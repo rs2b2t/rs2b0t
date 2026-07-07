@@ -29,7 +29,7 @@ ScriptRegistry.register({
     create: () => new TutorialBot()
 });
 
-// --- life (roams the world, switches activities; talks via the global Chatter) ---
+// --- life (roams the world, switches activities, chats) ---
 ScriptRegistry.register({
     name: 'LifeBot',
     description: 'Roams Lumbridge doing varied things (mine, fight chickens/cows, loiter) and chats — a believable person rather than a farmer',

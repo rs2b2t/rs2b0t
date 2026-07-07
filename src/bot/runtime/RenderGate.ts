@@ -2,9 +2,7 @@
  * Per-instance draw throttle (MultiBox). Gates ONLY the pixel draw
  * (mainredraw); mainloop/onFrame (logic, events, scheduler) are never gated.
  * A ref-counted `boost` forces full-rate drawing regardless of mode, because
- * the synthetic input driver's hover minimenu is rebuilt in mainredraw and a
- * gesture polls for it (SyntheticInputDriver.ts:14) — an acting bot must
- * render even when backgrounded.
+ * an acting bot must render even when backgrounded.
  */
 export type RenderMode = 'focused' | 'background' | 'hidden';
 

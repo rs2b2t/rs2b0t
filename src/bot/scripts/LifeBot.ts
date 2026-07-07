@@ -58,9 +58,8 @@ const AGGRESSIVE = 1; // com_mode: train Strength while fighting
  * a place in the world, walks there, does the local activity for a human-like
  * stretch (the clock starts on ARRIVAL, not when it sets off), then wanders off
  * somewhere else and does something different — mine, fight chickens or cows, or
- * loiter in town. Paired with the global Chatter, a fleet reads like people
- * going about their day rather than a bank of farmers. Combat spots train
- * Strength; low HP backs off.
+ * loiter in town. A fleet reads like people going about their day rather than a
+ * bank of farmers. Combat spots train Strength; low HP backs off.
  */
 export default class LifeBot extends TaskBot {
     override loopDelay = 600;

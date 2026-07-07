@@ -28,6 +28,11 @@ const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     }
 };
 
+if (!(TARGET_NAME in TARGET_RSA)) {
+    console.error(`Unknown TARGET '${TARGET_NAME}'. Valid: ${Object.keys(TARGET_RSA).join(', ')}.`);
+    process.exit(1);
+}
+
 const rsa = TARGET_RSA[TARGET_NAME] ?? TARGET_RSA.local;
 if (TARGET_NAME === 'live' && rsa.rsan === '') {
     console.error('TARGET=live requires LIVE_RSAN (rs2b2t rotated modulus). Aborting.');
