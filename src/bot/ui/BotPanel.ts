@@ -401,7 +401,7 @@ export default class BotPanel {
         } else {
             const name = ScriptRunner.meta?.name ?? '?';
             const extra = state === 'crashed' && ctx.crashError ? ` — ${ctx.crashError.message}` : ` — ${ctx.loopCount} loops`;
-            const mode = state === 'running' || state === 'paused' ? ` [${ActionRouter.activeMode}]` : '';
+            const mode = state === 'running' || state === 'paused' ? ` [${ActionRouter.driver.mode}]` : '';
             const text = `${name}: ${state}${extra}${mode}`;
             // while the runtime Supervisor is handling a random event the script
             // is paused — surface the event in place of the loop status

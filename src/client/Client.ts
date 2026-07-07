@@ -2362,7 +2362,7 @@ export class Client extends GameShell {
             // in headless farm conditions — and one wrongly-volunteered IDLE_TIMER logs
             // the bot out at exactly 90s (whole-fleet outage, 2026-07-06). A bot with no
             // script running still idles out like a human would.
-            const runner = (globalThis as unknown as { lcbuddy?: { runner?: { state?: string } } }).lcbuddy?.runner;
+            const runner = (globalThis as unknown as { rs2b0t?: { runner?: { state?: string } } }).rs2b0t?.runner;
             if (runner?.state === 'running') {
                 this.idleTimer = performance.now();
             } else {

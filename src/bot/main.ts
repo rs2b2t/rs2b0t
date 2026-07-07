@@ -1,10 +1,7 @@
 import { actions, reader } from './adapter/ClientAdapter.js';
-import { Chatter } from './behavior/Chatter.js';
-import { Humanizer } from './behavior/Humanizer.js';
 import BotClient from './BotClient.js';
 import { BotHost } from './BotHost.js';
 import { ActionRouter } from './input/ActionRouter.js';
-import { VirtualInput } from './input/VirtualInput.js';
 import { Navigator } from './nav/Navigator.js';
 import { installAbi } from './runtime/abi.js';
 import { AutoRelogin } from './runtime/AutoRelogin.js';
@@ -30,14 +27,6 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);
-
-    // Slice 6 additive hook: bot.html?inputmode=synthetic forces every
-    // script run synthetic (used by tools/synthetic-test.ts); default
-    // behavior (no param) is untouched — scripts pick their own inputMode.
-    const inputmode = params.get('inputmode');
-    if (inputmode === 'synthetic' || inputmode === 'direct') {
-        ActionRouter.force(inputmode);
-    }
 
     const panelRoot = document.getElementById('bot-panel');
     if (panelRoot) {
@@ -69,23 +58,11 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     // interaction and would otherwise freeze every bot on the live server.
     WelcomeDismisser.enable();
 
-    // Human-behaviour layer for every bot: run-energy management + fatigue
-    // breaks. Disable with bot.html?humanize=0
-    if (params.get('humanize') !== '0') {
-        Humanizer.enable();
-    }
-
-    // Ambient social chatter — bots say human-like things now and then, so a
-    // cluster reads like people hanging out. Mute with bot.html?chat=0
-    if (params.get('chat') !== '0') {
-        Chatter.enable();
-    }
-
     // DevTools handle (works because this bundle never mangles names).
-    (globalThis as Record<string, unknown>).lcbuddy = {
+    (globalThis as Record<string, unknown>).rs2b0t = {
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
-        reader, actions, navigator: Navigator, vinput: VirtualInput,
-        router: ActionRouter, humanizer: Humanizer, scheduler: Scheduler,
+        reader, actions, navigator: Navigator,
+        router: ActionRouter, scheduler: Scheduler,
         renderGate: RenderGate,
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),

@@ -49,11 +49,10 @@ class ScriptRunnerImpl {
         this.meta = meta;
         Scheduler.active = ctx;
 
-        // input mode for this run (Slice 6); synthetic failures land in the
-        // script log so soak tests can assert on them
-        ActionRouter.beginRun(bot.inputMode, (level, msg) => ctx.addLog(level, msg));
+        // wire this run's failure log sink into the router (direct-only)
+        ActionRouter.beginRun((level, msg) => ctx.addLog(level, msg));
 
-        ctx.addLog('info', `${meta.name} started (input: ${ActionRouter.activeMode})`);
+        ctx.addLog('info', `${meta.name} started (input: ${ActionRouter.driver.mode})`);
         this.fireChange();
 
         // onStart runs as iteration zero: loop() won't launch until it settles

@@ -17,14 +17,6 @@ export abstract class AbstractBot {
      */
     settings: SettingsBag = new SettingsBag({});
 
-    /**
-     * Input mode for this script: 'direct' (default, byte-identical packets
-     * with zero mouse telemetry) or 'synthetic' (virtual cursor + real
-     * minimenu, Slice 6). Applied by the runner at start; the page-level
-     * `?inputmode=` override wins.
-     */
-    inputMode: 'direct' | 'synthetic' = 'direct';
-
     private logSink: ((msg: string) => void) | null = null;
     private subscriptions: (() => void)[] = [];
 

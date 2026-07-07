@@ -1,54 +1,23 @@
 import DirectInputDriver from './DirectInputDriver.js';
 import type { InputDriver } from './InputDriver.js';
-import SyntheticInputDriver from './SyntheticInputDriver.js';
-import { VirtualInput } from './VirtualInput.js';
-
-export type InputMode = 'direct' | 'synthetic';
 
 /**
- * Single entry point for everything that emits input. Slice 6: two drivers,
- * mode applied per script run (AbstractBot.inputMode, default 'direct' so
- * existing soaks are untouched) with an optional global force from the page
- * (`bot.html?inputmode=synthetic`, set by main.ts — the additive hook the
- * synthetic e2e uses). No silent fallback between modes — dataset labels
- * stay clean (PLAN.md §humanization, ADR-0003).
+ * Single entry point for everything that emits input. rs2b0t is direct-only:
+ * one driver, byte-identical OP packets via the client's own doAction/tryMove,
+ * no mouse/click telemetry (spec §5.3, ADR-0003).
  */
 class ActionRouterImpl {
-    private readonly direct = new DirectInputDriver();
-    private readonly synthetic = new SyntheticInputDriver();
-
-    private mode: InputMode = 'direct';
-    /** Page-level override (query param); wins over the script's choice. */
-    private forced: InputMode | null = null;
-
-    get activeMode(): InputMode {
-        return this.forced ?? this.mode;
-    }
+    private readonly directDriver = new DirectInputDriver();
 
     get driver(): InputDriver {
-        return this.activeMode === 'synthetic' ? this.synthetic : this.direct;
+        return this.directDriver;
     }
 
-    /** main.ts only (?inputmode=...). */
-    force(mode: InputMode): void {
-        this.forced = mode;
-    }
+    /** ScriptRunner.start lifecycle hook. Direct input keeps no per-run state. */
+    beginRun(_log: (level: 'info' | 'warn', msg: string) => void): void {}
 
-    /** ScriptRunner.start: apply the script's mode and wire failure logs. */
-    beginRun(mode: InputMode, log: (level: 'info' | 'warn', msg: string) => void): void {
-        this.mode = mode;
-        this.synthetic.reset();
-        this.synthetic.logSink = log;
-        VirtualInput.setFidgets(this.activeMode === 'synthetic');
-    }
-
-    /** ScriptRunner teardown: cancel in-flight gestures, back to default. */
-    endRun(): void {
-        this.synthetic.cancel();
-        this.synthetic.logSink = null;
-        this.mode = 'direct';
-        VirtualInput.setFidgets(false);
-    }
+    /** ScriptRunner teardown hook. Nothing to cancel in direct mode. */
+    endRun(): void {}
 }
 
 export const ActionRouter = new ActionRouterImpl();
