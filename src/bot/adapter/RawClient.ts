@@ -101,57 +101,6 @@ export interface RawClient {
     loginMes1: string;
     login(username: string, password: string, reconnect: boolean): Promise<void>;
 
-    // ---- synthetic input (Slice 6) ----
-
-    // GameShell mouse state + the protected handlers the DOM listeners call.
-    // VirtualInput invokes these (never DOM events): mouseDown reads only
-    // e.button, mouseUp/pointerMove ignore the event arg; all three touch
-    // idleTimer themselves (GameShell.ts ~317-418).
-    idleTimer: number;
-    mouseX: number;
-    mouseY: number;
-    mouseButton: number;
-    mouseClickX: number;
-    mouseClickY: number;
-    mouseClickButton: number;
-    mouseDown(x: number, y: number, e: MouseEvent): void;
-    mouseUp(x: number, y: number, e: MouseEvent): void;
-    pointerMove(x: number, y: number, e: PointerEvent): void;
-
-    // GameShell keyboard state: keyHeld[1..4] = arrows (camera), chars >4 go
-    // through the ring queue (GameShell.onkeydown ~426). Injection mirrors
-    // onkeydown/onkeyup including the idleTimer touch.
-    keyHeld: number[];
-    keyQueue: number[];
-    keyQueueWritePos: number;
-
-    // open minimenu geometry (Client.ts ~427, row layout in mouseLoop ~8290:
-    // row i spans y in (menuY + (n-1-i)*15 + 31 - 13, ... + 3), area offsets
-    // 0=(4,4) viewport / 1=(553,205) sidebar / 2=(17,357) chat)
-    isMenuOpen: boolean;
-    menuArea: number;
-    menuX: number;
-    menuY: number;
-    menuWidth: number;
-    menuHeight: number;
-
-    // render camera + ground height, for world->screen projection
-    // (getOverlayPos, Client.ts ~5017; viewport origin = (256,167) blitted
-    // at (4,4))
-    camX: number;
-    camY: number;
-    camZ: number;
-    camPitch: number;
-    camYaw: number;
-    getAvH(sceneX: number, sceneZ: number, level: number): number;
-
-    // minimap click math (minimapLoop, Client.ts ~2742): yaw/zoom inputs of
-    // the screen->tile transform we invert for synthetic walk clicks
-    orbitCameraYaw: number;
-    macroMinimapAngle: number;
-    macroMinimapZoom: number;
-    minimapState: number;
-
     // selected sidebar tab (iconLoop ~2787 sets it from the icon strip)
     activeIcon: number;
 
@@ -214,35 +163,6 @@ export const SELF_TEST = [
     'loginPass',
     'loginMes1',
     'login',
-    'idleTimer',
-    'mouseX',
-    'mouseY',
-    'mouseButton',
-    'mouseClickX',
-    'mouseClickY',
-    'mouseClickButton',
-    'mouseDown',
-    'mouseUp',
-    'pointerMove',
-    'keyHeld',
-    'keyQueue',
-    'keyQueueWritePos',
-    'isMenuOpen',
-    'menuArea',
-    'menuX',
-    'menuY',
-    'menuWidth',
-    'menuHeight',
-    'camX',
-    'camY',
-    'camZ',
-    'camPitch',
-    'camYaw',
-    'getAvH',
-    'orbitCameraYaw',
-    'macroMinimapAngle',
-    'macroMinimapZoom',
-    'minimapState',
     'activeIcon',
     'redrawSide',
     'redrawIcons'
