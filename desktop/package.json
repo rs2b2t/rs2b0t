@@ -1,0 +1,27 @@
+{
+    "name": "lcbuddy2-desktop",
+    "version": "0.1.0",
+    "private": true,
+    "description": "LCBuddy2 desktop client (Electron shell, no background throttling)",
+    "main": "main.cjs",
+    "scripts": {
+        "start": "electron .",
+        "start:solo": "electron . --server=http://localhost:8888/bot.html",
+        "package": "electron-builder --dir"
+    },
+    "devDependencies": {
+        "electron": "^33.0.0",
+        "electron-builder": "^25.0.0"
+    },
+    "build": {
+        "appId": "rs.lostcity.lcbuddy2",
+        "productName": "LCBuddy2",
+        "files": ["main.cjs"],
+        "directories": {
+            "output": "dist"
+        },
+        "mac": {
+            "identity": null
+        }
+    }
+}

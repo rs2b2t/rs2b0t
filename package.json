@@ -11,8 +11,7 @@
         "build:dev": "bun run bundle.ts dev",
         "build:bot": "bun run bot.bundle.ts",
         "build:bot:dev": "bun run bot.bundle.ts dev",
-        "wall": "sh tools/wall-rs2b2t.sh",
-        "wall:dev": "cd desktop && bun run start"
+        "b0t": "sh tools/b0t.sh"
     },
     "dependencies": {
         "fflate": "^0.8.2"
