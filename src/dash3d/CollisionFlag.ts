@@ -1,0 +1,49 @@
+export const enum CollisionFlag {
+    _OPEN = 0,
+
+    W_NW = 0x1,
+    W_N = 0x2,
+    W_NE = 0x4,
+    W_E = 0x8,
+    W_SE = 0x10,
+    W_S = 0x20,
+    W_SW = 0x40,
+    W_W = 0x80,
+    WALK_BLOCK_FLAGS = 0xFF, // W_NW | W_N | W_NE | W_E | W_SE | W_S | W_SW | W_W
+    WALK_SCENERY = 0x100,
+
+    V_NW = 0x200,
+    V_N = 0x400,
+    V_NE = 0x800,
+    V_E = 0x1000,
+    V_SE = 0x2000,
+    V_S = 0x4000,
+    V_SW = 0x8000,
+    V_W = 0x10000,
+    VIS_BLOCK_FLAGS = 0x1FE00, // V_NW | V_N | V_NE | V_E | V_SE | V_S | V_SW | V_W
+    VIS_SCENERY = 0x20000,
+
+    WR_GROUND_DECOR = 0x40000,
+    BLOCK_NPCS_AND_PLAYERS = 0x80000,
+    ROOF = 0x100000,
+    WR_GRND = 0x200000,
+
+    SQ_BLOCKED = 0x280100, // WR_GRND | BLOCK_NPCS_AND_PLAYERS | WALK_SCENERY
+    // SQ_BLOCKED in 308 is 0x1280100: UNLOADED | WR_GRND | BLOCK_NPCS_AND_PLAYERS | WALK_SCENERY
+    // SQ_BLOCKED in 468 is 0x12C0100: UNLOADED | WR_GRND | BLOCK_NPCS_AND_PLAYERS | WR_GROUND_DECOR | WALK_SCENERY
+    PL_WALK_N = 0x280102, // SQ_BLOCKED | W_N
+    PL_WALK_E = 0x280108, // SQ_BLOCKED | W_E
+    PL_WALK_NE = 0x28010E, // SQ_BLOCKED | W_NE | W_N | W_E
+    PL_WALK_S = 0x280120, // SQ_BLOCKED | W_S
+    PL_WALK_SE = 0x280138, // SQ_BLOCKED | W_SE | W_S | W_E
+    PL_WALK_W = 0x280180, // SQ_BLOCKED | W_W
+    PL_WALK_NW = 0x280183, // SQ_BLOCKED | W_NW | W_N | W_W
+    PL_WALK_SW = 0x2801E0, // SQ_BLOCKED | W_SW | W_S | W_W
+
+    MULTIWAY = 0x400000,
+    FREEMAP = 0x800000,
+    UNLOADED = 0x1000000,
+    NPCS_OR_PLAYERS = 0x2000000,
+
+    _BOUNDS = 0xFFFFFF
+}

@@ -1,0 +1,10 @@
+[
+    {"from":{"x":3205,"z":3209,"level":0},"to":{"x":3205,"z":3209,"level":1},"locName":"Staircase","action":"Climb-up","kind":"stair"},
+    {"from":{"x":3205,"z":3209,"level":1},"to":{"x":3205,"z":3209,"level":2},"locName":"Staircase","action":"Climb-up","kind":"stair"},
+    {"from":{"x":3205,"z":3209,"level":1},"to":{"x":3205,"z":3209,"level":0},"locName":"Staircase","action":"Climb-down","kind":"stair"},
+    {"from":{"x":3205,"z":3209,"level":2},"to":{"x":3205,"z":3209,"level":1},"locName":"Staircase","action":"Climb-down","kind":"stair"},
+    {"from":{"x":3205,"z":3228,"level":0},"to":{"x":3205,"z":3228,"level":1},"locName":"Staircase","action":"Climb-up","kind":"stair"},
+    {"from":{"x":3205,"z":3228,"level":1},"to":{"x":3206,"z":3229,"level":2},"locName":"Staircase","action":"Climb-up","kind":"stair"},
+    {"from":{"x":3205,"z":3228,"level":1},"to":{"x":3205,"z":3228,"level":0},"locName":"Staircase","action":"Climb-down","kind":"stair"},
+    {"from":{"x":3206,"z":3229,"level":2},"to":{"x":3205,"z":3228,"level":1},"locName":"Staircase","action":"Climb-down","kind":"stair"}
+]

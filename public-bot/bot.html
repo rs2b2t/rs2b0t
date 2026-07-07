@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>LCBuddy2</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.7">
+
+    <style>
+        body,
+        td,
+        p {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            color: white;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+
+        /* full-viewport row: game fills the left, panel fixed on the right */
+        #lcb-root {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        #game-wrap {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* JS sizes this to the largest 765:503 box that fits #game-wrap;
+           both canvases fill it, so they scale together and stay aligned. */
+        #game-stage {
+            position: relative;
+            width: 765px;
+            height: 503px;
+        }
+
+        #game-stage canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            user-select: none;
+            outline: none;
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+            image-rendering: pixelated;
+        }
+
+        #overlay {
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* ---- bot panel ---- */
+
+        #bot-panel {
+            width: 330px;
+            flex: 0 0 330px;
+            height: 100vh;
+            overflow-y: auto;
+            box-sizing: border-box;
+            background: #111;
+            border-left: 1px solid #333;
+            padding: 10px;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        .lcb-title {
+            font-weight: bold;
+            font-size: 14px;
+            color: #04A800;
+            margin-bottom: 8px;
+        }
+
+        .lcb-banner {
+            padding: 4px 6px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .lcb-banner-ok {
+            background: #07330a;
+            color: #5be05b;
+        }
+
+        .lcb-banner-warn {
+            background: #333007;
+            color: #e0d75b;
+        }
+
+        .lcb-banner-error {
+            background: #3a0a0a;
+            color: #ff7b7b;
+        }
+
+        .lcb-section {
+            margin-bottom: 10px;
+        }
+
+        .lcb-section-title {
+            color: #888;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #2a2a2a;
+            margin-bottom: 4px;
+            padding-bottom: 2px;
+        }
+
+        .lcb-row {
+            display: flex;
+            justify-content: space-between;
+            line-height: 1.6;
+        }
+
+        .lcb-key {
+            color: #777;
+        }
+
+        .lcb-value {
+            color: #ddd;
+            text-align: right;
+        }
+
+        .lcb-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px 8px;
+        }
+
+        .lcb-stat {
+            display: flex;
+            justify-content: space-between;
+            line-height: 1.5;
+        }
+
+        .lcb-stat-name {
+            color: #777;
+            text-transform: capitalize;
+        }
+
+        .lcb-chat-line {
+            line-height: 1.5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .lcb-dim {
+            color: #555;
+        }
+
+        .lcb-select {
+            width: 100%;
+            background: #1a1a1a;
+            color: #ddd;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 3px;
+            font-family: inherit;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .lcb-buttons {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .lcb-button {
+            flex: 1;
+            background: #1a1a1a;
+            color: #ddd;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 4px 0;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .lcb-button:hover:not(:disabled) {
+            background: #252525;
+            border-color: #04A800;
+        }
+
+        .lcb-button:disabled {
+            color: #555;
+            cursor: default;
+        }
+
+        .lcb-state-running {
+            color: #5be05b;
+        }
+
+        .lcb-state-paused {
+            color: #e0d75b;
+        }
+
+        .lcb-state-stopping {
+            color: #e0d75b;
+        }
+
+        .lcb-state-crashed {
+            color: #ff7b7b;
+        }
+
+        .lcb-log {
+            height: 150px;
+            overflow-y: auto;
+            background: #0a0a0a;
+            border: 1px solid #2a2a2a;
+            border-radius: 3px;
+            padding: 4px;
+            font-size: 11px;
+        }
+
+        .lcb-log-line {
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .lcb-log-warn {
+            color: #e0d75b;
+        }
+
+        .lcb-log-error {
+            color: #ff7b7b;
+        }
+
+        .lcb-input {
+            flex: 1;
+            background: #1a1a1a;
+            color: #ddd;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 4px 6px;
+            font-family: inherit;
+            font-size: 11px;
+            min-width: 0;
+        }
+
+        .lcb-load-status {
+            font-size: 11px;
+            color: #777;
+            min-height: 14px;
+            margin-top: 2px;
+        }
+
+        .lcb-load-ok {
+            color: #5be05b;
+        }
+
+        .lcb-load-error {
+            color: #ff7b7b;
+        }
+
+        .lcb-setting {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            line-height: 1.9;
+        }
+
+        .lcb-setting-bool {
+            justify-content: flex-start;
+        }
+
+        .lcb-setting-label {
+            color: #aaa;
+        }
+
+        .lcb-setting .lcb-input {
+            max-width: 150px;
+            /* long labels must wrap, not crush the input to nothing */
+            min-width: 64px;
+        }
+
+        .lcb-setting input[type="checkbox"] {
+            accent-color: #04A800;
+        }
+
+        .lcb-current-script {
+            flex: 1;
+            align-self: center;
+            color: #7ad0ff;
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ---- script library modal ---- */
+        .lcb-modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lcb-modal {
+            width: min(720px, 86vw);
+            max-height: 82vh;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(17, 17, 17, 0.97);
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 14px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .lcb-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .lcb-modal-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #04A800;
+        }
+
+        .lcb-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .lcb-chip {
+            background: #1a1a1a;
+            color: #bbb;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 2px 10px;
+            font: inherit;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .lcb-chip:hover {
+            border-color: #04A800;
+        }
+
+        .lcb-chip-active {
+            background: #07330a;
+            color: #5be05b;
+            border-color: #04A800;
+        }
+
+        .lcb-library-list {
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 4px;
+        }
+
+        .lcb-library-card {
+            background: #161616;
+            border: 1px solid #2c2c2c;
+            border-radius: 4px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+
+        .lcb-library-card:hover {
+            border-color: #04A800;
+            background: #1c2419;
+        }
+
+        .lcb-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .lcb-card-name {
+            color: #7ad0ff;
+            font-weight: bold;
+        }
+
+        .lcb-card-cat {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .lcb-card-desc {
+            color: #ccc;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        .lcb-card-tags {
+            color: #6a8a5a;
+            font-size: 10px;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="lcb-root">
+        <div id="game-wrap">
+            <div id="game-stage">
+                <canvas id="canvas" width="765" height="503">
+                    Your browser is not capable of running our web client.
+                </canvas>
+                <canvas id="overlay" width="765" height="503"></canvas>
+            </div>
+        </div>
+        <div id="bot-panel"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading...', canvas.width / 2, canvas.height / 2);
+        }
+
+        // Scale the game (backing stays 765x503; the client maps mouse coords
+        // by the displayed size, so input stays correct) to the largest
+        // aspect-preserving box that fits the window. Kills the blank margins.
+        (function () {
+            const wrap = document.getElementById('game-wrap');
+            const stage = document.getElementById('game-stage');
+            function fit() {
+                const w = wrap.clientWidth;
+                const h = wrap.clientHeight;
+                if (w <= 0 || h <= 0) return;
+                const scale = Math.min(w / 765, h / 503);
+                stage.style.width = Math.floor(765 * scale) + 'px';
+                stage.style.height = Math.floor(503 * scale) + 'px';
+            }
+            window.addEventListener('resize', fit);
+            fit();
+        })();
+    </script>
+
+    <script type="module" src="./bot/botclient.js"></script>
+</body>
+
+</html>

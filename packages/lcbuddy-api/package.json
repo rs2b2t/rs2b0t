@@ -1,0 +1,9 @@
+{
+    "name": "@lcbuddy/api",
+    "version": "0.1.0",
+    "description": "Typed script-authoring API for the LCBuddy2 bot client (runtime shim over globalThis.__lcbuddy)",
+    "type": "module",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "license": "MIT"
+}

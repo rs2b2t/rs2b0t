@@ -1,0 +1,405 @@
+// Tick-driven walk executor (Slice 5b): turns a NavWorker path into game
+// clicks. Called from scripts via Traversal.walkTo, so every wait goes
+// through Execution.* — stop/pause/abort semantics hold exactly like any
+// other script action (PLAN.md §2).
+//
+// Loop: walk toward the furthest path tile within ~18 tiles that's inside
+// the loaded scene; when the next path segment is an annotated door/
+// transport crossing, approach it, interact with the annotated action and
+// wait for the crossing to open (loc gone / level changed); on stall
+// re-click, on repeated stall re-path from the current position.
+
+import type { WorldTile } from '../adapter/ClientAdapter.js';
+import { reader } from '../adapter/ClientAdapter.js';
+import { EventSignal } from '../api/EventSignal.js';
+import { Execution } from '../api/Execution.js';
+import { Locs, type Loc } from '../api/queries/Locs.js';
+import { Reachability } from '../api/Reachability.js';
+import { ActionRouter } from '../input/ActionRouter.js';
+import { Navigator, type PathResult } from './Navigator.js';
+import type { TransportInfo, Waypoint } from './PathFinder.js';
+import { locateOnPath, selectClickTarget } from './followMath.js';
+
+const TARGET_STEPS = 20; // click target this many steps ALONG the path
+const TARGET_JITTER = 4; // ± human-ish variance on TARGET_STEPS
+const ARRIVE_RADIUS = 4; // reaching within this of the click target ⇒ pick the next one
+const PROGRESS_WINDOW = 26; // how far ahead we look for our own position on the path
+const CORRIDOR = 3; // on-path tolerance (client micro-routes differ from ours)
+const OFF_CORRIDOR_STRIKES = 2; // consecutive off-corridor checks before repathing
+const STALL_TICKS = 6; // no tile change for this many ticks while short of the target ⇒ stalled
+// Handle a crossing once we're within reach of its approach tile. MUST be >=
+// ARRIVE_RADIUS: the walker stops advancing its click target once within
+// ARRIVE_RADIUS of it (the approach tile, when a crossing caps the click
+// limit), so a smaller trigger leaves the bot stranded 2-4 tiles short of a
+// staircase/gate — it never re-clicks and never fires the crossing (found live:
+// NavDemo legs 1/3 timed out at stairs/pen-gate). The client walks the final
+// tiles to the loc itself on interact.
+const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
+const MAX_REPATHS = 5;
+const PATH_REQUEST_TIMEOUT_MS = 30_000; // includes first-use worker boot + pack fetch
+const TRANSPORT_WAIT_MS = 8000;
+const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
+
+export interface WalkOptions {
+    /** Arrive when within this Chebyshev distance of dest (default 2). */
+    radius?: number;
+    /** Overall walk budget (default 300s — Lumbridge->Varrock walks ~2.5min). */
+    timeoutMs?: number;
+    /** Progress lines (path stats, transports, repaths) for the script log. */
+    log?: (msg: string) => void;
+}
+
+interface PathStep extends WorldTile {
+    transport?: TransportInfo;
+}
+
+type FollowResult = 'arrived' | 'repath' | 'failed' | 'interrupted';
+
+function chebyshev(a: WorldTile, b: WorldTile): number {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+
+/** Expand direction-change waypoints back into the full tile path. */
+function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
+    const tiles: PathStep[] = [];
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        if (i === 0) {
+            tiles.push({ x: wp.x, z: wp.z, level: wp.level, transport: wp.transport });
+            continue;
+        }
+        const prev = waypoints[i - 1];
+        if (wp.transport || wp.level !== prev.level) {
+            // a crossing is a single annotated hop, never a straight run
+            tiles.push({ x: wp.x, z: wp.z, level: wp.level, transport: wp.transport });
+            continue;
+        }
+        const dx = Math.sign(wp.x - prev.x);
+        const dz = Math.sign(wp.z - prev.z);
+        const steps = Math.max(Math.abs(wp.x - prev.x), Math.abs(wp.z - prev.z));
+        for (let step = 1; step <= steps; step++) {
+            tiles.push({ x: prev.x + dx * step, z: prev.z + dz * step, level: wp.level });
+        }
+    }
+    return tiles;
+}
+
+class WalkExecutorImpl {
+    /** Live progress for overlays: remaining path tiles of the current walk. */
+    remaining = 0;
+
+    /** How the last walkTo ended — 'interrupted' means a random event took
+     *  over and the caller should retry once the runtime clears it. */
+    lastOutcome: 'arrived' | 'interrupted' | 'failed' | null = null;
+
+    /** Doors that failed to open during THIS walkTo — excluded on repath. */
+    private avoidDoors: { x: number; z: number }[] = [];
+
+    /**
+     * Web-walk to `dest`. Resolves true on arrival, false on failure/timeout.
+     * Only call from script context (sleeps via Execution.*).
+     */
+    async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
+        const radius = opts?.radius ?? 2;
+        const timeoutMs = opts?.timeoutMs ?? 300_000;
+        const log = opts?.log ?? ((): void => {});
+        const deadline = performance.now() + timeoutMs;
+        this.lastOutcome = null;
+        this.avoidDoors = [];
+
+        try {
+            for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
+                const me = reader.worldTile();
+                if (!me) {
+                    this.lastOutcome = 'failed';
+                    return false;
+                }
+                if (chebyshev(me, dest) <= radius && me.level === dest.level) {
+                    this.lastOutcome = 'arrived';
+                    return true;
+                }
+
+                const path = await this.requestPath(me, dest);
+                if (!path.ok) {
+                    log(`no path to (${dest.x},${dest.z},${dest.level}): ${path.reason}`);
+                    this.lastOutcome = 'failed';
+                    return false;
+                }
+                log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`);
+
+                const tiles = expandWaypoints(path.waypoints);
+
+                // the terminal tile is the pathfinder's goal — when dest itself
+                // is unwalkable it snaps to the nearest reachable tile, and
+                // standing there already is as arrived as we can get
+                const terminal = tiles[tiles.length - 1];
+                if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
+                    if (chebyshev(me, dest) > radius) {
+                        log(`dest (${dest.x},${dest.z}) unreachable beyond (${me.x},${me.z}) — treating nearest reachable tile as arrival`);
+                    }
+                    this.lastOutcome = 'arrived';
+                    return true;
+                }
+
+                const result = await this.followPath(tiles, dest, radius, deadline, log);
+                if (result === 'arrived') {
+                    this.lastOutcome = 'arrived';
+                    return true;
+                }
+                if (result === 'failed') {
+                    this.lastOutcome = 'failed';
+                    return false;
+                }
+                if (result === 'interrupted') {
+                    log('walk interrupted — a random event is being handled');
+                    this.lastOutcome = 'interrupted';
+                    return false;
+                }
+                // 'repath': loop with a fresh path from wherever we are now
+            }
+            log(`giving up after ${MAX_REPATHS} repaths`);
+            this.lastOutcome = 'failed';
+            return false;
+        } finally {
+            this.remaining = 0;
+        }
+    }
+
+    /** Bridge the Navigator promise into the script scheduler. */
+    private async requestPath(from: WorldTile, to: WorldTile): Promise<PathResult> {
+        let result: PathResult | null = null;
+        Navigator.findPath(from, to, { avoidDoors: this.avoidDoors }).then(
+            r => (result = r),
+            err => (result = { ok: false, reason: err instanceof Error ? err.message : String(err), expanded: 0 })
+        );
+        const settled = await Execution.delayUntil(() => result !== null, PATH_REQUEST_TIMEOUT_MS);
+        return settled && result ? result : { ok: false, reason: 'path request timed out', expanded: 0 };
+    }
+
+    private async followPath(tiles: PathStep[], dest: WorldTile, radius: number, deadline: number, log: (msg: string) => void): Promise<FollowResult> {
+        let pathIdx = 0;
+        let offCorridor = 0;
+        let stallTicks = 0;
+        let stallRetries = 0;
+        let clickIdx = -1; // path index of the tile we last clicked, -1 = none
+        let clicks = 0;
+        let warnedCombat = false;
+        let lastTile: WorldTile | null = null;
+
+        const clickable = (t: WorldTile): boolean => reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
+
+        while (performance.now() < deadline) {
+            if (EventSignal.pending()) {
+                return 'interrupted';
+            }
+
+            const me = reader.worldTile();
+            if (!me) {
+                return 'failed';
+            }
+
+            if (chebyshev(me, dest) <= radius && me.level === dest.level) {
+                log(`arrived (${clicks} clicks)`);
+                return 'arrived';
+            }
+            const terminal = tiles[tiles.length - 1];
+            if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
+                log(`arrived at path terminal (${clicks} clicks)`);
+                return 'arrived';
+            }
+
+            // where are we along the path? (corridor-tolerant)
+            const found = locateOnPath(tiles, me, pathIdx, PROGRESS_WINDOW, CORRIDOR);
+            if (found !== -1) {
+                pathIdx = found;
+                offCorridor = 0;
+            } else if (++offCorridor >= OFF_CORRIDOR_STRIKES) {
+                log(`deviated from path at (${me.x},${me.z},${me.level}) — repathing (${clicks} clicks)`);
+                return 'repath';
+            }
+            this.remaining = tiles.length - 1 - pathIdx;
+
+            // stall bookkeeping: counts while short of the target — and also
+            // while we have NO target (nothing clickable at a scene edge)
+            const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
+            const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]) > ARRIVE_RADIUS;
+            stallTicks = moved || !shortOfTarget ? 0 : stallTicks + 2;
+            lastTile = me;
+
+            // annotated crossing: arrive at the approach tile, then open/take it
+            let crossingIdx = -1;
+            for (let i = pathIdx + 1; i < tiles.length; i++) {
+                if (tiles[i].transport) {
+                    crossingIdx = i;
+                    break;
+                }
+            }
+            if (crossingIdx !== -1 && chebyshev(me, tiles[crossingIdx - 1]) <= TRANSPORT_TRIGGER) {
+                const handled = await this.handleTransport(tiles[crossingIdx - 1], tiles[crossingIdx], log);
+                if (handled) {
+                    tiles[crossingIdx].transport = undefined;
+                    pathIdx = Math.max(pathIdx, crossingIdx - 1);
+                    stallTicks = 0;
+                    stallRetries = 0;
+                    clickIdx = -1;
+                    lastTile = null;
+                    continue;
+                }
+                this.failedDoor(tiles[crossingIdx]);
+                return 'repath';
+            }
+
+            if (stallTicks >= STALL_TICKS) {
+                stallTicks = 0;
+                if (stallRetries === 0) {
+                    stallRetries = 1;
+                    clickIdx = -1; // re-select and re-click below
+                } else if (reader.inCombat()) {
+                    // being attacked never roots the player in this era (no
+                    // auto-retaliate mechanic) — hold course, keep clicking,
+                    // never escalate to a repath because of combat
+                    if (!warnedCombat) {
+                        warnedCombat = true;
+                        log('under attack — holding course');
+                    }
+                    stallRetries = 0;
+                    clickIdx = -1;
+                } else {
+                    const opened = await this.tryNearbyDoor(tiles, pathIdx, log);
+                    if (opened) {
+                        stallRetries = 0;
+                        clickIdx = -1;
+                        lastTile = null;
+                        continue;
+                    }
+                    log(`stuck at (${me.x},${me.z}) — repathing (${clicks} clicks)`);
+                    return 'repath';
+                }
+            }
+
+            // commit to the current click until we arrive near it
+            const needClick = clickIdx === -1 || clickIdx <= pathIdx || chebyshev(me, tiles[clickIdx]) <= ARRIVE_RADIUS;
+            if (needClick) {
+                const limit = crossingIdx !== -1 ? crossingIdx - 1 : tiles.length - 1;
+                const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
+                const target = selectClickTarget(tiles, pathIdx, steps, limit, me.level, clickable);
+                if (target !== -1 && !(tiles[target].x === me.x && tiles[target].z === me.z)) {
+                    const local = reader.toLocal(tiles[target].x, tiles[target].z)!;
+                    ActionRouter.driver.walk(local.lx, local.lz);
+                    clickIdx = target;
+                    clicks++;
+                    stallTicks = 0;
+                } else if (target === -1) {
+                    // nothing clickable ahead (scene edge / blocked) — a stall
+                    stallTicks += 2;
+                }
+            }
+
+            await Execution.delayTicks(2);
+        }
+
+        log('walk timed out');
+        return 'failed';
+    }
+
+    /**
+     * Stalled twice (not in combat): is a closed door/gate sitting on the
+     * next few path tiles? Opens any 'Open'-able loc adjacent to the path
+     * ahead — catches every gate the door annotation (doors.json) missed
+     * (the historical "constantly stuck on gates" failure).
+     */
+    private async tryNearbyDoor(tiles: PathStep[], pathIdx: number, log: (msg: string) => void): Promise<boolean> {
+        const ahead = tiles.slice(pathIdx, Math.min(pathIdx + 5, tiles.length));
+        const door = Locs.query()
+            .action('Open')
+            .within(3)
+            .where(loc => {
+                const t = loc.tile();
+                return ahead.some(p => p.level === t.level && Math.max(Math.abs(p.x - t.x), Math.abs(p.z - t.z)) <= 1);
+            })
+            .nearest();
+        if (!door) {
+            return false;
+        }
+
+        const t = door.tile();
+        log(`stalled next to closed '${door.name}' at (${t.x},${t.z}) — opening it`);
+        if (!door.interact('Open')) {
+            return false;
+        }
+        return Execution.delayUntil(() => {
+            const cur = Locs.query()
+                .action('Open')
+                .where(l => l.tile().x === t.x && l.tile().z === t.z && (l.name ?? '') === (door.name ?? ''))
+                .nearest();
+            return cur === null || Reachability.canReach(t, { maxSteps: 200, adjacentOk: true });
+        }, 5000);
+    }
+
+    private failedDoor(step: PathStep): void {
+        const t = step.transport;
+        if (t && t.toLevel === undefined) {
+            this.avoidDoors.push({ x: t.locX, z: t.locZ });
+        }
+    }
+
+    /**
+     * Cross an annotated door/transport. The caller is within TRANSPORT_TRIGGER
+     * (>= ARRIVE_RADIUS) of the approach tile, so we interact from range and let
+     * the client walk the final tiles to the loc on interact — never clicking
+     * "through" the doorway. Success = the closed loc vanished OR live collision
+     * now permits the approach→crossing step (collision is ground truth; loc-name
+     * matching alone was the fragile part) OR the level changed for stairs.
+     */
+    private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
+        const transport = step.transport!;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const loc = this.findTransportLoc(transport);
+            if (!loc) {
+                if (transport.toLevel === undefined) {
+                    if (Reachability.canStep(approach, step)) {
+                        log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
+                        return true;
+                    }
+                    log(`transport loc '${transport.locName}' not found but the way is blocked`);
+                    return false;
+                }
+                log(`transport loc '${transport.locName}' not found near (${transport.locX},${transport.locZ})`);
+                return false;
+            }
+
+            if (!loc.interact(transport.action)) {
+                log(`'${transport.action}' not offered by ${transport.locName} (ops: ${loc.actions().join(', ')})`);
+                return false;
+            }
+
+            let crossed: boolean;
+            if (transport.toLevel !== undefined) {
+                const toLevel = transport.toLevel;
+                crossed = await Execution.delayUntil(() => reader.worldTile()?.level === toLevel, TRANSPORT_WAIT_MS);
+            } else {
+                crossed = await Execution.delayUntil(() => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step), TRANSPORT_WAIT_MS);
+            }
+            if (crossed) {
+                log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
+                return true;
+            }
+            log(`${transport.action} ${transport.locName} did not resolve, retrying`);
+        }
+        return false;
+    }
+
+    private findTransportLoc(transport: TransportInfo): Loc | null {
+        return Locs.query()
+            .name(transport.locName)
+            .action(transport.action)
+            .where(loc => {
+                const tile = loc.tile();
+                return Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
+            })
+            .nearest();
+    }
+}
+
+export const WalkExecutor = new WalkExecutorImpl();

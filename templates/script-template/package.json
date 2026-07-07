@@ -1,0 +1,16 @@
+{
+    "name": "lcbuddy-script-template",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "bun build src/ExampleBot.ts --outfile dist/bot.js --format esm",
+        "watch": "bun build src/ExampleBot.ts --outfile dist/bot.js --format esm --watch"
+    },
+    "dependencies": {
+        "@lcbuddy/api": "file:../../packages/lcbuddy-api"
+    },
+    "devDependencies": {
+        "typescript": "^5"
+    }
+}
