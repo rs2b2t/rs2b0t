@@ -3,7 +3,7 @@
 # public/ (see docs/DEV.md). Players: /rs2.cgi untouched; bot: /bot.html.
 set -e
 
-ENGINE="${ENGINE_DIR:-$HOME/code/lostcity-dev/engine}"
+ENGINE="${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
 
 if [ ! -d "$ENGINE/public" ]; then
     echo "engine public/ not found at $ENGINE (set ENGINE_DIR)" >&2
