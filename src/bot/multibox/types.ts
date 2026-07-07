@@ -23,7 +23,7 @@ export interface SlotSnapshot extends SlotStatus {
     mode: RenderMode;
 }
 
-/** Control surface over one bot iframe. Real impl wraps `window.lcbuddy`. */
+/** Control surface over one bot iframe. Real impl wraps `window.rs2b0t`. */
 export interface SlotHandle {
     setRenderMode(mode: RenderMode): void;
     setCredentials(username: string, password: string): void;

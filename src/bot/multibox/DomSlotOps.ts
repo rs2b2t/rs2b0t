@@ -4,7 +4,7 @@ const LOGICAL_W = 1100;
 const LOGICAL_H = 620;
 const THUMB_W = 300; // grid thumbnail width; height derives from the ratio
 
-/** Subset of window.lcbuddy the manager drives (same-origin, direct calls). */
+/** Subset of window.rs2b0t the manager drives (same-origin, direct calls). */
 interface Lcb {
     client: { constructor: { loopCycle: number } };
     reader: { ingame(): boolean };
@@ -14,14 +14,14 @@ interface Lcb {
     setCredentials(u: string, p: string): void;
     setAutoLogin(on: boolean): void;
 }
-interface LcbWindow extends Window { lcbuddy?: Lcb; }
+interface LcbWindow extends Window { rs2b0t?: Lcb; }
 
 /**
  * One bot tile: an iframe of /bot.html?inputmode=synthetic at a fixed logical
  * size, CSS-scaled to a grid thumbnail or (when focused) letterboxed to the
  * window. The iframe is NEVER reparented — focus toggles a class, so the
  * WebSocket/session survive fullscreen↔wall. Control calls buffer until the
- * iframe's lcbuddy handle appears, then flush in order.
+ * iframe's rs2b0t handle appears, then flush in order.
  */
 class DomSlotHandle implements SlotHandle {
     readonly el: HTMLDivElement;
@@ -68,7 +68,7 @@ class DomSlotHandle implements SlotHandle {
     }
 
     status(): SlotStatus {
-        const l = this.win?.lcbuddy;
+        const l = this.win?.rs2b0t;
         if (!l) {
             return { ready: false, ingame: false, loopCycle: 0, drawn: 0, scriptState: 'idle' };
         }
@@ -86,19 +86,19 @@ class DomSlotHandle implements SlotHandle {
             return;
         }
         const w = this.iframe.contentWindow as LcbWindow | null;
-        if (w?.lcbuddy) {
+        if (w?.rs2b0t) {
             this.win = w;
             const flush = this.pending;
             this.pending = [];
-            for (const fn of flush) fn(w.lcbuddy);
+            for (const fn of flush) fn(w.rs2b0t);
             return;
         }
         window.setTimeout(this.poll, 50);
     };
 
     private whenReady(fn: (l: Lcb) => void): void {
-        if (this.win?.lcbuddy) {
-            fn(this.win.lcbuddy);
+        if (this.win?.rs2b0t) {
+            fn(this.win.rs2b0t);
         } else {
             this.pending.push(fn);
         }
