@@ -21,6 +21,7 @@ import VarpType from '#/config/VarpType.js';
 import VarBitType from '#/config/VarBitType.js';
 import IfType from '#/config/IfType.js';
 import { ComponentType, ButtonType } from '#/config/IfType.js';
+import { TARGET } from '#/config/target.js';
 
 import ClientEntity from '#/dash3d/ClientEntity.js';
 import ClientLocAnim from '#/dash3d/ClientLocAnim.js';
@@ -1724,7 +1725,7 @@ export class Client extends GameShell {
                 await this.titleScreenDraw();
             }
 
-            this.stream = new ClientStream(await ClientStream.openSocket(window.location.host, window.location.protocol === 'https:'));
+            this.stream = new ClientStream(await ClientStream.openSocket(TARGET.wsHost, TARGET.tls));
 
             const userhash = JString.toUserhash(username);
             const loginServer = Number(userhash >> 16n) & 0x1f;
