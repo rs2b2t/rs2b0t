@@ -79,6 +79,15 @@ export const Inventory = {
         return reader.inventory().length;
     },
 
+    /** Total quantity of an item across the backpack (sums stacks + slots). */
+    count(name: string): number {
+        const wanted = name.toLowerCase();
+        return reader
+            .inventory()
+            .filter(i => i.name?.toLowerCase() === wanted)
+            .reduce((sum, i) => sum + i.count, 0);
+    },
+
     isFull(): boolean {
         const size = reader.inventorySize();
         return size > 0 && Inventory.used() >= size;

@@ -26,6 +26,10 @@ export const Quests = {
     status(name: string): QuestStatus {
         const hit = reader.questStatuses().find(q => q.name.toLowerCase() === name.toLowerCase());
         return hit ? toStatus(hit.colour) : 'unknown';
+    },
+    /** Total quest points (varp 101, kept current by the engine's count_questpoints). */
+    points(): number {
+        return reader.varp(101);
     }
 };
 
