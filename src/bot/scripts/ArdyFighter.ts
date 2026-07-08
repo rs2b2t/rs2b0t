@@ -7,8 +7,10 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Traversal } from '../api/Traversal.js';
+import { EventSignal } from '../api/EventSignal.js';
+import { Locs } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { countMatching, slotsMatching } from './ArdyFighterLogic.js';
+import { countMatching, matchesAny, shouldEat, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -145,6 +147,8 @@ export default class ArdyFighter extends TaskBot {
                     this.died = false;
                 }
             }),
+            new EatFood(this),
+            new RestockCakes(this),
             new ReturnToAnchor(this)
         );
     }
@@ -217,5 +221,87 @@ class ReturnToAnchor implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('walking to the market');
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
+    }
+}
+
+/** Eat below the gate — highest active priority, so it also fires mid-restock
+ *  and mid-walk, and Fight's inner loop yields to it below the same gate. */
+class EatFood implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    validate(): boolean {
+        return shouldEat(hpFraction(), EAT_AT, foodCount());
+    }
+
+    async execute(): Promise<void> {
+        const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
+        if (!food) {
+            return;
+        }
+        this.bot.setStatus(`eating ${food.name}`);
+        const before = Skills.effective('hitpoints');
+        await food.interact('Eat');
+        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+        this.bot.countEat();
+    }
+}
+
+/**
+ * Steal food from the Baker's stall until stocked. The engine blocks stall
+ * theft for 10 ticks after combat, and a guard with line-of-sight within 5
+ * tiles blocks the attempt and attacks ("Hey! Get your hands off there!") —
+ * that pull is welcome: combat invalidates this task, Fight kills the guard,
+ * and the 60s respawn window steals free. Owner-blocked attempts and the
+ * looted-bare stall (8-tick respawn) just retry.
+ */
+class RestockCakes implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    validate(): boolean {
+        return !Game.inCombat() && !Inventory.isFull() && shouldRestock(foodCount(), FOOD_FLOOR);
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('restocking at the Baker\'s stall');
+        const here = Game.tile();
+        if (!here || STALL_TILE.distanceTo(here) > 3) {
+            await Traversal.walkTo(STALL_TILE, { radius: 2, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
+        }
+
+        const deadline = performance.now() + 60000;
+        while (performance.now() < deadline) {
+            if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || Game.inCombat()) {
+                return; // higher-priority tasks take over next loop
+            }
+            if (Inventory.isFull() || foodCount() >= FOOD_TARGET) {
+                this.bot.log(`stocked ${foodCount()} food`);
+                return;
+            }
+            if (shouldEat(hpFraction(), EAT_AT, foodCount())) {
+                return; // EatFood outranks us next loop
+            }
+
+            // the looted stall swaps to an op-less variant while it respawns,
+            // so requiring the op naturally waits out the 8-tick gap
+            const stall = Locs.query()
+                .name(STALL_NAME)
+                .action(STALL_OP)
+                .where(l => l.tile().distanceTo(STALL_TILE) <= 3)
+                .nearest();
+            if (!stall) {
+                await Execution.delayTicks(2);
+                continue;
+            }
+
+            const before = foodCount();
+            if (!(await stall.interact(STALL_OP))) {
+                await Execution.delayTicks(2);
+                continue;
+            }
+            const got = await Execution.delayUntil(() => foodCount() > before || Game.inCombat(), 4000);
+            if (got && foodCount() > before) {
+                this.bot.countSteal();
+            }
+        }
     }
 }
