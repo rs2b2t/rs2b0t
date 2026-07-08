@@ -14,6 +14,7 @@ import IronBanker, { SETTINGS as IRONBANKER_SETTINGS } from './IronBanker.js';
 import LifeBot, { SETTINGS as LIFE_SETTINGS } from './LifeBot.js';
 import NavDemo from './NavDemo.js';
 import ProcessingBot from './ProcessingBot.js';
+import QuestDashboard from '../quests/QuestDashboard.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
@@ -46,6 +47,14 @@ ScriptRegistry.register({
     category: 'Quest',
     tags: ['f2p', 'quest', 'lumbridge', 'newbie'],
     create: () => new CooksAssistant()
+});
+
+ScriptRegistry.register({
+    name: 'QuestDashboard',
+    description: 'Reports DONE/READY/BLOCKED eligibility for all quests',
+    category: 'Quests',
+    tags: ['quests', 'overlay', 'dashboard'],
+    create: () => new QuestDashboard()
 });
 
 // --- combat ---
