@@ -69,15 +69,20 @@ export default class GatheringBot extends TaskBot {
         // location, anchor where we stand and drop when full (original behavior)
         this.anchor = this.location ? this.location.spot : new Tile(here.x, here.z, here.level);
 
+        // 'None' = power-gathering (always drop). Anything else banks: at the
+        // configured location's verified stand if resolved, else at the nearest
+        // bank booth in the scene (auto-detected). Miner has no location setting
+        // -> defaults to 'None' -> drops, unchanged.
+        const powerMode = locSetting.toLowerCase() === 'none';
         if (this.location) {
             this.log(`location: ${this.location.name}${locSetting.toLowerCase() === 'auto' ? ' (auto-detected)' : ''} — banking the catch at ${this.location.bankStand}`);
             if (!this.location.verified) {
                 this.log(`warning: ${this.location.name} coordinates are UNVERIFIED — watch the first bank run`);
             }
-        } else if (locSetting.toLowerCase() === 'auto') {
-            this.log('no known fishing location here — dropping the catch when full');
+        } else if (!powerMode) {
+            this.log('no preset location — will bank at the nearest bank booth in the scene (drops if none)');
         }
-        this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${this.location ? 'banking' : 'dropping'} *${this.dropMatch}* when full`);
+        this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.dropMatch}* when full`);
 
         this.on('inventory.changed', e => {
             if (e.id !== -1 && e.name?.toLowerCase().includes(this.dropMatch)) {
@@ -85,7 +90,7 @@ export default class GatheringBot extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(this), this.location ? new BankCatch(this) : new DropProduct(this), new Gather(this), new ReturnToAnchor(this));
+        this.add(new ContinueDialog(this), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -178,21 +183,28 @@ class DropProduct implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus('dropping');
-        for (let guard = 0; guard < 30; guard++) {
-            const item = this.bot.products()[0];
-            if (!item) {
-                break;
-            }
-            const before = Inventory.used();
-            await item.interact('Drop');
-            await Execution.delayUntil(() => Inventory.used() < before, 3000);
-        }
-        this.bot.log('dropped the haul');
+        await dropAll(this.bot);
     }
 }
 
-/** Full pack at a known location -> bank the catch and come back (IronBanker's recipe). */
+/** Drop every product slot (power-gathering, or the no-bank-nearby fallback). */
+async function dropAll(bot: GatheringBot): Promise<void> {
+    bot.setStatus('dropping');
+    for (let guard = 0; guard < 30; guard++) {
+        const item = bot.products()[0];
+        if (!item) {
+            break;
+        }
+        const before = Inventory.used();
+        await item.interact('Drop');
+        await Execution.delayUntil(() => Inventory.used() < before, 3000);
+    }
+    bot.log('dropped the haul');
+}
+
+/** Full pack -> bank the catch at the nearest bank, then come back. Uses the
+ *  configured location's verified stand when there is one, else auto-detects the
+ *  nearest booth in the scene; drops only if there's no bank nearby. */
 class BankCatch implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -201,16 +213,34 @@ class BankCatch implements Task {
     }
 
     async execute(): Promise<void> {
-        const loc = this.bot.getLocation()!;
         const had = this.bot.products().length;
+        const loc = this.bot.getLocation();
+        const boothName = loc?.boothName ?? 'Bank booth';
+        const boothOp = loc?.boothOp ?? 'Use-quickly';
+        const log = (m: string) => this.bot.log(`  ${m}`);
 
-        this.bot.setStatus('banking: walking to the bank');
-        if (!(await Traversal.walkResilient(loc.bankStand, { radius: 2, log: m => this.bot.log(`  ${m}`) }))) {
-            this.bot.log('walk to the bank failed — will retry');
-            return;
+        this.bot.setStatus('banking: heading to the bank');
+        let opened: boolean;
+        if (loc) {
+            // known location: walk to its verified stand and open the adjacent booth
+            await Traversal.walkResilient(loc.bankStand, { radius: 2, log });
+            opened = await Bank.openBooth(loc.bankStand, boothName, boothOp, log);
+        } else {
+            // auto-detect: nearest booth in the scene. Its own tile is solid, so
+            // walk close then interact it directly — the engine routes us to its
+            // accessible side (no hand-picked stand needed).
+            const booth = Locs.query().name(boothName).nearest();
+            if (!booth) {
+                this.bot.setStatus('no bank in scene — dropping the haul');
+                this.bot.log(`no '${boothName}' in the scene — dropping instead. Fish near a bank to bank the catch.`);
+                await dropAll(this.bot);
+                return;
+            }
+            await Traversal.walkResilient(booth.tile(), { radius: 3, log });
+            opened = await Bank.openNearest(boothName, boothOp, log);
         }
 
-        if (!(await Bank.openBooth(loc.bankStand, loc.boothName, loc.boothOp, m => this.bot.log(`  ${m}`)))) {
+        if (!opened) {
             this.bot.log('could not open the bank — will retry');
             return;
         }
@@ -222,7 +252,7 @@ class BankCatch implements Task {
         this.bot.log(`banked ${had} *${this.bot.dropKeyword()}*`);
 
         this.bot.setStatus('banking: back to the spots');
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
 

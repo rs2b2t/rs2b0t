@@ -160,7 +160,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Fisher',
-    description: 'Net/bait-fishes a spot; banks the catch at a known location (Draynor etc.), else drops it',
+    description: 'Net/bait-fishes a spot; banks the catch at the nearest bank (auto-detected), or drops it (location: None)',
     category: 'Fishing',
     tags: ['f2p', 'gathering', 'drop', 'banking'],
     settingsSchema: {
@@ -170,7 +170,7 @@ ScriptRegistry.register({
             default: 'Auto',
             options: LOCATION_OPTIONS,
             label: 'Fishing location',
-            help: 'Auto = bank the catch when started at a known fishing location; None = always drop (power-fishing)'
+            help: 'Auto = bank the catch at the nearest bank (a known location if started at one, else the nearest booth in the scene); None = always drop (power-fishing)'
         }
     },
     create: () => new GatheringBot()
