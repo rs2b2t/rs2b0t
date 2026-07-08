@@ -15,7 +15,10 @@ export function matchesAny(name: string | null, patterns: string[]): boolean {
         return false;
     }
     const n = name.toLowerCase();
-    return patterns.some(p => p.trim().length > 0 && n.includes(p.trim().toLowerCase()));
+    return patterns.some(p => {
+        const pat = p.trim().toLowerCase();
+        return pat.length > 0 && n.includes(pat);
+    });
 }
 
 /** Total quantity across matching slots (sums stacks). */

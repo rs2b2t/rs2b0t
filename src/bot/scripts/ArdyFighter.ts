@@ -90,6 +90,13 @@ function lootSlots(): number {
  * guard — free target), eats below a threshold (mid-combat too), loots the
  * rare guard drops, and banks them at the south bank when they fill enough
  * slots. Start it anywhere — it walks to the market first.
+ *
+ * Needs enough melee power to kill a guard well inside its 60 s respawn —
+ * stall thieving is blocked for 10 ticks after combat, so an account that
+ * can't clear its puller never opens a steal window (unarmed str 40
+ * soft-stalls; str 80 is comfortable, live-verified). Owner-alerted
+ * Knights/Paladins/Heroes are deliberately absent from the runtime's
+ * hostile-event list — the bot's own eat/panic ladder handles them.
  */
 export default class ArdyFighter extends TaskBot {
     override loopDelay = 600;
@@ -247,9 +254,12 @@ class EatFood implements Task {
         }
         this.bot.setStatus(`eating ${food.name}`);
         const before = Skills.effective('hitpoints');
-        await food.interact('Eat');
-        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
-        this.bot.countEat();
+        if (!(await food.interact('Eat'))) {
+            return;
+        }
+        if (await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000)) {
+            this.bot.countEat();
+        }
     }
 }
 
@@ -257,8 +267,10 @@ class EatFood implements Task {
  * Steal food from the Baker's stall until stocked. The engine blocks stall
  * theft for 10 ticks after combat, and a guard with line-of-sight within 5
  * tiles blocks the attempt and attacks ("Hey! Get your hands off there!") —
- * that pull is welcome: combat invalidates this task, Fight kills the guard,
- * and the 60s respawn window steals free. Owner-blocked attempts and the
+ * that pull is welcome: combat invalidates this task, and server-side
+ * auto-retaliate finishes the guard (Fight.validate requires !Game.inCombat(),
+ * so it never initiates against an already-attacking guard). The 60 s respawn
+ * window then steals free. Owner-blocked attempts and the
  * looted-bare stall (8-tick respawn) just retry.
  */
 class RestockCakes implements Task {
@@ -313,8 +325,9 @@ class RestockCakes implements Task {
     }
 }
 
-/** Pick up wanted drops near the anchor when out of combat. Counted by
- *  loot-quantity rise (not slot rise) so arrows landing on a stack register. */
+/** Pick up wanted drops within reach of the player (within LEASH+4 of us, not
+ *  the anchor) when out of combat. Counted by loot-quantity rise (not slot
+ *  rise) so arrows landing on a stack register. */
 class LootDrops implements Task {
     constructor(private bot: ArdyFighter) {}
 
@@ -410,7 +423,7 @@ class PanicRetreat implements Task {
 
         if (foodCount() === 0) {
             this.bot.setStatus('panic: bank empty — waiting for regen');
-            await Execution.delayUntil(() => hpFraction() >= REST_UNTIL, 300_000);
+            await Execution.delayUntil(() => hpFraction() >= REST_UNTIL || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
         }
 
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });

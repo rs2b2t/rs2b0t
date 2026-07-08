@@ -109,7 +109,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ArdyFighter',
-    description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank',
+    description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank (needs melee stats that beat the 60s guard respawn — ~str 80 unarmed)',
     category: 'Combat',
     tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
     settingsSchema: ARDY_SETTINGS,

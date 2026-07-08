@@ -33,6 +33,9 @@ describe('slotsMatching', () => {
         const pack = [item('Steel arrow', 40), item('Body talisman'), item('Cake')];
         expect(slotsMatching(pack, ['steel arrow', 'body talisman'])).toBe(2);
     });
+    test('empty pack occupies no slots', () => {
+        expect(slotsMatching([], ['cake'])).toBe(0);
+    });
 });
 
 describe('shouldBank', () => {
