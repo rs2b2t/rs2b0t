@@ -32,3 +32,7 @@ test('item kinds are valid and quantities positive', () => {
         }
     }
 });
+
+test('the dataset covers all 63 journal quests', () => {
+    expect(loadQuestRecords().length).toBe(63);
+});
