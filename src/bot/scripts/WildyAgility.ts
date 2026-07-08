@@ -48,7 +48,7 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         label: 'Food (name contains)',
         help: 'carried food eaten while running; also the ONLY thing re-withdrawn after a death, so a wilderness death costs nothing else'
     },
-    eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
+    eatAtHp: { type: 'number', default: 50, min: 1, max: 100, label: 'Eat below HP%' },
     eatToHp: { type: 'number', default: 90, min: 1, max: 100, label: 'Eat up to HP%', help: 'keep eating until HP reaches this % — 90 avoids the overheal wasted by eating to full' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 28, label: 'Food to withdraw after death' },
     obstacles: {
@@ -214,26 +214,26 @@ export default class WildyAgility extends TaskBot {
     }
 
     /**
-     * DeathRecovery.walkBack: after respawn, restock food-only at the bank (if
-     * we're short) then return to the course entrance. Guarded on `foodCount()`
-     * so a retry (e.g. the return leg timed out) skips straight back to walking
-     * rather than re-banking. Returns true once we're back at the entrance.
+     * DeathRecovery.walkBack: after respawn, ALWAYS restock food-only at the
+     * bank, then return to the course entrance. Every death walks to the bank,
+     * deposits the WHOLE pack and withdraws ONLY food — so the pack is
+     * guaranteed food-only when re-entering the wilderness, unconditionally
+     * (never contingent on the post-death food count). Returns true once we're
+     * back at the entrance.
      */
     private async recoverAndReturn(): Promise<boolean> {
-        if (foodCount() < FOOD_WITHDRAW) {
-            this.setStatus('recovering: walking to the bank');
-            await Traversal.walkResilient(BANK_TILE, { radius: 4, attempts: 4, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
+        this.setStatus('recovering: walking to the bank');
+        await Traversal.walkResilient(BANK_TILE, { radius: 4, attempts: 4, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
 
-            if (await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`))) {
-                // Food-only guarantee: empty the WHOLE pack, THEN take only food.
-                await Bank.depositInventory();
-                await Execution.delayTicks(1);
-                await this.withdrawFood();
-                this.log(`restocked ${foodCount()} '${FOOD}'`);
-            } else {
-                this.log('could not open the bank — will retry next loop');
-                return false;
-            }
+        if (await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`))) {
+            // Food-only guarantee: empty the WHOLE pack, THEN take only food.
+            await Bank.depositInventory();
+            await Execution.delayTicks(1);
+            await this.withdrawFood();
+            this.log(`restocked ${foodCount()} '${FOOD}'`);
+        } else {
+            this.log('could not open the bank — will retry next loop');
+            return false;
         }
 
         this.setStatus('recovering: returning to the course entrance');
