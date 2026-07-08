@@ -366,33 +366,40 @@ class GoToField implements Task {
     }
 }
 
+/** Nearest valuable drop in the field (a configured loot name), or null. */
+function findLoot() {
+    return GroundItems.query()
+        .where(g => LOOT_NAMES.includes((g.name ?? '').toLowerCase()))
+        .within(FIELD_RADIUS)
+        .nearest();
+}
+
+/** Grab the nearest valuable drop; resolves true if the pack grew. */
+async function lootOnce(bot: RockCrab): Promise<boolean> {
+    const drop = findLoot();
+    if (!drop) {
+        return false;
+    }
+    bot.setStatus(`looting ${drop.name} at ${drop.tile()}`);
+    const before = Inventory.used();
+    await drop.interact('Take');
+    if (await Execution.delayUntil(() => Inventory.used() > before, 5000)) {
+        bot.countLoot();
+        bot.log(`looted ${drop.name}`);
+        return true;
+    }
+    return false;
+}
+
 class LootValuables implements Task {
     constructor(private bot: RockCrab) {}
 
-    private find() {
-        return GroundItems.query()
-            .where(g => LOOT_NAMES.includes((g.name ?? '').toLowerCase()))
-            .within(FIELD_RADIUS)
-            .nearest();
-    }
-
     validate(): boolean {
-        return !Inventory.isFull() && this.find() !== null;
+        return !Inventory.isFull() && findLoot() !== null;
     }
 
     async execute(): Promise<void> {
-        const drop = this.find();
-        if (!drop) {
-            return;
-        }
-
-        this.bot.setStatus(`looting ${drop.name} at ${drop.tile()}`);
-        const before = Inventory.used();
-        await drop.interact('Take');
-        if (await Execution.delayUntil(() => Inventory.used() > before, 5000)) {
-            this.bot.countLoot();
-            this.bot.log(`looted ${drop.name}`);
-        }
+        await lootOnce(this.bot);
     }
 }
 
@@ -447,6 +454,13 @@ class Fight implements Task {
             }
             if (hpFraction() < FIGHT_HP_GATE) {
                 return; // out of food and low — Eat/ResetAggro handles it next loop
+            }
+
+            // grab valuable drops as they fall, without waiting for the whole
+            // stack to clear (the crabs keep auto-retaliating while we step over)
+            if (!Inventory.isFull() && findLoot() !== null) {
+                await lootOnce(this.bot);
+                continue;
             }
 
             const crab = activeCrabs().sort((a, b) => a.distance() - b.distance())[0];
