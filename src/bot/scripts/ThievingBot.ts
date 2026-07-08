@@ -1,10 +1,13 @@
 import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
+import { Reachability } from '../api/Reachability.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
+import { GroundItems } from '../api/queries/GroundItems.js';
+import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -16,8 +19,18 @@ export const SETTINGS: SettingsSchema = {
     food: { type: 'string', default: '', label: 'Food to eat (name contains)', help: 'eat this when HP drops from failed steals; blank = no eating (short runs only)' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
     dropMatch: { type: 'string', default: '', label: 'Drop when full (name contains)', help: 'drop these when the pack fills; blank = just idle when full (coins stack, so rarely fills)' },
+    loot: { type: 'string', default: 'coins', label: 'Pick up from ground (name contains)', help: 'grab matching ground drops within the leash, e.g. coins; comma-separate for several; blank = pick up nothing' },
+    obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (name contains)', help: 'when a target or the anchor is walled off, open the nearest of these that still has an Open action; comma-separate' },
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Leash radius (tiles)' }
 };
+
+/** Split a comma-separated keyword setting into lowercased, non-blank terms. */
+function splitKeywords(raw: string): string[] {
+    return raw
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
+}
 
 function hpFraction(): number {
     const base = Skills.level('hitpoints');
@@ -30,7 +43,9 @@ function hpFraction(): number {
  * knocks HP below the gate. Structurally the NPC-op cousin of GatheringBot —
  * stealing is an NPC action, not a loc action — with a combat-style HP gate
  * bolted on. Coins stack into one slot so the pack rarely fills; set dropMatch
- * to shed bulky loot for sustained runs. Start it standing by the targets.
+ * to shed bulky loot for sustained runs. Picks up wanted ground drops (coins
+ * by default) within the leash, and when a target or the anchor is walled off
+ * it opens the door/gate in the way. Start it standing by the targets.
  */
 export default class ThievingBot extends TaskBot {
     override loopDelay = 600;
@@ -41,10 +56,13 @@ export default class ThievingBot extends TaskBot {
     private food = '';
     private eatAtHp = 0.5;
     private dropMatch = '';
+    private loot: string[] = ['coins'];
+    private obstacle: string[] = ['door', 'gate'];
     private leash = 6;
 
     private steals = 0;
     private eats = 0;
+    private picked = 0;
     private status = 'starting';
 
     override async onStart(): Promise<void> {
@@ -55,6 +73,8 @@ export default class ThievingBot extends TaskBot {
         this.food = this.settings.str('food', '').toLowerCase();
         this.eatAtHp = this.settings.num('eatAtHp', 50) / 100;
         this.dropMatch = this.settings.str('dropMatch', '').toLowerCase();
+        this.loot = splitKeywords(this.settings.str('loot', 'coins'));
+        this.obstacle = splitKeywords(this.settings.str('obstacle', 'door, gate'));
         this.leash = this.settings.num('leashRadius', 6);
 
         const here = Game.tile()!;
@@ -68,11 +88,11 @@ export default class ThievingBot extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(), new EatFood(this), new DropJunk(this), new Steal(this), new ReturnToAnchor(this));
+        this.add(new ContinueDialog(), new EatFood(this), new DropJunk(this), new Loot(this), new Steal(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`ThievingBot — ${this.status}`, `${this.target}: ${this.steals} steals  ate ${this.eats}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
+        const lines = [`ThievingBot — ${this.status}`, `${this.target}: ${this.steals} steals  ate ${this.eats}  picked ${this.picked}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
         ctx.font = '12px monospace';
         const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -105,8 +125,50 @@ export default class ThievingBot extends TaskBot {
     dropKeyword(): string {
         return this.dropMatch;
     }
+    lootKeywords(): string[] {
+        return this.loot;
+    }
     countEat(): void {
         this.eats++;
+    }
+    countLoot(): void {
+        this.picked++;
+    }
+
+    /**
+     * Walk to within `radius` of `dest`, opening any shut door/gate we stall
+     * at. The steal/take ops path the engine's own way and won't open a closed
+     * door to reach a walled-off target, so we drive the approach by hand: walk
+     * a segment, and if it didn't get us closer, open the nearest matching
+     * obstacle that still offers an "Open" op (an open door offers "Close"
+     * instead, so this only ever targets shut ones) and retry. Returns true
+     * once we're in range, false when nothing is left to open.
+     */
+    async clearPathTo(dest: Tile, radius: number): Promise<boolean> {
+        for (let seg = 0; seg < 8; seg++) {
+            const here = Game.tile();
+            if (here && dest.distanceTo(here) <= radius) {
+                return true;
+            }
+            await Traversal.walkTo(dest, { radius, timeoutMs: 15000, log: m => this.log(`  ${m}`) });
+            const after = Game.tile();
+            if (after && dest.distanceTo(after) <= radius) {
+                return true;
+            }
+            const door = Locs.query()
+                .where(l => l.distance() <= 2 && this.obstacle.some(k => (l.name ?? '').toLowerCase().includes(k)) && l.actions().some(a => /^open/i.test(a)))
+                .nearest();
+            if (!door) {
+                return false; // nothing to open — genuinely stuck
+            }
+            const op = door.actions().find(a => /^open/i.test(a))!;
+            this.setStatus(`opening ${door.name}`);
+            this.log(`opening ${door.name} at ${door.tile()}`);
+            await door.interact(op);
+            await Execution.delayTicks(2);
+        }
+        const here = Game.tile();
+        return here !== null && dest.distanceTo(here) <= radius;
     }
 }
 
@@ -166,6 +228,51 @@ class DropJunk implements Task {
     }
 }
 
+/** Grab wanted drops off the ground (coins by default) within the leash —
+ *  only piles we can currently path to, so a walled-off drop can't wedge us. */
+class Loot implements Task {
+    constructor(private bot: ThievingBot) {}
+
+    private find() {
+        const want = this.bot.lootKeywords();
+        if (want.length === 0) {
+            return null;
+        }
+        const anchor = this.bot.getAnchor();
+        const within = this.bot.leashRadius();
+        return GroundItems.query()
+            .where(g => {
+                const n = g.name?.toLowerCase();
+                return n !== undefined && want.some(k => n.includes(k));
+            })
+            .where(g => g.tile().distanceTo(anchor) <= within && Reachability.canReach(g.tile()))
+            .nearest();
+    }
+
+    validate(): boolean {
+        return !Inventory.isFull() && this.find() !== null;
+    }
+
+    async execute(): Promise<void> {
+        const drop = this.find();
+        if (!drop) {
+            return;
+        }
+        const name = drop.name ?? '';
+        this.bot.setStatus(`picking up ${name}`);
+        // coins (and other stackables) merge into an existing slot, so the slot
+        // count needn't change — confirm the take by the item's total quantity.
+        const before = Inventory.count(name);
+        if (!(await drop.interact('Take'))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => Inventory.count(name) > before, 3000)) {
+            this.bot.countLoot();
+        }
+    }
+}
+
 /** Steal from the nearest target, then wait out the attempt (success or stun). */
 class Steal implements Task {
     constructor(private bot: ThievingBot) {}
@@ -190,6 +297,13 @@ class Steal implements Task {
         if (!npc) {
             return;
         }
+        // The steal op paths the engine's own way and won't open a shut door to
+        // reach a walled-off target — clear the way first, then steal next loop.
+        if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
+            this.bot.setStatus(`clearing path to ${this.bot.targetName()}`);
+            await this.bot.clearPathTo(npc.tile(), 1);
+            return;
+        }
         this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${npc.tile()}`);
         if (!(await npc.interact(this.bot.actionName()))) {
             await Execution.delayTicks(2);
@@ -210,6 +324,6 @@ class ReturnToAnchor implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to anchor');
-        await Traversal.walkTo(this.bot.getAnchor(), { radius: 2, timeoutMs: 60000 });
+        await this.bot.clearPathTo(this.bot.getAnchor(), 2);
     }
 }
