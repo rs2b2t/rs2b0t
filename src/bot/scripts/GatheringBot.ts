@@ -11,7 +11,7 @@ import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
-import { nearestBank } from '../api/BankLocations.js';
+import { Banking } from '../api/Banking.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
 export const GATHERING_SETTINGS: SettingsSchema = {
@@ -251,54 +251,33 @@ class BankCatch implements Task {
     async execute(): Promise<void> {
         const had = this.bot.products().length;
         const loc = this.bot.getLocation();
-        const boothName = loc?.boothName ?? 'Bank booth';
-        const boothOp = loc?.boothOp ?? 'Use-quickly';
         const log = (m: string) => this.bot.log(`  ${m}`);
+        const deposit = (name: string) => this.bot.isProduct(name);
 
-        this.bot.setStatus('banking: heading to the bank');
-        let opened: boolean;
         if (loc) {
             // known location: walk to its verified stand and open the adjacent booth
+            this.bot.setStatus('banking: heading to the bank');
             await Traversal.walkResilient(loc.bankStand, { radius: 2, log });
-            opened = await Bank.openBooth(loc.bankStand, boothName, boothOp, log);
-        } else {
-            // auto-detect: the nearest REAL booth in the scene (usable op — skips
-            // decorative "Bank booth" locs that share the name but have no op).
-            let booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
-            if (!booth) {
-                // no booth loaded — the resource is more than a screen from a
-                // bank, so web-walk to the nearest known bank and look again
-                const bank = nearestBank(Game.tile()!);
-                if (bank) {
-                    this.bot.setStatus(`banking: walking to ${bank.name}`);
-                    this.bot.log(`  no booth in scene — web-walking to the ${bank.name} bank at ${bank.tile}`);
-                    await Traversal.walkResilient(bank.tile, { radius: 4, timeoutMs: 120000, log });
-                    booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
-                }
+            if (!(await Bank.openBooth(loc.bankStand, loc.boothName ?? 'Bank booth', loc.boothOp ?? 'Use-quickly', log))) {
+                this.bot.log('could not open the bank — will retry');
+                return;
             }
-            if (!booth) {
+            await Bank.depositAllMatching(deposit);
+            await Execution.delayTicks(1);
+            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+        } else {
+            this.bot.setStatus('banking: heading to the nearest bank');
+            const banked = await Banking.bankNearest({ deposit, returnTo: this.bot.getAnchor(), log });
+            if (!banked) {
                 this.bot.setStatus('no bank reachable — dropping the haul');
-                this.bot.log(`no '${boothName}' reachable — dropping instead`);
+                this.bot.log('no bank reachable — dropping instead');
                 await dropAll(this.bot);
                 return;
             }
-            await Traversal.walkResilient(booth.tile(), { radius: 3, log });
-            opened = await Bank.openNearest(boothName, boothOp, log);
         }
 
-        if (!opened) {
-            this.bot.log('could not open the bank — will retry');
-            return;
-        }
-
-        this.bot.setStatus('banking: depositing the catch');
-        await Bank.depositAllMatching(name => this.bot.isProduct(name));
-        await Execution.delayTicks(1);
         this.bot.countTrip(had);
         this.bot.log(`banked ${had} *${this.bot.productLabel()}*`);
-
-        this.bot.setStatus('banking: back to the spots');
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
 

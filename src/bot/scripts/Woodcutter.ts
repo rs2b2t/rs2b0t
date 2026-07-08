@@ -3,13 +3,12 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { Traversal } from '../api/Traversal.js';
-import { Bank } from '../api/hud/Bank.js';
+import { Banking } from '../api/Banking.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { nearestBank } from '../api/BankLocations.js';
 
 /** Tunable parameters (panel + `?Woodcutter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -164,57 +163,27 @@ class BankLogs implements Task {
     }
 
     async execute(): Promise<void> {
-        // only REAL booths (usable op) — skip Seers-style decorative "Bank booth"
-        // locs against the outer walls that share the name but have no op
-        let booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
-        if (!booth) {
-            // no booth loaded — the trees are more than a screen from a bank, so
-            // web-walk to the nearest known bank and look again
-            const bank = nearestBank(Game.tile()!);
-            if (bank) {
-                this.bot.setStatus(`banking: walking to ${bank.name}`);
-                this.bot.log(`  no booth in scene — web-walking to the ${bank.name} bank at ${bank.tile}`);
-                await Traversal.walkResilient(bank.tile, { radius: 4, timeoutMs: 120000, log: m => this.bot.log(`  ${m}`) });
-                booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
-            }
-        }
-        if (!booth) {
-            // no bank reachable at all — drop so we never hard-stall, but shout about it
+        const had = logsHeld();
+        const deposit = (name: string) => isLogs(name);
+        this.bot.setStatus('banking: heading to the nearest bank');
+        const banked = await Banking.bankNearest({
+            deposit,
+            returnTo: this.bot.getAnchor(),
+            boothName: this.bot.bankName(),
+            boothOp: this.bot.bankOp(),
+            log: m => this.bot.log(`  ${m}`)
+        });
+        if (!banked) {
             this.bot.setStatus('no bank reachable — dropping logs');
-            this.bot.log(`no usable '${this.bot.bankName()}' reachable — dropping instead.`);
+            this.bot.log('no bank reachable — dropping instead');
             await dropAllLogs(this.bot);
             return;
         }
-
-        // Walk CLOSE to the booth (its own tile is solid/unreachable, so the
-        // pathfinder stops a few tiles off on the reachable side — that's fine).
-        // Then interact the booth directly; the engine routes us the last few
-        // tiles to its accessible side and opens it (no hand-picked stand tile).
-        this.bot.setStatus(`banking: heading to ${this.bot.bankName()} at ${booth.tile()}`);
-        await Traversal.walkResilient(booth.tile(), { radius: 3, attempts: 3, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
-
-        if (!(await Bank.openNearest(this.bot.bankName(), this.bot.bankOp(), m => this.bot.log(`  ${m}`)))) {
-            this.bot.log('could not open the bank — will retry');
-            return;
-        }
-
-        this.bot.setStatus('banking: depositing logs');
-        const had = logsHeld();
-        await Bank.depositAllMatching(name => isLogs(name));
-        await Execution.delayUntil(() => logsHeld() === 0, 3000);
-
-        const remaining = logsHeld();
-        const deposited = had - remaining;
+        const deposited = had - logsHeld();
         if (deposited > 0) {
             this.bot.countBanked(deposited);
             this.bot.log(`banked ${deposited} logs`);
         }
-        if (remaining > 0) {
-            this.bot.log(`warning: ${remaining} logs still in the pack after depositing`);
-        }
-
-        this.bot.setStatus('banking: back to the trees');
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
