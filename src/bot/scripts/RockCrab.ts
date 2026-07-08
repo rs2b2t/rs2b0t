@@ -4,6 +4,8 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
+import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -52,7 +54,8 @@ export const SETTINGS: SettingsSchema = {
     eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run' },
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Seers)' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names' }
+    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names' },
+    ...PERIODIC_BANK_SETTINGS
 };
 
 // Active run config — set from settings in onStart. Safe as module state
@@ -129,6 +132,16 @@ export default class RockCrab extends TaskBot {
             }),
             new Eat(this),
             new BankRun(this),
+            new PeriodicBank({
+                strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
+                itemsThreshold: () => this.settings.num('bankEveryItems', 15),
+                minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
+                countLoot: () => Inventory.items().filter(i => LOOT_NAMES.includes((i.name ?? '').toLowerCase())).length,
+                deposit: (name) => LOOT_NAMES.includes(name.toLowerCase()),
+                returnTo: () => FIELD,
+                setStatus: (s) => this.setStatus(s),
+                log: (m) => this.log(m)
+            }),
             new GoToField(this),
             new LootValuables(this),
             new RegroupAtField(this),

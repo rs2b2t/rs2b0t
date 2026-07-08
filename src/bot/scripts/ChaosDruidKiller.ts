@@ -3,6 +3,8 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
+import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -23,7 +25,8 @@ export const SETTINGS: SettingsSchema = {
     },
     leashRadius: { type: 'number', default: 8, min: 3, max: 20, label: 'Leash radius (tiles)' },
     fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Stop fighting below HP%' },
-    restUntilHp: { type: 'number', default: 65, min: 0, max: 100, label: 'Rest until HP%' }
+    restUntilHp: { type: 'number', default: 65, min: 0, max: 100, label: 'Rest until HP%' },
+    ...PERIODIC_BANK_SETTINGS
 };
 
 // --- Edgeville dungeon banking route (fixed waypoints) ---
@@ -115,6 +118,16 @@ export default class ChaosDruidKiller extends TaskBot {
                 }
             }),
             new BankRun(this),
+            new PeriodicBank({
+                strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
+                itemsThreshold: () => this.settings.num('bankEveryItems', 15),
+                minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
+                countLoot: () => this.carriedLoot(),
+                deposit: (name) => this.wantsLoot(name),
+                returnTo: () => this.getAnchor(),
+                setStatus: (s) => this.setStatus(s),
+                log: (m) => this.log(m)
+            }),
             new Loot(this),
             new Rest(this),
             new Fight(this),
@@ -150,6 +163,9 @@ export default class ChaosDruidKiller extends TaskBot {
     wantsLoot(name: string | null): boolean {
         const n = name?.toLowerCase();
         return n !== undefined && this.loot.some(m => n.includes(m));
+    }
+    carriedLoot(): number {
+        return Inventory.items().filter(i => this.wantsLoot(i.name)).length;
     }
     countKill(): void {
         this.kills++;

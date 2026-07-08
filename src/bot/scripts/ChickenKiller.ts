@@ -3,6 +3,8 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
+import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
@@ -27,7 +29,8 @@ export const SETTINGS: SettingsSchema = {
         options: ['attack', 'strength', 'defence'],
         label: 'Combat style',
         help: 'which combat stat to train (unarmed); re-applied each login since com_mode is not saved'
-    }
+    },
+    ...PERIODIC_BANK_SETTINGS
 };
 
 // combat style name -> com_mode value (aggressive = Strength xp).
@@ -114,6 +117,16 @@ export default class ChickenKiller extends TaskBot {
                     this.log('back at the anchor');
                 }
             }),
+            new PeriodicBank({
+                strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
+                itemsThreshold: () => this.settings.num('bankEveryItems', 15),
+                minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
+                countLoot: () => this.carriedLoot(),
+                deposit: (name) => this.wantsLoot(name),
+                returnTo: () => this.getAnchor(),
+                setStatus: (s) => this.setStatus(s),
+                log: (m) => this.log(m)
+            }),
             new BuryBones(this),
             new LootDrops(this),
             new LootFeathers(this),
@@ -149,6 +162,13 @@ export default class ChickenKiller extends TaskBot {
     }
     lootTerms(): string[] {
         return this.loot;
+    }
+    wantsLoot(name: string | null): boolean {
+        const n = (name ?? '').toLowerCase();
+        return this.loot.some(t => n.includes(t));
+    }
+    carriedLoot(): number {
+        return Inventory.items().filter(i => this.wantsLoot(i.name)).length;
     }
     shouldBury(): boolean {
         return this.buryEnabled;

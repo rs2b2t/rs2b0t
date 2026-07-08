@@ -3,6 +3,8 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
+import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -49,7 +51,8 @@ export const SETTINGS: SettingsSchema = {
     restUntilHp: { type: 'number', default: 60, min: 0, max: 100, label: 'Regen to HP% when bank empty' },
     foodTarget: { type: 'number', default: 8, min: 1, max: 27, label: 'Keep food stocked to (count)', help: 'after eating to full, restock the Baker\'s stall back up to this many' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names (contains)' }
+    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names (contains)' },
+    ...PERIODIC_BANK_SETTINGS
 };
 
 // Active run config — set from settings in onStart. Safe as module state
@@ -160,6 +163,16 @@ export default class ArdyFighter extends TaskBot {
             new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
+            new PeriodicBank({
+                strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
+                itemsThreshold: () => this.settings.num('bankEveryItems', 15),
+                minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
+                countLoot: () => lootSlots(),
+                deposit: (name) => matchesAny(name, LOOT),
+                returnTo: () => ANCHOR,
+                setStatus: (s) => this.setStatus(s),
+                log: (m) => this.log(m)
+            }),
             new BankRun(this),
             new RestockCakes(this),
             new Fight(this),
