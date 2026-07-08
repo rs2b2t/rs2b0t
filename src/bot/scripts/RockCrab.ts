@@ -147,7 +147,7 @@ export default class RockCrab extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${Inventory.count(FOOD_NAME)}  tick ${Game.tick()}`];
+        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`];
         ctx.font = '12px monospace';
         const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -215,13 +215,45 @@ function atCentre(): boolean {
     return here !== null && FIELD.distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
 }
 
-function hasFood(): boolean {
-    return Inventory.count(FOOD_NAME) > 0;
+// Multi-bite foods eat DOWN through intermediate items (a cake is 3 items:
+// Cake -> 2/3 cake -> Slice of cake), so an exact name match would stop seeing
+// it as food after the first bite. List every edible form, keyed by the full
+// item you'd bank/withdraw. Anything not listed is treated as a single-item food.
+const FOOD_FORMS: Record<string, string[]> = {
+    'cake': ['cake', '2/3 cake', 'slice of cake'],
+    'chocolate cake': ['chocolate cake', '2/3 chocolate cake', 'chocolate slice'],
+    'plain pizza': ['plain pizza', '1/2 plain pizza'],
+    'meat pizza': ['meat pizza', '1/2 meat pizza'],
+    'anchovy pizza': ['anchovy pizza', '1/2 anchovy pizza'],
+    'pineapple pizza': ['pineapple pizza', '1/2 pineapple pizza'],
+    'redberry pie': ['redberry pie', 'half a redberry pie'],
+    'meat pie': ['meat pie', 'half a meat pie'],
+    'apple pie': ['apple pie', 'half an apple pie']
+};
+
+/** Every edible form of the configured food (all 3 slices of a cake, etc.). */
+function foodForms(): string[] {
+    const key = FOOD_NAME.toLowerCase();
+    return FOOD_FORMS[key] ?? [key];
 }
 
-/** Eat one piece of food if we have any; resolves true if HP went up. */
+/** True if an item is one of the edible forms of the configured food. */
+function isFoodItem(name: string | null | undefined): boolean {
+    return foodForms().includes((name ?? '').toLowerCase());
+}
+
+/** Edible food items in the pack, counting part-eaten cakes/pizzas/pies too. */
+function foodCount(): number {
+    return Inventory.items().filter(i => isFoodItem(i.name)).length;
+}
+
+function hasFood(): boolean {
+    return foodCount() > 0;
+}
+
+/** Eat one piece of food if we have any (any form); resolves true if HP went up. */
 async function eatOnce(bot: RockCrab): Promise<boolean> {
-    const food = Inventory.first(FOOD_NAME);
+    const food = Inventory.items().find(i => isFoodItem(i.name));
     if (!food) {
         return false;
     }
