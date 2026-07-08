@@ -6,11 +6,13 @@ import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { Bank } from '../api/hud/Bank.js';
 import { Traversal } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
+import { GroundItems } from '../api/queries/GroundItems.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { countMatching, matchesAny, shouldEat, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
+import { countMatching, matchesAny, shouldBank, shouldEat, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -148,7 +150,9 @@ export default class ArdyFighter extends TaskBot {
                 }
             }),
             new EatFood(this),
+            new BankRun(this),
             new RestockCakes(this),
+            new LootDrops(this),
             new ReturnToAnchor(this)
         );
     }
@@ -303,5 +307,67 @@ class RestockCakes implements Task {
                 this.bot.countSteal();
             }
         }
+    }
+}
+
+/** Pick up wanted drops near the anchor when out of combat. Counted by
+ *  loot-quantity rise (not slot rise) so arrows landing on a stack register. */
+class LootDrops implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    private find() {
+        return GroundItems.query()
+            .where(g => matchesAny(g.name, LOOT))
+            .within(LEASH + 4)
+            .nearest();
+    }
+
+    validate(): boolean {
+        return !Game.inCombat() && !Inventory.isFull() && this.find() !== null;
+    }
+
+    async execute(): Promise<void> {
+        const drop = this.find();
+        if (!drop) {
+            return;
+        }
+        this.bot.setStatus(`looting ${drop.name} at ${drop.tile()}`);
+        const before = countMatching(Inventory.items(), LOOT);
+        if (!(await drop.interact('Take'))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => countMatching(Inventory.items(), LOOT) > before, 5000)) {
+            this.bot.countLoot();
+        }
+    }
+}
+
+/** Haul the loot two streets south: open the booth, deposit ONLY loot-list
+ *  matches (food and anything else carried is never touched), walk back. */
+class BankRun implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    validate(): boolean {
+        return shouldBank(lootSlots(), BANK_AT, Inventory.isFull());
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('banking the loot');
+        await Traversal.walkTo(BANK_STAND, { radius: 2, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
+
+        if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
+
+        await Bank.depositAllMatching(name => matchesAny(name, LOOT));
+        await Execution.delayTicks(1);
+        this.bot.countTrip();
+        this.bot.log(`deposited the loot (trip ${this.bot.tripsTotal()})`);
+
+        // walking away closes the bank on its own
+        this.bot.setStatus('heading back to the market');
+        await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
