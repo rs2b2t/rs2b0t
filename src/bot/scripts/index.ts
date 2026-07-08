@@ -52,7 +52,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'QuestDashboard',
     description: 'Reports DONE/READY/BLOCKED eligibility for all quests',
-    category: 'Quests',
+    category: 'Quest',
     tags: ['quests', 'overlay', 'dashboard'],
     create: () => new QuestDashboard()
 });
