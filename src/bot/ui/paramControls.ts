@@ -208,7 +208,7 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
                 f.appendChild(document.createTextNode(name));
                 const inp = el('input', 'lcb-param-tilein');
                 inp.type = 'number';
-                inp.value = parts[i] ?? (i === 2 ? '0' : '0');
+                inp.value = parts[i] ?? '0';
                 inp.disabled = disabled;
                 inp.addEventListener('change', () => onChange(fields.map(x => x.value.trim() || '0').join(',')));
                 fields.push(inp);

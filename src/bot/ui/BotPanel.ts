@@ -6,7 +6,7 @@ import { Credentials } from '../runtime/Credentials.js';
 import { loadFromFile, loadFromUrl, type LoadResult } from '../runtime/loader.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { SettingsStore, type SettingDef } from '../runtime/Settings.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
 import { summarize } from './paramControls.js';
