@@ -2,6 +2,7 @@ import type { InvItemSnapshot, WorldTile } from '../../adapter/ClientAdapter.js'
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
+import { Reachability } from '../Reachability.js';
 import { Traversal } from '../Traversal.js';
 import { Locs } from '../queries/Locs.js';
 import { ChatDialog } from './ChatDialog.js';
@@ -99,13 +100,12 @@ export const Bank = {
     },
 
     /**
-     * Open the nearest booth in the scene WITHOUT a hand-picked stand tile:
-     * interact the booth directly and let the engine's route-finder walk the
-     * player to its accessible side (around counters/walls). Retries a few
-     * times — each interact leaves the player closer, so it converges on
-     * adjacency even when the first click lands off. Use this for banks whose
-     * exact stand tile isn't known; use `openBooth` when you have one. True once
-     * the bank screen is open.
+     * Open the nearest booth in the scene WITHOUT a hand-picked stand tile.
+     * A booth sits behind a counter inside a building — interacting from outside
+     * just wanders the wall and wedges. So we first walk ONTO a live-reachable
+     * tile orthogonally adjacent to the booth (routing us through the doorway up
+     * to the counter), then operate the now-adjacent booth. Retries a few times.
+     * Use `openBooth` when you already know the stand tile. True once open.
      */
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
         for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
@@ -114,13 +114,25 @@ export const Bank = {
                 log?.(`no '${boothName}' in the scene`);
                 return false;
             }
-            const chosen = booth.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? booth.actions().find(a => /^use|^bank/i.test(a)) ?? booth.actions()[0];
-            log?.(`opening ${boothName} at ${booth.tile()} (${booth.distance()} away) via '${chosen}'`);
-            if (chosen) {
-                await booth.interact(chosen);
+
+            // step to the counter first unless we're already beside a booth
+            if (!Locs.query().name(boothName).where(l => l.distance() <= 1).nearest()) {
+                const stand = bankStand(booth.tile());
+                if (stand) {
+                    log?.(`stepping to the bank counter at (${stand.x}, ${stand.z}) beside ${boothName}`);
+                    await Traversal.walkTo(stand, { radius: 0, timeoutMs: 30000, log });
+                } else {
+                    log?.(`no reachable tile beside '${boothName}' yet — closing in`);
+                    await Traversal.walkTo(booth.tile(), { radius: 1, timeoutMs: 30000, log });
+                }
             }
-            // allow time for the engine to walk us to the booth and open it
-            await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 10000);
+
+            const adjacent = Locs.query().name(boothName).where(l => l.distance() <= 1).nearest() ?? booth;
+            const chosen = adjacent.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? adjacent.actions().find(a => /^use|^bank/i.test(a)) ?? adjacent.actions()[0];
+            if (chosen) {
+                await adjacent.interact(chosen);
+            }
+            await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 6000);
             if (ChatDialog.canContinue()) {
                 await ChatDialog.continue();
             }
@@ -128,6 +140,31 @@ export const Bank = {
         return Bank.isOpen();
     }
 };
+
+/**
+ * A live-reachable tile orthogonally adjacent to the booth — the counter tile
+ * you stand on to bank. Uses the LIVE collision map (doors in their current
+ * open state) so it routes in through the doorway; returns the one nearest the
+ * player, or null if none is reachable right now (caller falls back).
+ */
+function bankStand(booth: WorldTile): WorldTile | null {
+    const me = reader.worldTile();
+    const neighbours: WorldTile[] = [
+        { x: booth.x + 1, z: booth.z, level: booth.level },
+        { x: booth.x - 1, z: booth.z, level: booth.level },
+        { x: booth.x, z: booth.z + 1, level: booth.level },
+        { x: booth.x, z: booth.z - 1, level: booth.level }
+    ];
+    const reachable = neighbours.filter(t => Reachability.canReach(t));
+    if (reachable.length === 0) {
+        return null;
+    }
+    if (!me) {
+        return reachable[0];
+    }
+    const cheb = (t: WorldTile) => Math.max(Math.abs(t.x - me.x), Math.abs(t.z - me.z));
+    return reachable.sort((a, b) => cheb(a) - cheb(b))[0];
+}
 
 function clickInvButton(items: InvItemSnapshot[], name: string, opLabel: string): boolean | Promise<boolean> {
     const wanted = name.toLowerCase();
