@@ -6,6 +6,7 @@ import { Navigator } from './nav/Navigator.js';
 import { installAbi } from './runtime/abi.js';
 import { AutoRelogin } from './runtime/AutoRelogin.js';
 import { RenderGate, type RenderMode } from './runtime/RenderGate.js';
+import { RunManager } from './runtime/RunManager.js';
 import { WelcomeDismisser } from './runtime/WelcomeScreen.js';
 import { Scheduler } from './runtime/Scheduler.js';
 import { ScriptRegistry } from './runtime/ScriptRegistry.js';
@@ -57,6 +58,12 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     // Auto-close rs2b2t's login welcome_screen — it blocks all scene
     // interaction and would otherwise freeze every bot on the live server.
     WelcomeDismisser.enable();
+
+    // Keep run toggled on whenever there's energy, for every bot (the walkers
+    // don't manage run themselves). Disable with bot.html?run=0.
+    if (params.get('run') !== '0') {
+        RunManager.enable();
+    }
 
     // DevTools handle (works because this bundle never mangles names).
     (globalThis as Record<string, unknown>).rs2b0t = {
