@@ -425,6 +425,40 @@
             font-size: 10px;
             margin-top: 3px;
         }
+
+        /* parameters: read-only panel summary */
+        .lcb-param-summary { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 11px ui-monospace, monospace; margin-bottom: 8px; }
+        .lcb-param-sitem { white-space: nowrap; }
+        .lcb-param-skey { color: #7d8590; }
+        .lcb-param-sval { color: #fff; margin-left: 4px; }
+        .lcb-param-edit { width: 100%; color: #ffb86c; }
+
+        /* parameters modal body */
+        .lcb-params-body { padding: 4px 4px 8px; max-height: 60vh; overflow: auto; }
+        .lcb-param-row { padding: 10px 4px; border-bottom: 1px solid #23282f; }
+        .lcb-param-row:last-child { border-bottom: 0; }
+        .lcb-param-label { font: 600 12px ui-sans-serif, system-ui; color: #cdd3da; }
+        .lcb-param-help { font: 11px ui-sans-serif, system-ui; color: #7d8590; margin-top: 1px; }
+        .lcb-param-control { margin-top: 8px; }
+
+        /* slider */
+        .lcb-ctl-slider { display: flex; align-items: center; gap: 10px; }
+        .lcb-param-range { flex: 1; min-width: 120px; accent-color: #ffb86c; }
+        .lcb-param-num { width: 60px; text-align: center; }
+        .lcb-param-rangelbl { font: 10px ui-monospace, monospace; color: #7d8590; }
+
+        /* chips (multiselect + taglist) */
+        .lcb-ctl-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .lcb-param-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; cursor: pointer; }
+        .lcb-param-chip input { margin: 0; accent-color: #9be05b; }
+        .lcb-param-tag { display: inline-flex; align-items: center; gap: 6px; background: #22272e; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; }
+        .lcb-param-tagx { background: none; border: 0; color: #7d8590; cursor: pointer; padding: 0; }
+        .lcb-param-tagadd { width: 80px; }
+
+        /* tile */
+        .lcb-ctl-tile { display: flex; gap: 8px; }
+        .lcb-param-tilef { display: inline-flex; align-items: center; gap: 5px; font: 11px ui-monospace, monospace; color: #7d8590; }
+        .lcb-param-tilein { width: 66px; }
     </style>
 </head>
 

@@ -8,6 +8,8 @@ import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingDef } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
+import ParamsModal from './ParamsModal.js';
+import { summarize } from './paramControls.js';
 
 /**
  * Live state panel + script controls. Plain DOM, no framework. The only
@@ -30,6 +32,7 @@ export default class BotPanel {
     private loadUrlInput: HTMLInputElement;
     private loadStatus: HTMLElement;
     private settingsBox: HTMLElement;
+    private paramsModal!: ParamsModal;
 
     private banner: HTMLElement;
     private stateCell: HTMLElement;
@@ -116,6 +119,11 @@ export default class BotPanel {
         settings.appendChild(this.settingsBox);
         root.appendChild(settings);
 
+        this.paramsModal = new ParamsModal(
+            () => isActiveState(ScriptRunner.state),
+            () => this.renderSettings()
+        );
+
         ScriptRegistry.onChange(() => {
             this.ensureSelection();
             this.renderSettings();
@@ -156,9 +164,8 @@ export default class BotPanel {
         ScriptRunner.onChange(() => {
             this.renderScriptControls();
             this.renderLog();
-            // lock the parameter inputs while a script is active
-            const active = isActiveState(ScriptRunner.state);
-            this.settingsBox.querySelectorAll('input').forEach(i => ((i as HTMLInputElement).disabled = active));
+            // re-render the parameters section so the Edit button reflects active state
+            this.renderSettings();
         });
 
         // stat cells are created once (sparse over unused skill ids), updated in place
@@ -222,7 +229,7 @@ export default class BotPanel {
         }
     }
 
-    /** Render the selected script's settingsSchema as an editable form. */
+    /** Render the selected script's parameters as a read-only summary + Edit button. */
     private renderSettings(): void {
         this.settingsBox.replaceChildren();
         const meta = ScriptRegistry.get(this.selectedScript);
@@ -235,106 +242,26 @@ export default class BotPanel {
         }
 
         const active = isActiveState(ScriptRunner.state);
+
+        const summary = el('div', 'lcb-param-summary');
         for (const [key, def] of Object.entries(schema)) {
-            this.settingsBox.appendChild(this.buildSettingRow(meta.name, key, def, active));
+            const item = el('span', 'lcb-param-sitem');
+            const k = el('span', 'lcb-param-skey');
+            k.textContent = key;
+            const v = el('span', 'lcb-param-sval');
+            v.textContent = summarize(def, SettingsStore.displayString(meta.name, key, def));
+            item.appendChild(k);
+            item.appendChild(v);
+            summary.appendChild(item);
         }
+        this.settingsBox.appendChild(summary);
 
-        const hint = el('div', 'lcb-dim');
-        hint.textContent = active ? 'stop the script to change parameters' : 'changes apply on next Start';
-        this.settingsBox.appendChild(hint);
-    }
-
-    private buildSettingRow(scriptName: string, key: string, def: SettingDef, active: boolean): HTMLElement {
-        const rowEl = el('div', 'lcb-setting');
-        const label = el('span', 'lcb-setting-label');
-        label.textContent = def.label ?? key;
-        if (def.help) {
-            label.title = def.help;
-        }
-
-        const current = SettingsStore.displayString(scriptName, key, def);
-
-        if (def.type === 'string' && def.options && def.options.length > 0) {
-            const select = document.createElement('select');
-            select.className = 'lcb-input';
-            select.disabled = active;
-            for (const option of def.options) {
-                const opt = document.createElement('option');
-                opt.value = option;
-                opt.textContent = option;
-                select.appendChild(opt);
-            }
-            const match = def.options.find(o => o.toLowerCase() === current.trim().toLowerCase());
-            select.value = match ?? String(def.default);
-            select.addEventListener('change', () => SettingsStore.save(scriptName, key, select.value));
-            rowEl.appendChild(label);
-            rowEl.appendChild(select);
-            return rowEl;
-        }
-
-        // string[] with options -> a checkbox multi-select (e.g. Miner rock types)
-        if (def.type === 'string[]' && def.options && def.options.length > 0) {
-            const selected = new Set(
-                current
-                    .split(',')
-                    .map(s => s.trim().toLowerCase())
-                    .filter(Boolean)
-            );
-            const group = document.createElement('div');
-            group.className = 'lcb-multiselect';
-            group.style.display = 'flex';
-            group.style.flexWrap = 'wrap';
-            group.style.gap = '2px 12px';
-            const boxes: HTMLInputElement[] = [];
-            for (const option of def.options) {
-                const optLabel = document.createElement('label');
-                optLabel.className = 'lcb-multiselect-opt';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.disabled = active;
-                cb.checked = selected.has(option.toLowerCase());
-                cb.addEventListener('change', () => {
-                    const chosen = def.options!.filter((_, i) => boxes[i].checked);
-                    SettingsStore.save(scriptName, key, chosen.join(', '));
-                });
-                boxes.push(cb);
-                optLabel.appendChild(cb);
-                optLabel.appendChild(document.createTextNode(' ' + option));
-                group.appendChild(optLabel);
-            }
-            rowEl.appendChild(label);
-            rowEl.appendChild(group);
-            return rowEl;
-        }
-
-        const input = document.createElement('input');
-        input.disabled = active;
-
-        if (def.type === 'boolean') {
-            input.type = 'checkbox';
-            input.checked = current === 'true' || current === '1' || current === 'yes';
-            input.addEventListener('change', () => SettingsStore.save(scriptName, key, input.checked ? 'true' : 'false'));
-            rowEl.classList.add('lcb-setting-bool');
-            rowEl.appendChild(input);
-            rowEl.appendChild(label);
-        } else {
-            input.className = 'lcb-input';
-            input.type = def.type === 'number' ? 'number' : 'text';
-            if (def.type === 'number') {
-                if (def.min !== undefined) {
-                    input.min = String(def.min);
-                }
-                if (def.max !== undefined) {
-                    input.max = String(def.max);
-                }
-            }
-            input.value = current;
-            input.addEventListener('change', () => SettingsStore.save(scriptName, key, input.value.trim()));
-            rowEl.appendChild(label);
-            rowEl.appendChild(input);
-        }
-
-        return rowEl;
+        const edit = document.createElement('button');
+        edit.className = 'lcb-button lcb-param-edit';
+        edit.textContent = '✎ Edit parameters';
+        edit.disabled = active;
+        edit.addEventListener('click', () => this.paramsModal.open(meta.name, schema));
+        this.settingsBox.appendChild(edit);
     }
 
     private buildCredentials(): HTMLElement {
