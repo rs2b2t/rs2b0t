@@ -4,6 +4,7 @@ import { LOCATION_OPTIONS } from './FishingLocations.js';
 import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
+import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import CooksAssistant from './CooksAssistant.js';
@@ -104,6 +105,15 @@ ScriptRegistry.register({
     tags: ['members', 'rellekka', 'keys', 'afk'],
     settingsSchema: ROCKCRAB_SETTINGS,
     create: () => new RockCrab()
+});
+
+ScriptRegistry.register({
+    name: 'ArdyFighter',
+    description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank (needs melee stats that beat the 60s guard respawn — ~str 80 unarmed)',
+    category: 'Combat',
+    tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
+    settingsSchema: ARDY_SETTINGS,
+    create: () => new ArdyFighter()
 });
 
 // --- thieving ---
