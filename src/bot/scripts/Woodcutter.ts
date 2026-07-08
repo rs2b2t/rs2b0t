@@ -9,6 +9,7 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { nearestBank } from './BankLocations.js';
 
 /** Tunable parameters (panel + `?Woodcutter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -165,11 +166,22 @@ class BankLogs implements Task {
     async execute(): Promise<void> {
         // only REAL booths (usable op) — skip Seers-style decorative "Bank booth"
         // locs against the outer walls that share the name but have no op
-        const booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
+        let booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
         if (!booth) {
-            // no bank reachable in the scene — drop so we never hard-stall, but shout about it
-            this.bot.setStatus('no bank in scene — dropping logs');
-            this.bot.log(`no usable '${this.bot.bankName()}' in the scene near the anchor — dropping instead. Start me next to a bank to bank the logs.`);
+            // no booth loaded — the trees are more than a screen from a bank, so
+            // web-walk to the nearest known bank and look again
+            const bank = nearestBank(Game.tile()!);
+            if (bank) {
+                this.bot.setStatus(`banking: walking to ${bank.name}`);
+                this.bot.log(`  no booth in scene — web-walking to the ${bank.name} bank at ${bank.tile}`);
+                await Traversal.walkResilient(bank.tile, { radius: 4, timeoutMs: 120000, log: m => this.bot.log(`  ${m}`) });
+                booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
+            }
+        }
+        if (!booth) {
+            // no bank reachable at all — drop so we never hard-stall, but shout about it
+            this.bot.setStatus('no bank reachable — dropping logs');
+            this.bot.log(`no usable '${this.bot.bankName()}' reachable — dropping instead.`);
             await dropAllLogs(this.bot);
             return;
         }

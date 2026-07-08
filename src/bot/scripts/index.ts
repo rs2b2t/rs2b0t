@@ -1,6 +1,7 @@
 import { AGILITY_SETTINGS } from './AgilityBot.js';
 import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';
+import { ROCK_OPTIONS } from './MiningRocks.js';
 import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
@@ -149,10 +150,26 @@ function gathering(overrides: Record<string, unknown>): SettingsSchema {
 
 ScriptRegistry.register({
     name: 'Miner',
-    description: 'Mines rocks and drops the ore (anchor = start tile, needs a pickaxe)',
+    description: 'Mines the selected rock types and banks the ore at the nearest bank (auto-detected), or drops it. Needs a pickaxe.',
     category: 'Mining',
-    tags: ['f2p', 'gathering', 'drop'],
-    settingsSchema: gathering({ targetType: 'loc', target: 'Rocks', action: 'Mine', dropMatch: 'ore', leashRadius: 8 }),
+    tags: ['f2p', 'gathering', 'banking', 'drop'],
+    settingsSchema: {
+        rocks: {
+            type: 'string[]',
+            default: ['Iron'],
+            options: ROCK_OPTIONS,
+            label: 'Rock types',
+            help: 'which rocks to mine — every rock is named "Rocks" in-game, so pick the ore types here (multi-select). Empty = mine any rock.'
+        },
+        leashRadius: GATHERING_SETTINGS.leashRadius,
+        location: {
+            type: 'string',
+            default: 'Auto',
+            options: ['Auto', 'None'],
+            label: 'Banking',
+            help: 'Auto = bank the ore at the nearest bank booth in the loaded scene; None = drop it (power-mining). For Auto, mine within ~a screen of a bank.'
+        }
+    },
     create: () => new GatheringBot()
 });
 

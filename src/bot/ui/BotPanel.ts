@@ -272,6 +272,41 @@ export default class BotPanel {
             return rowEl;
         }
 
+        // string[] with options -> a checkbox multi-select (e.g. Miner rock types)
+        if (def.type === 'string[]' && def.options && def.options.length > 0) {
+            const selected = new Set(
+                current
+                    .split(',')
+                    .map(s => s.trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            const group = document.createElement('div');
+            group.className = 'lcb-multiselect';
+            group.style.display = 'flex';
+            group.style.flexWrap = 'wrap';
+            group.style.gap = '2px 12px';
+            const boxes: HTMLInputElement[] = [];
+            for (const option of def.options) {
+                const optLabel = document.createElement('label');
+                optLabel.className = 'lcb-multiselect-opt';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.disabled = active;
+                cb.checked = selected.has(option.toLowerCase());
+                cb.addEventListener('change', () => {
+                    const chosen = def.options!.filter((_, i) => boxes[i].checked);
+                    SettingsStore.save(scriptName, key, chosen.join(', '));
+                });
+                boxes.push(cb);
+                optLabel.appendChild(cb);
+                optLabel.appendChild(document.createTextNode(' ' + option));
+                group.appendChild(optLabel);
+            }
+            rowEl.appendChild(label);
+            rowEl.appendChild(group);
+            return rowEl;
+        }
+
         const input = document.createElement('input');
         input.disabled = active;
 

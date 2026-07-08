@@ -10,6 +10,8 @@ import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
+import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
+import { nearestBank } from './BankLocations.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
 export const GATHERING_SETTINGS: SettingsSchema = {
@@ -44,6 +46,12 @@ export default class GatheringBot extends TaskBot {
     private dropMatch = 'ore';
     private leash = 10;
 
+    // Mining mode (Miner preset): every rock loc is named "Rocks", so we target
+    // the SELECTED ore types by loc id, and the product filter matches every
+    // selected ore's item. Empty when not mining a specific set.
+    private rockIds = new Set<number>();
+    private productKeywords: string[] = [];
+
     // A target that gave a blocking dialog (too-high level / no tool) is dead
     // for this run; one that just yielded nothing (freshly depleted rock,
     // exhausted fishing spot) gets a short cooldown so we rotate to others and
@@ -59,6 +67,22 @@ export default class GatheringBot extends TaskBot {
         this.action = this.settings.str('action', 'Mine');
         this.dropMatch = this.settings.str('dropMatch', 'ore').toLowerCase();
         this.leash = this.settings.num('leashRadius', 10);
+
+        // Mining mode: the Miner preset carries a 'rocks' multi-select. When
+        // present, we target rocks by loc id (every rock shares the name
+        // "Rocks") and match every selected ore's item as the product. Empty
+        // selection falls back to mining all rock types.
+        if ('rocks' in this.settings.raw()) {
+            const chosen = this.settings.list('rocks');
+            const rocks = chosen.length > 0 ? chosen : ROCK_OPTIONS;
+            this.targetType = 'loc';
+            this.target = 'Rocks';
+            this.action = 'Mine';
+            this.rockIds = resolveRockIds(rocks);
+            this.productKeywords = rocks.map(r => r.trim().toLowerCase());
+        } else {
+            this.productKeywords = [this.dropMatch];
+        }
 
         const here = Game.tile()!;
         const locSetting = this.settings.str('location', 'None');
@@ -82,10 +106,10 @@ export default class GatheringBot extends TaskBot {
         } else if (!powerMode) {
             this.log('no preset location — will bank at the nearest bank booth in the scene (drops if none)');
         }
-        this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.dropMatch}* when full`);
+        this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.productLabel()}* when full`);
 
         this.on('inventory.changed', e => {
-            if (e.id !== -1 && e.name?.toLowerCase().includes(this.dropMatch)) {
+            if (e.id !== -1 && this.isProduct(e.name)) {
                 this.gathered++;
             }
         });
@@ -121,16 +145,28 @@ export default class GatheringBot extends TaskBot {
     actionName(): string {
         return this.action;
     }
-    dropKeyword(): string {
-        return this.dropMatch;
-    }
     isNpc(): boolean {
         return this.targetType === 'npc';
     }
 
+    /** True if an item name is one of our gathered products — any selected ore
+     *  (Miner), or the single dropMatch keyword for other presets. */
+    isProduct(name: string | null | undefined): boolean {
+        const n = (name ?? '').toLowerCase();
+        return this.productKeywords.some(k => n.includes(k));
+    }
+    /** Only mine the SELECTED rock ids; an empty set matches any rock. */
+    matchesRock(id: number): boolean {
+        return this.rockIds.size === 0 || this.rockIds.has(id);
+    }
+    /** Short product label (e.g. "iron/coal") for status and log lines. */
+    productLabel(): string {
+        return this.productKeywords.join('/');
+    }
+
     /** Inventory items matching the product filter (dropped or banked when full). */
     products() {
-        return Inventory.items().filter(i => i.name?.toLowerCase().includes(this.dropMatch));
+        return Inventory.items().filter(i => this.isProduct(i.name));
     }
     getLocation(): FishingLocation | null {
         return this.location;
@@ -226,14 +262,23 @@ class BankCatch implements Task {
             await Traversal.walkResilient(loc.bankStand, { radius: 2, log });
             opened = await Bank.openBooth(loc.bankStand, boothName, boothOp, log);
         } else {
-            // auto-detect: nearest REAL booth in the scene (usable op — skips
+            // auto-detect: the nearest REAL booth in the scene (usable op — skips
             // decorative "Bank booth" locs that share the name but have no op).
-            // Its own tile is solid, so openNearest walks us to a reachable tile
-            // beside it and opens it from there.
-            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
+            let booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
             if (!booth) {
-                this.bot.setStatus('no bank in scene — dropping the haul');
-                this.bot.log(`no '${boothName}' in the scene — dropping instead. Fish near a bank to bank the catch.`);
+                // no booth loaded — the resource is more than a screen from a
+                // bank, so web-walk to the nearest known bank and look again
+                const bank = nearestBank(Game.tile()!);
+                if (bank) {
+                    this.bot.setStatus(`banking: walking to ${bank.name}`);
+                    this.bot.log(`  no booth in scene — web-walking to the ${bank.name} bank at ${bank.tile}`);
+                    await Traversal.walkResilient(bank.tile, { radius: 4, timeoutMs: 120000, log });
+                    booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
+                }
+            }
+            if (!booth) {
+                this.bot.setStatus('no bank reachable — dropping the haul');
+                this.bot.log(`no '${boothName}' reachable — dropping instead`);
                 await dropAll(this.bot);
                 return;
             }
@@ -247,10 +292,10 @@ class BankCatch implements Task {
         }
 
         this.bot.setStatus('banking: depositing the catch');
-        await Bank.depositAllMatching(name => name.toLowerCase().includes(this.bot.dropKeyword()));
+        await Bank.depositAllMatching(name => this.bot.isProduct(name));
         await Execution.delayTicks(1);
         this.bot.countTrip(had);
-        this.bot.log(`banked ${had} *${this.bot.dropKeyword()}*`);
+        this.bot.log(`banked ${had} *${this.bot.productLabel()}*`);
 
         this.bot.setStatus('banking: back to the spots');
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
@@ -274,9 +319,9 @@ class Gather implements Task {
             .name(this.bot.targetName())
             .action(this.bot.actionName())
             // skip a target on our own tile — you can't mine/chop the tile you
-            // stand on; the client must approach an adjacent square — and skip
-            // anything we've blacklisted or cooled down
-            .where(l => l.distance() >= 1 && l.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(l.tile())))
+            // stand on; the client must approach an adjacent square — restrict to
+            // the selected rock ids (mining), and skip blacklisted/cooled-down tiles
+            .where(l => l.distance() >= 1 && l.tile().distanceTo(anchor) <= within && this.bot.matchesRock(l.id) && this.bot.usable(keyOf(l.tile())))
             .nearest();
     }
 
