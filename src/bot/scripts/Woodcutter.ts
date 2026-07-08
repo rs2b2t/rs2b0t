@@ -234,7 +234,20 @@ class Chop implements Task {
             return;
         }
 
-        this.bot.setStatus(`chopping ${this.bot.tree()} at ${tree.tile()}`);
+        const treeTile = tree.tile();
+        // Is the tree we're on still standing? A normal tree falls after ONE
+        // log — the moment this goes false we return at once for the next tree
+        // instead of waiting out the progress timeout (the "sits too long"
+        // pause). Oaks/willows stay up and keep yielding, so we keep chopping
+        // while they stand.
+        const standing = () =>
+            Locs.query()
+                .name(this.bot.tree())
+                .action(this.bot.chop())
+                .where(l => l.tile().equals(treeTile))
+                .nearest() !== null;
+
+        this.bot.setStatus(`chopping ${this.bot.tree()} at ${treeTile}`);
         if (!tree.interact(this.bot.chop())) {
             this.bot.log(`no '${this.bot.chop()}' op on ${this.bot.tree()}? ops=[${tree.actions().join(', ')}]`);
             await Execution.delayTicks(2);
@@ -243,16 +256,17 @@ class Chop implements Task {
 
         this.bot.consumeChopProgress();
 
-        // wait until we start getting xp, the tree falls, or we time out
-        const started = await Execution.delayUntil(() => this.bot.consumeChopProgress() || ChatDialog.canContinue(), 12000);
-        if (!started || ChatDialog.canContinue()) {
-            return;
+        // wait until we get a log, the tree falls, or we time out
+        const started = await Execution.delayUntil(() => this.bot.consumeChopProgress() || !standing() || ChatDialog.canContinue(), 12000);
+        if (!started || !standing() || ChatDialog.canContinue()) {
+            return; // fell after one log (normal tree), or never started
         }
 
-        // keep chopping while progress continues; trees fall on their own
+        // keep chopping while the tree stands and yields (oaks/willows); a normal
+        // tree falling flips standing() false and returns us immediately
         for (let guard = 0; guard < 60; guard++) {
-            const progressed = await Execution.delayUntil(() => this.bot.consumeChopProgress() || ChatDialog.canContinue() || Inventory.isFull(), 8000);
-            if (!progressed || ChatDialog.canContinue() || Inventory.isFull()) {
+            const progressed = await Execution.delayUntil(() => this.bot.consumeChopProgress() || !standing() || ChatDialog.canContinue() || Inventory.isFull(), 8000);
+            if (!progressed || !standing() || ChatDialog.canContinue() || Inventory.isFull()) {
                 return;
             }
         }
