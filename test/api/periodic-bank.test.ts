@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import { PeriodicBank } from '#/bot/api/tasks/PeriodicBank.js';
 import { Banking } from '#/bot/api/Banking.js';
 import { Game } from '#/bot/api/Game.js';
+import { Execution } from '#/bot/api/Execution.js';
 
 function make(over: Partial<ConstructorParameters<typeof PeriodicBank>[0]> = {}) {
     return new PeriodicBank({
@@ -34,4 +35,14 @@ test('execute calls bankNearest with the deposit filter + returnTo, then resets 
     expect(called.deposit).toBe(dep);
     expect(called.returnTo).toEqual({ x: 1, z: 2, level: 0 });
     (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
+});
+test('backs off ALL strategies after a failed (unreachable-bank) attempt', async () => {
+    const bspy = Banking.bankNearest; (Banking as any).bankNearest = async () => false;
+    const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
+    const dspy = Execution.delayTicks; (Execution as any).delayTicks = async () => {}; // no scheduler in tests
+    const task = make(); // items strategy: countLoot 10 >= itemsThreshold 5 → would trip
+    expect(task.validate()).toBe(true);       // trips before any attempt
+    await task.execute();                      // bank unreachable → sets failure backoff
+    expect(task.validate()).toBe(false);       // suppressed despite still-carried loot
+    (Banking as any).bankNearest = bspy; (Game as any).inCombat = gspy; (Execution as any).delayTicks = dspy;
 });
