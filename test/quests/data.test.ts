@@ -7,6 +7,11 @@ test('records have unique ids', () => {
     expect(new Set(ids).size).toBe(ids.length);
 });
 
+test('records have unique names (name is the live journal-lookup key)', () => {
+    const names = loadQuestRecords().map(r => r.name);
+    expect(new Set(names).size).toBe(names.length);
+});
+
 test('every prerequisite quest id resolves to a real record', () => {
     const records = loadQuestRecords();
     const ids = new Set(records.map(r => r.id));
