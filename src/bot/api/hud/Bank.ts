@@ -96,6 +96,36 @@ export const Bank = {
             }
         }
         return Bank.isOpen();
+    },
+
+    /**
+     * Open the nearest booth in the scene WITHOUT a hand-picked stand tile:
+     * interact the booth directly and let the engine's route-finder walk the
+     * player to its accessible side (around counters/walls). Retries a few
+     * times — each interact leaves the player closer, so it converges on
+     * adjacency even when the first click lands off. Use this for banks whose
+     * exact stand tile isn't known; use `openBooth` when you have one. True once
+     * the bank screen is open.
+     */
+    async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
+        for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
+            const booth = Locs.query().name(boothName).nearest();
+            if (!booth) {
+                log?.(`no '${boothName}' in the scene`);
+                return false;
+            }
+            const chosen = booth.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? booth.actions().find(a => /^use|^bank/i.test(a)) ?? booth.actions()[0];
+            log?.(`opening ${boothName} at ${booth.tile()} (${booth.distance()} away) via '${chosen}'`);
+            if (chosen) {
+                await booth.interact(chosen);
+            }
+            // allow time for the engine to walk us to the booth and open it
+            await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 10000);
+            if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+            }
+        }
+        return Bank.isOpen();
     }
 };
 
