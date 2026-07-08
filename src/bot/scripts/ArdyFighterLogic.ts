@@ -36,9 +36,9 @@ export function shouldBank(lootSlots: number, bankAt: number, invFull: boolean):
     return lootSlots >= bankAt || (invFull && lootSlots > 0);
 }
 
-/** Restock strictly below the floor (at-floor keeps fighting). */
-export function shouldRestock(foodCount: number, floor: number): boolean {
-    return foodCount < floor;
+/** Restock strictly below the target — at/above it, keep fighting. */
+export function shouldRestock(foodCount: number, threshold: number): boolean {
+    return foodCount < threshold;
 }
 
 /** Eat strictly below the gate, and only when food is actually carried. */

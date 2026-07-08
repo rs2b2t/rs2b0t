@@ -44,10 +44,10 @@ export const SETTINGS: SettingsSchema = {
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     food: { type: 'string[]', default: DEFAULT_FOOD.split(',').map(s => s.trim()), label: 'Food names (contains)' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
+    eatToHp: { type: 'number', default: 90, min: 1, max: 100, label: 'Eat up to HP%', help: 'keep eating until HP reaches this % — 90 avoids the overheal wasted by eating to full' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
     restUntilHp: { type: 'number', default: 60, min: 0, max: 100, label: 'Regen to HP% when bank empty' },
-    foodFloor: { type: 'number', default: 2, min: 0, max: 27, label: 'Restock below (count)' },
-    foodTarget: { type: 'number', default: 8, min: 1, max: 27, label: 'Restock until (count)' },
+    foodTarget: { type: 'number', default: 8, min: 1, max: 27, label: 'Keep food stocked to (count)', help: 'after eating to full, restock the Baker\'s stall back up to this many' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots' },
     loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names (contains)' }
 };
@@ -63,9 +63,9 @@ let BANK_STAND = DEFAULT_BANK_STAND;
 let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
 let LOOT = DEFAULT_LOOT.split(',').map(s => s.trim().toLowerCase());
 let EAT_AT = 0.5;
+let EAT_TO = 0.9;
 let PANIC_AT = 0.25;
 let REST_UNTIL = 0.6;
-let FOOD_FLOOR = 2;
 let FOOD_TARGET = 8;
 let BANK_AT = 12;
 
@@ -122,9 +122,9 @@ export default class ArdyFighter extends TaskBot {
         FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
         LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
+        EAT_TO = this.settings.num('eatToHp', 90) / 100;
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
-        FOOD_FLOOR = this.settings.num('foodFloor', 2);
         FOOD_TARGET = this.settings.num('foodTarget', 8);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
 
@@ -157,11 +157,11 @@ export default class ArdyFighter extends TaskBot {
                     this.died = false;
                 }
             }),
+            new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
             new BankRun(this),
             new RestockCakes(this),
-            new LootDrops(this),
             new Fight(this),
             new ReturnToAnchor(this)
         );
@@ -238,8 +238,11 @@ class ReturnToAnchor implements Task {
     }
 }
 
-/** Eat below the gate — highest active priority, so it also fires mid-restock
- *  and mid-walk, and Fight's inner loop yields to it below the same gate. */
+/** Eat up to the eat-to target (default 90%) once HP drops below the gate (not
+ *  just one bite) — highest combat priority after looting, so it also fires
+ *  mid-restock and mid-walk, and Fight's inner loop yields to it below the same
+ *  gate. Eating up in one go means fewer eat-interruptions; RestockCakes then
+ *  tops the food back up. */
 class EatFood implements Task {
     constructor(private bot: ArdyFighter) {}
 
@@ -248,17 +251,28 @@ class EatFood implements Task {
     }
 
     async execute(): Promise<void> {
-        const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
-        if (!food) {
-            return;
-        }
-        this.bot.setStatus(`eating ${food.name}`);
-        const before = Skills.effective('hitpoints');
-        if (!(await food.interact('Eat'))) {
-            return;
-        }
-        if (await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000)) {
-            this.bot.countEat();
+        // keep eating until HP is full or we run out of food; capped so a fight
+        // we're losing can't spin here forever
+        for (let bite = 0; bite < 28; bite++) {
+            if (this.bot.died || ChatDialog.canContinue() || EventSignal.pending()) {
+                return; // yield to death / dialog / runtime-event handling
+            }
+            if (hpFraction() >= EAT_TO || foodCount() === 0) {
+                return; // reached the eat-to target, or out of food
+            }
+            const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
+            if (!food) {
+                return;
+            }
+            this.bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+            const before = Skills.effective('hitpoints');
+            if (!(await food.interact('Eat'))) {
+                return;
+            }
+            await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
+            if (Skills.effective('hitpoints') > before) {
+                this.bot.countEat();
+            }
         }
     }
 }
@@ -277,7 +291,7 @@ class RestockCakes implements Task {
     constructor(private bot: ArdyFighter) {}
 
     validate(): boolean {
-        return !Game.inCombat() && !Inventory.isFull() && shouldRestock(foodCount(), FOOD_FLOOR);
+        return !Game.inCombat() && !Inventory.isFull() && shouldRestock(foodCount(), FOOD_TARGET);
     }
 
     async execute(): Promise<void> {
