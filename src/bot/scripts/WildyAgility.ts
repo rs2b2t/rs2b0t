@@ -102,6 +102,15 @@ export function inRegion(here: WorldTile, centre: WorldTile, radius: number): bo
     return here.level === centre.level && Math.max(Math.abs(here.x - centre.x), Math.abs(here.z - centre.z)) <= radius;
 }
 
+/**
+ * True when `here` is outside BOTH the course region and the entrance region —
+ * i.e. not at the course at all, so the bot must web-walk to it before it can
+ * cross the ridge (EnterCourse) or run the lap (RunLap).
+ */
+export function awayFromCourse(here: WorldTile, centre: WorldTile, courseRadius: number, entrance: WorldTile, entryRadius: number): boolean {
+    return !inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
+}
+
 function hpFraction(): number {
     const base = Skills.level('hitpoints');
     return base > 0 ? Skills.effective('hitpoints') / base : 1;
@@ -119,9 +128,11 @@ function foodCount(): number {
  * pack, re-withdraws ONLY food, walks back to the entrance and re-crosses the
  * ridge — so a wilderness death can never cost anything but the food.
  *
- * Start it standing at the course entrance (just south of the ridge) or already
- * inside past the ridge. Needs Agility 52 (the ridge minimum) or it refuses to
- * run rather than spin on a door it can't cross.
+ * Start it anywhere: if it isn't at the course it web-walks to the entrance
+ * (TravelToCourse), crosses the ridge (EnterCourse), then runs the lap. Needs
+ * Agility 52 (the ridge minimum) or it refuses to run rather than spin on a door
+ * it can't cross. (Wilderness web-walk reach is the same live-only caveat as the
+ * death return.)
  */
 export default class WildyAgility extends TaskBot {
     override loopDelay = 600;
@@ -190,6 +201,7 @@ export default class WildyAgility extends TaskBot {
                 walkBack: () => this.recoverAndReturn()
             }),
             new EatFood(this),
+            new TravelToCourse(this),
             new EnterCourse(this),
             new RunLap(this)
         );
@@ -344,6 +356,27 @@ class EatFood implements Task {
                 this.bot.countEat();
             }
         }
+    }
+}
+
+/**
+ * Web-walk to the course when started (or stranded) away from it — i.e. outside
+ * both the course region and the entrance region. Walks to the entrance (south
+ * of the ridge); EnterCourse then crosses the ridge and RunLap takes over. Ranks
+ * below EatFood (heal first) but above EnterCourse/RunLap. Same wilderness
+ * web-walk reach caveat as the death return.
+ */
+class TravelToCourse implements Task {
+    constructor(private bot: WildyAgility) {}
+
+    validate(): boolean {
+        const here = Game.tile();
+        return here !== null && awayFromCourse(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('walking to the wilderness agility course');
+        await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 2, attempts: 6, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 

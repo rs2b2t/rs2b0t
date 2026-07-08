@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
-import { inRegion, parseObstacles } from '#/bot/scripts/WildyAgility.js';
+import { awayFromCourse, inRegion, parseObstacles } from '#/bot/scripts/WildyAgility.js';
 
 test('parseObstacles trims, lowercases and drops empties', () => {
     expect(parseObstacles('  Obstacle pipe , Ropeswing ,, Rocks ')).toEqual(['obstacle pipe', 'ropeswing', 'rocks']);
@@ -48,4 +48,19 @@ test('the ridge hop crosses from the entrance region into the course region', ()
     // after the hop: clear of the entrance region, inside the course region
     expect(inRegion(postRidge, entrance, ENTRY_RADIUS)).toBe(false);
     expect(inRegion(postRidge, centre, COURSE_RADIUS)).toBe(true);
+});
+
+test('awayFromCourse: travel only when outside BOTH the course and entrance regions', () => {
+    const centre = new Tile(2998, 3945, 0);
+    const entrance = new Tile(2998, 3924, 0);
+
+    // inside the course region -> already there, do not travel
+    expect(awayFromCourse(new Tile(2998, 3950, 0), centre, 25, entrance, 10)).toBe(false);
+    // near the entrance but outside a (deliberately tiny) course region -> the
+    // entrance clause still says "not away", so EnterCourse handles it
+    expect(awayFromCourse(new Tile(2998, 3924, 0), centre, 5, entrance, 10)).toBe(false);
+    // far away (Edgeville) -> travel
+    expect(awayFromCourse(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(true);
+    // right level matters: same x/z on another plane is away
+    expect(awayFromCourse(new Tile(2998, 3945, 1), centre, 25, entrance, 10)).toBe(true);
 });
