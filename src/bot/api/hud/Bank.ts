@@ -109,17 +109,23 @@ export const Bank = {
      */
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
         for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
-            const booth = Locs.query().name(boothName).nearest();
+            // Only REAL booths: some banks (Seers) have decorative "Bank booth"
+            // locs with the SAME name but NO op (loc_2214, "for private customers
+            // only") sitting against the outer walls — locking onto those wedges
+            // the bot outside. Require a usable op so we target an operable booth.
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
             if (!booth) {
-                log?.(`no '${boothName}' in the scene`);
+                log?.(`no usable '${boothName}' in the scene`);
                 return false;
             }
 
-            // step to the counter first unless we're already beside a booth
-            if (!Locs.query().name(boothName).where(l => l.distance() <= 1).nearest()) {
+            // walk onto a reachable tile beside the real booth (its customer side;
+            // the wall/counter blocks the far side, so canReach only returns the
+            // usable side) unless we're already beside it
+            if (booth.distance() > 1) {
                 const stand = bankStand(booth.tile());
                 if (stand) {
-                    log?.(`stepping to the bank counter at (${stand.x}, ${stand.z}) beside ${boothName}`);
+                    log?.(`stepping to the bank counter at (${stand.x}, ${stand.z})`);
                     await Traversal.walkTo(stand, { radius: 0, timeoutMs: 30000, log });
                 } else {
                     log?.(`no reachable tile beside '${boothName}' yet — closing in`);
@@ -127,7 +133,7 @@ export const Bank = {
                 }
             }
 
-            const adjacent = Locs.query().name(boothName).where(l => l.distance() <= 1).nearest() ?? booth;
+            const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest() ?? booth;
             const chosen = adjacent.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? adjacent.actions().find(a => /^use|^bank/i.test(a)) ?? adjacent.actions()[0];
             if (chosen) {
                 await adjacent.interact(chosen);

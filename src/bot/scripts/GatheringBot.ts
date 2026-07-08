@@ -226,10 +226,11 @@ class BankCatch implements Task {
             await Traversal.walkResilient(loc.bankStand, { radius: 2, log });
             opened = await Bank.openBooth(loc.bankStand, boothName, boothOp, log);
         } else {
-            // auto-detect: nearest booth in the scene. Its own tile is solid, so
-            // walk close then interact it directly — the engine routes us to its
-            // accessible side (no hand-picked stand needed).
-            const booth = Locs.query().name(boothName).nearest();
+            // auto-detect: nearest REAL booth in the scene (usable op — skips
+            // decorative "Bank booth" locs that share the name but have no op).
+            // Its own tile is solid, so openNearest walks us to a reachable tile
+            // beside it and opens it from there.
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
             if (!booth) {
                 this.bot.setStatus('no bank in scene — dropping the haul');
                 this.bot.log(`no '${boothName}' in the scene — dropping instead. Fish near a bank to bank the catch.`);

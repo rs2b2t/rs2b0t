@@ -163,11 +163,13 @@ class BankLogs implements Task {
     }
 
     async execute(): Promise<void> {
-        const booth = Locs.query().name(this.bot.bankName()).nearest();
+        // only REAL booths (usable op) — skip Seers-style decorative "Bank booth"
+        // locs against the outer walls that share the name but have no op
+        const booth = Locs.query().name(this.bot.bankName()).where(l => l.actions().length > 0).nearest();
         if (!booth) {
             // no bank reachable in the scene — drop so we never hard-stall, but shout about it
             this.bot.setStatus('no bank in scene — dropping logs');
-            this.bot.log(`no '${this.bot.bankName()}' in the scene near the anchor — dropping instead. Start me next to a bank to bank the logs.`);
+            this.bot.log(`no usable '${this.bot.bankName()}' in the scene near the anchor — dropping instead. Start me next to a bank to bank the logs.`);
             await dropAllLogs(this.bot);
             return;
         }
