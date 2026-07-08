@@ -9,7 +9,7 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { nearestBank } from './BankLocations.js';
+import { nearestBank } from '../api/BankLocations.js';
 
 /** Tunable parameters (panel + `?Woodcutter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {

@@ -1,5 +1,5 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
-import Tile from '../api/Tile.js';
+import Tile from './Tile.js';
 
 export interface BankLocation {
     name: string;

@@ -11,7 +11,7 @@ import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
-import { nearestBank } from './BankLocations.js';
+import { nearestBank } from '../api/BankLocations.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
 export const GATHERING_SETTINGS: SettingsSchema = {

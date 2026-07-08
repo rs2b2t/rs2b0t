@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { BANK_LOCATIONS, nearestBank } from '#/bot/scripts/BankLocations.js';
+import { BANK_LOCATIONS, nearestBank } from '#/bot/api/BankLocations.js';
 
 test('bank names are unique', () => {
     const names = BANK_LOCATIONS.map(b => b.name);
