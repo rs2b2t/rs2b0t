@@ -21,6 +21,7 @@ import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
+import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility.js';
 import Woodcutter, { SETTINGS as WOODCUTTER_SETTINGS } from './Woodcutter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -263,6 +264,15 @@ ScriptRegistry.register({
     tags: ['members', 'course', 'gnome'],
     settingsSchema: AGILITY_SETTINGS,
     create: () => new AgilityBot()
+});
+
+ScriptRegistry.register({
+    name: 'WildyAgility',
+    description: 'Runs the Wilderness Agility Course, eats while running, and on death banks (food-only) then returns — needs Agility 52 + carried food (start at the entrance)',
+    category: 'Agility',
+    tags: ['members', 'course', 'wilderness', 'food', 'death-recovery'],
+    settingsSchema: WILDY_AGILITY_SETTINGS,
+    create: () => new WildyAgility()
 });
 
 // --- navigation / develop ---
