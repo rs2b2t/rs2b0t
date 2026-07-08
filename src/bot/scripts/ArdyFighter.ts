@@ -11,8 +11,9 @@ import { Traversal } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
+import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { countMatching, matchesAny, shouldBank, shouldEat, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
+import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -150,9 +151,11 @@ export default class ArdyFighter extends TaskBot {
                 }
             }),
             new EatFood(this),
+            new PanicRetreat(this),
             new BankRun(this),
             new RestockCakes(this),
             new LootDrops(this),
+            new Fight(this),
             new ReturnToAnchor(this)
         );
     }
@@ -369,5 +372,129 @@ class BankRun implements Task {
         // walking away closes the bank on its own
         this.bot.setStatus('heading back to the market');
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
+    }
+}
+
+/**
+ * Zero food and sinking: leave the square (market NPCs stop at their leash),
+ * refill from the bank if it holds food, else wait out regen, then go back.
+ * EatFood outranks this, so it can only fire with an empty food supply.
+ */
+class PanicRetreat implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    validate(): boolean {
+        return shouldPanic(hpFraction(), PANIC_AT, foodCount());
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('panic: no food — retreating to the bank');
+        this.bot.log(`panic retreat at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
+        await Traversal.walkTo(BANK_STAND, { radius: 2, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
+
+        if (await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))) {
+            const banked = Bank.items().find(i => matchesAny(i.name, FOOD));
+            if (banked?.name) {
+                for (let i = 0; i < FOOD_TARGET && !Inventory.isFull(); i++) {
+                    const before = foodCount();
+                    if (!(await Bank.withdraw(banked.name, 'Withdraw-1'))) {
+                        break;
+                    }
+                    if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) {
+                        break;
+                    }
+                }
+                this.bot.log(`withdrew ${foodCount()} food from the bank`);
+            }
+        }
+
+        if (foodCount() === 0) {
+            this.bot.setStatus('panic: bank empty — waiting for regen');
+            await Execution.delayUntil(() => hpFraction() >= REST_UNTIL, 300_000);
+        }
+
+        await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
+    }
+}
+
+/** Attack the nearest free Guard and see the fight through (ChaosDruidKiller
+ *  shape), yielding below the eat gate so EatFood can fire mid-combat. Guards
+ *  pulled onto us by stall theft are finished by auto-retaliate — this task
+ *  only initiates fights when we are otherwise idle. */
+class Fight implements Task {
+    constructor(private bot: ArdyFighter) {}
+
+    private findTarget() {
+        return Npcs.query()
+            .name(TARGET)
+            .action('Attack')
+            .where(n => !n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH)
+            .nearest();
+    }
+
+    private track(engaged: Npc): Npc | null {
+        return Npcs.all().find(n => n.index === engaged.index && n.name === TARGET) ?? null;
+    }
+
+    validate(): boolean {
+        return !Game.inCombat() && hpFraction() >= EAT_AT && this.findTarget() !== null;
+    }
+
+    async execute(): Promise<void> {
+        const guard = this.findTarget();
+        if (!guard) {
+            return;
+        }
+
+        this.bot.setStatus(`attacking ${TARGET} at ${guard.tile()}`);
+        if (!(await guard.interact('Attack'))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        const engaged = await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
+        if (!engaged || ChatDialog.canContinue()) {
+            return;
+        }
+
+        this.bot.setStatus('fighting');
+        const deadline = performance.now() + 90000;
+        let reattacks = 0;
+
+        while (performance.now() < deadline) {
+            if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died || Inventory.isFull()) {
+                return;
+            }
+            if (shouldEat(hpFraction(), EAT_AT, foodCount()) || hpFraction() < PANIC_AT) {
+                return; // EatFood / PanicRetreat outrank us next loop
+            }
+
+            const me = Game.tile();
+            if (!me || guard.tile().distanceTo(me) > LEASH + 10) {
+                this.bot.log('displaced mid-fight — abandoning target');
+                return;
+            }
+
+            const target = this.track(guard);
+            if (!target) {
+                this.bot.countKill();
+                return;
+            }
+            if (target.health === 0 && target.snap.totalHealth > 0) {
+                await Execution.delayUntil(() => this.track(guard) === null, 10000);
+                this.bot.countKill();
+                return;
+            }
+            if (!Game.inCombat() && !target.inCombat) {
+                if (reattacks >= 2) {
+                    return;
+                }
+                reattacks++;
+                await target.interact('Attack');
+                await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
+                continue;
+            }
+            await Execution.delayTicks(2);
+        }
     }
 }
