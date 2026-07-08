@@ -39,6 +39,7 @@ const DEFAULT_CENTRE = new Tile(2998, 3945, 0);
 const DEFAULT_ENTRANCE = new Tile(2998, 3924, 0);
 const EDGEVILLE = new Tile(3094, 3493, 0); // BankLocations 'Edgeville', the nearest bank
 const RIDGE_MIN_AGILITY = 52; // loc_2309 refuses below this; the whole course is gated on it
+const PIT_Z_GAP = 2000; // the wolf pit (ropeswing/log-balance fail) sits ~6400 tiles north in world-z; anything this far above the course centre is the pit (mime/maze are only ~600-800 away)
 
 /** Tunable parameters (panel + `?WildyAgility.<key>=...`). */
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
@@ -64,6 +65,8 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
     searchRadius: { type: 'number', default: 20, min: 4, max: 64, label: 'Obstacle search radius (tiles)' },
     ridgeName: { type: 'string', default: 'Door', label: 'Ridge/entry loc name', help: 'loc_2309 — display name is a generic "Door"; matched nearest-to-the-entrance so tune if it locks onto the wrong door' },
     ridgeOp: { type: 'string', default: 'Open', label: 'Ridge/entry op' },
+    pitLadderName: { type: 'string', default: '', label: 'Pit ladder loc name', help: 'failing the ropeswing/log balance drops you in the pit below; blank = climb the nearest loc with a Climb/ladder op, or name it (e.g. Ladder)' },
+    pitLadderOp: { type: 'string', default: 'Climb-up', label: 'Pit ladder op' },
     bankTile: { type: 'tile', default: EDGEVILLE, label: 'Bank tile (x,z)', help: 'nearest bank for the food-only restock (default Edgeville)' },
     menuSelect: {
         type: 'boolean',
@@ -86,6 +89,8 @@ let ENTRY_RADIUS = 10;
 let SEARCH_RADIUS = 20;
 let RIDGE_NAME = 'Door';
 let RIDGE_OP = 'Open';
+let PIT_LADDER_NAME = '';
+let PIT_LADDER_OP = 'Climb-up';
 let BANK_TILE: WorldTile = EDGEVILLE;
 let VIA_MENU = true;
 
@@ -122,6 +127,17 @@ export function insideCourseProper(here: WorldTile, centre: WorldTile, courseRad
 }
 
 /**
+ * True when `here` is in the wolf pit — the isolated area (~6400 tiles north in
+ * world-z, rendered "just below" the course) a ropeswing / log-balance FAIL
+ * drops you into. Detected by the large z gap from the course rather than exact
+ * pit coords: nothing else the bot visits is that far north (mime/maze stages
+ * are only ~600-800 away), and the pit is escapable only by its ladder.
+ */
+export function inPit(here: WorldTile, courseCentre: WorldTile, zGap: number): boolean {
+    return here.level === courseCentre.level && here.z - courseCentre.z > zGap;
+}
+
+/**
  * Classify an obstacle attempt from its aftermath. Success is the agility xp
  * every wilderness obstacle awards on completion; a FAILURE awards none but
  * always deals damage (lava/spikes/pit), so an HP drop with no xp is a fall to
@@ -149,7 +165,9 @@ function foodCount(): number {
  * (pipe -> ropeswing -> stepping stone -> log balance -> rocks), eating carried
  * food while it runs. On DEATH it world-walks to Edgeville, deposits the WHOLE
  * pack, re-withdraws ONLY food, walks back to the entrance and re-crosses the
- * ridge — so a wilderness death can never cost anything but the food.
+ * ridge — so a wilderness death can never cost anything but the food. Failing
+ * the ropeswing or log balance drops you into the pit below — PitEscape climbs
+ * the ladder back up and the lap resumes at the right obstacle.
  *
  * Start it anywhere: if it isn't at the course it web-walks to the entrance
  * (TravelToCourse), crosses the ridge (EnterCourse), then runs the lap. Needs
@@ -188,6 +206,8 @@ export default class WildyAgility extends TaskBot {
         SEARCH_RADIUS = this.settings.num('searchRadius', 20);
         RIDGE_NAME = this.settings.str('ridgeName', 'Door');
         RIDGE_OP = this.settings.str('ridgeOp', 'Open');
+        PIT_LADDER_NAME = this.settings.str('pitLadderName', '');
+        PIT_LADDER_OP = this.settings.str('pitLadderOp', 'Climb-up');
         BANK_TILE = this.settings.tile('bankTile', EDGEVILLE);
         VIA_MENU = this.settings.bool('menuSelect', true);
         this.course = parseObstacles(this.settings.str('obstacles', DEFAULT_OBSTACLES));
@@ -235,6 +255,7 @@ export default class WildyAgility extends TaskBot {
                 walkBack: () => this.recoverAndReturn()
             }),
             new EatFood(this),
+            new PitEscape(this),
             new TravelToCourse(this),
             new EnterCourse(this),
             new RunLap(this)
@@ -401,6 +422,65 @@ class EatFood implements Task {
                 this.bot.countEat();
             }
         }
+    }
+}
+
+/**
+ * Climb out of the wolf pit. Failing the ropeswing or log balance drops you into
+ * an isolated pit (far north in world-z, rendered "just below" the course); a
+ * ladder there climbs you back up. Ranks above TravelToCourse because the pit is
+ * isolated — you leave ONLY by the ladder, never by web-walking. After climbing
+ * out the lap's own resync picks up the right obstacle (e.g. after a log-balance
+ * fall you resume at the log, skipping the stepping stones).
+ */
+class PitEscape implements Task {
+    constructor(private bot: WildyAgility) {}
+
+    private findLadder(): Loc | null {
+        if (PIT_LADDER_NAME) {
+            return Locs.query().name(PIT_LADDER_NAME).action(PIT_LADDER_OP).nearest();
+        }
+        // best-effort: the nearest loc offering a climb/ladder op
+        return Locs.query()
+            .where(l => l.actions().some(a => /climb|ladder/i.test(a)))
+            .nearest();
+    }
+
+    validate(): boolean {
+        const here = Game.tile();
+        return here !== null && inPit(here, COURSE_CENTRE, PIT_Z_GAP);
+    }
+
+    async execute(): Promise<void> {
+        const ladder = this.findLadder();
+        if (!ladder) {
+            const near = Locs.query().where(l => l.actions().length > 0).nearest();
+            this.bot.setStatus('in the pit — no ladder found');
+            this.bot.log(`fell into the pit but found no climb/ladder loc — nearest interactable: ${near ? `${near.name} [${near.actions().join(', ')}]` : 'none'} (set pitLadderName/pitLadderOp)`);
+            await Execution.delayTicks(3);
+            return;
+        }
+
+        const op = ladder.actions().find(a => /climb|ladder/i.test(a)) ?? PIT_LADDER_OP;
+
+        // run to the ladder if we fell in away from it, then climb
+        const here = Game.tile();
+        const lt = ladder.tile();
+        if (here && lt.level === here.level && Math.max(Math.abs(here.x - lt.x), Math.abs(here.z - lt.z)) > 2) {
+            this.bot.setStatus('in the pit — heading to the ladder');
+            await Traversal.walkResilient(lt, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
+        }
+
+        this.bot.setStatus(`climbing out of the pit (${op} ${ladder.name})`);
+        this.bot.log(`fell into the pit — ${op} ${ladder.name} back up to the course`);
+        if (!(await ladder.interact(op, this.bot.menuSelect()))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        await Execution.delayUntil(() => {
+            const t = Game.tile();
+            return t !== null && !inPit(t, COURSE_CENTRE, PIT_Z_GAP);
+        }, 10_000);
     }
 }
 

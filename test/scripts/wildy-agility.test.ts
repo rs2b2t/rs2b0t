@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
-import { awayFromCourse, classifyAttempt, inRegion, insideCourseProper, parseObstacles } from '#/bot/scripts/WildyAgility.js';
+import { awayFromCourse, classifyAttempt, inPit, inRegion, insideCourseProper, parseObstacles } from '#/bot/scripts/WildyAgility.js';
 
 test('parseObstacles trims, lowercases and drops empties', () => {
     expect(parseObstacles('  Obstacle pipe , Ropeswing ,, Rocks ')).toEqual(['obstacle pipe', 'ropeswing', 'rocks']);
@@ -81,4 +81,13 @@ test('classifyAttempt: xp -> cleared; damage-without-xp -> failed (retry fast); 
     expect(classifyAttempt(true, true)).toBe('cleared'); // xp wins even if a tick of damage landed
     expect(classifyAttempt(false, true)).toBe('failed'); // fell off -> retry, don't wait for xp
     expect(classifyAttempt(false, false)).toBe('noop'); // click did nothing -> stuck counter
+});
+
+test('inPit: the wolf pit sits far above the course in world-z', () => {
+    const centre = new Tile(2998, 3945, 0);
+    expect(inPit(new Tile(2998, 10346, 0), centre, 2000)).toBe(true); // log-balance fail pit
+    expect(inPit(new Tile(3004, 10357, 0), centre, 2000)).toBe(true); // ropeswing fail pit
+    expect(inPit(new Tile(2998, 3945, 0), centre, 2000)).toBe(false); // on the course
+    expect(inPit(new Tile(3094, 3493, 0), centre, 2000)).toBe(false); // Edgeville
+    expect(inPit(new Tile(2998, 4736, 0), centre, 2000)).toBe(false); // a mime stage ~800 north — NOT the pit
 });
