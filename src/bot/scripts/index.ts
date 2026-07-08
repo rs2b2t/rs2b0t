@@ -20,6 +20,7 @@ import QuestDashboard from '../quests/QuestDashboard.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
+import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
 import Woodcutter, { SETTINGS as WOODCUTTER_SETTINGS } from './Woodcutter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -271,6 +272,15 @@ ScriptRegistry.register({
     category: 'Navigation',
     tags: ['demo', 'web-walk'],
     create: () => new NavDemo()
+});
+
+ScriptRegistry.register({
+    name: 'WalkTo',
+    description: 'Walks to a chosen destination and stops — Lumbridge, Varrock, Falador, Ardougne, Rellekka, Taverley (centre); Draynor, Al Kharid, Edgeville, Seers, Yanille (bank); or a custom tile',
+    category: 'Navigation',
+    tags: ['navigation', 'utility', 'web-walk'],
+    settingsSchema: WALKTO_SETTINGS,
+    create: () => new WalkToBot()
 });
 
 ScriptRegistry.register({
