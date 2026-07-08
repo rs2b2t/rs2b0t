@@ -4,6 +4,7 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
+import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
@@ -22,7 +23,17 @@ const DEFAULT_FIELD = new Tile(2710, 3720, 0);
 // de-aggro and revert, so walking back in wakes them again (the "run out and
 // back" reset).
 const DEFAULT_RESET = new Tile(2712, 3699, 0);
+// Seers' Village bank — the nearest bank to the Rellekka shoreline (the game
+// says so: quest_viking/viking_peer.rs2). Coords are the verified Seers bank
+// zone (firemaking bank_zones: mapsquare 42,54 -> x 2721-2730, z 3487-3497).
+// The exact walkable stand tile next to a booth may need a nudge on the first
+// live run.
+const DEFAULT_BANK = new Tile(2725, 3491, 0);
+const BANK_NAME = 'Bank booth';
+const BANK_OP = 'Use-quickly';
 const MAX_FAILED_WAKES = 3; // consecutive dud wakes => area is de-aggro'd
+// How close to the field centre counts as "regrouped" for the run-back step.
+const CENTRE_RADIUS = 2;
 
 // Valuables to grab off the ground. Both crystal-key halves share the item
 // name "Half of a key"; the rest are the notable rock-crab drops.
@@ -36,7 +47,11 @@ export const SETTINGS: SettingsSchema = {
     fieldRadius: { type: 'number', default: 15, min: 5, max: 30, label: 'Field radius (tiles)' },
     stack: { type: 'number', default: 3, min: 1, max: 8, label: 'Crabs to stack before clearing' },
     fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Retreat below HP%' },
-    restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP%' },
+    restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP% (no-food fallback)' },
+    food: { type: 'string', default: 'Lobster', label: 'Food item name', help: 'exact item name, e.g. Lobster, Swordfish, Trout' },
+    eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%' },
+    foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run' },
+    bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Seers)' },
     loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names' }
 };
 
@@ -44,18 +59,24 @@ export const SETTINGS: SettingsSchema = {
 // because exactly one script runs at a time (ADR-0006).
 let FIELD = DEFAULT_FIELD;
 let RESET_TILE = DEFAULT_RESET;
+let BANK_TILE = DEFAULT_BANK;
 let FIELD_RADIUS = 15;
 let DESIRED_STACK = 3;
 let FIGHT_HP_GATE = 0.4;
 let REST_HP = 0.75;
+let EAT_HP = 0.5;
+let FOOD_NAME = 'Lobster';
+let FOOD_WITHDRAW = 20;
 let LOOT_NAMES = DEFAULT_LOOT.split(',').map(s => s.trim());
 
 /**
  * Rock crab trainer for the Rellekka shoreline. Walks among the dormant
- * "Rocks" to aggro them, stacks a few Rock Crabs, kills the pile, re-gathers,
- * and runs out-and-back to reset aggression when the rocks stop waking. Loots
- * key halves and other valuables. Start it anywhere — it web-walks to the
- * field first. Handles every random event via the shared handler.
+ * "Rocks" to aggro them; once the stack is built it runs back to the field
+ * centre so the crabs pile up there, then kills the pile. Eats food to sustain,
+ * and when it runs out it web-walks to the Seers' Village bank, withdraws more,
+ * and returns. Loots key halves and other valuables, and runs out-and-back to
+ * reset aggression when the rocks stop waking. Start it anywhere — it web-walks
+ * to the field first. Handles every random event via the shared handler.
  */
 export default class RockCrab extends TaskBot {
     override loopDelay = 600;
@@ -64,7 +85,9 @@ export default class RockCrab extends TaskBot {
     private looted = 0;
     private deaths = 0;
     private resets = 0;
+    private bankTrips = 0;
     private failedWakes = 0;
+    private bankKnownEmpty = false;
     private status = 'starting';
     died = false;
 
@@ -73,13 +96,17 @@ export default class RockCrab extends TaskBot {
 
         FIELD = this.settings.tile('field', DEFAULT_FIELD);
         RESET_TILE = this.settings.tile('resetTile', DEFAULT_RESET);
+        BANK_TILE = this.settings.tile('bankTile', DEFAULT_BANK);
         FIELD_RADIUS = this.settings.num('fieldRadius', 15);
         DESIRED_STACK = this.settings.num('stack', 3);
         FIGHT_HP_GATE = this.settings.num('fightHpGate', 40) / 100;
         REST_HP = this.settings.num('restUntilHp', 75) / 100;
+        EAT_HP = this.settings.num('eatAtHp', 50) / 100;
+        FOOD_NAME = this.settings.str('food', 'Lobster');
+        FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_NAMES = this.settings.list('loot', LOOT_NAMES).map(s => s.toLowerCase());
 
-        this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, attack lvl ${Skills.level('attack')}`);
+        this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, attack lvl ${Skills.level('attack')}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -100,8 +127,11 @@ export default class RockCrab extends TaskBot {
                     this.died = false;
                 }
             }),
+            new Eat(this),
+            new BankRun(this),
             new GoToField(this),
             new LootValuables(this),
+            new RegroupAtField(this),
             new Fight(this),
             new Aggro(this),
             new ResetAggro(this)
@@ -117,7 +147,7 @@ export default class RockCrab extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
+        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${Inventory.count(FOOD_NAME)}  tick ${Game.tick()}`];
         ctx.font = '12px monospace';
         const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -144,6 +174,15 @@ export default class RockCrab extends TaskBot {
     countReset(): void {
         this.resets++;
     }
+    countBankTrip(): void {
+        this.bankTrips++;
+    }
+    noteBankEmpty(empty: boolean): void {
+        this.bankKnownEmpty = empty;
+    }
+    bankIsKnownEmpty(): boolean {
+        return this.bankKnownEmpty;
+    }
     noteWake(success: boolean): void {
         this.failedWakes = success ? 0 : this.failedWakes + 1;
     }
@@ -164,6 +203,34 @@ function inField(tile: Tile): boolean {
     return FIELD.distanceTo(tile) <= FIELD_RADIUS;
 }
 
+/** True once we've stacked enough crabs (or there are no more rocks to gather). */
+function stackReady(): boolean {
+    const crabs = activeCrabs().length;
+    return crabs >= DESIRED_STACK || (crabs >= 1 && dormantRocks().length === 0);
+}
+
+/** True when we're standing at (within CENTRE_RADIUS of) the field centre. */
+function atCentre(): boolean {
+    const here = Game.tile();
+    return here !== null && FIELD.distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
+}
+
+function hasFood(): boolean {
+    return Inventory.count(FOOD_NAME) > 0;
+}
+
+/** Eat one piece of food if we have any; resolves true if HP went up. */
+async function eatOnce(bot: RockCrab): Promise<boolean> {
+    const food = Inventory.first(FOOD_NAME);
+    if (!food) {
+        return false;
+    }
+    bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+    const before = Skills.effective('hitpoints');
+    await food.interact('Eat');
+    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+}
+
 /** Active, attackable crabs inside the field. */
 function activeCrabs(): Npc[] {
     return Npcs.query()
@@ -180,7 +247,76 @@ function dormantRocks(): Npc[] {
         .results();
 }
 
-/** Web-walk to the field when we're not in it (start, post-death, post-reset). */
+/** Eat food when HP dips below the eat gate (primary HP management). */
+class Eat implements Task {
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        return hpFraction() < EAT_HP && hasFood();
+    }
+
+    async execute(): Promise<void> {
+        await eatOnce(this.bot);
+    }
+}
+
+/** Out of food -> web-walk to the Seers bank, withdraw more, and return to the field. */
+class BankRun implements Task {
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        // restock when we've run out — unless we've already learned the bank is
+        // empty of this food (then fall back to no-food combat + resting)
+        return !hasFood() && !this.bot.bankIsKnownEmpty();
+    }
+
+    async execute(): Promise<void> {
+        if (EventSignal.pending()) {
+            return; // runtime event guard takes over next loop
+        }
+        this.bot.setStatus('out of food — walking to the bank');
+        this.bot.log(`out of ${FOOD_NAME} — banking at ${BANK_TILE} for more`);
+
+        // long web-walk south; the crabs de-aggro as we leave the field
+        if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
+            this.bot.log('walk to the bank failed — will retry');
+            return;
+        }
+
+        // interact the nearest booth directly; the engine walks us to its
+        // accessible side and opens it (BANK_TILE just needs to land us near it)
+        if (!(await Bank.openNearest(BANK_NAME, BANK_OP, m => this.bot.log(`  ${m}`)))) {
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
+
+        this.bot.setStatus(`withdrawing ${FOOD_NAME}`);
+        for (let guard = 0; guard < 12 && Inventory.count(FOOD_NAME) < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
+            const need = FOOD_WITHDRAW - Inventory.count(FOOD_NAME);
+            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
+            const before = Inventory.count(FOOD_NAME);
+            await Bank.withdraw(FOOD_NAME, op);
+            if (!(await Execution.delayUntil(() => Inventory.count(FOOD_NAME) > before, 2500))) {
+                break; // bank out of this food, or the button didn't fire
+            }
+        }
+
+        const got = Inventory.count(FOOD_NAME);
+        if (got === 0) {
+            this.bot.noteBankEmpty(true);
+            this.bot.log(`WARNING: no '${FOOD_NAME}' in the bank — falling back to no-food combat. Deposit food (or fix the food name) and it'll resume eating.`);
+        } else {
+            this.bot.countBankTrip();
+            this.bot.log(`withdrew ${got} ${FOOD_NAME} — walking back to the field`);
+        }
+
+        this.bot.setStatus('food restocked — walking back to the field');
+        await Traversal.walkResilient(FIELD, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        this.bot.clearWakes();
+    }
+}
+
+/** Web-walk to the field when we're not in it (start, post-death, post-bank). */
 class GoToField implements Task {
     constructor(private bot: RockCrab) {}
 
@@ -228,21 +364,37 @@ class LootValuables implements Task {
     }
 }
 
-/** Rest out of the field when low; doubles as an aggression reset. */
+/** After the stack is built, run back to the field centre so the crabs pile up there. */
+class RegroupAtField implements Task {
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        // only once we've stacked enough and we're healthy; Eat/ResetAggro own low HP
+        return hpFraction() >= FIGHT_HP_GATE && stackReady() && !atCentre();
+    }
+
+    async execute(): Promise<void> {
+        if (EventSignal.pending()) {
+            return; // runtime event guard takes over next loop
+        }
+        this.bot.setStatus('regrouping — running back to the field centre');
+        // scene-local walk; the aggroed crabs chase us to the centre
+        await DirectNavigator.walkTo(FIELD, CENTRE_RADIUS, 30000);
+    }
+}
+
+/** Clear the stacked crabs at the centre; eats mid-fight when HP dips. */
 class Fight implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
         if (hpFraction() < FIGHT_HP_GATE) {
-            return false; // too low to keep fighting — ResetAggro will retreat
+            return false; // too low to keep fighting — Eat or ResetAggro takes over
         }
-        const crabs = activeCrabs();
-        // Clear the pile only once it's stacked to size, or when there are no
-        // more dormant rocks left to gather. While gathering (1-2 crabs and
-        // rocks still to wake) Aggro keeps priority so they pile up first —
-        // auto-retaliate still chips at whatever is hitting us meanwhile.
-        const noMoreToGather = dormantRocks().length === 0;
-        return crabs.length >= DESIRED_STACK || (crabs.length >= 1 && noMoreToGather);
+        // Clear the pile only once it's stacked to size (or there are no more
+        // rocks to gather). RegroupAtField runs first to drag the stack to the
+        // centre; while still gathering, Aggro keeps priority.
+        return stackReady();
     }
 
     async execute(): Promise<void> {
@@ -256,8 +408,13 @@ class Fight implements Task {
             if (this.bot.died || ChatDialog.canContinue()) {
                 return;
             }
+            // eat mid-fight so we sustain without leaving the pile
+            if (hpFraction() < EAT_HP && hasFood()) {
+                await eatOnce(this.bot);
+                continue;
+            }
             if (hpFraction() < FIGHT_HP_GATE) {
-                return;
+                return; // out of food and low — Eat/ResetAggro handles it next loop
             }
 
             const crab = activeCrabs().sort((a, b) => a.distance() - b.distance())[0];
@@ -329,14 +486,14 @@ class Aggro implements Task {
     }
 }
 
-/** Run out of the field and back to reset aggression (or to regen HP). */
+/** Run out of the field and back to reset aggression, or (with no food) to regen HP. */
 class ResetAggro implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        // reset when the rocks stopped waking, or when we're too low and need
-        // to drop aggro and regen
-        return this.bot.deAggroed() || (hpFraction() < FIGHT_HP_GATE && !Game.inCombat());
+        // reset when the rocks stopped waking, or when we're low with no food to
+        // eat (the no-food fallback: drop aggro at the reset tile and regen)
+        return this.bot.deAggroed() || (hpFraction() < FIGHT_HP_GATE && !hasFood() && !Game.inCombat());
     }
 
     async execute(): Promise<void> {
@@ -344,7 +501,7 @@ class ResetAggro implements Task {
             return; // runtime event guard takes over next loop
         }
         const low = hpFraction() < FIGHT_HP_GATE;
-        this.bot.setStatus(low ? 'low HP — retreating to reset/regen' : 'running out to reset aggression');
+        this.bot.setStatus(low ? 'low HP, no food — retreating to regen' : 'running out to reset aggression');
         this.bot.countReset();
 
         await DirectNavigator.walkTo(RESET_TILE, 1, 60000);
