@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
-import { awayFromCourse, inRegion, parseObstacles } from '#/bot/scripts/WildyAgility.js';
+import { awayFromCourse, classifyAttempt, inRegion, insideCourseProper, parseObstacles } from '#/bot/scripts/WildyAgility.js';
 
 test('parseObstacles trims, lowercases and drops empties', () => {
     expect(parseObstacles('  Obstacle pipe , Ropeswing ,, Rocks ')).toEqual(['obstacle pipe', 'ropeswing', 'rocks']);
@@ -63,4 +63,22 @@ test('awayFromCourse: travel only when outside BOTH the course and entrance regi
     expect(awayFromCourse(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(true);
     // right level matters: same x/z on another plane is away
     expect(awayFromCourse(new Tile(2998, 3945, 1), centre, 25, entrance, 10)).toBe(true);
+});
+
+test('insideCourseProper: in the course but past the entrance region (the lap zone)', () => {
+    const centre = new Tile(2998, 3945, 0);
+    const entrance = new Tile(2998, 3924, 0);
+    // pipe approach after the ridge hop: in course region, clear of the entrance -> lapping
+    expect(insideCourseProper(new Tile(2998, 3937, 0), centre, 25, entrance, 10)).toBe(true);
+    // at the ridge entrance: in the entrance region -> NOT yet in the lap (must cross)
+    expect(insideCourseProper(new Tile(2998, 3924, 0), centre, 25, entrance, 10)).toBe(false);
+    // far away -> not inside
+    expect(insideCourseProper(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(false);
+});
+
+test('classifyAttempt: xp -> cleared; damage-without-xp -> failed (retry fast); nothing -> noop', () => {
+    expect(classifyAttempt(true, false)).toBe('cleared');
+    expect(classifyAttempt(true, true)).toBe('cleared'); // xp wins even if a tick of damage landed
+    expect(classifyAttempt(false, true)).toBe('failed'); // fell off -> retry, don't wait for xp
+    expect(classifyAttempt(false, false)).toBe('noop'); // click did nothing -> stuck counter
 });

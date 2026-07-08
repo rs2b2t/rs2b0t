@@ -111,6 +111,29 @@ export function awayFromCourse(here: WorldTile, centre: WorldTile, courseRadius:
     return !inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
 }
 
+/**
+ * True when `here` is inside the course PROPER — in the course region but past
+ * the entrance region, i.e. north of the ridge running the lap (not still at the
+ * ridge waiting to cross). Used to seed the "entered" latch at start and to
+ * confirm a ridge crossing.
+ */
+export function insideCourseProper(here: WorldTile, centre: WorldTile, courseRadius: number, entrance: WorldTile, entryRadius: number): boolean {
+    return inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
+}
+
+/**
+ * Classify an obstacle attempt from its aftermath. Success is the agility xp
+ * every wilderness obstacle awards on completion; a FAILURE awards none but
+ * always deals damage (lava/spikes/pit), so an HP drop with no xp is a fall to
+ * retry (fast) rather than a stuck step. Neither = the click did nothing.
+ */
+export function classifyAttempt(xpGained: boolean, tookDamage: boolean): 'cleared' | 'failed' | 'noop' {
+    if (xpGained) {
+        return 'cleared';
+    }
+    return tookDamage ? 'failed' : 'noop';
+}
+
 function hpFraction(): number {
     const base = Skills.level('hitpoints');
     return base > 0 ? Skills.effective('hitpoints') / base : 1;
@@ -145,6 +168,11 @@ export default class WildyAgility extends TaskBot {
     private deaths = 0;
     private status = 'starting';
     died = false;
+    // Latched once we've crossed the ridge into the course, so the lap loops
+    // rocks -> pipe without EnterCourse re-firing when we pass back through the
+    // pipe's south approach (which overlaps the ridge entrance region). Reset on
+    // death and whenever we've left the course area (TravelToCourse).
+    private entered = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -175,6 +203,11 @@ export default class WildyAgility extends TaskBot {
 
         this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}`);
 
+        // Already inside the course (past the ridge)? Latch "entered" so we start
+        // lapping instead of trying to re-cross. Otherwise EnterCourse/TravelToCourse get us in.
+        const here = Game.tile()!;
+        this.entered = insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
+
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
                 this.died = true;
@@ -191,6 +224,7 @@ export default class WildyAgility extends TaskBot {
                 // of) walkBack. The food-only restock lives entirely in walkBack.
                 onDeath: () => {
                     this.deaths++;
+                    this.entered = false; // respawned outside — must re-cross the ridge after recovery
                     this.setStatus('died — recovering');
                     this.log('died in the wilderness — banking (food-only) then returning');
                 },
@@ -272,6 +306,17 @@ export default class WildyAgility extends TaskBot {
 
     setStatus(s: string): void {
         this.status = s;
+    }
+    isEntered(): boolean {
+        return this.entered;
+    }
+    /** Latched by EnterCourse once we've crossed the ridge into the course. */
+    markEntered(): void {
+        this.entered = true;
+    }
+    /** Cleared when we've left the course area (TravelToCourse) or died. */
+    markLeft(): void {
+        this.entered = false;
     }
     countEat(): void {
         this.eats++;
@@ -375,6 +420,7 @@ class TravelToCourse implements Task {
     }
 
     async execute(): Promise<void> {
+        this.bot.markLeft(); // away from the course — must re-cross the ridge to get back in
         this.bot.setStatus('walking to the wilderness agility course');
         await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 2, attempts: 6, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
     }
@@ -401,7 +447,7 @@ class EnterCourse implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        return here !== null && inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS);
+        return here !== null && !this.bot.isEntered() && inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS);
     }
 
     async execute(): Promise<void> {
@@ -431,8 +477,15 @@ class EnterCourse implements Task {
         // agility on success; wait for that xp OR for us to land in the region.
         await Execution.delayUntil(() => {
             const t = Game.tile();
-            return Skills.xp('agility') > before || (!!t && inRegion(t, COURSE_CENTRE, COURSE_RADIUS) && !inRegion(t, COURSE_ENTRANCE, ENTRY_RADIUS)) || EventSignal.pending();
+            return Skills.xp('agility') > before || (!!t && insideCourseProper(t, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS)) || EventSignal.pending();
         }, 15_000);
+
+        // Latch "entered" once we're across (the ridge awarded agility, or we
+        // landed north of the entrance) so the lap loops without re-crossing.
+        const after = Game.tile();
+        if (Skills.xp('agility') > before || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS))) {
+            this.bot.markEntered();
+        }
     }
 }
 
@@ -460,7 +513,10 @@ class RunLap implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        return here !== null && this.bot.courseNames().length > 0 && inRegion(here, COURSE_CENTRE, COURSE_RADIUS);
+        // Run the lap once we've crossed the ridge (entered), anywhere in the
+        // course area (course region OR the entrance/pipe approach). When truly
+        // away (a fail pit, or started far) TravelToCourse handles the walk back.
+        return here !== null && this.bot.isEntered() && this.bot.courseNames().length > 0 && (inRegion(here, COURSE_CENTRE, COURSE_RADIUS) || inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS));
     }
 
     async execute(): Promise<void> {
@@ -485,14 +541,17 @@ class RunLap implements Task {
         }
 
         const before = Skills.xp('agility');
+        const hpBefore = Skills.effective('hitpoints');
         this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
         const clicked = await obstacle.interact(op, this.bot.menuSelect());
 
-        // Every wilderness obstacle awards agility xp when its traversal script
-        // finishes — that's the completion signal. Generous timeout: the pipe is
-        // two exact-moves and a telejump.
-        const cleared = clicked && (await Execution.delayUntil(() => Skills.xp('agility') > before || EventSignal.pending(), 15_000));
-        if (!clicked) {
+        // Resolve the attempt fast: success is the agility xp every obstacle
+        // awards on completion; a FAILURE never awards xp but always deals damage
+        // (lava/spikes/pit) — so break on an HP drop too, instead of burning the
+        // full timeout on every fall. Also yield to events / level-up dialogs.
+        if (clicked) {
+            await Execution.delayUntil(() => Skills.xp('agility') > before || Skills.effective('hitpoints') < hpBefore || EventSignal.pending() || ChatDialog.canContinue(), 15_000);
+        } else {
             await Execution.delayTicks(2);
         }
 
@@ -501,7 +560,9 @@ class RunLap implements Task {
             return;
         }
 
-        // Let any trailing force-move settle before clicking the next obstacle.
+        const outcome = classifyAttempt(Skills.xp('agility') > before, Skills.effective('hitpoints') < hpBefore);
+
+        // Let any trailing force-move / fall settle before the next click.
         let last = Game.tile();
         for (let settle = 0; settle < 25; settle++) {
             await Execution.delayTicks(1);
@@ -515,10 +576,17 @@ class RunLap implements Task {
             last = now;
         }
 
-        if (cleared) {
+        if (outcome === 'cleared') {
             this.stuck = 0;
             this.bot.countCleared();
             this.bot.advance();
+        } else if (outcome === 'failed') {
+            // Fell off (damage, no xp): retry the SAME obstacle at once — a fall
+            // isn't "stuck", and the stepping stone / log balance can't be
+            // skipped. RunLap re-finds the nearest obstacle next loop.
+            this.stuck = 0;
+            this.bot.setStatus(`failed ${obstacle.name} — retrying`);
+            this.bot.log(`failed '${this.bot.currentName()}' (took damage) — retrying`);
         } else if (++this.stuck >= 4) {
             this.bot.log(`step '${this.bot.currentName()}' gave no xp after ${this.stuck} attempts — skipping`);
             this.stuck = 0;
