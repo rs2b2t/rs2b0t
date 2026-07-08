@@ -20,3 +20,6 @@ dist/
 *.log
 .idea/
 .vscode/
+
+# brainstorm visual-companion mockups
+.superpowers/
