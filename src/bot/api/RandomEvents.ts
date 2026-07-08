@@ -82,6 +82,24 @@ export interface DetectedEvent {
 
 const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
 const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
+// Strange plant (triffid): it "grows" for ~54s (Pick just says "the fruit isn't
+// ready yet"), is pickable for the next ~54s, then turns hostile and poisons. So
+// keep trying Pick across the whole grow window in a single handling pass rather
+// than spending the 4-attempt budget before the fruit is ever ripe.
+const PICK_WAIT_MS = 80_000;
+
+/**
+ * Strange-plant (triffid) handling from its right-click ops. While growing/ready
+ * the plant carries a 'Pick' op; once it turns hostile the server changes it to
+ * macro_triffidseed_angry — an 'Attack' op, NO 'Pick', and it poisons — so it
+ * must be fled then, never picked. Unknown/empty ops default to 'pick' (keep
+ * trying) rather than fleeing a plant that isn't actually attacking. Pure.
+ */
+export function plantStrategy(ops: string[]): 'pick' | 'evade' {
+    const canPick = ops.some(a => /pick|take/i.test(a));
+    const canAttack = ops.some(a => /attack/i.test(a));
+    return !canPick && canAttack ? 'evade' : 'pick';
+}
 
 class RandomEventsImpl {
     /** Names the host bot legitimately fights, so they're never mistaken for a combat event. */
@@ -326,22 +344,50 @@ class RandomEventsImpl {
     }
 
     private async handlePick(name: string, log: (msg: string) => void): Promise<boolean> {
-        log(`random event: ${name} — picking it before it turns hostile`);
-        const plant = Npcs.query()
-            .where(n => (n.name?.toLowerCase() ?? '') === name)
-            .nearest();
-        if (!plant) {
-            return false;
+        // The strange plant grows for ~54s — during which "Pick" only reports
+        // "the fruit isn't ready yet" and does nothing — is then pickable for
+        // ~54s, and finally turns hostile (a changetype'd plant that poisons). So
+        // keep trying Pick across the grow window in this one pass until the fruit
+        // lands in the pack; if it has ALREADY turned hostile (Attack op, no Pick)
+        // flee it like any other hostile event — picking is impossible then and
+        // standing next to it just eats poison damage.
+        const deadline = performance.now() + PICK_WAIT_MS;
+        let announced = false;
+        while (performance.now() < deadline) {
+            const plant = Npcs.query()
+                .where(n => (n.name?.toLowerCase() ?? '') === name)
+                .nearest();
+            if (!plant) {
+                return true; // picked, despawned, or we walked out of range
+            }
+            if (plantStrategy(plant.actions()) === 'evade') {
+                log(`random event: ${name} turned hostile — fleeing (it poisons)`);
+                return await this.handleEvade(name, log);
+            }
+            if (!announced) {
+                log(`random event: ${name} — picking the fruit as soon as it ripens`);
+                announced = true;
+            }
+            const op = plant.actions().find(a => /pick|take/i.test(a));
+            if (op) {
+                const before = Inventory.count('Strange fruit');
+                await plant.interact(op);
+                // success is the fruit landing in the pack immediately; the plant
+                // itself only despawns ~13 ticks after a successful pick, so don't
+                // gate solely on its disappearance
+                const picked = await Execution.delayUntil(
+                    () => Inventory.count('Strange fruit') > before || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name),
+                    6000
+                );
+                if (picked) {
+                    log(`random event: ${name} — fruit picked`);
+                    return true;
+                }
+            }
+            // not ripe yet ("the fruit isn't ready to be picked yet") — wait, retry
+            await Execution.delayTicks(4);
         }
-
-        // the triffid's op is "Pick"; fall back to "Take" / first op
-        const op = plant.actions().find(a => /pick|take/i.test(a)) ?? plant.actions()[0];
-        if (!op) {
-            return false;
-        }
-
-        await plant.interact(op);
-        await Execution.delayUntil(() => !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name), 6000);
+        log(`random event: ${name} — fruit never ripened in this pass; will retry`);
         return true;
     }
 
