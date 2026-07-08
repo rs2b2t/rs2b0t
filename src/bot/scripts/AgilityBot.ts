@@ -1,4 +1,5 @@
 import { TaskBot, type Task } from '../api/Bot.js';
+import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
@@ -178,9 +179,16 @@ class DoObstacle implements Task {
         // every course obstacle awards agility xp when the traversal script
         // finishes — that's the completion signal. Generous timeout: the pipe
         // is a forcewalk plus two exact-moves and takes ~10s.
-        const cleared = clicked && (await Execution.delayUntil(() => Skills.xp('agility') > before, 15000));
+        const cleared = clicked && (await Execution.delayUntil(() => Skills.xp('agility') > before || EventSignal.pending(), 15000));
         if (!clicked) {
             await Execution.delayTicks(2);
+        }
+
+        // a random event (e.g. the Swarm) interrupted us — yield at once so the
+        // runtime event guard walks us away from it before we retry the obstacle
+        if (EventSignal.pending()) {
+            this.bot.setStatus('random event — handling');
+            return;
         }
 
         // let any trailing force-move settle before clicking the next one

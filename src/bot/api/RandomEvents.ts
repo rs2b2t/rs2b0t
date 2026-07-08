@@ -162,13 +162,16 @@ class RandomEventsImpl {
             }
         }
 
-        // hostile event: an event monster attacking us that we don't grind
-        if (Game.inCombat()) {
-            for (const npc of reader.npcs()) {
-                const name = npc.name?.toLowerCase();
-                if (name && npc.inCombat && HOSTILE_EVENT_NPCS.includes(name) && !this.grindTargets.includes(name)) {
-                    return { kind: 'evade', name };
-                }
+        // hostile event: an event monster attacking us — or right on top of us —
+        // that we don't grind. NOT gated on OUR combat flag: the Swarm event is a
+        // 0-damage interrupter (antimacro.npc: max_dealt=0) that may never flip
+        // the player's combat state, yet it wedges non-combat scripts (agility,
+        // woodcutting) until we walk off. Keying on the event NPC attacking
+        // (npc.inCombat) or being adjacent is the reliable signal.
+        for (const npc of reader.npcs()) {
+            const name = npc.name?.toLowerCase();
+            if (name && HOSTILE_EVENT_NPCS.includes(name) && !this.grindTargets.includes(name) && (npc.inCombat || npc.distance <= 1)) {
+                return { kind: 'evade', name };
             }
         }
 
