@@ -234,41 +234,43 @@ class Chop implements Task {
             return;
         }
 
-        const treeTile = tree.tile();
-        // Is the tree we're on still standing? A normal tree falls after ONE
-        // log — the moment this goes false we return at once for the next tree
-        // instead of waiting out the progress timeout (the "sits too long"
-        // pause). Oaks/willows stay up and keep yielding, so we keep chopping
-        // while they stand.
-        const standing = () =>
-            Locs.query()
-                .name(this.bot.tree())
-                .action(this.bot.chop())
-                .where(l => l.tile().equals(treeTile))
-                .nearest() !== null;
-
-        this.bot.setStatus(`chopping ${this.bot.tree()} at ${treeTile}`);
-        if (!tree.interact(this.bot.chop())) {
+        this.bot.setStatus(`chopping ${this.bot.tree()} at ${tree.tile()}`);
+        const before = Inventory.used();
+        if (!(await tree.interact(this.bot.chop()))) {
             this.bot.log(`no '${this.bot.chop()}' op on ${this.bot.tree()}? ops=[${tree.actions().join(', ')}]`);
             await Execution.delayTicks(2);
             return;
         }
 
-        this.bot.consumeChopProgress();
-
-        // wait until we get a log, the tree falls, or we time out
-        const started = await Execution.delayUntil(() => this.bot.consumeChopProgress() || !standing() || ChatDialog.canContinue(), 12000);
-        if (!started || !standing() || ChatDialog.canContinue()) {
-            return; // fell after one log (normal tree), or never started
+        // wait for chopping to take hold: a log, the swing animation starting, or
+        // a timeout (walking to the tree takes a moment). Nothing => click refused.
+        await Execution.delayUntil(() => Inventory.used() > before || Game.animating() || ChatDialog.canContinue(), 12000);
+        if (Inventory.used() === before && !Game.animating()) {
+            await Execution.delayTicks(2);
+            return;
         }
 
-        // keep chopping while the tree stands and yields (oaks/willows); a normal
-        // tree falling flips standing() false and returns us immediately
-        for (let guard = 0; guard < 60; guard++) {
-            const progressed = await Execution.delayUntil(() => this.bot.consumeChopProgress() || !standing() || ChatDialog.canContinue() || Inventory.isFull(), 8000);
-            if (!progressed || !standing() || ChatDialog.canContinue() || Inventory.isFull()) {
+        // Stay on the tree WHILE we're swinging — key the loop on the chop
+        // ANIMATION, not on the tree loc (which reads absent between logs on a
+        // standing oak and caused re-clicks). An oak keeps animating and yields
+        // many logs, so we wait instead of re-clicking; a normal tree falls after
+        // one log, the animation stops, and we return at once for the next tree.
+        for (let guard = 0; guard < 120; guard++) {
+            if (Inventory.isFull() || ChatDialog.canContinue()) {
                 return;
             }
+            const mark = Inventory.used();
+            await Execution.delayUntil(() => Inventory.used() > mark || !Game.animating() || Inventory.isFull() || ChatDialog.canContinue(), 8000);
+            if (Inventory.isFull() || ChatDialog.canContinue()) {
+                return;
+            }
+            if (Inventory.used() > mark) {
+                continue; // got a log — keep swinging the same tree
+            }
+            if (!Game.animating()) {
+                return; // stopped swinging with no new log — tree fell/depleted; find the next
+            }
+            // still animating after 8s with no log — a slow tree; keep waiting
         }
     }
 
