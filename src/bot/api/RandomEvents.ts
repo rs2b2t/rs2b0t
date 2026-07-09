@@ -68,6 +68,13 @@ const HOSTILE_EVENT_NPCS = ['swarm', 'zombie', 'shade', 'rock golem', 'river tro
 // chest_macro_gas loc 2141; whirlpool npcs 403/404/405; big fish npc 390.
 const GAS_CHEST_LOC_ID = 2141;
 const WHIRLPOOL_NPC_IDS = [403, 404, 405];
+// Mining "smoking rock" (macro gas): the rock being mined swaps to a
+// macro_<ore>rock1/2 variant (loc ids 2119-2138, all named "Rocks", the
+// macro_plainrock model) that the server auto-re-mines until it EXPLODES —
+// 10 damage + breaks the pickaxe (macro_event_gas.rs2). Treat it as a hazard:
+// stop mining and step away until it expires (~60 ticks).
+const SMOKING_ROCK_ID_MIN = 2119;
+const SMOKING_ROCK_ID_MAX = 2138;
 const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fly fishing rod', 'harpoon', 'lobster pot'];
 
 // Teleport-minigame stages, detected by mapsquare (survives relogs into the
@@ -195,10 +202,14 @@ class RandomEventsImpl {
             }
         }
 
-        // hazards: gas chest adjacent; whirlpool where our fishing spot was
+        // hazards: gas chest adjacent; smoking rock at the mining spot; whirlpool
+        // where our fishing spot was
         for (const loc of reader.locs()) {
             if (loc.id === GAS_CHEST_LOC_ID && loc.distance <= 1) {
                 return { kind: 'hazard', name: 'poisonous gas' };
+            }
+            if (loc.id >= SMOKING_ROCK_ID_MIN && loc.id <= SMOKING_ROCK_ID_MAX && loc.distance <= 2) {
+                return { kind: 'hazard', name: 'smoking rock' };
             }
         }
         for (const npc of reader.npcs()) {
