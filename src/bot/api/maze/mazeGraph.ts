@@ -47,3 +47,72 @@ export function parseJm2Locs(text: string): MazeLoc[] {
     }
     return out;
 }
+
+export interface DoorInfo {
+    tile: { x: number; z: number };
+    id: number;
+    angle: number;
+}
+
+export interface MazeGraph {
+    wallEdge: Set<string>;      // undirected blocked cardinal edges (solid walls)
+    door: Map<string, DoorInfo>; // edgeKey -> door on that edge
+    minx: number;
+    maxx: number;
+    minz: number;
+    maxz: number;
+}
+
+// Canonical key for the undirected cardinal edge between two adjacent tiles.
+export function edgeKey(ax: number, az: number, bx: number, bz: number): string {
+    return ax < bx || az < bz ? `${ax},${az}|${bx},${bz}` : `${bx},${bz}|${ax},${az}`;
+}
+
+// The cardinal edge a wall_straight of the given angle sits on, as [ax,az,bx,bz].
+// Mirrors CollisionEngine.changeWallStraight (WEST=west edge, NORTH=north, ...).
+function straightEdge(wx: number, wz: number, angle: number): [number, number, number, number] {
+    switch (angle) {
+        case 0: return [wx, wz, wx - 1, wz]; // WEST
+        case 1: return [wx, wz, wx, wz + 1]; // NORTH
+        case 2: return [wx, wz, wx + 1, wz]; // EAST
+        default: return [wx, wz, wx, wz - 1]; // SOUTH
+    }
+}
+
+// wall_L blocks two edges of its tile (CollisionEngine.changeWallL).
+const WALL_L_ANGLES: Record<number, number[]> = { 0: [1, 0], 1: [1, 2], 2: [3, 2], 3: [3, 0] };
+
+export function buildMaze(locs: MazeLoc[]): MazeGraph {
+    const wallEdge = new Set<string>();
+    const door = new Map<string, DoorInfo>();
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+
+    for (const l of locs) {
+        const wx = MAZE_ORIGIN.x + l.lx;
+        const wz = MAZE_ORIGIN.z + l.lz;
+        if (l.id === WALL_ID) {
+            minx = Math.min(minx, wx); maxx = Math.max(maxx, wx);
+            minz = Math.min(minz, wz); maxz = Math.max(maxz, wz);
+            if (l.shape === 0) {
+                wallEdge.add(edgeKey(...straightEdge(wx, wz, l.angle)));
+            } else if (l.shape === 2) {
+                for (const a of WALL_L_ANGLES[l.angle]) {
+                    wallEdge.add(edgeKey(...straightEdge(wx, wz, a)));
+                }
+            } // shape 3 (square_corner) blocks diagonals only — ignored for cardinal movement
+        } else if (l.id in DOOR_DIRS) {
+            door.set(edgeKey(...straightEdge(wx, wz, l.angle)), { tile: { x: wx, z: wz }, id: l.id, angle: l.angle });
+        }
+    }
+    return { wallEdge, door, minx, maxx, minz, maxz };
+}
+
+// Whether the door opens when approached from (fromX,fromZ). Mirrors
+// macro_event_maze.rs2 ($door_entry_side) + door_procs.rs2 (~check_axis).
+export function doorPassable(door: DoorInfo, fromX: number, fromZ: number): boolean {
+    const dir = DOOR_DIRS[door.id];
+    if (dir === 0) { return true; }
+    // check_axis: NORTH/SOUTH angle -> true iff same z; WEST/EAST -> true iff same x
+    const axisTrue = door.angle === 1 || door.angle === 3 ? fromZ === door.tile.z : fromX === door.tile.x;
+    return dir === 1 ? axisTrue : !axisTrue;
+}
