@@ -5,6 +5,7 @@ import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -41,6 +42,7 @@ export const SETTINGS: SettingsSchema = {
     anchor: { type: 'tile', default: DEFAULT_ANCHOR, label: 'Market anchor (x,z)' },
     leashRadius: { type: 'number', default: 12, min: 5, max: 25, label: 'Leash radius (tiles)' },
     target: { type: 'string', default: 'Guard', label: 'NPC to fight (name)' },
+    combatStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Combat style', help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
     stallTile: { type: 'tile', default: DEFAULT_STALL, label: 'Baker\'s stall (x,z)', help: 'second stall sits at 2655,3311' },
     stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
@@ -71,6 +73,7 @@ let PANIC_AT = 0.25;
 let REST_UNTIL = 0.6;
 let FOOD_TARGET = 8;
 let BANK_AT = 12;
+let COMBAT_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
 
 function hpFraction(): number {
     const base = Skills.level('hitpoints');
@@ -130,6 +133,7 @@ export default class ArdyFighter extends TaskBot {
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
         FOOD_TARGET = this.settings.num('foodTarget', 8);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
+        COMBAT_MODE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
 
         // The Baker's stall needs Thieving 5 — without it this bot cannot feed
         // itself, so refuse to run rather than starve mid-fight.
@@ -175,6 +179,7 @@ export default class ArdyFighter extends TaskBot {
             }),
             new BankRun(this),
             new RestockCakes(this),
+            new SetStyle(this),
             new Fight(this),
             new ReturnToAnchor(this)
         );
@@ -454,6 +459,28 @@ class PanicRetreat implements Task {
         }
 
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
+    }
+}
+
+/** Set the chosen combat style (com_mode) once, when out of combat and it's
+ *  wrong. The server doesn't persist com_mode, so it's re-asserted each session;
+ *  ranks just above Fight so the style is right before the first swing. */
+class SetStyle implements Task {
+    private announced = false;
+    constructor(private bot: ArdyFighter) {}
+
+    validate(): boolean {
+        return !Game.inCombat() && Game.combatMode() !== COMBAT_MODE;
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('setting combat style');
+        Game.setCombatStyle(COMBAT_MODE);
+        const ok = await Execution.delayUntil(() => Game.combatMode() === COMBAT_MODE, 3000);
+        if (ok && !this.announced) {
+            this.announced = true;
+            this.bot.log(`combat style: ${['accurate', 'aggressive', 'defensive'][COMBAT_MODE] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][COMBAT_MODE] ?? '?'})`);
+        }
     }
 }
 

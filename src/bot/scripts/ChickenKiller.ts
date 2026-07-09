@@ -5,6 +5,7 @@ import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
@@ -26,15 +27,13 @@ export const SETTINGS: SettingsSchema = {
     combatStyle: {
         type: 'string',
         default: 'strength',
-        options: ['attack', 'strength', 'defence'],
+        options: COMBAT_STYLE_OPTIONS,
         label: 'Combat style',
         help: 'which combat stat to train (unarmed); re-applied each login since com_mode is not saved'
     },
     ...PERIODIC_BANK_SETTINGS
 };
 
-// combat style name -> com_mode value (aggressive = Strength xp).
-const STYLE_MODE: Record<string, number> = { attack: 0, accurate: 0, strength: 1, aggressive: 1, defence: 2, defense: 2, defensive: 2 };
 
 /**
  * Slice 3 exit-criterion bot: kills a configurable target NPC (settings:
@@ -83,7 +82,7 @@ export default class ChickenKiller extends TaskBot {
         this.target = this.settings.str('targetName', 'Chicken');
         this.loot = this.settings.str('lootMatch', 'bones').toLowerCase().split('|').map(s => s.trim()).filter(s => s.length > 0);
         this.buryEnabled = this.settings.bool('buryBones', true);
-        this.combatMode = STYLE_MODE[this.settings.str('combatStyle', 'strength').toLowerCase()] ?? 1;
+        this.combatMode = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
 
         const hinted = RecoveryHints.takeAnchor();
         const here = Game.tile()!;
