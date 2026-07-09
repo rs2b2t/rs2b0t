@@ -18,8 +18,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
         host: { tickCount: number };
         runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null };
@@ -33,18 +33,18 @@ try {
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
     await page.goto(`${base}/bot.html`);
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
 
     await page.evaluate(
         ([user, pass]) => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             client.loginUser = user;
             client.loginPass = pass;
             void client.login(user, pass, false);
         },
         [username, 'test']
     );
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 });
     console.log(`logged in as '${username}'`);
 
     // new accounts spawn tutorial-locked on Tutorial Island (no sidebar tabs
@@ -58,7 +58,7 @@ try {
     await page.waitForTimeout(2000);
 
     await page.reload();
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
 
     // the server takes a few seconds to process the disconnect; retry past
     // the already-online window
@@ -67,7 +67,7 @@ try {
         await page.waitForTimeout(5000);
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -75,13 +75,13 @@ try {
             [username, 'test']
         );
         backIn = await page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 10000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 10000 })
             .then(() => true)
             .catch(() => false);
     }
     if (!backIn) fail('could not re-login after tutorial unlock');
 
-    const invTab = await page.evaluate(() => ((globalThis as never as { lcbuddy: { client: { sideIcon: number[] } } }).lcbuddy.client.sideIcon[3] ?? -1) !== -1);
+    const invTab = await page.evaluate(() => ((globalThis as never as { rs2b0t: { client: { sideIcon: number[] } } }).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     console.log(`re-logged in; inventory tab ${invTab ? 'present' : 'STILL MISSING'}`);
     if (!invTab) fail('re-login off tutorial island did not unlock sidebar tabs');
 
@@ -128,7 +128,7 @@ try {
         await page.waitForTimeout(10_000);
 
         const snap = await page.evaluate(() => {
-            const { runner } = (globalThis as never as Lcb).lcbuddy;
+            const { runner } = (globalThis as never as Rs2b0t).rs2b0t;
             return { state: runner.state, log: runner.ctx?.log ?? [], loops: runner.ctx?.loopCount ?? 0 };
         });
 
@@ -146,12 +146,12 @@ try {
 
     await page.screenshot({ path: 'out/chicken-test.png' });
 
-    const log = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
+    const log = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
     const buried = log.filter(l => l === 'buried bones').length;
     console.log(`\nresult: ${buried} bones buried over ${minutes}min (screenshot: out/chicken-test.png)`);
 
     await page.getByRole('button', { name: 'Stop' }).click();
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 }).catch(() => {});
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 }).catch(() => {});
 
     if (buried === 0) fail('no bones buried — cycle did not complete');
     console.log('PASS');

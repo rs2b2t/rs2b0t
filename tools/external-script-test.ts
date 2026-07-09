@@ -25,8 +25,8 @@ if (build.exitCode !== 0) fail(`template build failed: ${build.stderr.toString()
 fs.copyFileSync('templates/script-template/dist/bot.js', `${engineDir}/public/bot/external-test-bot.js`);
 console.log('template built and copied to engine public/bot/');
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
     };
@@ -39,13 +39,13 @@ try {
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
     const boot = async () => {
-        await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+        await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
     };
 
     const login = async () => {
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -53,7 +53,7 @@ try {
             [username, 'test']
         );
         return page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
             .then(() => true)
             .catch(() => false);
     };
@@ -80,12 +80,12 @@ try {
         backIn = await login();
     }
     if (!backIn) fail('re-login failed');
-    const invTab = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.client.sideIcon[3] ?? -1) !== -1);
+    const invTab = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     if (!invTab) fail('tabs still locked');
     console.log('re-logged in, tabs unlocked');
 
     await type('::give bones 25');
-    const haveBones = await page.evaluate(() => ((globalThis as never as { lcbuddy: { reader: { inventory(): { name: string | null }[] } } }).lcbuddy.reader.inventory() ?? []).some(i => i.name?.toLowerCase() === 'bones'));
+    const haveBones = await page.evaluate(() => ((globalThis as never as { rs2b0t: { reader: { inventory(): { name: string | null }[] } } }).rs2b0t.reader.inventory() ?? []).some(i => i.name?.toLowerCase() === 'bones'));
     if (!haveBones) fail('::give bones did not land');
     console.log('bones acquired');
 
@@ -115,7 +115,7 @@ try {
     await page.selectOption('.rs2b0t-select', 'BoneBurier');
     await page.getByRole('button', { name: 'Start' }).click();
 
-    await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).filter(l => l.msg.startsWith('buried bones')).length >= 10, undefined, { timeout: 180000 });
+    await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.startsWith('buried bones')).length >= 10, undefined, { timeout: 180000 });
     console.log('external bot buried 10+ bones');
 
     // 4. reload while running must be refused
@@ -126,7 +126,7 @@ try {
     await page.screenshot({ path: 'out/external-script-test.png' });
 
     await page.getByRole('button', { name: 'Stop' }).click();
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
 
     // 5. hot reload after stop: replaces, no duplicates
     status = await loadUrl();

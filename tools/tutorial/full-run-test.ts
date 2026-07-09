@@ -23,8 +23,8 @@ const POLL_MS = 5000;
 /** Mainland proof: west Lumbridge is x > 3190; the island tops out ~3155. */
 const MAINLAND_X = 3190;
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
         runner: { ctx: { state?: string; crashError?: unknown; loopCount?: number; log?: unknown[] } | null };
     };
@@ -78,7 +78,7 @@ try {
         // varp alone — docs/tutorial-map.md's Task 9 debug-handle note.
         const ctx = await page
             .evaluate(() => {
-                const c = (globalThis as never as Lcb).lcbuddy.runner.ctx;
+                const c = (globalThis as never as Rs2b0t).rs2b0t.runner.ctx;
                 return c ? { state: c.state, crashError: String(c.crashError ?? ''), loopCount: c.loopCount, logTail: (c.log ?? []).slice(-10) } : null;
             })
             .catch(e => `ctx unreadable: ${e}`);
@@ -87,7 +87,7 @@ try {
     }
 
     await page.waitForTimeout(1500);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-teleport tile: ${JSON.stringify(tile)}`);
     if (!tile || tile.x <= MAINLAND_X) {
         fail(`tutorial reached ${v} but the client tile doesn't show Lumbridge (got ${JSON.stringify(tile)})`);

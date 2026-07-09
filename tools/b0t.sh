@@ -1,6 +1,6 @@
 #!/bin/sh
 # `bun run b0t` — build the rs2b0t LIVE client and open the Electron WALL against
-# w1.rs2b2t.com, fully local. Mirrors LCBuddy2's `wall`: fetch rs2b2t's current
+# w1.rs2b2t.com, fully local. Mirrors the legacy `wall` command: fetch rs2b2t's current
 # login key, build TARGET=live with it, start the local reverse proxy (serves your
 # client from disk + forwards /crc and the cache WebSocket to live), then open the
 # multibox wall in Electron (background throttling OFF, so minimized bots keep full

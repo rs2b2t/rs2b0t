@@ -17,8 +17,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { msg: string }[] } | null };
         reader: { inventory(): { name: string | null }[]; locs(): { name: string | null; tile: { x: number; z: number } }[]; worldTile(): { x: number; z: number } | null; chat(n: number): { text: string }[] };
@@ -30,10 +30,10 @@ try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
     };
     const type = async (t: string) => {
         await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -42,8 +42,8 @@ try {
         await page.keyboard.press('Enter');
         await page.waitForTimeout(1400);
     };
-    const cookedCount = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().filter(i => { const n = (i.name ?? '').toLowerCase(); return n === 'shrimps' || n === 'burnt shrimps'; }).length);
-    const rawCount = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().filter(i => (i.name ?? '').toLowerCase() === 'raw shrimps').length);
+    const cookedCount = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().filter(i => { const n = (i.name ?? '').toLowerCase(); return n === 'shrimps' || n === 'burnt shrimps'; }).length);
+    const rawCount = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().filter(i => (i.name ?? '').toLowerCase() === 'raw shrimps').length);
 
     await page.goto(`${base}/bot.html`);
     await boot();
@@ -58,7 +58,7 @@ try {
     await type('::advancestat cooking 20'); // reduce burning so a cook clearly completes
     await type(RANGE_TELE);
 
-    const ranges = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.locs().filter(l => l.name === 'Range' || l.name === 'Cooking range').length);
+    const ranges = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().filter(l => l.name === 'Range' || l.name === 'Cooking range').length);
     console.log(`ranges in scene: ${ranges}, raw shrimps: ${await rawCount()}`);
     if (ranges === 0) fail('no Range at the tele spot');
 
@@ -78,16 +78,16 @@ try {
     let lastLogged = 0;
     while (Date.now() < deadline && cooked === 0) {
         await page.waitForTimeout(6000);
-        const log = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
+        const log = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
         for (const line of log.slice(lastLogged)) console.log(`  [bot] ${line}`);
         lastLogged = log.length;
         const diag = await page.evaluate(() => {
-            const r = (globalThis as never as Lcb).lcbuddy.reader;
+            const r = (globalThis as never as Rs2b0t).rs2b0t.reader;
             const t = r.worldTile();
             return `tile ${t ? `${t.x},${t.z}` : '?'} | chat: ${r.chat(3).map(c => c.text).join(' | ')}`;
         });
         console.log(`  [diag] raw ${await rawCount()} cooked ${await cookedCount()} | ${diag}`);
-        if (await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'crashed')) fail('Cook crashed');
+        if (await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'crashed')) fail('Cook crashed');
         cooked = await cookedCount();
     }
 

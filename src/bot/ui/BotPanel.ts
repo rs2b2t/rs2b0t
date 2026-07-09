@@ -54,7 +54,7 @@ export default class BotPanel {
         root.replaceChildren();
 
         const title = el('div', 'rs2b0t-title');
-        title.textContent = 'LCBuddy2';
+        title.textContent = 'rs2b0t';
         root.appendChild(title);
 
         this.banner = el('div', 'rs2b0t-banner');

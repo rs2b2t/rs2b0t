@@ -38,8 +38,8 @@ const TELE_CMD = 'tele 0,48,148,9,47';
 /** `MINE_Z` from `src/bot/scripts/tutorial/stages/helpers.ts` -- underground/surface boundary. */
 const MINE_Z = 9000;
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
 };
@@ -95,7 +95,7 @@ try {
     // Land at the mine-arrival tile (Mining.ts's stages take it from there).
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] teleported: tile=${JSON.stringify(tile)}`);
     if (!tile || tile.x !== ARRIVAL.x || tile.z !== ARRIVAL.z) {
         fail(`tele into the mine did not land at (${ARRIVAL.x},${ARRIVAL.z}) (got ${JSON.stringify(tile)})`);
@@ -128,7 +128,7 @@ try {
     }
 
     // Surface observable: confirm the client tile agrees (ClimbOutLadder's terminal outcome).
-    const surfaceTile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const surfaceTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-ladder tile: ${JSON.stringify(surfaceTile)}`);
     if (!surfaceTile || surfaceTile.z >= MINE_Z) {
         fail(`tutorial reached ${v} but the client tile doesn't show the expected surface crossing (got ${JSON.stringify(surfaceTile)})`);

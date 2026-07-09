@@ -77,8 +77,8 @@ const MINE_Z = 9000;
 const TELE_CMD = 'tele 0,48,48,14,49';
 const LANDING = { x: 3086, z: 3121 };
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
 };
@@ -144,7 +144,7 @@ try {
     // misfire surface live).
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] teleported: tile=${JSON.stringify(tile)}`);
     if (!tile || tile.x !== LANDING.x || tile.z !== LANDING.z) {
         fail(`tele into the Quest Guide hall did not land at (${LANDING.x},${LANDING.z}) (got ${JSON.stringify(tile)})`);
@@ -178,7 +178,7 @@ try {
 
     // Mine-arrival observable: the climb shifts world z by +6400; confirm the
     // client agrees post-climb.
-    const mineTile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const mineTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-climb tile: ${JSON.stringify(mineTile)}`);
     if (!mineTile || mineTile.z < MINE_Z) {
         fail(`tutorial reached ${v} but the client tile doesn't show the expected mine z-jump (got ${JSON.stringify(mineTile)})`);

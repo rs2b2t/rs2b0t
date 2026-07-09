@@ -18,8 +18,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
         host: { tickCount: number };
         runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null };
@@ -36,7 +36,7 @@ try {
     const login = async () => {
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -44,7 +44,7 @@ try {
             [username, 'test']
         );
         return page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
             .then(() => true)
             .catch(() => false);
     };
@@ -58,7 +58,7 @@ try {
     };
 
     const boot = async () => {
-        await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+        await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
     };
 
     await page.goto(`${base}/bot.html`);
@@ -77,23 +77,23 @@ try {
     }
     if (!backIn) fail('re-login failed');
 
-    const invTab = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.client.sideIcon[3] ?? -1) !== -1);
+    const invTab = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     if (!invTab) fail('sidebar tabs still locked after re-login');
     console.log('tabs unlocked');
 
     await type('::give bronze_axe');
-    const hasAxe = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().some(i => i.name?.toLowerCase().includes('axe')));
+    const hasAxe = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => i.name?.toLowerCase().includes('axe')));
     if (!hasAxe) {
-        const inv = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().map(i => i.name));
+        const inv = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().map(i => i.name));
         fail(`::give bronze_axe did not land (inventory: [${inv.join(', ')}]) — staffModLevel < 3?`);
     }
     console.log('axe acquired');
 
-    const trees = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.locs().filter(l => l.name === 'Tree' && l.distance <= 15).length);
+    const trees = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().filter(l => l.name === 'Tree' && l.distance <= 15).length);
     console.log(`trees within 15 tiles: ${trees}`);
     if (trees === 0) {
         const near = await page.evaluate(() =>
-            (globalThis as never as Lcb).lcbuddy.reader
+            (globalThis as never as Rs2b0t).rs2b0t.reader
                 .locs()
                 .filter(l => l.name?.toLowerCase().includes('tree'))
                 .sort((a, b) => a.distance - b.distance)
@@ -113,7 +113,7 @@ try {
         await page.waitForTimeout(10_000);
 
         const snap = await page.evaluate(() => {
-            const { runner } = (globalThis as never as Lcb).lcbuddy;
+            const { runner } = (globalThis as never as Rs2b0t).rs2b0t;
             return { state: runner.state, log: runner.ctx?.log ?? [] };
         });
 
@@ -131,7 +131,7 @@ try {
     await page.screenshot({ path: 'out/woodcut-test.png' });
 
     const summary = await page.evaluate(() => {
-        const log = ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg);
+        const log = ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg);
         return {
             dropped: log.filter(l => l === 'dropped all logs').length,
             levelups: log.filter(l => l.startsWith('level up!')).length

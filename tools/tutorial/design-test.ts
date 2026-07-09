@@ -31,8 +31,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = { lcbuddy: { reader: { modals(): { main: number; side: number; chat: number } } } };
-const mainModal = (page: Page) => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.modals().main);
+type Rs2b0t = { rs2b0t: { reader: { modals(): { main: number; side: number; chat: number } } } };
+const mainModal = (page: Page) => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals().main);
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
@@ -57,7 +57,7 @@ try {
     await startScript(page, 'TutorialBot');
 
     const closed = await page
-        .waitForFunction(m => (globalThis as never as Lcb).lcbuddy.reader.modals().main !== m, DESIGN_MODAL, { timeout: 12000 })
+        .waitForFunction(m => (globalThis as never as Rs2b0t).rs2b0t.reader.modals().main !== m, DESIGN_MODAL, { timeout: 12000 })
         .then(() => true)
         .catch(() => false);
     if (!closed) {

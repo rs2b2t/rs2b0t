@@ -2,7 +2,7 @@
 // boot a fresh bot.html page, log in as a brand-new (auto-created) account,
 // start a registered script, and poll a varp for progress.
 //
-// All game-state access goes through the page's `globalThis.lcbuddy` inside
+// All game-state access goes through the page's `globalThis.rs2b0t` inside
 // page.evaluate()/waitForFunction() (docs/OPERATING.md §5). Like every other
 // tools/*-test.ts file, this re-declares the minimal structural type it
 // needs rather than importing from src/bot/ — the tools run under Node, the
@@ -10,8 +10,8 @@
 
 import type { Page } from 'playwright-core';
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: {
             ingame: boolean;
             sceneState: number;
@@ -39,10 +39,10 @@ type Lcb = {
  */
 export async function bootAndLogin(page: Page, base: string, user: string): Promise<void> {
     await page.goto(`${base}/bot.html?nodeid=10`);
-    await page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
 
     await page.evaluate(u => {
-        const { client } = (globalThis as never as Lcb).lcbuddy;
+        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         client.loginUser = u;
         client.loginPass = 'test';
         void client.login(u, 'test', false);
@@ -50,7 +50,7 @@ export async function bootAndLogin(page: Page, base: string, user: string): Prom
 
     await page.waitForFunction(
         () => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             return client.ingame && client.sceneState === 2;
         },
         undefined,
@@ -80,12 +80,12 @@ export async function bootAndLogin(page: Page, base: string, user: string): Prom
  * any test that relogs.
  */
 export async function relog(page: Page, user: string): Promise<void> {
-    await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.client.logout());
-    await page.waitForFunction(() => !(globalThis as never as Lcb).lcbuddy.client.ingame, undefined, { timeout: 15000 });
+    await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.logout());
+    await page.waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, { timeout: 15000 });
 
     const attemptLogin = () =>
         page.evaluate(u => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             client.loginUser = u;
             client.loginPass = 'test';
             void client.login(u, 'test', false);
@@ -95,7 +95,7 @@ export async function relog(page: Page, user: string): Promise<void> {
         page
             .waitForFunction(
                 () => {
-                    const { client } = (globalThis as never as Lcb).lcbuddy;
+                    const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                     return client.ingame && client.sceneState === 2;
                 },
                 undefined,
@@ -156,7 +156,7 @@ export async function cheat(page: Page, command: string): Promise<void> {
  */
 export async function cheatQuiet(page: Page, command: string): Promise<boolean> {
     const sent = await page.evaluate(c => {
-        const { client } = (globalThis as never as Lcb).lcbuddy;
+        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
@@ -199,7 +199,7 @@ export async function cheatQuiet(page: Page, command: string): Promise<boolean> 
  */
 export async function getServerVar(page: Page, name: string): Promise<number | null> {
     await cheat(page, `getvar ${name}`);
-    const lines = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.chat(5));
+    const lines = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.chat(5));
     const line = lines.find(l => l.text.toLowerCase().startsWith(`get ${name.toLowerCase()}:`));
     if (!line) {
         return null;
@@ -226,7 +226,7 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
  */
 export async function getServerVarQuiet(page: Page, name: string): Promise<number | null> {
     const sent = await page.evaluate(n => {
-        const { client } = (globalThis as never as Lcb).lcbuddy;
+        const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
             return false;
         }
@@ -241,7 +241,7 @@ export async function getServerVarQuiet(page: Page, name: string): Promise<numbe
     }
 
     await page.waitForTimeout(900); // one server tick + headroom for the echo
-    const lines = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.chat(8));
+    const lines = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.chat(8));
     const line = lines.find(l => l.text.toLowerCase().startsWith(`get ${name.toLowerCase()}:`));
     if (!line) {
         return null;
@@ -285,7 +285,7 @@ export async function mainlandAccount(page: Page, base: string, user: string): P
 
     await relog(page, user);
 
-    const unlocked = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.client.sideIcon[3] ?? -1) !== -1);
+    const unlocked = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     if (!unlocked) {
         throw new Error('mainlandAccount: sidebar still tutorial-locked after tele + setvar tutorial=1000 + relog');
     }
@@ -294,7 +294,7 @@ export async function mainlandAccount(page: Page, base: string, user: string): P
 /** Start a registered script by name — the headless equivalent of picking it in the panel and clicking Start. */
 export async function startScript(page: Page, name: string): Promise<void> {
     await page.evaluate(n => {
-        const { runner, registry } = (globalThis as never as Lcb).lcbuddy;
+        const { runner, registry } = (globalThis as never as Rs2b0t).rs2b0t;
         runner.start(registry.get(n));
     }, name);
 }
@@ -302,12 +302,12 @@ export async function startScript(page: Page, name: string): Promise<void> {
 /** Resolve true as soon as varp `varpIndex` reaches >= `target`, false on timeout. */
 export async function runToVarp(page: Page, varpIndex: number, target: number, timeoutMs: number): Promise<boolean> {
     return page
-        .waitForFunction(([i, t]) => (globalThis as never as Lcb).lcbuddy.reader.varp(i) >= t, [varpIndex, target], { timeout: timeoutMs })
+        .waitForFunction(([i, t]) => (globalThis as never as Rs2b0t).rs2b0t.reader.varp(i) >= t, [varpIndex, target], { timeout: timeoutMs })
         .then(() => true)
         .catch(() => false);
 }
 
 /** Read-only snapshot of varp `i` (for pass/fail reporting after runToVarp settles). */
 export async function tutorialVarp(page: Page, i: number): Promise<number> {
-    return page.evaluate(idx => (globalThis as never as Lcb).lcbuddy.reader.varp(idx), i);
+    return page.evaluate(idx => (globalThis as never as Rs2b0t).rs2b0t.reader.varp(idx), i);
 }

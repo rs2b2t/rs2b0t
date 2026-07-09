@@ -16,7 +16,7 @@
 // src/bot/runtime/Scheduler.ts) — confirmed empirically running this test
 // against a bare `page.evaluate` first. So this registers and starts a tiny
 // throwaway LoopingBot through the same public ABI/runtime handles a real
-// script would use (registerScript + lcbuddy.runner), rather than calling
+// script would use (registerScript + rs2b0t.runner), rather than calling
 // Equipment.equip/unequip from an unstarted context — the same reason
 // tools/chaosdruid-bank-test.ts exercises Bank.deposit via a real running
 // script instead of a bare evaluate call.
@@ -48,13 +48,13 @@ type BotCtor = new () => BotInstance;
 type ScriptMetaLike = { name: string; create(): BotInstance };
 
 type Abi = {
-    __lcbuddy: {
+    __rs2b0t: {
         LoopingBot: BotCtor;
         registerScript(manifest: { name: string; create(): BotInstance }): ScriptMetaLike;
         Equipment: { contains(name: string): boolean; equip(name: string): Promise<boolean>; unequip(name: string): Promise<boolean> };
         Inventory: { contains(name: string): boolean; items(): { name: string | null }[] };
     };
-    lcbuddy: {
+    rs2b0t: {
         runner: {
             state: string;
             ctx: { log: { level: string; msg: string }[] } | null;
@@ -73,7 +73,7 @@ try {
     await mainlandAccount(page, base, user);
     await cheat(page, `give ${ITEM_DEBUGNAME}`);
 
-    const invNames = await page.evaluate(() => (globalThis as never as Abi).__lcbuddy.Inventory.items().map(i => i.name));
+    const invNames = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Inventory.items().map(i => i.name));
     console.log('inventory after ::give:', invNames);
     if (!invNames.some(n => n === ITEM_NAME)) {
         fail(`expected '${ITEM_NAME}' in inventory after '::give ${ITEM_DEBUGNAME}', got ${JSON.stringify(invNames)}`);
@@ -82,8 +82,8 @@ try {
     // Register + start a throwaway bot whose onStart() drives the equip/unequip
     // round-trip and stashes the result on a page-global for Playwright to read.
     await page.evaluate(itemName => {
-        const abi = (globalThis as never as Abi).__lcbuddy;
-        const host = (globalThis as never as Abi).lcbuddy;
+        const abi = (globalThis as never as Abi).__rs2b0t;
+        const host = (globalThis as never as Abi).rs2b0t;
 
         const createBot = (): BotInstance => {
             const bot = new abi.LoopingBot();
@@ -100,7 +100,7 @@ try {
             return bot;
         };
 
-        const meta = abi.registerScript({ name: 'LCBuddyEquipTestBot', create: createBot });
+        const meta = abi.registerScript({ name: 'Rs2b0tEquipTestBot', create: createBot });
         host.runner.start(meta);
     }, ITEM_NAME);
 
@@ -108,14 +108,14 @@ try {
         await page.waitForFunction(() => (globalThis as never as Abi).__equipTestResult !== undefined, undefined, { timeout: 20000 });
     } catch {
         const diag = await page.evaluate(() => {
-            const { state, ctx } = (globalThis as never as Abi).lcbuddy.runner;
+            const { state, ctx } = (globalThis as never as Abi).rs2b0t.runner;
             return { state, log: ctx?.log.map(l => `${l.level}: ${l.msg}`) ?? [] };
         });
         fail(`timed out waiting for the equip/unequip round-trip -- runner state: ${JSON.stringify(diag)}`);
     }
 
     const result = await page.evaluate(() => (globalThis as never as Abi).__equipTestResult as EquipResult);
-    await page.evaluate(() => (globalThis as never as Abi).lcbuddy.runner.stop());
+    await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop());
 
     console.log(result);
     const pass =

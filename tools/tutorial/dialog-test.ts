@@ -50,8 +50,8 @@ function fail(msg: string): never {
 }
 
 type NpcSnap = { index: number; name: string | null; distance: number; ops: (string | null)[] };
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: {
             varp(index: number): number;
             modals(): { main: number; side: number; chat: number };
@@ -61,7 +61,7 @@ type Lcb = {
     };
 };
 
-const modals = (page: import('playwright-core').Page) => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.modals());
+const modals = (page: import('playwright-core').Page) => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals());
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
@@ -118,14 +118,14 @@ try {
     // Step 4: talk to the basics instructor (discover its display name live
     // rather than hardcoding it) and assert a dialog opens.
     const guideName = await page.evaluate(() => {
-        const npcs = (globalThis as never as Lcb).lcbuddy.reader.npcs();
+        const npcs = (globalThis as never as Rs2b0t).rs2b0t.reader.npcs();
         const candidates = npcs.filter(n => n.ops.some(o => o?.toLowerCase() === 'talk-to')).sort((a, b) => a.distance - b.distance);
         const guide = candidates[0];
         if (!guide) {
             return null;
         }
         const op = guide.ops.findIndex(o => o?.toLowerCase() === 'talk-to') + 1;
-        (globalThis as never as Lcb).lcbuddy.router.driver.interactNpc(guide.index, op);
+        (globalThis as never as Rs2b0t).rs2b0t.router.driver.interactNpc(guide.index, op);
         return guide.name;
     });
     if (!guideName) {
@@ -134,7 +134,7 @@ try {
     console.log(`basics-instructor display name (live query): '${guideName}'`);
 
     const opened = await page
-        .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.reader.modals().chat !== -1, undefined, { timeout: 8000 })
+        .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals().chat !== -1, undefined, { timeout: 8000 })
         .then(() => true)
         .catch(() => false);
     if (!opened) {
@@ -146,7 +146,7 @@ try {
     // (wired first in TutorialBot.onStart) clicks/chooses through the whole
     // conversation unattended.
     const cleared = await page
-        .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.reader.modals().chat === -1, undefined, { timeout: 20000 })
+        .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals().chat === -1, undefined, { timeout: 20000 })
         .then(() => true)
         .catch(() => false);
 

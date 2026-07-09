@@ -13,8 +13,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; stream: { close(): void } | null; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
     };
@@ -25,23 +25,23 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
     const page = await browser.newPage();
     await page.goto(`${base}/bot.html`);
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
 
     await page.evaluate(
         ([user, pass]) => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             client.loginUser = user;
             client.loginPass = pass;
             void client.login(user, pass, false);
         },
         [username, 'test']
     );
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 30000 });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 });
     console.log(`logged in as '${username}'`);
 
     await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'running', undefined, { timeout: 10000 });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
     await page.waitForTimeout(3000);
 
     // force a session loss that reaches the title screen. (A plain socket
@@ -49,13 +49,13 @@ try {
     // without ever leaving the game, verified experimentally; logout() is
     // the path that ends at the title with credentials cleared, which is
     // exactly what AutoRelogin exists to recover.)
-    await page.evaluate(() => (globalThis as never as { lcbuddy: { client: { logout(): Promise<void> } } }).lcbuddy.client.logout());
+    await page.evaluate(() => (globalThis as never as { rs2b0t: { client: { logout(): Promise<void> } } }).rs2b0t.client.logout());
     console.log('forced logout; waiting for auto-relogin...');
 
-    await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.includes('auto-relogin: back ingame')), undefined, { timeout: 150000 });
+    await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('auto-relogin: back ingame')), undefined, { timeout: 150000 });
 
-    const state = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.runner.state);
-    const lines = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).filter(l => l.msg.includes('auto-relogin')).map(l => l.msg));
+    const state = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
+    const lines = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.includes('auto-relogin')).map(l => l.msg));
     console.log(lines.join('\n'));
     if (state !== 'running') fail(`script not resumed after relogin (state: ${state})`);
 

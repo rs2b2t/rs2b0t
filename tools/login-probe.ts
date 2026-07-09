@@ -29,7 +29,7 @@ const OPCODE_NAMES: Record<number, string> = {
 };
 
 const host = process.argv[2] ?? 'localhost:8888';
-const username = process.argv[3] ?? 'lcbuddy';
+const username = process.argv[3] ?? 'rs2b0t';
 const password = process.argv[4] ?? 'test';
 
 function fail(msg: string): never {

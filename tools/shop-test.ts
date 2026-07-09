@@ -61,7 +61,7 @@ type BotCtor = new () => BotInstance;
 type ScriptMetaLike = { name: string; create(): BotInstance };
 
 type Abi = {
-    __lcbuddy: {
+    __rs2b0t: {
         LoopingBot: BotCtor;
         registerScript(manifest: { name: string; create(): BotInstance }): ScriptMetaLike;
         Shop: {
@@ -74,7 +74,7 @@ type Abi = {
         };
         Inventory: { contains(name: string): boolean };
     };
-    lcbuddy: {
+    rs2b0t: {
         runner: {
             state: string;
             ctx: { log: { level: string; msg: string }[] } | null;
@@ -99,8 +99,8 @@ try {
     // page-global for Playwright to read.
     await page.evaluate(
         ([npcName, itemName]) => {
-            const abi = (globalThis as never as Abi).__lcbuddy;
-            const host = (globalThis as never as Abi).lcbuddy;
+            const abi = (globalThis as never as Abi).__rs2b0t;
+            const host = (globalThis as never as Abi).rs2b0t;
 
             const createBot = (): BotInstance => {
                 const bot = new abi.LoopingBot();
@@ -119,7 +119,7 @@ try {
                 return bot;
             };
 
-            const meta = abi.registerScript({ name: 'LCBuddyShopTestBot', create: createBot });
+            const meta = abi.registerScript({ name: 'Rs2b0tShopTestBot', create: createBot });
             host.runner.start(meta);
         },
         [NPC_NAME, ITEM_NAME]
@@ -129,14 +129,14 @@ try {
         await page.waitForFunction(() => (globalThis as never as Abi).__shopTestResult !== undefined, undefined, { timeout: 30000 });
     } catch {
         const diag = await page.evaluate(() => {
-            const { state, ctx } = (globalThis as never as Abi).lcbuddy.runner;
+            const { state, ctx } = (globalThis as never as Abi).rs2b0t.runner;
             return { state, log: ctx?.log.map(l => `${l.level}: ${l.msg}`) ?? [] };
         });
         fail(`timed out waiting for the shop round-trip -- runner state: ${JSON.stringify(diag)}`);
     }
 
     const result = await page.evaluate(() => (globalThis as never as Abi).__shopTestResult as ShopResult);
-    await page.evaluate(() => (globalThis as never as Abi).lcbuddy.runner.stop());
+    await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop());
 
     console.log(result);
     const pass = result.opened && result.stockHasHammer && result.bought === 1 && result.haveHammer && result.sold === 1 && result.hammerGone && result.closed;

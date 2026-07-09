@@ -55,8 +55,8 @@ const TELE_CMD = 'tele 0,48,148,9,47';
 /** Live-probed exit-gate wall line (Mining.ts's `EXIT_GATE_X`) -- the section's terminal crossing. */
 const EXIT_GATE_X = 3094;
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
 };
@@ -111,7 +111,7 @@ try {
     // Land at the mine-arrival tile.
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] teleported: tile=${JSON.stringify(tile)}`);
     if (!tile || tile.x !== ARRIVAL.x || tile.z !== ARRIVAL.z) {
         fail(`tele into the mine did not land at (${ARRIVAL.x},${ARRIVAL.z}) (got ${JSON.stringify(tile)})`);
@@ -144,7 +144,7 @@ try {
     }
 
     // Exit-gate crossing observable: confirm the client tile agrees.
-    const exitTile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const exitTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-gate tile: ${JSON.stringify(exitTile)}`);
     if (!exitTile || exitTile.x <= EXIT_GATE_X) {
         fail(`tutorial reached ${v} but the client tile doesn't show the expected exit-gate crossing (got ${JSON.stringify(exitTile)})`);

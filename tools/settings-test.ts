@@ -14,19 +14,19 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { msg: string }[] } | null };
     };
 };
 
-const boot = (page: Page) => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-const ingame = (page: Page) => page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
-const logs = (page: Page) => page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
+const boot = (page: Page) => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+const ingame = (page: Page) => page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
+const logs = (page: Page) => page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 
 async function login(page: Page, user: string): Promise<boolean> {
-    await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [user, 'test']);
+    await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [user, 'test']);
     return ingame(page);
 }
 async function type(page: Page, t: string): Promise<void> {
@@ -65,20 +65,20 @@ try {
 
         // default off: start, expect NO "gathering feathers"
         await page.getByRole('button', { name: 'Start' }).click();
-        await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
+        await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
         if ((await logs(page)).some(l => l.includes('gathering feathers'))) fail('default should be feathers OFF');
         console.log('panel: default OFF confirmed');
         await page.getByRole('button', { name: 'Stop' }).click();
-        await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 });
+        await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
 
         // tick the checkbox, start again, expect "gathering feathers" + a pickup
         await checkbox.check();
         await page.getByRole('button', { name: 'Start' }).click();
-        const gathering = await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.includes('gathering feathers')), undefined, { timeout: 20000 }).then(() => true).catch(() => false);
+        const gathering = await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('gathering feathers')), undefined, { timeout: 20000 }).then(() => true).catch(() => false);
         if (!gathering) fail('panel toggle did not enable feather gathering');
         console.log('panel: checkbox ON -> bot gathering feathers');
 
-        const looted = await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.includes('looted feathers')), undefined, { timeout: 180000 }).then(() => true).catch(() => false);
+        const looted = await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('looted feathers')), undefined, { timeout: 180000 }).then(() => true).catch(() => false);
         if (!looted) fail('feathers param on, but no feathers looted in 3 min');
         console.log('panel: feathers actually looted');
         await ctx.close();
@@ -94,7 +94,7 @@ try {
 
         await page.selectOption('.rs2b0t-select', 'ChickenKiller');
         await page.getByRole('button', { name: 'Start' }).click();
-        await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
+        await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
         const log = await logs(page);
         const anchor = log.find(l => l.startsWith('anchored')) ?? '';
         if (!anchor.includes('leash 7')) fail(`URL leashRadius override not applied: "${anchor}"`);
@@ -125,21 +125,21 @@ try {
         // fresh page with auto-login: should log in by itself using saved creds
         const consoleLines: string[] = [];
         page.on('console', m => {
-            if (m.text().includes('auto-login') || m.text().includes('lcbuddy')) {
+            if (m.text().includes('auto-login') || m.text().includes('rs2b0t')) {
                 consoleLines.push(m.text());
             }
         });
         await page.goto(`${base}/bot.html?autologin=1`);
         await boot(page);
         const auto = await page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 45000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 45000 })
             .then(() => true)
             .catch(() => false);
         if (!auto) {
             const credsSeen = await page.evaluate(() => localStorage.getItem('lcb:creds'));
             fail(`auto-login did not reach the game (creds in storage: ${credsSeen ? 'yes' : 'no'}). console: ${consoleLines.slice(-5).join(' | ') || '(none)'}`);
         }
-        const who = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.client.loginUser);
+        const who = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.loginUser);
         console.log(`auto-login: logged in by itself as '${who}' from saved credentials (console: ${consoleLines.slice(-2).join(' | ')})`);
         await ctx.close();
     }

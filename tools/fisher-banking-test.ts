@@ -28,8 +28,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { msg: string }[] } | null };
         reader: { inventory(): { name: string | null }[]; worldTile(): { x: number; z: number } | null };
@@ -41,10 +41,10 @@ try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
     };
     const type = async (t: string) => {
         await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -64,10 +64,10 @@ try {
         if (current !== card) fail(`expected ${card} selected, got "${current}"`);
     };
     const settingLabels = () => page.$$eval('.rs2b0t-setting .rs2b0t-setting-label', els => els.map(e => e.textContent ?? ''));
-    const botLog = () => page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
-    const rawCount = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().filter(i => (i.name ?? '').toLowerCase().includes('raw')).length);
-    const hasNet = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('net')));
-    const tile = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const botLog = () => page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
+    const rawCount = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().filter(i => (i.name ?? '').toLowerCase().includes('raw')).length);
+    const hasNet = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('net')));
+    const tile = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
 
     /** Poll the bot log (printing new lines) until `want` matches a line or timeout. */
     let lastLogged = 0;
@@ -79,7 +79,7 @@ try {
             lastLogged = log.length;
             const hit = log.find(l => want.test(l));
             if (hit) return hit;
-            if (await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'crashed')) fail('script crashed');
+            if (await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'crashed')) fail('script crashed');
             await page.waitForTimeout(4000);
         }
         return null;

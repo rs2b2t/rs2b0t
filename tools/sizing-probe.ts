@@ -8,10 +8,10 @@ const app = await electron.launch({
 });
 try {
     const page = await app.firstWindow();
-    type Lcb = { lcbuddy: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; constructor: { loopCycle: number }; login(u: string, p: string, r: boolean): Promise<void> } } };
-    await page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    await page.evaluate(() => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = 'sizing'; c.loginPass = 'test'; void c.login('sizing', 'test', false); });
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame, undefined, { timeout: 15000 }).catch(() => {});
+    type Rs2b0t = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; constructor: { loopCycle: number }; login(u: string, p: string, r: boolean): Promise<void> } } };
+    await page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    await page.evaluate(() => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = 'sizing'; c.loginPass = 'test'; void c.login('sizing', 'test', false); });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(2500);
 
     const dims = await page.evaluate(() => ({

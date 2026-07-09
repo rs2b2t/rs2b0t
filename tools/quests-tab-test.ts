@@ -41,7 +41,7 @@ function fail(msg: string): never {
 
 type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 type Abi = {
-    __lcbuddy: {
+    __rs2b0t: {
         reader: { questStatuses(): { name: string; colour: number }[] };
         Quests: {
             all(): { name: string; status: QuestStatus }[];
@@ -49,7 +49,7 @@ type Abi = {
         };
     };
 };
-const read = (page: Page) => page.evaluate(() => (globalThis as never as Abi).__lcbuddy.reader.questStatuses());
+const read = (page: Page) => page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.questStatuses());
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
@@ -93,7 +93,7 @@ try {
     // API layer assertions: exercise Quests.all() and Quests.status() mapping
     // Call within page.evaluate since object methods don't serialize across boundary
     const apiResult = await page.evaluate(() => {
-        const Quests = (globalThis as never as Abi).__lcbuddy.Quests;
+        const Quests = (globalThis as never as Abi).__rs2b0t.Quests;
         const allQuests = Quests.all();
 
         // Find exact quest names robustly from the API

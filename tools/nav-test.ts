@@ -18,8 +18,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
     };
@@ -32,13 +32,13 @@ try {
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
     const boot = async () => {
-        await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+        await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
     };
 
     const login = async () => {
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -46,7 +46,7 @@ try {
             [username, 'test']
         );
         return page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
             .then(() => true)
             .catch(() => false);
     };
@@ -85,7 +85,7 @@ try {
         await page.waitForTimeout(5000);
 
         const snap = await page.evaluate(() => {
-            const { runner } = (globalThis as never as Lcb).lcbuddy;
+            const { runner } = (globalThis as never as Rs2b0t).rs2b0t;
             return { state: runner.state, log: (runner.ctx?.log ?? []).map(l => `${l.level}: ${l.msg}`) };
         });
 
@@ -105,7 +105,7 @@ try {
     await page.screenshot({ path: 'out/nav-test.png' });
     console.log('screenshot: out/nav-test.png');
 
-    const log = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
+    const log = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
     const arrivals = log.filter(l => /^leg \d.*arrived/.test(l));
     const failures = log.filter(l => l.includes('FAILED'));
 

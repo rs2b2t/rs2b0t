@@ -18,8 +18,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { msg: string }[] } | null };
         reader: { npcs(): { name: string | null }[] };
@@ -31,10 +31,10 @@ try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
     };
     const type = async (t: string) => {
         await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -43,8 +43,8 @@ try {
         await page.keyboard.press('Enter');
         await page.waitForTimeout(1500);
     };
-    const logLines = () => page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
-    const npcPresent = (name: string) => page.evaluate(n => (globalThis as never as Lcb).lcbuddy.reader.npcs().some(x => x.name === n), name);
+    const logLines = () => page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
+    const npcPresent = (name: string) => page.evaluate(n => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().some(x => x.name === n), name);
 
     await page.goto(`${base}/bot.html`);
     await boot();
@@ -72,7 +72,7 @@ try {
         await page.selectOption('.rs2b0t-select', 'ChickenKiller');
         await page.getByRole('button', { name: 'Start' }).click();
 
-        const detected = await page.waitForFunction(m => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.includes(m)), detectMsg, { timeout: 30000 }).then(() => true).catch(() => false);
+        const detected = await page.waitForFunction(m => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes(m)), detectMsg, { timeout: 30000 }).then(() => true).catch(() => false);
         const tail = (await logLines()).slice(-6);
         if (!detected) {
             await page.screenshot({ path: 'out/event-test.png' });
@@ -87,7 +87,7 @@ try {
         console.log(`  ${displayName} ${gone ? 'cleared from scene' : 'still present (handler attempted; some events teleport/expire)'}`);
 
         await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});
-        await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 }).catch(() => {});
+        await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 }).catch(() => {});
         await page.waitForTimeout(1500);
     };
 

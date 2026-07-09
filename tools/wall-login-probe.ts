@@ -21,19 +21,19 @@ try {
     console.log('wall booted; adding one bot with dummy creds…');
 
     await page.evaluate(() => {
-        (globalThis as never as { multibox: { add(a: { username: string; password: string }): unknown } }).multibox.add({ username: 'lcbuddyprobe1', password: 'notarealpass1' });
+        (globalThis as never as { multibox: { add(a: { username: string; password: string }): unknown } }).multibox.add({ username: 'rs2b0tprobe1', password: 'notarealpass1' });
     });
 
     const frame = page.frames().find(f => f.url().includes('bot.html')) ?? (await page.waitForTimeout(3000), page.frames().find(f => f.url().includes('bot.html')));
     if (!frame) throw new Error('bot iframe never appeared');
 
     // poll the title-screen message until the login attempt resolves
-    interface Lcb { client: { loginMes1: string; loginMes2: string; ingame: boolean } }
+    interface Rs2b0t { client: { loginMes1: string; loginMes2: string; ingame: boolean } }
     const deadline = Date.now() + 60000;
     let last = '';
     while (Date.now() < deadline) {
         const state = await frame.evaluate(() => {
-            const l = (globalThis as never as { lcbuddy?: Lcb }).lcbuddy;
+            const l = (globalThis as never as { rs2b0t?: Rs2b0t }).rs2b0t;
             if (!l) return null;
             return { mes1: l.client.loginMes1, mes2: l.client.loginMes2 };
         });

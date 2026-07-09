@@ -47,7 +47,7 @@ try {
     // client booted and main loop running (maininit finished)
     await page.waitForFunction(
         () => {
-            const lcb = (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy;
+            const lcb = (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t;
             return lcb !== undefined && lcb.client.constructor.loopCycle > 10;
         },
         undefined,
@@ -58,7 +58,7 @@ try {
     // log in through the client's own (unmangled) login path
     await page.evaluate(
         ([user, pass]) => {
-            const { client } = (globalThis as never as { lcbuddy: { client: { loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> } } }).lcbuddy;
+            const { client } = (globalThis as never as { rs2b0t: { client: { loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> } } }).rs2b0t;
             client.loginUser = user;
             client.loginPass = pass;
             void client.login(user, pass, false);
@@ -69,7 +69,7 @@ try {
     try {
         await page.waitForFunction(
             () => {
-                const { client } = (globalThis as never as { lcbuddy: { client: { ingame: boolean; sceneState: number } } }).lcbuddy;
+                const { client } = (globalThis as never as { rs2b0t: { client: { ingame: boolean; sceneState: number } } }).rs2b0t;
                 return client.ingame && client.sceneState === 2;
             },
             undefined,
@@ -77,7 +77,7 @@ try {
         );
     } catch (err) {
         const mes = await page.evaluate(() => {
-            const { client } = (globalThis as never as { lcbuddy: { client: { loginMes1: string; loginMes2: string } } }).lcbuddy;
+            const { client } = (globalThis as never as { rs2b0t: { client: { loginMes1: string; loginMes2: string } } }).rs2b0t;
             return `${client.loginMes1} / ${client.loginMes2}`;
         });
         fail(`login did not reach the game (server said: '${mes}'): ${err}`);
@@ -99,7 +99,7 @@ try {
             rows,
             stats: text('.rs2b0t-stat-level'),
             chat: text('.rs2b0t-chat-line'),
-            tick: (globalThis as never as { lcbuddy: { host: { tickCount: number; tickMeanMs: number } } }).lcbuddy.host.tickCount
+            tick: (globalThis as never as { rs2b0t: { host: { tickCount: number; tickMeanMs: number } } }).rs2b0t.host.tickCount
         };
     });
 
@@ -121,20 +121,20 @@ try {
     // tick counter must advance (~600ms cadence)
     const before = panel.tick;
     await page.waitForTimeout(2000);
-    const after = await page.evaluate(() => (globalThis as never as { lcbuddy: { host: { tickCount: number } } }).lcbuddy.host.tickCount);
+    const after = await page.evaluate(() => (globalThis as never as { rs2b0t: { host: { tickCount: number } } }).rs2b0t.host.tickCount);
     if (after < before + 2) fail(`tick counter stalled: ${before} -> ${after}`);
     console.log(`ticks advanced ${before} -> ${after}`);
 
     // ---- Slice 2: script runtime ----
-    type RunnerGlobal = { lcbuddy: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null }; host: { tickCount: number } } };
-    const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.runner.state);
-    const logLines = (): Promise<string[]> => page.evaluate(() => ((globalThis as never as RunnerGlobal).lcbuddy.runner.ctx?.log ?? []).map(l => `${l.level}: ${l.msg}`));
-    const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.runner.ctx?.log.length ?? 0);
+    type RunnerGlobal = { rs2b0t: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null }; host: { tickCount: number } } };
+    const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.state);
+    const logLines = (): Promise<string[]> => page.evaluate(() => ((globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log ?? []).map(l => `${l.level}: ${l.msg}`));
+    const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log.length ?? 0);
 
     await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
 
-    await page.waitForFunction(() => ((globalThis as never as { lcbuddy: { runner: { ctx: { log: { msg: string }[] } | null } } }).lcbuddy.runner.ctx?.log ?? []).filter(l => l.msg.includes('nearest:')).length >= 2, undefined, { timeout: 20000 });
+    await page.waitForFunction(() => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: { msg: string }[] } | null } } }).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.includes('nearest:')).length >= 2, undefined, { timeout: 20000 });
     console.log('DebugBot: looping and logging');
 
     const overlayPainted = await page.evaluate(() => {
@@ -154,18 +154,18 @@ try {
     console.log('DebugBot: paused cleanly (no progress while paused)');
 
     await page.getByRole('button', { name: 'Resume' }).click();
-    await page.waitForFunction(len => ((globalThis as never as { lcbuddy: { runner: { ctx: { log: unknown[] } | null } } }).lcbuddy.runner.ctx?.log.length ?? 0) > len, pausedLogLength, { timeout: 15000 });
+    await page.waitForFunction(len => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: unknown[] } | null } } }).rs2b0t.runner.ctx?.log.length ?? 0) > len, pausedLogLength, { timeout: 15000 });
     console.log('DebugBot: resumed');
 
     await page.getByRole('button', { name: 'Stop' }).click();
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
     if (!(await logLines()).some(l => l.includes('DebugBot stopped'))) fail('onStop did not run on stop');
     console.log('DebugBot: stopped cleanly, onStop ran');
 
     // crash isolation: CrashTestBot throws on iteration 3
     await page.selectOption('.rs2b0t-select', 'CrashTestBot');
     await page.getByRole('button', { name: 'Start' }).click();
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'crashed', undefined, { timeout: 15000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'crashed', undefined, { timeout: 15000 });
 
     const crashLog = await logLines();
     if (!crashLog.some(l => l.includes('deliberate CrashTestBot explosion'))) fail('crash not reported in log');
@@ -174,16 +174,16 @@ try {
 
     // the client must have survived the crash: ticks still flowing, and a new
     // script starts fine
-    const tickBeforeSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.host.tickCount);
+    const tickBeforeSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.host.tickCount);
     await page.waitForTimeout(2000);
-    const tickAfterSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.host.tickCount);
+    const tickAfterSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.host.tickCount);
     if (tickAfterSurvival < tickBeforeSurvival + 2) fail('client tick flow died after script crash');
 
     await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'running', undefined, { timeout: 10000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
     await page.getByRole('button', { name: 'Stop' }).click();
-    await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'stopped', undefined, { timeout: 10000 });
+    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
     console.log('client survived the crash; restart works');
 
     await page.screenshot({ path: 'out/e2e-smoke.png' });

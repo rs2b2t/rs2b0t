@@ -45,8 +45,8 @@ const TELE_CMD = 'tele 0,48,48,39,53';
 /** `newbie_door8`'s wall line (BankChapel.ts CHAPEL_EXIT_DOOR): the 600 -> 610 crossing leaves z <= 3102. */
 const EXIT_Z = 3102;
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
 };
@@ -102,7 +102,7 @@ try {
     // Land where the real 470 -> 500 ladder climb-out surfaces.
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] teleported: tile=${JSON.stringify(tile)}`);
     if (!tile || tile.x !== LANDING.x || tile.z !== LANDING.z) {
         fail(`tele to the ladder landing did not land at (${LANDING.x},${LANDING.z}) (got ${JSON.stringify(tile)})`);
@@ -135,7 +135,7 @@ try {
     }
 
     // Terminal observable: the chapel-exit crossing (ExitChapel's latch).
-    const exitTile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const exitTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-exit tile: ${JSON.stringify(exitTile)}`);
     if (!exitTile || exitTile.z > EXIT_Z) {
         fail(`tutorial reached ${v} but the client tile doesn't show the chapel-exit crossing (got ${JSON.stringify(exitTile)})`);

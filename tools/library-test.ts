@@ -12,14 +12,14 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = { lcbuddy: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string } } };
+type Rs2b0t = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string } } };
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
     await page.goto(`${base}/bot.html`);
-    await page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
 
     // open the library
     await page.getByRole('button', { name: 'Browse…' }).click();
@@ -61,10 +61,10 @@ try {
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^All/ }).click(); // library remembers the last filter
     await page.locator('.rs2b0t-library-card', { hasText: 'DebugBot' }).click();
-    await page.evaluate(() => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = `lib${Date.now().toString(36).slice(-5)}`; c.loginPass = 't'; void c.login(c.loginUser, 't', false); });
-    await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 20000 }).catch(() => {});
+    await page.evaluate(() => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = `lib${Date.now().toString(36).slice(-5)}`; c.loginPass = 't'; void c.login(c.loginUser, 't', false); });
+    await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 20000 }).catch(() => {});
     await page.getByRole('button', { name: 'Start' }).click();
-    const running = await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.runner.state === 'running', undefined, { timeout: 10000 }).then(() => true).catch(() => false);
+    const running = await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 }).then(() => true).catch(() => false);
     if (!running) fail('selected script did not start');
     console.log('library: selected DebugBot started via the runner');
 

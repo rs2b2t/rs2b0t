@@ -18,8 +18,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; constructor: { loopCycle: number }; login(u: string, p: string, r: boolean): Promise<void> };
         runner: { state: string; ctx: { log: { msg: string }[] } | null };
         scheduler: { gapShifts: number };
@@ -34,10 +34,10 @@ const electronApp = await electron.launch({
 try {
     const page = await electronApp.firstWindow();
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
     };
     const type = async (t: string) => {
         await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -46,7 +46,7 @@ try {
         await page.keyboard.press('Enter');
         await page.waitForTimeout(1400);
     };
-    const loopCycle = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.client.constructor.loopCycle);
+    const loopCycle = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.constructor.loopCycle);
 
     await boot();
     console.log('electron app booted, client running');
@@ -84,17 +84,17 @@ try {
     // ---- bonus: frame-gap insurance still protects against a hard stall ----
     // block the main thread ~2.5s (simulates a system sleep the flag can't
     // prevent); the Scheduler should shift deadlines, not falsely time out.
-    const gapsBefore = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.scheduler.gapShifts);
+    const gapsBefore = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.scheduler.gapShifts);
     await page.evaluate(() => { const end = performance.now() + 2500; while (performance.now() < end) { /* spin */ } });
     await page.waitForTimeout(1500);
-    const gapsAfter = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.scheduler.gapShifts);
+    const gapsAfter = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.scheduler.gapShifts);
     if (gapsAfter <= gapsBefore) {
         console.log('note: frame-gap insurance did not trip on the 2.5s stall (scheduler may have been mid-launch) — non-fatal');
     } else {
         console.log(`frame-gap insurance: shifted timers after the stall (${gapsBefore} -> ${gapsAfter})`);
     }
 
-    const state = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.runner.state);
+    const state = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
     if (state === 'crashed') fail('bot crashed during the test');
     console.log(`bot state after stall: ${state}`);
 

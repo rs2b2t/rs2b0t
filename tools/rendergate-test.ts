@@ -17,7 +17,7 @@ const username = `rg${Date.now().toString(36).slice(-7)}`;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 
-type Lcb = { lcbuddy: {
+type Rs2b0t = { rs2b0t: {
     client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; constructor: { loopCycle: number }; login(u: string, p: string, r: boolean): Promise<void> };
     runner: { state: string; ctx: { log: { msg: string }[] } | null };
     renderGate: { drawn: number; mode: string; boosted: boolean };
@@ -32,16 +32,16 @@ const app = await electron.launch({
 try {
     const page = await app.firstWindow();
     const probe = () => page.evaluate(() => {
-        const l = (globalThis as never as Lcb).lcbuddy;
+        const l = (globalThis as never as Rs2b0t).rs2b0t;
         return { loop: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, mode: l.renderGate.mode, boosted: l.renderGate.boosted };
     });
-    const setMode = (m: string) => page.evaluate(mm => (globalThis as never as Lcb).lcbuddy.setRenderMode(mm), m);
+    const setMode = (m: string) => page.evaluate(mm => (globalThis as never as Rs2b0t).rs2b0t.setRenderMode(mm), m);
     const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 15000 }).then(() => true).catch(() => false);
     };
 
-    await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     if (!(await login())) fail('first login failed');
     // teleport off tutorial island, then relog
     await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -92,8 +92,8 @@ try {
         await page.waitForTimeout(120);
     }
     const gEnd = await probe();
-    const logHasFail = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.includes('synthetic-fail')));
-    const state = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.runner.state);
+    const logHasFail = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('synthetic-fail')));
+    const state = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
     const gestureDrawFps = (gEnd.drawn - gStart.drawn) / ((Date.now() - t0) / 1000);
     console.log(`backgrounded NavDemo: boosted seen=${sawBoost}, draw during run ${gestureDrawFps.toFixed(1)}fps, state=${state}, synthetic-fail=${logHasFail}`);
     if (!sawBoost) fail('boost never engaged during synthetic gestures while backgrounded');

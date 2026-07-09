@@ -85,8 +85,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: {
             ingame: boolean;
             sceneState: number;
@@ -109,13 +109,13 @@ try {
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
     const boot = async () => {
-        await page.waitForFunction(() => (globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy !== undefined && (globalThis as never as { lcbuddy: { client: { constructor: { loopCycle: number } } } }).lcbuddy.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+        await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
     };
 
     const login = async () => {
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -123,7 +123,7 @@ try {
             [username, 'test']
         );
         return page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 30000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 })
             .then(() => true)
             .catch(() => false);
     };
@@ -138,7 +138,7 @@ try {
     // eaten, no death possible). No keyboard, no focus, no click.
     const cheat = async (command: string) => {
         const sent = await page.evaluate(cmd => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             if (!client.ingame || !client.out) return false;
             client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
             client.out.p1(cmd.length + 1);
@@ -161,7 +161,7 @@ try {
     }
     if (!firstIn) {
         const mes = await page.evaluate(() => {
-            const { client } = (globalThis as never as Lcb).lcbuddy;
+            const { client } = (globalThis as never as Rs2b0t).rs2b0t;
             return `${client.loginMes1} / ${client.loginMes2}`;
         });
         fail(`first login failed (server said: '${mes}')`);
@@ -190,7 +190,7 @@ try {
     // "no NPCs" failure — and give the scene a moment to populate
     const atSpot = () =>
         page.evaluate(needUnderground => {
-            const t = (globalThis as never as Lcb).lcbuddy.reader.worldTile();
+            const t = (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile();
             if (!t) return false;
             return needUnderground ? t.z > 6400 : Math.abs(t.x - 3222) > 10 || Math.abs(t.z - 3218) > 10; // surface mode: just "not at the respawn/unlock area"
         }, target.underground);
@@ -199,7 +199,7 @@ try {
         await page.waitForTimeout(2000);
     }
     if (target.underground && !(await atSpot())) fail('dungeon tele never took (still on the surface)');
-    const npcCount = () => page.evaluate(name => (globalThis as never as Lcb).lcbuddy.reader.npcs().filter(n => n.name === name).length, target.npc);
+    const npcCount = () => page.evaluate(name => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === name).length, target.npc);
     let npcs = 0;
     for (let i = 0; i < 10 && npcs === 0; i++) {
         npcs = await npcCount();
@@ -214,7 +214,7 @@ try {
             for (const node of Array.from(document.querySelectorAll('.rs2b0t-row'))) {
                 rows[node.querySelector('.rs2b0t-key')?.textContent ?? ''] = node.querySelector('.rs2b0t-value')?.textContent ?? '';
             }
-            const reader = (globalThis as never as { lcbuddy: { reader: { stat(i: number): { name: string; effective: number; base: number } } } }).lcbuddy.reader;
+            const reader = (globalThis as never as { rs2b0t: { reader: { stat(i: number): { name: string; effective: number; base: number } } } }).rs2b0t.reader;
             const hp = reader.stat(3);
             return { tile: rows.tile ?? '?', status: rows.status ?? '?', hp: `${hp.effective}/${hp.base}` };
         });
@@ -251,7 +251,7 @@ try {
         await page.waitForTimeout(6000); // let the pause take
         await cheat('setstat defence 1');
         await cheat('setstat hitpoints 1');
-        const hunters = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.npcs().filter(n => n.name === 'Jail guard').length);
+        const hunters = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Jail guard').length);
         for (let round = 0; round < 3 && (await hunters()) < 1; round++) {
             await cheat('npcadd jailguard');
         }
@@ -305,7 +305,7 @@ try {
 
     const lootCount = () =>
         page.evaluate(() =>
-            (globalThis as never as Lcb).lcbuddy.reader
+            (globalThis as never as Rs2b0t).rs2b0t.reader
                 .inventory()
                 .filter(i => {
                     const n = (i.name ?? '').toLowerCase();
@@ -324,7 +324,7 @@ try {
     while (Date.now() < deadline) {
         await page.waitForTimeout(5000);
         const s = await page.evaluate(() => {
-            const { runner, reader } = (globalThis as never as Lcb).lcbuddy;
+            const { runner, reader } = (globalThis as never as Rs2b0t).rs2b0t;
             return { state: runner.state, log: (runner.ctx?.log ?? []).map(l => l.msg), tile: reader.worldTile() };
         });
         for (const line of s.log.slice(lastLogged)) {

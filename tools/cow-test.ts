@@ -21,8 +21,8 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void>; sideIcon: number[] };
         runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
     };
@@ -34,11 +34,11 @@ try {
     const page = await browser.newPage();
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { lcbuddy?: { client: { constructor: { loopCycle: number } } } }).lcbuddy?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
         await page.evaluate(
             ([user, pass]) => {
-                const { client } = (globalThis as never as Lcb).lcbuddy;
+                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
                 client.loginUser = user;
                 client.loginPass = pass;
                 void client.login(user, pass, false);
@@ -46,7 +46,7 @@ try {
             [username, 'test']
         );
         return page
-            .waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 12000 })
+            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
             .then(() => true)
             .catch(() => false);
     };
@@ -80,7 +80,7 @@ try {
     }
     if (!backIn) fail('could not re-login after tutorial unlock');
 
-    const invTab = await page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.client.sideIcon[3] ?? -1) !== -1);
+    const invTab = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     console.log(`re-logged in; inventory tab ${invTab ? 'present' : 'STILL MISSING'}`);
     if (!invTab) fail('re-login off tutorial island did not unlock sidebar tabs');
 
@@ -104,7 +104,7 @@ try {
     let lastLogged = 0;
     while (Date.now() < deadline) {
         const snap = await page.evaluate(() => {
-            const { runner } = (globalThis as never as Lcb).lcbuddy;
+            const { runner } = (globalThis as never as Rs2b0t).rs2b0t;
             return { state: runner.state, log: (runner.ctx?.log ?? []).map(l => l.msg) };
         });
 

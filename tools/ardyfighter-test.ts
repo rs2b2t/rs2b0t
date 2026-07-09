@@ -3,8 +3,8 @@
 // account, panel Browse->Combat->ArdyFighter->Start, poll runner log + reader)
 // but uses the death-test.ts CLIENT_CHEAT-packet route (typed commands get
 // swallowed in the crowded market square) and the CURRENT debug global
-// `rs2b0t` (the old `lcbuddy` name was renamed in commit 1ce35ab; the older
-// tool tests still referencing `lcbuddy` are stale against this build).
+// `rs2b0t` (the old `rs2b0t` name was renamed in commit 1ce35ab; the older
+// tool tests still referencing `rs2b0t` are stale against this build).
 //
 // Asserts IN ONE RUN, accelerated with URL overrides
 // (?ArdyFighter.bankAtLootSlots=2&foodTarget=4&eatAtHp=60):

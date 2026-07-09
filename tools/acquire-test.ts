@@ -68,14 +68,14 @@ type BotCtor = new () => BotInstance;
 type ScriptMetaLike = { name: string; create(): BotInstance };
 
 type Abi = {
-    __lcbuddy: {
+    __rs2b0t: {
         LoopingBot: BotCtor;
         registerScript(manifest: { name: string; create(): BotInstance }): ScriptMetaLike;
         AcquireTask: new (bot: unknown, needs: ItemNeed[]) => { validate(): boolean | Promise<boolean>; execute(): void | Promise<void> };
         hasAll(needs: ItemNeed[]): boolean;
         Inventory: { contains(name: string): boolean };
     };
-    lcbuddy: {
+    rs2b0t: {
         runner: {
             state: string;
             ctx: { log: { level: string; msg: string }[] } | null;
@@ -99,8 +99,8 @@ try {
     // stashing the result on a page-global for Playwright to read.
     await page.evaluate(
         ({ shopNpc, hammerNear, eggAt }) => {
-            const abi = (globalThis as never as Abi).__lcbuddy;
-            const host = (globalThis as never as Abi).lcbuddy;
+            const abi = (globalThis as never as Abi).__rs2b0t;
+            const host = (globalThis as never as Abi).rs2b0t;
 
             const createBot = (): BotInstance => {
                 const bot = new abi.LoopingBot();
@@ -154,7 +154,7 @@ try {
                 return bot;
             };
 
-            const meta = abi.registerScript({ name: 'LCBuddyAcquireTestBot', create: createBot });
+            const meta = abi.registerScript({ name: 'Rs2b0tAcquireTestBot', create: createBot });
             host.runner.start(meta);
         },
         { shopNpc: SHOP_NPC, hammerNear: HAMMER_NEAR, eggAt: EGG_AT }
@@ -164,14 +164,14 @@ try {
         await page.waitForFunction(() => (globalThis as never as Abi).__acquireTestResult !== undefined, undefined, { timeout: 300000 });
     } catch {
         const diag = await page.evaluate(() => {
-            const { state, ctx } = (globalThis as never as Abi).lcbuddy.runner;
+            const { state, ctx } = (globalThis as never as Abi).rs2b0t.runner;
             return { state, log: ctx?.log.map(l => `${l.level}: ${l.msg}`) ?? [] };
         });
         fail(`timed out waiting for the acquire round-trip -- runner state: ${JSON.stringify(diag)}`);
     }
 
     const result = await page.evaluate(() => (globalThis as never as Abi).__acquireTestResult as AcquireResult);
-    await page.evaluate(() => (globalThis as never as Abi).lcbuddy.runner.stop());
+    await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop());
 
     console.log(result);
     const gatherOk = result.gatherThrew && result.gatherMessage === 'ItemSource.gather: implemented in Plan B';

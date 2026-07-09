@@ -30,8 +30,8 @@ const TELE_CMD = 'tele 0,48,48,50,29';
 /** Mainland proof: west Lumbridge is x > 3190; the island tops out ~3155. */
 const MAINLAND_X = 3190;
 
-type Lcb = {
-    lcbuddy: {
+type Rs2b0t = {
+    rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
 };
@@ -82,7 +82,7 @@ try {
 
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
-    const tile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] teleported: tile=${JSON.stringify(tile)}`);
     if (!tile || tile.x !== LANDING.x || tile.z !== LANDING.z) {
         fail(`tele to the chapel-exit landing did not land at (${LANDING.x},${LANDING.z}) (got ${JSON.stringify(tile)})`);
@@ -116,7 +116,7 @@ try {
 
     // Terminal observable: the mainland teleport.
     await page.waitForTimeout(1500);
-    const mainlandTile = await page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.worldTile());
+    const mainlandTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-teleport tile: ${JSON.stringify(mainlandTile)}`);
     if (!mainlandTile || mainlandTile.x <= MAINLAND_X) {
         fail(`tutorial reached ${v} but the client tile doesn't show the mainland teleport (got ${JSON.stringify(mainlandTile)})`);
