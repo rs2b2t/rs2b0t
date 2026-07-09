@@ -79,14 +79,14 @@ try {
     // is exercised without depending on market navigation from the anchor.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,42,46'); // beside the Baker's stall ~ (2666,3310)
+        await type('::tele 0,41,51,37,42'); // East Ardougne market anchor ~ (2661,3306)
         await page.waitForTimeout(2000);
         at = await tile();
-        if (at && Math.abs(at.x - 2667) <= 8 && Math.abs(at.z - 3310) <= 8) { break; }
+        if (at && Math.abs(at.x - 2661) <= 8 && Math.abs(at.z - 3306) <= 8) { break; }
         await clearDialogs();
     }
     console.log(`at stall: ${at ? `${at.x},${at.z}` : '?'}`);
-    if (!at || Math.abs(at.x - 2667) > 8 || Math.abs(at.z - 3310) > 8) { fail(`stall tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
+    if (!at || Math.abs(at.x - 2661) > 8 || Math.abs(at.z - 3306) > 8) { fail(`stall tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
     await clearDialogs();
 
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyThiever')); });
