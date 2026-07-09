@@ -31,6 +31,9 @@ import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRe
 //   dagger, body talisman, steel arrows, blood/chaos/nature runes, iron ore.
 const DEFAULT_ANCHOR = new Tile(2661, 3306, 0);
 const DEFAULT_STALL = new Tile(2667, 3310, 0);
+// The stall sits behind a counter (like a bank booth), so we can't stand on it —
+// walk ONTO this reachable tile beside it and steal from there.
+const DEFAULT_STALL_STAND = new Tile(2668, 3312, 0);
 const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
@@ -44,6 +47,7 @@ export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Guard', label: 'NPC to fight (name)' },
     combatStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Combat style', help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
     stallTile: { type: 'tile', default: DEFAULT_STALL, label: 'Baker\'s stall (x,z)', help: 'second stall sits at 2655,3311' },
+    stallStand: { type: 'tile', default: DEFAULT_STALL_STAND, label: 'Stall stand tile (x,z)', help: 'reachable tile beside the stall to steal from (the stall itself is behind a counter)' },
     stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     food: { type: 'string[]', default: DEFAULT_FOOD.split(',').map(s => s.trim()), label: 'Food names (contains)' },
@@ -63,6 +67,7 @@ let ANCHOR = DEFAULT_ANCHOR;
 let LEASH = 12;
 let TARGET = 'Guard';
 let STALL_TILE = DEFAULT_STALL;
+let STALL_STAND = DEFAULT_STALL_STAND;
 let STALL_NAME = 'Baker\'s stall';
 let BANK_STAND = DEFAULT_BANK_STAND;
 let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
@@ -124,6 +129,7 @@ export default class ArdyFighter extends TaskBot {
         LEASH = this.settings.num('leashRadius', 12);
         TARGET = this.settings.str('target', 'Guard');
         STALL_TILE = this.settings.tile('stallTile', DEFAULT_STALL);
+        STALL_STAND = this.settings.tile('stallStand', DEFAULT_STALL_STAND);
         STALL_NAME = this.settings.str('stallName', 'Baker\'s stall');
         BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
@@ -318,8 +324,8 @@ class RestockCakes implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
         const here = Game.tile();
-        if (!here || STALL_TILE.distanceTo(here) > 3) {
-            await Traversal.walkTo(STALL_TILE, { radius: 2, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
+        if (!here || STALL_STAND.distanceTo(here) > 0) {
+            await Traversal.walkTo(STALL_STAND, { radius: 0, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
         }
 
         const deadline = performance.now() + 60000;
