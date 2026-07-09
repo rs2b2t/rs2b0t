@@ -9,7 +9,7 @@
  * machine. Clear it from the panel.
  */
 const hasStorage = typeof localStorage !== 'undefined';
-const KEY = 'lcb:creds';
+const KEY = 'rs2b0t:creds';
 
 export interface Creds {
     username: string;

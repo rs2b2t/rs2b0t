@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { SettingsStore, GLOBAL_SETTINGS, type SettingsSchema } from '#/bot/runtime/Settings.js';
 
 const SCHEMA: SettingsSchema = { bankCommonJunk: { type: 'boolean', default: true } };
-const K = (ns: string, key: string) => `lcb:set:${ns}:${key}`;
+const K = (ns: string, key: string) => `rs2b0t:set:${ns}:${key}`;
 
 beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());

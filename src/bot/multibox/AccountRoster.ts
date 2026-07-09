@@ -1,10 +1,10 @@
 import type { Account } from './types.js';
 
-const KEY = 'lcb:multibox:accounts';
+const KEY = 'rs2b0t:multibox:accounts';
 
 /**
  * The manager's account list, persisted under its OWN localStorage key — never
- * the client's `lcb:creds`, so the per-iframe credential injection is the only
+ * the client's `rs2b0t:creds`, so the per-iframe credential injection is the only
  * source of a bot's identity (spec constraint #4). `claimNext` hands out an
  * unused account; `release` returns it when a slot closes.
  *

@@ -145,7 +145,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
 const hasStorage = typeof localStorage !== 'undefined';
 
 function storageKey(name: string, key: string): string {
-    return `lcb:set:${name}:${key}`;
+    return `rs2b0t:set:${name}:${key}`;
 }
 
 class SettingsStoreImpl {

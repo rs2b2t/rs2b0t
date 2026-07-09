@@ -29,7 +29,7 @@ export class MultiBoxController {
     add(account?: Account): SlotSnapshot | null {
         const acct = account ?? this.roster.claimNext();
         // reject no-account, empty username (would fall back to the shared
-        // lcb:creds key), and a username already live in another slot (would
+        // rs2b0t:creds key), and a username already live in another slot (would
         // double-spawn the same account) — both defeat credential isolation.
         if (!acct || acct.username.length === 0) {
             return null;
@@ -41,7 +41,7 @@ export class MultiBoxController {
         const slot: Slot = { id: this.nextId++, account: acct, handle, mode: 'background' };
         this.slots.push(slot);
         // credential isolation: inject BEFORE arming auto-login so the shared
-        // lcb:creds fallback is never consulted (constraint #4).
+        // rs2b0t:creds fallback is never consulted (constraint #4).
         handle.setCredentials(acct.username, acct.password);
         // the first bot is a focused 1-cell wall (the single-bot client);
         // later bots join the wall, or stay hidden behind whatever is focused.
