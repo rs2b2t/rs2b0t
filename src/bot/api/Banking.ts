@@ -56,8 +56,31 @@ export function parseBankStrategy(label: string): BankStrategy {
 export const PERIODIC_BANK_SETTINGS: SettingsSchema = {
     bankStrategy: { type: 'string', default: 'Off', options: BANK_STRATEGY_OPTIONS, label: 'Periodic bank', help: 'save accumulated loot so a death does not lose it all' },
     bankEveryItems: { type: 'number', default: 15, min: 1, max: 27, label: 'Bank at N loot items' },
-    bankEveryMinutes: { type: 'number', default: 10, min: 1, max: 120, label: 'Bank every N minutes' }
+    bankEveryMinutes: { type: 'number', default: 10, min: 1, max: 120, label: 'Bank every N minutes' },
+    bankCommonJunk: { type: 'boolean', default: true, label: 'Also bank gems/fruit/beer/kebabs' }
 };
+
+// Junk every banking bot offloads unless it opts out (bankCommonJunk=false).
+// Name-contains (case-insensitive), like all deposit filters. NOTE: 'sapphire'
+// etc. also match cut-gem jewellery — intended (saving a valuable); opt out per
+// bot if a script wants to keep them.
+export const COMMON_BANK_LOOT: string[] = [
+    'uncut', 'sapphire', 'emerald', 'ruby', 'diamond', 'opal', 'jade', 'topaz',
+    'strange fruit', 'beer', 'kebab'
+];
+
+export function matchesCommonBankLoot(name: string): boolean {
+    if (name.length === 0) {
+        return false;
+    }
+    const n = name.toLowerCase();
+    return COMMON_BANK_LOOT.some(p => n.includes(p));
+}
+
+/** Compose a bot's own deposit predicate with the shared junk list. */
+export function depositMatcher(own: (name: string) => boolean, includeCommon: boolean): (name: string) => boolean {
+    return (name: string) => own(name) || (includeCommon && matchesCommonBankLoot(name));
+}
 
 function realBooth(boothName: string) {
     return Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
