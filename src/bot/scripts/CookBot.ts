@@ -12,7 +12,7 @@ import { countRaw, lastRawIndex } from './CookBotLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(2809, 3441, 0);
 const DEFAULT_RANGE_STAND = new Tile(2817, 3443, 0);
-const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
+const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
     fish: { type: 'string', default: 'Raw salmon', label: 'Raw fish to cook (contains)', help: 'e.g. Raw salmon / Raw shark / Raw lobster' },
@@ -122,14 +122,19 @@ class BankTrip implements Task {
         }
         await Bank.depositInventory(); // cooked + burnt + junk — the whole pack
         await Execution.delayTicks(1);
-        // withdraw a full pack of raw fish (non-stackable → fills the free slots)
-        await Bank.withdraw(this.bot.fishName(), 'Withdraw-All');
-        await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(this.bot.fishName()) === 0, 4000);
+        // Resolve the EXACT bank item name for the (substring) `fish` setting —
+        // Bank.withdraw/count match names exactly, so a partial like 'shark' must
+        // be turned into 'Raw shark' first or it would withdraw nothing.
+        const pat = this.bot.fishName().toLowerCase();
+        const bankName = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat))?.name;
         this.bot.countTrip();
-        if (this.bot.rawCount() === 0) {
+        if (!bankName) {
             this.bot.log(`no '${this.bot.fishName()}' in the bank — idling`);
             await Execution.delayTicks(5);
+            return;
         }
+        await Bank.withdraw(bankName, 'Withdraw-All'); // non-stackable → fills the free slots
+        await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(bankName) === 0, 4000);
         // walking closes the bank; CookTrip crosses to the range next tick
     }
 }

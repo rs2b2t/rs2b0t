@@ -1,14 +1,16 @@
-// Headless live smoke for CookBot. Boots the WebGL client (SwiftShader),
-// logs in (auto-creates), teleports off Tutorial Island, maxes stats (Thieving
-// for the Guard pickpocket), teleports to the East Ardougne market anchor, starts
-// the bot, and watches for the restock -> pickpocket cycle (and a flee if a guard
-// retaliates).
+// Headless live smoke for CookBot. Boots the WebGL client (SwiftShader), logs in
+// (auto-creates), teleports off Tutorial Island, maxes stats (Cooking), teleports
+// to the Catherby bank, starts the bot, and validates the BANK HALF: reach the
+// bank stand, open the booth, deposit + Withdraw-All the fish, graceful idle when
+// the bank has no fish. The cook half (cross the door + useOn the range) needs
+// raw fish seeded in the bank — no item-give cheat exists, so it's validated
+// live by the owner.
 //
 // Requires the local engine running + the local build deployed:
 //   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
 //   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
 //
-// Usage: bun tools/ardythiever-test.ts [base-url] [username]
+// Usage: bun tools/cookbot-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
 
