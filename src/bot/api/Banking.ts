@@ -97,6 +97,7 @@ export const Banking = {
      */
     async bankNearest(opts: {
         deposit: (name: string) => boolean;
+        commonJunk?: boolean;
         returnTo?: WorldTile;
         boothName?: string;
         boothOp?: string;
@@ -120,7 +121,7 @@ export const Banking = {
         if (!(await Bank.openNearest(boothName, boothOp, log))) {
             return false;
         }
-        await Bank.depositAllMatching(opts.deposit);
+        await Bank.depositAllMatching(depositMatcher(opts.deposit, opts.commonJunk ?? true));
         await Execution.delayTicks(1);
         if (opts.returnTo) {
             await Traversal.walkResilient(opts.returnTo, { radius: 3, timeoutMs: 120_000, log });

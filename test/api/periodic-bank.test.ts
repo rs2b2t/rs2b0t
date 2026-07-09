@@ -29,10 +29,13 @@ test('execute calls bankNearest with the deposit filter + returnTo, then resets 
     let called: any = null;
     const spy = Banking.bankNearest; (Banking as any).bankNearest = async (o: any) => { called = o; return true; };
     const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
-    const dep = () => true;
+    const dep = (n: string) => n === 'mine';
     const task = make({ deposit: dep, returnTo: () => ({ x: 1, z: 2, level: 0 }) });
     await task.execute();
-    expect(called.deposit).toBe(dep);
+    // deposit is composed with the shared junk list (default on)
+    expect(called.deposit('mine')).toBe(true);            // bot's own predicate honoured
+    expect(called.deposit('uncut sapphire')).toBe(true);  // common junk included by default
+    expect(called.deposit('rune scimitar')).toBe(false);  // neither → kept
     expect(called.returnTo).toEqual({ x: 1, z: 2, level: 0 });
     (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
 });
@@ -45,4 +48,14 @@ test('backs off ALL strategies after a failed (unreachable-bank) attempt', async
     await task.execute();                      // bank unreachable → sets failure backoff
     expect(task.validate()).toBe(false);       // suppressed despite still-carried loot
     (Banking as any).bankNearest = bspy; (Game as any).inCombat = gspy; (Execution as any).delayTicks = dspy;
+});
+
+test('PeriodicBankOptions accepts a commonJunk getter (type-level + default include)', () => {
+    // Construct with commonJunk omitted and present; both must type-check and construct.
+    const base = {
+        strategy: () => 'off' as const, itemsThreshold: () => 1, minutesThreshold: () => 1,
+        countLoot: () => 0, deposit: (_n: string) => false
+    };
+    expect(new PeriodicBank(base)).toBeDefined();
+    expect(new PeriodicBank({ ...base, commonJunk: () => false })).toBeDefined();
 });
