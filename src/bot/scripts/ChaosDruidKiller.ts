@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
-import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -54,6 +54,7 @@ export default class ChaosDruidKiller extends TaskBot {
     private leash = 8;
     private fightHpGate = 0.4;
     private restHp = 0.65;
+    bankCommon = true;
 
     private kills = 0;
     private looted = 0;
@@ -73,6 +74,7 @@ export default class ChaosDruidKiller extends TaskBot {
         this.leash = this.settings.num('leashRadius', 8);
         this.fightHpGate = this.settings.num('fightHpGate', 40) / 100;
         this.restHp = this.settings.num('restUntilHp', 65) / 100;
+        this.bankCommon = this.settings.bool('bankCommonJunk', true);
 
         const here = Game.tile()!;
         this.anchor = new Tile(here.x, here.z, here.level);
@@ -124,6 +126,7 @@ export default class ChaosDruidKiller extends TaskBot {
                 minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
                 countLoot: () => this.carriedLoot(),
                 deposit: (name) => this.wantsLoot(name),
+                commonJunk: () => this.bankCommon,
                 returnTo: () => this.getAnchor(),
                 setStatus: (s) => this.setStatus(s),
                 log: (m) => this.log(m)
@@ -300,7 +303,7 @@ class BankRun implements Task {
         }
 
         this.bot.setStatus('banking: depositing loot');
-        await Bank.depositAllMatching(name => this.bot.wantsLoot(name));
+        await Bank.depositAllMatching(depositMatcher(name => this.bot.wantsLoot(name), this.bot.bankCommon));
         await Execution.delayTicks(1);
         this.bot.countTrip();
         this.bot.log('deposited the haul');

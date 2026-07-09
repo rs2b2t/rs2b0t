@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
-import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
@@ -73,6 +73,7 @@ let PANIC_AT = 0.25;
 let REST_UNTIL = 0.6;
 let FOOD_TARGET = 8;
 let BANK_AT = 12;
+let BANK_COMMON = true;
 let COMBAT_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
 
 function hpFraction(): number {
@@ -133,6 +134,7 @@ export default class ArdyFighter extends TaskBot {
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
         FOOD_TARGET = this.settings.num('foodTarget', 8);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
+        BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         COMBAT_MODE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
 
         // The Baker's stall needs Thieving 5 — without it this bot cannot feed
@@ -173,6 +175,7 @@ export default class ArdyFighter extends TaskBot {
                 minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
                 countLoot: () => lootSlots(),
                 deposit: (name) => matchesAny(name, LOOT),
+                commonJunk: () => BANK_COMMON,
                 returnTo: () => ANCHOR,
                 setStatus: (s) => this.setStatus(s),
                 log: (m) => this.log(m)
@@ -409,7 +412,7 @@ class BankRun implements Task {
             return;
         }
 
-        await Bank.depositAllMatching(name => matchesAny(name, LOOT));
+        await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON));
         await Execution.delayTicks(1);
         this.bot.countTrip();
         this.bot.log(`deposited the loot (trip ${this.bot.tripsTotal()})`);

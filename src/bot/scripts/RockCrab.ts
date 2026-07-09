@@ -5,7 +5,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
-import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -71,6 +71,7 @@ let EAT_HP = 0.5;
 let FOOD_NAME = 'Lobster';
 let FOOD_WITHDRAW = 20;
 let LOOT_NAMES = DEFAULT_LOOT.split(',').map(s => s.trim());
+let BANK_COMMON = true;
 
 /**
  * Rock crab trainer for the Rellekka shoreline. Walks among the dormant
@@ -108,6 +109,7 @@ export default class RockCrab extends TaskBot {
         FOOD_NAME = this.settings.str('food', 'Lobster');
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_NAMES = this.settings.list('loot', LOOT_NAMES).map(s => s.toLowerCase());
+        BANK_COMMON = this.settings.bool('bankCommonJunk', true);
 
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, attack lvl ${Skills.level('attack')}`);
 
@@ -138,6 +140,7 @@ export default class RockCrab extends TaskBot {
                 minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
                 countLoot: () => Inventory.items().filter(i => LOOT_NAMES.includes((i.name ?? '').toLowerCase())).length,
                 deposit: (name) => LOOT_NAMES.includes(name.toLowerCase()),
+                commonJunk: () => BANK_COMMON,
                 returnTo: () => FIELD,
                 setStatus: (s) => this.setStatus(s),
                 log: (m) => this.log(m)
