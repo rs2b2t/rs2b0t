@@ -116,3 +116,60 @@ export function doorPassable(door: DoorInfo, fromX: number, fromZ: number): bool
     const axisTrue = door.angle === 1 || door.angle === 3 ? fromZ === door.tile.z : fromX === door.tile.x;
     return dir === 1 ? axisTrue : !axisTrue;
 }
+
+const CARDINAL: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// Directed BFS from spawn to a tile cardinally adjacent to the shrine. A step
+// cur->next is allowed unless a solid wall sits on that edge; a door edge is
+// allowed only when doorPassable() holds for the crossing direction. Returns
+// the door tiles crossed on the shortest such path, in order.
+export function solveRoute(g: MazeGraph, spawn: { x: number; z: number }, shrine: { x: number; z: number } = MAZE_SHRINE): { x: number; z: number }[] {
+    // Fall back to the spawn/shrine extents when the graph has no walls (empty
+    // maze -> min/max are still Infinity); real maps always have finite bounds.
+    const finite = Number.isFinite(g.minx);
+    const lo = {
+        x: (finite ? g.minx : Math.min(spawn.x, shrine.x)) - 2,
+        z: (finite ? g.minz : Math.min(spawn.z, shrine.z)) - 2
+    };
+    const hi = {
+        x: (finite ? g.maxx : Math.max(spawn.x, shrine.x)) + 2,
+        z: (finite ? g.maxz : Math.max(spawn.z, shrine.z)) + 2
+    };
+    const key = (x: number, z: number): string => `${x},${z}`;
+    const prev = new Map<string, { px: number; pz: number; door: DoorInfo | null } | null>();
+    prev.set(key(spawn.x, spawn.z), null);
+    const queue: { x: number; z: number }[] = [{ x: spawn.x, z: spawn.z }];
+    const adjacent = (x: number, z: number): boolean => Math.abs(x - shrine.x) + Math.abs(z - shrine.z) === 1;
+
+    for (let head = 0; head < queue.length; head++) {
+        const cur = queue[head];
+        if (adjacent(cur.x, cur.z)) {
+            const doors: { x: number; z: number }[] = [];
+            let node = prev.get(key(cur.x, cur.z));
+            let px = cur.x, pz = cur.z;
+            while (node) {
+                if (node.door) { doors.unshift({ x: node.door.tile.x, z: node.door.tile.z }); }
+                px = node.px; pz = node.pz;
+                node = prev.get(key(px, pz)) ?? null;
+            }
+            return doors;
+        }
+        for (const [dx, dz] of CARDINAL) {
+            const nx = cur.x + dx;
+            const nz = cur.z + dz;
+            if (nx < lo.x || nx > hi.x || nz < lo.z || nz > hi.z) { continue; }
+            const nk = key(nx, nz);
+            if (prev.has(nk)) { continue; }
+            const ek = edgeKey(cur.x, cur.z, nx, nz);
+            const door = g.door.get(ek);
+            if (door) {
+                if (!doorPassable(door, cur.x, cur.z)) { continue; }
+            } else if (g.wallEdge.has(ek)) {
+                continue;
+            }
+            prev.set(nk, { px: cur.x, pz: cur.z, door: door ?? null });
+            queue.push({ x: nx, z: nz });
+        }
+    }
+    return [];
+}

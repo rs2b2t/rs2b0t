@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseJm2Locs, MAZE_ORIGIN, DOOR_DIRS } from '#/bot/api/maze/mazeGraph.js';
 import { buildMaze, edgeKey, doorPassable } from '#/bot/api/maze/mazeGraph.js';
+import { solveRoute, MAZE_SHRINE, MAZE_SPAWNS } from '#/bot/api/maze/mazeGraph.js';
 
 const MAP = '/Users/elliottriplett/code/rs2b2t-content/maps/m45_71.jm2';
 
@@ -83,5 +84,51 @@ describe('buildMaze on real map', () => {
         expect(g.wallEdge.size).toBeGreaterThan(1000);
         expect(g.minx).toBeGreaterThanOrEqual(2880);
         expect(g.maxx).toBeLessThanOrEqual(2943);
+    });
+});
+
+describe('solveRoute (synthetic 1-D corridor)', () => {
+    // Corridor along z at x=2900: tiles z=4570..4575. A door at (2900,4572)
+    // angle NORTH joins (2900,4572)<->(2900,4573). Walls seal the sides so the
+    // only spawn->shrine path crosses that door.
+    function corridor(): ReturnType<typeof buildMaze> {
+        const g = buildMaze([]);
+        for (let z = 4570; z <= 4575; z++) {
+            g.wallEdge.add(edgeKey(2900, z, 2899, z)); // west wall
+            g.wallEdge.add(edgeKey(2900, z, 2901, z)); // east wall
+        }
+        g.door.set(edgeKey(2900, 4572, 2900, 4573), { tile: { x: 2900, z: 4572 }, id: 3628, angle: 1 });
+        return g;
+    }
+    test('returns the single door between spawn and shrine', () => {
+        const route = solveRoute(corridor(), { x: 2900, z: 4570 }, { x: 2900, z: 4575 });
+        expect(route).toEqual([{ x: 2900, z: 4572 }]);
+    });
+    test('gated door blocks the wrong-side approach (empty route)', () => {
+        const g = corridor();
+        g.door.set(edgeKey(2900, 4572, 2900, 4573), { tile: { x: 2900, z: 4572 }, id: 3630, angle: 1 }); // dir-2
+        // Approaching northward from z=4572 (fromZ==door.z -> axisTrue -> dir2 blocked): no path north.
+        expect(solveRoute(g, { x: 2900, z: 4570 }, { x: 2900, z: 4575 })).toEqual([]);
+    });
+});
+
+describe('solveRoute on real map', () => {
+    const g = buildMaze(parseJm2Locs(readFileSync(MAP, 'utf8')));
+    const routes = MAZE_SPAWNS.map(s => solveRoute(g, s));
+    test('every spawn yields a non-empty route ending adjacent to the shrine', () => {
+        for (const r of routes) {
+            expect(r.length).toBeGreaterThan(0);
+            const last = r[r.length - 1];
+            // last door borders the centre chamber: within a few tiles of the shrine
+            expect(Math.abs(last.x - MAZE_SHRINE.x) + Math.abs(last.z - MAZE_SHRINE.z)).toBeLessThanOrEqual(4);
+        }
+    });
+    test('all four routes share a common tail (convergence onto the final path)', () => {
+        const tailKey = (r: { x: number; z: number }[]): string => {
+            const t = r[r.length - 1];
+            return `${t.x},${t.z}`;
+        };
+        const tails = new Set(routes.map(tailKey));
+        expect(tails.size).toBe(1); // same final door for all spawns
     });
 });
