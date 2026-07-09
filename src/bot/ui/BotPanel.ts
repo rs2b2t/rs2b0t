@@ -6,7 +6,7 @@ import { Credentials } from '../runtime/Credentials.js';
 import { loadFromFile, loadFromUrl, type LoadResult } from '../runtime/loader.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { SettingsStore } from '../runtime/Settings.js';
+import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
 import { summarize } from './paramControls.js';
@@ -117,6 +117,16 @@ export default class BotPanel {
         settings.appendChild(sectionTitle('parameters'));
         this.settingsBox = el('div', 'lcb-settings');
         settings.appendChild(this.settingsBox);
+
+        // shared-across-scripts settings; built once so it's always present
+        // regardless of the selected script (unlike the per-script Edit button)
+        const globalBtn = document.createElement('button');
+        globalBtn.className = 'lcb-button lcb-param-edit';
+        globalBtn.textContent = 'Global settings';
+        globalBtn.title = 'Settings shared across all scripts (e.g. genie lamp skill); a script’s own value overrides these';
+        globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS));
+        settings.appendChild(globalBtn);
+
         root.appendChild(settings);
 
         this.paramsModal = new ParamsModal(
