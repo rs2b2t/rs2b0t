@@ -127,6 +127,21 @@ export function settingToString(def: SettingDef, value: unknown): string {
     return String(value);
 }
 
+/** Genie/lamp skills (keys of LAMP_IF.skills) — the lampSkill dropdown options.
+ *  Kept local to avoid a runtime→api import; handleLamp falls back to strength. */
+export const LAMP_SKILLS: string[] = [
+    'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer',
+    'agility', 'herblore', 'thieving', 'crafting', 'runecraft', 'mining',
+    'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'fletching'
+];
+
+/** Reserved 'Global' namespace schema — settings that resolve as a fallback
+ *  below per-script values (per-script overrides global). */
+export const GLOBAL_SETTINGS: SettingsSchema = {
+    lampSkill: { type: 'string', default: 'strength', options: LAMP_SKILLS, label: 'Genie lamp skill', help: 'which skill genie/lamp random events train' },
+    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs (default)' }
+};
+
 const hasStorage = typeof localStorage !== 'undefined';
 
 function storageKey(name: string, key: string): string {
@@ -189,18 +204,26 @@ class SettingsStoreImpl {
         const out: Record<string, unknown> = {};
         for (const [key, def] of Object.entries(schema)) {
             const url = this.urlOverride(name, key);
-            if (url !== null) {
-                out[key] = parseValue(def, url);
-                continue;
-            }
+            if (url !== null) { out[key] = parseValue(def, url); continue; }
             const saved = this.saved(name, key);
-            if (saved !== undefined) {
-                out[key] = parseValue(def, saved);
+            if (saved !== undefined) { out[key] = parseValue(def, saved); continue; }
+            // global fallback for global-eligible keys (not when resolving Global itself)
+            if (name !== 'Global' && key in GLOBAL_SETTINGS) {
+                const gurl = this.urlOverride('Global', key);
+                if (gurl !== null) { out[key] = parseValue(def, gurl); continue; }
+                const gsaved = this.saved('Global', key);
+                if (gsaved !== undefined) { out[key] = parseValue(def, gsaved); continue; }
+                out[key] = GLOBAL_SETTINGS[key].default;
                 continue;
             }
             out[key] = def.default;
         }
         return out;
+    }
+
+    /** Resolve the reserved Global namespace into a bag (for global-only reads). */
+    globalBag(): SettingsBag {
+        return new SettingsBag(this.resolve('Global', GLOBAL_SETTINGS));
     }
 }
 
