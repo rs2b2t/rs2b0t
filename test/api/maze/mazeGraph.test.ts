@@ -4,7 +4,9 @@ import { parseJm2Locs, MAZE_ORIGIN, DOOR_DIRS } from '#/bot/api/maze/mazeGraph.j
 import { buildMaze, edgeKey, doorPassable } from '#/bot/api/maze/mazeGraph.js';
 import { solveRoute, MAZE_SHRINE, MAZE_SPAWNS } from '#/bot/api/maze/mazeGraph.js';
 
-const MAP = '/Users/elliottriplett/code/rs2b2t-content/maps/m45_71.jm2';
+// Vendored from the engine content (region 0_45_71) so the suite is portable —
+// no dependency on a sibling checkout. Regenerate with tools/maze-derive.ts.
+const MAP = new URL('./fixtures/m45_71.jm2', import.meta.url).pathname;
 
 describe('parseJm2Locs', () => {
     test('parses "level lx lz: id shape angle" with defaults', () => {

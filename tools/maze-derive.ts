@@ -5,11 +5,11 @@
 // Usage: bun tools/maze-derive.ts [--map <m45_71.jm2>] [--out <mazeRoutes.ts>]
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { buildMaze, parseJm2Locs, solveRoute, MAZE_SHRINE, MAZE_SPAWNS, WALL_ID, DOOR_DIRS, edgeKey } from '../src/bot/api/maze/mazeGraph.js';
+import { buildMaze, parseJm2Locs, solveRoute, MAZE_SHRINE, MAZE_SPAWNS, edgeKey } from '../src/bot/api/maze/mazeGraph.js';
 
 function parseArgs(): { map: string; out: string } {
     const args = process.argv.slice(2);
-    let map = '/Users/elliottriplett/code/rs2b2t-content/maps/m45_71.jm2';
+    let map = new URL('../test/api/maze/fixtures/m45_71.jm2', import.meta.url).pathname;
     let out = 'src/bot/api/maze/mazeRoutes.ts';
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--map') { map = args[++i]; }
