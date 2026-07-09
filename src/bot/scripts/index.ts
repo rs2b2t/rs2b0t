@@ -7,6 +7,7 @@ import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
+import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import CooksAssistant from './CooksAssistant.js';
@@ -128,6 +129,15 @@ ScriptRegistry.register({
     tags: ['f2p', 'pickpocket', 'coins'],
     settingsSchema: THIEVING_SETTINGS,
     create: () => new ThievingBot()
+});
+
+ScriptRegistry.register({
+    name: 'ArdyThiever',
+    description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Hero, flees all combat, banks loot + junk, grabs ground coins',
+    category: 'Thieving',
+    tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
+    settingsSchema: ARDYTHIEVER_SETTINGS,
+    create: () => new ArdyThiever()
 });
 
 // --- woodcutting ---
