@@ -40,6 +40,7 @@ const DEFAULT_ENTRANCE = new Tile(2998, 3924, 0);
 const EDGEVILLE = new Tile(3094, 3493, 0); // BankLocations 'Edgeville', the nearest bank
 const RIDGE_MIN_AGILITY = 52; // loc_2309 refuses below this; the whole course is gated on it
 const PIT_Z_GAP = 2000; // the wolf pit (ropeswing/log-balance fail) sits ~6400 tiles north in world-z; anything this far above the course centre is the pit (mime/maze are only ~600-800 away)
+const LAP_RETRY_LIMIT = 4; // retry a failing obstacle this many times (falls happen), then move on to the next so a spot it can't be finished from never wedges the lap
 
 /** Tunable parameters (panel + `?WildyAgility.<key>=...`). */
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
@@ -577,9 +578,11 @@ class EnterCourse implements Task {
  * same-named-loc hazards the Gnome course also has.
  */
 class RunLap implements Task {
-    // consecutive xp-less attempts at the current step; obstacles are side-gated
-    // (e.g. the pipe rejects the wrong side with no xp), so repeated failure
-    // means we are past this step — skip rather than wedge the lap.
+    // consecutive non-clearing attempts at the current step (a fall, or a click
+    // with no xp). A few are normal — you retry the obstacle. Past
+    // LAP_RETRY_LIMIT we can't complete it from where we are (e.g. up the ladder
+    // you land in the pocket between the log and the rocks, where the only way on
+    // is the rocks), so we advance to the next obstacle.
     private stuck = 0;
 
     constructor(private bot: WildyAgility) {}
@@ -605,6 +608,7 @@ class RunLap implements Task {
             for (const name of new Set(this.bot.courseNames())) {
                 if (this.find(name) && this.bot.resyncTo(name)) {
                     obstacle = this.find(name);
+                    this.stuck = 0; // relocated to a fresh obstacle — start its retry count over
                     break;
                 }
             }
@@ -660,17 +664,23 @@ class RunLap implements Task {
             this.stuck = 0;
             this.bot.countCleared();
             this.bot.advance();
-        } else if (outcome === 'failed') {
-            // Fell off (damage, no xp): retry the SAME obstacle at once — a fall
-            // isn't "stuck", and the stepping stone / log balance can't be
-            // skipped. RunLap re-finds the nearest obstacle next loop.
-            this.stuck = 0;
-            this.bot.setStatus(`failed ${obstacle.name} — retrying`);
-            this.bot.log(`failed '${this.bot.currentName()}' (took damage) — retrying`);
-        } else if (++this.stuck >= 4) {
-            this.bot.log(`step '${this.bot.currentName()}' gave no xp after ${this.stuck} attempts — skipping`);
+            return;
+        }
+
+        // Not cleared — retry the SAME obstacle (a fall you re-attempt after the
+        // ladder, a stepping stone you redo in place). But if it keeps not
+        // completing, we're on a spot it can't be finished from — most often the
+        // pocket between the log and the rocks reached up the ladder, where the
+        // only way on is the rocks — so after a few tries advance to the next
+        // obstacle rather than wedge the lap forever.
+        if (++this.stuck >= LAP_RETRY_LIMIT) {
+            this.bot.log(`'${this.bot.currentName()}' isn't completing from here after ${this.stuck} tries — moving on to the next obstacle`);
             this.stuck = 0;
             this.bot.advance();
+        } else {
+            const why = outcome === 'failed' ? 'took damage' : 'no progress';
+            this.bot.setStatus(`retrying ${obstacle.name}`);
+            this.bot.log(`'${this.bot.currentName()}' ${why} — retrying (${this.stuck}/${LAP_RETRY_LIMIT})`);
         }
     }
 }
