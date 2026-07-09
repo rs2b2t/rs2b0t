@@ -28,7 +28,7 @@ const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
 const PICKPOCKET_OP = 'Pickpocket';
-const FLEE_DIST = 8;
+const FLEE_DIST = 4; // step just far enough to break a guard's melee, not into walled/door areas
 const DEFAULT_FOOD = 'cake, bread, chocolate slice';
 const DEFAULT_LOOT = 'coins';
 const TARGET_OPTIONS = ['Guard', 'Knight of Ardougne', 'Hero'];
@@ -240,6 +240,7 @@ class Flee implements Task {
         const threat = Npcs.query().where(n => n.inCombat).nearest() ?? Npcs.query().name(TARGET).nearest();
         const tp = threat ? threat.tile() : STALL_TILE;
         this.bot.setStatus(`fleeing combat near ${tp.x},${tp.z}`);
+        this.bot.log(`fleeing combat near ${tp.x},${tp.z}`);
         this.bot.countFlee();
         const dest = fleeCandidates({ x: me.x, z: me.z, level: me.level }, { x: tp.x, z: tp.z }, FLEE_DIST)
             .find(t => Reachability.canReach(t, { maxSteps: 1500 }));
@@ -346,6 +347,7 @@ class RestockCakes implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
+        this.bot.log(`restocking cake (have ${foodCount()})`);
         const here = Game.tile();
         if (!here || STALL_TILE.distanceTo(here) > 3) {
             await Traversal.walkTo(STALL_TILE, { radius: 2, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
@@ -402,7 +404,7 @@ class Pickpocket implements Task {
             () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < EAT_AT || Game.inCombat(),
             3000
         );
-        if (Skills.xp('thieving') > xpBefore) { this.bot.countSteal(); }
+        if (Skills.xp('thieving') > xpBefore) { this.bot.countSteal(); this.bot.log(`pickpocketed ${TARGET}`); }
     }
 }
 
