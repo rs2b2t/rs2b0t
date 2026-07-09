@@ -62,6 +62,7 @@ class ScriptRunnerImpl {
         })()
             .then(() => {
                 RandomEvents.setGrindTargets(bot.grindTargets());
+                RandomEvents.setLampSkill(SettingsStore.globalBag().str('lampSkill', 'strength'));
                 Supervisor.resetProgress();
                 // A recovery hint still set after onStart means this script never
                 // consumed it (only anchored scripts call RecoveryHints.takeAnchor),

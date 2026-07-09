@@ -148,6 +148,10 @@ class RandomEventsImpl {
         this.grindTargets = names.map(n => n.toLowerCase());
     }
 
+    setLampSkill(skill: string): void {
+        this.lampSkill = skill;
+    }
+
     private cooledDown(sig: string): boolean {
         const until = this.cooldownUntil.get(sig);
         return until !== undefined && performance.now() < until;
