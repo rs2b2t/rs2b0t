@@ -445,6 +445,10 @@ class RandomEventsImpl {
      *  and press on to the final door. Then Touch the shrine to finish. */
     private static readonly MAZE_SHRINE_LOC = 3634;
     private static readonly MAZE_DOOR_IDS = new Set([3628, 3629, 3630, 3631, 3632]);
+    /** The one tile the purple-path finish is reached from: stand here, Open the
+     *  door on it, then Touch the 3x3 shrine (proven live — the shrine completes
+     *  from this approach only). All 4 spawn routes converge to it. */
+    private static readonly MAZE_FINAL_TILE = { x: 2910, z: 4576 };
 
     private async handleMaze(log: (msg: string) => void): Promise<boolean> {
         const inMaze = (): boolean => {
@@ -458,18 +462,39 @@ class RandomEventsImpl {
         const route = selectRoute(start, MAZE_ROUTES);
         log(`random event: maze — spawn (${start.x},${start.z}) -> route ${route.spawn.x},${route.spawn.z} (${route.doors.length} doors)`);
 
+        // Each maze corridor has one in-door and one out-door; interacting a door
+        // does NOT walk us there (direct-input sends OPLOC from where we stand), so
+        // we WALK to each door first (the client's tryMove paths the open corridor),
+        // then Open it — a valid open teleports us into the next corridor.
+        const walkTowards = async (d: { x: number; z: number }, onto: boolean): Promise<void> => {
+            const reached = (t: { x: number; z: number }): boolean => (onto ? t.x === d.x && t.z === d.z : cheb(t, d) <= 1);
+            for (let w = 0; w < 8 && inMaze(); w++) {
+                const now = reader.worldTile();
+                if (now && reached(now)) { return; }
+                const local = reader.toLocal(d.x, d.z);
+                if (!local) { await Execution.delayTicks(1); continue; }
+                const before = reader.worldTile();
+                actions.walkTo(local.lx, local.lz); // client-side path over the live scene collision
+                await Execution.delayUntil(() => {
+                    const t = reader.worldTile();
+                    return t !== null && (reached(t) || (before !== null && cheb(t, before) >= 2));
+                }, 4_000);
+            }
+        };
+        const walkAdjacent = (d: { x: number; z: number }): Promise<void> => walkTowards(d, false);
+
         for (let i = 0; i < route.doors.length && inMaze(); i++) {
             const d = route.doors[i];
-            const before = reader.worldTile();
-            if (!before) { await Execution.delayTicks(2); i--; continue; }
+            await walkAdjacent(d);
             const door = Locs.query()
                 .where(l => RandomEventsImpl.MAZE_DOOR_IDS.has(l.id) && l.tile().x === d.x && l.tile().z === d.z)
                 .nearest();
-            if (!door) { await Execution.delayTicks(2); continue; } // not yet in scene — skip to next
-            await door.interact('Open'); // client walks to it, then opens or refuses
+            if (!door) { log(`random event: maze — door (${d.x},${d.z}) not in scene, skipping`); continue; }
+            const pre = reader.worldTile();
+            await door.interact('Open');
             await Execution.delayUntil(() => {
                 const t = reader.worldTile();
-                return ChatDialog.canContinue() || (t !== null && cheb(t, before) >= 2);
+                return ChatDialog.canContinue() || (t !== null && pre !== null && cheb(t, pre) >= 2);
             }, 6_000);
             if (ChatDialog.canContinue()) {
                 await ChatDialog.continue(); // "not the right way" — benign branch door; press on
@@ -480,13 +505,34 @@ class RandomEventsImpl {
             }
         }
 
-        for (let pass = 0; pass < 12 && inMaze(); pass++) {
+        // Fixed purple-path finish (all 4 routes converge here): stand ON the
+        // final tile, Open the door on it — that teleports us beside the 3x3 shrine,
+        // which only completes from this one approach — then Touch the shrine. The
+        // finish plays a cheer emote before the return teleport, so the wait is
+        // generous.
+        for (let pass = 0; pass < 4 && inMaze(); pass++) {
+            await walkTowards(RandomEventsImpl.MAZE_FINAL_TILE, true);
+            const me = reader.worldTile();
+            if (!me || me.x !== RandomEventsImpl.MAZE_FINAL_TILE.x || me.z !== RandomEventsImpl.MAZE_FINAL_TILE.z) {
+                await Execution.delayTicks(2);
+                continue; // not on the final tile yet
+            }
+            const finalDoor = Locs.query()
+                .where(l => RandomEventsImpl.MAZE_DOOR_IDS.has(l.id) && l.tile().x === RandomEventsImpl.MAZE_FINAL_TILE.x && l.tile().z === RandomEventsImpl.MAZE_FINAL_TILE.z)
+                .nearest();
+            if (finalDoor) {
+                await finalDoor.interact('Open'); // teleports us beside the shrine
+                await Execution.delayUntil(() => {
+                    const t = reader.worldTile();
+                    return t !== null && (t.x !== RandomEventsImpl.MAZE_FINAL_TILE.x || t.z !== RandomEventsImpl.MAZE_FINAL_TILE.z);
+                }, 6_000);
+            }
             const shrine = Locs.query()
                 .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC || (l.name ?? '').toLowerCase() === 'strange shrine')
                 .nearest();
             if (!shrine) { await Execution.delayTicks(3); continue; }
-            await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch'); // client walks to it, then touches
-            await Execution.delayUntil(() => !inMaze(), 8_000);
+            await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch');
+            await Execution.delayUntil(() => !inMaze(), 20_000);
         }
         log(inMaze() ? 'random event: maze — still inside; will retry' : 'random event: maze solved — returned');
         return true;
