@@ -186,7 +186,7 @@ class ScriptRunnerImpl {
         ctx.state = 'crashed';
         ctx.abortWaiters();
         ctx.addLog('error', `crashed: ${error.stack ?? error.message}`);
-        console.error('[lcbuddy] script crashed', error);
+        console.error('[rs2b0t] script crashed', error);
         this.teardown(ctx);
     }
 
@@ -220,7 +220,7 @@ class ScriptRunnerImpl {
             try {
                 listener();
             } catch (err) {
-                console.error('[lcbuddy] runner listener error', err);
+                console.error('[rs2b0t] runner listener error', err);
             }
         }
     }

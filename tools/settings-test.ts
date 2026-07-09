@@ -118,7 +118,7 @@ try {
         await page.fill('input[placeholder="username"]', user);
         await page.fill('input[placeholder="password"]', 'test');
         await page.getByRole('button', { name: 'Save' }).click();
-        const persisted = await page.evaluate(() => localStorage.getItem('lcb:creds'));
+        const persisted = await page.evaluate(() => localStorage.getItem('rs2b0t:creds'));
         if (!persisted || !persisted.includes(user)) fail('credentials not saved to localStorage');
         console.log('credentials: saved to localStorage');
 
@@ -136,7 +136,7 @@ try {
             .then(() => true)
             .catch(() => false);
         if (!auto) {
-            const credsSeen = await page.evaluate(() => localStorage.getItem('lcb:creds'));
+            const credsSeen = await page.evaluate(() => localStorage.getItem('rs2b0t:creds'));
             fail(`auto-login did not reach the game (creds in storage: ${credsSeen ? 'yes' : 'no'}). console: ${consoleLines.slice(-5).join(' | ') || '(none)'}`);
         }
         const who = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.loginUser);

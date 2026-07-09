@@ -1,9 +1,9 @@
 import fs from 'fs';
 
-// LCBuddy2 build (H7) — clone of bundle.ts with three deliberate differences:
+// rs2b0t build (H7) — clone of bundle.ts with three deliberate differences:
 //   1. entrypoint is src/bot/main.ts (the bot client), emitted as botclient.js
 //   2. NO terser pass and therefore NO property mangling: the bot API surface
-//      (globalThis.__lcbuddy, Slice 7) keeps stable property names for
+//      (globalThis.__rs2b0t, Slice 7) keeps stable property names for
 //      externally-compiled scripts, and string-keyed self-test checks work
 //   3. console is always kept — bot logs matter
 // Bun's own minifier (prod) shortens locals but never mangles property names.

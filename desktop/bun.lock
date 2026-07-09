@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "lcbuddy2-desktop",
+      "name": "rs2b0t-desktop",
       "devDependencies": {
         "electron": "^33.0.0",
         "electron-builder": "^25.0.0",

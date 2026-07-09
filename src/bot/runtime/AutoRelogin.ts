@@ -79,7 +79,7 @@ class AutoReloginImpl {
     private log(level: 'info' | 'warn' | 'error', msg: string): void {
         ScriptRunner.ctx?.addLog(level, msg);
         if (!ScriptRunner.ctx) {
-            console.log(`[lcbuddy] ${msg}`);
+            console.log(`[rs2b0t] ${msg}`);
         }
     }
 

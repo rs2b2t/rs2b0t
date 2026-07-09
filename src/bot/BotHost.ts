@@ -41,9 +41,9 @@ class BotHostImpl {
         setPacketListener(ptype => this.handlePacket(ptype));
 
         if (this.selfTestMissing.length > 0) {
-            console.error(`[lcbuddy] adapter self-test: missing internals: ${this.selfTestMissing.join(', ')}`);
+            console.error(`[rs2b0t] adapter self-test: missing internals: ${this.selfTestMissing.join(', ')}`);
         } else {
-            console.log('[lcbuddy] adapter self-test: all internals present');
+            console.log('[rs2b0t] adapter self-test: all internals present');
         }
     }
 
@@ -64,7 +64,7 @@ class BotHostImpl {
         try {
             pumpProducers(this.tickCount);
         } catch (err) {
-            console.error('[lcbuddy] producer error', err);
+            console.error('[rs2b0t] producer error', err);
         }
 
         this.fire(this.frameListeners);
@@ -95,7 +95,7 @@ class BotHostImpl {
                 try {
                     listener(this.tickCount);
                 } catch (err) {
-                    console.error('[lcbuddy] tick listener error', err);
+                    console.error('[rs2b0t] tick listener error', err);
                 }
             }
         }
@@ -104,7 +104,7 @@ class BotHostImpl {
             try {
                 listener(ptype);
             } catch (err) {
-                console.error('[lcbuddy] packet listener error', err);
+                console.error('[rs2b0t] packet listener error', err);
             }
         }
     }
@@ -141,7 +141,7 @@ class BotHostImpl {
             try {
                 listener();
             } catch (err) {
-                console.error('[lcbuddy] listener error', err);
+                console.error('[rs2b0t] listener error', err);
             }
         }
     }

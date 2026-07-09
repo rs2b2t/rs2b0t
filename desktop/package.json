@@ -1,8 +1,8 @@
 {
-    "name": "lcbuddy2-desktop",
+    "name": "rs2b0t-desktop",
     "version": "0.1.0",
     "private": true,
-    "description": "LCBuddy2 desktop client (Electron shell, no background throttling)",
+    "description": "rs2b0t desktop client (Electron shell, no background throttling)",
     "main": "main.cjs",
     "scripts": {
         "start": "electron .",
@@ -14,8 +14,8 @@
         "electron-builder": "^25.0.0"
     },
     "build": {
-        "appId": "rs.lostcity.lcbuddy2",
-        "productName": "LCBuddy2",
+        "appId": "rs.lostcity.rs2b0t",
+        "productName": "rs2b0t",
         "files": ["main.cjs"],
         "directories": {
             "output": "dist"

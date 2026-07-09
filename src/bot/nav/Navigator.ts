@@ -97,7 +97,7 @@ class NavigatorImpl {
             this.doorEdges = message.doorEdges;
             this.transportEdges = message.transportEdges;
             this.state = 'ready';
-            console.log(`[lcbuddy] nav worker ready: ${message.mapsquares} mapsquares, ${message.doorEdges} door edges, ${message.transportEdges} transport edges`);
+            console.log(`[rs2b0t] nav worker ready: ${message.mapsquares} mapsquares, ${message.doorEdges} door edges, ${message.transportEdges} transport edges`);
             this.flushReadyWaiters();
         } else if (message.type === 'error') {
             this.fail(message.message);
@@ -114,7 +114,7 @@ class NavigatorImpl {
     }
 
     private fail(reason: string): void {
-        console.error(`[lcbuddy] navigator failed: ${reason}`);
+        console.error(`[rs2b0t] navigator failed: ${reason}`);
         this.failReason = reason;
         this.state = 'failed';
         this.flushReadyWaiters();

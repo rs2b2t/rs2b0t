@@ -1,4 +1,4 @@
-# LCBuddy2 desktop client (Electron)
+# rs2b0t desktop client (Electron)
 
 Runs the bot client as a standalone desktop window instead of a browser tab.
 The point is one Electron setting — `webPreferences.backgroundThrottling: false`

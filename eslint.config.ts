@@ -32,7 +32,7 @@ export default defineConfig([
         }
     },
 
-    // ---- LCBuddy2 fences (H8, see HOOKS.md) ----
+    // ---- rs2b0t fences (H8, see HOOKS.md) ----
     // Only adapter/ may name client internals; everything else in src/bot/
     // imports the adapter. Protocol const-enums are exempt (inlined, no
     // runtime coupling).

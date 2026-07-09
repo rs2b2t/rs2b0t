@@ -23,7 +23,7 @@
         }
 
         /* full-viewport row: game fills the left, panel fixed on the right */
-        #lcb-root {
+        #rs2b0t-root {
             display: flex;
             align-items: stretch;
             gap: 8px;
@@ -82,40 +82,40 @@
             color: #ddd;
         }
 
-        .lcb-title {
+        .rs2b0t-title {
             font-weight: bold;
             font-size: 14px;
             color: #04A800;
             margin-bottom: 8px;
         }
 
-        .lcb-banner {
+        .rs2b0t-banner {
             padding: 4px 6px;
             border-radius: 3px;
             margin-bottom: 8px;
             font-size: 11px;
         }
 
-        .lcb-banner-ok {
+        .rs2b0t-banner-ok {
             background: #07330a;
             color: #5be05b;
         }
 
-        .lcb-banner-warn {
+        .rs2b0t-banner-warn {
             background: #333007;
             color: #e0d75b;
         }
 
-        .lcb-banner-error {
+        .rs2b0t-banner-error {
             background: #3a0a0a;
             color: #ff7b7b;
         }
 
-        .lcb-section {
+        .rs2b0t-section {
             margin-bottom: 10px;
         }
 
-        .lcb-section-title {
+        .rs2b0t-section-title {
             color: #888;
             text-transform: uppercase;
             font-size: 10px;
@@ -125,50 +125,50 @@
             padding-bottom: 2px;
         }
 
-        .lcb-row {
+        .rs2b0t-row {
             display: flex;
             justify-content: space-between;
             line-height: 1.6;
         }
 
-        .lcb-key {
+        .rs2b0t-key {
             color: #777;
         }
 
-        .lcb-value {
+        .rs2b0t-value {
             color: #ddd;
             text-align: right;
         }
 
-        .lcb-stats {
+        .rs2b0t-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 2px 8px;
         }
 
-        .lcb-stat {
+        .rs2b0t-stat {
             display: flex;
             justify-content: space-between;
             line-height: 1.5;
         }
 
-        .lcb-stat-name {
+        .rs2b0t-stat-name {
             color: #777;
             text-transform: capitalize;
         }
 
-        .lcb-chat-line {
+        .rs2b0t-chat-line {
             line-height: 1.5;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .lcb-dim {
+        .rs2b0t-dim {
             color: #555;
         }
 
-        .lcb-select {
+        .rs2b0t-select {
             width: 100%;
             background: #1a1a1a;
             color: #ddd;
@@ -180,13 +180,13 @@
             margin-bottom: 6px;
         }
 
-        .lcb-buttons {
+        .rs2b0t-buttons {
             display: flex;
             gap: 6px;
             margin-bottom: 4px;
         }
 
-        .lcb-button {
+        .rs2b0t-button {
             flex: 1;
             background: #1a1a1a;
             color: #ddd;
@@ -198,33 +198,33 @@
             cursor: pointer;
         }
 
-        .lcb-button:hover:not(:disabled) {
+        .rs2b0t-button:hover:not(:disabled) {
             background: #252525;
             border-color: #04A800;
         }
 
-        .lcb-button:disabled {
+        .rs2b0t-button:disabled {
             color: #555;
             cursor: default;
         }
 
-        .lcb-state-running {
+        .rs2b0t-state-running {
             color: #5be05b;
         }
 
-        .lcb-state-paused {
+        .rs2b0t-state-paused {
             color: #e0d75b;
         }
 
-        .lcb-state-stopping {
+        .rs2b0t-state-stopping {
             color: #e0d75b;
         }
 
-        .lcb-state-crashed {
+        .rs2b0t-state-crashed {
             color: #ff7b7b;
         }
 
-        .lcb-log {
+        .rs2b0t-log {
             height: 150px;
             overflow-y: auto;
             background: #0a0a0a;
@@ -234,21 +234,21 @@
             font-size: 11px;
         }
 
-        .lcb-log-line {
+        .rs2b0t-log-line {
             line-height: 1.5;
             white-space: pre-wrap;
             word-break: break-word;
         }
 
-        .lcb-log-warn {
+        .rs2b0t-log-warn {
             color: #e0d75b;
         }
 
-        .lcb-log-error {
+        .rs2b0t-log-error {
             color: #ff7b7b;
         }
 
-        .lcb-input {
+        .rs2b0t-input {
             flex: 1;
             background: #1a1a1a;
             color: #ddd;
@@ -260,22 +260,22 @@
             min-width: 0;
         }
 
-        .lcb-load-status {
+        .rs2b0t-load-status {
             font-size: 11px;
             color: #777;
             min-height: 14px;
             margin-top: 2px;
         }
 
-        .lcb-load-ok {
+        .rs2b0t-load-ok {
             color: #5be05b;
         }
 
-        .lcb-load-error {
+        .rs2b0t-load-error {
             color: #ff7b7b;
         }
 
-        .lcb-setting {
+        .rs2b0t-setting {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -283,25 +283,25 @@
             line-height: 1.9;
         }
 
-        .lcb-setting-bool {
+        .rs2b0t-setting-bool {
             justify-content: flex-start;
         }
 
-        .lcb-setting-label {
+        .rs2b0t-setting-label {
             color: #aaa;
         }
 
-        .lcb-setting .lcb-input {
+        .rs2b0t-setting .rs2b0t-input {
             max-width: 150px;
             /* long labels must wrap, not crush the input to nothing */
             min-width: 64px;
         }
 
-        .lcb-setting input[type="checkbox"] {
+        .rs2b0t-setting input[type="checkbox"] {
             accent-color: #04A800;
         }
 
-        .lcb-current-script {
+        .rs2b0t-current-script {
             flex: 1;
             align-self: center;
             color: #7ad0ff;
@@ -312,7 +312,7 @@
         }
 
         /* ---- script library modal ---- */
-        .lcb-modal-backdrop {
+        .rs2b0t-modal-backdrop {
             display: none;
             position: fixed;
             inset: 0;
@@ -323,7 +323,7 @@
             justify-content: center;
         }
 
-        .lcb-modal {
+        .rs2b0t-modal {
             width: min(720px, 86vw);
             max-height: 82vh;
             display: flex;
@@ -336,25 +336,25 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
         }
 
-        .lcb-modal-header {
+        .rs2b0t-modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .lcb-modal-title {
+        .rs2b0t-modal-title {
             font-size: 15px;
             font-weight: bold;
             color: #04A800;
         }
 
-        .lcb-chips {
+        .rs2b0t-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 5px;
         }
 
-        .lcb-chip {
+        .rs2b0t-chip {
             background: #1a1a1a;
             color: #bbb;
             border: 1px solid #333;
@@ -365,17 +365,17 @@
             cursor: pointer;
         }
 
-        .lcb-chip:hover {
+        .rs2b0t-chip:hover {
             border-color: #04A800;
         }
 
-        .lcb-chip-active {
+        .rs2b0t-chip-active {
             background: #07330a;
             color: #5be05b;
             border-color: #04A800;
         }
 
-        .lcb-library-list {
+        .rs2b0t-library-list {
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -383,7 +383,7 @@
             padding-right: 4px;
         }
 
-        .lcb-library-card {
+        .rs2b0t-library-card {
             background: #161616;
             border: 1px solid #2c2c2c;
             border-radius: 4px;
@@ -391,82 +391,82 @@
             cursor: pointer;
         }
 
-        .lcb-library-card:hover {
+        .rs2b0t-library-card:hover {
             border-color: #04A800;
             background: #1c2419;
         }
 
-        .lcb-card-top {
+        .rs2b0t-card-top {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
         }
 
-        .lcb-card-name {
+        .rs2b0t-card-name {
             color: #7ad0ff;
             font-weight: bold;
         }
 
-        .lcb-card-cat {
+        .rs2b0t-card-cat {
             color: #888;
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        .lcb-card-desc {
+        .rs2b0t-card-desc {
             color: #ccc;
             font-size: 11px;
             margin-top: 2px;
         }
 
-        .lcb-card-tags {
+        .rs2b0t-card-tags {
             color: #6a8a5a;
             font-size: 10px;
             margin-top: 3px;
         }
 
         /* parameters: read-only panel summary */
-        .lcb-param-summary { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 11px ui-monospace, monospace; margin-bottom: 8px; }
-        .lcb-param-sitem { white-space: nowrap; }
-        .lcb-param-skey { color: #7d8590; }
-        .lcb-param-sval { color: #fff; margin-left: 4px; }
-        .lcb-param-edit { width: 100%; color: #ffb86c; }
+        .rs2b0t-param-summary { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 11px ui-monospace, monospace; margin-bottom: 8px; }
+        .rs2b0t-param-sitem { white-space: nowrap; }
+        .rs2b0t-param-skey { color: #7d8590; }
+        .rs2b0t-param-sval { color: #fff; margin-left: 4px; }
+        .rs2b0t-param-edit { width: 100%; color: #ffb86c; }
 
         /* parameters modal body */
-        .lcb-params-body { padding: 4px 4px 8px; max-height: 60vh; overflow: auto; }
-        .lcb-param-row { padding: 10px 4px; border-bottom: 1px solid #23282f; }
-        .lcb-param-row:last-child { border-bottom: 0; }
-        .lcb-param-label { font: 600 12px ui-sans-serif, system-ui; color: #cdd3da; }
-        .lcb-param-help { font: 11px ui-sans-serif, system-ui; color: #7d8590; margin-top: 1px; }
-        .lcb-param-control { margin-top: 8px; }
+        .rs2b0t-params-body { padding: 4px 4px 8px; max-height: 60vh; overflow: auto; }
+        .rs2b0t-param-row { padding: 10px 4px; border-bottom: 1px solid #23282f; }
+        .rs2b0t-param-row:last-child { border-bottom: 0; }
+        .rs2b0t-param-label { font: 600 12px ui-sans-serif, system-ui; color: #cdd3da; }
+        .rs2b0t-param-help { font: 11px ui-sans-serif, system-ui; color: #7d8590; margin-top: 1px; }
+        .rs2b0t-param-control { margin-top: 8px; }
         /* dark-theme the control inputs (native inputs render light inside the dark modal otherwise) */
-        .lcb-param-text, .lcb-param-select, .lcb-param-num, .lcb-param-tilein, .lcb-param-tagadd { background: #1a1a1a; color: #ddd; border: 1px solid #333; border-radius: 3px; padding: 4px 6px; }
-        .lcb-param-cb { accent-color: #9be05b; }
+        .rs2b0t-param-text, .rs2b0t-param-select, .rs2b0t-param-num, .rs2b0t-param-tilein, .rs2b0t-param-tagadd { background: #1a1a1a; color: #ddd; border: 1px solid #333; border-radius: 3px; padding: 4px 6px; }
+        .rs2b0t-param-cb { accent-color: #9be05b; }
 
         /* slider */
-        .lcb-ctl-slider { display: flex; align-items: center; gap: 10px; }
-        .lcb-param-range { flex: 1; min-width: 120px; accent-color: #ffb86c; }
-        .lcb-param-num { width: 60px; text-align: center; }
-        .lcb-param-rangelbl { font: 10px ui-monospace, monospace; color: #7d8590; }
+        .rs2b0t-ctl-slider { display: flex; align-items: center; gap: 10px; }
+        .rs2b0t-param-range { flex: 1; min-width: 120px; accent-color: #ffb86c; }
+        .rs2b0t-param-num { width: 60px; text-align: center; }
+        .rs2b0t-param-rangelbl { font: 10px ui-monospace, monospace; color: #7d8590; }
 
         /* chips (multiselect + taglist) */
-        .lcb-ctl-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .lcb-param-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; cursor: pointer; }
-        .lcb-param-chip input { margin: 0; accent-color: #9be05b; }
-        .lcb-param-tag { display: inline-flex; align-items: center; gap: 6px; background: #22272e; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; }
-        .lcb-param-tagx { background: none; border: 0; color: #7d8590; cursor: pointer; padding: 0; }
-        .lcb-param-tagadd { width: 80px; }
+        .rs2b0t-ctl-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .rs2b0t-param-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; cursor: pointer; }
+        .rs2b0t-param-chip input { margin: 0; accent-color: #9be05b; }
+        .rs2b0t-param-tag { display: inline-flex; align-items: center; gap: 6px; background: #22272e; border: 1px solid #2a2f36; border-radius: 14px; padding: 3px 10px; font: 12px ui-sans-serif, system-ui; color: #cdd3da; }
+        .rs2b0t-param-tagx { background: none; border: 0; color: #7d8590; cursor: pointer; padding: 0; }
+        .rs2b0t-param-tagadd { width: 80px; }
 
         /* tile */
-        .lcb-ctl-tile { display: flex; gap: 8px; }
-        .lcb-param-tilef { display: inline-flex; align-items: center; gap: 5px; font: 11px ui-monospace, monospace; color: #7d8590; }
-        .lcb-param-tilein { width: 66px; }
+        .rs2b0t-ctl-tile { display: flex; gap: 8px; }
+        .rs2b0t-param-tilef { display: inline-flex; align-items: center; gap: 5px; font: 11px ui-monospace, monospace; color: #7d8590; }
+        .rs2b0t-param-tilein { width: 66px; }
     </style>
 </head>
 
 <body>
-    <div id="lcb-root">
+    <div id="rs2b0t-root">
         <div id="game-wrap">
             <div id="game-stage">
                 <canvas id="canvas" width="765" height="503">

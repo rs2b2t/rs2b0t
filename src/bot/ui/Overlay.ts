@@ -36,7 +36,7 @@ export default class Overlay {
             ctx.save();
             bot.onPaint(ctx);
         } catch (err) {
-            console.error('[lcbuddy] onPaint error', err);
+            console.error('[rs2b0t] onPaint error', err);
         } finally {
             ctx.restore();
         }

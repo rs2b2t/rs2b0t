@@ -29,7 +29,7 @@ class ScriptRegistryImpl {
             try {
                 listener();
             } catch (err) {
-                console.error('[lcbuddy] registry listener error', err);
+                console.error('[rs2b0t] registry listener error', err);
             }
         }
     }

@@ -1,7 +1,7 @@
 // Vendored from LostCityRS/Engine-TS@274: src/engine/routefinder/StepValidator.ts
 // (a TypeScript port of rsmod's pathfinder, https://github.com/rsmod/rsmod — MIT licensed).
 // Verbatim except imports rewritten from '#/engine/routefinder/*' to relative paths,
-// per the LCBuddy2 import fences (HOOKS.md).
+// per the rs2b0t import fences (HOOKS.md).
 import { canMove } from './CollisionStrategy.js';
 import CollisionEngine from './CollisionEngine.js';
 import { CollisionFlag, CollisionType } from './flags.js';

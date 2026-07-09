@@ -339,7 +339,7 @@ export default class BotPanel {
         try {
             ScriptRunner.start(meta);
         } catch (err) {
-            console.error('[lcbuddy] start failed', err);
+            console.error('[rs2b0t] start failed', err);
             return;
         }
 

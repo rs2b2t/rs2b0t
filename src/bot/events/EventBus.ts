@@ -77,7 +77,7 @@ class EventBusImpl {
             try {
                 cb(payload);
             } catch (err) {
-                console.error(`[lcbuddy] '${event}' listener error`, err);
+                console.error(`[rs2b0t] '${event}' listener error`, err);
             }
         }
     }

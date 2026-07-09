@@ -1,4 +1,4 @@
-// LCBuddy2 desktop shell: runs the bot client as a standalone window with
+// rs2b0t desktop shell: runs the bot client as a standalone window with
 // background throttling DISABLED — the whole reason this exists. A browser
 // tab clamps setTimeout to ~1/s when hidden, stalling the 50fps game loop
 // and starving the bot (then replaying everything at 2-5x on refocus). Here

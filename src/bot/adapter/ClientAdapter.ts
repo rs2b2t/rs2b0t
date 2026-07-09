@@ -128,7 +128,7 @@ export function attach(client: unknown): string[] {
                 try {
                     packetListener(this.ptype0);
                 } catch (err) {
-                    console.error('[lcbuddy] packet listener error', err);
+                    console.error('[rs2b0t] packet listener error', err);
                 }
             }
             return processed;
