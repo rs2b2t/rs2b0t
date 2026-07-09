@@ -88,8 +88,8 @@ try {
     const arrived = await page
         .waitForFunction(
             () => {
-                const rows = Array.from(document.querySelectorAll('.lcb-row'));
-                const tile = rows.find(r => r.querySelector('.lcb-key')?.textContent === 'tile')?.querySelector('.lcb-value')?.textContent ?? '';
+                const rows = Array.from(document.querySelectorAll('.rs2b0t-row'));
+                const tile = rows.find(r => r.querySelector('.rs2b0t-key')?.textContent === 'tile')?.querySelector('.rs2b0t-value')?.textContent ?? '';
                 return tile.startsWith('323') || tile.startsWith('322');
             },
             undefined,
@@ -99,12 +99,12 @@ try {
         .catch(() => false);
 
     const tileNow = await page.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll('.lcb-row'));
-        return rows.find(r => r.querySelector('.lcb-key')?.textContent === 'tile')?.querySelector('.lcb-value')?.textContent ?? '?';
+        const rows = Array.from(document.querySelectorAll('.rs2b0t-row'));
+        return rows.find(r => r.querySelector('.rs2b0t-key')?.textContent === 'tile')?.querySelector('.rs2b0t-value')?.textContent ?? '?';
     });
     console.log(`teleport ${arrived ? 'ok' : 'DID NOT TAKE'} — tile now ${tileNow}`);
     if (!arrived) {
-        const chat = await page.evaluate(() => Array.from(document.querySelectorAll('.lcb-chat-line')).map(n => n.textContent));
+        const chat = await page.evaluate(() => Array.from(document.querySelectorAll('.rs2b0t-chat-line')).map(n => n.textContent));
         fail(`still at ${tileNow}; chat: ${chat.join(' | ')}`);
     }
 
@@ -112,11 +112,11 @@ try {
 
     // start ChickenKiller through the panel: Browse… -> Combat category -> card -> Start
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'ChickenKiller' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-    const current = await page.textContent('.lcb-current-script');
+    await page.locator('.rs2b0t-library-card', { hasText: 'ChickenKiller' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'ChickenKiller') fail(`expected ChickenKiller selected, got "${current}"`);
 
     await page.getByRole('button', { name: 'Start' }).click();

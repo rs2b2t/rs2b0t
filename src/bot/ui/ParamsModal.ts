@@ -15,18 +15,18 @@ export default class ParamsModal {
     private schema: SettingsSchema = {};
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
-        this.backdrop = el('div', 'lcb-modal-backdrop');
+        this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {
             if (e.target === this.backdrop) {
                 this.close();
             }
         });
 
-        const modal = el('div', 'lcb-modal');
-        const header = el('div', 'lcb-modal-header');
-        this.titleEl = el('div', 'lcb-modal-title');
+        const modal = el('div', 'rs2b0t-modal');
+        const header = el('div', 'rs2b0t-modal-header');
+        this.titleEl = el('div', 'rs2b0t-modal-title');
         const close = document.createElement('button');
-        close.className = 'lcb-button';
+        close.className = 'rs2b0t-button';
         close.textContent = '✕';
         close.style.flex = '0 0 auto';
         close.addEventListener('click', () => this.close());
@@ -34,7 +34,7 @@ export default class ParamsModal {
         header.appendChild(close);
         modal.appendChild(header);
 
-        this.bodyEl = el('div', 'lcb-params-body');
+        this.bodyEl = el('div', 'rs2b0t-params-body');
         modal.appendChild(this.bodyEl);
 
         this.backdrop.appendChild(modal);
@@ -68,14 +68,14 @@ export default class ParamsModal {
         const disabled = this.isActive();
 
         for (const [key, def] of Object.entries(this.schema)) {
-            const row = el('div', 'lcb-param-row');
+            const row = el('div', 'rs2b0t-param-row');
 
-            const label = el('div', 'lcb-param-label');
+            const label = el('div', 'rs2b0t-param-label');
             label.textContent = def.label ?? key;
             row.appendChild(label);
 
             if (def.help) {
-                const help = el('div', 'lcb-param-help');
+                const help = el('div', 'rs2b0t-param-help');
                 help.textContent = def.help;
                 row.appendChild(help);
             }
@@ -85,7 +85,7 @@ export default class ParamsModal {
                 SettingsStore.save(this.scriptName, key, raw);
                 this.onChanged();
             }, { disabled });
-            control.classList.add('lcb-param-control');
+            control.classList.add('rs2b0t-param-control');
             row.appendChild(control);
 
             this.bodyEl.appendChild(row);

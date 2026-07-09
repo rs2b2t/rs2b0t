@@ -73,7 +73,7 @@ try {
     if (!backIn) fail('re-login failed');
     console.log('re-logged in at Lumbridge');
 
-    await page.selectOption('.lcb-select', 'NavDemo');
+    await page.selectOption('.rs2b0t-select', 'NavDemo');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log('NavDemo started...');
 

@@ -89,11 +89,11 @@ try {
     await type(TELE);
 
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'CowKiller' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-    const current = await page.textContent('.lcb-current-script');
+    await page.locator('.rs2b0t-library-card', { hasText: 'CowKiller' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'CowKiller') fail(`expected CowKiller selected, got "${current}"`);
 
     await page.getByRole('button', { name: 'Start' }).click();

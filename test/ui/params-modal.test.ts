@@ -19,7 +19,7 @@ test('open renders one row per parameter and closes', () => {
     const modal = new ParamsModal(() => false, () => {});
     modal.open('Demo', schema);
     expect(modal.isOpen()).toBe(true);
-    const rows = document.querySelectorAll('.lcb-param-row');
+    const rows = document.querySelectorAll('.rs2b0t-param-row');
     expect(rows.length).toBe(2);
     modal.close();
     expect(modal.isOpen()).toBe(false);
@@ -29,7 +29,7 @@ test('editing a control live-saves through SettingsStore + fires onChanged', () 
     let changed = 0;
     const modal = new ParamsModal(() => false, () => (changed += 1));
     modal.open('Demo2', schema);
-    const range = document.querySelector('.lcb-param-range') as HTMLInputElement;
+    const range = document.querySelector('.rs2b0t-param-range') as HTMLInputElement;
     range.value = '12';
     range.dispatchEvent(new Event('input'));
     expect(SettingsStore.saved('Demo2', 'leash')).toBe('12');

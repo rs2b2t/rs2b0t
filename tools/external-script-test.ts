@@ -91,28 +91,28 @@ try {
 
     // 2. load the external script via the panel URL loader
     const loadUrl = async () => {
-        await page.fill('.lcb-input', '/bot/external-test-bot.js');
+        await page.fill('.rs2b0t-input', '/bot/external-test-bot.js');
         await page.getByRole('button', { name: 'Load URL' }).click();
         await page.waitForFunction(
             () => {
-                const text = document.querySelector('.lcb-load-status')?.textContent ?? '';
+                const text = document.querySelector('.rs2b0t-load-status')?.textContent ?? '';
                 return text.length > 0 && text !== 'loading…';
             },
             undefined,
             { timeout: 15000 }
         );
-        return page.evaluate(() => document.querySelector('.lcb-load-status')?.textContent ?? '');
+        return page.evaluate(() => document.querySelector('.rs2b0t-load-status')?.textContent ?? '');
     };
 
     let status = await loadUrl();
     if (!status.includes("loaded 'BoneBurier'")) fail(`load failed: '${status}'`);
 
-    const optionCount = () => page.evaluate(() => Array.from(document.querySelectorAll('.lcb-select option')).filter(o => o.textContent?.includes('BoneBurier')).length);
+    const optionCount = () => page.evaluate(() => Array.from(document.querySelectorAll('.rs2b0t-select option')).filter(o => o.textContent?.includes('BoneBurier')).length);
     if ((await optionCount()) !== 1) fail('BoneBurier missing from selector');
     console.log('external script loaded and registered');
 
     // 3. run it
-    await page.selectOption('.lcb-select', 'BoneBurier');
+    await page.selectOption('.rs2b0t-select', 'BoneBurier');
     await page.getByRole('button', { name: 'Start' }).click();
 
     await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).filter(l => l.msg.startsWith('buried bones')).length >= 10, undefined, { timeout: 180000 });

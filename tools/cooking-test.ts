@@ -63,11 +63,11 @@ try {
     if (ranges === 0) fail('no Range at the tele spot');
 
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Cooking/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'Cook' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-    const current = await page.textContent('.lcb-current-script');
+    await page.locator('.rs2b0t-library-card', { hasText: 'Cook' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'Cook') fail(`expected Cook selected, got "${current}"`);
 
     await page.getByRole('button', { name: 'Start' }).click();

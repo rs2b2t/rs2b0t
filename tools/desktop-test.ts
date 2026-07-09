@@ -61,7 +61,7 @@ try {
     if (!backIn) fail('relogin failed');
     console.log('logged in');
 
-    await page.selectOption('.lcb-select', 'DebugBot');
+    await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForTimeout(2000);
 

@@ -23,8 +23,8 @@ try {
 
     // open the library
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
-    const chips = await page.$$eval('.lcb-chip', els => els.map(e => e.textContent ?? ''));
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
+    const chips = await page.$$eval('.rs2b0t-chip', els => els.map(e => e.textContent ?? ''));
     console.log(`categories: ${chips.join('  ')}`);
     for (const want of ['Combat', 'Woodcutting', 'Mining', 'Fishing', 'Navigation', 'Develop']) {
         if (!chips.some(c => c.startsWith(want))) fail(`category chip "${want}" missing`);
@@ -33,34 +33,34 @@ try {
 
     // filter by Mining -> only the Miner card
     await page.getByRole('button', { name: /^Mining/ }).click();
-    let cards = await page.$$eval('.lcb-card-name', els => els.map(e => e.textContent ?? ''));
+    let cards = await page.$$eval('.rs2b0t-card-name', els => els.map(e => e.textContent ?? ''));
     if (cards.length !== 1 || !cards[0].includes('Miner')) fail(`Mining filter showed ${JSON.stringify(cards)} (expected just Miner)`);
     console.log('library: Mining filter -> Miner');
 
     // back to All, search "crab" -> only RockCrab
     await page.getByRole('button', { name: /^All/ }).click();
-    await page.fill('.lcb-modal .lcb-input', 'crab');
+    await page.fill('.rs2b0t-modal .rs2b0t-input', 'crab');
     await page.waitForTimeout(300);
-    cards = await page.$$eval('.lcb-card-name', els => els.map(e => e.textContent ?? ''));
+    cards = await page.$$eval('.rs2b0t-card-name', els => els.map(e => e.textContent ?? ''));
     if (cards.length !== 1 || !cards[0].includes('RockCrab')) fail(`search "crab" showed ${JSON.stringify(cards)} (expected just RockCrab)`);
     console.log('library: search "crab" -> RockCrab');
 
     // select a card -> modal closes, panel shows it, params render
-    await page.fill('.lcb-modal .lcb-input', '');
+    await page.fill('.rs2b0t-modal .rs2b0t-input', '');
     await page.getByRole('button', { name: /^Combat/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'ChickenKiller' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-    const current = await page.textContent('.lcb-current-script');
+    await page.locator('.rs2b0t-library-card', { hasText: 'ChickenKiller' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'ChickenKiller') fail(`panel shows "${current}" after selecting ChickenKiller`);
-    const hasFeatherParam = (await page.locator('.lcb-setting', { hasText: 'Gather feathers?' }).count()) > 0;
+    const hasFeatherParam = (await page.locator('.rs2b0t-setting', { hasText: 'Gather feathers?' }).count()) > 0;
     if (!hasFeatherParam) fail('selecting ChickenKiller did not load its parameters');
     console.log('library: selected ChickenKiller -> panel + params updated');
 
     // selection drives the runner: pick DebugBot, log in, Start
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^All/ }).click(); // library remembers the last filter
-    await page.locator('.lcb-library-card', { hasText: 'DebugBot' }).click();
+    await page.locator('.rs2b0t-library-card', { hasText: 'DebugBot' }).click();
     await page.evaluate(() => { const c = (globalThis as never as Lcb).lcbuddy.client; c.loginUser = `lib${Date.now().toString(36).slice(-5)}`; c.loginPass = 't'; void c.login(c.loginUser, 't', false); });
     await page.waitForFunction(() => (globalThis as never as Lcb).lcbuddy.client.ingame && (globalThis as never as Lcb).lcbuddy.client.sceneState === 2, undefined, { timeout: 20000 }).catch(() => {});
     await page.getByRole('button', { name: 'Start' }).click();

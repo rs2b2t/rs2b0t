@@ -20,7 +20,7 @@
 // Cheats are delivered as direct CLIENT_CHEAT packets, not keyboard input
 // (typed commands can be silently swallowed — see docs/quest-campaign-map.md,
 // Task 6 section). Script selection uses the "Browse..." modal (the old
-// `.lcb-select` dropdown is gone from BotPanel).
+// `.rs2b0t-select` dropdown is gone from BotPanel).
 //
 // Usage: bun tools/death-test.ts [base-url] [username] [script]
 //        script = ChickenKiller (default) | ChaosDruidKiller
@@ -211,8 +211,8 @@ try {
     const snapshot = () =>
         page.evaluate(() => {
             const rows: Record<string, string> = {};
-            for (const node of Array.from(document.querySelectorAll('.lcb-row'))) {
-                rows[node.querySelector('.lcb-key')?.textContent ?? ''] = node.querySelector('.lcb-value')?.textContent ?? '';
+            for (const node of Array.from(document.querySelectorAll('.rs2b0t-row'))) {
+                rows[node.querySelector('.rs2b0t-key')?.textContent ?? ''] = node.querySelector('.rs2b0t-value')?.textContent ?? '';
             }
             const reader = (globalThis as never as { lcbuddy: { reader: { stat(i: number): { name: string; effective: number; base: number } } } }).lcbuddy.reader;
             const hp = reader.stat(3);
@@ -220,12 +220,12 @@ try {
         });
 
     // script-library modal (Browse... -> category chip -> card), the current
-    // (post `.lcb-select` dropdown) selection UI
+    // (post `.rs2b0t-select` dropdown) selection UI
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();
-    await page.locator('.lcb-library-card', { hasText: script }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    await page.locator('.rs2b0t-library-card', { hasText: script }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`${script} started`);
 

@@ -143,14 +143,14 @@ try {
     let started = false;
     for (let attempt = 0; attempt < 4 && !started; attempt++) {
         await page.getByRole('button', { name: 'Browse…' }).click().catch(() => {});
-        await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 }).catch(() => {});
+        await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 }).catch(() => {});
         await page.waitForTimeout(500);
         await page.getByRole('button', { name: /^Combat/ }).click().catch(() => {});
         await page.waitForTimeout(500);
-        const card = page.locator('.lcb-library-card', { hasText: 'ArdyFighter' });
+        const card = page.locator('.rs2b0t-library-card', { hasText: 'ArdyFighter' });
         if (await card.count() > 0) {
             await card.first().click();
-            await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 }).catch(() => {});
+            await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 }).catch(() => {});
             await page.getByRole('button', { name: 'Start' }).click();
             started = true;
         } else {

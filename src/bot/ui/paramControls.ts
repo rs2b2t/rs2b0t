@@ -58,32 +58,32 @@ export interface ParamControl {
 export const CONTROLS: Record<ControlKind, ParamControl> = {
     checkbox: {
         edit(_def, current, onChange, { disabled }) {
-            const box = el('input', 'lcb-param-cb');
+            const box = el('input', 'rs2b0t-param-cb');
             box.type = 'checkbox';
             box.disabled = disabled;
             box.checked = current === 'true' || current === '1' || current === 'yes';
             box.addEventListener('change', () => onChange(box.checked ? 'true' : 'false'));
-            const wrap = el('div', 'lcb-ctl-checkbox');
+            const wrap = el('div', 'rs2b0t-ctl-checkbox');
             wrap.appendChild(box);
             return wrap;
         }
     },
     slider: {
         edit(def, current, onChange, { disabled }) {
-            const wrap = el('div', 'lcb-ctl-slider');
-            const range = el('input', 'lcb-param-range');
+            const wrap = el('div', 'rs2b0t-ctl-slider');
+            const range = el('input', 'rs2b0t-param-range');
             range.type = 'range';
             range.min = String(def.min ?? 0);
             range.max = String(def.max ?? 100);
             range.value = current;
             range.disabled = disabled;
-            const num = el('input', 'lcb-param-num');
+            const num = el('input', 'rs2b0t-param-num');
             num.type = 'number';
             num.min = range.min;
             num.max = range.max;
             num.value = current;
             num.disabled = disabled;
-            const rng = el('span', 'lcb-param-rangelbl');
+            const rng = el('span', 'rs2b0t-param-rangelbl');
             rng.textContent = `${range.min}–${range.max}`;
             range.addEventListener('input', () => { num.value = range.value; onChange(range.value); });
             num.addEventListener('change', () => { range.value = num.value; onChange(num.value); });
@@ -95,21 +95,21 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
     },
     number: {
         edit(def, current, onChange, { disabled }) {
-            const num = el('input', 'lcb-param-num');
+            const num = el('input', 'rs2b0t-param-num');
             num.type = 'number';
             if (def.min !== undefined) num.min = String(def.min);
             if (def.max !== undefined) num.max = String(def.max);
             num.value = current;
             num.disabled = disabled;
             num.addEventListener('change', () => onChange(num.value.trim()));
-            const wrap = el('div', 'lcb-ctl-number');
+            const wrap = el('div', 'rs2b0t-ctl-number');
             wrap.appendChild(num);
             return wrap;
         }
     },
     dropdown: {
         edit(def, current, onChange, { disabled }) {
-            const sel = el('select', 'lcb-param-select');
+            const sel = el('select', 'rs2b0t-param-select');
             sel.disabled = disabled;
             for (const opt of def.options ?? []) {
                 const o = document.createElement('option');
@@ -120,32 +120,32 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
             const match = (def.options ?? []).find(o => o.toLowerCase() === current.trim().toLowerCase());
             sel.value = match ?? String(def.default);
             sel.addEventListener('change', () => onChange(sel.value));
-            const wrap = el('div', 'lcb-ctl-dropdown');
+            const wrap = el('div', 'rs2b0t-ctl-dropdown');
             wrap.appendChild(sel);
             return wrap;
         }
     },
     text: {
         edit(_def, current, onChange, { disabled }) {
-            const input = el('input', 'lcb-param-text');
+            const input = el('input', 'rs2b0t-param-text');
             input.type = 'text';
             input.value = current;
             input.disabled = disabled;
             input.addEventListener('change', () => onChange(input.value.trim()));
-            const wrap = el('div', 'lcb-ctl-text');
+            const wrap = el('div', 'rs2b0t-ctl-text');
             wrap.appendChild(input);
             return wrap;
         }
     },
     multiselect: {
         edit(def, current, onChange, { disabled }) {
-            const wrap = el('div', 'lcb-ctl-chips');
+            const wrap = el('div', 'rs2b0t-ctl-chips');
             const selected = new Set(listItems(current).map(s => s.toLowerCase()));
             const opts = def.options ?? [];
             const boxes: HTMLInputElement[] = [];
             opts.forEach(opt => {
-                const chip = el('label', 'lcb-param-chip');
-                const box = el('input', 'lcb-param-chipbox');
+                const chip = el('label', 'rs2b0t-param-chip');
+                const box = el('input', 'rs2b0t-param-chipbox');
                 box.type = 'checkbox';
                 box.disabled = disabled;
                 box.checked = selected.has(opt.toLowerCase());
@@ -163,16 +163,16 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
     },
     taglist: {
         edit(_def, current, onChange, { disabled }) {
-            const wrap = el('div', 'lcb-ctl-chips');
+            const wrap = el('div', 'rs2b0t-ctl-chips');
             let items = listItems(current);
             const commit = () => onChange(items.join(', '));
             const rebuild = () => {
                 wrap.replaceChildren();
                 items.forEach((item, i) => {
-                    const chip = el('span', 'lcb-param-tag');
+                    const chip = el('span', 'rs2b0t-param-tag');
                     chip.appendChild(document.createTextNode(item));
                     if (!disabled) {
-                        const x = el('button', 'lcb-param-tagx');
+                        const x = el('button', 'rs2b0t-param-tagx');
                         x.type = 'button';
                         x.textContent = '✕';
                         x.addEventListener('click', () => { items.splice(i, 1); commit(); rebuild(); });
@@ -181,7 +181,7 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
                     wrap.appendChild(chip);
                 });
                 if (!disabled) {
-                    const add = el('input', 'lcb-param-tagadd');
+                    const add = el('input', 'rs2b0t-param-tagadd');
                     add.type = 'text';
                     add.placeholder = '+ add';
                     add.addEventListener('keydown', e => {
@@ -200,13 +200,13 @@ export const CONTROLS: Record<ControlKind, ParamControl> = {
     },
     tile: {
         edit(_def, current, onChange, { disabled }) {
-            const wrap = el('div', 'lcb-ctl-tile');
+            const wrap = el('div', 'rs2b0t-ctl-tile');
             const parts = current.split(',').map(s => s.trim());
             const fields: HTMLInputElement[] = [];
             (['x', 'z', 'lvl'] as const).forEach((name, i) => {
-                const f = el('label', 'lcb-param-tilef');
+                const f = el('label', 'rs2b0t-param-tilef');
                 f.appendChild(document.createTextNode(name));
-                const inp = el('input', 'lcb-param-tilein');
+                const inp = el('input', 'rs2b0t-param-tilein');
                 inp.type = 'number';
                 inp.value = parts[i] ?? '0';
                 inp.disabled = disabled;

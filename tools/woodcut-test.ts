@@ -103,7 +103,7 @@ try {
         fail(`no plain Trees nearby; tree-ish locs: [${near.join(', ')}]`);
     }
 
-    await page.selectOption('.lcb-select', 'Woodcutter');
+    await page.selectOption('.rs2b0t-select', 'Woodcutter');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`Woodcutter started, running ${minutes}min...`);
 

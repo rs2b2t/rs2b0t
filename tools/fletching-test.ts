@@ -48,11 +48,11 @@ try {
 
     console.log(`knife + ${await logCount()} logs`);
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Fletching/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'Fletcher' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-    const current = await page.textContent('.lcb-current-script');
+    await page.locator('.rs2b0t-library-card', { hasText: 'Fletcher' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'Fletcher') fail(`expected Fletcher selected, got "${current}"`);
 
     await page.getByRole('button', { name: 'Start' }).click();

@@ -90,15 +90,15 @@ try {
     const panel = await page.evaluate(() => {
         const text = (selector: string): string[] => Array.from(document.querySelectorAll(selector)).map(n => n.textContent ?? '');
         const rows: Record<string, string> = {};
-        for (const node of Array.from(document.querySelectorAll('.lcb-row'))) {
-            const key = node.querySelector('.lcb-key')?.textContent ?? '';
-            rows[key] = node.querySelector('.lcb-value')?.textContent ?? '';
+        for (const node of Array.from(document.querySelectorAll('.rs2b0t-row'))) {
+            const key = node.querySelector('.rs2b0t-key')?.textContent ?? '';
+            rows[key] = node.querySelector('.rs2b0t-value')?.textContent ?? '';
         }
         return {
-            banner: text('.lcb-banner')[0] ?? '',
+            banner: text('.rs2b0t-banner')[0] ?? '',
             rows,
-            stats: text('.lcb-stat-level'),
-            chat: text('.lcb-chat-line'),
+            stats: text('.rs2b0t-stat-level'),
+            chat: text('.rs2b0t-chat-line'),
             tick: (globalThis as never as { lcbuddy: { host: { tickCount: number; tickMeanMs: number } } }).lcbuddy.host.tickCount
         };
     });
@@ -131,7 +131,7 @@ try {
     const logLines = (): Promise<string[]> => page.evaluate(() => ((globalThis as never as RunnerGlobal).lcbuddy.runner.ctx?.log ?? []).map(l => `${l.level}: ${l.msg}`));
     const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.runner.ctx?.log.length ?? 0);
 
-    await page.selectOption('.lcb-select', 'DebugBot');
+    await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
 
     await page.waitForFunction(() => ((globalThis as never as { lcbuddy: { runner: { ctx: { log: { msg: string }[] } | null } } }).lcbuddy.runner.ctx?.log ?? []).filter(l => l.msg.includes('nearest:')).length >= 2, undefined, { timeout: 20000 });
@@ -163,7 +163,7 @@ try {
     console.log('DebugBot: stopped cleanly, onStop ran');
 
     // crash isolation: CrashTestBot throws on iteration 3
-    await page.selectOption('.lcb-select', 'CrashTestBot');
+    await page.selectOption('.rs2b0t-select', 'CrashTestBot');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'crashed', undefined, { timeout: 15000 });
 
@@ -179,7 +179,7 @@ try {
     const tickAfterSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).lcbuddy.host.tickCount);
     if (tickAfterSurvival < tickBeforeSurvival + 2) fail('client tick flow died after script crash');
 
-    await page.selectOption('.lcb-select', 'DebugBot');
+    await page.selectOption('.rs2b0t-select', 'DebugBot');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForFunction(() => (globalThis as never as { lcbuddy: { runner: { state: string } } }).lcbuddy.runner.state === 'running', undefined, { timeout: 10000 });
     await page.getByRole('button', { name: 'Stop' }).click();

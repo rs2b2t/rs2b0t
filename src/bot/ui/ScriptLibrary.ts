@@ -19,20 +19,20 @@ export default class ScriptLibrary {
     private query = '';
 
     constructor(private onSelect: (name: string) => void) {
-        this.backdrop = el('div', 'lcb-modal-backdrop');
+        this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {
             if (e.target === this.backdrop) {
                 this.close();
             }
         });
 
-        const modal = el('div', 'lcb-modal');
+        const modal = el('div', 'rs2b0t-modal');
 
-        const header = el('div', 'lcb-modal-header');
-        const title = el('div', 'lcb-modal-title');
+        const header = el('div', 'rs2b0t-modal-header');
+        const title = el('div', 'rs2b0t-modal-title');
         title.textContent = 'Script library';
         const close = document.createElement('button');
-        close.className = 'lcb-button';
+        close.className = 'rs2b0t-button';
         close.textContent = '✕';
         close.style.flex = '0 0 auto';
         close.addEventListener('click', () => this.close());
@@ -41,7 +41,7 @@ export default class ScriptLibrary {
         modal.appendChild(header);
 
         this.searchEl = document.createElement('input');
-        this.searchEl.className = 'lcb-input';
+        this.searchEl.className = 'rs2b0t-input';
         this.searchEl.type = 'text';
         this.searchEl.placeholder = 'search name / description / tag…';
         this.searchEl.addEventListener('input', () => {
@@ -50,10 +50,10 @@ export default class ScriptLibrary {
         });
         modal.appendChild(this.searchEl);
 
-        this.chipsEl = el('div', 'lcb-chips');
+        this.chipsEl = el('div', 'rs2b0t-chips');
         modal.appendChild(this.chipsEl);
 
-        this.listEl = el('div', 'lcb-library-list');
+        this.listEl = el('div', 'rs2b0t-library-list');
         modal.appendChild(this.listEl);
 
         this.backdrop.appendChild(modal);
@@ -100,7 +100,7 @@ export default class ScriptLibrary {
         for (const cat of this.categories()) {
             const count = cat === 'All' ? ScriptRegistry.list().length : ScriptRegistry.list().filter(m => (m.category ?? 'Other') === cat).length;
             const chip = document.createElement('button');
-            chip.className = `lcb-chip${cat === this.category ? ' lcb-chip-active' : ''}`;
+            chip.className = `rs2b0t-chip${cat === this.category ? ' rs2b0t-chip-active' : ''}`;
             chip.textContent = `${cat} (${count})`;
             chip.addEventListener('click', () => {
                 this.category = cat;
@@ -125,34 +125,34 @@ export default class ScriptLibrary {
         this.listEl.replaceChildren();
         const items = ScriptRegistry.list().filter(m => this.matches(m));
         if (items.length === 0) {
-            const none = el('div', 'lcb-dim');
+            const none = el('div', 'rs2b0t-dim');
             none.textContent = 'no scripts match';
             this.listEl.appendChild(none);
             return;
         }
 
         for (const m of items) {
-            const card = el('div', 'lcb-library-card');
+            const card = el('div', 'rs2b0t-library-card');
             card.addEventListener('click', () => {
                 this.onSelect(m.name);
                 this.close();
             });
 
-            const top = el('div', 'lcb-card-top');
-            const name = el('span', 'lcb-card-name');
+            const top = el('div', 'rs2b0t-card-top');
+            const name = el('span', 'rs2b0t-card-name');
             name.textContent = m.origin ? `${m.name} ⇪` : m.name;
-            const badge = el('span', 'lcb-card-cat');
+            const badge = el('span', 'rs2b0t-card-cat');
             badge.textContent = m.category ?? 'Other';
             top.appendChild(name);
             top.appendChild(badge);
             card.appendChild(top);
 
-            const desc = el('div', 'lcb-card-desc');
+            const desc = el('div', 'rs2b0t-card-desc');
             desc.textContent = m.description;
             card.appendChild(desc);
 
             if (m.tags && m.tags.length > 0) {
-                const tags = el('div', 'lcb-card-tags');
+                const tags = el('div', 'rs2b0t-card-tags');
                 tags.textContent = m.tags.map(t => `#${t}`).join(' ');
                 card.appendChild(tags);
             }

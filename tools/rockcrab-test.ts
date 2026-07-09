@@ -78,7 +78,7 @@ try {
     if (!atField) fail('no rock crabs in scene after teleport — wrong coords?');
     console.log('at the rock crab field');
 
-    await page.selectOption('.lcb-select', 'RockCrab');
+    await page.selectOption('.rs2b0t-select', 'RockCrab');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`RockCrab started, running ${minutes}min...`);
 

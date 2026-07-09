@@ -55,15 +55,15 @@ try {
     };
     const selectScript = async (category: RegExp, card: string) => {
         await page.getByRole('button', { name: 'Browse…' }).click();
-        await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+        await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
         await page.getByRole('button', { name: category }).click();
         // anchor to the card's leading name — descriptions mention other scripts
-        await page.locator('.lcb-library-card', { hasText: new RegExp(`^${card}`) }).click();
-        await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
-        const current = await page.textContent('.lcb-current-script');
+        await page.locator('.rs2b0t-library-card', { hasText: new RegExp(`^${card}`) }).click();
+        await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+        const current = await page.textContent('.rs2b0t-current-script');
         if (current !== card) fail(`expected ${card} selected, got "${current}"`);
     };
-    const settingLabels = () => page.$$eval('.lcb-setting .lcb-setting-label', els => els.map(e => e.textContent ?? ''));
+    const settingLabels = () => page.$$eval('.rs2b0t-setting .rs2b0t-setting-label', els => els.map(e => e.textContent ?? ''));
     const botLog = () => page.evaluate(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).map(l => l.msg));
     const rawCount = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().filter(i => (i.name ?? '').toLowerCase().includes('raw')).length);
     const hasNet = () => page.evaluate(() => (globalThis as never as Lcb).lcbuddy.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('net')));
@@ -111,7 +111,7 @@ try {
         await selectScript(/^Fishing/, 'Fisher');
         const fisherLabels = await settingLabels();
         if (!fisherLabels.some(l => l.includes('Fishing location'))) fail(`Fisher lacks the Fishing location row: [${fisherLabels.join(', ')}]`);
-        const dropdown = await page.$$eval('.lcb-setting select', els => els.map(s => ({ value: (s as HTMLSelectElement).value, options: Array.from((s as HTMLSelectElement).options as unknown as ArrayLike<HTMLOptionElement>, o => o.value) })));
+        const dropdown = await page.$$eval('.rs2b0t-setting select', els => els.map(s => ({ value: (s as HTMLSelectElement).value, options: Array.from((s as HTMLSelectElement).options as unknown as ArrayLike<HTMLOptionElement>, o => o.value) })));
         const loc = dropdown.find(d => d.options.includes('Draynor Village'));
         if (!loc) fail('no <select> with Draynor Village found');
         if (loc.value !== 'Auto') fail(`dropdown default is ${loc.value}, expected Auto`);

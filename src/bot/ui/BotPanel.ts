@@ -53,27 +53,27 @@ export default class BotPanel {
 
         root.replaceChildren();
 
-        const title = el('div', 'lcb-title');
+        const title = el('div', 'rs2b0t-title');
         title.textContent = 'LCBuddy2';
         root.appendChild(title);
 
-        this.banner = el('div', 'lcb-banner');
+        this.banner = el('div', 'rs2b0t-banner');
         root.appendChild(this.banner);
 
-        const script = el('div', 'lcb-section');
+        const script = el('div', 'rs2b0t-section');
         script.appendChild(sectionTitle('script'));
 
         // the library modal is the picker; the panel shows the current choice
         this.library = new ScriptLibrary(name => this.selectScript(name));
         this.selectedScript = ScriptRegistry.list()[0]?.name ?? '';
 
-        const pick = el('div', 'lcb-buttons');
-        this.scriptName = el('span', 'lcb-current-script');
+        const pick = el('div', 'rs2b0t-buttons');
+        this.scriptName = el('span', 'rs2b0t-current-script');
         pick.appendChild(this.scriptName);
         this.browseBtn = button(pick, 'Browse…', () => this.library.open());
         script.appendChild(pick);
 
-        const buttons = el('div', 'lcb-buttons');
+        const buttons = el('div', 'rs2b0t-buttons');
         this.startBtn = button(buttons, 'Start', () => this.handleStart());
         this.pauseBtn = button(buttons, 'Pause', () => this.handlePause());
         this.stopBtn = button(buttons, 'Stop', () => ScriptRunner.stop());
@@ -83,16 +83,16 @@ export default class BotPanel {
 
         // Slice 7: load external scripts (URL with cache-busting reload, or
         // a local file). Trusted code, no sandbox.
-        const loadRow = el('div', 'lcb-buttons');
+        const loadRow = el('div', 'rs2b0t-buttons');
         this.loadUrlInput = document.createElement('input');
-        this.loadUrlInput.className = 'lcb-input';
+        this.loadUrlInput.className = 'rs2b0t-input';
         this.loadUrlInput.type = 'text';
         this.loadUrlInput.placeholder = 'script URL (dist/bot.js)';
         loadRow.appendChild(this.loadUrlInput);
         button(loadRow, 'Load URL', () => void this.handleLoad(loadFromUrl(this.loadUrlInput.value.trim())));
         script.appendChild(loadRow);
 
-        const fileRow = el('div', 'lcb-buttons');
+        const fileRow = el('div', 'rs2b0t-buttons');
         const filePick = document.createElement('input');
         filePick.type = 'file';
         filePick.accept = '.js,.mjs';
@@ -108,20 +108,20 @@ export default class BotPanel {
         fileRow.appendChild(filePick);
         script.appendChild(fileRow);
 
-        this.loadStatus = el('div', 'lcb-load-status');
+        this.loadStatus = el('div', 'rs2b0t-load-status');
         script.appendChild(this.loadStatus);
         root.appendChild(script);
 
         // settings: the selected script's tunable parameters
-        const settings = el('div', 'lcb-section');
+        const settings = el('div', 'rs2b0t-section');
         settings.appendChild(sectionTitle('parameters'));
-        this.settingsBox = el('div', 'lcb-settings');
+        this.settingsBox = el('div', 'rs2b0t-settings');
         settings.appendChild(this.settingsBox);
 
         // shared-across-scripts settings; built once so it's always present
         // regardless of the selected script (unlike the per-script Edit button)
         const globalBtn = document.createElement('button');
-        globalBtn.className = 'lcb-button lcb-param-edit';
+        globalBtn.className = 'rs2b0t-button rs2b0t-param-edit';
         globalBtn.textContent = 'Global settings';
         globalBtn.title = 'Settings shared across all scripts (e.g. genie lamp skill); a script’s own value overrides these';
         globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS));
@@ -142,7 +142,7 @@ export default class BotPanel {
         // credentials: saved locally so the bot can (re)log in itself
         root.appendChild(this.buildCredentials());
 
-        const status = el('div', 'lcb-section');
+        const status = el('div', 'rs2b0t-section');
         status.appendChild(sectionTitle('status'));
         this.stateCell = row(status, 'state');
         this.playerCell = row(status, 'player');
@@ -153,21 +153,21 @@ export default class BotPanel {
         this.tickCell = row(status, 'tick');
         root.appendChild(status);
 
-        const stats = el('div', 'lcb-section');
+        const stats = el('div', 'rs2b0t-section');
         stats.appendChild(sectionTitle('stats'));
-        this.statsGrid = el('div', 'lcb-stats');
+        this.statsGrid = el('div', 'rs2b0t-stats');
         stats.appendChild(this.statsGrid);
         root.appendChild(stats);
 
-        const chat = el('div', 'lcb-section');
+        const chat = el('div', 'rs2b0t-section');
         chat.appendChild(sectionTitle('chat'));
-        this.chatList = el('div', 'lcb-chat');
+        this.chatList = el('div', 'rs2b0t-chat');
         chat.appendChild(this.chatList);
         root.appendChild(chat);
 
-        const logSection = el('div', 'lcb-section');
+        const logSection = el('div', 'rs2b0t-section');
         logSection.appendChild(sectionTitle('log'));
-        this.logBox = el('div', 'lcb-log');
+        this.logBox = el('div', 'rs2b0t-log');
         logSection.appendChild(this.logBox);
         root.appendChild(logSection);
 
@@ -184,10 +184,10 @@ export default class BotPanel {
                 continue;
             }
 
-            const cell = el('div', 'lcb-stat');
-            const name = el('span', 'lcb-stat-name');
+            const cell = el('div', 'rs2b0t-stat');
+            const name = el('span', 'rs2b0t-stat-name');
             name.textContent = reader.stat(i).name.slice(0, 3);
-            const level = el('span', 'lcb-stat-level');
+            const level = el('span', 'rs2b0t-stat-level');
             level.textContent = '-';
             cell.appendChild(name);
             cell.appendChild(level);
@@ -204,18 +204,18 @@ export default class BotPanel {
 
     private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
         this.loadStatus.textContent = 'loading…';
-        this.loadStatus.className = 'lcb-load-status';
+        this.loadStatus.className = 'rs2b0t-load-status';
 
         const result = await pending;
         if (result.ok) {
             this.loadStatus.textContent = `loaded '${result.name}'`;
-            this.loadStatus.className = 'lcb-load-status lcb-load-ok';
+            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
             if (result.name && !isActiveState(ScriptRunner.state)) {
                 this.selectScript(result.name);
             }
         } else {
             this.loadStatus.textContent = `load failed: ${result.error}`;
-            this.loadStatus.className = 'lcb-load-status lcb-load-error';
+            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
         }
     }
 
@@ -245,7 +245,7 @@ export default class BotPanel {
         const meta = ScriptRegistry.get(this.selectedScript);
         const schema = meta?.settingsSchema;
         if (!meta || !schema || Object.keys(schema).length === 0) {
-            const none = el('div', 'lcb-dim');
+            const none = el('div', 'rs2b0t-dim');
             none.textContent = '(no parameters)';
             this.settingsBox.appendChild(none);
             return;
@@ -253,12 +253,12 @@ export default class BotPanel {
 
         const active = isActiveState(ScriptRunner.state);
 
-        const summary = el('div', 'lcb-param-summary');
+        const summary = el('div', 'rs2b0t-param-summary');
         for (const [key, def] of Object.entries(schema)) {
-            const item = el('span', 'lcb-param-sitem');
-            const k = el('span', 'lcb-param-skey');
+            const item = el('span', 'rs2b0t-param-sitem');
+            const k = el('span', 'rs2b0t-param-skey');
             k.textContent = key;
-            const v = el('span', 'lcb-param-sval');
+            const v = el('span', 'rs2b0t-param-sval');
             v.textContent = summarize(def, SettingsStore.displayString(meta.name, key, def));
             item.appendChild(k);
             item.appendChild(v);
@@ -267,7 +267,7 @@ export default class BotPanel {
         this.settingsBox.appendChild(summary);
 
         const edit = document.createElement('button');
-        edit.className = 'lcb-button lcb-param-edit';
+        edit.className = 'rs2b0t-button rs2b0t-param-edit';
         edit.textContent = '✎ Edit parameters';
         edit.disabled = active;
         edit.addEventListener('click', () => this.paramsModal.open(meta.name, schema));
@@ -275,51 +275,51 @@ export default class BotPanel {
     }
 
     private buildCredentials(): HTMLElement {
-        const sec = el('div', 'lcb-section');
+        const sec = el('div', 'rs2b0t-section');
         sec.appendChild(sectionTitle('credentials'));
         const saved = Credentials.get();
 
         const userInput = document.createElement('input');
-        userInput.className = 'lcb-input';
+        userInput.className = 'rs2b0t-input';
         userInput.type = 'text';
         userInput.placeholder = 'username';
         userInput.value = saved?.username ?? '';
         sec.appendChild(labeled('user', userInput));
 
         const passInput = document.createElement('input');
-        passInput.className = 'lcb-input';
+        passInput.className = 'rs2b0t-input';
         passInput.type = 'password';
         passInput.placeholder = 'password';
         passInput.value = saved?.password ?? '';
         sec.appendChild(labeled('pass', passInput));
 
-        const status = el('div', 'lcb-load-status');
+        const status = el('div', 'rs2b0t-load-status');
 
-        const buttons = el('div', 'lcb-buttons');
+        const buttons = el('div', 'rs2b0t-buttons');
         button(buttons, 'Save', () => {
             Credentials.save(userInput.value.trim(), passInput.value);
             status.textContent = 'saved locally (plaintext)';
-            status.className = 'lcb-load-status lcb-load-ok';
+            status.className = 'rs2b0t-load-status rs2b0t-load-ok';
         });
         button(buttons, 'Log in', () => {
             const ok = AutoRelogin.loginNow();
             status.textContent = ok ? 'logging in…' : 'save creds first / already ingame';
-            status.className = `lcb-load-status ${ok ? 'lcb-load-ok' : 'lcb-load-error'}`;
+            status.className = `rs2b0t-load-status ${ok ? 'rs2b0t-load-ok' : 'rs2b0t-load-error'}`;
         });
         button(buttons, 'Clear', () => {
             Credentials.clear();
             userInput.value = '';
             passInput.value = '';
             status.textContent = 'cleared';
-            status.className = 'lcb-load-status';
+            status.className = 'rs2b0t-load-status';
         });
         sec.appendChild(buttons);
 
-        const autoRow = el('div', 'lcb-setting lcb-setting-bool');
+        const autoRow = el('div', 'rs2b0t-setting rs2b0t-setting-bool');
         const auto = document.createElement('input');
         auto.type = 'checkbox';
         auto.addEventListener('change', () => AutoRelogin.setAutoLogin(auto.checked));
-        const autoLabel = el('span', 'lcb-setting-label');
+        const autoLabel = el('span', 'rs2b0t-setting-label');
         autoLabel.textContent = 'auto-login on title screen';
         autoLabel.title = 'Unattended: log in by itself whenever sitting on the title screen with saved creds';
         autoRow.appendChild(auto);
@@ -379,7 +379,7 @@ export default class BotPanel {
             // is paused — surface the event in place of the loop status
             this.scriptStatus.textContent = ctx.activeEvent ? `⚡ ${ctx.activeEvent}` : text;
         }
-        this.scriptStatus.className = `lcb-value lcb-state-${state}`;
+        this.scriptStatus.className = `rs2b0t-value rs2b0t-state-${state}`;
     }
 
     private renderLog(): void {
@@ -393,7 +393,7 @@ export default class BotPanel {
 
         this.logBox.replaceChildren();
         for (const line of ctx.log.slice(-200)) {
-            const div = el('div', `lcb-log-line lcb-log-${line.level}`);
+            const div = el('div', `rs2b0t-log-line rs2b0t-log-${line.level}`);
             const time = new Date(line.time).toTimeString().slice(0, 8);
             div.textContent = `${time} ${line.msg}`;
             this.logBox.appendChild(div);
@@ -418,13 +418,13 @@ export default class BotPanel {
     private render(): void {
         const missing = this.host.selfTestMissing;
         if (!reader.attached()) {
-            this.banner.className = 'lcb-banner lcb-banner-warn';
+            this.banner.className = 'rs2b0t-banner rs2b0t-banner-warn';
             this.banner.textContent = 'adapter: not attached';
         } else if (missing.length > 0) {
-            this.banner.className = 'lcb-banner lcb-banner-error';
+            this.banner.className = 'rs2b0t-banner rs2b0t-banner-error';
             this.banner.textContent = `adapter self-test FAILED — missing: ${missing.join(', ')}`;
         } else {
-            this.banner.className = 'lcb-banner lcb-banner-ok';
+            this.banner.className = 'rs2b0t-banner rs2b0t-banner-ok';
             this.banner.textContent = 'adapter self-test: ok';
         }
 
@@ -459,12 +459,12 @@ export default class BotPanel {
         const lines = reader.chat(6);
         this.chatList.replaceChildren();
         for (const line of lines) {
-            const div = el('div', 'lcb-chat-line');
+            const div = el('div', 'rs2b0t-chat-line');
             div.textContent = line.username ? `${line.username}: ${line.text}` : line.text;
             this.chatList.appendChild(div);
         }
         if (lines.length === 0) {
-            const div = el('div', 'lcb-chat-line lcb-dim');
+            const div = el('div', 'rs2b0t-chat-line rs2b0t-dim');
             div.textContent = '(no messages)';
             this.chatList.appendChild(div);
         }
@@ -483,16 +483,16 @@ function el(tag: string, className: string): HTMLElement {
 }
 
 function sectionTitle(text: string): HTMLElement {
-    const node = el('div', 'lcb-section-title');
+    const node = el('div', 'rs2b0t-section-title');
     node.textContent = text;
     return node;
 }
 
 function row(parent: HTMLElement, label: string): HTMLElement {
-    const line = el('div', 'lcb-row');
-    const key = el('span', 'lcb-key');
+    const line = el('div', 'rs2b0t-row');
+    const key = el('span', 'rs2b0t-key');
     key.textContent = label;
-    const value = el('span', 'lcb-value');
+    const value = el('span', 'rs2b0t-value');
     value.textContent = '-';
     line.appendChild(key);
     line.appendChild(value);
@@ -502,7 +502,7 @@ function row(parent: HTMLElement, label: string): HTMLElement {
 
 function button(parent: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
     const node = document.createElement('button');
-    node.className = 'lcb-button';
+    node.className = 'rs2b0t-button';
     node.textContent = label;
     node.addEventListener('click', onClick);
     parent.appendChild(node);
@@ -510,8 +510,8 @@ function button(parent: HTMLElement, label: string, onClick: () => void): HTMLBu
 }
 
 function labeled(label: string, input: HTMLElement): HTMLElement {
-    const rowEl = el('div', 'lcb-setting');
-    const key = el('span', 'lcb-setting-label');
+    const rowEl = el('div', 'rs2b0t-setting');
+    const key = el('span', 'rs2b0t-setting-label');
     key.textContent = label;
     rowEl.appendChild(key);
     rowEl.appendChild(input);

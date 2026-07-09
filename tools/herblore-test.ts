@@ -24,10 +24,10 @@ try {
     await type('::advancestat herblore 10');
     console.log(`unidentified herbs: ${await herbs()}`);
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Herblore/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'Herbalist' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    await page.locator('.rs2b0t-library-card', { hasText: 'Herbalist' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`Herbalist started...`);
     const deadline = Date.now() + minutes * 60_000; let done = 0, lastLogged = 0;

@@ -4,7 +4,7 @@
 // synthetic walking script still renders at full rate during gestures and
 // never logs synthetic-fail.
 //
-// Part 2's script picker: BotPanel.ts no longer exposes the `.lcb-select`
+// Part 2's script picker: BotPanel.ts no longer exposes the `.rs2b0t-select`
 // dropdown the original desktop-test.ts copies from — script choice now goes
 // through the ScriptLibrary modal (Browse… -> category chip -> script card ->
 // close), same pattern already used by tools/chicken-test.ts / library-test.ts.
@@ -72,16 +72,16 @@ try {
     // ---- (2) constraint #5: backgrounded synthetic gestures still render ----
     await setMode('background');
     // Bot panel script picker: Browse… -> category chip -> script card -> Start
-    // (the `.lcb-select` dropdown this test's original brief was drafted
+    // (the `.rs2b0t-select` dropdown this test's original brief was drafted
     // against has been replaced by the ScriptLibrary modal; pattern matches
     // tools/chicken-test.ts / tools/library-test.ts). NavDemo web-walks a
     // fixed route (Lumbridge castle -> chicken pen -> Varrock -> Falador),
     // so it issues plenty of synthetic walk() gestures via minimap clicks.
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Navigation/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'NavDemo' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    await page.locator('.rs2b0t-library-card', { hasText: 'NavDemo' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
     let sawBoost = false;
     const gStart = await probe();

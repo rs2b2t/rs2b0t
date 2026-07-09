@@ -28,10 +28,10 @@ try {
     if (await used() < 28) fail(`pack not full (${await used()}/28) — can't trigger BankRun`);
 
     await page.getByRole('button', { name: 'Browse…' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();
-    await page.locator('.lcb-library-card', { hasText: 'ChaosDruidKiller' }).click();
-    await page.waitForSelector('.lcb-modal-backdrop', { state: 'hidden', timeout: 5000 });
+    await page.locator('.rs2b0t-library-card', { hasText: 'ChaosDruidKiller' }).click();
+    await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`started full — expecting a bank run...`);
     const deadline = Date.now() + minutes * 60_000; let deposited = false, returned = false, lastLogged = 0, reachedSurface = false;

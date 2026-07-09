@@ -58,9 +58,9 @@ try {
         await boot(page);
         await setup(page, `set${Date.now().toString(36).slice(-6)}`);
 
-        await page.selectOption('.lcb-select', 'ChickenKiller');
+        await page.selectOption('.rs2b0t-select', 'ChickenKiller');
         // the param form should show the feather checkbox
-        const checkbox = page.locator('.lcb-setting-bool', { hasText: 'Gather feathers?' }).locator('input[type=checkbox]');
+        const checkbox = page.locator('.rs2b0t-setting-bool', { hasText: 'Gather feathers?' }).locator('input[type=checkbox]');
         if ((await checkbox.count()) === 0) fail('parameter form has no "Gather feathers?" checkbox');
 
         // default off: start, expect NO "gathering feathers"
@@ -92,7 +92,7 @@ try {
         await boot(page);
         await setup(page, `url${Date.now().toString(36).slice(-6)}`);
 
-        await page.selectOption('.lcb-select', 'ChickenKiller');
+        await page.selectOption('.rs2b0t-select', 'ChickenKiller');
         await page.getByRole('button', { name: 'Start' }).click();
         await page.waitForFunction(() => ((globalThis as never as Lcb).lcbuddy.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
         const log = await logs(page);
