@@ -1,6 +1,7 @@
 import { AGILITY_SETTINGS } from './AgilityBot.js';
 import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';
+import { FISHING_METHOD_OPTIONS } from './FishingMethods.js';
 import { ROCK_OPTIONS } from './MiningRocks.js';
 import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
@@ -189,11 +190,18 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Fisher',
-    description: 'Net/bait-fishes a spot; banks the catch at the nearest bank (auto-detected), or drops it (location: None)',
+    description: 'Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch at the nearest bank, or drops it (location: None)',
     category: 'Fishing',
     tags: ['f2p', 'gathering', 'drop', 'banking'],
     settingsSchema: {
-        ...gathering({ targetType: 'npc', target: 'Fishing spot', action: 'Net', dropMatch: 'raw', leashRadius: 12 }),
+        fishMethod: {
+            type: 'string',
+            default: FISHING_METHOD_OPTIONS[0],
+            options: FISHING_METHOD_OPTIONS,
+            label: 'Fishing method',
+            help: 'what to fish — picks the right spot (each spot offers a PAIR of ops) and the correct op of the two, e.g. small net (shrimp) vs big net (mackerel)'
+        },
+        leashRadius: { type: 'number', default: 12, min: 2, max: 30, label: 'Leash radius (tiles)' },
         location: {
             type: 'string',
             default: 'Auto',

@@ -11,6 +11,7 @@ import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
+import { FISHING_METHOD_OPTIONS, resolveFishMethod } from './FishingMethods.js';
 import { Banking } from '../api/Banking.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
@@ -43,6 +44,10 @@ export default class GatheringBot extends TaskBot {
     private targetType = 'loc';
     private target = 'Rocks';
     private action = 'Mine';
+    // Fishing (Fisher preset): a fishing spot exposes a PAIR of ops; pairOp is the
+    // OTHER op that identifies the right spot when the clicked op is shared by two
+    // spot types (Net on small/big, Bait on sardine/pike). '' = match any spot.
+    private pairOp = '';
     private dropMatch = 'ore';
     private leash = 10;
 
@@ -80,6 +85,16 @@ export default class GatheringBot extends TaskBot {
             this.action = 'Mine';
             this.rockIds = resolveRockIds(rocks);
             this.productKeywords = rocks.map(r => r.trim().toLowerCase());
+        } else if ('fishMethod' in this.settings.raw()) {
+            // Fishing mode: the Fisher preset carries a 'fishMethod'. Map it to the
+            // Fishing-spot op to click and the pair op that picks the right spot
+            // (Net small/big, Bait sardine/pike). Every catch is a 'Raw ...' fish.
+            const method = resolveFishMethod(this.settings.str('fishMethod', FISHING_METHOD_OPTIONS[0]));
+            this.targetType = 'npc';
+            this.target = 'Fishing spot';
+            this.action = method.op;
+            this.pairOp = method.pair ?? '';
+            this.productKeywords = ['raw'];
         } else {
             this.productKeywords = [this.dropMatch];
         }
@@ -147,6 +162,10 @@ export default class GatheringBot extends TaskBot {
     }
     isNpc(): boolean {
         return this.targetType === 'npc';
+    }
+    /** The op that must ALSO be on a fishing spot to disambiguate it ('' = any). */
+    pairAction(): string {
+        return this.pairOp;
     }
 
     /** True if an item name is one of our gathered products — any selected ore
@@ -288,10 +307,14 @@ class Gather implements Task {
         const anchor = this.bot.getAnchor();
         const within = this.bot.leashRadius();
         if (this.bot.isNpc()) {
+            // fishing spots share the name "Fishing spot": require BOTH the op we
+            // click and the pair op, so "Net" picks the small (Net/Bait) vs big
+            // (Net/Harpoon) net spot, not whichever is nearest.
+            const pair = this.bot.pairAction().toLowerCase();
             return Npcs.query()
                 .name(this.bot.targetName())
                 .action(this.bot.actionName())
-                .where(n => n.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(n.tile())))
+                .where(n => n.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(n.tile())) && (pair === '' || n.actions().some(a => a.toLowerCase() === pair)))
                 .nearest();
         }
         return Locs.query()
@@ -315,67 +338,57 @@ class Gather implements Task {
         }
         const key = keyOf(target.tile());
 
-        this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${target.tile()}`);
-        const before = Inventory.used();
-        if (!(await target.interact(this.bot.actionName()))) {
-            this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        // wait for the action to take hold: an item drops, the gather anim
-        // starts (slow rocks swing well before the first ore), the target
-        // depletes, the bag fills, or a dialog interrupts us
-        await Execution.delayUntil(() => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue(), 12000);
-
-        if (Inventory.used() === before && !Game.animating()) {
-            // gained nothing and never started animating — the engine refused
-            if (ChatDialog.canContinue()) {
-                this.bot.reject(key); // level/tool gate (~mesbox); never retry
-            } else if (this.find() !== null) {
-                this.bot.cooldown(key); // depleted/exhausted; come back later
-            }
-            return;
-        }
-
-        // We're gathering: stay on this target while it yields and we have room.
-        //
-        // Fishing (npc) is different from mining/woodcutting: you fish ONE spot
-        // continuously until it MOVES or you're stopped — so you must NOT re-click
-        // while it's still producing. The fishing animation flickers between
-        // catches, so it is NOT a reliable "still fishing" signal, and cooling the
-        // spot down on an animation gap would send us to a DIFFERENT spot
-        // mid-catch. So for a fishing spot we stay while the spot is present and
-        // we keep catching, and never cool it down. For a loc (rock/tree) the
-        // swing animation stopping is still the depletion signal.
         const npc = this.bot.isNpc();
-        for (let guard = 0; guard < 120; guard++) {
+
+        // "Am I still fishing?" gate: if we're already animating we're working the
+        // spot (or rock), so DON'T click again — re-clicking mid-action only
+        // interrupts it. Only (re)start the action when the animation is stopped.
+        if (!Game.animating()) {
+            this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${target.tile()}`);
+            const before = Inventory.used();
+            if (!(await target.interact(this.bot.actionName()))) {
+                this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
+                await Execution.delayTicks(2);
+                return;
+            }
+
+            // wait for the action to take hold: an item drops, the anim starts
+            // (slow rocks swing before the first ore), the target moves/depletes,
+            // the bag fills, or a dialog interrupts us
+            await Execution.delayUntil(() => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue(), 12000);
+
+            if (Inventory.used() === before && !Game.animating()) {
+                // gained nothing and never started animating — the engine refused
+                if (ChatDialog.canContinue()) {
+                    this.bot.reject(key); // level/tool gate (~mesbox); never retry
+                } else if (!npc && this.find() !== null) {
+                    this.bot.cooldown(key); // a depleted rock; a fishing spot we just re-find
+                }
+                return;
+            }
+        }
+
+        // We're gathering/fishing now — stay put while the animation runs (still
+        // working the spot) and we have room; NEVER re-click while animating. When
+        // it STOPS: a rock/tree has depleted (cool it down and rotate away); a
+        // fishing spot has moved or we were interrupted (do NOT cool it down —
+        // re-find resumes the same spot, or picks the one it moved to).
+        for (let guard = 0; guard < 200; guard++) {
             if (Inventory.isFull() || ChatDialog.canContinue() || this.find() === null) {
-                return; // full / dialog / the spot moved or the rock depleted — re-find next loop
+                return;
             }
             const mark = Inventory.used();
-            // wait for the next catch, or for the target to move / us to be stopped
-            const resolved = await Execution.delayUntil(
-                () => Inventory.used() > mark || this.find() === null || Inventory.isFull() || ChatDialog.canContinue() || (!npc && !Game.animating()),
-                npc ? 10000 : 8000
-            );
+            await Execution.delayUntil(() => Inventory.used() > mark || !Game.animating() || Inventory.isFull() || ChatDialog.canContinue() || this.find() === null, 8000);
             if (Inventory.used() > mark) {
-                continue; // caught/gathered one — still going, keep waiting (no re-click)
+                continue; // caught/gathered one — keep going, no re-click
             }
-            if (!npc && !Game.animating()) {
-                // a rock/tree stopped swinging with no drop — depleted; cool it down and rotate
-                if (this.find() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
+            if (!Game.animating()) {
+                if (!npc && this.find() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
                     this.bot.cooldown(key);
                 }
                 return;
             }
-            if (npc && !resolved) {
-                // fishing spot still here but no catch this window — we got stopped
-                // (moved off / interrupted). Return so we re-click the SAME nearest
-                // spot next loop; do NOT cool it down (that would rotate us away).
-                return;
-            }
-            // loc still swinging with no drop yet — a very slow rock; keep waiting
+            // still animating — keep waiting
         }
     }
 }

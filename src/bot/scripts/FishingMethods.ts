@@ -1,0 +1,39 @@
+/**
+ * Fishing methods for the Fisher preset. Every fishing spot in the game is named
+ * "Fishing spot" but exposes a PAIR of ops, and the four spot types are:
+ *   Net/Bait, Lure/Bait, Cage/Harpoon, Net/Harpoon   (verified in content
+ *   scripts/skill_fishing/configs/fishing.npc).
+ *
+ * The same op can appear on two different spots and catch DIFFERENT fish at
+ * DIFFERENT levels — "Net" is Shrimps/Anchovies on the Net/Bait spot but
+ * Mackerel/Cod/Bass on the Net/Harpoon spot; "Bait" is Sardine/Herring on
+ * Net/Bait but Pike on Lure/Bait. So a method is (op to click) + the OTHER op
+ * that identifies the right spot (`pair`). Harpoon catches Tuna/Swordfish on
+ * BOTH harpoon spots, so it needs no pair (any spot offering Harpoon works).
+ */
+export interface FishingMethod {
+    /** Dropdown label (the settings panel snaps to this string). */
+    name: string;
+    /** The op to click on the Fishing spot. */
+    op: string;
+    /** The other op that must also be on the spot, to pick the right one of two
+     *  spots that share `op`. Omit to match any spot offering `op`. */
+    pair?: string;
+}
+
+export const FISHING_METHODS: FishingMethod[] = [
+    { name: 'Small net — shrimp/anchovy', op: 'Net', pair: 'Bait' }, // Net/Bait spot: Shrimps (1), Anchovies (15)
+    { name: 'Bait rod — sardine/herring', op: 'Bait', pair: 'Net' }, // Net/Bait spot: Sardine (5), Herring (10)
+    { name: 'Fly fishing — trout/salmon', op: 'Lure', pair: 'Bait' }, // Lure/Bait spot: Trout (20), Salmon (30)
+    { name: 'Bait rod — pike', op: 'Bait', pair: 'Lure' }, // Lure/Bait spot: Pike (25)
+    { name: 'Big net — mackerel/cod/bass', op: 'Net', pair: 'Harpoon' }, // Net/Harpoon spot: Mackerel (16), Cod (23), Bass (46)
+    { name: 'Lobster cage — lobster', op: 'Cage', pair: 'Harpoon' }, // Cage/Harpoon spot: Lobster (40)
+    { name: 'Harpoon — tuna/swordfish', op: 'Harpoon' } // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
+];
+
+export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);
+
+/** Resolve a dropdown label to its method (falls back to the first method). */
+export function resolveFishMethod(name: string): FishingMethod {
+    return FISHING_METHODS.find(m => m.name === name) ?? FISHING_METHODS[0];
+}
