@@ -13,6 +13,8 @@ import { GroundItems } from './queries/GroundItems.js';
 import { Locs } from './queries/Locs.js';
 import { MIME_EMOTE_BY_SEQ, MIME_IF, mimeAnswer } from './solvers/Mime.js';
 import { CUBE_IF, LAMP_IF, solveCube } from './solvers/StrangeBox.js';
+import { MAZE_ROUTES } from './maze/mazeRoutes.js';
+import { selectRoute } from './maze/selectRoute.js';
 
 /**
  * Comprehensive random-event ("macro event") handling, shared by every bot
@@ -435,17 +437,14 @@ class RandomEventsImpl {
         return true;
     }
 
-    /** Maze (macro_event_maze.rs2, region 0_45_71): concentric square rings of
-     *  "Wall"/"Open" locs (#3626). Some are DOORS that open and walk you through
-     *  (from the correct side); the rest are fakes that say "you're not going the
-     *  right way". The finish is the "Strange shrine" (#3634, op Touch) at the
-     *  centre (0_45_71_30_32). We head inward and poke the doors nearest the
-     *  centre; poking a door either advances us a ring or refuses, so we remember
-     *  what we tried FROM EACH SPOT and reposition when a spot is exhausted (which
-     *  is how backtracking out of a dead-end ring falls out naturally). */
+    /** Maze (macro_event_maze.rs2, region 0_45_71): a fixed wall/door layout with
+     *  4 corner spawns. We match the spawn to its pre-derived route (tools/maze-derive.ts)
+     *  and Open each door in order; the client interact-walks to each door and, when
+     *  opened from the correct side, teleports us through. A refused door ("not the
+     *  right way") is a benign branch door from another corner's path — we dismiss it
+     *  and press on to the final door. Then Touch the shrine to finish. */
     private static readonly MAZE_SHRINE_LOC = 3634;
-    private static readonly MAZE_WALL_LOC = 3626;
-    private static readonly MAZE_CENTRE = { x: 2910, z: 4576, level: 0 }; // 0_45_71_30_32
+    private static readonly MAZE_DOOR_IDS = new Set([3628, 3629, 3630, 3631, 3632]);
 
     private async handleMaze(log: (msg: string) => void): Promise<boolean> {
         const inMaze = (): boolean => {
@@ -453,80 +452,42 @@ class RandomEventsImpl {
             return me !== null && me.level === 0 && me.x >> 6 === MAZE_SQUARE.mx && me.z >> 6 === MAZE_SQUARE.mz;
         };
         const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-        const k = (t: { x: number; z: number }): string => `${t.x},${t.z}`;
 
-        // The DOORS are #3628 (+ #3629-3632 near the centre); #3626 are the solid
-        // walls (poking them just says "I can't open that"). Interact a door and
-        // the CLIENT walks to it (that's the only nav that works in here — the
-        // server walker can't path the maze) and either opens+walks us through, or
-        // refuses ("not the right way") if it's the wrong side, or won't reach it.
-        // Try doors shrine-ward first; drop refused ones for good, and retry
-        // not-yet-reachable ones each time a door opens (a new ring came within
-        // reach). Repeat until the shrine is reachable, then touch it.
-        const DOOR_IDS = [3628, 3629, 3630, 3631, 3632];
-        log('random event: maze — navigating to the shrine');
-        const done = new Set<string>(); // doors that refused or that we went through
-        const blocked = new Set<string>(); // doors we couldn't reach yet — retried when a door opens
-        for (let step = 0; step < 90 && inMaze(); step++) {
-            const me = reader.worldTile();
-            if (!me) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            const shrine = Locs.query()
-                .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC || (l.name ?? '').toLowerCase() === 'strange shrine')
+        const start = reader.worldTile();
+        if (!start) { return true; }
+        const route = selectRoute(start, MAZE_ROUTES);
+        log(`random event: maze — spawn (${start.x},${start.z}) -> route ${route.spawn.x},${route.spawn.z} (${route.doors.length} doors)`);
+
+        for (let i = 0; i < route.doors.length && inMaze(); i++) {
+            const d = route.doors[i];
+            const before = reader.worldTile();
+            if (!before) { await Execution.delayTicks(2); i--; continue; }
+            const door = Locs.query()
+                .where(l => RandomEventsImpl.MAZE_DOOR_IDS.has(l.id) && l.tile().x === d.x && l.tile().z === d.z)
                 .nearest();
-            const goal = shrine ? shrine.tile() : RandomEventsImpl.MAZE_CENTRE;
-            if (shrine && cheb(me, shrine.tile()) <= 1) {
-                log('random event: maze — at the shrine, touching it');
-                await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch');
-                await Execution.delayUntil(() => !inMaze(), 8_000);
-                continue;
-            }
-
-            const dr = reader.locs()
-                .filter(l => DOOR_IDS.includes(l.id) && (l.ops ?? []).some(o => o === 'Open') && !done.has(k(l.tile)) && !blocked.has(k(l.tile)))
-                .map(l => ({ id: l.id, x: l.tile.x, z: l.tile.z, dc: cheb(l.tile, goal), dm: cheb(l.tile, me) }))
-                .sort((a, b) => a.dm - b.dm || a.dc - b.dc)[0];
-            if (!dr) {
-                // nothing fresh in reach: retry the previously-unreachable ones once
-                // (a door we opened may have brought them into reach), else wait
-                if (blocked.size > 0) {
-                    blocked.clear();
-                } else {
-                    await Execution.delayTicks(3);
-                }
-                continue;
-            }
-
-            const wrap = Locs.query()
-                .where(l => l.id === dr.id && l.tile().x === dr.x && l.tile().z === dr.z)
-                .nearest();
-            if (!wrap) {
-                done.add(k(dr));
-                continue;
-            }
-            const before = me;
-            await wrap.interact('Open'); // the client walks to the door, then opens/refuses
+            if (!door) { await Execution.delayTicks(2); continue; } // not yet in scene — skip to next
+            await door.interact('Open'); // client walks to it, then opens or refuses
             await Execution.delayUntil(() => {
                 const t = reader.worldTile();
-                return ChatDialog.canContinue() || (t !== null && cheb(t, before) >= 3);
+                return ChatDialog.canContinue() || (t !== null && cheb(t, before) >= 2);
             }, 6_000);
-            const now = reader.worldTile();
-            const movedFar = now !== null && cheb(now, before) >= 3;
             if (ChatDialog.canContinue()) {
-                await ChatDialog.continue(); // "not the right way" / "I can't open that"
-                done.add(k(dr));
-                log(`random event: maze — door #${dr.id} (${dr.x},${dr.z}) d${dr.dc} refused`);
-            } else if (movedFar) {
-                done.add(k(dr));
-                blocked.clear(); // stepped into a new ring — earlier out-of-reach doors may be reachable now
-                log(`random event: maze — door #${dr.id} through -> (${now.x},${now.z}) d${cheb(now, goal)}`);
+                await ChatDialog.continue(); // "not the right way" — benign branch door; press on
+                log(`random event: maze — door (${d.x},${d.z}) refused (branch), continuing`);
             } else {
-                blocked.add(k(dr)); // couldn't reach it from here — try again after some door opens
+                const now = reader.worldTile();
+                log(`random event: maze — through (${d.x},${d.z}) -> (${now?.x},${now?.z})`);
             }
         }
 
+        for (let pass = 0; pass < 12 && inMaze(); pass++) {
+            const shrine = Locs.query()
+                .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC || (l.name ?? '').toLowerCase() === 'strange shrine')
+                .nearest();
+            if (!shrine) { await Execution.delayTicks(3); continue; }
+            await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch'); // client walks to it, then touches
+            await Execution.delayUntil(() => !inMaze(), 8_000);
+        }
         log(inMaze() ? 'random event: maze — still inside; will retry' : 'random event: maze solved — returned');
         return true;
     }
