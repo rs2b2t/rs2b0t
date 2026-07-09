@@ -122,19 +122,36 @@ class BankTrip implements Task {
         }
         await Bank.depositInventory(); // cooked + burnt + junk — the whole pack
         await Execution.delayTicks(1);
-        // Resolve the EXACT bank item name for the (substring) `fish` setting —
-        // Bank.withdraw/count match names exactly, so a partial like 'shark' must
-        // be turned into 'Raw shark' first or it would withdraw nothing.
+        // Find the fish bank item by substring (the `fish` setting may be partial)
+        // — Bank.withdraw/count match names EXACTLY, so resolve the real name first.
         const pat = this.bot.fishName().toLowerCase();
-        const bankName = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat))?.name;
+        const fishItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat));
         this.bot.countTrip();
-        if (!bankName) {
+        if (!fishItem || fishItem.name === null) {
             this.bot.log(`no '${this.bot.fishName()}' in the bank — idling`);
             await Execution.delayTicks(5);
             return;
         }
-        await Bank.withdraw(bankName, 'Withdraw-All'); // non-stackable → fills the free slots
-        await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(bankName) === 0, 4000);
+        const bankName = fishItem.name;
+        // Pick the REAL withdraw-all op label off the item's OWN ops — the client
+        // labels it 'Withdraw All' / 'Withdraw-All' depending on build, so read it
+        // rather than hardcode (a wrong label silently withdraws nothing). Fall
+        // back to filling 10 at a time.
+        const ops = fishItem.ops.filter((o): o is string => o !== null);
+        const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o));
+        if (allOp) {
+            this.bot.log(`withdrawing all ${bankName} ('${allOp}')`);
+            await Bank.withdraw(bankName, allOp);
+            await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(bankName) === 0, 4000);
+        } else {
+            const tenOp = ops.find(o => /withdraw[\s-]*10/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-10';
+            this.bot.log(`withdrawing ${bankName} 10 at a time ('${tenOp}')`);
+            for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
+                const before = this.bot.rawCount();
+                await Bank.withdraw(bankName, tenOp);
+                if (!(await Execution.delayUntil(() => this.bot.rawCount() > before || Inventory.isFull(), 3000))) { break; }
+            }
+        }
         // walking closes the bank; CookTrip crosses to the range next tick
     }
 }
