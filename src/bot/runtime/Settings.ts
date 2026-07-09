@@ -186,7 +186,12 @@ class SettingsStoreImpl {
         }
     }
 
-    /** The string an input should show: URL override > saved > default. */
+    /**
+     * The string an input should show. Mirrors resolve()'s precedence so the
+     * panel never contradicts what the bot runs: per-script URL > per-script
+     * saved > (for global-eligible keys) global URL > global saved > global
+     * default > schema default.
+     */
     displayString(name: string, key: string, def: SettingDef): string {
         const url = this.urlOverride(name, key);
         if (url !== null) {
@@ -195,6 +200,17 @@ class SettingsStoreImpl {
         const saved = this.saved(name, key);
         if (saved !== undefined) {
             return saved;
+        }
+        if (name !== 'Global' && key in GLOBAL_SETTINGS) {
+            const gurl = this.urlOverride('Global', key);
+            if (gurl !== null) {
+                return gurl;
+            }
+            const gsaved = this.saved('Global', key);
+            if (gsaved !== undefined) {
+                return gsaved;
+            }
+            return settingToString(GLOBAL_SETTINGS[key], GLOBAL_SETTINGS[key].default);
         }
         return settingToString(def, def.default);
     }
@@ -209,11 +225,15 @@ class SettingsStoreImpl {
             if (saved !== undefined) { out[key] = parseValue(def, saved); continue; }
             // global fallback for global-eligible keys (not when resolving Global itself)
             if (name !== 'Global' && key in GLOBAL_SETTINGS) {
+                // parse + floor against the Global schema's def, not the
+                // requesting bot's, so a global-eligible key resolves the same
+                // way regardless of which bot asked for it
+                const gdef = GLOBAL_SETTINGS[key];
                 const gurl = this.urlOverride('Global', key);
-                if (gurl !== null) { out[key] = parseValue(def, gurl); continue; }
+                if (gurl !== null) { out[key] = parseValue(gdef, gurl); continue; }
                 const gsaved = this.saved('Global', key);
-                if (gsaved !== undefined) { out[key] = parseValue(def, gsaved); continue; }
-                out[key] = GLOBAL_SETTINGS[key].default;
+                if (gsaved !== undefined) { out[key] = parseValue(gdef, gsaved); continue; }
+                out[key] = gdef.default;
                 continue;
             }
             out[key] = def.default;

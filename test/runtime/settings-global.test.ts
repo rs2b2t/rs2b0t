@@ -41,6 +41,26 @@ describe('resolve global fallback (per-script overrides global)', () => {
     });
 });
 
+describe('displayString mirrors resolve for global-eligible keys', () => {
+    const DEF = SCHEMA.bankCommonJunk;
+    test('shows the global value when the per-script value is unset', () => {
+        localStorage.setItem(K('Global', 'bankCommonJunk'), 'false');
+        expect(SettingsStore.displayString('MyBot', 'bankCommonJunk', DEF)).toBe('false');
+    });
+    test('per-script saved value still wins in the display', () => {
+        localStorage.setItem(K('Global', 'bankCommonJunk'), 'false');
+        localStorage.setItem(K('MyBot', 'bankCommonJunk'), 'true');
+        expect(SettingsStore.displayString('MyBot', 'bankCommonJunk', DEF)).toBe('true');
+    });
+    test('falls back to the global default (not the schema default) when unset', () => {
+        expect(SettingsStore.displayString('MyBot', 'bankCommonJunk', DEF)).toBe('true');
+    });
+    test('non-global keys still show their own schema default', () => {
+        const def = { type: 'number', default: 7 } as const;
+        expect(SettingsStore.displayString('MyBot', 'width', def)).toBe('7');
+    });
+});
+
 describe('globalBag', () => {
     test('reads the Global namespace (lampSkill default + saved override)', () => {
         expect(SettingsStore.globalBag().str('lampSkill', 'x')).toBe('strength');
