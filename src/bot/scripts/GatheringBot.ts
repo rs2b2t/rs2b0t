@@ -338,26 +338,44 @@ class Gather implements Task {
             return;
         }
 
-        // we're gathering: stay on this spot while it yields and we have room
-        // (fishing spots and slow trees/rocks drop repeatedly over many swings)
+        // We're gathering: stay on this target while it yields and we have room.
+        //
+        // Fishing (npc) is different from mining/woodcutting: you fish ONE spot
+        // continuously until it MOVES or you're stopped — so you must NOT re-click
+        // while it's still producing. The fishing animation flickers between
+        // catches, so it is NOT a reliable "still fishing" signal, and cooling the
+        // spot down on an animation gap would send us to a DIFFERENT spot
+        // mid-catch. So for a fishing spot we stay while the spot is present and
+        // we keep catching, and never cool it down. For a loc (rock/tree) the
+        // swing animation stopping is still the depletion signal.
+        const npc = this.bot.isNpc();
         for (let guard = 0; guard < 120; guard++) {
             if (Inventory.isFull() || ChatDialog.canContinue() || this.find() === null) {
-                return;
+                return; // full / dialog / the spot moved or the rock depleted — re-find next loop
             }
             const mark = Inventory.used();
-            // wait for the next item, or for the action to stop / be interrupted
-            await Execution.delayUntil(() => Inventory.used() > mark || !Game.animating() || Inventory.isFull() || ChatDialog.canContinue() || this.find() === null, 8000);
+            // wait for the next catch, or for the target to move / us to be stopped
+            const resolved = await Execution.delayUntil(
+                () => Inventory.used() > mark || this.find() === null || Inventory.isFull() || ChatDialog.canContinue() || (!npc && !Game.animating()),
+                npc ? 10000 : 8000
+            );
             if (Inventory.used() > mark) {
-                continue; // got one, keep swinging
+                continue; // caught/gathered one — still going, keep waiting (no re-click)
             }
-            if (!Game.animating()) {
-                // stopped without a new item — depleted/interrupted; rotate away
+            if (!npc && !Game.animating()) {
+                // a rock/tree stopped swinging with no drop — depleted; cool it down and rotate
                 if (this.find() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
                     this.bot.cooldown(key);
                 }
                 return;
             }
-            // still animating after 8s with no drop: a very slow rock — keep waiting
+            if (npc && !resolved) {
+                // fishing spot still here but no catch this window — we got stopped
+                // (moved off / interrupted). Return so we re-click the SAME nearest
+                // spot next loop; do NOT cool it down (that would rotate us away).
+                return;
+            }
+            // loc still swinging with no drop yet — a very slow rock; keep waiting
         }
     }
 }
