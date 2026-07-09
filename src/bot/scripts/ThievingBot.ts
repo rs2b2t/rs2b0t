@@ -305,14 +305,21 @@ class Steal implements Task {
             return;
         }
         this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${npc.tile()}`);
+        const xpBefore = Skills.xp('thieving');
+        const usedBefore = Inventory.used();
         if (!(await npc.interact(this.bot.actionName()))) {
             await Execution.delayTicks(2);
             return;
         }
-        // one steal resolves in a couple ticks; a failure stuns us for a few more
-        // (the engine ignores inputs while stunned, so the next loop simply
-        // retries). Wait out the attempt, yielding to EatFood between loops.
-        await Execution.delayUntil(() => ChatDialog.canContinue() || hpFraction() < this.bot.eatGate(), 3000);
+        // A SUCCESS awards thieving xp (and usually loot) within a tick or two —
+        // break the moment it lands so the next loop steals again, instead of
+        // idling out the full timeout on every pick. A FAILURE gives neither and
+        // stuns us for a few ticks: wait it out (yielding to EatFood if the hit
+        // dropped us) rather than hammering inputs the stun ignores.
+        await Execution.delayUntil(
+            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < this.bot.eatGate(),
+            3000
+        );
     }
 }
 
