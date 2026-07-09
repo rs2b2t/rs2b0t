@@ -10,6 +10,7 @@ import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
 import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
+import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import CooksAssistant from './CooksAssistant.js';
 import CrashTestBot from './CrashTestBot.js';
 import DebugBot from './DebugBot.js';
@@ -241,6 +242,15 @@ ScriptRegistry.register({
     tags: ['f2p', 'processing'],
     settingsSchema: processing({ material: 'Raw', targetType: 'loc', target: 'Range', product: '', leashRadius: 8 }),
     create: () => new ProcessingBot()
+});
+
+ScriptRegistry.register({
+    name: 'CookBot',
+    description: 'Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at a time, bank everything, repeat',
+    category: 'Cooking',
+    tags: ['catherby', 'cooking', 'banking', 'afk'],
+    settingsSchema: COOKBOT_SETTINGS,
+    create: () => new CookBot()
 });
 
 ScriptRegistry.register({
