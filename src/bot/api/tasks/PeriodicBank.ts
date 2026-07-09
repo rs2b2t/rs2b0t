@@ -3,7 +3,7 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { Task } from '../Bot.js';
 import { Execution } from '../Execution.js';
 import { Game } from '../Game.js';
-import { Banking, depositMatcher, shouldBankNow, type BankStrategy } from '../Banking.js';
+import { Banking, shouldBankNow, type BankStrategy } from '../Banking.js';
 
 /** After a failed attempt (no bank reachable), suppress ALL strategies this long. */
 const FAILURE_BACKOFF_MS = 3 * 60_000;
@@ -51,7 +51,8 @@ export class PeriodicBank implements Task {
     async execute(): Promise<void> {
         this.opts.setStatus?.('periodic bank run');
         const ok = await Banking.bankNearest({
-            deposit: depositMatcher(this.opts.deposit, this.opts.commonJunk?.() ?? true),
+            deposit: this.opts.deposit,
+            commonJunk: this.opts.commonJunk?.() ?? true,
             returnTo: this.opts.returnTo?.() ?? undefined,
             log: this.opts.log
         });

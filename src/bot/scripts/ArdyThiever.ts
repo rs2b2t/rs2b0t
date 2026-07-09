@@ -191,7 +191,6 @@ export default class ArdyThiever extends TaskBot {
     countEat(): void { this.eats++; }
     countLoot(): void { this.looted++; }
     countTrip(): void { this.trips++; }
-    tripsTotal(): number { return this.trips; }
     countFlee(): void { this.flees++; }
 
     /** Walk to within `radius` of `dest`, opening any shut obstacle we stall at

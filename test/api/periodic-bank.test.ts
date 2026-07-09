@@ -25,18 +25,31 @@ test('never validates in combat', () => {
     expect(make().validate()).toBe(false);
     (Game as any).inCombat = spy;
 });
-test('execute calls bankNearest with the deposit filter + returnTo, then resets timer', async () => {
+test('execute forwards the RAW own predicate + commonJunk=true (default) so bankNearest composes once', async () => {
     let called: any = null;
     const spy = Banking.bankNearest; (Banking as any).bankNearest = async (o: any) => { called = o; return true; };
     const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
     const dep = (n: string) => n === 'mine';
     const task = make({ deposit: dep, returnTo: () => ({ x: 1, z: 2, level: 0 }) });
     await task.execute();
-    // deposit is composed with the shared junk list (default on)
-    expect(called.deposit('mine')).toBe(true);            // bot's own predicate honoured
-    expect(called.deposit('uncut sapphire')).toBe(true);  // common junk included by default
-    expect(called.deposit('rune scimitar')).toBe(false);  // neither → kept
+    // bankNearest gets the RAW own predicate — NOT pre-composed with the junk list.
+    expect(called.deposit('mine')).toBe(true);             // bot's own predicate
+    expect(called.deposit('uncut sapphire')).toBe(false);  // raw own does NOT include common junk
+    expect(called.deposit('rune scimitar')).toBe(false);   // neither → kept
+    expect(called.commonJunk).toBe(true);                  // default flag forwarded (bankNearest composes)
     expect(called.returnTo).toEqual({ x: 1, z: 2, level: 0 });
+    (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
+});
+test('execute forwards commonJunk=false so the junk opt-out reaches bankNearest', async () => {
+    let called: any = null;
+    const spy = Banking.bankNearest; (Banking as any).bankNearest = async (o: any) => { called = o; return true; };
+    const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
+    const dep = (n: string) => n === 'mine';
+    const task = make({ deposit: dep, commonJunk: () => false });
+    await task.execute();
+    expect(called.deposit('mine')).toBe(true);             // own predicate still honoured
+    expect(called.deposit('uncut sapphire')).toBe(false);  // raw own excludes common
+    expect(called.commonJunk).toBe(false);                 // opt-out plumbed end-to-end
     (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
 });
 test('backs off ALL strategies after a failed (unreachable-bank) attempt', async () => {

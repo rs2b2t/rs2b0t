@@ -54,7 +54,7 @@ export default class ChaosDruidKiller extends TaskBot {
     private leash = 8;
     private fightHpGate = 0.4;
     private restHp = 0.65;
-    bankCommon = true;
+    bankCommon = true; // public: read by the BankRun task
 
     private kills = 0;
     private looted = 0;
