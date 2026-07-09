@@ -23,3 +23,6 @@ dist/
 
 # brainstorm visual-companion mockups
 .superpowers/
+
+# local Claude tooling scratch (agents, worktrees, session state)
+.claude/
