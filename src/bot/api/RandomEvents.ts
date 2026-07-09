@@ -435,10 +435,12 @@ class RandomEventsImpl {
         return true;
     }
 
-    /** Maze finish: loc macro_maze_complete id 3634 'Strange shrine' (3x3),
-     *  region 0_45_71 — pack/loc.pack + macro_event_maze.rs2. Touching it
-     *  returns us via ~macro_return_teleport. The maze is ordinary walkable
-     *  geometry in the baked pack, so the normal walker can path to it. */
+    /** Maze finish: loc macro_maze_complete id 3634 'Strange shrine', op1 Touch,
+     *  region 0_45_71 (macro_event_maze.rs2). The maze is walled — you can't walk
+     *  straight to the shrine; the walls that are DOORS (also named "Wall"/"Open")
+     *  open and walk you through, but ONLY from the correct side. So we head for
+     *  the shrine, and when a wall blocks the way we try opening the nearest
+     *  reachable "Wall": the ones that let us through are the doors. */
     private static readonly MAZE_SHRINE_LOC = 3634;
 
     private async handleMaze(log: (msg: string) => void): Promise<boolean> {
@@ -446,23 +448,57 @@ class RandomEventsImpl {
             const me = reader.worldTile();
             return me !== null && me.level === 0 && me.x >> 6 === MAZE_SQUARE.mx && me.z >> 6 === MAZE_SQUARE.mz;
         };
+        const k = (t: { x: number; z: number }): string => `${t.x},${t.z}`;
 
-        log('random event: maze — walking to the shrine');
-        const shrine = Locs.query()
-            .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC)
-            .nearest();
-        if (!shrine) {
-            log('maze: shrine not in scene yet — waiting');
-            await Execution.delayTicks(25);
-            return false;
+        log('random event: maze — finding the way to the shrine');
+        const tried = new Set<string>(); // walls refused from here; cleared once we move through one
+        for (let step = 0; step < 40 && inMaze(); step++) {
+            const shrine = Locs.query()
+                .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC || (l.name ?? '').toLowerCase() === 'strange shrine')
+                .nearest();
+
+            // Reachable shrine → walk to it and touch it to finish.
+            if (shrine && Reachability.canReach(shrine.tile(), { adjacentOk: true, maxSteps: 800 })) {
+                await Traversal.walkTo(shrine.tile(), { radius: 1, timeoutMs: 20_000, log });
+                await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch');
+                await Execution.delayUntil(() => !inMaze(), 8_000);
+                continue;
+            }
+
+            // Blocked — open the nearest reachable "Wall" we haven't tried from here.
+            const door = Locs.query()
+                .name('Wall')
+                .action('Open')
+                .where(l => !tried.has(k(l.tile())) && Reachability.canReach(l.tile(), { adjacentOk: true, maxSteps: 800 }))
+                .nearest();
+            if (!door) {
+                // nothing new reachable — reset and edge toward the shrine to re-open options
+                tried.clear();
+                if (shrine) {
+                    await Traversal.walkTo(shrine.tile(), { radius: 6, timeoutMs: 10_000, log });
+                } else {
+                    await Execution.delayTicks(3);
+                }
+                continue;
+            }
+
+            tried.add(k(door.tile()));
+            await Traversal.walkTo(door.tile(), { radius: 1, timeoutMs: 15_000, log });
+            const before = reader.worldTile();
+            await door.interact('Open');
+            const moved = await Execution.delayUntil(() => {
+                const t = reader.worldTile();
+                return (t !== null && before !== null && Math.abs(t.x - before.x) + Math.abs(t.z - before.z) >= 2) || ChatDialog.canContinue();
+            }, 6_000);
+            if (ChatDialog.canContinue()) {
+                await ChatDialog.continue(); // "I can't open that" / "not the right way"
+            }
+            if (moved) {
+                tried.clear(); // stepped through a door — fresh set of options from the new spot
+            }
         }
 
-        await Traversal.walkTo(shrine.tile(), { radius: 1, timeoutMs: 120_000, log });
-        if (inMaze()) {
-            shrine.interact(shrine.actions()[0] ?? 'Touch');
-            await Execution.delayUntil(() => !inMaze(), 15_000);
-        }
-        log(inMaze() ? 'maze: still inside — will retry' : 'random event: maze solved — returned');
+        log(inMaze() ? 'random event: maze — still inside after navigating; will retry' : 'random event: maze solved — returned');
         return true;
     }
 
@@ -560,31 +596,43 @@ class RandomEventsImpl {
     }
 
     private async handleBox(log: (msg: string) => void): Promise<boolean> {
-        const box = Inventory.first('Strange box');
-        if (!box) {
-            return false;
-        }
+        // Each Strange box is its OWN cube puzzle, solved one at a time, and the
+        // reward only lands once EVERY box is gone (the server inv_del's one per
+        // correct answer). Unsolved boxes REPLICATE until they fill the pack — so
+        // solve them ALL in this single pass. (Solving one per handle() call let
+        // the generic MAX_ATTEMPTS backstop give up after 4 boxes — the attempt
+        // counter never resets while more boxes remain — and the rest replicated.)
+        let solved = 0;
+        for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
+            const box = Inventory.first('Strange box');
+            if (!box) {
+                break;
+            }
+            const before = Inventory.count('Strange box');
+            await box.interact('Open');
+            if (!(await Execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
+                log('random event: strange box interface did not open');
+                return solved > 0;
+            }
 
-        const countBefore = Inventory.items().filter(i => i.name === 'Strange box').length;
-        await box.interact('Open');
-        if (!(await Execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
-            log('random event: strange box interface did not open');
-            return false;
-        }
+            const question = reader.ifText(CUBE_IF.question) ?? '';
+            const models: [number | null, number | null, number | null] = [reader.ifModelObjId(CUBE_IF.models[0]), reader.ifModelObjId(CUBE_IF.models[1]), reader.ifModelObjId(CUBE_IF.models[2])];
+            const answer = solveCube(question, models);
+            if (answer === null) {
+                log(`random event: could not solve strange box ('${question}' models=${models}) — closing`);
+                actions.closeModal();
+                return solved > 0;
+            }
 
-        const question = reader.ifText(CUBE_IF.question) ?? '';
-        const models: [number | null, number | null, number | null] = [reader.ifModelObjId(CUBE_IF.models[0]), reader.ifModelObjId(CUBE_IF.models[1]), reader.ifModelObjId(CUBE_IF.models[2])];
-        const answer = solveCube(question, models);
-        if (answer === null) {
-            log(`random event: could not solve strange box ('${question}' models=${models}) — closing`);
-            actions.closeModal();
-            return false; // attempts/cooldown machinery caps retries
+            actions.ifButton(CUBE_IF.buttons[answer]);
+            if (!(await Execution.delayUntil(() => Inventory.count('Strange box') < before, 4000))) {
+                log('random event: strange box answer did not consume a box');
+                return solved > 0;
+            }
+            solved++;
         }
-
-        actions.ifButton(CUBE_IF.buttons[answer]);
-        const solved = await Execution.delayUntil(() => Inventory.items().filter(i => i.name === 'Strange box').length < countBefore, 4000);
-        log(solved ? `random event: strange box solved ('${question}')` : 'random event: strange box answer did not consume a box');
-        return true;
+        log(`random event: solved ${solved} strange box${solved === 1 ? '' : 'es'}`);
+        return solved > 0;
     }
 
     private async handleLamp(log: (msg: string) => void): Promise<boolean> {
