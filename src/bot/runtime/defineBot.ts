@@ -4,7 +4,7 @@ import type { SettingsSchema } from './Settings.js';
 
 export interface BotManifest {
     /** Manifest format tag the loader recognizes. */
-    __lcbuddyManifest: 1;
+    __rs2b0tManifest: 1;
     name: string;
     description?: string;
     version?: string;
@@ -16,7 +16,7 @@ export interface BotManifest {
     create(): AbstractBot;
 }
 
-export type BotManifestInput = Omit<BotManifest, '__lcbuddyManifest'>;
+export type BotManifestInput = Omit<BotManifest, '__rs2b0tManifest'>;
 
 /**
  * Script manifest helper (Slice 7). External scripts default-export
@@ -28,11 +28,11 @@ export function defineBot(manifest: BotManifestInput): BotManifest {
         throw new Error('defineBot requires { name, create }');
     }
 
-    return { __lcbuddyManifest: 1, ...manifest };
+    return { __rs2b0tManifest: 1, ...manifest };
 }
 
 export function isBotManifest(value: unknown): value is BotManifest {
-    return typeof value === 'object' && value !== null && (value as BotManifest).__lcbuddyManifest === 1;
+    return typeof value === 'object' && value !== null && (value as BotManifest).__rs2b0tManifest === 1;
 }
 
 /** Register (or hot-replace) a manifest in the script registry. */

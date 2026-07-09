@@ -1,4 +1,4 @@
-// Type declarations for the LCBuddy2 script ABI (apiVersion 1). Mirrors the
+// Type declarations for the rs2b0t script ABI (apiVersion 1). Mirrors the
 // client's src/bot/api surface. interact()-style methods return
 // boolean | Promise<boolean>: DIRECT input resolves synchronously, SYNTHETIC
 // returns a promise for the whole mouse gesture — either way, verify
@@ -384,7 +384,7 @@ export interface BotManifestInput {
 }
 
 export interface BotManifest extends BotManifestInput {
-    __lcbuddyManifest: 1;
+    __rs2b0tManifest: 1;
 }
 
 /** Default-export defineBot({...}) from your script's entry module. */

@@ -40,7 +40,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     }
 
     // The stable script-facing ABI: externally-compiled scripts bind to
-    // globalThis.__lcbuddy through the @lcbuddy/api shim (ADR-0004).
+    // globalThis.__rs2b0t through the @rs2b0t/api shim (ADR-0004).
     installAbi();
 
     // Login keeper (Slice 7): re-login on disconnect while a script is active.

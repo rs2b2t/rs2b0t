@@ -1,0 +1,9 @@
+{
+    "name": "@rs2b0t/api",
+    "version": "0.1.0",
+    "description": "Typed script-authoring API for the rs2b0t bot client (runtime shim over globalThis.__rs2b0t)",
+    "type": "module",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "license": "MIT"
+}

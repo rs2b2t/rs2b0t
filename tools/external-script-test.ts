@@ -1,5 +1,5 @@
 // Slice 7 exit-criterion test: build the out-of-tree template bot (authored
-// only against @lcbuddy/api), load it through the panel's URL loader, run it,
+// only against @rs2b0t/api), load it through the panel's URL loader, run it,
 // and verify hot-reload replacement.
 //
 // Usage: bun tools/external-script-test.ts [base-url] [username]

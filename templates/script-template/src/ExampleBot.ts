@@ -1,7 +1,7 @@
-// Out-of-tree example bot, authored ONLY against @lcbuddy/api (the Slice 7
+// Out-of-tree example bot, authored ONLY against @rs2b0t/api (the Slice 7
 // exit criterion). Picks up bones near where it starts and buries them.
 // Try it: stand anywhere, ::give bones 25, Start.
-import { defineBot, Execution, Game, GroundItems, Inventory, LoopingBot } from '@lcbuddy/api';
+import { defineBot, Execution, Game, GroundItems, Inventory, LoopingBot } from '@rs2b0t/api';
 
 class BoneBurier extends LoopingBot {
     private buried = 0;
