@@ -12,6 +12,7 @@ import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Traversal } from '../api/Traversal.js';
+import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -198,34 +199,6 @@ export default class ArdyThiever extends TaskBot {
     countLoot(): void { this.looted++; }
     countTrip(): void { this.trips++; }
     countFlee(): void { this.flees++; }
-
-    /** Walk to within `radius` of `dest`, opening any shut obstacle we stall at
-     *  (lifted from ThievingBot — steal ops won't path through closed doors). */
-    async clearPathTo(dest: Tile, radius: number): Promise<boolean> {
-        for (let seg = 0; seg < 8; seg++) {
-            const here = Game.tile();
-            if (here && dest.distanceTo(here) <= radius) {
-                return true;
-            }
-            await Traversal.walkTo(dest, { radius, timeoutMs: 15000, log: m => this.log(`  ${m}`) });
-            const after = Game.tile();
-            if (after && dest.distanceTo(after) <= radius) {
-                return true;
-            }
-            const door = Locs.query()
-                .where(l => l.distance() <= 2 && OBSTACLE.some(k => (l.name ?? '').toLowerCase().includes(k)) && l.actions().some(a => /^open/i.test(a)))
-                .nearest();
-            if (!door) {
-                return false;
-            }
-            const op = door.actions().find(a => /^open/i.test(a))!;
-            this.setStatus(`opening ${door.name}`);
-            await door.interact(op);
-            await Execution.delayTicks(2);
-        }
-        const here = Game.tile();
-        return here !== null && dest.distanceTo(here) <= radius;
-    }
 }
 
 class ContinueDialog implements Task {
@@ -398,7 +371,7 @@ class Pickpocket implements Task {
         if (!npc) { return; }
         if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
             this.bot.setStatus(`clearing path to ${TARGET}`);
-            await this.bot.clearPathTo(npc.tile(), 1);
+            await walkOpening(npc.tile(), 1, OBSTACLE, m => this.bot.log(m));
             return;
         }
         this.bot.setStatus(`pickpocketing ${TARGET} at ${npc.tile()}`);
@@ -421,6 +394,6 @@ class ReturnToAnchor implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to anchor');
-        await this.bot.clearPathTo(ANCHOR, 2);
+        await walkOpening(ANCHOR, 2, OBSTACLE, m => this.bot.log(m));
     }
 }

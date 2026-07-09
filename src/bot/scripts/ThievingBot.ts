@@ -7,9 +7,8 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
-import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
-import { Traversal } from '../api/Traversal.js';
+import { walkOpening } from '../api/walkOpening.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 /** Tunable parameters (panel + `?ThievingBot.<key>=...`). */
@@ -128,47 +127,14 @@ export default class ThievingBot extends TaskBot {
     lootKeywords(): string[] {
         return this.loot;
     }
+    obstacleList(): string[] {
+        return this.obstacle;
+    }
     countEat(): void {
         this.eats++;
     }
     countLoot(): void {
         this.picked++;
-    }
-
-    /**
-     * Walk to within `radius` of `dest`, opening any shut door/gate we stall
-     * at. The steal/take ops path the engine's own way and won't open a closed
-     * door to reach a walled-off target, so we drive the approach by hand: walk
-     * a segment, and if it didn't get us closer, open the nearest matching
-     * obstacle that still offers an "Open" op (an open door offers "Close"
-     * instead, so this only ever targets shut ones) and retry. Returns true
-     * once we're in range, false when nothing is left to open.
-     */
-    async clearPathTo(dest: Tile, radius: number): Promise<boolean> {
-        for (let seg = 0; seg < 8; seg++) {
-            const here = Game.tile();
-            if (here && dest.distanceTo(here) <= radius) {
-                return true;
-            }
-            await Traversal.walkTo(dest, { radius, timeoutMs: 15000, log: m => this.log(`  ${m}`) });
-            const after = Game.tile();
-            if (after && dest.distanceTo(after) <= radius) {
-                return true;
-            }
-            const door = Locs.query()
-                .where(l => l.distance() <= 2 && this.obstacle.some(k => (l.name ?? '').toLowerCase().includes(k)) && l.actions().some(a => /^open/i.test(a)))
-                .nearest();
-            if (!door) {
-                return false; // nothing to open — genuinely stuck
-            }
-            const op = door.actions().find(a => /^open/i.test(a))!;
-            this.setStatus(`opening ${door.name}`);
-            this.log(`opening ${door.name} at ${door.tile()}`);
-            await door.interact(op);
-            await Execution.delayTicks(2);
-        }
-        const here = Game.tile();
-        return here !== null && dest.distanceTo(here) <= radius;
     }
 }
 
@@ -301,7 +267,7 @@ class Steal implements Task {
         // reach a walled-off target — clear the way first, then steal next loop.
         if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
             this.bot.setStatus(`clearing path to ${this.bot.targetName()}`);
-            await this.bot.clearPathTo(npc.tile(), 1);
+            await walkOpening(npc.tile(), 1, this.bot.obstacleList(), m => this.bot.log(m));
             return;
         }
         this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${npc.tile()}`);
@@ -331,6 +297,6 @@ class ReturnToAnchor implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to anchor');
-        await this.bot.clearPathTo(this.bot.getAnchor(), 2);
+        await walkOpening(this.bot.getAnchor(), 2, this.bot.obstacleList(), m => this.bot.log(m));
     }
 }
