@@ -84,6 +84,11 @@ try {
     if (!invTab) fail('tabs still locked');
     console.log('re-logged in, tabs unlocked');
 
+    // rebrand: the panel header must read 'rs2b0t' (was 'LCBuddy2')
+    const title = await page.evaluate(() => document.querySelector('.rs2b0t-title')?.textContent ?? '');
+    if (title !== 'rs2b0t') fail(`panel title is '${title}', expected 'rs2b0t'`);
+    console.log('panel title reads rs2b0t');
+
     await type('::give bones 25');
     const haveBones = await page.evaluate(() => ((globalThis as never as { rs2b0t: { reader: { inventory(): { name: string | null }[] } } }).rs2b0t.reader.inventory() ?? []).some(i => i.name?.toLowerCase() === 'bones'));
     if (!haveBones) fail('::give bones did not land');
@@ -107,12 +112,15 @@ try {
     let status = await loadUrl();
     if (!status.includes("loaded 'BoneBurier'")) fail(`load failed: '${status}'`);
 
-    const optionCount = () => page.evaluate(() => Array.from(document.querySelectorAll('.rs2b0t-select option')).filter(o => o.textContent?.includes('BoneBurier')).length);
-    if ((await optionCount()) !== 1) fail('BoneBurier missing from selector');
-    console.log('external script loaded and registered');
+    // the URL loader auto-selects the loaded script; the picker is the ScriptLibrary
+    // (card list, no <select>), so verify via the current-script label + the registry.
+    const regCount = () => page.evaluate(() => (globalThis as never as { rs2b0t: { registry: { list(): { name: string }[] } } }).rs2b0t.registry.list().filter(s => s.name === 'BoneBurier').length);
+    const currentScript = () => page.evaluate(() => document.querySelector('.rs2b0t-current-script')?.textContent ?? '');
+    if ((await regCount()) !== 1) fail('BoneBurier not registered exactly once');
+    if ((await currentScript()) !== 'BoneBurier') fail(`expected BoneBurier auto-selected, got '${await currentScript()}'`);
+    console.log('external script loaded, registered, and auto-selected');
 
-    // 3. run it
-    await page.selectOption('.rs2b0t-select', 'BoneBurier');
+    // 3. run it (already selected by the loader)
     await page.getByRole('button', { name: 'Start' }).click();
 
     await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.startsWith('buried bones')).length >= 10, undefined, { timeout: 180000 });
@@ -131,7 +139,7 @@ try {
     // 5. hot reload after stop: replaces, no duplicates
     status = await loadUrl();
     if (!status.includes("loaded 'BoneBurier'")) fail(`hot reload failed: '${status}'`);
-    if ((await optionCount()) !== 1) fail('hot reload duplicated the selector entry');
+    if ((await regCount()) !== 1) fail('hot reload duplicated the registration');
     console.log('hot reload replaced the registration, no duplicates');
 
     console.log('screenshot: out/external-script-test.png');
