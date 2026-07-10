@@ -31,9 +31,17 @@ cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworke
    out/navworker.js out/navworker.js.map out/collision.lcnav.gz out/tinymidipcm.wasm "$DEST/bot/"
 cp public-bot/bot.html "$DEST/index.html"
 
+# Cache-bust the client bundle: the served page (/rs2b0t/) is dynamic (not edge-
+# cached), but botclient.js is a static asset Cloudflare caches for hours. Stamp
+# the <script src> with a content hash so each build gets a fresh URL and a new
+# bot client goes live immediately, without a manual cache purge.
+V="$(shasum out/botclient.js | cut -c1-10)"
+sed -i '' "s#\./bot/botclient\.js#./bot/botclient.js?v=$V#g" "$DEST/index.html" 2>/dev/null \
+  || sed -i "s#\./bot/botclient\.js#./bot/botclient.js?v=$V#g" "$DEST/index.html"
+
 # soundfont lives in the engine repo; the bot bundle resolves it relative to itself
 if [ -f "$ENGINE/public/client/SCC1_Florestan.sf2" ]; then
     cp "$ENGINE/public/client/SCC1_Florestan.sf2" "$DEST/bot/"
 fi
 
-echo "packed: $DEST/index.html (+ /rs2b0t/bot) — single instance"
+echo "packed: $DEST/index.html (+ /rs2b0t/bot, botclient.js?v=$V) — single instance"
