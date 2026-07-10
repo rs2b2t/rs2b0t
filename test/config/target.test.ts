@@ -18,3 +18,9 @@ test('an https local origin selects a secure socket', () => {
     const t = resolveTarget('local', 'example.test', true);
     expect(t.tls).toBe(true);
 });
+
+test('prod target resolves same-origin (like local), NOT a hardcoded host', () => {
+    // prod = local's same-origin resolution + the prod RSA key (baked separately).
+    expect(resolveTarget('prod', 'w1.rs2b2t.com', true)).toEqual({ wsHost: 'w1.rs2b2t.com', tls: true });
+    expect(resolveTarget('prod', 'localhost:8890', false)).toEqual({ wsHost: 'localhost:8890', tls: false });
+});

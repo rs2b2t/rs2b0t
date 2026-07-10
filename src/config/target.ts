@@ -17,6 +17,11 @@ export function resolveTarget(name: string, locationHost = '', isHttps = false):
     if (name === 'live') {
         return { wsHost: LIVE_HOST, tls: true };
     }
+    // `local` AND `prod` both resolve same-origin — they talk to whatever origin
+    // served the page. `prod` is a real, supported target (the client hosted ON
+    // the game server at w1.rs2b2t.com/rs2b0t, same-origin, no proxy); it differs
+    // from `local` only in the RSA login key baked by bot.bundle.ts. `live` is the
+    // odd one out: it hardcodes the world host for the local reverse-proxy dev flow.
     return { wsHost: locationHost, tls: isHttps };
 }
 

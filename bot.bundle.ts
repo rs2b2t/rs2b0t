@@ -25,6 +25,13 @@ const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     live: {
         rsae: '65537',
         rsan: process.env.LIVE_RSAN ?? ''
+    },
+    // prod = the client hosted ON the game server (same-origin, no proxy). Same
+    // prod modulus as live, injected via PROD_RSAN at build time (ops/scripts/
+    // build.sh extracts it from the served client.js).
+    prod: {
+        rsae: '65537',
+        rsan: process.env.PROD_RSAN ?? ''
     }
 };
 
@@ -34,8 +41,9 @@ if (!(TARGET_NAME in TARGET_RSA)) {
 }
 
 const rsa = TARGET_RSA[TARGET_NAME] ?? TARGET_RSA.local;
-if (TARGET_NAME === 'live' && rsa.rsan === '') {
-    console.error('TARGET=live requires LIVE_RSAN (rs2b2t rotated modulus). Aborting.');
+if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod') && rsa.rsan === '') {
+    const envVar = TARGET_NAME === 'live' ? 'LIVE_RSAN' : 'PROD_RSAN';
+    console.error(`TARGET=${TARGET_NAME} requires ${envVar} (rs2b2t rotated modulus). Aborting.`);
     process.exit(1);
 }
 
