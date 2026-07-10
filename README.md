@@ -17,8 +17,10 @@ log in with an rs2b2t account, pick a script, and run.
   priority `TaskBot`, or a `TreeBot` behaviour tree.
 - **World-walking** — A\* pathfinding over a baked collision pack + a door and
   transport graph, with stuck-recovery.
-- **Real client, real input** — no packet injection; bots interact through the
-  same client the game exposes, and verify outcomes against game state.
+- **Real client, no forged packets** — bots drive the real client's own action
+  dispatch (`doAction`/`tryMove`), so interaction packets are byte-identical to a
+  human click; there's no synthetic mouse input, and outcomes are verified
+  against game state.
 - **In-client panel** — a script library, per-script parameters, live logs, and
   an overlay for `onPaint` HUDs.
 - **Out-of-tree scripts** — author a bot in its own repo against `@rs2b0t/api`
