@@ -84,7 +84,7 @@ try {
     if (!invTab) fail('tabs still locked');
     console.log('re-logged in, tabs unlocked');
 
-    // rebrand: the panel header must read 'rs2b0t' (was 'LCBuddy2')
+    // rebrand: the panel header must read 'rs2b0t'
     const title = await page.evaluate(() => document.querySelector('.rs2b0t-title')?.textContent ?? '');
     if (title !== 'rs2b0t') fail(`panel title is '${title}', expected 'rs2b0t'`);
     console.log('panel title reads rs2b0t');
