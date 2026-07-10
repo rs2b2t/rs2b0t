@@ -55,6 +55,12 @@ export default abstract class GameShell {
     protected mainquit() { }
     protected async mainloop() { }
     protected async mainredraw() { }
+    /** Paces the frame loop. Overridable so the bot client can use a
+     *  throttle-immune timer — background tabs clamp setTimeout to ~1/min,
+     *  which would otherwise stall the loop. Default keeps upstream behaviour. */
+    protected async frameDelay(ms: number): Promise<void> {
+        await sleep(ms);
+    }
     protected refresh() { }
 
     constructor(resizetoFit: boolean = false) {
@@ -180,7 +186,7 @@ export default abstract class GameShell {
                 delta = this.mindel;
             }
 
-            await sleep(delta);
+            await this.frameDelay(delta);
 
             while (count < 256) {
                 this.mouseClickButton = this.nextMouseClickButton;

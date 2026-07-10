@@ -65,6 +65,17 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         RunManager.enable();
     }
 
+    // Standalone hosted client: the frame loop keeps ticking while minimized
+    // (WorkerClock is immune to background throttling), so the bot stays
+    // connected — but drop draws to the background cadence to save CPU when the
+    // tab is hidden. Skipped inside a MultiBox iframe (window.top !== self),
+    // where the wall manager owns each cell's render mode.
+    if (typeof document !== 'undefined' && window.top === window.self) {
+        document.addEventListener('visibilitychange', () => {
+            RenderGate.setMode(document.hidden ? 'background' : 'focused');
+        });
+    }
+
     // DevTools handle (works because this bundle never mangles names).
     (globalThis as Record<string, unknown>).rs2b0t = {
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
