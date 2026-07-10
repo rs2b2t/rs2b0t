@@ -124,5 +124,4 @@ engine image and served same-origin from the game server — no proxy.
 
 ## License
 
-No license is currently declared. Until one is added, all rights are reserved by
-the authors; open an issue if you'd like to use the code.
+[MIT](LICENSE).

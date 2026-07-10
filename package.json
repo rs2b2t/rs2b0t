@@ -1,5 +1,7 @@
 {
     "name": "rs2b0t",
+    "description": "Scriptable direct-input bot client for rs2b2t (2004scape)",
+    "license": "MIT",
     "module": "src/client/Client.ts",
     "type": "module",
     "imports": {
