@@ -65,6 +65,30 @@ export const ChatDialog = {
         }, 3000);
     },
 
+    /**
+     * In a skill-multi make menu, pick the product whose name contains `match`
+     * and click its "Make X"/"Smelt X" button (the qty === -1 one), then answer
+     * the count dialog with `count` — the exact-quantity path (e.g. smelt all 14
+     * bars from a 14+14 ore pack in one go). Returns false if no product / no
+     * Make-X button matched or the count dialog never opened.
+     */
+    async makeX(match: string, count: number): Promise<boolean> {
+        const products = reader.makeProducts();
+        const want = match.toLowerCase();
+        const product = products.find(p => p.name.toLowerCase().includes(want));
+        const xBtn = product?.buttons.find(b => b.qty === -1);
+        if (!xBtn) {
+            return false;
+        }
+        if (!actions.ifButton(xBtn.comId)) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+            return false;
+        }
+        return actions.answerCountDialog(count);
+    },
+
     /** A MAIN-modal skill-multi panel (TYPE_INV columns, e.g. the tutorial's smithing anvil) is open. */
     isMainMakePanel(): boolean {
         return reader.mainSkillMultiItems().length > 0;

@@ -546,7 +546,11 @@ export const reader = {
                 objs.push(com.model1Id);
             }
             if (com.buttonType === ButtonType.BUTTON_OK && com.buttonText) {
-                const m = /make\s+(x|\d+)/i.exec(com.buttonText);
+                // Fletch/craft menus label their qty buttons "Make X"/"Make 10";
+                // the furnace smelting interface uses "Smelt X"/"Smelt 10" (its
+                // com_12..15 buttontype=normal buttons, option="Smelt X @lre@Bronze").
+                // Match either verb so both drive the same product/qty grouping.
+                const m = /(?:make|smelt)\s+(x|\d+)/i.exec(com.buttonText);
                 if (m) {
                     buttons.push({ qty: m[1].toLowerCase() === 'x' ? -1 : parseInt(m[1], 10), comId });
                 }

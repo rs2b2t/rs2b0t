@@ -15,7 +15,6 @@ import {
     recipeForBar,
     withdrawPlan,
     countPrimary,
-    lastPrimaryIndex,
     type Recipe
 } from './SmelterBotLogic.js';
 
@@ -37,8 +36,8 @@ export const SETTINGS: SettingsSchema = {
 
 /**
  * Al Kharid smelt-and-bank loop. Withdraw a pack of ore per the chosen bar's
- * recipe, cross to the Furnace (opening the bank-building door), smelt every bar
- * by using the LAST primary ore on the furnace one at a time, then return and
+ * recipe, cross to the Furnace (opening the bank-building door), open its Smelt
+ * panel and smelt the whole pack in one Smelt-X, then return and
  * bank the whole pack (bars + any leftover), and repeat. Runs off bank-fed ore;
  * stops cleanly when the bank can no longer supply a full set. Start it at the
  * Al Kharid bank.
@@ -100,12 +99,6 @@ export default class SmelterBot extends TaskBot {
     furnaceTile(): Tile { return this.furnaceStand; }
     boothLocName(): string { return this.boothName; }
     primaryCount(): number { return countPrimary(Inventory.items(), this.recipe); }
-    /** The LAST primary-ore InvItem in the pack (the smelt target), or null. */
-    lastPrimary() {
-        const items = Inventory.items();
-        const idx = lastPrimaryIndex(items, this.recipe);
-        return idx >= 0 ? items[idx] : null;
-    }
 }
 
 class ContinueDialog implements Task {
@@ -169,13 +162,19 @@ class BankTrip implements Task {
     }
 }
 
-/** Primary ore in the pack → cross to the furnace and smelt the LAST primary ore,
- *  one bar at a time, until none remain. */
+/** Primary ore in the pack → cross to the furnace, open its Smelt panel and smelt
+ *  the whole pack of the chosen bar in one Smelt-X (exact count), until no primary
+ *  ore remains. */
 class SmeltTrip implements Task {
     constructor(private bot: SmelterBot) {}
-    validate(): boolean { return this.bot.primaryCount() > 0 && !ChatDialog.isOpen(); }
+    // The make menu IS a chat modal, so don't gate on isOpen() (that would block
+    // us the moment the panel opens). Only a "click to continue" dialog defers to
+    // ContinueDialog; otherwise run and drive the panel ourselves.
+    validate(): boolean { return this.bot.primaryCount() > 0 && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
-        const furnace = () => Locs.query().name(this.bot.furnaceLocName()).where(l => l.tile().distanceTo(this.bot.furnaceTile()) <= this.bot.leashRadius()).nearest();
+        // The Al Kharid furnace loc spans two adjacent tiles; only one carries the
+        // "Smelt" op — filter to it so we never target the op-less tile.
+        const furnace = () => Locs.query().name(this.bot.furnaceLocName()).action('Smelt').where(l => l.tile().distanceTo(this.bot.furnaceTile()) <= this.bot.leashRadius()).nearest();
         const here = Game.tile();
         if (!here || this.bot.furnaceTile().distanceTo(here) > 1 || !furnace()) {
             this.bot.setStatus('crossing to the furnace');
@@ -198,21 +197,35 @@ class SmeltTrip implements Task {
                 return (t !== null && t.x === stand.x && t.z === stand.z) || (before !== null && t !== null && (before.x !== t.x || before.z !== t.z));
             }, 3000);
         }
-        // smelt the last primary ore repeatedly until none remain (bounded). The
-        // primary is inv_del'd before any iron-fail roll, so the count drops on
-        // both a smelt and a fail — progress tracking is correct either way.
-        for (let n = 0; n < 30 && this.bot.primaryCount() > 0; n++) {
-            if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) { return; }
-            const ore = this.bot.lastPrimary();
+
+        // Open the Smelt panel via the furnace's "Smelt" op (an OPLOC loc-op, so it
+        // needs us adjacent — the stand tile above). One panel handles the whole
+        // pack; don't ore-on-furnace bar-by-bar.
+        if (!ChatDialog.isMakeMenu()) {
             const oven = furnace();
-            if (!ore || !oven) { await Execution.delayTicks(2); return; }
-            this.bot.setStatus(`smelting ${this.bot.activeRecipe().bar}`);
-            const before = this.bot.primaryCount();
-            if (!(await ore.useOn(oven))) { await Execution.delayTicks(2); continue; }
-            // wait for the bar to smelt (primary count drops), a menu, or a dialog
-            if (await Execution.delayUntil(() => this.bot.primaryCount() < before || ChatDialog.isMakeMenu() || ChatDialog.canContinue(), 6000)) {
-                if (this.bot.primaryCount() < before) { this.bot.recordSmelt(before - this.bot.primaryCount()); }
+            if (!oven) { await Execution.delayTicks(2); return; }
+            await oven.interact('Smelt');
+            if (!(await Execution.delayUntil(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue(), 6000))) {
+                await Execution.delayTicks(2);
+                return;
             }
+        }
+        if (!ChatDialog.isMakeMenu()) { return; } // a message dialog opened — ContinueDialog clears it
+
+        // Smelt the whole pack in one Smelt-X. The panel's product name is the bar
+        // obj name, which differs from the tier keyword for two metals
+        // (Adamant→"Adamantite bar", Rune→"Runite bar"). Count = primary-ore count,
+        // which equals the number of bars (one primary ore per bar).
+        const recipe = this.bot.activeRecipe();
+        const barKeyword = ({ Adamant: 'Adamantite', Rune: 'Runite' } as Record<string, string>)[recipe.bar] ?? recipe.bar;
+        const before = this.bot.primaryCount();
+        this.bot.setStatus(`smelting ${recipe.bar}`);
+        if (await ChatDialog.makeX(barKeyword, before)) {
+            await Execution.delayUntil(() => this.bot.primaryCount() === 0 || ChatDialog.canContinue(), 120000);
+            if (this.bot.primaryCount() < before) { this.bot.recordSmelt(before - this.bot.primaryCount()); }
+        } else {
+            this.bot.log(`Smelt panel open but couldn't Smelt-X '${barKeyword}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
+            await Execution.delayTicks(2);
         }
     }
 }
