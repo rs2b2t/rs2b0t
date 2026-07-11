@@ -7,7 +7,6 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
-import { Reachability } from '../api/Reachability.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -21,11 +20,9 @@ import {
 } from './SmelterBotLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(3269, 3167, 0);
-// The Al Kharid furnace loc sits at (3272,3185); the web-walker approaches from
-// the EAST, so stand on the walkable tile just east of it — adjacent to the loc
-// (so the smelt interact lands) and on the reachable side (the west/south tiles
-// are split off from the approach by the furnace structure). Verified live.
-const DEFAULT_FURNACE_STAND = new Tile(3273, 3185, 0);
+// Stand tile for the Al Kharid furnace (the furnace is a large loc ~(3272,3185);
+// you stand adjacent to its EAST footprint edge and use ore on it from here).
+const DEFAULT_FURNACE_STAND = new Tile(3275, 3185, 0);
 const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
@@ -199,38 +196,22 @@ class SmeltTrip implements Task {
             this.bot.setStatus('crossing to the furnace');
             await walkOpening(this.bot.furnaceTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
         }
-        // The baked web-walker parks a couple tiles short of the Al Kharid furnace
-        // (its building isn't routable in the baked collision pack), so close the
-        // last gap with a LIVE scene walk over the client's live collision — the
-        // same trick RandomEvents uses in the maze. Step toward the furnace loc
-        // until we're beside it, then the smelt loop can use ore on it.
-        const oven0 = furnace();
-        if (oven0) {
-            const ovenTile = oven0.tile();
-            // nearest WALKABLE, live-reachable tile adjacent to the furnace (its
-            // own tile is unwalkable, so we must step beside it, not onto it).
-            const stand = (): Tile | null => {
-                const me = Game.tile();
-                const cands = [[1, 0], [0, 1], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]
-                    .map(([dx, dz]) => new Tile(ovenTile.x + dx, ovenTile.z + dz, ovenTile.level))
-                    .filter(t => reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: 600 }));
-                if (me) { cands.sort((a, b) => a.distanceTo(me) - b.distanceTo(me)); }
-                return cands[0] ?? null;
-            };
-            for (let w = 0; w < 8; w++) {
-                const now = Game.tile();
-                if (now && ovenTile.distanceTo(now) <= 1) { break; }
-                const target = stand();
-                const local = target ? reader.toLocal(target.x, target.z) : null;
-                if (!local) { await Execution.delayTicks(1); continue; }
-                const before = Game.tile();
-                actions.walkTo(local.lx, local.lz);
-                await Execution.delayUntil(() => {
-                    const t = Game.tile();
-                    if (!t) { return false; }
-                    return ovenTile.distanceTo(t) <= 1 || (before !== null && Math.max(Math.abs(before.x - t.x), Math.abs(before.z - t.z)) >= 1);
-                }, 3000);
-            }
+        // The baked web-walker parks ~1 tile short of the furnace stand (the
+        // furnace building isn't fully routable in the baked collision pack), so
+        // close the last step with a LIVE scene walk onto the exact stand tile —
+        // the same trick RandomEvents uses in the maze.
+        const stand = this.bot.furnaceTile();
+        for (let w = 0; w < 5; w++) {
+            const now = Game.tile();
+            if (now && now.x === stand.x && now.z === stand.z) { break; }
+            const local = reader.toLocal(stand.x, stand.z);
+            if (!local) { await Execution.delayTicks(1); continue; }
+            const before = Game.tile();
+            actions.walkTo(local.lx, local.lz);
+            await Execution.delayUntil(() => {
+                const t = Game.tile();
+                return (t !== null && t.x === stand.x && t.z === stand.z) || (before !== null && t !== null && (before.x !== t.x || before.z !== t.z));
+            }, 3000);
         }
         // smelt the last primary ore repeatedly until none remain (bounded). The
         // primary is inv_del'd before any iron-fail roll, so the count drops on
