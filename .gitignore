@@ -26,3 +26,6 @@ dist/
 
 # local Claude tooling scratch (agents, worktrees, session state)
 .claude/
+
+# recovered farm logins — plaintext, never commit
+multibox-accounts.recovered.json
