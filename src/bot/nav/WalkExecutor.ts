@@ -14,6 +14,9 @@ import { reader } from '../adapter/ClientAdapter.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
+import { Inventory } from '../api/hud/Inventory.js';
+import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing } from './data/specialCrossings.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
@@ -38,6 +41,7 @@ const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000; // includes first-use worker boot + pack fetch
 const TRANSPORT_WAIT_MS = 8000;
+const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing dialogue
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
 export interface WalkOptions {
@@ -354,6 +358,11 @@ class WalkExecutorImpl {
     private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
         const transport = step.transport!;
 
+        const special = specialCrossingAt(transport.locX, transport.locZ, step.level);
+        if (special) {
+            return this.handleSpecialCrossing(step, special, log);
+        }
+
         for (let attempt = 0; attempt < 2; attempt++) {
             const loc = this.findTransportLoc(transport);
             if (!loc) {
@@ -387,6 +396,53 @@ class WalkExecutorImpl {
             }
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
+        return false;
+    }
+
+    /**
+     * Cross a gate that needs a precondition and/or a dialogue (see
+     * specialCrossings.ts). If the precondition is unmet we return false so the
+     * caller adds the gate to avoidDoors and repaths (there may be no alternate
+     * route — then walkTo ends cleanly instead of hanging on a blocking dialogue,
+     * the "ignore if you can't pay" behaviour). If it's met we interact and drive
+     * the dialogue (continue through lines, click the configured choice) until the
+     * player has crossed to the far tile.
+     */
+    private async handleSpecialCrossing(step: PathStep, sc: SpecialCrossing, log: (msg: string) => void): Promise<boolean> {
+        if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
+            log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
+            return false; // caller: failedDoor() + repath (avoids this gate)
+        }
+
+        const loc = this.findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });
+        if (!loc) {
+            log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
+            return false;
+        }
+        if (!loc.interact(sc.action)) {
+            log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
+            return false;
+        }
+
+        const crossed = (): boolean => {
+            const me = reader.worldTile();
+            return me !== null && me.level === step.level && chebyshev(me, step) <= 1;
+        };
+        for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
+            const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
+            if (pick) {
+                await ChatDialog.chooseOption(pick);
+            } else if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+            } else {
+                await Execution.delayTicks(1);
+            }
+        }
+        if (crossed()) {
+            log(`${sc.label}: crossed`);
+            return true;
+        }
+        log(`${sc.label}: dialogue did not resolve — repathing`);
         return false;
     }
 
