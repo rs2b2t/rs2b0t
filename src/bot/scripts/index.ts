@@ -21,6 +21,9 @@ import TutorialBot from './TutorialBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
 import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility.js';
 import Woodcutter, { SETTINGS as WOODCUTTER_SETTINGS } from './Woodcutter.js';
+import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot.js';
+import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
+import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // --- tutorial ---
@@ -217,9 +220,28 @@ ScriptRegistry.register({
     create: () => new ProcessingBot()
 });
 
-// NOTE: Smithing is intentionally not registered yet — use-bar-on-anvil opens
-// the dedicated `smithing` interface (inv-transmit item columns), not the
-// skill-multi chat menu ProcessingBot drives. It needs a bespoke handler.
+ScriptRegistry.register({
+    name: 'BankFletcher',
+    description: 'Bank-standing fletcher — withdraw logs, knife-fletch the chosen product (arrow shafts / unstrung bow), deposit, repeat',
+    category: 'Fletching',
+    tags: ['members', 'fletching', 'banking', 'afk'],
+    settingsSchema: BANKFLETCHER_SETTINGS,
+    create: () => new BankFletcher()
+});
+
+// --- smithing (smelting) ---
+ScriptRegistry.register({
+    name: 'SmelterBot',
+    description: 'Al Kharid smelter — withdraw ore, use it on the Furnace to smelt bars (all 8 bar types), bank, repeat',
+    category: 'Smithing',
+    tags: ['smithing', 'smelting', 'banking', 'afk'],
+    settingsSchema: SMELTER_SETTINGS,
+    create: () => new SmelterBot()
+});
+
+// NOTE: bar-on-anvil SMITHING is still not registered — it opens the dedicated
+// `smithing` interface (inv-transmit item columns), not the skill-multi chat
+// menu, and needs a bespoke handler. (SmelterBot above is smelting, not smithing.)
 
 ScriptRegistry.register({
     name: 'Herbalist',
@@ -237,6 +259,16 @@ ScriptRegistry.register({
     tags: ['f2p', 'processing'],
     settingsSchema: processing({ material: 'essence', targetType: 'loc', target: 'Altar', product: '', leashRadius: 8 }),
     create: () => new ProcessingBot()
+});
+
+// --- crafting ---
+ScriptRegistry.register({
+    name: 'FlaxPicker',
+    description: 'Seers flax field picker — pick flax until full, bank it at Seers, repeat',
+    category: 'Crafting',
+    tags: ['members', 'seers', 'gathering', 'banking', 'afk'],
+    settingsSchema: FLAXPICKER_SETTINGS,
+    create: () => new FlaxPicker()
 });
 
 // --- agility ---
