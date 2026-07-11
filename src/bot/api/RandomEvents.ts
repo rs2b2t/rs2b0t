@@ -490,10 +490,24 @@ class RandomEventsImpl {
                 if (!local) { await Execution.delayTicks(1); continue; }
                 const before = reader.worldTile();
                 actions.walkTo(local.lx, local.lz); // client-side path over the live scene collision
+                // The FIRST walk click right after a door Open is swallowed (the
+                // player stays put); a SECOND click registers. Detect the swallow
+                // — no movement within ~1 tick — and re-issue once, instead of
+                // sitting out the full timeout below. A real step lands in ~0.3-0.6s
+                // (well under 1s), so a moving walk never triggers the re-kick.
+                const moved = await Execution.delayUntil(() => {
+                    const t = reader.worldTile();
+                    return t !== null && before !== null && cheb(t, before) >= 1;
+                }, 1_000);
+                if (!moved && inMaze()) { actions.walkTo(local.lx, local.lz); }
+                // Then the normal wait (reached, or a full 2-tile step). Budget is
+                // 1s + 3s = the baseline's ~4s, so a genuinely stuck door still
+                // burns the same total before the loop gives up — solving behaviour
+                // is unchanged; only the swallowed-click waste is removed.
                 await Execution.delayUntil(() => {
                     const t = reader.worldTile();
                     return t !== null && (reached(t) || (before !== null && cheb(t, before) >= 2));
-                }, 4_000);
+                }, 3_000);
             }
         };
         const walkAdjacent = (d: { x: number; z: number }): Promise<void> => walkTowards(d, false);
@@ -507,10 +521,16 @@ class RandomEventsImpl {
             if (!door) { log(`random event: maze — door (${d.x},${d.z}) not in scene, skipping`); continue; }
             const pre = reader.worldTile();
             await door.interact('Open');
+            // Wait for the through (a full 2-tile displacement) or a "not the right
+            // way" dialog, THEN move on. We keep the >=2 threshold (a 1-tile drift
+            // must NOT be mistaken for a through — that desyncs the route and wedges
+            // us), but a 1-tile through never trips it, so cap the wait at 2s, not
+            // 6s: by then the open has fully resolved and we're safely on the far
+            // side, so proceeding is correct — we just stop idling for 4 extra sec.
             await Execution.delayUntil(() => {
                 const t = reader.worldTile();
                 return ChatDialog.canContinue() || (t !== null && pre !== null && cheb(t, pre) >= 2);
-            }, 6_000);
+            }, 2_000);
             if (ChatDialog.canContinue()) {
                 await ChatDialog.continue(); // "not the right way" — benign branch door; press on
                 log(`random event: maze — door (${d.x},${d.z}) refused (branch), continuing`);
