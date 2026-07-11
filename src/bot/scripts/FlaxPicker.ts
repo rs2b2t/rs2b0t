@@ -7,7 +7,6 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
-import { depositMatcher } from '../api/Banking.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 const DEFAULT_FIELD = new Tile(2744, 3446, 0);
@@ -113,6 +112,18 @@ export default class FlaxPicker extends TaskBot {
             .where(l => l.tile().distanceTo(this.fieldTile) <= this.leash)
             .nearest();
     }
+
+    /** True while a pickable flax loc still stands at `tile`. Picking flax (by us
+     *  OR any other player) runs loc_del(25) — the loc vanishes for 25 ticks — so
+     *  this flips false the instant someone else takes our target, letting Pick
+     *  retarget immediately instead of waiting out the yield window. */
+    flaxStillAt(tile: Tile): boolean {
+        return Locs.query()
+            .name(this.flaxLocName())
+            .action(this.pickOpName())
+            .where(l => l.tile().x === tile.x && l.tile().z === tile.z && l.tile().level === tile.level)
+            .nearest() !== null;
+    }
 }
 
 class ContinueDialog implements Task {
@@ -121,8 +132,11 @@ class ContinueDialog implements Task {
 }
 
 /** Pack full (no free slots), or carrying flax with no reachable flax loc left in
- *  the leash → walk to the bank, deposit all the flax (+ shared junk), and head
- *  back to the field. */
+ *  the leash → walk to the bank, deposit the WHOLE pack, and head back to the
+ *  field. FlaxPicker keeps nothing else in the inventory, so depositing
+ *  everything also clears any random-event item — otherwise non-flax junk sticks
+ *  (flax-only deposit left it) and accumulates until the pack is permanently
+ *  "full" of un-depositable items and the bot ping-pongs bank↔field forever. */
 class BankTrip implements Task {
     constructor(private bot: FlaxPicker) {}
     validate(): boolean {
@@ -132,12 +146,22 @@ class BankTrip implements Task {
     async execute(): Promise<void> {
         const had = this.bot.flaxCount();
         this.bot.setStatus('banking the flax');
-        await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
-        if (!(await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+        // Approach the bank vicinity with a TOLERANT radius (don't wedge outside
+        // trying to path onto one exact tile), then open. Try the configured stand
+        // first (openBooth); if that stand can't be reached — the live failure that
+        // looped forever on "no path … unreachable" — fall back to openNearest,
+        // which steps onto a LIVE-reachable tile beside the nearest OPERABLE booth
+        // (skipping the decorative "private customers only" booths). Two distinct
+        // strategies so a bad stand can't hang the bot.
+        await walkOpening(this.bot.bankTile(), 4, this.bot.obstacleList(), m => this.bot.log(m));
+        const log = (m: string): void => this.bot.log(`  ${m}`);
+        const opened = (await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, log))
+            || (await Bank.openNearest(this.bot.boothLocName(), BOOTH.op, log));
+        if (!opened) {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositAllMatching(depositMatcher(name => this.bot.isFlax(name), true));
+        await Bank.depositInventory();
         await Execution.delayTicks(1);
         this.bot.countTrip();
         this.bot.log(`banked ${had} ${this.bot.flaxLocName()}`);
@@ -160,17 +184,23 @@ class Pick implements Task {
             this.bot.setStatus('walking to the flax field');
             await walkOpening(this.bot.fieldCentre(), this.bot.leashRadius(), this.bot.obstacleList(), m => this.bot.log(m));
         }
-        // Pick is a single-shot action (the flax doesn't deplete), so re-click each
-        // time. Bounded loop: pick, wait for a flax to land, repeat until full or a
-        // dialog interrupts us.
+        // Picking flax loc_del's it for 25t (ours or anyone's), so re-select the
+        // nearest each time. Bounded loop: pick, wait for a flax to land, repeat
+        // until full or a dialog interrupts us. Bail the yield-wait the moment the
+        // targeted stalk disappears — someone else picked it first — so we retarget
+        // the next-nearest flax instead of burning the whole window on a dead loc.
         for (let n = 0; n < 30 && !Inventory.isFull(); n++) {
             if (ChatDialog.canContinue()) { return; }
             const flax = this.bot.nearestFlax();
             if (!flax) { return; }
-            this.bot.setStatus(`picking ${this.bot.flaxLocName()} at ${flax.tile()}`);
+            const target = flax.tile();
+            this.bot.setStatus(`picking ${this.bot.flaxLocName()} at ${target}`);
             const before = this.bot.flaxCount();
             if (!(await flax.interact(this.bot.pickOpName()))) { await Execution.delayTicks(2); continue; }
-            await Execution.delayUntil(() => this.bot.flaxCount() > before || Inventory.isFull() || ChatDialog.canContinue(), 6000);
+            await Execution.delayUntil(
+                () => this.bot.flaxCount() > before || Inventory.isFull() || ChatDialog.canContinue() || !this.bot.flaxStillAt(target),
+                6000
+            );
         }
     }
 }
