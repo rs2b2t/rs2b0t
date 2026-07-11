@@ -25,6 +25,7 @@ import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
+import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // --- tutorial ---
@@ -279,6 +280,15 @@ ScriptRegistry.register({
     tags: ['members', 'seers', 'gathering', 'banking', 'afk'],
     settingsSchema: FLAXPICKER_SETTINGS,
     create: () => new FlaxPicker()
+});
+
+ScriptRegistry.register({
+    name: 'FlaxSpinner',
+    description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
+    category: 'Crafting',
+    tags: ['members', 'seers', 'crafting', 'banking', 'afk'],
+    settingsSchema: FLAXSPINNER_SETTINGS,
+    create: () => new FlaxSpinner()
 });
 
 // --- agility ---

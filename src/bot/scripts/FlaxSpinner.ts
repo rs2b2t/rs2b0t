@@ -1,0 +1,234 @@
+import { TaskBot, type Task } from '../api/Bot.js';
+import { Execution } from '../api/Execution.js';
+import { Game } from '../api/Game.js';
+import Tile from '../api/Tile.js';
+import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Inventory } from '../api/hud/Inventory.js';
+import { Bank } from '../api/hud/Bank.js';
+import { Locs } from '../api/queries/Locs.js';
+import { walkOpening } from '../api/walkOpening.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import type { SettingsSchema } from '../runtime/Settings.js';
+
+// Seers Village — verified live (dumped reader.locs()): the flax spinning wheel is
+// UPSTAIRS. Bank (2722,3493,0) → house door (2716,3472,0) → Ladder (2715,3470)
+// Climb-up → Spinning wheel (2711,3471,1) "Spin" → same Ladder Climb-down → bank.
+const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
+const DEFAULT_LADDER_TILE = new Tile(2715, 3470, 0);
+const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
+const BOOTH = { op: 'Use-quickly' };
+
+export const SETTINGS: SettingsSchema = {
+    product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'matched against the "What would you like to spin?" menu' },
+    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
+    ladderTile: { type: 'tile', default: DEFAULT_LADDER_TILE, label: 'Ladder tile (x,z) — ground floor', help: 'the ladder up to the spinning wheel; the house door is opened on the way' },
+    wheelTile: { type: 'tile', default: DEFAULT_WHEEL_TILE, label: 'Spinning wheel tile (x,z,level)', help: 'upstairs — search centre for the wheel' },
+    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
+    ladderName: { type: 'string', default: 'Ladder', label: 'Ladder/staircase loc name' },
+    climbUpOp: { type: 'string', default: 'Climb-up', label: 'Ladder up op' },
+    climbDownOp: { type: 'string', default: 'Climb-down', label: 'Ladder down op' },
+    wheelName: { type: 'string', default: 'Spinning wheel', label: 'Spinning wheel loc name' },
+    spinOp: { type: 'string', default: 'Spin', label: 'Spinning wheel op' },
+    obstacle: { type: 'string', default: 'door', label: 'Openable obstacles (contains)', help: 'the house door on the bank route' },
+    leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Wheel/ladder search radius (tiles)' }
+};
+
+/** Interact the nearest `name` loc offering `op` (a Climb-up/Climb-down — an OPLOC,
+ *  so the server walks us to the ladder and climbs) and wait for our floor to
+ *  change. Returns true once `Game.tile().level` differs from before. */
+async function climbLadder(name: string, op: string, log: (m: string) => void): Promise<boolean> {
+    const ladder = Locs.query().name(name).action(op).nearest();
+    if (!ladder) {
+        log(`no '${name}' offering '${op}' nearby`);
+        return false;
+    }
+    const before = Game.tile()?.level;
+    await ladder.interact(op);
+    return Execution.delayUntil(() => {
+        const t = Game.tile();
+        return t !== null && t.level !== before;
+    }, 8000);
+}
+
+/**
+ * Seers Village flax spinner. Withdraw a full pack of flax at the Seers bank, run
+ * to the spinning-wheel house (opening the door), climb the ladder up, Spin-X the
+ * whole pack into bow string, climb back down, return to the bank, deposit
+ * everything, repeat. Runs off bank-fed flax; stops cleanly when the bank runs
+ * out. Start it at the Seers bank.
+ */
+export default class FlaxSpinner extends TaskBot {
+    override loopDelay = 600;
+
+    private spun = 0;
+    private trips = 0;
+    private status = 'starting';
+
+    private product = 'Flax';
+    private bankStand = DEFAULT_BANK_STAND;
+    private ladderTile = DEFAULT_LADDER_TILE;
+    private wheelTile = DEFAULT_WHEEL_TILE;
+    private boothName = 'Bank booth';
+    private ladder = 'Ladder';
+    private upOp = 'Climb-up';
+    private downOp = 'Climb-down';
+    private wheel = 'Spinning wheel';
+    private spin = 'Spin';
+    private obstacle: string[] = ['door'];
+    private leash = 8;
+
+    override async onStart(): Promise<void> {
+        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+
+        this.product = this.settings.str('product', 'Flax');
+        this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
+        this.ladderTile = this.settings.tile('ladderTile', DEFAULT_LADDER_TILE);
+        this.wheelTile = this.settings.tile('wheelTile', DEFAULT_WHEEL_TILE);
+        this.boothName = this.settings.str('bankBooth', 'Bank booth');
+        this.ladder = this.settings.str('ladderName', 'Ladder');
+        this.upOp = this.settings.str('climbUpOp', 'Climb-up');
+        this.downOp = this.settings.str('climbDownOp', 'Climb-down');
+        this.wheel = this.settings.str('wheelName', 'Spinning wheel');
+        this.spin = this.settings.str('spinOp', 'Spin');
+        this.obstacle = this.settings.str('obstacle', 'door').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        this.leash = this.settings.num('leashRadius', 8);
+
+        this.log(`FlaxSpinner spinning ${this.product} — bank ${this.bankStand}, ladder ${this.ladderTile}, wheel ${this.wheelTile}`);
+        this.add(new ContinueDialog(), new BankTrip(this), new Ascend(this), new Spin(this), new Descend(this));
+    }
+
+    override onPaint(ctx: CanvasRenderingContext2D): void {
+        const lines = [
+            `FlaxSpinner — ${this.status}`,
+            `${this.product}: spun ${this.spun}  bank trips ${this.trips}`,
+            `flax left ${this.fibreCount()}  level ${Game.tile()?.level ?? '?'}  tick ${Game.tick()}`
+        ];
+        ctx.font = '12px monospace';
+        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
+        ctx.fillStyle = '#a0e0ff';
+        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+    }
+
+    setStatus(s: string): void { this.status = s; }
+    recordSpun(n: number): void { this.spun += n; }
+    countTrip(): void { this.trips++; }
+    productName(): string { return this.product; }
+    bankTile(): Tile { return this.bankStand; }
+    ladderStand(): Tile { return this.ladderTile; }
+    wheelStand(): Tile { return this.wheelTile; }
+    boothLocName(): string { return this.boothName; }
+    ladderName(): string { return this.ladder; }
+    climbUpOp(): string { return this.upOp; }
+    climbDownOp(): string { return this.downOp; }
+    wheelLocName(): string { return this.wheel; }
+    spinOpName(): string { return this.spin; }
+    obstacleList(): string[] { return this.obstacle; }
+    leashRadius(): number { return this.leash; }
+    onFloor(level: number): boolean { return Game.tile()?.level === level; }
+
+    /** Fibre (flax/wool) still in the pack. Flax and bow string don't stack, so
+     *  count slots; the bow-string product never matches the fibre keyword. */
+    fibreCount(): number {
+        const pat = this.product.toLowerCase();
+        return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
+    }
+}
+
+class ContinueDialog implements Task {
+    validate(): boolean { return ChatDialog.canContinue(); }
+    async execute(): Promise<void> { await ChatDialog.continue(); }
+}
+
+/** Ground floor, no flax → cross to the bank (opening the house door), deposit
+ *  everything, then Withdraw-All flax. Stop cleanly when the bank runs dry. */
+class BankTrip implements Task {
+    constructor(private bot: FlaxSpinner) {}
+    validate(): boolean { return this.bot.onFloor(0) && this.bot.fibreCount() === 0; }
+    async execute(): Promise<void> {
+        this.bot.setStatus('banking');
+        await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
+        if (!(await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
+        await Bank.depositInventory(); // bow string + any leftover flax/junk
+        await Execution.delayTicks(1);
+        this.bot.countTrip();
+
+        const flaxBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(this.bot.productName().toLowerCase()));
+        if (!flaxBank || flaxBank.name === null || Bank.count(flaxBank.name) === 0) {
+            this.bot.log(`out of '${this.bot.productName()}' in the bank. Stopping.`);
+            this.bot.setStatus(`out of ${this.bot.productName()} — stopped`);
+            ScriptRunner.stop();
+            return;
+        }
+        const flaxName = flaxBank.name;
+        const ops = flaxBank.ops.filter((o): o is string => o !== null);
+        const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-All';
+        this.bot.setStatus(`withdrawing ${flaxName}`);
+        await Bank.withdraw(flaxName, allOp);
+        await Execution.delayUntil(() => this.bot.fibreCount() > 0 || Bank.count(flaxName) === 0, 4000);
+        // walking closes the bank; Ascend heads for the ladder next tick
+    }
+}
+
+/** Ground floor, flax in the pack → walk to the ladder (opening the house door)
+ *  and climb up to the spinning wheel. */
+class Ascend implements Task {
+    constructor(private bot: FlaxSpinner) {}
+    validate(): boolean { return this.bot.onFloor(0) && this.bot.fibreCount() > 0; }
+    async execute(): Promise<void> {
+        this.bot.setStatus('heading up to the wheel');
+        const ladder = Locs.query().name(this.bot.ladderName()).action(this.bot.climbUpOp()).nearest();
+        if (!ladder || ladder.distance() > 1) {
+            await walkOpening(this.bot.ladderStand(), 1, this.bot.obstacleList(), m => this.bot.log(m));
+        }
+        await climbLadder(this.bot.ladderName(), this.bot.climbUpOp(), m => this.bot.log(`  ${m}`));
+    }
+}
+
+/** Upstairs with flax → open the wheel's Spin panel and Spin-X the whole pack.
+ *  The wheel's Spin op is an OPLOC (forceapproach=south), so the server walks us
+ *  onto it — no web-walking on the un-baked upper floor. */
+class Spin implements Task {
+    constructor(private bot: FlaxSpinner) {}
+    validate(): boolean { return this.bot.onFloor(1) && this.bot.fibreCount() > 0 && !ChatDialog.canContinue(); }
+    async execute(): Promise<void> {
+        // already spinning → ride the batch until the pack drains
+        if (Game.animating()) {
+            await Execution.delayUntil(() => !Game.animating() || this.bot.fibreCount() === 0 || ChatDialog.canContinue(), 6000);
+            return;
+        }
+        // the Spin menu is up → pick the fibre at Make-X for the whole pack
+        if (ChatDialog.isMakeMenu()) {
+            const before = this.bot.fibreCount();
+            if (await ChatDialog.makeX(this.bot.productName(), before)) {
+                await Execution.delayUntil(() => this.bot.fibreCount() < before || Game.animating() || ChatDialog.canContinue(), 6000);
+                if (this.bot.fibreCount() < before) { this.bot.recordSpun(before - this.bot.fibreCount()); }
+            } else {
+                this.bot.log(`Spin menu open but couldn't Make-X '${this.bot.productName()}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
+                await Execution.delayTicks(2);
+            }
+            return;
+        }
+        // open the wheel
+        const wheel = Locs.query().name(this.bot.wheelLocName()).action(this.bot.spinOpName())
+            .where(l => l.tile().distanceTo(this.bot.wheelStand()) <= this.bot.leashRadius()).nearest();
+        if (!wheel) { await Execution.delayTicks(2); return; }
+        this.bot.setStatus('spinning flax');
+        await wheel.interact(this.bot.spinOpName());
+        await Execution.delayUntil(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || Game.animating(), 6000);
+    }
+}
+
+/** Upstairs, no flax left → climb back down to the ground floor. */
+class Descend implements Task {
+    constructor(private bot: FlaxSpinner) {}
+    validate(): boolean { return this.bot.onFloor(1) && this.bot.fibreCount() === 0; }
+    async execute(): Promise<void> {
+        this.bot.setStatus('heading back down');
+        await climbLadder(this.bot.ladderName(), this.bot.climbDownOp(), m => this.bot.log(`  ${m}`));
+    }
+}
