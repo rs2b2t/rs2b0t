@@ -99,32 +99,54 @@ export const Bank = {
     },
 
     /**
-     * Open a bank booth from `stand` (a booth-adjacent tile). A booth only
-     * opens reliably when the op fires from a directly adjacent tile —
-     * otherwise the approach pathing wanders the counter — so step exactly
-     * onto the stand tile and operate the adjacent booth. Retries 4×,
-     * dismissing interrupting dialogs; true once the bank screen is open.
+     * Open a bank booth near `stand` (a booth-adjacent tile). Each attempt first
+     * just CLICKS the booth's op: an OPLOC loc-op makes the server walk us to the
+     * booth's own interactable tile and open it — the normal human click, robust
+     * against the baked walker wedging a couple tiles off the stand and against a
+     * stand that isn't quite adjacent to the nearest booth. Only if that doesn't
+     * open the bank do we fall back to hand-walking exactly onto the stand and
+     * operating the now-adjacent booth. Retries 4×, dismissing interrupting
+     * dialogs; true once the bank screen is open.
      */
     async openBooth(stand: WorldTile, boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
+        // Prefer the requested op ("Use-quickly"), else any "Use…", else op 0.
+        const pick = (acts: string[]): string | undefined =>
+            acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use/i.test(a)) ?? acts[0];
+
         for (let attempt = 0; attempt < 4 && !Bank.isOpen(); attempt++) {
-            let booth = Locs.query().name(boothName).where(l => l.distance() <= 1).nearest();
+            // Only REAL, operable booths — some banks have decorative same-named
+            // booths with no ops that would wedge us if targeted.
+            const booth = Locs.query().name(boothName).where(l => l.actions().length > 0).nearest()
+                ?? Locs.query().name(boothName).nearest();
             if (!booth) {
-                const nearest = Locs.query().name(boothName).nearest();
-                log?.(`no adjacent '${boothName}' (nearest: ${nearest ? `${nearest.tile()}` : 'none in scene'}) — stepping onto (${stand.x}, ${stand.z}, ${stand.level})`);
-                await Traversal.walkTo(stand, { radius: 0, timeoutMs: 30000, log });
-                await Execution.delayTicks(1);
-                booth = Locs.query().name(boothName).where(l => l.distance() <= 1).nearest();
-                if (!booth) {
-                    continue;
-                }
+                log?.(`no '${boothName}' in the scene — waiting`);
+                await Execution.delayTicks(2);
+                continue;
             }
-            const chosen = booth.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? booth.actions().find(a => /^use/i.test(a)) ?? booth.actions()[0];
+
+            // 1) Click the booth op and let the server walk us to it (allow time
+            //    for a multi-tile approach before deciding it didn't land).
+            const chosen = pick(booth.actions());
             if (chosen) {
                 await booth.interact(chosen);
+                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
+                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (Bank.isOpen()) { return true; }
+                }
             }
-            await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000);
-            if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
+
+            // 2) Fallback: hand-walk exactly onto the stand and operate the booth
+            //    from there (for booths behind a counter where OPLOC wanders).
+            log?.(`booth didn't open from here — stepping onto (${stand.x}, ${stand.z}, ${stand.level})`);
+            await Traversal.walkTo(stand, { radius: 0, timeoutMs: 15000, log });
+            await Execution.delayTicks(1);
+            const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
+            const adjOp = adj ? pick(adj.actions()) : undefined;
+            if (adj && adjOp) {
+                await adj.interact(adjOp);
+                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
+                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                }
             }
         }
         return Bank.isOpen();
@@ -132,13 +154,18 @@ export const Bank = {
 
     /**
      * Open the nearest booth in the scene WITHOUT a hand-picked stand tile.
-     * A booth sits behind a counter inside a building — interacting from outside
-     * just wanders the wall and wedges. So we first walk ONTO a live-reachable
-     * tile orthogonally adjacent to the booth (routing us through the doorway up
-     * to the counter), then operate the now-adjacent booth. Retries a few times.
-     * Use `openBooth` when you already know the stand tile. True once open.
+     * Like `openBooth`, each attempt first CLICKS the booth op and lets the
+     * server walk us to it (OPLOC) — the robust path. Only if that doesn't open
+     * the bank do we fall back to hand-walking onto a live-reachable tile beside
+     * the booth (its customer side; the counter blocks the far side) and
+     * operating the now-adjacent booth — needed for booths behind a counter/wall
+     * where OPLOC wanders. Retries a few times. Use `openBooth` when you already
+     * know the stand tile. True once open.
      */
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
+        const pick = (acts: string[]): string | undefined =>
+            acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use|^bank/i.test(a)) ?? acts[0];
+
         for (let attempt = 0; attempt < 6 && !Bank.isOpen(); attempt++) {
             // Only REAL booths: some banks (Seers) have decorative "Bank booth"
             // locs with the SAME name but NO op (loc_2214, "for private customers
@@ -150,28 +177,37 @@ export const Bank = {
                 return false;
             }
 
-            // walk onto a reachable tile beside the real booth (its customer side;
-            // the wall/counter blocks the far side, so canReach only returns the
-            // usable side) unless we're already beside it
+            // 1) Click the booth op; the server walks us there and opens it.
+            const chosen = pick(booth.actions());
+            if (chosen) {
+                await booth.interact(chosen);
+                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
+                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (Bank.isOpen()) { return true; }
+                }
+            }
+
+            // 2) Fallback: hand-walk onto a reachable tile beside the booth (its
+            //    customer side; the wall/counter blocks the far side), then
+            //    operate the now-adjacent booth.
             if (booth.distance() > 1) {
                 const stand = bankStand(booth.tile());
                 if (stand) {
-                    log?.(`stepping to the bank counter at (${stand.x}, ${stand.z})`);
-                    await Traversal.walkTo(stand, { radius: 0, timeoutMs: 30000, log });
+                    log?.(`booth didn't open — stepping to the bank counter at (${stand.x}, ${stand.z})`);
+                    await Traversal.walkTo(stand, { radius: 0, timeoutMs: 15000, log });
                 } else {
                     log?.(`no reachable tile beside '${boothName}' yet — closing in`);
-                    await Traversal.walkTo(booth.tile(), { radius: 1, timeoutMs: 30000, log });
+                    await Traversal.walkTo(booth.tile(), { radius: 1, timeoutMs: 15000, log });
                 }
             }
 
             const adjacent = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest() ?? booth;
-            const chosen = adjacent.actions().find(a => a.toLowerCase() === op.toLowerCase()) ?? adjacent.actions().find(a => /^use|^bank/i.test(a)) ?? adjacent.actions()[0];
-            if (chosen) {
-                await adjacent.interact(chosen);
-            }
-            await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 6000);
-            if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
+            const adjOp = pick(adjacent.actions());
+            if (adjOp) {
+                await adjacent.interact(adjOp);
+                if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
+                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                }
             }
         }
         return Bank.isOpen();
