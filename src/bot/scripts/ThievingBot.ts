@@ -9,11 +9,12 @@ import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { walkOpening } from '../api/walkOpening.js';
+import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 /** Tunable parameters (panel + `?ThievingBot.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
-    target: { type: 'string', default: 'Man', label: 'NPC to thieve (name)', help: 'in-game name, e.g. Man / Woman / Farmer / Master Farmer' },
+    target: { type: 'string', default: 'Man', options: PICKPOCKET_TARGET_NAMES, label: 'Pickpocket target', help: 'pick by exact in-game name (level in parens): Man/Woman 1, Farmer 10, Rogue 32, Guard 40, Knight of Ardougne 55, Paladin 70, Hero 80' },
     action: { type: 'string', default: 'Pickpocket', label: 'Action', help: 'right-click op, e.g. Pickpocket / Steal-from' },
     food: { type: 'string', default: '', label: 'Food to eat (name contains)', help: 'eat this when HP drops from failed steals; blank = no eating (short runs only)' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },

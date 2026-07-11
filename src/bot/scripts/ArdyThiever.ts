@@ -17,6 +17,7 @@ import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs } from '../api/queries/Npcs.js';
+import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
@@ -44,7 +45,7 @@ const FLEE_DIST = 4; // step just far enough to break a guard's melee, not into 
 const STUN_COMBAT_TICKS = 17;
 const DEFAULT_FOOD = 'cake, bread, chocolate slice';
 const DEFAULT_LOOT = 'coins';
-const TARGET_OPTIONS = ['Guard', 'Knight of Ardougne', 'Hero'];
+const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
 
 export const SETTINGS: SettingsSchema = {
     thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target' },
