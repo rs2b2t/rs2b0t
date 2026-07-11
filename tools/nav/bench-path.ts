@@ -37,7 +37,7 @@ const routes: { name: string; from: NavPoint; to: NavPoint }[] = [
     { name: 'Lumbridge -> Varrock square', from: { x: 3222, z: 3218, level: 0 }, to: { x: 3213, z: 3428, level: 0 } },
     { name: 'Lumbridge -> chicken pen interior', from: { x: 3222, z: 3218, level: 0 }, to: { x: 3232, z: 3298, level: 0 } },
     { name: 'chicken pen -> Varrock square', from: { x: 3232, z: 3298, level: 0 }, to: { x: 3213, z: 3428, level: 0 } },
-    { name: 'NavDemo start (3222,3210) -> pen', from: { x: 3222, z: 3210, level: 0 }, to: { x: 3232, z: 3298, level: 0 } },
+    { name: 'Lumbridge (3222,3210) -> chicken pen', from: { x: 3222, z: 3210, level: 0 }, to: { x: 3232, z: 3298, level: 0 } },
     { name: 'Lumbridge ground -> castle roof L2 (stairs)', from: { x: 3222, z: 3218, level: 0 }, to: { x: 3209, z: 3213, level: 2 } },
     { name: 'Lumbridge -> Falador square', from: { x: 3222, z: 3218, level: 0 }, to: { x: 2964, z: 3378, level: 0 } },
     { name: 'Lumbridge -> Al Kharid (toll gate)', from: { x: 3222, z: 3218, level: 0 }, to: { x: 3293, z: 3174, level: 0 } }

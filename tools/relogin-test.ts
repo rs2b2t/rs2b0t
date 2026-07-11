@@ -39,7 +39,7 @@ try {
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 });
     console.log(`logged in as '${username}'`);
 
-    await page.selectOption('.rs2b0t-select', 'DebugBot');
+    await page.selectOption('.rs2b0t-select', 'QuestDashboard');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
     await page.waitForTimeout(3000);

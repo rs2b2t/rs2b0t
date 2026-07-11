@@ -25,7 +25,7 @@ type Rs2b0t = { rs2b0t: {
 } };
 
 const app = await electron.launch({
-    args: ['desktop/main.cjs', `--server=${server}/bot.html?inputmode=synthetic`],
+    args: ['desktop/main.cjs', `--server=${server}/bot.html?inputmode=synthetic&WalkTo.destination=Falador`],
     executablePath: 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 });
 
@@ -74,13 +74,13 @@ try {
     // Bot panel script picker: Browse… -> category chip -> script card -> Start
     // (the `.rs2b0t-select` dropdown this test's original brief was drafted
     // against has been replaced by the ScriptLibrary modal; pattern matches
-    // tools/chicken-test.ts / tools/library-test.ts). NavDemo web-walks a
-    // fixed route (Lumbridge castle -> chicken pen -> Varrock -> Falador),
+    // tools/chicken-test.ts / tools/library-test.ts). WalkTo web-walks from
+    // Lumbridge to Falador (set via the ?WalkTo.destination override above),
     // so it issues plenty of synthetic walk() gestures via minimap clicks.
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Navigation/ }).click();
-    await page.locator('.rs2b0t-library-card', { hasText: 'NavDemo' }).click();
+    await page.locator('.rs2b0t-library-card', { hasText: 'WalkTo' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
     let sawBoost = false;
@@ -95,7 +95,7 @@ try {
     const logHasFail = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('synthetic-fail')));
     const state = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
     const gestureDrawFps = (gEnd.drawn - gStart.drawn) / ((Date.now() - t0) / 1000);
-    console.log(`backgrounded NavDemo: boosted seen=${sawBoost}, draw during run ${gestureDrawFps.toFixed(1)}fps, state=${state}, synthetic-fail=${logHasFail}`);
+    console.log(`backgrounded WalkTo: boosted seen=${sawBoost}, draw during run ${gestureDrawFps.toFixed(1)}fps, state=${state}, synthetic-fail=${logHasFail}`);
     if (!sawBoost) fail('boost never engaged during synthetic gestures while backgrounded');
     if (logHasFail) fail('synthetic-fail logged while backgrounded (constraint #5 violated)');
     if (state === 'crashed') fail('script crashed');

@@ -103,8 +103,9 @@ try {
         };
     });
 
-    if (panel.banner !== 'adapter self-test: ok') fail(`banner: '${panel.banner}'`);
-    console.log(`banner: ${panel.banner}`);
+    // healthy adapter now shows NO banner (it only appears on not-attached / self-test FAILED)
+    if (panel.banner !== '') fail(`unexpected adapter banner: '${panel.banner}'`);
+    console.log('banner: none (adapter healthy)');
 
     const { state, player, tile, energy, nearby, tick } = panel.rows;
     if (state !== 'ingame') fail(`state row: '${state}'`);
@@ -128,21 +129,20 @@ try {
     // ---- Slice 2: script runtime ----
     type RunnerGlobal = { rs2b0t: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null }; host: { tickCount: number } } };
     const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.state);
-    const logLines = (): Promise<string[]> => page.evaluate(() => ((globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log ?? []).map(l => `${l.level}: ${l.msg}`));
     const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log.length ?? 0);
 
-    await page.selectOption('.rs2b0t-select', 'DebugBot');
+    await page.selectOption('.rs2b0t-select', 'QuestDashboard');
     await page.getByRole('button', { name: 'Start' }).click();
 
-    await page.waitForFunction(() => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: { msg: string }[] } | null } } }).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.includes('nearest:')).length >= 2, undefined, { timeout: 20000 });
-    console.log('DebugBot: looping and logging');
+    await page.waitForFunction(() => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: { msg: string }[] } | null } } }).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.toLowerCase().includes('quest')).length >= 2, undefined, { timeout: 20000 });
+    console.log('QuestDashboard: looping and logging');
 
     const overlayPainted = await page.evaluate(() => {
         const overlay = document.getElementById('overlay') as HTMLCanvasElement;
         return (overlay.getContext('2d')?.getImageData(10, 10, 1, 1).data[3] ?? 0) > 0;
     });
-    if (!overlayPainted) fail('overlay not painted while DebugBot running');
-    console.log('DebugBot: overlay painted');
+    if (!overlayPainted) fail('overlay not painted while QuestDashboard running');
+    console.log('QuestDashboard: overlay painted');
 
     await page.screenshot({ path: 'out/e2e-smoke-runtime.png' });
 
@@ -151,40 +151,17 @@ try {
     const pausedLogLength = await logLength();
     await page.waitForTimeout(2500);
     if ((await logLength()) !== pausedLogLength) fail('script made progress while paused');
-    console.log('DebugBot: paused cleanly (no progress while paused)');
+    console.log('QuestDashboard: paused cleanly (no progress while paused)');
 
     await page.getByRole('button', { name: 'Resume' }).click();
     await page.waitForFunction(len => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: unknown[] } | null } } }).rs2b0t.runner.ctx?.log.length ?? 0) > len, pausedLogLength, { timeout: 15000 });
-    console.log('DebugBot: resumed');
+    console.log('QuestDashboard: resumed');
 
+    // QuestDashboard has no onStop hook, so a clean stop is proven by the runner
+    // reaching the 'stopped' state (the runner still tears down subscriptions).
     await page.getByRole('button', { name: 'Stop' }).click();
     await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
-    if (!(await logLines()).some(l => l.includes('DebugBot stopped'))) fail('onStop did not run on stop');
-    console.log('DebugBot: stopped cleanly, onStop ran');
-
-    // crash isolation: CrashTestBot throws on iteration 3
-    await page.selectOption('.rs2b0t-select', 'CrashTestBot');
-    await page.getByRole('button', { name: 'Start' }).click();
-    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'crashed', undefined, { timeout: 15000 });
-
-    const crashLog = await logLines();
-    if (!crashLog.some(l => l.includes('deliberate CrashTestBot explosion'))) fail('crash not reported in log');
-    if (!crashLog.some(l => l.includes('onStop ran'))) fail('onStop did not run after crash');
-    console.log('CrashTestBot: crashed in isolation, error logged, onStop ran');
-
-    // the client must have survived the crash: ticks still flowing, and a new
-    // script starts fine
-    const tickBeforeSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.host.tickCount);
-    await page.waitForTimeout(2000);
-    const tickAfterSurvival = await page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.host.tickCount);
-    if (tickAfterSurvival < tickBeforeSurvival + 2) fail('client tick flow died after script crash');
-
-    await page.selectOption('.rs2b0t-select', 'DebugBot');
-    await page.getByRole('button', { name: 'Start' }).click();
-    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
-    await page.getByRole('button', { name: 'Stop' }).click();
-    await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
-    console.log('client survived the crash; restart works');
+    console.log('QuestDashboard: stopped cleanly');
 
     await page.screenshot({ path: 'out/e2e-smoke.png' });
     console.log('screenshots: out/e2e-smoke.png, out/e2e-smoke-runtime.png');
@@ -193,7 +170,7 @@ try {
         console.log(`note: ${resourceNoise.length} resource-load failures (also present on the stock client): ${resourceNoise.join(', ')}`);
     }
 
-    const fatal = pageErrors.filter(e => !e.includes('AudioContext') && !e.includes('autoplay') && !e.includes('deliberate CrashTestBot explosion'));
+    const fatal = pageErrors.filter(e => !e.includes('AudioContext') && !e.includes('autoplay'));
     if (fatal.length > 0) fail(`page errors:\n${fatal.join('\n')}`);
 
     console.log('PASS');

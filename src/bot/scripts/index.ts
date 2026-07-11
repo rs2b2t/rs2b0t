@@ -12,12 +12,7 @@ import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidK
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import CooksAssistant from './CooksAssistant.js';
-import CrashTestBot from './CrashTestBot.js';
-import DebugBot from './DebugBot.js';
 import GatheringBot from './GatheringBot.js';
-import IronBanker, { SETTINGS as IRONBANKER_SETTINGS } from './IronBanker.js';
-import LifeBot, { SETTINGS as LIFE_SETTINGS } from './LifeBot.js';
-import NavDemo from './NavDemo.js';
 import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
@@ -35,16 +30,6 @@ ScriptRegistry.register({
     category: 'Tutorial',
     tags: ['tutorial', 'onboarding'],
     create: () => new TutorialBot()
-});
-
-// --- life (roams the world, switches activities, chats) ---
-ScriptRegistry.register({
-    name: 'LifeBot',
-    description: 'Roams Lumbridge doing varied things (mine, fight chickens/cows, loiter) and chats — a believable person rather than a farmer',
-    category: 'Life',
-    tags: ['roaming', 'human', 'social', 'varied'],
-    settingsSchema: LIFE_SETTINGS,
-    create: () => new LifeBot()
 });
 
 // --- quest ---
@@ -153,15 +138,6 @@ ScriptRegistry.register({
 
 // --- gathering presets (all GatheringBot, varied by settings defaults) ---
 
-/** Build a gathering preset: GATHERING_SETTINGS with overridden defaults. */
-function gathering(overrides: Record<string, unknown>): SettingsSchema {
-    const schema: SettingsSchema = {};
-    for (const [key, def] of Object.entries(GATHERING_SETTINGS)) {
-        schema[key] = key in overrides ? { ...def, default: overrides[key] } : def;
-    }
-    return schema;
-}
-
 ScriptRegistry.register({
     name: 'Miner',
     description: 'Mines the selected rock types and banks the ore at the nearest bank (auto-detected), or drops it. Needs a pickaxe.',
@@ -185,18 +161,6 @@ ScriptRegistry.register({
         }
     },
     create: () => new GatheringBot()
-});
-
-// The banking half of a mining→banking pair: run `Miner` at an iron mine and
-// `IronBanker` alongside it (set IronBanker.bankTile to a booth-adjacent tile).
-// No IPC — the miner's dropped ore is the shared signal.
-ScriptRegistry.register({
-    name: 'IronBanker',
-    description: 'Sweeps ore a nearby Miner bot drops and shuttles it to a bank (set bankTile; pairs with Miner)',
-    category: 'Mining',
-    tags: ['f2p', 'banking', 'coordination'],
-    settingsSchema: IRONBANKER_SETTINGS,
-    create: () => new IronBanker()
 });
 
 ScriptRegistry.register({
@@ -234,15 +198,6 @@ function processing(overrides: Record<string, unknown>): SettingsSchema {
     }
     return schema;
 }
-
-ScriptRegistry.register({
-    name: 'Cook',
-    description: 'Cooks raw food on a nearby range or fire (anchor = start tile)',
-    category: 'Cooking',
-    tags: ['f2p', 'processing'],
-    settingsSchema: processing({ material: 'Raw', targetType: 'loc', target: 'Range', product: '', leashRadius: 8 }),
-    create: () => new ProcessingBot()
-});
 
 ScriptRegistry.register({
     name: 'CookBot',
@@ -303,15 +258,7 @@ ScriptRegistry.register({
     create: () => new WildyAgility()
 });
 
-// --- navigation / develop ---
-ScriptRegistry.register({
-    name: 'NavDemo',
-    description: 'Web-walks Lumbridge -> castle stairs -> chicken pen -> Varrock -> Falador',
-    category: 'Navigation',
-    tags: ['demo', 'web-walk'],
-    create: () => new NavDemo()
-});
-
+// --- navigation ---
 ScriptRegistry.register({
     name: 'WalkTo',
     description: 'Walks to a chosen destination and stops — Lumbridge, Varrock, Falador, Ardougne, Rellekka, Taverley (centre); Draynor, Al Kharid, Edgeville, Seers, Yanille (bank); or a custom tile',
@@ -319,20 +266,4 @@ ScriptRegistry.register({
     tags: ['navigation', 'utility', 'web-walk'],
     settingsSchema: WALKTO_SETTINGS,
     create: () => new WalkToBot()
-});
-
-ScriptRegistry.register({
-    name: 'DebugBot',
-    description: 'Logs nearest NPCs each tick and paints an overlay box',
-    category: 'Develop',
-    tags: ['debug', 'overlay'],
-    create: () => new DebugBot()
-});
-
-ScriptRegistry.register({
-    name: 'CrashTestBot',
-    description: 'Throws on iteration 3 to demonstrate crash isolation',
-    category: 'Develop',
-    tags: ['test'],
-    create: () => new CrashTestBot()
 });

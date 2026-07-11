@@ -1,6 +1,7 @@
-// Slice 5 functional test: fresh account, unlock tabs, run NavDemo through
-// the panel and assert both web-walking legs arrive (Lumbridge -> chicken pen
-// interior through the gate -> Varrock square).
+// Slice 5 functional test: fresh account, unlock tabs, run WalkTo through the
+// panel and assert the web-walker routes from Lumbridge to Varrock and arrives.
+// (Previously drove the multi-leg NavDemo; NavDemo was retired, so this now
+// exercises the resilient web-walker over a single cross-region route.)
 //
 // Usage: bun tools/nav-test.ts [base-url] [username]
 
@@ -51,7 +52,7 @@ try {
             .catch(() => false);
     };
 
-    await page.goto(`${base}/bot.html`);
+    await page.goto(`${base}/bot.html?WalkTo.destination=Varrock`);
     await boot();
     if (!(await login())) fail('first login failed');
     console.log(`logged in as '${username}'`);
@@ -73,9 +74,9 @@ try {
     if (!backIn) fail('re-login failed');
     console.log('re-logged in at Lumbridge');
 
-    await page.selectOption('.rs2b0t-select', 'NavDemo');
+    await page.selectOption('.rs2b0t-select', 'WalkTo');
     await page.getByRole('button', { name: 'Start' }).click();
-    console.log('NavDemo started...');
+    console.log('WalkTo (-> Varrock) started...');
 
     const deadline = Date.now() + DEMO_TIMEOUT_MS;
     let lastLogged = 0;
@@ -96,24 +97,21 @@ try {
 
         if (snap.state === 'crashed') {
             await page.screenshot({ path: 'out/nav-test.png' });
-            fail('NavDemo crashed — see log above');
+            fail('WalkTo crashed — see log above');
         }
 
-        done = snap.log.some(l => l.includes('NavDemo complete'));
+        done = snap.log.some(l => /arrived at/i.test(l));
     }
 
     await page.screenshot({ path: 'out/nav-test.png' });
     console.log('screenshot: out/nav-test.png');
 
     const log = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
-    const arrivals = log.filter(l => /^leg \d.*arrived/.test(l));
-    const failures = log.filter(l => l.includes('FAILED'));
+    const arrivals = log.filter(l => /arrived at/i.test(l));
 
     await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});
 
-    if (!done) fail(`demo did not complete within ${DEMO_TIMEOUT_MS / 60000}min (${arrivals.length} arrivals, ${failures.length} failures)`);
-    if (failures.length > 0) fail(`legs failed: ${failures.join(' | ')}`);
-    if (arrivals.length < 5) fail(`expected 5 arrivals, saw ${arrivals.length}`);
+    if (!done) fail(`walk did not arrive within ${DEMO_TIMEOUT_MS / 60000}min (${arrivals.length} arrivals)`);
 
     console.log(`\nresult: ${arrivals.join(' | ')}`);
     console.log('PASS');

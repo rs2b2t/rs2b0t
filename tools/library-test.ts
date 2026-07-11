@@ -56,17 +56,17 @@ try {
     if (!hasFeatherParam) fail('selecting ChickenKiller did not load its parameters');
     console.log('library: selected ChickenKiller -> panel + params updated');
 
-    // selection drives the runner: pick DebugBot, log in, Start
+    // selection drives the runner: pick QuestDashboard, log in, Start
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^All/ }).click(); // library remembers the last filter
-    await page.locator('.rs2b0t-library-card', { hasText: 'DebugBot' }).click();
+    await page.locator('.rs2b0t-library-card', { hasText: 'QuestDashboard' }).click();
     await page.evaluate(() => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = `lib${Date.now().toString(36).slice(-5)}`; c.loginPass = 't'; void c.login(c.loginUser, 't', false); });
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 20000 }).catch(() => {});
     await page.getByRole('button', { name: 'Start' }).click();
     const running = await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 }).then(() => true).catch(() => false);
     if (!running) fail('selected script did not start');
-    console.log('library: selected DebugBot started via the runner');
+    console.log('library: selected QuestDashboard started via the runner');
 
     await page.screenshot({ path: 'out/library-test.png' });
     await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});
