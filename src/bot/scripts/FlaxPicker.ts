@@ -5,8 +5,10 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { Locs } from '../api/queries/Locs.js';
+import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Traversal } from '../api/Traversal.js';
+import { Reachability } from '../api/Reachability.js';
+import { EventSignal } from '../api/EventSignal.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -25,6 +27,11 @@ const BOOTH = { op: 'Use-quickly' };
 // this just scopes which flax belongs to this field.
 const FIELD_SCOPE = 12;
 const FIELD_ARRIVE = 6; // arrival radius when web-walking to the field
+// Flax locs block movement, so a full pack (which can't pick — "You can't carry
+// any more flax") can get walled in. If the tiles reachable from the player flood
+// to fewer than this, we're boxed into a flax pocket and must carve out.
+const POCKET_CAP = 40;
+const CARVE_DROP = 5; // flax to drop to free slots for carving a way out
 
 export const SETTINGS: SettingsSchema = {
     flaxName: { type: 'string', default: 'Flax', label: 'Flax loc name' },
@@ -79,7 +86,7 @@ export default class FlaxPicker extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(), new StartupReset(this), new BankTrip(this), new Pick(this), new GoToField(this));
+        this.add(new ContinueDialog(), new EscapeFlaxTrap(this), new StartupReset(this), new BankTrip(this), new Pick(this), new GoToField(this));
     }
 
     override recoveryAnchor(): Tile | null {
@@ -128,16 +135,109 @@ export default class FlaxPicker extends TaskBot {
             .nearest();
     }
 
+    /** The pickable flax loc at exactly (x,z,level), or null. */
+    flaxLocAt(x: number, z: number, level: number): Loc | null {
+        return Locs.query()
+            .name(this.flaxName)
+            .action(this.pickOp)
+            .where(l => l.tile().x === x && l.tile().z === z && l.tile().level === level)
+            .nearest();
+    }
+
     /** True while a pickable flax loc still stands at `tile`. Picking flax (by us
      *  OR any other player) runs loc_del(25) — the loc vanishes for 25 ticks — so
      *  this flips false the instant someone else takes our target, letting Pick
      *  retarget immediately instead of waiting out the yield window. */
     flaxStillAt(tile: Tile): boolean {
-        return Locs.query()
-            .name(this.flaxName)
-            .action(this.pickOp)
-            .where(l => l.tile().x === tile.x && l.tile().z === tile.z && l.tile().level === tile.level)
-            .nearest() !== null;
+        return this.flaxLocAt(tile.x, tile.z, tile.level) !== null;
+    }
+
+    /** Flood-fill the walkable tiles reachable from the player (4-connected, live
+     *  collision), bounded to `cap`. A small result means we're penned into a
+     *  pocket; open ground floods past the cap immediately. */
+    private pocketTiles(cap: number): { x: number; z: number }[] {
+        const me = Game.tile();
+        if (!me) { return []; }
+        const level = me.level;
+        const key = (x: number, z: number): string => `${x},${z}`;
+        const seen = new Set<string>([key(me.x, me.z)]);
+        const out: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
+        const queue: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        while (queue.length > 0 && out.length < cap) {
+            const cur = queue.shift()!;
+            const from = { x: cur.x, z: cur.z, level };
+            for (const [dx, dz] of dirs) {
+                const nx = cur.x + dx, nz = cur.z + dz, k = key(nx, nz);
+                if (seen.has(k) || !Reachability.canStep(from, { x: nx, z: nz, level })) { continue; }
+                seen.add(k);
+                out.push({ x: nx, z: nz });
+                queue.push({ x: nx, z: nz });
+            }
+        }
+        return out;
+    }
+
+    /** Pickable flax locs walling in `pocket` — the boundary tiles we can carve. */
+    private boundaryFlax(pocket: { x: number; z: number }[]): Loc[] {
+        const level = Game.tile()?.level ?? 0;
+        const inPocket = new Set(pocket.map(t => `${t.x},${t.z}`));
+        const seen = new Set<string>();
+        const walls: Loc[] = [];
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (const p of pocket) {
+            for (const [dx, dz] of dirs) {
+                const nx = p.x + dx, nz = p.z + dz, k = `${nx},${nz}`;
+                if (inPocket.has(k) || seen.has(k)) { continue; }
+                seen.add(k);
+                const flax = this.flaxLocAt(nx, nz, level);
+                if (flax) { walls.push(flax); }
+            }
+        }
+        return walls;
+    }
+
+    /** Full pack AND penned into a small flax pocket — a full pack can't pick, so
+     *  it can't open the flax walls the normal way and is stuck. */
+    boxedByFlax(): boolean {
+        if (!Inventory.isFull()) { return false; }
+        const pocket = this.pocketTiles(POCKET_CAP);
+        return pocket.length < POCKET_CAP && this.boundaryFlax(pocket).length > 0;
+    }
+
+    /** Drop up to `n` flax to free slots (a full pack refuses to pick). */
+    private async dropFlax(n: number): Promise<void> {
+        for (let i = 0; i < n; i++) {
+            const flax = Inventory.items().find(it => this.isFlax(it.name));
+            if (!flax) { return; }
+            const before = this.flaxCount();
+            if (!(await flax.interact('Drop'))) { return; }
+            await Execution.delayUntil(() => this.flaxCount() < before, 2000);
+        }
+    }
+
+    /**
+     * Carve out of a flax pen: drop a few flax to free slots, then pick the
+     * boundary flax nearest the exit (toward the west opening) to open a path,
+     * repeating until the pocket floods back open. Flax we pick lands in the freed
+     * slots; top the drop up if we fill again mid-carve.
+     */
+    async carveOut(): Promise<void> {
+        this.setStatus('boxed in by flax — carving a way out');
+        this.log(`boxed in by flax with a full pack — dropping ${CARVE_DROP} flax to pick a way out`);
+        await this.dropFlax(CARVE_DROP);
+        for (let n = 0; n < 20; n++) {
+            if (ChatDialog.canContinue() || EventSignal.pending()) { return; }
+            const pocket = this.pocketTiles(POCKET_CAP);
+            if (pocket.length >= POCKET_CAP) { this.log('carved back out to open ground'); return; }
+            const walls = this.boundaryFlax(pocket);
+            if (walls.length === 0) { return; } // walled by map, not flax — nothing to carve
+            if (Inventory.isFull()) { await this.dropFlax(CARVE_DROP); }
+            const target = walls.sort((a, b) => a.tile().distanceTo(this.fieldExit) - b.tile().distanceTo(this.fieldExit))[0];
+            const t = target.tile();
+            if (!(await target.interact(this.pickOp))) { await Execution.delayTicks(2); continue; }
+            await Execution.delayUntil(() => !this.flaxStillAt(t), 4000);
+        }
     }
 
     /**
@@ -199,6 +299,15 @@ export default class FlaxPicker extends TaskBot {
 class ContinueDialog implements Task {
     validate(): boolean { return ChatDialog.canContinue(); }
     async execute(): Promise<void> { await ChatDialog.continue(); }
+}
+
+/** Full pack AND walled into a flax pocket → carve out (a full pack can't pick
+ *  the flax walls the normal way). Highest working priority so it pre-empts the
+ *  bank trip, which would otherwise try to web-walk out of a pen it can't leave. */
+class EscapeFlaxTrap implements Task {
+    constructor(private bot: FlaxPicker) {}
+    validate(): boolean { return this.bot.boxedByFlax(); }
+    async execute(): Promise<void> { await this.bot.carveOut(); }
 }
 
 /** One-shot at start: bank whatever we spawned holding so the loop begins from a
