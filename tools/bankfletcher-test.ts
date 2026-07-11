@@ -112,6 +112,7 @@ try {
     let sawShafts = false, boothFail = false;
     for (let i = 0; i < 60; i++) { // ~120s
         await page.waitForTimeout(2000);
+        if (i % 5 === 0) { console.log(`  t=${i * 2}s inv=${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`); }
         if (countSub(await inv(), 'arrow shaft') > 0) { sawShafts = true; break; }
         if ((await logLines()).some(l => /could not open the bank/i.test(l))) { boothFail = true; break; }
     }

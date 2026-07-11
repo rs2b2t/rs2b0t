@@ -172,7 +172,12 @@ class BankTrip implements Task {
         }
         const knifeName = knifeBank.name;
         if (Inventory.count(knifeName) === 0) {
-            await Bank.withdraw(knifeName, 'Withdraw-1');
+            // Read the real Withdraw-1 op off the item's OWN ops — the client
+            // labels it 'Withdraw 1' / 'Withdraw-1' by build, and a hardcoded
+            // label silently withdraws nothing (same trap as CookBot's Withdraw All).
+            const knifeOps = knifeBank.ops.filter((o): o is string => o !== null);
+            const oneOp = knifeOps.find(o => /withdraw[\s-]*1\b/i.test(o)) ?? knifeOps.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-1';
+            await Bank.withdraw(knifeName, oneOp);
             await Execution.delayUntil(() => Inventory.contains(knifeName), 3000);
         }
 
