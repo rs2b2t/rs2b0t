@@ -33,6 +33,15 @@ const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
 const PICKPOCKET_OP = 'Pickpocket';
 const FLEE_DIST = 4; // step just far enough to break a guard's melee, not into walled/door areas
+// A failed pickpocket damages you (health bar shows -> Game.inCombat() true) AND
+// stuns you — the target does NOT enter combat (engine: fail_pick_pocket ends on
+// npc_setmode(null)). So a caught pickpocket looks like "combat" for as long as
+// the health bar lingers: combatCycle = loopCycle + 400, shown while within 300
+// client cycles ≈ 6s ≈ 10 server ticks at 50fps. Suppress Flee for a slightly
+// longer window (headroom for frame-rate dips) after each stun so a normal miss
+// isn't mistaken for a real attacker. Genuine combat never emits a stun message,
+// so it still flees once the window lapses.
+const STUN_COMBAT_TICKS = 17;
 const DEFAULT_FOOD = 'cake, bread, chocolate slice';
 const DEFAULT_LOOT = 'coins';
 const TARGET_OPTIONS = ['Guard', 'Knight of Ardougne', 'Hero'];
@@ -104,6 +113,7 @@ export default class ArdyThiever extends TaskBot {
     private trips = 0;
     private flees = 0;
     private status = 'starting';
+    private stunnedUntilTick = 0;
     died = false;
 
     override async onStart(): Promise<void> {
@@ -138,6 +148,11 @@ export default class ArdyThiever extends TaskBot {
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
                 this.died = true;
+            }
+            // a caught pickpocket stuns us and shows the health bar (looks like
+            // combat) — mark the stun so Flee ignores the self-inflicted hit.
+            if (/been stunned|fail to pick/i.test(e.text)) {
+                this.stunnedUntilTick = Game.tick() + STUN_COMBAT_TICKS;
             }
         });
 
@@ -194,6 +209,14 @@ export default class ArdyThiever extends TaskBot {
     }
 
     setStatus(s: string): void { this.status = s; }
+    /** True while a recent thieving stun still explains Game.inCombat() (a caught
+     *  pickpocket, not a real attacker). */
+    private inThievingStun(): boolean { return Game.tick() <= this.stunnedUntilTick; }
+    /** In combat with an actual attacker — the self-inflicted pickpocket-fail
+     *  stun (which also shows the health bar) does NOT count. Every task that
+     *  pauses "while in combat" gates on this so a normal miss neither flees nor
+     *  freezes the loop. */
+    inRealCombat(): boolean { return Game.inCombat() && !this.inThievingStun(); }
     countSteal(): void { this.steals++; }
     countEat(): void { this.eats++; }
     countLoot(): void { this.looted++; }
@@ -206,12 +229,14 @@ class ContinueDialog implements Task {
     async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
-/** A low-level thief never trades hits: on any combat, retreat directly away
+/** A low-level thief never trades hits: on a REAL attack, retreat directly away
  *  from the attacker (or the target/stall) to a reachable tile, then wait it
- *  out. Highest non-recovery priority. */
+ *  out. Highest non-recovery priority. A caught pickpocket also shows the health
+ *  bar, but that self-inflicted stun is not combat — inThievingStun() keeps us
+ *  from fleeing a normal miss (we're stunned in place anyway). */
 class Flee implements Task {
     constructor(private bot: ArdyThiever) {}
-    validate(): boolean { return Game.inCombat(); }
+    validate(): boolean { return this.bot.inRealCombat(); }
     async execute(): Promise<void> {
         const me = Game.tile();
         if (!me) { await Execution.delayTicks(1); return; }
@@ -239,7 +264,7 @@ class LootDrops implements Task {
             .where(g => g.tile().distanceTo(ANCHOR) <= LEASH + 4 && Reachability.canReach(g.tile()))
             .nearest();
     }
-    validate(): boolean { return !Game.inCombat() && !Inventory.isFull() && this.find() !== null; }
+    validate(): boolean { return !this.bot.inRealCombat() && !Inventory.isFull() && this.find() !== null; }
     async execute(): Promise<void> {
         const drop = this.find();
         if (!drop) { return; }
@@ -321,7 +346,7 @@ class BankRun implements Task {
 class RestockCakes implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean {
-        return !Game.inCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
+        return !this.bot.inRealCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
@@ -332,7 +357,7 @@ class RestockCakes implements Task {
         }
         const deadline = performance.now() + 60000;
         while (performance.now() < deadline) {
-            if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || Game.inCombat()) { return; }
+            if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || this.bot.inRealCombat()) { return; }
             if (Inventory.isFull() || foodCount() >= FOOD_TARGET) {
                 this.bot.log(`stocked ${foodCount()} food`);
                 return;
@@ -364,7 +389,7 @@ class Pickpocket implements Task {
             .nearest();
     }
     validate(): boolean {
-        return !Game.inCombat() && foodCount() > RESTOCK_AT && !Inventory.isFull() && this.find() !== null;
+        return !this.bot.inRealCombat() && foodCount() > RESTOCK_AT && !Inventory.isFull() && this.find() !== null;
     }
     async execute(): Promise<void> {
         const npc = this.find();
@@ -378,8 +403,13 @@ class Pickpocket implements Task {
         const xpBefore = Skills.xp('thieving');
         const usedBefore = Inventory.used();
         if (!(await npc.interact(PICKPOCKET_OP))) { await Execution.delayTicks(2); return; }
+        // Wait out the attempt: a SUCCESS lands thieving xp/loot within a tick or
+        // two; a FAILURE stuns us instead (no xp/loot) — sit it out (yielding to
+        // EatFood if the hit dropped us) rather than re-firing opnpc every tick,
+        // which the stun ignores anyway. NOT gated on Game.inCombat(): the fail
+        // itself shows the health bar, and breaking on it just spins the attempt.
         await Execution.delayUntil(
-            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < EAT_AT || Game.inCombat(),
+            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < EAT_AT,
             3000
         );
         if (Skills.xp('thieving') > xpBefore) { this.bot.countSteal(); this.bot.log(`pickpocketed ${TARGET}`); }
