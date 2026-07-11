@@ -17,7 +17,6 @@ import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
-import { dodgeStallOwner, ownerNearStall } from './StallOwner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
@@ -29,9 +28,6 @@ const DEFAULT_STALL = new Tile(2667, 3310, 0);
 // The stall sits behind a counter (like a bank booth), so we can't stand on it —
 // walk ONTO this reachable tile beside it and steal from there.
 const DEFAULT_STALL_STAND = new Tile(2668, 3312, 0);
-// If the stall owner (the Baker) is within range of the stand, stealing gets us
-// caught → guards attack. Step to this tile until they wander off, then resume.
-const DEFAULT_OWNER_DODGE = new Tile(2669, 3310, 0);
 const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
@@ -60,9 +56,6 @@ export const SETTINGS: SettingsSchema = {
     stallTile: { type: 'tile', default: DEFAULT_STALL, label: 'Baker\'s stall (x,z)' },
     stallStand: { type: 'tile', default: DEFAULT_STALL_STAND, label: 'Stall stand tile (x,z)', help: 'reachable tile beside the stall to steal from (the stall itself is behind a counter)' },
     stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
-    stallOwner: { type: 'string', default: 'Baker', label: 'Stall owner NPC (dodge)', help: 'if this NPC is near the stall it catches your theft — step aside until they move off' },
-    ownerDodgeTile: { type: 'tile', default: DEFAULT_OWNER_DODGE, label: 'Owner-dodge tile (x,z)' },
-    ownerRange: { type: 'number', default: 5, min: 1, max: 12, label: 'Owner catch range (tiles)' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     stallFleeTile: { type: 'tile', default: DEFAULT_FLEE_TILE, label: 'Flee/kite tile (x,z)', help: 'run here on any guard combat to kite the guard away from the stall' },
     obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'open the nearest of these when a target is walled off' },
@@ -87,9 +80,6 @@ let STALL_STAND = DEFAULT_STALL_STAND;
 let STALL_NAME = 'Baker\'s stall';
 let BANK_STAND = DEFAULT_BANK_STAND;
 let FLEE_TILE = DEFAULT_FLEE_TILE;
-let STALL_OWNER = 'Baker';
-let OWNER_DODGE = DEFAULT_OWNER_DODGE;
-let OWNER_RANGE = 5;
 let OBSTACLE: string[] = ['door', 'gate'];
 let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
 let LOOT = DEFAULT_LOOT.split(',').map(s => s.trim().toLowerCase());
@@ -142,9 +132,6 @@ export default class ArdyThiever extends TaskBot {
         STALL_NAME = this.settings.str('stallName', 'Baker\'s stall');
         BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         FLEE_TILE = this.settings.tile('stallFleeTile', DEFAULT_FLEE_TILE);
-        STALL_OWNER = this.settings.str('stallOwner', 'Baker');
-        OWNER_DODGE = this.settings.tile('ownerDodgeTile', DEFAULT_OWNER_DODGE);
-        OWNER_RANGE = this.settings.num('ownerRange', 5);
         OBSTACLE = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
         LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
@@ -365,11 +352,8 @@ class RestockCakes implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
         this.bot.log(`restocking cake (have ${foodCount()})`);
-        // If the Baker is in catch range, stealing gets us caught — dodge aside
-        // and wait him out, then re-eval (steal on the next run once he's gone).
-        if (await dodgeStallOwner({ ownerName: STALL_OWNER, stallStand: STALL_STAND, dodgeTile: OWNER_DODGE, range: OWNER_RANGE, log: m => this.bot.log(m), abort: () => this.bot.inRealCombat() || this.bot.died || EventSignal.pending() })) {
-            return;
-        }
+        // Stand on the dedicated stand tile beside the stall and steal from there.
+        // A theft caught by the Baker just pulls a guard — the Flee task kites it.
         const here = Game.tile();
         if (!here || STALL_STAND.distanceTo(here) > 0) {
             await Traversal.walkTo(STALL_STAND, { radius: 0, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
@@ -377,7 +361,6 @@ class RestockCakes implements Task {
         const deadline = performance.now() + 60000;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || this.bot.inRealCombat()) { return; }
-            if (ownerNearStall(STALL_OWNER, STALL_STAND, OWNER_RANGE)) { return; } // Baker wandered back — bail, dodge next run
             if (Inventory.isFull() || foodCount() >= FOOD_TARGET) {
                 this.bot.log(`stocked ${foodCount()} food`);
                 return;
