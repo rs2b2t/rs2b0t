@@ -6,7 +6,6 @@ import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
-import { fleeCandidates } from '../api/eventEvade.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -33,7 +32,10 @@ const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
 const PICKPOCKET_OP = 'Pickpocket';
-const FLEE_DIST = 4; // step just far enough to break a guard's melee, not into walled/door areas
+// On any real combat (a guard caught us stealing from the stall), run to this
+// fixed tile SW of the market — far enough to drag the guard off the stall and
+// break its melee, so the stall clears for the next restock.
+const DEFAULT_FLEE_TILE = new Tile(2655, 3298, 0);
 // A failed pickpocket damages you (health bar shows -> Game.inCombat() true) AND
 // stuns you — the target does NOT enter combat (engine: fail_pick_pocket ends on
 // npc_setmode(null)). So a caught pickpocket looks like "combat" for as long as
@@ -55,6 +57,7 @@ export const SETTINGS: SettingsSchema = {
     stallStand: { type: 'tile', default: DEFAULT_STALL_STAND, label: 'Stall stand tile (x,z)', help: 'reachable tile beside the stall to steal from (the stall itself is behind a counter)' },
     stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
+    stallFleeTile: { type: 'tile', default: DEFAULT_FLEE_TILE, label: 'Flee/kite tile (x,z)', help: 'run here on any guard combat to kite the guard away from the stall' },
     obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'open the nearest of these when a target is walled off' },
     food: { type: 'string[]', default: DEFAULT_FOOD.split(',').map(s => s.trim()), label: 'Food names (contains)' },
     eatAtHp: { type: 'number', default: 40, min: 0, max: 100, label: 'Eat below HP%' },
@@ -76,6 +79,7 @@ let STALL_TILE = DEFAULT_STALL;
 let STALL_STAND = DEFAULT_STALL_STAND;
 let STALL_NAME = 'Baker\'s stall';
 let BANK_STAND = DEFAULT_BANK_STAND;
+let FLEE_TILE = DEFAULT_FLEE_TILE;
 let OBSTACLE: string[] = ['door', 'gate'];
 let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
 let LOOT = DEFAULT_LOOT.split(',').map(s => s.trim().toLowerCase());
@@ -127,6 +131,7 @@ export default class ArdyThiever extends TaskBot {
         STALL_STAND = this.settings.tile('stallStand', DEFAULT_STALL_STAND);
         STALL_NAME = this.settings.str('stallName', 'Baker\'s stall');
         BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
+        FLEE_TILE = this.settings.tile('stallFleeTile', DEFAULT_FLEE_TILE);
         OBSTACLE = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
         LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
@@ -230,27 +235,22 @@ class ContinueDialog implements Task {
     async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
-/** A low-level thief never trades hits: on a REAL attack, retreat directly away
- *  from the attacker (or the target/stall) to a reachable tile, then wait it
- *  out. Highest non-recovery priority. A caught pickpocket also shows the health
- *  bar, but that self-inflicted stun is not combat — inThievingStun() keeps us
- *  from fleeing a normal miss (we're stunned in place anyway). */
+/** A low-level thief never trades hits: on a REAL attack (a guard that caught us
+ *  stealing from the stall), run to the fixed kite tile — far enough to drag the
+ *  guard off the stall and break its melee — then wait out combat. Uses the same
+ *  door-opening market walk as the bot's other navigation so it doesn't snag on a
+ *  market gate en route. Highest non-recovery priority. A caught pickpocket also
+ *  shows the health bar, but that self-inflicted stun is not combat —
+ *  inThievingStun() keeps us from fleeing a normal miss (we're stunned in place
+ *  anyway). */
 class Flee implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean { return this.bot.inRealCombat(); }
     async execute(): Promise<void> {
-        const me = Game.tile();
-        if (!me) { await Execution.delayTicks(1); return; }
-        const threat = Npcs.query().where(n => n.inCombat).nearest() ?? Npcs.query().name(TARGET).nearest();
-        const tp = threat ? threat.tile() : STALL_TILE;
-        this.bot.setStatus(`fleeing combat near ${tp.x},${tp.z}`);
-        this.bot.log(`fleeing combat near ${tp.x},${tp.z}`);
+        this.bot.setStatus(`kiting the guard to ${FLEE_TILE.x},${FLEE_TILE.z}`);
+        this.bot.log(`combat — kiting the guard to ${FLEE_TILE.x},${FLEE_TILE.z}`);
         this.bot.countFlee();
-        const dest = fleeCandidates({ x: me.x, z: me.z, level: me.level }, { x: tp.x, z: tp.z }, FLEE_DIST)
-            .find(t => Reachability.canReach(t, { maxSteps: 1500 }));
-        if (dest) {
-            await Traversal.walkTo(new Tile(dest.x, dest.z, dest.level), { radius: 0, timeoutMs: 15000, log: m => this.bot.log(`  ${m}`) });
-        }
+        await walkOpening(FLEE_TILE, 0, OBSTACLE, m => this.bot.log(`  ${m}`));
         await Execution.delayUntil(() => !Game.inCombat(), 15000);
     }
 }

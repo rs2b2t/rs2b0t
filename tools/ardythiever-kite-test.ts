@@ -1,0 +1,111 @@
+// Headless live smoke for ArdyThiever's kite-flee: on any real combat (a guard
+// that caught it stealing from the Baker's stall), the bot must run to the fixed
+// kite tile (2655,3298,0), dragging the guard off the stall — through the market
+// WITHOUT snagging on a gate. Spawns guards at the stall to force the aggro, runs
+// the bot, and asserts it logs the kite AND reaches the kite tile.
+//
+// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
+// Usage: bun tools/ardythiever-kite-test.ts [base-url] [username]
+
+import { chromium } from 'playwright-core';
+
+const base = process.argv[2] || 'http://localhost:8890';
+const username = process.argv[3] || `ak${Date.now().toString(36).slice(-7)}`;
+const KITE = { x: 2655, z: 3298 };
+
+function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
+
+type R = {
+    rs2b0t: {
+        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
+        runner: { state: string; start(s: unknown): void; ctx: { log: { msg: string }[] } | null };
+        registry: { get(n: string): unknown };
+        reader: { worldTile(): { x: number; z: number; level: number } | null };
+        actions?: { continueDialog?: () => boolean };
+    };
+};
+
+const browser = await chromium.launch({
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    headless: true,
+    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
+});
+try {
+    const page = await browser.newPage();
+    page.on('pageerror', e => console.log(`pageerror: ${e}`));
+
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const login = async () => {
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as R).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as R).rs2b0t.client.ingame && (globalThis as never as R).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+    };
+    const type = async (t: string) => {
+        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
+        await page.waitForTimeout(400);
+        await page.keyboard.type(t, { delay: 30 });
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1500);
+    };
+    const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
+    const logLines = () => page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
+    const clearDialogs = () => page.evaluate(async () => { const a = (globalThis as never as R).rs2b0t.actions; for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); } });
+
+    await page.goto(`${base}/bot.html`);
+    await boot();
+    for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
+    await type('::tele 0,50,50,20,20');
+    await page.reload();
+    await boot();
+    let backIn = false;
+    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
+    if (!backIn) { fail('relogin failed'); }
+    console.log('logged in off Tutorial Island');
+
+    await type('::~maxme');
+    await clearDialogs();
+
+    // No spawned guards: tele onto the stall stand (2668,3312) and let the bot
+    // restock cake by stealing from the stall. Over a long window the real
+    // patrolling Ardougne guards wander to the stall, witness the theft, and
+    // aggro into melee — the natural trigger for the kite.
+    let at = null as { x: number; z: number; level: number } | null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+        await type('::tele 0,41,51,44,48'); // (2668,3312) stall stand
+        await page.waitForTimeout(1500);
+        at = await tile();
+        if (at && Math.abs(at.x - 2668) <= 8 && Math.abs(at.z - 3312) <= 8) { break; }
+        await clearDialogs();
+    }
+    if (!at || Math.abs(at.x - 2668) > 8) { fail(`stall tele failed (at ${JSON.stringify(at)})`); }
+    console.log(`at stall: ${JSON.stringify(at)}`);
+
+    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyThiever')); });
+    console.log('started ArdyThiever — waiting (up to ~12 min) for a patrolling guard to catch it and the kite...');
+
+    let kiteLog = false;
+    let reached = false;
+    let closest = 999;
+    let lastNote = 0;
+    for (let i = 0; i < 360; i++) { // ~720s (12 min) — real guards must wander over
+        await page.waitForTimeout(2000);
+        const lines = await logLines();
+        if (lines.some(l => /kiting the guard to 2655,3298/i.test(l))) { kiteLog = true; }
+        const t = await tile();
+        if (t) {
+            const d = Math.max(Math.abs(t.x - KITE.x), Math.abs(t.z - KITE.z));
+            closest = Math.min(closest, d);
+            if (d <= 3) { reached = true; }
+        }
+        if (i - lastNote >= 30) { lastNote = i; console.log(`  ...${i * 2}s: kiteLog=${kiteLog} closestToKite=${closest} at=${JSON.stringify(t)}`); }
+        if (kiteLog && reached) { break; }
+    }
+
+    console.log('--- recent bot log ---');
+    for (const l of (await logLines()).slice(-18)) { console.log(`  ${l}`); }
+    console.log(`kiteLog=${kiteLog} reachedKiteTile=${reached} closest=${closest} finalTile=${JSON.stringify(await tile())}`);
+    if (!kiteLog) { await page.screenshot({ path: 'out/ardythiever-kite-test.png' }); fail('never entered combat / never logged the kite within the window'); }
+    if (!reached) { await page.screenshot({ path: 'out/ardythiever-kite-test.png' }); fail(`kited but did not reach (2655,3298) — got within ${closest} tiles (door-trap?)`); }
+    console.log('PASS');
+} finally {
+    await browser.close();
+}
