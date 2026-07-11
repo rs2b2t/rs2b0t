@@ -76,6 +76,8 @@ export interface RawClient {
 
     // dialog state
     resumedPauseButton: boolean;
+    // true while a p_countdialog "Enter amount" input is open (Withdraw-X etc.)
+    dialogInputOpen: boolean;
 
     // interaction primitives (Slice 3): doAction dispatches a menu slot to
     // the byte-identical OP packet a human click produces; tryMove runs the
@@ -154,6 +156,7 @@ export const SELF_TEST = [
     'collision',
     'sideIcon',
     'resumedPauseButton',
+    'dialogInputOpen',
     'doAction',
     'tryMove',
     'out',

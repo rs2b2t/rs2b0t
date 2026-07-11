@@ -147,11 +147,10 @@ class BankTrip implements Task {
             }
         }
 
-        // Withdraw each ingredient. Read the REAL Withdraw-All op off the item's
-        // OWN ops (label varies by build; a hardcoded one silently withdraws
-        // nothing); fall back to Withdraw-10 batches. Coal/tin can share the same
-        // 'Coal'/'Tin ore' bank name across the pack, so confirm by inventory
-        // count of that specific ore.
+        // Withdraw the EXACT count of each ingredient via Withdraw-X. Batching
+        // Withdraw-10 over-withdraws the first ore (e.g. 20 copper for a 14 goal),
+        // filling the pack and starving the second ore — the pack must hold the
+        // precise recipe mix (14 copper + 14 tin for bronze).
         for (const step of plan) {
             const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(step.ore.toLowerCase()));
             if (!bankItem || bankItem.name === null) {
@@ -160,24 +159,10 @@ class BankTrip implements Task {
                 return;
             }
             const bankName = bankItem.name;
-            const ops = bankItem.ops.filter((o): o is string => o !== null);
             this.bot.setStatus(`withdrawing ${step.count} ${bankName}`);
-            const target = Inventory.count(bankName) + step.count;
-            if (step.count >= 28) {
-                const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o));
-                if (allOp) {
-                    await Bank.withdraw(bankName, allOp);
-                    await Execution.delayUntil(() => Inventory.count(bankName) >= target || Inventory.isFull() || Bank.count(bankName) === 0, 4000);
-                    continue;
-                }
-            }
-            // Withdraw-10 batches up to the needed count (works for partial sets
-            // like steel's 9 iron / 18 coal, and when no Withdraw-All op exists).
-            const tenOp = ops.find(o => /withdraw[\s-]*10/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-10';
-            for (let n = 0; n < 6 && Inventory.count(bankName) < target && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
-                const before = Inventory.count(bankName);
-                await Bank.withdraw(bankName, tenOp);
-                if (!(await Execution.delayUntil(() => Inventory.count(bankName) > before || Inventory.isFull(), 3000))) { break; }
+            if (!(await Bank.withdrawX(bankName, step.count))) {
+                this.bot.log(`could not withdraw ${step.count} ${bankName} — retrying next trip`);
+                return;
             }
         }
         // walking closes the bank; SmeltTrip crosses to the furnace next tick

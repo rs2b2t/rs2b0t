@@ -1,5 +1,5 @@
 import type { InvItemSnapshot, WorldTile } from '../../adapter/ClientAdapter.js';
-import { reader } from '../../adapter/ClientAdapter.js';
+import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
 import { Reachability } from '../Reachability.js';
@@ -32,6 +32,37 @@ export const Bank = {
     /** Click a Withdraw-* button on a bank item, e.g. withdraw('Logs', 'Withdraw-5'). */
     withdraw(name: string, op: string = 'Withdraw-1'): boolean | Promise<boolean> {
         return clickInvButton(reader.bankItems(), name, op);
+    },
+
+    /**
+     * Withdraw an EXACT quantity via the item's "Withdraw-X" op + the "Enter
+     * amount" count dialog (clicks Withdraw-X, waits for the prompt, answers it
+     * with `count`, waits for the pack to receive them). Unlike batching
+     * Withdraw-10, this never over-withdraws — needed when the pack must hold a
+     * precise mix (e.g. 14 copper + 14 tin for bronze). Returns true once the
+     * pack gained the requested amount (or the bank ran dry / the pack filled).
+     */
+    async withdrawX(name: string, count: number): Promise<boolean> {
+        if (count <= 0) {
+            return true;
+        }
+        const wanted = name.toLowerCase();
+        const invCount = (): number => reader.inventory().filter(i => i.name?.toLowerCase() === wanted).reduce((s, i) => s + i.count, 0);
+        const item = reader.bankItems().find(i => i.name?.toLowerCase() === wanted);
+        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
+        if (!xOp) {
+            return false;
+        }
+        const target = invCount() + count;
+        await clickInvButton(reader.bankItems(), name, xOp);
+        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+            return false;
+        }
+        actions.answerCountDialog(count);
+        return Execution.delayUntil(
+            () => invCount() >= target || Bank.count(name) === 0 || reader.inventory().length >= reader.inventorySize(),
+            4000
+        );
     },
 
     /** Click a Deposit-* button on a backpack item while the bank is open. */

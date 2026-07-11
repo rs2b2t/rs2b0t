@@ -111,7 +111,7 @@ try {
         if (here && Math.abs(here.x - 3275) <= 1 && Math.abs(here.z - 3185) <= 1) { reachedFurnace = true; }
         peakBars = Math.max(peakBars, await invBars());
         if (i % 5 === 0) { console.log(`  t=${i * 2}s pos=${here ? `${here.x},${here.z}` : '?'} bronzeBars=${await invBars()}`); }
-        if (peakBars >= 8) { break; } // sustained smelting proven (most of a 14-bar pack)
+        if (peakBars >= 12) { break; } // near-full 14-bar pack — proves it doesn't stall mid-pack
     }
 
     const tail = (await logLines()).slice(-25);
@@ -138,12 +138,12 @@ try {
         if (i % 10 === 0) { console.log(`  oos t=${i * 2}s state=${await runState()} shortage=${shortage}`); }
         if (shortage && stopped) { break; }
     }
-    // The out-of-ore STOP is unit-tested (SmelterBotLogic) and was observed
-    // cleanly on a no-ore start; here it depends on the bot finishing a full
-    // 14-bar pack first, which currently stalls after ~8 bars (re-approach drift
-    // off the stand — a known refinement), so treat this phase as advisory.
-    console.log(`out-of-ore: shortage=${shortage} stopped=${stopped} (advisory — see follow-ups)`);
-    console.log('PASS (Al Kharid bronze smelting: withdraw copper+tin → make bronze bars at the furnace)');
+    console.log(`out-of-ore: shortage=${shortage} stopped=${stopped}`);
+    if (!shortage || !stopped) {
+        await page.screenshot({ path: 'out/smelter-test.png' });
+        fail('SmelterBot did not cleanly stop when the tin ran out');
+    }
+    console.log('PASS (Al Kharid bronze: withdraw exact 14/14 → smelt a full pack → bank → stop on out-of-ore)');
 } finally {
     await browser.close();
 }

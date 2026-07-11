@@ -667,6 +667,11 @@ export const reader = {
         };
     },
 
+    /** True while a p_countdialog "Enter amount" input is open (Withdraw-X etc.). */
+    countDialogOpen(): boolean {
+        return raw?.dialogInputOpen === true;
+    },
+
     /**
      * Items on any TYPE_INV component that defines its own button ops, keyed
      * by the component's own `iop` labels (not the object's held ops) --
@@ -900,6 +905,22 @@ export const actions = {
         raw.out.p1(effect & 0xff);
         WordPack.pack(raw.out, msg);
         raw.out.psize1(raw.out.pos - start);
+        return true;
+    },
+
+    /**
+     * Answer an open "Enter amount" count dialog (Withdraw-X / Buy-X / make-X)
+     * by writing the same RESUME_P_COUNTDIALOG the client sends when a human
+     * types the number and presses Enter (Client.ts:3047 — byte-identical).
+     * Returns false when no count dialog is open.
+     */
+    answerCountDialog(value: number): boolean {
+        if (!raw || !raw.ingame || !raw.out || !raw.dialogInputOpen) {
+            return false;
+        }
+        raw.out.p1Enc(ClientProt.RESUME_P_COUNTDIALOG);
+        raw.out.p4(Math.max(0, Math.floor(value)));
+        raw.dialogInputOpen = false;
         return true;
     },
 
