@@ -230,15 +230,30 @@ class WalkExecutorImpl {
             stallTicks = moved || !shortOfTarget ? 0 : stallTicks + 2;
             lastTile = me;
 
-            // annotated crossing: arrive at the approach tile, then open/take it
-            let crossingIdx = -1;
+            // The next crossing AHEAD caps how far we click (we stop before it).
+            let nextCrossingIdx = -1;
             for (let i = pathIdx + 1; i < tiles.length; i++) {
                 if (tiles[i].transport) {
+                    nextCrossingIdx = i;
+                    break;
+                }
+            }
+            // The crossing we're actually standing next to — searched in a window
+            // that also looks a few tiles BEHIND pathIdx, because locateOnPath can
+            // snap our index PAST a gate we haven't crossed (the winding approach
+            // to a wide gate). Trigger on proximity to the crossing's approach OR
+            // far tile, not on pathIdx, so handleTransport still fires. A handled
+            // crossing clears its transport, so this never re-triggers one we've
+            // already crossed. (Root fix for "constantly stuck on gates".)
+            let crossingIdx = -1;
+            const scanHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
+            for (let i = Math.max(1, pathIdx - 5); i < scanHi; i++) {
+                if (tiles[i].transport && (chebyshev(me, tiles[i - 1]) <= TRANSPORT_TRIGGER || chebyshev(me, tiles[i]) <= TRANSPORT_TRIGGER)) {
                     crossingIdx = i;
                     break;
                 }
             }
-            if (crossingIdx !== -1 && chebyshev(me, tiles[crossingIdx - 1]) <= TRANSPORT_TRIGGER) {
+            if (crossingIdx !== -1) {
                 const handled = await this.handleTransport(tiles[crossingIdx - 1], tiles[crossingIdx], log);
                 if (handled) {
                     tiles[crossingIdx].transport = undefined;
@@ -269,7 +284,7 @@ class WalkExecutorImpl {
                     stallRetries = 0;
                     clickIdx = -1;
                 } else {
-                    const opened = await this.tryNearbyDoor(tiles, pathIdx, log);
+                    const opened = await this.tryNearbyDoor(log);
                     if (opened) {
                         stallRetries = 0;
                         clickIdx = -1;
@@ -284,7 +299,7 @@ class WalkExecutorImpl {
             // commit to the current click until we arrive near it
             const needClick = clickIdx === -1 || clickIdx <= pathIdx || chebyshev(me, tiles[clickIdx]) <= ARRIVE_RADIUS;
             if (needClick) {
-                const limit = crossingIdx !== -1 ? crossingIdx - 1 : tiles.length - 1;
+                const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
                 const target = selectClickTarget(tiles, pathIdx, steps, limit, me.level, clickable);
                 if (target !== -1 && !(tiles[target].x === me.x && tiles[target].z === me.z)) {
@@ -307,20 +322,18 @@ class WalkExecutorImpl {
     }
 
     /**
-     * Stalled twice (not in combat): is a closed door/gate sitting on the
-     * next few path tiles? Opens any 'Open'-able loc adjacent to the path
-     * ahead — catches every gate the door annotation (doors.json) missed
-     * (the historical "constantly stuck on gates" failure).
+     * Stalled (not in combat): a closed door/gate is blocking us. Open the
+     * nearest 'Open'-able loc next to the PLAYER — searched player-relative, NOT
+     * relative to pathIdx. `locateOnPath` can snap our path index PAST a crossing
+     * on a winding approach (a 2-wide gate at the edge of a field), and a
+     * path-relative search then looks north of the very gate we're stuck against
+     * to the south and never opens it — the "constantly stuck on gates" failure.
+     * `.within(3).nearest()` is player-relative, so it always finds the blocker.
      */
-    private async tryNearbyDoor(tiles: PathStep[], pathIdx: number, log: (msg: string) => void): Promise<boolean> {
-        const ahead = tiles.slice(pathIdx, Math.min(pathIdx + 5, tiles.length));
+    private async tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
         const door = Locs.query()
             .action('Open')
             .within(3)
-            .where(loc => {
-                const t = loc.tile();
-                return ahead.some(p => p.level === t.level && Math.max(Math.abs(p.x - t.x), Math.abs(p.z - t.z)) <= 1);
-            })
             .nearest();
         if (!door) {
             return false;
