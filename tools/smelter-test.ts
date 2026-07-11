@@ -72,17 +72,16 @@ try {
     });
     const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
 
-    await type('::~maxme');                 // Smithing 99 + everything
-    await clearDialogs();
-
-    // Seed ore into the bank for a bronze cycle (copper + tin). Add coal + iron
-    // for a later steel cycle, and gold for a single-ore cycle. Object names are
-    // the engine's obj ids.
+    // Seed ore into the bank BEFORE ::~maxme — maxme's level-up dialogs swallow
+    // the next typed command, so seeding after it drops the first ::~bankitem.
+    // Object names are the engine's obj ids (copper_ore, tin_ore, ...).
     await type('::~bankitem copper_ore 5000');
     await type('::~bankitem tin_ore 5000');
     await type('::~bankitem iron_ore 5000');
     await type('::~bankitem coal 5000');
     await type('::~bankitem gold_ore 5000');
+
+    await type('::~maxme');                 // Smithing 99 + everything
     await clearDialogs();
 
     // Al Kharid bank stand (3269,3167) — mapsquare 51_49, local (5,31).
@@ -112,7 +111,7 @@ try {
             if (/withdrawing .*copper/i.test(l)) { withdrew = true; }
         }
         const here = await tile();
-        if (here && Math.abs(here.x - 3276) <= 6 && Math.abs(here.z - 3186) <= 6) { smelted = true; } // reached the furnace
+        if (here && Math.abs(here.x - 3272) <= 3 && Math.abs(here.z - 3185) <= 3) { smelted = true; } // reached the furnace
         // a second bank trip (trips>=2 after the first smelt) confirms the loop closed
         if (withdrew && smelted) { break; }
     }
