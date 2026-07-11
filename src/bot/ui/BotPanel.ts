@@ -418,14 +418,17 @@ export default class BotPanel {
     private render(): void {
         const missing = this.host.selfTestMissing;
         if (!reader.attached()) {
+            this.banner.hidden = false;
             this.banner.className = 'rs2b0t-banner rs2b0t-banner-warn';
             this.banner.textContent = 'adapter: not attached';
         } else if (missing.length > 0) {
+            this.banner.hidden = false;
             this.banner.className = 'rs2b0t-banner rs2b0t-banner-error';
             this.banner.textContent = `adapter self-test FAILED — missing: ${missing.join(', ')}`;
         } else {
-            this.banner.className = 'rs2b0t-banner rs2b0t-banner-ok';
-            this.banner.textContent = 'adapter self-test: ok';
+            // healthy: no banner — only surface the adapter when something's wrong
+            this.banner.hidden = true;
+            this.banner.textContent = '';
         }
 
         const ingame = reader.ingame();
