@@ -105,6 +105,43 @@ export const ChatDialog = {
         return Execution.delayUntil(() => reader.modals().main !== before, 5000);
     },
 
+    /**
+     * Like `makeFromPanel` but clicks the LARGEST-quantity make op for the
+     * matched product — "Make 10" over "Make 5" over "Make" (qty parsed from the
+     * op label, bare "Make" = 1). Used for bulk smithing at the anvil.
+     */
+    async makeFromPanelMax(match: string): Promise<boolean> {
+        const items = reader.mainSkillMultiItems();
+        const wanted = match.toLowerCase();
+        const item = items.find(i => i.name?.toLowerCase().includes(wanted));
+        if (!item) {
+            return false;
+        }
+
+        let bestIdx = -1;
+        let bestQty = -1;
+        item.ops.forEach((o, i) => {
+            if (o && /make/i.test(o)) {
+                const m = o.match(/(\d+)/);
+                const qty = m ? parseInt(m[1], 10) : 1;
+                if (qty > bestQty) {
+                    bestQty = qty;
+                    bestIdx = i;
+                }
+            }
+        });
+        if (bestIdx === -1) {
+            return false;
+        }
+
+        const before = reader.modals().main;
+        if (!(await ActionRouter.driver.invButton(item.id, item.slot, item.comId, bestIdx + 1))) {
+            return false;
+        }
+
+        return Execution.delayUntil(() => reader.modals().main !== before, 5000);
+    },
+
     /** Press continue and wait for the dialog page to change. */
     async continue(): Promise<boolean> {
         const before = reader.modals().chat;

@@ -22,6 +22,7 @@ import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
 import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility.js';
 import Woodcutter, { SETTINGS as WOODCUTTER_SETTINGS } from './Woodcutter.js';
 import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot.js';
+import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -237,6 +238,15 @@ ScriptRegistry.register({
     tags: ['smithing', 'smelting', 'banking', 'afk'],
     settingsSchema: SMELTER_SETTINGS,
     create: () => new SmelterBot()
+});
+
+ScriptRegistry.register({
+    name: 'SmithingBot',
+    description: 'Varrock anvil smithing — withdraw bars + a hammer, make the chosen item at the anvil, bank the products, repeat',
+    category: 'Smithing',
+    tags: ['smithing', 'anvil', 'banking', 'afk'],
+    settingsSchema: SMITHING_SETTINGS,
+    create: () => new SmithingBot()
 });
 
 // NOTE: bar-on-anvil SMITHING is still not registered — it opens the dedicated
