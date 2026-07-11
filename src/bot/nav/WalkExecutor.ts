@@ -360,7 +360,7 @@ class WalkExecutorImpl {
 
         const special = specialCrossingAt(transport.locX, transport.locZ, step.level);
         if (special) {
-            return this.handleSpecialCrossing(step, special, log);
+            return this.handleSpecialCrossing(approach, step, special, log);
         }
 
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -408,7 +408,7 @@ class WalkExecutorImpl {
      * the dialogue (continue through lines, click the configured choice) until the
      * player has crossed to the far tile.
      */
-    private async handleSpecialCrossing(step: PathStep, sc: SpecialCrossing, log: (msg: string) => void): Promise<boolean> {
+    private async handleSpecialCrossing(approach: PathStep, step: PathStep, sc: SpecialCrossing, log: (msg: string) => void): Promise<boolean> {
         if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
             log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
             return false; // caller: failedDoor() + repath (avoids this gate)
@@ -426,7 +426,12 @@ class WalkExecutorImpl {
 
         const crossed = (): boolean => {
             const me = reader.worldTile();
-            return me !== null && me.level === step.level && chebyshev(me, step) <= 1;
+            // "Crossed" = now strictly on the far side of the gate: closer to the
+            // far tile (step) than to the near approach tile. approach and step
+            // are coordinate-adjacent (a 1-tile door hop), so a plain proximity
+            // check to step would be true while still standing on approach; this
+            // relative check only trips once we have actually moved across.
+            return me !== null && me.level === step.level && chebyshev(me, step) < chebyshev(me, approach);
         };
         for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
             const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
