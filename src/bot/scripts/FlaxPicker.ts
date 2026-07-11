@@ -11,7 +11,9 @@ import { depositMatcher } from '../api/Banking.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 const DEFAULT_FIELD = new Tile(2744, 3446, 0);
-const DEFAULT_BANK_STAND = new Tile(2725, 3491, 0);
+// South-adjacent to the Seers bank booth at (2722,3494) — verified live (the
+// booths run along z=3494; the player stands on the walkable z=3493 side).
+const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
 const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
