@@ -1,16 +1,38 @@
 import { Execution } from './Execution.js';
 import { Game } from './Game.js';
+import { Reachability } from './Reachability.js';
 import type Tile from './Tile.js';
 import { Traversal } from './Traversal.js';
 import { Locs } from './queries/Locs.js';
 
+// How far to look for the exit door when we stall. The old code only checked 2
+// tiles from where we stood, so a bot stranded deep inside a shop (the knight
+// wandered out and the door shut behind it) never found the exit and got stuck.
+const ESCAPE_RADIUS = 10;
+
 /**
- * Walk to within `radius` of `dest`, opening any shut door/gate we stall at. The
- * engine's own interact-walks won't open a closed door to reach a walled-off
- * target, so we drive the approach by hand: walk a segment, and if it didn't get
- * us closer, open the nearest matching obstacle that still offers an "Open" op
- * (an open door offers "Close" instead, so this only ever targets shut ones) and
- * retry. Returns true once we're in range, false when nothing is left to open.
+ * A shut door/gate we can open: its name matches one of `obstacles`
+ * (case-insensitive substring) and it offers an "Open"-style op. An OPEN door
+ * offers "Close" instead, so this only ever matches shut ones. Pure.
+ */
+export function isOpenableObstacle(name: string | null, actions: string[], obstacles: string[]): boolean {
+    const n = (name ?? '').toLowerCase();
+    return obstacles.some(k => n.includes(k)) && actions.some(a => /^open/i.test(a));
+}
+
+/** The first "Open"-style op on a loc, or null. Pure. */
+export function openOp(actions: string[]): string | null {
+    return actions.find(a => /^open/i.test(a)) ?? null;
+}
+
+/**
+ * Walk to within `radius` of `dest`, opening any shut door/gate that blocks us.
+ * The engine's own interact-walks won't open a closed door to reach a walled-off
+ * target, so we drive the approach by hand: push toward `dest`, and if that made
+ * no progress, find the nearest openable obstacle we can actually reach on our
+ * side of the wall, walk up to THAT (a fixed tile — never the moving target),
+ * open it, wait for it to swing, and try again. Returns true once we're in
+ * range, false when nothing openable is left within reach (genuinely stuck).
  * (Extracted from ThievingBot/ArdyThiever's clearPathTo.)
  */
 export async function walkOpening(dest: Tile, radius: number, obstacles: string[], log?: (m: string) => void): Promise<boolean> {
@@ -24,16 +46,43 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
         if (after && dest.distanceTo(after) <= radius) {
             return true;
         }
+
+        // Stalled. Find the nearest openable obstacle we can reach on our side of
+        // the wall — searched across ESCAPE_RADIUS, not just the 2 tiles the old
+        // code used, so a bot stranded deep inside a shop still finds the exit.
         const door = Locs.query()
-            .where(l => l.distance() <= 2 && obstacles.some(k => (l.name ?? '').toLowerCase().includes(k)) && l.actions().some(a => /^open/i.test(a)))
+            .where(l => isOpenableObstacle(l.name, l.actions(), obstacles))
+            .where(l => l.distance() <= ESCAPE_RADIUS && Reachability.canReach(l.tile(), { adjacentOk: true }))
             .nearest();
         if (!door) {
-            return false; // nothing to open — genuinely stuck
+            return false; // nothing openable within reach — genuinely stuck
         }
-        const op = door.actions().find(a => /^open/i.test(a))!;
-        log?.(`opening ${door.name} at ${door.tile()}`);
-        await door.interact(op);
-        await Execution.delayTicks(2);
+
+        // Walk to the door itself (a stable tile, unlike the moving target) so we
+        // can open it even when it's across the room.
+        const dt = door.tile();
+        const cur = Game.tile();
+        if (cur && dt.distanceTo(cur) > 1) {
+            log?.(`walking to ${door.name} at ${dt.x},${dt.z} to open it`);
+            await Traversal.walkTo(dt, { radius: 1, timeoutMs: 15000, log: m => log?.(`  ${m}`) });
+        }
+
+        // Re-resolve at the tile (we moved) and open it, then wait for it to swing
+        // before the next push toward dest.
+        const shut = Locs.query().where(l => l.tile().x === dt.x && l.tile().z === dt.z && isOpenableObstacle(l.name, l.actions(), obstacles)).nearest();
+        if (!shut) {
+            continue; // already open — push on
+        }
+        const op = openOp(shut.actions())!;
+        log?.(`opening ${shut.name} at ${dt.x},${dt.z}`);
+        if (!(await shut.interact(op))) {
+            await Execution.delayTicks(2);
+            continue;
+        }
+        await Execution.delayUntil(() => {
+            const still = Locs.query().where(l => l.tile().x === dt.x && l.tile().z === dt.z && isOpenableObstacle(l.name, l.actions(), obstacles)).nearest();
+            return still === null;
+        }, 4000);
     }
     const here = Game.tile();
     return here !== null && dest.distanceTo(here) <= radius;
