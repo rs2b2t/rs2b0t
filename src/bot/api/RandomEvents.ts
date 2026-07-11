@@ -360,6 +360,23 @@ class RandomEventsImpl {
         return true;
     }
 
+    /** True once the server has told us the triffid isn't ours ("It's not here for
+     *  you.") in a chat line newer than `sinceText`. The strange plant is bound to
+     *  the player who triggered it (macro_event_triffid: [opnpc1] rejects a picker
+     *  whose uid != the plant's target), so a non-owner sees that message and never
+     *  gets the fruit — this lets us END the event instead of picking it forever. */
+    private plantNotOurs(sinceText: string): boolean {
+        for (const line of reader.chat(5)) {
+            if (line.text === sinceText) {
+                break;
+            }
+            if (/not here for you/i.test(line.text)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private async handlePick(name: string, log: (msg: string) => void): Promise<boolean> {
         // The strange plant grows for ~54s — during which "Pick" only reports
         // "the fruit isn't ready yet" and does nothing — is then pickable for
@@ -388,15 +405,27 @@ class RandomEventsImpl {
             const op = plant.actions().find(a => /pick|take/i.test(a));
             if (op) {
                 const before = Inventory.count('Strange fruit');
+                const sinceText = reader.chat(1)[0]?.text ?? '';
                 await plant.interact(op);
-                // success is the fruit landing in the pack immediately; the plant
-                // itself only despawns ~13 ticks after a successful pick, so don't
-                // gate solely on its disappearance
-                const picked = await Execution.delayUntil(
-                    () => Inventory.count('Strange fruit') > before || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name),
+                // Resolve on any of: the fruit lands (ours, ripe), the plant
+                // despawns, or the server says it isn't ours. The plant only
+                // despawns ~13 ticks after a successful pick, so don't gate solely
+                // on its disappearance.
+                await Execution.delayUntil(
+                    () => Inventory.count('Strange fruit') > before
+                        || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
+                        || this.plantNotOurs(sinceText),
                     6000
                 );
-                if (picked) {
+                if (this.plantNotOurs(sinceText)) {
+                    // Another player's plant — picking it just spams "It's not here
+                    // for you". End the event and ignore this one for a while so we
+                    // don't re-pick it every loop while it's on screen (the freeze).
+                    this.cooldownUntil.set(`pick:${name}`, performance.now() + GIVE_UP_COOLDOWN_MS);
+                    log(`random event: ${name} isn't ours ("it's not here for you") — ignoring it for ${GIVE_UP_COOLDOWN_MS / 1000}s`);
+                    return true;
+                }
+                if (Inventory.count('Strange fruit') > before || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)) {
                     log(`random event: ${name} — fruit picked`);
                     return true;
                 }
