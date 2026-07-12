@@ -14,12 +14,16 @@
 //   bun tools/run-all-smokes.ts --only smelter,flax   # only smokes whose file matches
 //   bun tools/run-all-smokes.ts --skip maze,tutorial  # exclude some
 //   bun tools/run-all-smokes.ts --no-deploy           # skip the build+deploy step
-//   bun tools/run-all-smokes.ts --timeout 300         # per-smoke kill timeout (s, default 360)
+//   bun tools/run-all-smokes.ts --timeout 300         # override kill timeout for ALL smokes (s)
 //   bun tools/run-all-smokes.ts --base http://localhost:8890
 //   bun tools/run-all-smokes.ts --list                # print what would run and exit
 //
 // NOTE: this is a long sweep — ~40 smokes × 2-5 min each is 2-3 hours. Use --only
 // for a fast subset (e.g. the bank-cycle bots after a banking change).
+//
+// Each smoke is killed at DEFAULT_TIMEOUT (360s); a few legitimately-long smokes
+// (see LONG below) get a bigger budget automatically. An explicit --timeout
+// overrides that for every smoke.
 
 import { readdirSync, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,19 +33,34 @@ import { join } from 'node:path';
 // local-engine bot sweep. Run these by hand when relevant.
 const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test'];
 
+// Default per-smoke kill timeout (s). Smokes that legitimately run far longer
+// than this (e.g. a full quest walk) get a bigger budget via LONG — keyed by
+// filename substring → kill timeout (s). Both are only consulted when the user
+// hasn't passed an explicit --timeout, which overrides everything.
+const DEFAULT_TIMEOUT = 360;
+const LONG: Record<string, number> = { 'rune-mysteries-test': 1600 };
+
 const args = process.argv.slice(2);
 const optVal = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const hasFlag = (name: string): boolean => args.includes(name);
 const splitList = (s: string | undefined): string[] => (s ?? '').split(',').map(x => x.trim()).filter(Boolean);
 
 const base = optVal('--base') ?? 'http://localhost:8890';
-const timeoutSec = Number(optVal('--timeout') ?? 360);
+const timeoutArg = optVal('--timeout');
 const only = splitList(optVal('--only'));
 const skip = splitList(optVal('--skip'));
 const noDeploy = hasFlag('--no-deploy');
 const listOnly = hasFlag('--list');
 
 const LOG_DIR = 'out/smoke-logs';
+
+// Per-smoke kill timeout (s). An explicit --timeout wins for every smoke;
+// otherwise long-running smokes get their LONG entry, all others DEFAULT_TIMEOUT.
+function killTimeoutSec(name: string): number {
+    if (timeoutArg !== undefined) { return Number(timeoutArg); }
+    const long = Object.entries(LONG).find(([sub]) => name.includes(sub));
+    return long ? long[1] : DEFAULT_TIMEOUT;
+}
 
 function selectTests(): string[] {
     const all = readdirSync('tools').filter(f => f.endsWith('-test.ts')).sort();
@@ -77,6 +96,7 @@ async function runOne(name: string): Promise<Result> {
     const logPath = join(LOG_DIR, name.replace('.ts', '.log'));
     const fd = openSync(logPath, 'w');
     const proc = Bun.spawn(['bun', join('tools', name), base], { stdout: fd, stderr: fd });
+    const timeoutSec = killTimeoutSec(name);
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; proc.kill(9); }, timeoutSec * 1000);
     const code = await proc.exited;
@@ -115,7 +135,7 @@ if (tests.length === 0) { console.error('no smokes matched the filters'); proces
 
 if (listOnly) {
     console.log(`${tests.length} smoke(s) would run against ${base}:`);
-    for (const t of tests) { console.log(`  ${t}`); }
+    for (const t of tests) { console.log(`  ${t.padEnd(34)} ${killTimeoutSec(t)}s timeout`); }
     process.exit(0);
 }
 
@@ -130,7 +150,10 @@ if (!(await engineUp())) {
 
 mkdirSync(LOG_DIR, { recursive: true });
 
-console.log(`\nrunning ${tests.length} smoke(s) against ${base} — sequential, ${timeoutSec}s timeout each. Logs → ${LOG_DIR}/\n`);
+const timeoutNote = timeoutArg !== undefined
+    ? `${Number(timeoutArg)}s timeout each`
+    : `${DEFAULT_TIMEOUT}s timeout each (longer for ${Object.keys(LONG).join(', ')})`;
+console.log(`\nrunning ${tests.length} smoke(s) against ${base} — sequential, ${timeoutNote}. Logs → ${LOG_DIR}/\n`);
 const runStart = Date.now();
 const results: Result[] = [];
 for (const t of tests) {

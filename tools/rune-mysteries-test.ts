@@ -5,7 +5,8 @@
 //
 // Requires: engine on :8890 + local build deployed (deploy-local.sh).
 // Budget 25 min (~12 min clean + headroom for accepted variance; see BUDGET_MS).
-// In run-all-smokes sweeps pass --timeout 1600 or run it standalone.
+// In run-all-smokes sweeps this gets a longer kill timeout automatically (its
+// LONG entry, 1600s); pass --timeout to override, or run it standalone.
 // Usage: bun tools/rune-mysteries-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
