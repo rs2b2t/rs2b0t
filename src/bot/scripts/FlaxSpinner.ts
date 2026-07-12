@@ -7,8 +7,16 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
+import { EventSignal } from '../api/EventSignal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+// Spinning is a weakqueue (spinning.rs2): it drains the pack ~1 fibre / 2 ticks,
+// replaying the anim each item — so Game.animating() FLICKERS false between items
+// and any click/move CANCELS the batch. Gauge "still spinning" by the pack
+// actually draining; only re-spin once it's been this many ticks with no fibre
+// consumed and flax still left (i.e. it genuinely stopped).
+const RESPIN_AFTER_TICKS = 6;
 
 // Seers Village — verified live (dumped reader.locs()): the flax spinning wheel is
 // UPSTAIRS. Bank (2722,3493,0) → house door (2716,3472,0) → Ladder (2715,3470)
@@ -189,37 +197,61 @@ class Ascend implements Task {
     }
 }
 
-/** Upstairs with flax → open the wheel's Spin panel and Spin-X the whole pack.
- *  The wheel's Spin op is an OPLOC (forceapproach=south), so the server walks us
- *  onto it — no web-walking on the un-baked upper floor. */
+/** Upstairs with flax → click the wheel, Spin-X the whole pack, and ride the batch
+ *  to completion. Only (re)clicks the wheel when spinning has genuinely stopped —
+ *  a mid-batch click would cancel the weak-queue spin. The wheel's Spin op is an
+ *  OPLOC (forceapproach=south), so the server walks us onto it — no web-walking on
+ *  the un-baked upper floor. */
 class Spin implements Task {
     constructor(private bot: FlaxSpinner) {}
     validate(): boolean { return this.bot.onFloor(1) && this.bot.fibreCount() > 0 && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
-        // already spinning → ride the batch until the pack drains
-        if (Game.animating()) {
-            await Execution.delayUntil(() => !Game.animating() || this.bot.fibreCount() === 0 || ChatDialog.canContinue(), 6000);
+        // Already mid-batch (entered while the pack is draining) → just ride it out;
+        // do NOT touch anything, or the weak-queue spin cancels.
+        if (Game.animating() && !ChatDialog.isMakeMenu()) {
+            await this.ride();
             return;
         }
-        // the Spin menu is up → pick the fibre at Make-X for the whole pack
+        // Open the wheel's Spin panel if it isn't already up (a click here is safe:
+        // we're not currently spinning).
+        if (!ChatDialog.isMakeMenu()) {
+            const wheel = Locs.query().name(this.bot.wheelLocName()).action(this.bot.spinOpName())
+                .where(l => l.tile().distanceTo(this.bot.wheelStand()) <= this.bot.leashRadius()).nearest();
+            if (!wheel) { await Execution.delayTicks(2); return; }
+            this.bot.setStatus('opening the spinning wheel');
+            if (!(await wheel.interact(this.bot.spinOpName()))) { await Execution.delayTicks(2); return; }
+            if (!(await Execution.delayUntil(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || Game.animating(), 6000))) {
+                return; // the wheel didn't respond — retry next tick
+            }
+        }
+        // Spin-X the whole pack.
         if (ChatDialog.isMakeMenu()) {
-            const before = this.bot.fibreCount();
-            if (await ChatDialog.makeX(this.bot.productName(), before)) {
-                await Execution.delayUntil(() => this.bot.fibreCount() < before || Game.animating() || ChatDialog.canContinue(), 6000);
-                if (this.bot.fibreCount() < before) { this.bot.recordSpun(before - this.bot.fibreCount()); }
-            } else {
+            if (!(await ChatDialog.makeX(this.bot.productName(), this.bot.fibreCount()))) {
                 this.bot.log(`Spin menu open but couldn't Make-X '${this.bot.productName()}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
                 await Execution.delayTicks(2);
+                return;
             }
-            return;
         }
-        // open the wheel
-        const wheel = Locs.query().name(this.bot.wheelLocName()).action(this.bot.spinOpName())
-            .where(l => l.tile().distanceTo(this.bot.wheelStand()) <= this.bot.leashRadius()).nearest();
-        if (!wheel) { await Execution.delayTicks(2); return; }
-        this.bot.setStatus('spinning flax');
-        await wheel.interact(this.bot.spinOpName());
-        await Execution.delayUntil(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || Game.animating(), 6000);
+        // Ride the batch to completion in THIS execute so we never re-click mid-spin.
+        await this.ride();
+    }
+
+    /** Wait while the weak-queue batch drains the pack. Returns when the pack is
+     *  empty (→ Descend), a dialog/event interrupts, we leave the floor, or
+     *  spinning STALLS — no fibre consumed for RESPIN_AFTER_TICKS with flax left,
+     *  meaning it stopped for some reason and execute() should re-spin. Touches
+     *  nothing: any action would cancel the spin. */
+    private async ride(): Promise<void> {
+        this.bot.setStatus('spinning');
+        let last = this.bot.fibreCount();
+        let idle = 0;
+        while (this.bot.fibreCount() > 0) {
+            if (ChatDialog.canContinue() || EventSignal.pending() || !this.bot.onFloor(1)) { return; }
+            await Execution.delayTicks(1);
+            const now = this.bot.fibreCount();
+            if (now < last) { this.bot.recordSpun(last - now); last = now; idle = 0; }
+            else if (++idle >= RESPIN_AFTER_TICKS) { return; }
+        }
     }
 }
 
