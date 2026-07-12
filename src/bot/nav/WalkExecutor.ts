@@ -245,10 +245,22 @@ class WalkExecutorImpl {
             // far tile, not on pathIdx, so handleTransport still fires. A handled
             // crossing clears its transport, so this never re-triggers one we've
             // already crossed. (Root fix for "constantly stuck on gates".)
+            //
+            // MUST be on the crossing's approach-tile LEVEL: chebyshev() is
+            // horizontal-only, so a crossing whose approach sits on a DIFFERENT
+            // level but nearly the same (x,z) — e.g. the Lumbridge-castle ground-
+            // floor doorways directly under a player standing upstairs — would
+            // otherwise match, get "handled" as already-open, and advance pathIdx
+            // PAST the real next crossing (the staircase down) without the player
+            // moving. locateOnPath then can't place the upstairs player among the
+            // downstairs tiles → deviate → repath → give up: the ~270s post-Duke
+            // descent stall (Task 6 live smoke). Gating on tiles[i-1].level keeps
+            // staircases working (approached from their own level) while ignoring
+            // the vertically-stacked doorway below.
             let crossingIdx = -1;
             const scanHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
             for (let i = Math.max(1, pathIdx - 5); i < scanHi; i++) {
-                if (tiles[i].transport && (chebyshev(me, tiles[i - 1]) <= TRANSPORT_TRIGGER || chebyshev(me, tiles[i]) <= TRANSPORT_TRIGGER)) {
+                if (tiles[i].transport && me.level === tiles[i - 1].level && (chebyshev(me, tiles[i - 1]) <= TRANSPORT_TRIGGER || chebyshev(me, tiles[i]) <= TRANSPORT_TRIGGER)) {
                     crossingIdx = i;
                     break;
                 }
@@ -380,7 +392,17 @@ class WalkExecutorImpl {
             const loc = this.findTransportLoc(transport);
             if (!loc) {
                 if (transport.toLevel === undefined) {
-                    if (Reachability.canStep(approach, step)) {
+                    // No CLOSED door loc here (an open door offers 'Close', not
+                    // 'Open', so findTransportLoc misses it) — is the way already
+                    // clear? canStep only validates a SINGLE adjacent step, but a
+                    // hand-added diagonal-door edge bridges tiles 2+ apart across a
+                    // wall the baked pack keeps (e.g. wizard tower 3106<->3108):
+                    // canStep is permanently false there, so an already-open door
+                    // read as "blocked" and the walk repathed until the RS door
+                    // auto-closed (~240s; Task 6 wizard-tower stall). canReach walks
+                    // the LIVE scene collision, where an open diagonal door is
+                    // passable, so it settles the multi-tile hop correctly.
+                    if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
                         log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
                         return true;
                     }

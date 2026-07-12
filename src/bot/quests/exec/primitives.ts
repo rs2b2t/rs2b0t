@@ -83,10 +83,24 @@ export async function hopLadder(hop: LadderHop, log: (m: string) => void): Promi
 }
 
 /**
- * Web-walk until the stop's NPC is within its leash. Takes a region-crossing
- * hop first when here/anchor straddle the surface/underground boundary. The
- * final approach targets `anchor` (a probe-verified walkable tile near the
- * spawn), then re-checks the leash — NPCs wander, talkThrough re-finds them.
+ * Web-walk to the stop's `anchor` (a probe-verified walkable tile beside the
+ * NPC's spawn), taking a region-crossing hop first when here/anchor straddle
+ * the surface/underground boundary, then re-check the leash — NPCs wander, and
+ * talkThrough re-finds them from the anchor.
+ *
+ * The final approach lands RIGHT ON the anchor (radius 1), NOT merely "within
+ * leash". Two reasons, both found live in the Task 6 smoke:
+ *   - A loose arrival (the old radius 3) can halt the bot on the wrong side of
+ *     a wall from a wandering NPC — e.g. the cramped wizard-tower basement,
+ *     where stopping ~6 tiles short of Sedridor left the client's Talk-to
+ *     auto-walk unable to path to him: "'Sedridor' never opened a dialogue",
+ *     retried forever. The A* walk routes around the wall to the anchor; only
+ *     the loose radius made it stop early.
+ *   - There is deliberately no "already within leash, skip the walk"
+ *     short-circuit: leash (up to 8) is far wider than talk range, so returning
+ *     true from wherever we happen to stand let a failed talk re-loop from the
+ *     same unreachable spot indefinitely. Re-centring on the anchor every call
+ *     makes a failed talk self-heal on the next loop instead.
  */
 export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string) => void): Promise<boolean> {
     let here = Game.tile();
@@ -97,9 +111,6 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
         const n = Npcs.query().name(stop.npc).nearest();
         return n !== null && n.distance() <= stop.leash;
     };
-    if (npcNear()) {
-        return true;
-    }
     if (needsHop(here, stop.anchor)) {
         const near = hops.filter(h => isUnderground(h.stand) === isUnderground(here!));
         const hop = near.sort((a, b) => a.stand.distanceTo(here!) - b.stand.distanceTo(here!))[0];
@@ -118,7 +129,30 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
             return false;
         }
     }
-    if (stop.anchor.distanceTo(here) > 3 && !(await Traversal.walkResilient(stop.anchor, { radius: 3, log }))) {
+    if (stop.anchor.distanceTo(here) > 1) {
+        // Bounded attempts so a dead-end landing (handled next) is diagnosed in
+        // ~1 min, not the default 3x90s. On a good landing the short chamber
+        // approach finishes well inside one attempt.
+        await Traversal.walkResilient(stop.anchor, { radius: 1, attempts: 2, timeoutMs: 45_000, log });
+        here = Game.tile() ?? here;
+    }
+    // Trapped-landing recovery. The wizard-tower ladder occasionally drops you on
+    // a dead-end basement tile (3104,9575) the baked pack thinks reaches Sedridor
+    // but the live scene walls off — the walker makes 0 clicks and never arrives
+    // (the Task 6 notes-leg freeze). Signature: still underground and NOT at the
+    // (nearby) anchor after trying to walk. Climb back up and return so the caller
+    // re-descends; the re-descent lands on a reachable tile from which the next
+    // approach completes. Proximity-gated so the far-anchor Aubury climb-up (a
+    // surface hop AWAY from its anchor) never trips it.
+    if (isUnderground(here) && isUnderground(stop.anchor) && stop.anchor.distanceTo(here) > 2 && stop.anchor.distanceTo(here) <= 20) {
+        const back = hops.find(h => isUnderground(h.stand) === isUnderground(here!));
+        if (back) {
+            log(`trapped landing at (${here.x},${here.z}) — could not reach anchor, climbing back to re-roll`);
+            if (back.stand.distanceTo(here) > 1) {
+                await Traversal.walkResilient(back.stand, { radius: 1, log });
+            }
+            await hopLadder(back, log);
+        }
         return false;
     }
     return npcNear();
