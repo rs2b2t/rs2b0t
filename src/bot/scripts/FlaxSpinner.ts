@@ -21,15 +21,25 @@ const RESPIN_AFTER_TICKS = 6;
 // Seers Village — verified live (dumped reader.locs()): the flax spinning wheel is
 // UPSTAIRS. Bank (2722,3493,0) → house door (2716,3472,0) → Ladder (2715,3470)
 // Climb-up → Spinning wheel (2711,3471,1) "Spin" → same Ladder Climb-down → bank.
+//
+// The ground-floor walk target is (2714,3471) — a walkable tile INSIDE the house
+// beside the ladder, never the ladder's own loc-blocked tile. An unwalkable dest
+// lets the pathfinder accept any walkable tile within 5 as the goal, and the
+// cheapest one from the bank is on the STREET outside the sealed house: the walk
+// "arrives" without ever planning the door crossing, and the stall-recovery door
+// hunt then opened the NEIGHBOUR house's door (2713,3483) once ours stood open.
+// An exactly-walkable interior dest forces the planned path through the door
+// edge at (2716,3472), which walkTo opens like any other crossing. Its whole
+// radius-1 arrival ball is also inside, so we can't "arrive" across a wall.
 const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
-const DEFAULT_LADDER_TILE = new Tile(2715, 3470, 0);
+const DEFAULT_LADDER_TILE = new Tile(2714, 3471, 0);
 const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
 const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
     product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'matched against the "What would you like to spin?" menu' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
-    ladderTile: { type: 'tile', default: DEFAULT_LADDER_TILE, label: 'Ladder tile (x,z) — ground floor', help: 'the ladder up to the spinning wheel; the house door is opened on the way' },
+    ladderTile: { type: 'tile', default: DEFAULT_LADDER_TILE, label: 'Ladder stand tile (x,z) — inside the house', help: 'walkable tile INSIDE the wheel house beside the ladder (not the ladder tile itself — see route note); the house door is opened on the way' },
     wheelTile: { type: 'tile', default: DEFAULT_WHEEL_TILE, label: 'Spinning wheel tile (x,z,level)', help: 'upstairs — search centre for the wheel' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
     ladderName: { type: 'string', default: 'Ladder', label: 'Ladder/staircase loc name' },

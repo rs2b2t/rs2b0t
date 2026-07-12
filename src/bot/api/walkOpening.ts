@@ -1,3 +1,4 @@
+import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { Execution } from './Execution.js';
 import { Game } from './Game.js';
 import { Reachability } from './Reachability.js';
@@ -9,6 +10,13 @@ import { Locs } from './queries/Locs.js';
 // tiles from where we stood, so a bot stranded deep inside a shop (the knight
 // wandered out and the door shut behind it) never found the exit and got stuck.
 const ESCAPE_RADIUS = 10;
+
+// How much farther from dest than we already are a door may sit and still be
+// worth opening. The exit of a room we're shut inside is sometimes a couple of
+// tiles "backward" relative to dest, but a door well beyond that is some other
+// building's — opening it is at best noise (Seers: the neighbour house at
+// (2713,3483) getting opened instead of the spinning-house door at (2716,3472)).
+const TOWARD_SLACK = 4;
 
 /**
  * A shut door/gate we can open: its name matches one of `obstacles`
@@ -23,6 +31,17 @@ export function isOpenableObstacle(name: string | null, actions: string[], obsta
 /** The first "Open"-style op on a loc, or null. Pure. */
 export function openOp(actions: string[]): string | null {
     return actions.find(a => /^open/i.test(a)) ?? null;
+}
+
+/**
+ * Is `door` plausibly on the way from `here` to `dest` — i.e. no more than
+ * TOWARD_SLACK farther from dest than we already are? Chebyshev (the game
+ * movement metric). Keeps the stall-recovery hunt from wandering off to open
+ * an unrelated building's door that merely sits within ESCAPE_RADIUS. Pure.
+ */
+export function towardDest(door: WorldTile, here: WorldTile, dest: WorldTile): boolean {
+    const cheb = (a: WorldTile, b: WorldTile): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+    return cheb(door, dest) <= cheb(here, dest) + TOWARD_SLACK;
 }
 
 /**
@@ -50,9 +69,12 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
         // Stalled. Find the nearest openable obstacle we can reach on our side of
         // the wall — searched across ESCAPE_RADIUS, not just the 2 tiles the old
         // code used, so a bot stranded deep inside a shop still finds the exit.
+        // Only doors that keep us headed toward dest count: nearest-to-player
+        // alone used to walk off and open a neighbouring house's door.
         const door = Locs.query()
             .where(l => isOpenableObstacle(l.name, l.actions(), obstacles))
             .where(l => l.distance() <= ESCAPE_RADIUS && Reachability.canReach(l.tile(), { adjacentOk: true }))
+            .where(l => after === null || towardDest(l.tile(), after, dest))
             .nearest();
         if (!door) {
             return false; // nothing openable within reach — genuinely stuck

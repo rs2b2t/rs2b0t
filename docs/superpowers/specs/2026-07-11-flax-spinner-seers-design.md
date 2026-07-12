@@ -78,7 +78,11 @@ Ladder loc name + ops are settings (default name "Ladder", ops "Climb-up" /
 
 - `bankStand` (tile) — Seers bank booth-adjacent tile (found live)
 - `bankBooth` (string, default "Bank booth"), booth op "Use-quickly"
-- `ladderStand` (tile) — ground-floor tile at the foot of the ladder (found live)
+- `ladderStand` (tile) — ground-floor tile INSIDE the house beside the ladder
+  ((2714,3471) — not the ladder's own loc-blocked tile: an unwalkable dest lets
+  the pathfinder "arrive" on the street outside the sealed house, the door never
+  becomes a planned crossing, and the stall hunt once opened the NEIGHBOUR
+  house's door; see the route note in FlaxSpinner.ts)
 - `ladderName` (string, default "Ladder"), `climbUpOp` ("Climb-up"),
   `climbDownOp` ("Climb-down")
 - `wheelName` (string, default "Spinning wheel"), `spinOp` ("Spin")
