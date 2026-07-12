@@ -4,8 +4,8 @@
 // journal complete + QP, script stops itself.
 //
 // Requires: engine on :8890 + local build deployed (deploy-local.sh).
-// Budget ~18 min (three cross-map walks). In run-all-smokes sweeps pass
-// --timeout 1200 or run it standalone.
+// Budget 25 min (~12 min clean + headroom for accepted variance; see BUDGET_MS).
+// In run-all-smokes sweeps pass --timeout 1600 or run it standalone.
 // Usage: bun tools/rune-mysteries-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
@@ -13,7 +13,15 @@ import { mainlandAccount, startScript } from './tutorial/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const username = process.argv[3] || `rm${Date.now().toString(36).slice(-7)}`;
-const BUDGET_MS = 18 * 60_000;
+// A clean run is ~11-12 min, but two ACCEPTED, unfixed-here variances stack on
+// top: the wizard-tower ladder's trapped-landing re-roll (~90s each; a
+// baked-collision-vs-live mismatch that fix #4 recovers from rather than
+// prevents) and a random-event teleport that can bounce the bot off an NPC
+// mid-dialogue (~90s round-trip). A live PASS hit BOTH at once and still
+// finished at ~14.7 min; 25 min leaves headroom for an unluckier stack. This is
+// budget for known variance only — the diagonal-door stall itself is fixed in
+// WalkExecutor.crossMultiTileDoor, not papered over here.
+const BUDGET_MS = 25 * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 

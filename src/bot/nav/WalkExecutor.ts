@@ -41,6 +41,12 @@ const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000; // includes first-use worker boot + pack fetch
 const TRANSPORT_WAIT_MS = 8000;
+// Budget to open AND walk THROUGH a multi-tile door (the wizard-tower shape-9
+// diagonal Door: from/to are 2 tiles apart across the sealed 3107 tile). Must
+// cover several open→walk tries because the RS door auto-reverts after a few
+// ticks — enough headroom that a genuine cross always lands, small vs the 90s
+// walkTo attempt so a truly stuck one still repaths.
+const MULTI_DOOR_CROSS_MS = 20_000;
 const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing dialogue
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
@@ -388,20 +394,31 @@ class WalkExecutorImpl {
             return this.handleSpecialCrossing(approach, step, special, log);
         }
 
+        // A hand-added edge that bridges tiles >1 apart is a MULTI-TILE door
+        // (the wizard-tower shape-9 diagonal Door@3107,3162 seals the whole
+        // tile, so the graph hops the walkable neighbours 3106<->3108). Opening
+        // it does NOT put us on the far side, and the RS door auto-reverts after
+        // a few ticks, so — unlike a 1-tile door — we must actively walk THROUGH
+        // and only report success once we're across. Otherwise the old path
+        // declared victory on "door opened", followPath cleared the crossing
+        // annotation, the door re-closed before the canReach-gated click-through
+        // could fire, and the crossing could never re-trigger: gotoNpc's
+        // ladder-stand hop froze ~5 min at (3108,3162) while walkResilient burned
+        // 3x90s (RuneMysteries smoke, t=170-460).
+        if (transport.toLevel === undefined && chebyshev(approach, step) > 1) {
+            return this.crossMultiTileDoor(approach, step, transport, log);
+        }
+
         for (let attempt = 0; attempt < 2; attempt++) {
             const loc = this.findTransportLoc(transport);
             if (!loc) {
                 if (transport.toLevel === undefined) {
                     // No CLOSED door loc here (an open door offers 'Close', not
                     // 'Open', so findTransportLoc misses it) — is the way already
-                    // clear? canStep only validates a SINGLE adjacent step, but a
-                    // hand-added diagonal-door edge bridges tiles 2+ apart across a
-                    // wall the baked pack keeps (e.g. wizard tower 3106<->3108):
-                    // canStep is permanently false there, so an already-open door
-                    // read as "blocked" and the walk repathed until the RS door
-                    // auto-closed (~240s; Task 6 wizard-tower stall). canReach walks
-                    // the LIVE scene collision, where an open diagonal door is
-                    // passable, so it settles the multi-tile hop correctly.
+                    // clear? For a 1-tile door canStep settles it; canReach is the
+                    // fallback for any edge whose from/to aren't cardinally adjacent
+                    // (multi-tile diagonal doors are handled earlier by
+                    // crossMultiTileDoor, so this is a general safety net now).
                     if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
                         log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
                         return true;
@@ -431,6 +448,65 @@ class WalkExecutorImpl {
             }
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
+        return false;
+    }
+
+    /**
+     * Drive a multi-tile door crossing to COMPLETION: ensure the door is open
+     * and walk the player THROUGH it to the far side, re-opening if the RS door
+     * reverts mid-cross, until we're across (or the budget runs out → repath).
+     * Success is the player crossing — not the door merely opening — because for
+     * these edges (from/to >1 apart across a sealed tile) opening leaves us on
+     * the near side, and the old "door opened ⇒ done + clear annotation" let the
+     * door re-close before the click-through, stranding the bot with no way to
+     * re-fire the crossing (the ~5-min (3108,3162) freeze; see handleTransport).
+     *
+     * We aim one tile PAST `step`, not at `step` itself: a live probe of the
+     * wizard-tower shape-9 Door showed that OPENING it swings the loc onto the
+     * far `step` tile and flags it WALK_SCENERY — 3107,3162 clears but 3106,3162
+     * becomes blocked. So `step` is unreachable while the door is open; clicking
+     * it is gated out by canReach and the bot never moves (the exact failure of
+     * the first fix attempt). The landing tile one step further along the
+     * crossing axis (3105,3162 here) is walkable, and the client routes around
+     * the swung door to reach it.
+     */
+    private async crossMultiTileDoor(approach: PathStep, step: PathStep, transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
+        const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
+        const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
+        // On the far side once we're strictly closer to `step` than to the
+        // `approach` tile we started from — mirrors handleSpecialCrossing's test.
+        const onFarSide = (): boolean => {
+            const me = reader.worldTile();
+            return me !== null && me.level === step.level && chebyshev(me, step) < chebyshev(me, approach);
+        };
+        const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
+        while (performance.now() < deadline) {
+            if (onFarSide()) {
+                log(`crossed ${transport.locName} at (${transport.locX},${transport.locZ})`);
+                return true;
+            }
+            const shut = this.findTransportLoc(transport);
+            if (shut) {
+                // closed (first arrival) or reverted mid-cross — open it and let
+                // the open register before trying to step through
+                if (!shut.interact(transport.action)) {
+                    log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
+                    return false;
+                }
+                await Execution.delayUntil(() => this.findTransportLoc(transport) === null, TRANSPORT_WAIT_MS);
+                continue;
+            }
+            // door open — walk to the landing tile PAST the door; the client
+            // routes around the swung-open loc (canReach mirrors that route, so a
+            // click only issues when one exists), and we loop back to re-open if
+            // it reverts before we cross
+            const local = reader.toLocal(landing.x, landing.z);
+            if (local && Reachability.canReach(landing, { maxSteps: 128 })) {
+                ActionRouter.driver.walk(local.lx, local.lz);
+            }
+            await Execution.delayTicks(2);
+        }
+        log(`${transport.locName} at (${transport.locX},${transport.locZ}) did not cross in time, repathing`);
         return false;
     }
 
