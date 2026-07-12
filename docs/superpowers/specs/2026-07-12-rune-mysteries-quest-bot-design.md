@@ -54,6 +54,7 @@ One pure decision function `nextStep(journal, held)` (unit-tested table):
 | journal | held | step |
 |---|---|---|
 | complete | — | DONE — log + `ScriptRunner.stop()` |
+| unknown | — | WAIT — journal not read yet; delay + re-poll |
 | notStarted | — | DUKE |
 | inProgress | Air talisman | SEDRIDOR |
 | inProgress | Research package | AUBURY |
@@ -69,13 +70,23 @@ again" step.
 
 ## The two executor primitives (`src/bot/quests/exec/primitives.ts`)
 
-- **`gotoNpc(spec)`** — `Traversal.walkResilient` to `spec.anchor`; when the
-  spec carries a `via` hop (Sedridor: the basement ladder is NOT a nav edge
-  and the 2D A* heuristic can't span the z+6400 underground offset), walk to
-  the surface ladder anchor, `climbLadder(name, op)` (FlaxSpinner's helper,
-  promoted/mirrored), then local-walk the basement — the basement mapsquare
-  IS in the collision pack (verified: walkable(3103,9571,0) = true). Done
-  when the target NPC is visible within the leash radius.
+- **`gotoNpc(spec)`** — `Traversal.walkResilient` to `spec.anchor`; when here
+  and the anchor straddle the surface/underground boundary (Sedridor: the
+  basement ladder is NOT a nav edge and the 2D A* heuristic can't span the
+  z+6400 underground offset), take a `hopLadder(hop)` region-crossing first
+  (FlaxSpinner's climb helper, promoted/mirrored), then local-walk the
+  basement — the basement mapsquare IS in the collision pack (verified:
+  walkable(3103,9571,0) = true). Task-6 live-run true-up: the final approach
+  lands RIGHT ON the anchor (radius 1), not merely "within leash", and the
+  leash-wide "already near, skip the walk" short-circuit was removed — a loose
+  radius-3 arrival stranded the bot across the cramped basement wall from a
+  wandering Sedridor (Talk-to couldn't path; "never opened a dialogue", retried
+  forever), so re-centring on the anchor every call self-heals a failed talk.
+  It also recovers a trapped ladder-landing: the tower ladder occasionally
+  drops you on a dead-end tile the baked pack thinks reaches Sedridor while the
+  live scene walls it off (0 clicks, freeze) — detected (still underground, not
+  at the nearby anchor after a bounded walk) and escaped by climbing back up so
+  the caller re-descends onto a reachable tile.
 - **`talkThrough(npcName, prefer[])`** — Talk-to the nearest matching NPC,
   then drive the dialogue: continue through pages; at a choice pick the first
   `prefer` entry that case-insensitive substring-matches (the tutorial
@@ -124,6 +135,16 @@ exclusivity trivially true and the decision auditable in one pure function.
   transcript, keep retrying (recovery dialogues make retries safe).
 - Items only move on server-completed handovers, so an interrupted dialogue
   never wedges state.
+- Nav-layer hardenings this quest's first live walks forced (Task 6):
+  `WalkExecutor` now (a) gates its crossing-proximity scan on the player being
+  on the crossing's approach-tile level — `chebyshev()` is horizontal-only, so
+  a ground-floor doorway directly under an upstairs player was falsely
+  "handled" as already-open and skipped the real staircase-down (the post-Duke
+  castle-descent stall); and (b) accepts an already-open door via live-scene
+  `Reachability.canReach`, not just `canStep`, because the hand-added
+  wizard-tower diagonal-door edge bridges tiles 2 apart across a baked-in wall
+  where `canStep` (single adjacent step only) is permanently false (the
+  wizard-tower stall).
 
 ## Testing
 
@@ -137,10 +158,12 @@ exclusivity trivially true and the decision auditable in one pure function.
 
 ## Settings & registration
 
-`SETTINGS` schema (FlaxSpinner style): NPC names, anchor tiles, ladder
-name/op, leash radius — defaults from the verified data, all overridable.
-Registered in `scripts/index.ts` as `RuneMysteries`. Paint overlay: current
-step, journal status, held item, walk progress.
+`SETTINGS` schema (FlaxSpinner style): the quest journal name, the three NPC
+anchor tiles, and the leash radius — defaults from the verified data, all
+overridable. The NPC names and the ladder name/op shipped as in-script
+constants, not settings (they're fixed by the quest content). Registered in
+`scripts/index.ts` as `RuneMysteries`. Paint overlay: current step, journal
+status, held item, walk progress.
 
 ## Out of scope
 
