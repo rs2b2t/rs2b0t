@@ -12,21 +12,22 @@ import { EventSignal } from '../api/EventSignal.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
-const DEFAULT_FIELD = new Tile(2744, 3446, 0);
-// Open road just WEST of the field, out through the opening in the tree line and
-// on the Seers-bank side (the bank is due north at 2722,3493). Web-walking
-// straight from inside the flax cluster wedges on the flax "walls" — hopping to
-// this tile first, then web-walking, avoids it (user-reported).
-const DEFAULT_FIELD_EXIT = new Tile(2722, 3446, 0);
-// South-adjacent to the Seers bank booths (they run along z=3494; stand on z=3493).
-const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
+// Waypoints for the Seers loop (user-supplied, live). The bank run is a chain of
+// short, reliable hops — field centre → gate (the opening in the field boundary)
+// → bank entrance → a booth stand — so no single long web-walk from inside the
+// flax cluster can wedge.
+const DEFAULT_FIELD = new Tile(2741, 3444, 0);      // centre of the flax field
+const DEFAULT_FIELD_GATE = new Tile(2736, 3443, 0); // the opening on the west side
+const DEFAULT_BANK_ENTRANCE = new Tile(2726, 3487, 0); // doorway into the Seers bank
+const DEFAULT_BANK_STAND = new Tile(2725, 3493, 0); // middle of the booth-stand row (2721..2729, z3493)
+const BANK_STAND_SPAN = 4; // booth stands run bankStand.x ± this along the same z
 const BOOTH = { op: 'Use-quickly' };
 // How close (Chebyshev) to the field centre still counts as "at the field" — the
 // whole Seers flax cluster sits within this of the centre tile. Replaces the old
 // user-facing "leash" setting: the bot web-walks to the field from anywhere, and
 // this just scopes which flax belongs to this field.
 const FIELD_SCOPE = 12;
-const FIELD_ARRIVE = 6; // arrival radius when web-walking to the field
+const FIELD_ARRIVE = 3; // arrival radius when walking to the field centre
 // Flax locs block movement, so a full pack (which can't pick — "You can't carry
 // any more flax") can get walled in. If the tiles reachable from the player flood
 // to fewer than this, we're boxed into a flax pocket and must carve out.
@@ -36,9 +37,10 @@ const CARVE_DROP = 5; // flax to drop to free slots for carving a way out
 export const SETTINGS: SettingsSchema = {
     flaxName: { type: 'string', default: 'Flax', label: 'Flax loc name' },
     pickOp: { type: 'string', default: 'Pick', label: 'Interact op' },
-    fieldTile: { type: 'tile', default: DEFAULT_FIELD, label: 'Field centre tile (x,z)', help: 'verify/adjust live — Seers flax field' },
-    fieldExit: { type: 'tile', default: DEFAULT_FIELD_EXIT, label: 'Field exit tile (x,z)', help: 'open ground just west of the field (through the opening) — run here before banking' },
-    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'Seers bank booth-adjacent tile' },
+    fieldTile: { type: 'tile', default: DEFAULT_FIELD, label: 'Field centre tile (x,z)', help: 'centre of the flax field' },
+    fieldGate: { type: 'tile', default: DEFAULT_FIELD_GATE, label: 'Field gate/opening (x,z)', help: 'the opening on the west side — run out here before banking' },
+    bankEntrance: { type: 'tile', default: DEFAULT_BANK_ENTRANCE, label: 'Bank entrance tile (x,z)', help: 'doorway into the bank, walked to on the way in and out' },
+    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'a booth-adjacent tile; the bot uses the nearest reachable one along this row' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' }
 };
 
@@ -60,7 +62,8 @@ export default class FlaxPicker extends TaskBot {
     private flaxName = 'Flax';
     private pickOp = 'Pick';
     private fieldTile = DEFAULT_FIELD;
-    private fieldExit = DEFAULT_FIELD_EXIT;
+    private fieldGate = DEFAULT_FIELD_GATE;
+    private bankEntrance = DEFAULT_BANK_ENTRANCE;
     private bankStand = DEFAULT_BANK_STAND;
     private boothName = 'Bank booth';
 
@@ -74,11 +77,12 @@ export default class FlaxPicker extends TaskBot {
         this.flaxName = this.settings.str('flaxName', 'Flax');
         this.pickOp = this.settings.str('pickOp', 'Pick');
         this.fieldTile = this.settings.tile('fieldTile', DEFAULT_FIELD);
-        this.fieldExit = this.settings.tile('fieldExit', DEFAULT_FIELD_EXIT);
+        this.fieldGate = this.settings.tile('fieldGate', DEFAULT_FIELD_GATE);
+        this.bankEntrance = this.settings.tile('bankEntrance', DEFAULT_BANK_ENTRANCE);
         this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
 
-        this.log(`FlaxPicker picking '${this.flaxName}' (${this.pickOp}) at ${this.fieldTile} — exit ${this.fieldExit}, bank ${this.bankStand}`);
+        this.log(`FlaxPicker picking '${this.flaxName}' (${this.pickOp}) at ${this.fieldTile} — gate ${this.fieldGate}, bank entrance ${this.bankEntrance}, stand ${this.bankStand}`);
 
         this.on('inventory.changed', e => {
             if (e.id !== -1 && this.isFlax(e.name)) {
@@ -126,13 +130,25 @@ export default class FlaxPicker extends TaskBot {
         return here !== null && this.fieldTile.distanceTo(here) <= FIELD_SCOPE;
     }
 
-    /** The nearest pickable "Flax" loc belonging to this field, or null. */
-    nearestFlax() {
-        return Locs.query()
+    /** The nearest REACHABLE pickable "Flax" loc of this field, or null. Reachable
+     *  matters because flax blocks movement: the plain nearest can sit behind a
+     *  wall of other flax, and interacting with it leaves the bot stranded (the
+     *  server can't path to it) — it then camps, picking only the one adjacent
+     *  stalk as it respawns. Checking nearest-first and stopping at the first
+     *  reachable keeps the bot flowing to flax it can actually walk to. */
+    nearestFlax(): Loc | null {
+        const me = Game.tile();
+        const flax = Locs.query()
             .name(this.flaxName)
             .action(this.pickOp)
             .where(l => l.tile().distanceTo(this.fieldTile) <= FIELD_SCOPE)
-            .nearest();
+            .results();
+        if (flax.length === 0) { return null; }
+        if (me) { flax.sort((a, b) => a.tile().distanceTo(me) - b.tile().distanceTo(me)); }
+        for (const f of flax) {
+            if (Reachability.canReach(f.tile(), { adjacentOk: true, maxSteps: 400 })) { return f; }
+        }
+        return null;
     }
 
     /** The pickable flax loc at exactly (x,z,level), or null. */
@@ -233,53 +249,97 @@ export default class FlaxPicker extends TaskBot {
             const walls = this.boundaryFlax(pocket);
             if (walls.length === 0) { return; } // walled by map, not flax — nothing to carve
             if (Inventory.isFull()) { await this.dropFlax(CARVE_DROP); }
-            const target = walls.sort((a, b) => a.tile().distanceTo(this.fieldExit) - b.tile().distanceTo(this.fieldExit))[0];
+            const target = walls.sort((a, b) => a.tile().distanceTo(this.fieldGate) - b.tile().distanceTo(this.fieldGate))[0];
             const t = target.tile();
             if (!(await target.interact(this.pickOp))) { await Execution.delayTicks(2); continue; }
             await Execution.delayUntil(() => !this.flaxStillAt(t), 4000);
         }
     }
 
+    /** The nearest reachable booth-stand tile in the row (bankStand.x ± span, same
+     *  z), or the row-nearest to us if none reads reachable right now. Using the
+     *  whole row means one occupied/blocked stand never wedges the bank run. */
+    private nearestStand(): Tile {
+        const me = Game.tile();
+        const z = this.bankStand.z, level = this.bankStand.level;
+        const row: Tile[] = [];
+        for (let x = this.bankStand.x - BANK_STAND_SPAN; x <= this.bankStand.x + BANK_STAND_SPAN; x++) {
+            row.push(new Tile(x, z, level));
+        }
+        const pool = row.filter(t => Reachability.canReach(t));
+        const pick = pool.length > 0 ? pool : row;
+        if (!me) { return pick[Math.floor(pick.length / 2)]; }
+        return pick.sort((a, b) => a.distanceTo(me) - b.distanceTo(me))[0];
+    }
+
+    /** Walk to `dest` using the LIVE client tryMove (local-scene pathing), which
+     *  handles the short/medium in-scene hops the baked web-walker stalls on
+     *  ("stuck … repathing (0 clicks)"). Re-issues each time we move; bails if the
+     *  target isn't in the loaded scene or we stop making progress, so the caller
+     *  can fall back to the web-walker. Returns true once within `radius`. */
+    private async walkLocal(dest: Tile, radius: number): Promise<boolean> {
+        let last: { x: number; z: number } | null = null;
+        for (let w = 0; w < 30; w++) {
+            const now = Game.tile();
+            if (now && dest.distanceTo(now) <= radius) { return true; }
+            const local = reader.toLocal(dest.x, dest.z);
+            if (!local) { return false; } // off-scene — hand off to the web-walker
+            actions.walkTo(local.lx, local.lz);
+            // walk for a beat, then re-check. If we didn't move at all since the
+            // last beat, bail IMMEDIATELY to the web-walker rather than re-clicking
+            // a blocked tile — fast stuck-resolution, no slow flailing.
+            await Execution.delayUntil(() => {
+                const t = Game.tile();
+                return t !== null && dest.distanceTo(t) <= radius;
+            }, 1800);
+            const moved = Game.tile();
+            if (moved && last && moved.x === last.x && moved.z === last.z) { return false; }
+            last = moved ? { x: moved.x, z: moved.z } : null;
+        }
+        const fin = Game.tile();
+        return fin !== null && dest.distanceTo(fin) <= radius;
+    }
+
+    /** Robust travel to `dest`: the local client walk first (no short-move stall,
+     *  handles the whole in-scene Seers loop), and the web-walker as a fallback for
+     *  off-scene / long cross-region legs or when the local walk is blocked (it
+     *  also opens any door/gate en route). */
+    async travelTo(dest: Tile, radius: number): Promise<boolean> {
+        if (reader.toLocal(dest.x, dest.z) !== null && await this.walkLocal(dest, radius)) {
+            return true;
+        }
+        return Traversal.walkResilient(dest, { radius: Math.max(radius, 2), attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) });
+    }
+
     /**
      * Empty the whole pack at the Seers bank, then return to the field. Shared by
-     * the startup reset and the pack-full bank trip. If we're currently in the
-     * field, step out through the west opening onto open ground FIRST — web-walking
-     * straight from inside the flax cluster wedges on the flax walls. Deposits the
-     * ENTIRE inventory (flax + any random-event junk). Returns true once banked.
+     * the startup reset and the pack-full bank trip. The route is a chain of short
+     * hops between known-good tiles — field ⇄ gate ⇄ bank entrance ⇄ booth stand —
+     * so no single long web-walk (least of all one starting inside the flax
+     * cluster) can wedge. Deposits the ENTIRE inventory (flax + any random-event
+     * junk). Returns true once banked.
      */
     async bankRun(): Promise<boolean> {
         const log = (m: string): void => this.log(`  ${m}`);
         const had = this.flaxCount();
+        // OUT: field → gate → bank entrance → nearest booth stand. Each is its own
+        // travelTo (local-first, web-walk fallback) so a short hop never wedges.
         if (this.atField()) {
-            this.setStatus('leaving the field via the west opening');
-            await Traversal.walkResilient(this.fieldExit, { radius: 1, attempts: 3, timeoutMs: 60_000, log });
+            this.setStatus('leaving the field via the gate');
+            await this.travelTo(this.fieldGate, 0);
         }
-        this.setStatus('web-walking to the bank');
-        if (!(await Traversal.walkResilient(this.bankStand, { radius: 4, attempts: 4, timeoutMs: 180_000, log }))) {
-            this.log('could not reach the bank — will retry');
+        this.setStatus('walking to the bank entrance');
+        if (!(await this.travelTo(this.bankEntrance, 1))) {
+            this.log('could not reach the bank entrance — will retry');
             return false;
         }
-        // The web-walker parks a tile or two short of the counter, and its 1-tile
-        // final step stalls ("stuck … repathing (0 clicks)") — the recurring "banks
-        // slowly / recalculates while already at the bank" symptom. Close the last
-        // step with a LIVE local walk onto the exact stand tile (adjacent to an
-        // operable booth), the same trick SmelterBot/maze use, then just open.
-        for (let w = 0; w < 6; w++) {
-            const now = Game.tile();
-            if (now && now.x === this.bankStand.x && now.z === this.bankStand.z) { break; }
-            const local = reader.toLocal(this.bankStand.x, this.bankStand.z);
-            if (!local) { await Execution.delayTicks(1); continue; }
-            const before = Game.tile();
-            actions.walkTo(local.lx, local.lz);
-            await Execution.delayUntil(() => {
-                const t = Game.tile();
-                return (t !== null && t.x === this.bankStand.x && t.z === this.bankStand.z) || (before !== null && t !== null && (before.x !== t.x || before.z !== t.z));
-            }, 3000);
-        }
+        const stand = this.nearestStand();
+        this.setStatus('stepping to the bank counter');
+        await this.travelTo(stand, 0);
         // configured stand first, then the dynamic openNearest fallback (a bad/
         // unreachable stand can't hang us — it steps onto a live-reachable tile
         // beside the nearest OPERABLE booth, skipping the decorative ones)
-        const opened = (await Bank.openBooth(this.bankStand, this.boothName, BOOTH.op, log))
+        const opened = (await Bank.openBooth(stand, this.boothName, BOOTH.op, log))
             || (await Bank.openNearest(this.boothName, BOOTH.op, log));
         if (!opened) {
             this.log('could not open the bank — will retry');
@@ -289,9 +349,11 @@ export default class FlaxPicker extends TaskBot {
         await Execution.delayTicks(1);
         this.countTrip();
         this.log(`banked ${had} ${this.flaxName} (+ any junk)`);
+        // BACK: bank entrance → gate → field centre.
         this.setStatus('returning to the field');
-        await Traversal.walkResilient(this.fieldExit, { radius: 1, attempts: 3, timeoutMs: 180_000, log });
-        await Traversal.walkResilient(this.fieldTile, { radius: FIELD_ARRIVE, attempts: 4, timeoutMs: 180_000, log });
+        await this.travelTo(this.bankEntrance, 1);
+        await this.travelTo(this.fieldGate, 0);
+        await this.travelTo(this.fieldTile, FIELD_ARRIVE);
         return true;
     }
 }
@@ -360,12 +422,20 @@ class Pick implements Task {
     }
 }
 
-/** Not at the field and not full → web-walk to the field from wherever we are. */
+/** Not full and no reachable flax to pick right now → get to / reposition toward
+ *  the field centre (handles both "still travelling here from anywhere" and "stuck
+ *  in a spot with nothing reachable"). At the centre with nothing reachable, just
+ *  wait a beat for flax to respawn. */
 class GoToField implements Task {
     constructor(private bot: FlaxPicker) {}
-    validate(): boolean { return !Inventory.isFull() && !this.bot.atField(); }
+    validate(): boolean { return !Inventory.isFull() && this.bot.nearestFlax() === null; }
     async execute(): Promise<void> {
-        this.bot.setStatus('web-walking to the flax field');
-        await Traversal.walkResilient(this.bot.fieldCentre(), { radius: FIELD_ARRIVE, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
+        const here = Game.tile();
+        if (here && this.bot.fieldCentre().distanceTo(here) <= FIELD_ARRIVE) {
+            await Execution.delayTicks(2); // at the centre — flax just respawning, wait it out
+            return;
+        }
+        this.bot.setStatus('travelling to the flax field');
+        await this.bot.travelTo(this.bot.fieldCentre(), FIELD_ARRIVE);
     }
 }
