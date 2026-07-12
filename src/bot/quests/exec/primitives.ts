@@ -58,6 +58,17 @@ export interface NpcStop {
     anchor: Tile;
     leash: number;
     prefer: string[];
+    /** Staged walk targets on the way to `anchor`, walked in order (radius 2)
+     *  before the anchor leg. Needed for horseshoe rooms: the 2004 client's
+     *  ground-click fallback walks to the reachable tile NEAREST the click, so
+     *  when every tile along the only route is FARTHER from the target than
+     *  the start (wizard-tower basement: landing → east → south corridor →
+     *  west through the door to Sedridor), clicks are no-ops and the walker
+     *  freezes at the ladder (probe-verified live: 9s of clicks, zero
+     *  movement). A waypoint at the corridor mouth is a plain reachable dest
+     *  the client paths happily; the door crossing then starts from the right
+     *  side of the horseshoe. */
+    approach?: Tile[];
 }
 
 /**
@@ -127,6 +138,20 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
         here = Game.tile();
         if (!here) {
             return false;
+        }
+    }
+    // Staged approach: walk each waypoint in order before the anchor leg, so a
+    // horseshoe route is broken into segments the client can path (see
+    // NpcStop.approach). No "already past it" shortcut — straight-line distance
+    // is exactly what a horseshoe breaks (the landing is CLOSER to the anchor
+    // than the waypoint is), and the npcNear() check above already skips all
+    // walking once we're in the chamber with the NPC.
+    for (const wp of stop.approach ?? []) {
+        if (wp.distanceTo(here) > 2) {
+            if (!(await Traversal.walkResilient(wp, { radius: 2, attempts: 2, timeoutMs: 45_000, log }))) {
+                return false;
+            }
+            here = Game.tile() ?? here;
         }
     }
     if (stop.anchor.distanceTo(here) > 1) {

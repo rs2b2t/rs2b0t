@@ -72,6 +72,13 @@ const DEFAULT_SEDRIDOR = new Tile(3103, 9572, 0); // tower basement, beside his 
 const DEFAULT_AUBURY = new Tile(3253, 3402, 0); // Varrock rune shop
 const DEFAULT_LEASH = 8;
 
+// The basement is a horseshoe: the ladder alcove is walled off from Sedridor's
+// chamber, and the only route runs east → south corridor → WEST through the
+// Door at (3108,9570). Walking straight at the anchor from the landing freezes
+// the client (its ground-click fallback can't improve distance on a horseshoe
+// — probe-verified 2026-07-12), so stage the approach at the corridor mouth.
+const SEDRIDOR_APPROACH = [new Tile(3108, 9572, 0)];
+
 const DUKE_PREFER = ['Have you any quests for me?', 'Sure, no problem.'];
 const SEDRIDOR_PREFER = ["I'm looking for the head wizard.", 'Ok, here you are.', 'Yes, certainly.'];
 const AUBURY_PREFER = ['I have been sent here with a package for you.'];
@@ -120,7 +127,7 @@ export default class RuneMysteries extends TaskBot {
         this.questName = this.settings.str('questName', QUEST_NAME);
         const leash = this.settings.num('leashRadius', DEFAULT_LEASH);
         this.duke = { npc: 'Duke Horacio', anchor: this.settings.tile('dukeTile', DEFAULT_DUKE), leash: Math.min(leash, 6), prefer: DUKE_PREFER };
-        this.sedridor = { npc: 'Sedridor', anchor: this.settings.tile('sedridorTile', DEFAULT_SEDRIDOR), leash, prefer: SEDRIDOR_PREFER };
+        this.sedridor = { npc: 'Sedridor', anchor: this.settings.tile('sedridorTile', DEFAULT_SEDRIDOR), leash, prefer: SEDRIDOR_PREFER, approach: SEDRIDOR_APPROACH };
         this.aubury = { npc: 'Aubury', anchor: this.settings.tile('auburyTile', DEFAULT_AUBURY), leash, prefer: AUBURY_PREFER };
         // Empty-handed mid-quest probes, fixed order: Aubury first is also the
         // quest's REQUIRED second talk after handing him the package.

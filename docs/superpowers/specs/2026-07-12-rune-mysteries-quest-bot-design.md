@@ -87,6 +87,14 @@ again" step.
   live scene walls it off (0 clicks, freeze) — detected (still underground, not
   at the nearby anchor after a bounded walk) and escaped by climbing back up so
   the caller re-descends onto a reachable tile.
+  Post-ship root-cause (2026-07-12, live probe): the "trapped landing" was the
+  basement's HORSESHOE shape — the client's ground-click fallback walks to the
+  reachable tile nearest the target, and on the landing → east → corridor →
+  west-through-the-door route every intermediate tile is farther from Sedridor
+  than the start, so clicks were no-ops. Fixed properly with
+  `NpcStop.approach` staged waypoints (Sedridor: corridor mouth (3108,9572));
+  the recovery remains as a belt-and-braces fallback but no longer fires
+  (smoke: descent→talk in ~10s, zero recoveries).
 - **`talkThrough(npcName, prefer[])`** — Talk-to the nearest matching NPC,
   then drive the dialogue: continue through pages; at a choice pick the first
   `prefer` entry that case-insensitive substring-matches (the tutorial
