@@ -26,6 +26,7 @@ import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
+import RuneMysteries, { SETTINGS as RUNEMYSTERIES_SETTINGS } from './RuneMysteries.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // --- tutorial ---
@@ -44,6 +45,15 @@ ScriptRegistry.register({
     category: 'Quest',
     tags: ['f2p', 'quest', 'lumbridge', 'newbie'],
     create: () => new CooksAssistant()
+});
+
+ScriptRegistry.register({
+    name: 'RuneMysteries',
+    description: 'Completes the Rune Mysteries quest — Duke Horacio → Sedridor (tower basement) → Aubury → back. No cheats.',
+    category: 'Quest',
+    tags: ['f2p', 'quest', 'lumbridge', 'wizard-tower', 'varrock'],
+    settingsSchema: RUNEMYSTERIES_SETTINGS,
+    create: () => new RuneMysteries()
 });
 
 ScriptRegistry.register({
