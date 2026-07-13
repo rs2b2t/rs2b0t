@@ -110,6 +110,47 @@ export function plantStrategy(ops: string[]): 'pick' | 'evade' {
     return !canPick && canAttack ? 'evade' : 'pick';
 }
 
+// Lost-tool event pieces + tools we must never drop to free a slot. Ores,
+// logs, fish and gems all fail this test — any of them is worth pennies next
+// to the rune pickaxe the free slot is rescuing.
+const PROTECTED_FROM_DROP = /(handle|head$|axe|pick|hammer|chisel|knife|tinderbox|rod|net|harpoon)/i;
+
+/** Which sacrificial item to drop when the pack is full mid-recovery: the
+ *  most-duplicated name that isn't a tool or an event piece. Null when the
+ *  pack is all-protected (log loudly and attempt recovery anyway). Pure. */
+export function pickSacrificial(names: (string | null)[]): string | null {
+    const counts = new Map<string, number>();
+    for (const n of names) {
+        if (n && !PROTECTED_FROM_DROP.test(n)) {
+            counts.set(n, (counts.get(n) ?? 0) + 1);
+        }
+    }
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [name, count] of counts) {
+        if (count > bestCount) {
+            best = name;
+            bestCount = count;
+        }
+    }
+    return best;
+}
+
+/** Where the lost-tool event left the handle. WORN first: a wielded tool's
+ *  handle is force-equipped into the rhand slot (macro_event_lost_pickaxe.rs2
+ *  inv_setslot(worn, ...)) — invisible to an inventory-only scan, which is
+ *  how wielded rune picks used to despawn. Pure. */
+export function handleLocation(invNames: (string | null)[], wornNames: (string | null)[]): 'worn' | 'inventory' | null {
+    const isHandle = (n: string | null): boolean => n !== null && /(axe|pickaxe) handle/i.test(n);
+    if (wornNames.some(isHandle)) {
+        return 'worn';
+    }
+    if (invNames.some(isHandle)) {
+        return 'inventory';
+    }
+    return null;
+}
+
 class RandomEventsImpl {
     /** Names the host bot legitimately fights, so they're never mistaken for a combat event. */
     grindTargets: string[] = [];
