@@ -1499,7 +1499,7 @@ import { Game } from '#/bot/api/Game.js';
 import { TaskBot, type Task } from '#/bot/api/Bot.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import type { SettingsSchema } from '#/bot/runtime/Settings.js';
-import { cheapestUnmetGate, decide, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '#/bot/shops/Planner.js';
+import { cheapestUnmetGate, clusterEligible, decide, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '#/bot/shops/Planner.js';
 import { SHOP_DB } from '#/bot/shops/data/shopdb.js';
 import { ROUTE, SMOKE_ROUTE } from '#/bot/shops/data/route.js';
 import type { AccountView, BuyPolicy, Route, SeenMap } from '#/bot/shops/types.js';
@@ -1563,7 +1563,7 @@ export class ShopRunner extends TaskBot {
         }
 
         const acct = this.accountView();
-        if (!this.route.clusters.some(c => this.eligible(c, acct))) {
+        if (!this.route.clusters.some(c => clusterEligible(c, acct))) {
             this.log(`[shoprun] stopping — no eligible clusters (cheapest unmet gate: ${cheapestUnmetGate(this.route, acct)})`);
             ScriptRunner.stop();
             return;
@@ -1606,14 +1606,6 @@ export class ShopRunner extends TaskBot {
             }
         }
         return { members: this.membersWorld, qp: Quests.points(), quests, skills };
-    }
-
-    private eligible(cluster: Route['clusters'][number], acct: AccountView): boolean {
-        return cluster.gates.every(g =>
-            (!g.members || acct.members) &&
-            (!g.skill || (acct.skills[g.skill.name] ?? 0) >= g.skill.level) &&
-            (!g.quest || acct.quests[g.quest]) &&
-            (g.qp === undefined || acct.qp >= g.qp));
     }
 
     seenKey(): string | null {
