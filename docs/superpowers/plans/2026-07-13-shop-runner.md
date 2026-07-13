@@ -868,7 +868,7 @@ describe('planCluster', () => {
         expect(plan.totalUnits).toBe(0);
     });
     test('cooldown expiry restores the shop', () => {
-        const plan = planCluster(CLUSTER, DB, {}, 100_000, CFG, { runeshop: 99_999 });
+        const plan = planCluster(CLUSTER, DB, {}, 100_000, UNCAPPED, { runeshop: 99_999 });
         expect(plan.totalUnits).toBe(2000);
     });
 });
