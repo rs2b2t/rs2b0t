@@ -122,3 +122,127 @@ export function planCluster(
         budget
     };
 }
+
+export type Decision =
+    | { kind: 'buy'; clusterId: string; shop: ShopPlan }
+    | { kind: 'bank'; clusterId: string; stand: NavPointLike; boothName: string; boothOp: string; withdrawFor: ClusterPlan | null }
+    | { kind: 'idle'; stand: NavPointLike; boothName: string; boothOp: string; untilMs: number; bestClusterId: string | null; bestFractionPct: number };
+
+export interface RuntimeState {
+    pos: NavPointLike | null;
+    gpHeld: number;
+    carryingPurchases: boolean;
+    fundedPlan: ClusterPlan | null;
+    visited: string[];          // shopIds bought (or skipped) within fundedPlan
+    lastClusterId: string | null;
+}
+
+export interface PlanOutcome {
+    decision: Decision;
+    skipped: { clusterId: string; fractionPct: number }[];
+}
+
+function cheb(a: NavPointLike, b: NavPointLike): number {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+
+function nearestBank(route: Route, pos: NavPointLike | null): RouteCluster {
+    if (!pos) {
+        return route.clusters[0];
+    }
+    return [...route.clusters].sort((a, b) => cheb(a.bank.stand, pos) - cheb(b.bank.stand, pos))[0];
+}
+
+function nextInRing(route: Route, qualifying: Map<string, ClusterPlan>, lastClusterId: string | null): ClusterPlan | null {
+    const ring = route.ring;
+    const start = lastClusterId ? (ring.indexOf(lastClusterId) + 1) % ring.length : 0;
+    for (let i = 0; i < ring.length; i++) {
+        const id = ring[(start + i) % ring.length];
+        const plan = qualifying.get(id);
+        if (plan) {
+            return plan;
+        }
+    }
+    return null;
+}
+
+export function decide(
+    route: Route,
+    db: Record<string, ShopRecord>,
+    seen: SeenMap,
+    nowMs: number,
+    cfg: PlannerCfg,
+    acct: AccountView,
+    cooldowns: Record<string, number>,
+    rt: RuntimeState
+): PlanOutcome {
+    const eligible = route.clusters.filter(c => clusterEligible(c, acct));
+    const plans = new Map(eligible.map(c => [c.id, planCluster(c, db, seen, nowMs, cfg, cooldowns)]));
+    const qualifying = new Map([...plans].filter(([, p]) => p.totalUnits > 0 && p.haulFraction * 100 >= cfg.haulThresholdPct));
+    const skipped = [...plans.values()]
+        .filter(p => !qualifying.has(p.clusterId))
+        .map(p => ({ clusterId: p.clusterId, fractionPct: Math.round(p.haulFraction * 100) }));
+
+    // mid-cluster: keep executing the funded plan
+    if (rt.fundedPlan) {
+        const next = rt.fundedPlan.shops.find(s => !rt.visited.includes(s.shopId) && (cooldowns[s.shopId] ?? 0) <= nowMs);
+        if (next) {
+            return { decision: { kind: 'buy', clusterId: rt.fundedPlan.clusterId, shop: next }, skipped };
+        }
+    }
+
+    const target = nextInRing(route, qualifying, rt.fundedPlan?.clusterId ?? rt.lastClusterId);
+
+    // done with a cluster (or holding stuff/gp for any other reason): bank —
+    // deposit everything and fund the next target in the same visit.
+    if (rt.fundedPlan || rt.carryingPurchases || rt.gpHeld > 0 || target) {
+        const at = rt.fundedPlan
+            ? route.clusters.find(c => c.id === rt.fundedPlan!.clusterId) ?? nearestBank(route, rt.pos)
+            : nearestBank(route, rt.pos);
+        return {
+            decision: { kind: 'bank', clusterId: at.id, stand: at.bank.stand, boothName: at.bank.boothName, boothOp: at.bank.boothOp, withdrawFor: target },
+            skipped
+        };
+    }
+
+    // nothing to do: idle at the nearest bank until the model says otherwise
+    const best = [...plans.values()].sort((a, b) => b.haulFraction - a.haulFraction)[0] ?? null;
+    const at = nearestBank(route, rt.pos);
+    return {
+        decision: {
+            kind: 'idle',
+            stand: at.bank.stand,
+            boothName: at.bank.boothName,
+            boothOp: at.bank.boothOp,
+            untilMs: earliestQualifyMs(route, db, seen, nowMs, cfg, acct, cooldowns),
+            bestClusterId: best?.clusterId ?? null,
+            bestFractionPct: Math.round((best?.haulFraction ?? 0) * 100)
+        },
+        skipped
+    };
+}
+
+const QUALIFY_SCAN_STEP_MS = 60_000;
+const QUALIFY_SCAN_HORIZON_MS = 8 * 60 * 60_000;
+const QUALIFY_FALLBACK_MS = 30 * 60_000;
+
+export function earliestQualifyMs(
+    route: Route,
+    db: Record<string, ShopRecord>,
+    seen: SeenMap,
+    nowMs: number,
+    cfg: PlannerCfg,
+    acct: AccountView,
+    cooldowns: Record<string, number>
+): number {
+    const eligible = route.clusters.filter(c => clusterEligible(c, acct));
+    for (let t = nowMs + QUALIFY_SCAN_STEP_MS; t <= nowMs + QUALIFY_SCAN_HORIZON_MS; t += QUALIFY_SCAN_STEP_MS) {
+        for (const c of eligible) {
+            const p = planCluster(c, db, seen, t, cfg, cooldowns);
+            if (p.totalUnits > 0 && p.haulFraction * 100 >= cfg.haulThresholdPct) {
+                return t;
+            }
+        }
+    }
+    return nowMs + QUALIFY_FALLBACK_MS;
+}
