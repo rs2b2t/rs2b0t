@@ -27,6 +27,7 @@ import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import RuneMysteries, { SETTINGS as RUNEMYSTERIES_SETTINGS } from './RuneMysteries.js';
+import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // --- tutorial ---
@@ -176,6 +177,15 @@ ScriptRegistry.register({
         }
     },
     create: () => new GatheringBot()
+});
+
+ScriptRegistry.register({
+    name: 'EssMiner',
+    description: 'Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries + a usable pickaxe (picks your best by default)',
+    category: 'Mining',
+    tags: ['f2p', 'varrock', 'mining', 'banking', 'afk'],
+    settingsSchema: ESSMINER_SETTINGS,
+    create: () => new EssMiner()
 });
 
 ScriptRegistry.register({
