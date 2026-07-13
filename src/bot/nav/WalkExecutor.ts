@@ -367,7 +367,7 @@ class WalkExecutorImpl {
      * to the south and never opens it — the "constantly stuck on gates" failure.
      * `.within(3).nearest()` is player-relative, so it always finds the blocker.
      */
-    private async tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
+    async tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
         const door = Locs.query()
             .action('Open')
             .within(3)
