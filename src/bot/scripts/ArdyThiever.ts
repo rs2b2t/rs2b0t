@@ -17,25 +17,27 @@ import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
+import { requiredThieving, targetSpot } from './ArdyThieverLogic.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
-// East Ardougne, shared with ArdyFighter. Pickpocket targets (Thieving req):
-// Guard 40, Knight of Ardougne 55, Hero 80 — all in/near the market. Baker's
-// stall feeds the bot; it FLEES any combat (can't fight guards).
-const DEFAULT_ANCHOR = new Tile(2661, 3306, 0);
-const DEFAULT_STALL = new Tile(2667, 3310, 0);
+// East Ardougne market layout — baked in, not settings. Tiles were live-tuned
+// in the original bot; per-target anchors come from the packed spawn data (see
+// ArdyThieverLogic + the 2026-07-12 design spec). Start the bot anywhere:
+// ReturnToAnchor travels to the target's spot.
+const STALL_TILE = new Tile(2667, 3310, 0);
 // The stall sits behind a counter (like a bank booth), so we can't stand on it —
 // walk ONTO this reachable tile beside it and steal from there.
-const DEFAULT_STALL_STAND = new Tile(2668, 3312, 0);
-const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
+const STALL_STAND = new Tile(2668, 3312, 0);
+const STALL_NAME = 'Baker\'s stall';
+const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
 const PICKPOCKET_OP = 'Pickpocket';
-// On any real combat (a guard caught us stealing from the stall), run to this
-// fixed tile SW of the market — far enough to drag the guard off the stall and
-// break its melee, so the stall clears for the next restock.
-const DEFAULT_FLEE_TILE = new Tile(2655, 3298, 0);
+// On any real combat (a guard caught us stealing from the stall), flee mode
+// runs to this fixed tile SW of the market — far enough to drag the guard off
+// the stall and break its melee, so the stall clears for the next restock.
+const FLEE_TILE = new Tile(2655, 3298, 0);
 // A failed pickpocket damages you (health bar shows -> Game.inCombat() true) AND
 // stuns you — the target does NOT enter combat (engine: fail_pick_pocket ends on
 // npc_setmode(null)). So a caught pickpocket looks like "combat" for as long as
@@ -45,21 +47,19 @@ const DEFAULT_FLEE_TILE = new Tile(2655, 3298, 0);
 // isn't mistaken for a real attacker. Genuine combat never emits a stun message,
 // so it still flees once the window lapses.
 const STUN_COMBAT_TICKS = 17;
-const DEFAULT_FOOD = 'cake, bread, chocolate slice';
-const DEFAULT_LOOT = 'coins';
+const OBSTACLE = ['door', 'gate'];
+// What the Baker's stall gives (content stealing.dbrow) — also what PanicRetreat
+// withdraws if the bank holds any.
+const FOOD = ['cake', 'bread', 'chocolate slice'];
+// Pickpocket loot across all four targets (content pickpocket.dbrow: coins for
+// all; Paladin +chaos runes; Hero +death/blood runes, wine, fire orb, gold ore)
+// plus guard drops for fight mode (clue, body talisman, steel arrows, runes,
+// iron ore). Gems bank via the shared common-junk list.
+const LOOT = ['coins', 'chaos rune', 'death rune', 'blood rune', 'nature rune', 'jug of wine', 'fire orb', 'gold ore', 'clue scroll', 'body talisman', 'steel arrow', 'iron ore'];
 const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
 
 export const SETTINGS: SettingsSchema = {
-    thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target' },
-    anchor: { type: 'tile', default: DEFAULT_ANCHOR, label: 'Thieving anchor (x,z)', help: 'stand near your target; place it yourself for Knight/Hero spots' },
-    leashRadius: { type: 'number', default: 12, min: 5, max: 25, label: 'Leash radius (tiles)' },
-    stallTile: { type: 'tile', default: DEFAULT_STALL, label: 'Baker\'s stall (x,z)' },
-    stallStand: { type: 'tile', default: DEFAULT_STALL_STAND, label: 'Stall stand tile (x,z)', help: 'reachable tile beside the stall to steal from (the stall itself is behind a counter)' },
-    stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
-    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
-    stallFleeTile: { type: 'tile', default: DEFAULT_FLEE_TILE, label: 'Flee/kite tile (x,z)', help: 'run here on any guard combat to kite the guard away from the stall' },
-    obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'open the nearest of these when a target is walled off' },
-    food: { type: 'string[]', default: DEFAULT_FOOD.split(',').map(s => s.trim()), label: 'Food names (contains)' },
+    thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target', help: 'the bot knows each target\'s market spot — no anchor to place' },
     eatAtHp: { type: 'number', default: 40, min: 0, max: 100, label: 'Eat below HP%' },
     eatToHp: { type: 'number', default: 90, min: 1, max: 100, label: 'Eat up to HP%' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
@@ -67,22 +67,13 @@ export const SETTINGS: SettingsSchema = {
     foodTarget: { type: 'number', default: 22, min: 1, max: 27, label: 'Fill food to (count)' },
     restockAtFood: { type: 'number', default: 3, min: 0, max: 26, label: 'Restock when food drops to' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot names (contains)' },
     ...PERIODIC_BANK_SETTINGS
 };
 
 // Active run config (ADR-0006 single-script module state).
-let ANCHOR = DEFAULT_ANCHOR;
-let LEASH = 12;
 let TARGET = 'Guard';
-let STALL_TILE = DEFAULT_STALL;
-let STALL_STAND = DEFAULT_STALL_STAND;
-let STALL_NAME = 'Baker\'s stall';
-let BANK_STAND = DEFAULT_BANK_STAND;
-let FLEE_TILE = DEFAULT_FLEE_TILE;
-let OBSTACLE: string[] = ['door', 'gate'];
-let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
-let LOOT = DEFAULT_LOOT.split(',').map(s => s.trim().toLowerCase());
+let ANCHOR = targetSpot(TARGET).anchor;
+let LEASH = targetSpot(TARGET).leash;
 let EAT_AT = 0.4;
 let EAT_TO = 0.9;
 let PANIC_AT = 0.25;
@@ -104,10 +95,12 @@ function lootSlots(): number {
 }
 
 /**
- * East Ardougne low-level pickpocket bot. Fills up on cake from the Baker's
- * stall, then pickpockets the chosen target (Guard/Knight/Hero), eating below a
- * threshold and refilling cake when it runs low. It never fights: any combat
- * triggers a flee. Banks loot + the shared junk list; grabs ground coins.
+ * East Ardougne market pickpocket bot. Start it anywhere — it walks to the
+ * chosen target's market spot (baked-in layout; nothing to place). Fills up on
+ * cake from the Baker's stall, pickpockets the target (Guard/Knight/Paladin/
+ * Hero), eats below a threshold, refills cake when low, banks loot + the
+ * shared junk list, grabs ground coins. A guard that catches the stall theft
+ * is fled (kited off the stall) or fought, per the guardResponse setting.
  */
 export default class ArdyThiever extends TaskBot {
     override loopDelay = 600;
@@ -125,31 +118,28 @@ export default class ArdyThiever extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         TARGET = this.settings.str('thieveTarget', 'Guard');
-        ANCHOR = this.settings.tile('anchor', DEFAULT_ANCHOR);
-        LEASH = this.settings.num('leashRadius', 12);
-        STALL_TILE = this.settings.tile('stallTile', DEFAULT_STALL);
-        STALL_STAND = this.settings.tile('stallStand', DEFAULT_STALL_STAND);
-        STALL_NAME = this.settings.str('stallName', 'Baker\'s stall');
-        BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
-        FLEE_TILE = this.settings.tile('stallFleeTile', DEFAULT_FLEE_TILE);
-        OBSTACLE = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-        FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
-        LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
+        const spot = targetSpot(TARGET);
+        ANCHOR = spot.anchor;
+        LEASH = spot.leash;
+        FOOD_TARGET = this.settings.num('foodTarget', 22);
+        RESTOCK_AT = this.settings.num('restockAtFood', 3);
+        BANK_AT = this.settings.num('bankAtLootSlots', 12);
         EAT_AT = this.settings.num('eatAtHp', 40) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
-        FOOD_TARGET = this.settings.num('foodTarget', 22);
-        RESTOCK_AT = this.settings.num('restockAtFood', 3);
-        BANK_AT = this.settings.num('bankAtLootSlots', 12);
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
 
-        if (Skills.level('thieving') < 5) {
-            this.log(`ArdyThiever needs Thieving 5 for the Baker's stall (have ${Skills.level('thieving')}) — stopping.`);
-            throw new Error('ArdyThiever: Thieving 5 required');
+        // Gate on the target's pickpocket requirement (subsumes the stall's
+        // Thieving 5 — every market target needs 40+): stop with a clear
+        // message instead of spamming failed pickpockets.
+        const need = requiredThieving(TARGET);
+        if (Skills.level('thieving') < need) {
+            this.log(`ArdyThiever needs Thieving ${need} to pickpocket ${TARGET} (have ${Skills.level('thieving')}) — stopping.`);
+            throw new Error(`ArdyThiever: Thieving ${need} required`);
         }
 
-        this.log(`ArdyThiever starting — target '${TARGET}', anchor ${ANCHOR} r${LEASH}, stall ${STALL_TILE}, bank ${BANK_STAND}`);
+        this.log(`ArdyThiever starting — target '${TARGET}' at ${ANCHOR} r${LEASH} (Thieving ${need}+), stall ${STALL_TILE}, bank ${BANK_STAND}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -419,6 +409,10 @@ class Pickpocket implements Task {
     }
 }
 
+/** Travel task: covers both start-anywhere (launched across the map) and
+ *  displacement recovery. Long hauls web-walk first (ArdyFighter's proven
+ *  shape); the final market approach always runs walkOpening so a shut market
+ *  door/gate can't wedge the arrival. */
 class ReturnToAnchor implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean {
@@ -426,7 +420,11 @@ class ReturnToAnchor implements Task {
         return here !== null && ANCHOR.distanceTo(here) > LEASH + 6;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('returning to anchor');
+        this.bot.setStatus('heading to the market');
+        const here = Game.tile();
+        if (here && ANCHOR.distanceTo(here) > 30) {
+            await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
+        }
         await walkOpening(ANCHOR, 2, OBSTACLE, m => this.bot.log(m));
     }
 }
