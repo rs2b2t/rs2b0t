@@ -67,3 +67,18 @@ for (const route of routes) {
         console.log(`        via ${describe(wp)}`);
     }
 }
+
+// Budget param check: a tiny budget makes a real long route fail 'budget
+// exceeded'; the default solves it. Proves maxExpansions reaches findPath.
+{
+    const from = { x: 3222, z: 3218, level: 0 };
+    const to = { x: 3213, z: 3428, level: 0 };
+    const tight = finder.findPath(from, to, undefined, 50);
+    const loose = finder.findPath(from, to);
+    if (tight.ok || !/budget/i.test(tight.reason) || !loose.ok) {
+        console.log(`FAIL  budget-param: tight.ok=${tight.ok} reason=${tight.ok ? '-' : tight.reason} loose.ok=${loose.ok}`);
+        process.exitCode = 1;
+    } else {
+        console.log(`ok    budget-param: tight budget -> ${tight.reason}; default budget -> solved`);
+    }
+}

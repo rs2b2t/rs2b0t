@@ -57,6 +57,8 @@ export interface WalkOptions {
     timeoutMs?: number;
     /** Progress lines (path stats, transports, repaths) for the script log. */
     log?: (msg: string) => void;
+    /** Override the pathfinder's node-expansion budget for this walk (default 300k). */
+    maxExpansions?: number;
 }
 
 interface PathStep extends WorldTile {
@@ -113,6 +115,7 @@ class WalkExecutorImpl {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
+        const maxExpansions = opts?.maxExpansions;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.avoidDoors = [];
@@ -129,7 +132,7 @@ class WalkExecutorImpl {
                     return true;
                 }
 
-                const path = await this.requestPath(me, dest);
+                const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
                     log(`no path to (${dest.x},${dest.z},${dest.level}): ${path.reason}`);
                     this.lastOutcome = 'failed';
@@ -176,9 +179,9 @@ class WalkExecutorImpl {
     }
 
     /** Bridge the Navigator promise into the script scheduler. */
-    private async requestPath(from: WorldTile, to: WorldTile): Promise<PathResult> {
+    private async requestPath(from: WorldTile, to: WorldTile, maxExpansions?: number): Promise<PathResult> {
         let result: PathResult | null = null;
-        Navigator.findPath(from, to, { avoidDoors: this.avoidDoors }).then(
+        Navigator.findPath(from, to, { avoidDoors: this.avoidDoors, maxExpansions }).then(
             r => (result = r),
             err => (result = { ok: false, reason: err instanceof Error ? err.message : String(err), expanded: 0 })
         );

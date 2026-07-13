@@ -48,7 +48,7 @@ worker.addEventListener('message', event => {
             }
             const started = performance.now();
             const avoid = message.avoid ? new Set(message.avoid.map(d => `${d.x}|${d.z}`)) : undefined;
-            const outcome = finder.findPath(message.from, message.to, avoid);
+            const outcome = finder.findPath(message.from, message.to, avoid, message.maxExpansions);
             worker.postMessage({ type: 'path', id: message.id, elapsedMs: performance.now() - started, ...outcome });
         }
     } catch (err) {

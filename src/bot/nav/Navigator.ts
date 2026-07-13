@@ -69,7 +69,7 @@ class NavigatorImpl {
      * Resolve a world path off-thread. Never rejects: failures come back as
      * {ok:false, reason}. Queues behind init when the worker isn't ready yet.
      */
-    async findPath(from: NavPoint, to: NavPoint, opts?: { avoidDoors?: { x: number; z: number }[]; timeoutMs?: number }): Promise<PathResult> {
+    async findPath(from: NavPoint, to: NavPoint, opts?: { avoidDoors?: { x: number; z: number }[]; timeoutMs?: number; maxExpansions?: number }): Promise<PathResult> {
         this.start();
 
         if (this.state === 'starting') {
@@ -87,7 +87,7 @@ class NavigatorImpl {
                 resolve({ ok: false, reason: `path request timed out after ${timeoutMs}ms`, expanded: 0 });
             }, timeoutMs);
             this.pending.set(id, { resolve, timer });
-            this.worker!.postMessage({ type: 'path', id, from, to, avoid: opts?.avoidDoors });
+            this.worker!.postMessage({ type: 'path', id, from, to, avoid: opts?.avoidDoors, maxExpansions: opts?.maxExpansions });
         });
     }
 

@@ -50,7 +50,7 @@ export interface TransportEdgeData {
 
 // ---- worker protocol (NavWorker.ts <-> Navigator.ts) ----
 
-export type NavRequest = { type: 'init'; pack: ArrayBuffer } | { type: 'path'; id: number; from: NavPoint; to: NavPoint; avoid?: { x: number; z: number }[] };
+export type NavRequest = { type: 'init'; pack: ArrayBuffer } | { type: 'path'; id: number; from: NavPoint; to: NavPoint; avoid?: { x: number; z: number }[]; maxExpansions?: number };
 
 export type NavResponse =
     | { type: 'ready'; mapsquares: number; doorEdges: number; transportEdges: number }
