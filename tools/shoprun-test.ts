@@ -13,7 +13,18 @@ import { cheat, mainlandAccount } from './tutorial/harness.js';
 const base = process.argv[2] ?? 'http://localhost:8890';
 const user = `shoprun${Date.now() % 100000}`;
 
-function fail(msg: string): never {
+async function fail(msg: string): Promise<never> {
+    // Dump the runner log tail so a live failure is diagnosable from the smoke
+    // log alone (logLines is defined below; fail only runs after it exists).
+    try {
+        const tail = (await logLines()).slice(-20);
+        console.error('--- last runner log lines (tail) ---');
+        for (const line of tail) {
+            console.error(`  ${line}`);
+        }
+    } catch (err) {
+        console.error(`(could not read runner log: ${err instanceof Error ? err.message : String(err)})`);
+    }
     console.error(`FAIL: ${msg}`);
     process.exit(1);
 }
@@ -53,14 +64,14 @@ async function waitForLog(re: RegExp, timeoutMs: number): Promise<string> {
         }
         await new Promise(r => setTimeout(r, 1000));
     }
-    fail(`timed out waiting for ${re}`);
+    return fail(`timed out waiting for ${re}`); // Promise<never> — also satisfies the string return
 }
 
 // 1. withdrawal happens, is capped, and names the cluster
 const withdraw = await waitForLog(/\[shoprun\] withdraw (\d+)gp cluster=varrock/, 120_000);
 const amount = Number(/withdraw (\d+)gp/.exec(withdraw)![1]);
 if (amount > 30_000) {
-    fail(`withdrawal ${amount} exceeds maxGpPerLeg 30000`);
+    await fail(`withdrawal ${amount} exceeds maxGpPerLeg 30000`);
 }
 // 2. real purchases at Aubury (floor 90% leaves stock behind)
 await waitForLog(/\[shoprun\] buy shop=runeshop item=\w+ n=\d+ spent=\d+/, 180_000);

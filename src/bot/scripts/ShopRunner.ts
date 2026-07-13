@@ -11,7 +11,6 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Shop } from '../api/hud/Shop.js';
 import { Skills } from '../api/hud/Skills.js';
-import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { Traversal } from '../api/Traversal.js';
 import { TaskBot, type Task } from '../api/Bot.js';
@@ -32,10 +31,26 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
     route: { type: 'string', default: 'live', options: ['live', 'smoke-varrock'], label: 'Route', help: 'smoke-varrock is the Aubury-only test route' }
 };
 
-const SEEN_KEY_PREFIX = 'rs2b0t:shoprun:seen:';
+const STATE_KEY_PREFIX = 'rs2b0t:shoprun:state:';
 const hasStorage = typeof localStorage !== 'undefined';
 /** Shop-open failure cooldown: skip a shop this long after 3 consecutive open failures. */
 const COOLDOWN_MS = 10 * 60_000;
+/** Idle shuffle cadence — a legit idle stands still for 10min–hours, but the
+ *  Supervisor watchdog treats "no tile change AND no xp for WEDGE_MS (10min)"
+ *  as wedged and restarts us. Move one tile this often (MUST stay < WEDGE_MS)
+ *  so tile-change progress detection keeps the watchdog quiet. */
+const IDLE_SHUFFLE_MS = 5 * 60_000;
+
+/** Per-account persisted runner state — survives the watchdog's stop+restart
+ *  (a fresh instance reloads this; session stats/`fundedPlan` legitimately reset).
+ *  `seen` alone was persisted before Task-12; `cooldowns`/`lastClusterId` are
+ *  in-memory-only otherwise, so a restart would re-hammer a cooled shop and
+ *  lose the ring position. */
+interface RunnerState {
+    seen: SeenMap;
+    cooldowns: Record<string, number>;
+    lastClusterId: string | null;
+}
 
 export class ShopRunner extends TaskBot {
     override loopDelay = 600;
@@ -51,6 +66,14 @@ export class ShopRunner extends TaskBot {
     visited: string[] = [];
     lastClusterId: string | null = null;
     decision: PlanOutcome | null = null;
+
+    /** Bumped by recordSeen / cooldown writes / loadState. loop() reuses an
+     *  unexpired idle decision while this is unchanged (F2 wake-scan memo). */
+    stateVersion = 0;
+    /** stateVersion snapshot from when `decision` was last computed. */
+    private decisionStateVersion = -1;
+    /** Most recent skip reason logged by BankLeg (`cluster=… haul=…`); overlay only. */
+    lastSkip: string | null = null;
 
     /** lowercase display names of everything the route can buy (deposit filter / carrying check) */
     buyNames = new Set<string>();
@@ -87,7 +110,7 @@ export class ShopRunner extends TaskBot {
             ScriptRunner.stop();
             return;
         }
-        this.loadSeen();
+        this.loadState();
         this.addTasks();
     }
 
@@ -98,17 +121,29 @@ export class ShopRunner extends TaskBot {
     }
 
     override async loop(): Promise<number | void> {
-        this.decision = decide(
-            this.route, SHOP_DB, this.seen, Date.now(), this.cfg, this.accountView(), this.cooldowns,
-            {
-                pos: Game.tile(),
-                gpHeld: Inventory.count('Coins'),
-                carryingPurchases: Inventory.items().some(i => i.name !== null && this.buyNames.has(i.name.toLowerCase())),
-                fundedPlan: this.fundedPlan,
-                visited: this.visited,
-                lastClusterId: this.lastClusterId
-            }
-        );
+        const now = Date.now();
+        const cur = this.decision?.decision;
+        // Idle wake-scan is expensive: earliestQualifyMs scans up to 480
+        // one-minute steps when nothing qualifies. While idling, the plan
+        // cannot change until the clock reaches untilMs OR observed stock /
+        // cooldowns move (stateVersion) — so reuse the decision instead of
+        // re-scanning every 600ms tick. All other decide() inputs are static
+        // during a hover (position, gp, funded plan, visited).
+        const idleMemoValid = cur?.kind === 'idle' && now < cur.untilMs && this.stateVersion === this.decisionStateVersion;
+        if (!idleMemoValid) {
+            this.decision = decide(
+                this.route, SHOP_DB, this.seen, now, this.cfg, this.accountView(), this.cooldowns,
+                {
+                    pos: Game.tile(),
+                    gpHeld: Inventory.count('Coins'),
+                    carryingPurchases: Inventory.items().some(i => i.name !== null && this.buyNames.has(i.name.toLowerCase())),
+                    fundedPlan: this.fundedPlan,
+                    visited: this.visited,
+                    lastClusterId: this.lastClusterId
+                }
+            );
+            this.decisionStateVersion = this.stateVersion;
+        }
         return super.loop();
     }
 
@@ -128,40 +163,74 @@ export class ShopRunner extends TaskBot {
         return { members: this.membersWorld, qp: Quests.points(), quests, skills };
     }
 
-    seenKey(): string | null {
+    stateKey(): string | null {
         const name = Game.myName();
-        return name ? `${SEEN_KEY_PREFIX}${name.toLowerCase()}` : null;
+        return name ? `${STATE_KEY_PREFIX}${name.toLowerCase()}` : null;
     }
 
-    loadSeen(): void {
-        const key = this.seenKey();
+    loadState(): void {
+        const key = this.stateKey();
         if (!hasStorage || !key) {
             return;
         }
         try {
-            this.seen = JSON.parse(localStorage.getItem(key) ?? '{}') as SeenMap;
+            const blob = JSON.parse(localStorage.getItem(key) ?? '{}') as Partial<RunnerState>;
+            this.seen = blob.seen ?? {};
+            this.cooldowns = blob.cooldowns ?? {};
+            this.lastClusterId = blob.lastClusterId ?? null;
         } catch {
             this.seen = {};
+            this.cooldowns = {};
+            this.lastClusterId = null;
         }
+        // Prune cooldowns that already elapsed so a stale blob can't keep an
+        // open shop suppressed after a restart.
+        const now = Date.now();
+        for (const [id, untilMs] of Object.entries(this.cooldowns)) {
+            if (untilMs <= now) {
+                delete this.cooldowns[id];
+            }
+        }
+        this.stateVersion++;
     }
 
-    saveSeen(): void {
-        const key = this.seenKey();
+    saveState(): void {
+        const key = this.stateKey();
         if (hasStorage && key) {
-            localStorage.setItem(key, JSON.stringify(this.seen));
+            const blob: RunnerState = { seen: this.seen, cooldowns: this.cooldowns, lastClusterId: this.lastClusterId };
+            localStorage.setItem(key, JSON.stringify(blob));
         }
     }
 
     recordSeen(shopId: string, obj: string, count: number): void {
         (this.seen[shopId] ??= {})[obj] = { count, atMs: Date.now() };
+        this.stateVersion++;
+    }
+
+    /** Overlay's next-stop line, derived live from the current decision
+     *  (spec §Overlay: "stop <cur> → next <id>"). */
+    private nextStopLabel(): string {
+        const d = this.decision?.decision;
+        if (!d) {
+            return '—';
+        }
+        if (d.kind === 'buy') {
+            return `buy ${d.clusterId}`;
+        }
+        if (d.kind === 'bank') {
+            return `bank ${d.clusterId} fund=${d.withdrawFor?.clusterId ?? 'none'}`;
+        }
+        return `idle best=${d.bestClusterId ?? 'none'}`;
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const haul = Object.entries(this.sessionHaul).map(([k, v]) => `${k} +${v}`).join('  ') || '—';
         const lines = [
             `ShopRunner — ${this.status}`,
+            `stop → ${this.nextStopLabel()}`,
             `gp held ${Inventory.count('Coins')}  spent ${this.sessionSpent}`,
-            `haul ${haul}`
+            `haul ${haul}`,
+            `last skip ${this.lastSkip ?? '—'}`
         ];
         ctx.font = '12px monospace';
         const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
@@ -216,9 +285,11 @@ class BankLeg implements Task {
             bot.fundedPlan = null;
             bot.visited = [];
             bot.log(`[shoprun] banked cluster=${d.clusterId}`);
+            bot.saveState(); // ring position must survive a watchdog restart
         }
         for (const s of bot.decision!.skipped) {
-            bot.log(`[shoprun] skip cluster=${s.clusterId} haul=${s.fractionPct}%<${bot.cfg.haulThresholdPct}%`);
+            bot.lastSkip = `cluster=${s.clusterId} haul=${s.fractionPct}%<${bot.cfg.haulThresholdPct}%`;
+            bot.log(`[shoprun] skip ${bot.lastSkip}`);
         }
         const bankGp = Bank.count('Coins');
         if (bankGp < bot.stopFloorGp) {
@@ -227,12 +298,11 @@ class BankLeg implements Task {
             return;
         }
         if (d.withdrawFor && d.withdrawFor.budget > 0) {
-            const before = Inventory.count('Coins');
+            // Bank.withdrawX already blocks until the pack gains the coins.
             if (!(await Bank.withdrawX('Coins', d.withdrawFor.budget))) {
                 bot.log('[shoprun] coin withdrawal failed — will retry');
                 return;
             }
-            await Execution.delayUntil(() => Inventory.count('Coins') > before, 3000);
             bot.log(`[shoprun] withdraw ${d.withdrawFor.budget}gp cluster=${d.withdrawFor.clusterId}`);
             bot.fundedPlan = d.withdrawFor;
             bot.visited = [];
@@ -263,6 +333,8 @@ class BuyLeg implements Task {
                 bot.cooldowns[shop.shopId] = Date.now() + COOLDOWN_MS;
                 bot.visited.push(shop.shopId);
                 this.openFails[shop.shopId] = 0;
+                bot.stateVersion++;
+                bot.saveState(); // cooldown must survive a watchdog restart, and re-plan the wake scan
                 bot.log(`[shoprun] shop-open failed 3x — cooling ${shop.shopId} for 10m`);
             }
             return;
@@ -293,7 +365,7 @@ class BuyLeg implements Task {
             }
         }
         record(); // post-buy leftovers are the next prediction's anchor
-        bot.saveSeen();
+        bot.saveState();
         await Shop.close();
         bot.visited.push(shop.shopId);
     }
@@ -303,6 +375,8 @@ class BuyLeg implements Task {
  *  the next predicted restock so the run stays visibly alive. */
 class IdleAtBank implements Task {
     private lastIdleLogMs = 0;
+    private lastShuffleMs = 0;
+    private shuffled = false;
     constructor(private readonly bot: ShopRunner) {}
     validate(): boolean { return this.bot.decision?.decision.kind === 'idle'; }
     async execute(): Promise<void> {
@@ -314,6 +388,16 @@ class IdleAtBank implements Task {
         bot.status = 'idle — waiting for restock';
         await walkNear(bot, d.stand, 4);
         const now = Date.now();
+        // Shuffle one tile every IDLE_SHUFFLE_MS so the Supervisor watchdog's
+        // tile-change progress detector keeps resetting — a motionless hover
+        // reads as wedged and gets restarted. Alternate stand ↔ stand.x+1;
+        // walkNear(…, 0) forces the exact tile so the move actually registers.
+        // Failure is benign: persisted state (F1a) survives a restart anyway.
+        if (now - this.lastShuffleMs > IDLE_SHUFFLE_MS) {
+            this.lastShuffleMs = now;
+            this.shuffled = !this.shuffled;
+            await walkNear(bot, this.shuffled ? { ...d.stand, x: d.stand.x + 1 } : d.stand, 0);
+        }
         if (now - this.lastIdleLogMs > 60_000) {
             this.lastIdleLogMs = now;
             const remain = Math.max(0, d.untilMs - now);
