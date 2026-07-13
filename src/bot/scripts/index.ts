@@ -28,6 +28,7 @@ import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import RuneMysteries, { SETTINGS as RUNEMYSTERIES_SETTINGS } from './RuneMysteries.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
+import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // --- tutorial ---
@@ -328,6 +329,16 @@ ScriptRegistry.register({
     tags: ['members', 'course', 'wilderness', 'food', 'death-recovery'],
     settingsSchema: WILDY_AGILITY_SETTINGS,
     create: () => new WildyAgility()
+});
+
+// --- money making ---
+ScriptRegistry.register({
+    name: 'ShopRunner',
+    description: 'World shop-run supply loop — cycles shop clusters buying feathers, runes, and arrows/arrowtips, banking between clusters with capped gp withdrawals; skips shops until stock regenerates',
+    category: 'Money making',
+    tags: ['shopping', 'banking', 'worldwalker', 'f2p', 'members'],
+    settingsSchema: SHOPRUNNER_SETTINGS,
+    create: () => new ShopRunner()
 });
 
 // --- navigation ---
