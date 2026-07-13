@@ -59,14 +59,20 @@ Urgency: despawn is 2 min; the supervisor polls between 600 ms script loops
 - `handleLocation(invNames, wornNames): 'worn' | 'inventory' | null` —
   drives detection + the unequip branch.
 
-## Live smoke `tools/lost-pickaxe-test.ts`
+## Live smoke `tools/lost-pickaxe-test.ts` (as shipped — real event)
 
-No random roll needed — fabricate the post-event state with existing
-cheats: `::~item macro_pickaxehandle` + wield, `::~item
-macro_rune_pickaxehead` + drop on the ground, step away, fill the pack with
-junk (worst case), idle-script trick so the supervisor runs. Assert, in
-order: handle unequipped → slot freed (one junk dropped) → head taken →
-"Rune pickaxe" in pack → re-wielded. One run covers every new branch.
+Upgraded from the fabrication idea: trigger the REAL event via a new
+`::~lost_pickaxe` content debugproc (cheat_macro_event.rs2, engine repack
+required) against the worst case — wielded rune pick + a pack stuffed with
+iron ore. Setup gotchas that shaped it: `Equipment.equip` needs a running
+script (throwaway `LoopingBot.onStart`, the equip-test idiom), and
+`::~maxme` is UNUSABLE here — its 19-skill level-up cascade keeps the
+player server-`delayed`, which silently blocks ground-item Takes; targeted
+`setstat attack/mining 45` instead. Slot arithmetic is HARD-asserted:
+iron ore is non-stackable so 27 fit beside the pick → the full-pack Take
+forces exactly one sacrificial drop (handler log line counted) → final
+`used === 26`. Gates, in order: worn "Pickaxe handle" observed → ≥1 ore
+dropped → reattached → "Rune pickaxe" re-wielded, no handle/head left.
 
 ## Files
 
