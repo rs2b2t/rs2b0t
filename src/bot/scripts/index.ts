@@ -134,7 +134,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ArdyThiever',
-    description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Hero, flees all combat, banks loot + junk, grabs ground coins',
+    description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Paladin/Hero, flees (kites) or fights the guard per the guardResponse setting, banks loot + junk, grabs ground coins',
     category: 'Thieving',
     tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
     settingsSchema: ARDYTHIEVER_SETTINGS,

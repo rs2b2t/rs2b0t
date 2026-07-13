@@ -59,6 +59,9 @@ describe('isHostileAttacker', () => {
     test('rejects a hostile beyond the engage radius', () => {
         expect(isHostileAttacker({ ...guard, distance: 6 }, 5)).toBe(false);
     });
+    test('accepts a hostile at the exact engage radius (inclusive boundary)', () => {
+        expect(isHostileAttacker({ ...guard, distance: 5 }, 5)).toBe(true);
+    });
     test('rejects non-hostile NPCs (the Baker) and null names', () => {
         expect(isHostileAttacker({ ...guard, name: 'Baker' }, 5)).toBe(false);
         expect(isHostileAttacker({ ...guard, name: null }, 5)).toBe(false);

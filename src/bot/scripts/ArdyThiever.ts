@@ -289,6 +289,7 @@ class FightBack implements Task {
             if (shouldEat(hpFraction(), EAT_AT, foodCount()) || shouldPanic(hpFraction(), PANIC_AT, foodCount())) {
                 return; // EatFood / PanicRetreat outrank us next loop
             }
+            // No displaced-mid-fight leash bail (unlike ArdyFighter's Fight): as the responder the attacker is already adjacent, and any runtime-event displacement is caught by EventSignal.pending() above.
             const target = this.track(attacker);
             if (!target) {
                 this.bot.countKill();
