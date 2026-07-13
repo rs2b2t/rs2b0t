@@ -7,6 +7,7 @@ import { Game } from './Game.js';
 import { Reachability } from './Reachability.js';
 import { Traversal } from './Traversal.js';
 import { ChatDialog } from './hud/ChatDialog.js';
+import { Equipment } from './hud/Equipment.js';
 import { Inventory } from './hud/Inventory.js';
 import { Npcs } from './queries/Npcs.js';
 import { GroundItems } from './queries/GroundItems.js';
@@ -274,8 +275,13 @@ class RandomEventsImpl {
             }
         }
 
-        // lost tool: a broken axe/pickaxe handle in the inventory
-        if (Inventory.items().some(i => /(axe|pickaxe) handle/i.test(i.name ?? ''))) {
+        // lost tool: the event leaves an axe/pickaxe handle in the pack — or,
+        // when the tool was WIELDED, force-equipped in the worn rhand slot
+        // (macro_event_lost_pickaxe.rs2 inv_setslot(worn, ...)) while the head
+        // despawns in 200 ticks. Worn was invisible to the old inventory-only
+        // scan: the "bot mines with a bare handle until the rune pick is gone"
+        // loss.
+        if (handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name)) !== null) {
             return { kind: 'lost-tool', name: 'lost tool' };
         }
 
@@ -686,36 +692,87 @@ class RandomEventsImpl {
         return true;
     }
 
+    /** Drop one sacrificial item (ore/log — never a tool or event piece) so
+     *  the unequip/Take has a slot to land in. Full packs are ROUTINE while
+     *  mining; without this the head Take silently fails until the 200-tick
+     *  despawn eats the head. */
+    private async freeSlot(log: (msg: string) => void): Promise<void> {
+        if (!Inventory.isFull()) {
+            return;
+        }
+        const drop = pickSacrificial(Inventory.items().map(i => i.name));
+        if (!drop) {
+            log('random event: pack full and nothing sacrificial to drop — attempting recovery anyway');
+            return;
+        }
+        const item = Inventory.first(drop);
+        if (item) {
+            log(`random event: dropping one ${drop} to free a slot`);
+            const before = Inventory.used();
+            await item.interact('Drop');
+            await Execution.delayUntil(() => Inventory.used() < before, 4000);
+        }
+    }
+
     private async handleLostTool(log: (msg: string) => void): Promise<boolean> {
         log('random event: lost tool — recovering the head');
-        const handle = Inventory.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
-        if (!handle) {
+        const where = handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name));
+        if (where === null) {
             return false;
         }
 
-        // the broken head lands on the ground nearby; pick it up
+        // A WORN handle (the tool was wielded when the event fired) must come
+        // off first — useOn needs both pieces in the pack — and unequipping
+        // needs a free inventory slot for the handle to land in.
+        const wasWorn = where === 'worn';
+        if (wasWorn) {
+            const worn = Equipment.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
+            await this.freeSlot(log);
+            if (worn?.name != null && !(await Equipment.unequip(worn.name))) {
+                log('random event: could not unequip the handle — will retry next pass');
+                return false;
+            }
+        }
+
+        // the head lands <=7 tiles away (map_findsquare lineofwalk) and
+        // despawns after 200 ticks — grab it, freeing a slot first
         const head = GroundItems.query()
             .where(g => /(axe|pickaxe) head/i.test(g.snap.name ?? ''))
             .within(12)
             .nearest();
         if (head) {
+            await this.freeSlot(log);
             const before = Inventory.used();
             await head.interact('Take');
             await Execution.delayUntil(() => Inventory.used() > before, 6000);
         }
 
-        // reattach: use the head on the handle (InvItem.useOn — the same
-        // use-X-on-Y primitive every processing skill uses)
+        // reattach: use the head on the handle (either direction — opheldu is
+        // wired on both ends in macro_event_lost_pickaxe.rs2)
         const headItem = Inventory.items().find(i => /(axe|pickaxe) head/i.test(i.name ?? ''));
         const handleItem = Inventory.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
-        if (headItem && handleItem) {
-            const before = Inventory.used();
-            await headItem.useOn(handleItem);
-            const fixed = await Execution.delayUntil(() => Inventory.used() < before, 5000);
-            log(fixed ? 'random event: tool reattached' : 'random event: reattach did not resolve');
+        if (!headItem || !handleItem) {
+            log('random event: head or handle still missing — cannot reattach yet');
             return true;
         }
-        log('random event: picked up the tool head but could not pair it with a handle');
+        const before = Inventory.used();
+        await headItem.useOn(handleItem);
+        if (!(await Execution.delayUntil(() => Inventory.used() < before, 5000))) {
+            log('random event: reattach did not resolve');
+            return true;
+        }
+
+        // the reattached tool lands in the PACK even when the original was
+        // wielded — restore the pre-event state
+        if (wasWorn) {
+            const tool = Inventory.items().find(i => /(pickaxe|axe)$/i.test(i.name ?? '') && i.actions().some(o => /wield|wear/i.test(o)));
+            if (tool?.name != null) {
+                const rewielded = await Equipment.equip(tool.name);
+                log(rewielded ? `random event: ${tool.name} reattached and re-wielded` : `random event: ${tool.name} reattached (re-wield failed — it stays in the pack)`);
+                return true;
+            }
+        }
+        log('random event: tool reattached');
         return true;
     }
 
