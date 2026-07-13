@@ -73,3 +73,11 @@ export function resolvePick(selection: string, miningLevel: number, held: readon
 export function inEssMine(x: number, z: number): boolean {
     return (x >> 6) === 45 && (z >> 6) === 75;
 }
+
+/** The "Withdraw 1" op off a bank item's op list. The real bank label is
+ *  "Withdraw 1" (a SPACE, per bank_main.if); Bank.withdraw's default
+ *  "Withdraw-1" (hyphen) matches nothing. Anchored so it never catches
+ *  "Withdraw 10". Returns null if absent. */
+export function withdrawOneOp(ops: readonly (string | null)[]): string | null {
+    return ops.find((o): o is string => o !== null && /^withdraw[\s-]*1$/i.test(o)) ?? null;
+}

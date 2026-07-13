@@ -15,7 +15,7 @@ import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, inEssMine, requiredMiningLevel, resolvePick } from './EssMinerLogic.js';
+import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, inEssMine, requiredMiningLevel, resolvePick, withdrawOneOp } from './EssMinerLogic.js';
 
 // Varrock East bank + Aubury's rune shop + the essence mine — decoded from the
 // packed server maps and content (2026-07-12 ess-miner spec). Booths line
@@ -44,6 +44,8 @@ const STALL_MS = 20_000;
 // Consecutive teleport attempts that changed nothing before we stop — the
 // server refuses silently (a plain game message) when the quest gate fails.
 const MAX_TELEPORT_FAILS = 3;
+// Consecutive bank-open failures before we stop (can't reach the bank — e.g. cold-started far from Varrock with the pick only in the bank).
+const MAX_BANK_FAILS = 6;
 // The journal entry's EXACT name (content quest.enum val 13) — Quests.status()
 // matches by exact name, so 'Rune Mysteries' alone reads 'unknown'. Same
 // constant the RuneMysteries bot uses.
@@ -69,8 +71,9 @@ function inMine(): boolean {
 }
 /** Deposit filter: the essence + the shared junk list. A pickaxe matches
  *  neither, so it stays with us whether worn or carried. */
-function essDeposit(bankCommon: boolean): (name: string) => boolean {
-    return depositMatcher(name => name.toLowerCase() === ESS_ITEM.toLowerCase(), bankCommon);
+function essDeposit(): (name: string) => boolean {
+    // includeCommon=true is a harmless no-op here — the pack only holds rune essence + the pickaxe (never gems/junk); the pickaxe matches neither, so it always survives.
+    return depositMatcher(name => name.toLowerCase() === ESS_ITEM.toLowerCase(), true);
 }
 
 /**
@@ -86,6 +89,7 @@ export default class EssMiner extends TaskBot {
     private trips = 0;
     private banked = 0;
     private mined = 0;
+    private bankFails = 0;
     private status = 'starting';
     questRefused = false;
 
@@ -142,7 +146,8 @@ export default class EssMiner extends TaskBot {
     countMined(delta: number): void { this.mined += delta; }
     countTrip(deposited: number): void { this.trips++; this.banked += deposited; }
     tripsTotal(): number { return this.trips; }
-    bankCommon(): boolean { return this.settings.bool('bankCommonJunk', true); }
+    countBankFail(): number { return ++this.bankFails; }
+    resetBankFail(): void { this.bankFails = 0; }
 
     /** Shared outside-travel: web-walk to within `radius` of dest and stop.
      *  Varrock's rune shop has no openable door loc (walls with a gap), so
@@ -172,8 +177,8 @@ class MineEss implements Task {
         const rock = Locs.query().name(ESS_LOC).action(MINE_OP).nearest();
         if (!rock) { await Execution.delayTicks(2); return; }
         this.bot.setStatus('mining rune essence');
-        this.bot.log('mining rune essence');
         if (!(await rock.interact(MINE_OP))) { await Execution.delayTicks(2); return; }
+        this.bot.log('mining rune essence');
         let count = essCount();
         let lastGain = performance.now();
         while (!Inventory.isFull()) {
@@ -214,11 +219,18 @@ class BankEss implements Task {
         this.bot.setStatus('banking the essence');
         await this.bot.walkTo(BANK_STAND);
         if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
+                this.bot.log('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock. Stopping.');
+                this.bot.setStatus('cannot reach the bank — stopped');
+                ScriptRunner.stop();
+                return;
+            }
             this.bot.log('could not open the bank — will retry');
             return;
         }
+        this.bot.resetBankFail();
         const n = essCount();
-        await Bank.depositAllMatching(essDeposit(this.bot.bankCommon()));
+        await Bank.depositAllMatching(essDeposit());
         await Execution.delayTicks(1);
         this.bot.countTrip(n);
         this.bot.log(`banked ${n} rune essence (trip ${this.bot.tripsTotal()})`);
@@ -236,12 +248,19 @@ class GetPick implements Task {
         this.bot.setStatus('getting a pickaxe from the bank');
         await this.bot.walkTo(BANK_STAND);
         if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
+                this.bot.log('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock. Stopping.');
+                this.bot.setStatus('cannot reach the bank — stopped');
+                ScriptRunner.stop();
+                return;
+            }
             this.bot.log('could not open the bank — will retry');
             return;
         }
+        this.bot.resetBankFail();
         if (Inventory.isFull()) {
             // make room for the withdraw (ess + junk only — never the pick)
-            await Bank.depositAllMatching(essDeposit(this.bot.bankCommon()));
+            await Bank.depositAllMatching(essDeposit());
             await Execution.delayTicks(1);
         }
         const bankNames = Bank.items().map(i => i.name ?? '').filter(n => n.length > 0);
@@ -253,12 +272,12 @@ class GetPick implements Task {
             return;
         }
         if (res.kind === 'withdraw') {
-            // Read the withdraw-1 op off the bank item itself — the real label
-            // is "Withdraw 1" (a SPACE, per bank_main.if), not Bank.withdraw's
-            // hyphenated "Withdraw-1" default, which matches nothing (same trap
-            // CookBot/BankFletcher hit). Anchored so it can't catch "Withdraw 10".
+            // Read the withdraw-1 op off the bank item itself (withdrawOneOp) —
+            // the real label is "Withdraw 1" (a SPACE, per bank_main.if), not
+            // Bank.withdraw's hyphenated "Withdraw-1" default, which matches
+            // nothing (same trap CookBot/BankFletcher hit).
             const item = Bank.items().find(i => i.name?.toLowerCase() === res.item.toLowerCase());
-            const withdrawOp = item?.ops.find((o): o is string => o !== null && /^withdraw[\s-]*1$/i.test(o));
+            const withdrawOp = item ? withdrawOneOp(item.ops) : null;
             if (!withdrawOp) {
                 this.bot.log(`no withdraw op on ${res.item} — will retry`);
                 return;

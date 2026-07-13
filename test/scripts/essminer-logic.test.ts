@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, PICK_TIERS, inEssMine, requiredMiningLevel, resolvePick } from '#/bot/scripts/EssMinerLogic.js';
+import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, PICK_TIERS, inEssMine, requiredMiningLevel, resolvePick, withdrawOneOp } from '#/bot/scripts/EssMinerLogic.js';
 
 describe('PICK_TIERS', () => {
     test('best-first with the content levelrequire values (pickaxes.obj)', () => {
@@ -76,5 +76,26 @@ describe('inEssMine', () => {
 describe('ESS_ITEM', () => {
     test('matches the blankrune obj display name', () => {
         expect(ESS_ITEM).toBe('Rune essence');
+    });
+});
+
+describe('withdrawOneOp', () => {
+    test('matches the real "Withdraw 1" label (a space)', () => {
+        expect(withdrawOneOp(['Withdraw 1'])).toBe('Withdraw 1');
+    });
+    test('also matches the hyphenated "Withdraw-1" default', () => {
+        expect(withdrawOneOp(['Withdraw-1'])).toBe('Withdraw-1');
+    });
+    test('anchored — never matches "Withdraw 10"/All/X', () => {
+        expect(withdrawOneOp(['Withdraw 10', 'Withdraw All', 'Withdraw X'])).toBeNull();
+    });
+    test('picks "Withdraw 1" out of a realistic op list', () => {
+        expect(withdrawOneOp([null, 'Withdraw 5', 'Withdraw 1', 'Withdraw 10', 'Withdraw All', 'Withdraw X'])).toBe('Withdraw 1');
+    });
+    test('empty op list returns null', () => {
+        expect(withdrawOneOp([])).toBeNull();
+    });
+    test('case-insensitive', () => {
+        expect(withdrawOneOp(['WITHDRAW 1'])).toBe('WITHDRAW 1');
     });
 });
