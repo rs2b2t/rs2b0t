@@ -2,7 +2,11 @@
 // (::~lost_pickaxe, added to the content cheats) against the worst case — a
 // WIELDED rune pickaxe and a FULL pack — and assert the supervisor recovers:
 // handle unequipped, one sacrificial ore dropped, head taken before the
-// 200-tick despawn, reattached, re-wielded.
+// 200-tick despawn, reattached, re-wielded. The slot arithmetic is HARD-ASSERTED
+// (exactly one sacrificial drop logged + final used === 26) so a seeding or
+// cheat-behavior regression that stops exercising the full-pack freeSlot path
+// fails loudly instead of coasting on the end-state (worn pick / no leftovers)
+// gates, which pass equally on a half-full pack.
 //
 // The wield + the idle loop the Supervisor polls randoms in are BOTH driven by
 // one throwaway LoopingBot: Equipment.equip settles via Execution.delayUntil,
@@ -23,6 +27,11 @@ import { cheat, cheatQuiet, mainlandAccount } from './tutorial/harness.js';
 const base = process.argv[2] || 'http://localhost:8890';
 const user = `lp${Date.now().toString(36).slice(-7)}`;
 const BUDGET_MS = 4 * 60_000;
+// Slot count after a clean worn-path recovery — full derivation in the assertion
+// block at the end. Seeding fits 27 iron ore alongside the pick (28-slot pack,
+// pick added first); the pick's wield frees its slot -> 27 ore survive. The
+// full-pack head Take forces exactly ONE sacrificial drop -> 26 ore, nothing else.
+const EXPECTED_FINAL_USED = 26;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 
@@ -116,10 +125,12 @@ try {
     // diagnosable from this one run — see the brief's "diagnose from the
     // snapshots + the bot log".
     let logCount = 0;
+    const allLogs: string[] = []; // full transcript so the drop can be counted at the end
     const logTail = async (): Promise<string[]> => {
         const lines = await page.evaluate(() => (globalThis as never as G).rs2b0t.runner.ctx?.log.map(l => `${l.level}: ${l.msg}`) ?? []);
         const fresh = lines.slice(logCount);
         logCount = lines.length;
+        allLogs.push(...fresh);
         return fresh;
     };
 
@@ -138,11 +149,26 @@ try {
         await page.waitForTimeout(5000);
     }
 
+    for (const line of await logTail()) console.log(`     | ${line}`); // catch any tail lines the loop's last pass missed
     if (!last) fail('no snapshot');
     if (!sawWornHandle) fail('event never put a Pickaxe handle in the worn slot — did ::~lost_pickaxe fire? (pack the cheat + restart the engine)');
     if (!last.wornPick) fail(`Rune pickaxe not re-wielded (worn handle=${last.wornHandle}, inv pick=${last.invPick})`);
     if (last.invHandle || last.invHead) fail('leftover handle/head in the pack — reattach incomplete');
-    console.log(`PASS (lost-pickaxe: worn handle detected -> slot freed -> head taken${sawHeadInPack ? '' : ' (fast)'} -> reattached -> re-wielded)`);
+
+    // Slot arithmetic — the whole point of the full-pack seeding. Without these,
+    // the gates above pass on a half-full pack that never triggers freeSlot.
+    // Derivation: ~item iron_ore 28 requests 28 but only 27 fit alongside the pick
+    // (28-slot pack, pick seeded first) -> used=28 (full). Wielding the pick frees
+    // its slot -> 27 iron ore, used=27. The event swaps the worn pick for a worn
+    // handle (pack untouched -> still 27). Recovery: the head Take needs a slot but
+    // the unequipped handle refills the pack to 28, so freeSlot drops exactly ONE
+    // iron ore (27), Take the head (28), reattach head+handle -> pick (27), re-wield
+    // the pick (26). Net: one sacrificial drop, final used=26. (One recovery pass or
+    // two — the pre-unequip freeSlot is always a no-op at used=27 — same arithmetic.)
+    const drops = allLogs.filter(l => /dropping one .* to free a slot/i.test(l)).length;
+    if (drops < 1) fail('freeSlot never dropped a sacrificial ore — the full-pack path was NOT exercised (seeding/cheat regression?); the end-state gates alone would still have passed');
+    if (last.used !== EXPECTED_FINAL_USED) fail(`final used=${last.used}, expected ${EXPECTED_FINAL_USED} (27 iron ore post-wield − 1 sacrificial drop) — slot arithmetic regressed`);
+    console.log(`PASS (lost-pickaxe: worn handle detected -> ${drops} ore dropped -> head taken${sawHeadInPack ? '' : ' (fast)'} -> reattached -> re-wielded; final used=${last.used})`);
 } finally {
     await browser.close();
 }
