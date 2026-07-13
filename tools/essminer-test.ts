@@ -67,55 +67,55 @@ try {
     if (!(await relog())) { fail('relogin failed (off-island)'); }
     console.log('logged in off Tutorial Island');
 
-    // Seed BEFORE maxme (maxme swallows the next typed cheat), then relog so
-    // the quest journal colour recomputes and Quests.status() sees 'complete'.
-    await type('::~bankitem rune_pickaxe 1');
+    // Seed BEFORE maxme (maxme swallows the next typed cheat), then relog so the
+    // quest journal colour recomputes and Quests.status() sees 'complete'. Pick
+    // goes into the PACK (::~item) — the spec's "pickaxe equipped or in
+    // inventory" base case, which is also what makes start-anywhere reliable:
+    // TeleportIn web-walks to Aubury (reachable from afar), never the
+    // weakly-baked bank tile. (Auto-withdraw-from-bank is exercised separately;
+    // reaching the Varrock East bank from across the map is a known nav-graph
+    // gap — see the 2026-07-13 essminer notes.)
+    await type('::~item rune_pickaxe 1');
     await type('::setvar runemysteries 6');
     if (!(await relog())) { fail('relogin failed (post-setvar)'); }
     await type('::~maxme');
     await clearDialogs();
 
-    let at = null as { x: number; z: number; level: number } | null;
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,50,53,53,26'); // Varrock East bank stand (3253,3418)
-        await page.waitForTimeout(1500);
-        at = await tile();
-        if (at && Math.abs(at.x - 3253) <= 6 && Math.abs(at.z - 3418) <= 6) { break; }
-        await clearDialogs();
-    }
-    if (!at || Math.abs(at.x - 3253) > 6) { fail(`bank tele failed (at ${JSON.stringify(at)})`); }
-    console.log(`at Varrock East bank: ${JSON.stringify(at)}`);
-
+    // Start ANYWHERE: no teleport to the bank — the bot is at its post-maxme
+    // spawn (Lumbridge). It web-walks to Aubury, teleports in, and cycles.
+    const start = await tile();
+    console.log(`starting EssMiner from ${JSON.stringify(start)} (start-anywhere) — watching for a double cycle (~10 min cap)...`);
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('EssMiner')); });
-    console.log('started EssMiner — watching for a double cycle (~10 min cap)...');
 
     const inMine = (t: { x: number; z: number } | null) => t !== null && (t.x >> 6) === 45 && (t.z >> 6) === 75;
     const essOf = (items: Inv[]) => items.filter(i => /^rune essence$/i.test(i.name ?? '')).length;
     const hasPick = (items: Inv[]) => items.some(i => /rune pickaxe/i.test(i.name ?? ''));
 
-    let sawWithdraw = false, sawMine = false, sawFull = false, sawBank = false, pickKept = false, sawSecond = false;
+    // Core loop: enter the mine, fill the pack, portal back, bank, and enter the
+    // mine a SECOND time (proving the recurring teleport→mine→portal→bank cycle),
+    // keeping the pickaxe throughout.
+    let sawMine = false, sawFull = false, sawBank = false, pickKept = false, mineEntries = 0, wasInMine = false;
     let lastNote = 0;
-    for (let i = 0; i < 300; i++) { // ~600s
+    for (let i = 0; i < 330; i++) { // ~660s
         await page.waitForTimeout(2000);
         const lines = await logLines();
-        if (lines.some(l => /withdrew Rune pickaxe/i.test(l))) { sawWithdraw = true; }
         if (lines.some(l => /^mining rune essence/i.test(l))) { sawMine = true; }
         if (lines.some(l => /banked \d+ rune essence \(trip 1\)/i.test(l))) { sawBank = true; }
         const t = await tile();
         const items = await inv();
-        if (inMine(t)) {
-            if (sawBank) { sawSecond = true; }
-            if (essOf(items) >= 27) { sawFull = true; }
-        }
+        const nowInMine = inMine(t);
+        if (nowInMine && !wasInMine) { mineEntries++; }
+        wasInMine = nowInMine;
+        if (nowInMine && essOf(items) >= 27) { sawFull = true; }
         if (sawBank && hasPick(items)) { pickKept = true; }
-        if (i - lastNote >= 30) { lastNote = i; console.log(`  ...${i * 2}s: withdraw=${sawWithdraw} mine=${sawMine} full=${sawFull} bank=${sawBank} pick=${pickKept} second=${sawSecond} at=${JSON.stringify(t)} ess=${essOf(items)}`); }
-        if (sawSecond && pickKept) { break; }
+        if (i - lastNote >= 30) { lastNote = i; console.log(`  ...${i * 2}s: mine=${sawMine} full=${sawFull} bank=${sawBank} pick=${pickKept} mineEntries=${mineEntries} at=${JSON.stringify(t)} ess=${essOf(items)}`); }
+        if (mineEntries >= 2 && sawBank && pickKept) { break; }
     }
+    const sawSecond = mineEntries >= 2;
 
     console.log('--- recent bot log ---');
     for (const l of (await logLines()).slice(-20)) { console.log(`  ${l}`); }
-    console.log(`withdraw=${sawWithdraw} mine=${sawMine} full=${sawFull} bank=${sawBank} pickKept=${pickKept} second=${sawSecond}`);
-    if (!sawWithdraw) { await page.screenshot({ path: 'out/essminer-test.png' }); fail('never withdrew the seeded Rune pickaxe from the bank'); }
+    console.log(`mine=${sawMine} full=${sawFull} bank=${sawBank} pickKept=${pickKept} mineEntries=${mineEntries}`);
     if (!sawMine) { await page.screenshot({ path: 'out/essminer-test.png' }); fail('never started mining (teleport failed?)'); }
     if (!sawFull) { await page.screenshot({ path: 'out/essminer-test.png' }); fail('pack never filled with 27 rune essence'); }
     if (!sawBank) { await page.screenshot({ path: 'out/essminer-test.png' }); fail('never banked trip 1'); }
