@@ -145,16 +145,23 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
     // NpcStop.approach). No "already past it" shortcut — straight-line distance
     // is exactly what a horseshoe breaks (the landing is CLOSER to the anchor
     // than the waypoint is), and the npcNear() check above already skips all
-    // walking once we're in the chamber with the NPC.
+    // walking once we're in the chamber with the NPC. A failed leg must NOT
+    // return yet: it has to fall through to the trapped-landing recovery below
+    // (live 2026-07-12 21:49: a pocket landing froze the corridor-mouth leg at
+    // (3107,9575) with 0 clicks, and an early return here looped the bot on
+    // that walk forever instead of climbing out).
+    let approachFailed = false;
     for (const wp of stop.approach ?? []) {
         if (wp.distanceTo(here) > 2) {
             if (!(await Traversal.walkResilient(wp, { radius: 2, attempts: 2, timeoutMs: 45_000, log }))) {
-                return false;
+                approachFailed = true;
+                here = Game.tile() ?? here;
+                break;
             }
             here = Game.tile() ?? here;
         }
     }
-    if (stop.anchor.distanceTo(here) > 1) {
+    if (!approachFailed && stop.anchor.distanceTo(here) > 1) {
         // Bounded attempts so a dead-end landing (handled next) is diagnosed in
         // ~1 min, not the default 3x90s. On a good landing the short chamber
         // approach finishes well inside one attempt.
@@ -162,13 +169,15 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
         here = Game.tile() ?? here;
     }
     // Trapped-landing recovery. The wizard-tower ladder occasionally drops you on
-    // a dead-end basement tile (3104,9575) the baked pack thinks reaches Sedridor
-    // but the live scene walls off — the walker makes 0 clicks and never arrives
-    // (the Task 6 notes-leg freeze). Signature: still underground and NOT at the
-    // (nearby) anchor after trying to walk. Climb back up and return so the caller
-    // re-descends; the re-descent lands on a reachable tile from which the next
-    // approach completes. Proximity-gated so the far-anchor Aubury climb-up (a
-    // surface hop AWAY from its anchor) never trips it.
+    // a dead-end basement tile the baked pack thinks reaches Sedridor but the
+    // live scene walls off — the walker makes 0 clicks and never arrives (the
+    // Task 6 notes-leg freeze at (3104,9575); the 2026-07-12 21:49 approach-leg
+    // freeze at (3107,9575)). Signature: still underground and NOT at the
+    // (nearby) anchor after trying to walk — it guards the approach legs above as
+    // much as the anchor leg. Climb back up and return so the caller re-descends;
+    // the re-descent lands on a reachable tile from which the next approach
+    // completes. Proximity-gated so the far-anchor Aubury climb-up (a surface
+    // hop AWAY from its anchor) never trips it.
     if (isUnderground(here) && isUnderground(stop.anchor) && stop.anchor.distanceTo(here) > 2 && stop.anchor.distanceTo(here) <= 20) {
         const back = hops.find(h => isUnderground(h.stand) === isUnderground(here!));
         if (back) {
@@ -178,6 +187,13 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
             }
             await hopLadder(back, log);
         }
+        return false;
+    }
+    // A failed approach outside the trapped signature stays a failure: the
+    // leash (up to 8) can see the NPC across the very wall that blocked the
+    // walk, and a true here would send talkThrough into the "never opened a
+    // dialogue" retry loop the radius-1 anchor rule exists to prevent.
+    if (approachFailed) {
         return false;
     }
     return npcNear();

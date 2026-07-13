@@ -92,9 +92,20 @@ again" step.
   reachable tile nearest the target, and on the landing → east → corridor →
   west-through-the-door route every intermediate tile is farther from Sedridor
   than the start, so clicks were no-ops. Fixed properly with
-  `NpcStop.approach` staged waypoints (Sedridor: corridor mouth (3108,9572));
-  the recovery remains as a belt-and-braces fallback but no longer fires
-  (smoke: descent→talk in ~10s, zero recoveries).
+  `NpcStop.approach` staged waypoints (Sedridor: corridor mouth (3108,9572)).
+  Second post-ship true-up (2026-07-12 21:49 live freeze): the pocket landing
+  is REAL and distinct from the horseshoe artifact — its signature is 0 clicks
+  (live `Reachability.canReach` rejects every tile of the baked path; the
+  horseshoe variant clicked plenty and just didn't move), seen at (3107,9575)
+  against a pack-open cost-4 route to the corridor mouth. So the recovery is
+  load-bearing, not belt-and-braces, and it must catch a failed APPROACH leg
+  too: the staged-waypoint loop originally early-returned on failure, which
+  bypassed the recovery entirely and re-walked from the pocket forever. A
+  failed approach leg now falls through to the trapped-landing check (climb
+  up, re-descend to re-roll), and a failed leg outside the trapped signature
+  still returns false rather than `npcNear()` — the leash can see the NPC
+  across the very wall that blocked the walk. Control-flow regression tests:
+  `src/bot/quests/exec/gotoNpc.test.ts` (mocked I/O singletons).
 - **`talkThrough(npcName, prefer[])`** — Talk-to the nearest matching NPC,
   then drive the dialogue: continue through pages; at a choice pick the first
   `prefer` entry that case-insensitive substring-matches (the tutorial
