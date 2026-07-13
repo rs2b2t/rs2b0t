@@ -26,7 +26,12 @@ import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, inEssMine, requiredMiningLevel,
 // four "Portal" exits live — ALL in-mine movement rides OPLOC interacts (the
 // server walks us); the web-walker has no data for the region and is never
 // used inside it. The portal returns to Aubury's shop (3253,3401).
-const BANK_STAND = new Tile(3253, 3418, 0);
+// (3253,3418) — directly south of the booths — is a sealed collision nook
+// (booths wall it north, building walls south), unreachable by walking (nav
+// coverage harness). (3251,3420) is the nearest connected tile; banking is
+// OPLOC-first (openBooth), so the walk only needs a reachable approach and the
+// server-walk finishes onto the booth.
+const BANK_STAND = new Tile(3251, 3420, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const AUBURY_TILE = new Tile(3253, 3402, 0);
 const AUBURY = 'Aubury';

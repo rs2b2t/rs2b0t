@@ -16,9 +16,7 @@ export interface NavTarget {
 }
 
 export const NAV_TARGETS: NavTarget[] = [
-    // NOTE: this entry starts at the KNOWN-BAD nook tile so the harness proves it
-    // catches it (Task 2 run FAILs here); Task 3 repoints it to (3251,3420).
-    { bot: 'EssMiner', label: 'Varrock East bank stand', tile: { x: 3253, z: 3418, level: 0 } },
+    { bot: 'EssMiner', label: 'Varrock East bank stand', tile: { x: 3251, z: 3420, level: 0 } },
     { bot: 'ArdyThiever/ArdyFighter', label: 'Ardougne south bank stand', tile: { x: 2655, z: 3286, level: 0 } },
     { bot: 'ArdyFighter', label: "Baker's stall stand", tile: { x: 2668, z: 3312, level: 0 } },
     { bot: 'CookBot', label: 'Catherby bank stand', tile: { x: 2809, z: 3441, level: 0 } },
