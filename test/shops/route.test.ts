@@ -1,0 +1,47 @@
+import { describe, expect, test } from 'bun:test';
+import { ROUTE, SMOKE_ROUTE } from '#/bot/shops/data/route.js';
+import { SHOP_DB } from '#/bot/shops/data/shopdb.js';
+import type { Route } from '#/bot/shops/types.js';
+
+function checkRoute(route: Route): void {
+    expect(route.ring).toEqual(route.clusters.map(c => c.id));
+    for (const cluster of route.clusters) {
+        for (const shop of cluster.shops) {
+            const rec = SHOP_DB[shop.shopId];
+            expect(rec).toBeDefined();
+            expect(rec.keepers).toContain(shop.keeperNpc);
+            expect(rec.scope).toBe('shared');
+            for (const buy of shop.buys) {
+                const item = rec.items.find(i => i.obj === buy.obj);
+                expect(item).toBeDefined();
+                expect(item!.stackable).toBe(true);   // v1 buylist must stack (no inv pressure)
+                expect(item!.baseline).toBeGreaterThan(0); // baseline-0 never restocks
+                if (buy.policy?.kind === 'floor') {
+                    expect(buy.policy.pct).toBeGreaterThan(0);
+                    expect(buy.policy.pct).toBeLessThan(100);
+                }
+            }
+        }
+    }
+}
+
+describe('route data integrity vs generated shopdb', () => {
+    test('live route resolves entirely against SHOP_DB', () => {
+        checkRoute(ROUTE);
+        expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild']);
+    });
+    test('members/skill gates sit on the members clusters', () => {
+        const byId = new Map(ROUTE.clusters.map(c => [c.id, c]));
+        expect(byId.get('varrock')!.gates).toEqual([]);
+        expect(byId.get('portsarim')!.gates).toEqual([]);
+        expect(byId.get('catherby')!.gates).toEqual([{ members: true }]);
+        expect(byId.get('fishingguild')!.gates).toEqual([{ members: true }, { skill: { name: 'fishing', level: 68 } }]);
+        expect(byId.get('rangingguild')!.gates).toEqual([{ members: true }, { skill: { name: 'ranged', level: 40 } }]);
+    });
+    test('smoke route is the Aubury-only varrock cluster', () => {
+        checkRoute(SMOKE_ROUTE);
+        expect(SMOKE_ROUTE.clusters).toHaveLength(1);
+        expect(SMOKE_ROUTE.clusters[0].shops).toHaveLength(1);
+        expect(SMOKE_ROUTE.clusters[0].shops[0].shopId).toBe('runeshop');
+    });
+});

@@ -37,5 +37,13 @@ export const NAV_TARGETS: NavTarget[] = [
     // KNOWN island: the wizard-tower BASEMENT ladder landing is a separate
     // underground region reached via the ladder transport; RuneMysteries handles
     // the trapped-landing at runtime (climb-up re-roll). Expected, not a defect.
-    { bot: 'RuneMysteries', label: 'wizard-tower basement ladder landing', tile: { x: 3104, z: 9576, level: 0 }, expected: 'island' }
+    { bot: 'RuneMysteries', label: 'wizard-tower basement ladder landing', tile: { x: 3104, z: 9576, level: 0 }, expected: 'island' },
+    { bot: 'ShopRunner', label: 'Aubury shop stand', tile: { x: 3253, z: 3401, level: 0 } },
+    { bot: 'ShopRunner', label: "Lowe's archery stand", tile: { x: 3231, z: 3421, level: 0 } },
+    { bot: 'ShopRunner', label: "Betty's magic shop stand", tile: { x: 3012, z: 3258, level: 0 } },
+    { bot: 'ShopRunner', label: "Gerrant's fishing shop stand", tile: { x: 3013, z: 3224, level: 0 } },
+    { bot: 'ShopRunner', label: 'Draynor bank stand', tile: { x: 3092, z: 3243, level: 0 } },
+    { bot: 'ShopRunner', label: "Hickton's archery stand", tile: { x: 2821, z: 3442, level: 0 } },
+    { bot: 'ShopRunner', label: 'Fishing Guild shop stand', tile: { x: 2596, z: 3399, level: 0 } },
+    { bot: 'ShopRunner', label: "Dargaud's bow shop stand", tile: { x: 2678, z: 3440, level: 0 } }
 ];
