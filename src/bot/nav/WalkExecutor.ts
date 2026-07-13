@@ -22,6 +22,7 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
 import { locateOnPath, selectClickTarget } from './followMath.js';
+import { classifyReason } from './walkLadder.js';
 
 const TARGET_STEPS = 20; // click target this many steps ALONG the path
 const TARGET_JITTER = 4; // ± human-ish variance on TARGET_STEPS
@@ -65,7 +66,7 @@ interface PathStep extends WorldTile {
     transport?: TransportInfo;
 }
 
-type FollowResult = 'arrived' | 'repath' | 'failed' | 'interrupted';
+type FollowResult = 'arrived' | 'closest' | 'repath' | 'failed' | 'interrupted';
 
 function chebyshev(a: WorldTile, b: WorldTile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
@@ -102,7 +103,7 @@ class WalkExecutorImpl {
 
     /** How the last walkTo ended — 'interrupted' means a random event took
      *  over and the caller should retry once the runtime clears it. */
-    lastOutcome: 'arrived' | 'interrupted' | 'failed' | null = null;
+    lastOutcome: 'arrived' | 'closest' | 'budget' | 'interrupted' | 'failed' | null = null;
 
     /** Doors that failed to open during THIS walkTo — excluded on repath. */
     private avoidDoors: { x: number; z: number }[] = [];
@@ -135,7 +136,7 @@ class WalkExecutorImpl {
                 const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
                     log(`no path to (${dest.x},${dest.z},${dest.level}): ${path.reason}`);
-                    this.lastOutcome = 'failed';
+                    this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
                 log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`);
@@ -148,7 +149,13 @@ class WalkExecutorImpl {
                 const terminal = tiles[tiles.length - 1];
                 if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
                     if (chebyshev(me, dest) > radius) {
-                        log(`dest (${dest.x},${dest.z}) unreachable beyond (${me.x},${me.z}) — treating nearest reachable tile as arrival`);
+                        // standing on the nearest reachable tile but still short of dest —
+                        // honestly 'closest', so walkResilient keeps escalating (client-scene
+                        // walk) instead of believing it arrived. walkTo still returns true so
+                        // direct callers get the "as close as the baked graph reaches" contract.
+                        log(`dest (${dest.x},${dest.z}) unreachable beyond (${me.x},${me.z}) — nearest reachable tile`);
+                        this.lastOutcome = 'closest';
+                        return true;
                     }
                     this.lastOutcome = 'arrived';
                     return true;
@@ -157,6 +164,12 @@ class WalkExecutorImpl {
                 const result = await this.followPath(tiles, dest, radius, deadline, log);
                 if (result === 'arrived') {
                     this.lastOutcome = 'arrived';
+                    return true;
+                }
+                if (result === 'closest') {
+                    // on the nearest reachable tile but short of dest — true boolean
+                    // (as close as the baked graph reaches), honest 'closest' outcome.
+                    this.lastOutcome = 'closest';
                     return true;
                 }
                 if (result === 'failed') {
@@ -217,8 +230,11 @@ class WalkExecutorImpl {
             }
             const terminal = tiles[tiles.length - 1];
             if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
-                log(`arrived at path terminal (${clicks} clicks)`);
-                return 'arrived';
+                // reached the path's end but the within-radius check above didn't
+                // fire — the pathfinder snapped an unwalkable dest here, so we're
+                // honestly 'closest', not arrived (lets walkResilient keep escalating).
+                log(`reached path terminal short of dest (${clicks} clicks)`);
+                return 'closest';
             }
 
             // where are we along the path? (corridor-tolerant)
