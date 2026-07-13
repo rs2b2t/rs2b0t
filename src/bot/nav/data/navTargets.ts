@@ -22,13 +22,17 @@ export const NAV_TARGETS: NavTarget[] = [
     { bot: 'CookBot', label: 'Catherby bank stand', tile: { x: 2809, z: 3441, level: 0 } },
     { bot: 'CookBot', label: 'Catherby range stand', tile: { x: 2817, z: 3443, level: 0 } },
     { bot: 'SmelterBot', label: 'Al Kharid furnace stand', tile: { x: 3275, z: 3185, level: 0 } },
+    { bot: 'SmelterBot', label: 'Al Kharid bank stand', tile: { x: 3269, z: 3167, level: 0 } },
     { bot: 'SmithingBot', label: 'Varrock West anvil stand', tile: { x: 3188, z: 3425, level: 0 } },
     { bot: 'BankFletcher', label: 'Varrock West bank stand', tile: { x: 3185, z: 3440, level: 0 } },
     { bot: 'FlaxSpinner', label: 'Seers bank stand', tile: { x: 2722, z: 3493, level: 0 } },
     { bot: 'FlaxPicker', label: 'Seers bank stand', tile: { x: 2725, z: 3493, level: 0 } },
     { bot: 'ChaosDruidKiller', label: 'Edgeville bank stand', tile: { x: 3094, z: 3491, level: 0 } },
     { bot: 'ChaosDruidKiller', label: 'trapdoor stand', tile: { x: 3096, z: 3468, level: 0 } },
-    { bot: 'RockCrab', label: 'Rellekka area', tile: { x: 2586, z: 3420, level: 0 } },
+    { bot: 'Fisher', label: 'Fishing Guild / Rellekka bank stand', tile: { x: 2586, z: 3420, level: 0 } },
+    { bot: 'RockCrab', label: 'Rellekka crab field', tile: { x: 2710, z: 3720, level: 0 } },
+    { bot: 'RockCrab', label: 'crab reset tile', tile: { x: 2712, z: 3699, level: 0 } },
+    { bot: 'RockCrab', label: 'Seers bank stand', tile: { x: 2725, z: 3491, level: 0 } },
     { bot: 'RuneMysteries', label: 'wizard-tower surface ladder stand', tile: { x: 3105, z: 3162, level: 0 } },
     // KNOWN island: the wizard-tower BASEMENT ladder landing is a separate
     // underground region reached via the ladder transport; RuneMysteries handles
