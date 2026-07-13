@@ -15,9 +15,9 @@ import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
-import { Npcs } from '../api/queries/Npcs.js';
+import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
-import { requiredThieving, targetSpot } from './ArdyThieverLogic.js';
+import { isHostileAttacker, requiredThieving, targetSpot } from './ArdyThieverLogic.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
@@ -47,6 +47,9 @@ const FLEE_TILE = new Tile(2655, 3298, 0);
 // isn't mistaken for a real attacker. Genuine combat never emits a stun message,
 // so it still flees once the window lapses.
 const STUN_COMBAT_TICKS = 17;
+// How close an in-combat market hostile must be to count as "the one attacking
+// us" — melee attackers stand adjacent; 5 gives slack for a pathing hostile.
+const ENGAGE_RADIUS = 5;
 const OBSTACLE = ['door', 'gate'];
 // What the Baker's stall gives (content stealing.dbrow) — also what PanicRetreat
 // withdraws if the bank holds any.
@@ -60,6 +63,7 @@ const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
 
 export const SETTINGS: SettingsSchema = {
     thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target', help: 'the bot knows each target\'s market spot — no anchor to place' },
+    guardResponse: { type: 'string', default: 'Flee', options: ['Flee', 'Fight'], label: 'Guard response', help: 'caught at the stall: Flee kites the guard off the market; Fight kills it (bring combat stats)' },
     eatAtHp: { type: 'number', default: 40, min: 0, max: 100, label: 'Eat below HP%' },
     eatToHp: { type: 'number', default: 90, min: 1, max: 100, label: 'Eat up to HP%' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
@@ -72,6 +76,7 @@ export const SETTINGS: SettingsSchema = {
 
 // Active run config (ADR-0006 single-script module state).
 let TARGET = 'Guard';
+let RESPONSE = 'Flee';
 let ANCHOR = targetSpot(TARGET).anchor;
 let LEASH = targetSpot(TARGET).leash;
 let EAT_AT = 0.4;
@@ -110,6 +115,7 @@ export default class ArdyThiever extends TaskBot {
     private looted = 0;
     private trips = 0;
     private flees = 0;
+    private kills = 0;
     private status = 'starting';
     private stunnedUntilTick = 0;
     died = false;
@@ -118,6 +124,7 @@ export default class ArdyThiever extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         TARGET = this.settings.str('thieveTarget', 'Guard');
+        RESPONSE = this.settings.str('guardResponse', 'Flee');
         const spot = targetSpot(TARGET);
         ANCHOR = spot.anchor;
         LEASH = spot.leash;
@@ -139,7 +146,7 @@ export default class ArdyThiever extends TaskBot {
             throw new Error(`ArdyThiever: Thieving ${need} required`);
         }
 
-        this.log(`ArdyThiever starting — target '${TARGET}' at ${ANCHOR} r${LEASH} (Thieving ${need}+), stall ${STALL_TILE}, bank ${BANK_STAND}`);
+        this.log(`ArdyThiever starting — target '${TARGET}' at ${ANCHOR} r${LEASH} (Thieving ${need}+), ${RESPONSE.toLowerCase()} mode, stall ${STALL_TILE}, bank ${BANK_STAND}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -160,10 +167,11 @@ export default class ArdyThiever extends TaskBot {
                 onDeath: () => { this.setStatus('died — recovering'); this.log('died! recovering'); },
                 onRecovered: () => { this.died = false; }
             }),
-            new Flee(this),
+            ...(RESPONSE === 'Fight' ? [] : [new Flee(this)]),
             new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
+            ...(RESPONSE === 'Fight' ? [new FightBack(this)] : []),
             new PeriodicBank({
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
@@ -192,7 +200,7 @@ export default class ArdyThiever extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [
             `ArdyThiever — ${this.status}`,
-            `target ${TARGET}  steals ${this.steals}  ate ${this.eats}  fled ${this.flees}`,
+            `target ${TARGET}  steals ${this.steals}  ate ${this.eats}  fled ${this.flees}  fought ${this.kills}`,
             `loot ${this.looted}  bank trips ${this.trips}  food ${foodCount()}  lootslots ${lootSlots()}`,
             `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
         ];
@@ -218,6 +226,7 @@ export default class ArdyThiever extends TaskBot {
     countLoot(): void { this.looted++; }
     countTrip(): void { this.trips++; }
     countFlee(): void { this.flees++; }
+    countKill(): void { this.kills++; }
 }
 
 class ContinueDialog implements Task {
@@ -242,6 +251,61 @@ class Flee implements Task {
         this.bot.countFlee();
         await walkOpening(FLEE_TILE, 0, OBSTACLE, m => this.bot.log(`  ${m}`));
         await Execution.delayUntil(() => !Game.inCombat(), 15000);
+    }
+}
+
+/** Fight mode: kill the guard that caught us instead of kiting it. Triggers on
+ *  the same inRealCombat() signal as Flee (the pickpocket-stun suppression is
+ *  load-bearing — a failed pickpocket must NOT start a fight). Registered
+ *  BELOW EatFood/PanicRetreat so the eat ladder outranks the fight, and above
+ *  the bank/restock/pickpocket tasks so nothing else runs mid-combat. Attacks
+ *  explicitly (robust even with auto-retaliate off); a second attacker (the
+ *  Baker can alert several) is picked up by revalidation after the first kill. */
+class FightBack implements Task {
+    constructor(private bot: ArdyThiever) {}
+    private findAttacker(): Npc | null {
+        return Npcs.query()
+            .where(n => isHostileAttacker({ name: n.name, inCombat: n.inCombat, distance: n.distance(), actions: n.actions() }, ENGAGE_RADIUS))
+            .nearest();
+    }
+    private track(engaged: Npc): Npc | null {
+        return Npcs.all().find(n => n.index === engaged.index && n.name === engaged.name) ?? null;
+    }
+    validate(): boolean { return this.bot.inRealCombat(); }
+    async execute(): Promise<void> {
+        const attacker = this.findAttacker();
+        if (!attacker) {
+            // combat flag with no visible aggressor (it died, or the health bar
+            // is lingering) — idle a moment; tasks resume once combat clears
+            await Execution.delayTicks(2);
+            return;
+        }
+        this.bot.setStatus(`fighting back: ${attacker.name} at ${attacker.tile()}`);
+        this.bot.log(`combat — fighting back against ${attacker.name}`);
+        if (!(await attacker.interact('Attack'))) { await Execution.delayTicks(2); return; }
+        const deadline = performance.now() + 90_000;
+        while (performance.now() < deadline) {
+            if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died) { return; }
+            if (shouldEat(hpFraction(), EAT_AT, foodCount()) || shouldPanic(hpFraction(), PANIC_AT, foodCount())) {
+                return; // EatFood / PanicRetreat outrank us next loop
+            }
+            const target = this.track(attacker);
+            if (!target) {
+                this.bot.countKill();
+                this.bot.log(`killed the ${attacker.name}`);
+                return;
+            }
+            if (target.health === 0 && target.snap.totalHealth > 0) {
+                await Execution.delayUntil(() => this.track(attacker) === null, 10_000);
+                this.bot.countKill();
+                this.bot.log(`killed the ${attacker.name}`);
+                return;
+            }
+            if (!Game.inCombat() && !target.inCombat) {
+                return; // both disengaged — over; revalidation handles re-aggro
+            }
+            await Execution.delayTicks(2);
+        }
     }
 }
 
