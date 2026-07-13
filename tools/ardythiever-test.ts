@@ -100,7 +100,7 @@ try {
         for (const l of lines) {
             if (/restocking|stocked \d+ food/i.test(l)) { seen.restock = true; }
             if (/pickpocketed/i.test(l)) { seen.steal = true; }
-            if (/fleeing combat/i.test(l)) { seen.flee = true; }
+            if (/kiting the guard/i.test(l)) { seen.flee = true; }
         }
         if (seen.restock && seen.steal) { break; }
     }
