@@ -129,7 +129,7 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
             log(`no hop from (${here.x},${here.z}) toward (${stop.anchor.x},${stop.anchor.z})`);
             return false;
         }
-        if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, log }))) {
+        if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, attempts: 3, log }))) {
             return false;
         }
         if (!(await hopLadder(hop, log))) {
@@ -183,7 +183,7 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
         if (back) {
             log(`trapped landing at (${here.x},${here.z}) — could not reach anchor, climbing back to re-roll`);
             if (back.stand.distanceTo(here) > 1) {
-                await Traversal.walkResilient(back.stand, { radius: 1, log });
+                await Traversal.walkResilient(back.stand, { radius: 1, attempts: 3, log });
             }
             await hopLadder(back, log);
         }

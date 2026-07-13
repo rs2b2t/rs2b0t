@@ -74,6 +74,11 @@ export const Traversal = {
         for (let iter = 0; iter < 100_000; iter++) {
             if (EventSignal.pending()) {
                 log('walk interrupted by a random event — yielding to the runtime');
+                // Surface the interruption on WalkExecutor.lastOutcome so a caller
+                // that distinguishes yield-vs-failure after we return false (the
+                // Supervisor watchdog) reads a true signal, not a stale sub-walk
+                // outcome. Interruption = yield; a bounded/cap give-up = 'failed'.
+                WalkExecutor.lastOutcome = 'interrupted';
                 return false;
             }
 
@@ -86,10 +91,12 @@ export const Traversal = {
             }
             if (action.kind === 'interrupted') {
                 log('walk interrupted by a random event — yielding to the runtime');
+                WalkExecutor.lastOutcome = 'interrupted';
                 return false;
             }
             if (maxPasses !== undefined && state.noProgressPasses >= maxPasses) {
                 log(`walkResilient: ${maxPasses} passes made no progress — stopping (bounded caller)`);
+                WalkExecutor.lastOutcome = 'failed';
                 return false;
             }
 
@@ -121,6 +128,7 @@ export const Traversal = {
             }
         }
         log('walkResilient: iteration cap hit (no player tile?) — yielding');
+        WalkExecutor.lastOutcome = 'failed';
         return false;
     },
 

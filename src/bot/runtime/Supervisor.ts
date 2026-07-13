@@ -86,7 +86,12 @@ class SupervisorImpl {
                     ctx.addLog('warn', `watchdog: no progress for ${Math.round(WEDGE_MS / 60000)}min at (${me?.x},${me?.z},${me?.level})`);
                     if (anchor && me && Math.max(Math.abs(anchor.x - me.x), Math.abs(anchor.z - me.z)) > 8) {
                         ctx.addLog('info', 'watchdog: walking back to the anchor');
-                        const ok = await Traversal.walkResilient(anchor, { radius: 3, log: msg => ctx.addLog('info', msg) });
+                        // BOUNDED (attempts:3): the watchdog IS the recovery path — it
+                        // must be able to give up (walkResilient returns false after 3
+                        // no-progress passes) so an unreachable anchor escalates to
+                        // StallGuard.requestRestart below. The default (retry-forever)
+                        // would keep it walking and the restart would never fire.
+                        const ok = await Traversal.walkResilient(anchor, { radius: 3, attempts: 3, log: msg => ctx.addLog('info', msg) });
                         if (ok) {
                             this.lastProgressAt = performance.now();
                             return;
