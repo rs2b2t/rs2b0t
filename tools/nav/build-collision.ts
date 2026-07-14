@@ -1,4 +1,4 @@
-// Offline collision pack builder (Slice 5, docs/PLAN.md "Navigation / web-walking").
+// Offline collision pack builder (Slice 5, "Navigation / web-walking").
 //
 // Replays Engine-TS@274 GameMap.loadGround/loadLocations over every packed
 // mapsquare (engine repo, data/pack/.cache/maps-server.zip or

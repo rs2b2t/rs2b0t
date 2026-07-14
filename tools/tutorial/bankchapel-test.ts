@@ -1,11 +1,11 @@
 // Task 12 section test: jump-start a fresh account to the bank & chapel
-// section (docs/tutorial-map.md's 500 -> 610 ladder) and assert TutorialBot's
+// section (the 500 -> 610 ladder) and assert TutorialBot's
 // thirteen BankChapel.ts stages carry it through the bank, the Financial
 // Advisor and Brother Brace to the chapel-exit crossing unattended.
 //
 // Same jump-start shape as `combat-test.ts` (Task 11): two-step setvar (a
 // bare `setvar tutorial N` from a fresh spawn silently reverts --
-// docs/tutorial-map.md's "Stage-jump recipe corrections") + the faithful-
+// the "Stage-jump recipe corrections") + the faithful-
 // account kit + relog + a `::tele` to the real 470 -> 500 ladder-out landing
 // (3111,3125).
 //
@@ -37,7 +37,7 @@ const TARGET = 610;
 const DEADLINE_MS = 10 * 60_000; // ~25 dialogue pages + 3 tab clicks + ~45 tiles of walking; observed runs are minutes, not seconds
 const POLL_MS = 3000;
 
-/** Live-confirmed 470 -> 500 ladder-out landing (docs/tutorial-map.md, Combat.ts's ClimbOutLadder). */
+/** Live-confirmed 470 -> 500 ladder-out landing (Combat.ts's ClimbOutLadder). */
 const LANDING = { x: 3111, z: 3125 };
 /** `tele level,mx,mz,lx,lz` for LANDING: mapsquare 48,48, local (39,53). */
 const TELE_CMD = 'tele 0,48,48,39,53';
@@ -74,7 +74,7 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (docs/tutorial-map.md's "Stage-jump recipe corrections").
+    // Two-step setvar (the "Stage-jump recipe corrections").
     await cheatQuiet(page, 'setvar tutorial 1');
     await cheatQuiet(page, 'setvar tutorial 500');
     const jumped = await getServerVarQuiet(page, 'tutorial');
@@ -131,7 +131,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     // Terminal observable: the chapel-exit crossing (ExitChapel's latch).

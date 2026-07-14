@@ -18,11 +18,11 @@
 // state 'crashed'.
 //
 // Usage: bun tools/ardyfighter-test.ts [minutes] [base-url]
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '18');
-const base = process.argv[3] ?? 'http://localhost:8890';
-const mode = (process.argv[4] ?? 'assert').toLowerCase(); // 'assert' | 'soak'
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8890', minutes: 18 });
+const mode = (rest[0] ?? 'assert').toLowerCase(); // 'assert' | 'soak'
 const username = `af${Date.now().toString(36).slice(-7)}`;
 // URL overrides go on the page URL (SettingsStore reads location.search at
 // script start); page.reload() preserves them, so load the page WITH them.
@@ -33,40 +33,17 @@ const OVERRIDES = mode === 'soak' ? 'ArdyFighter.eatAtHp=50' : 'ArdyFighter.bank
 const PAGE = `${base}/bot.html?${OVERRIDES}`;
 
 const ANCHOR = { x: 2661, z: 3306 };
-const LEASH = 12;
 const UNLOCK_TELE = 'tele 0,50,50,20,20'; // generic off-Tutorial-Island tile
 const ANCHOR_TELE = 'tele 0,41,51,37,42'; // -> (2661,3306,0), the market anchor
 
-function fail(m: string): never {
-    console.error(`FAIL: ${m}`);
-    process.exit(1);
-}
-
 type Inv = { name: string | null; count: number };
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; loginMessage?: string; login(u: string, p: string, r: boolean): Promise<void>; out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } | null };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null; bot: Record<string, unknown> | null };
-        reader: {
-            inventory(): Inv[];
-            npcs(): { name: string | null; health: number; totalHealth: number; inCombat: boolean; distance: number }[];
-            worldTile(): { x: number; z: number; level: number } | null;
-            chat(n: number): { text: string }[];
-            stat(i: number): { effective: number; base: number };
-            locs(): { name: string | null; ops: (string | null)[]; tile: { x: number; z: number }; distance: number }[];
-            inCombat(): boolean;
-        };
-    };
-};
-const G = 'rs2b0t';
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
         await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
         return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 }).then(() => true).catch(() => false);
@@ -99,12 +76,12 @@ try {
     const runnerState = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
 
     // --- bring-up: login, unlock the sidebar, raise stats -----------------
-    await page.goto(PAGE); await boot();
+    await page.goto(PAGE); await boot(page);
     let firstIn = false;
     for (let i = 0; i < 3 && !firstIn; i++) firstIn = await login();
     if (!firstIn) fail('first login failed');
     await cheat(UNLOCK_TELE);
-    await page.reload(); await boot(); // reload preserves ?overrides
+    await page.reload(); await boot(page); // reload preserves ?overrides
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) fail('re-login failed');

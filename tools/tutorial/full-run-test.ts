@@ -4,7 +4,7 @@
 // client tile at the end).
 //
 // Logs every distinct tutorial value with a timestamp: a stalled run's last
-// line names the broken stage via docs/tutorial-map.md's ladder table.
+// line names the broken stage via the ladder table.
 // Expected wall-clock ~12-20 min (survival ~1.5m, chef ~2.5m, quest guide
 // ~1.5m, mine ~3m, combat ~5m incl. two kill waits, bank+chapel ~2m, magic
 // ~1.5m, plus dialogue/walking overhead).
@@ -75,7 +75,7 @@ try {
     if (v < TARGET) {
         // Name the failure before dying: a crashed script (ScriptRunner
         // catches and stops) is indistinguishable from a stage stall by the
-        // varp alone — docs/tutorial-map.md's Task 9 debug-handle note.
+        // varp alone — the Task 9 debug-handle note.
         const ctx = await page
             .evaluate(() => {
                 const c = (globalThis as never as Rs2b0t).rs2b0t.runner.ctx;
@@ -83,7 +83,7 @@ try {
             })
             .catch(e => `ctx unreadable: ${e}`);
         console.error(`runner ctx at stall: ${JSON.stringify(ctx, null, 1)}`);
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- the ladder table in docs/tutorial-map.md names the stage`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- the ladder table names the stage`);
     }
 
     await page.waitForTimeout(1500);

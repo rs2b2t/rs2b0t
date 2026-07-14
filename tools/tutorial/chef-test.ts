@@ -2,7 +2,7 @@
 // cheats from the bot) through survival (proven by survival-test.ts) and
 // this task's chef + controls section (Chef.ts's 9 stage tasks wired into
 // TutorialBot.onStart after survivalStages), asserting the server ladder
-// reaches stage 220 (the Quest Guide's door, docs/tutorial-map.md).
+// reaches stage 220 (the Quest Guide's door).
 //
 // Why a full run instead of the brief's stage-jump sketch (`::setvar
 // tutorial 130` + relog + `::tele`): the jump recipe works (two-step setvar
@@ -100,7 +100,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     console.log(`PASS: TutorialBot drove a fresh account 0 -> ${v} unattended (no cheats, full run)`);

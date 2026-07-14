@@ -9,6 +9,7 @@
 //   PATH="/opt/homebrew/opt/node@24/bin:$PATH" npx tsx tools/desktop-test.ts [server-url]
 
 import { _electron as electron } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const server = process.argv[2] ?? 'http://localhost:8888';
 const username = `desk${Date.now().toString(36).slice(-7)}`;
@@ -61,7 +62,7 @@ try {
     if (!backIn) fail('relogin failed');
     console.log('logged in');
 
-    await page.selectOption('.rs2b0t-select', 'QuestDashboard');
+    await startFromLibrary(page, 'Quest', 'QuestDashboard');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForTimeout(2000);
 

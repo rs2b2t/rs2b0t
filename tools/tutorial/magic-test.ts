@@ -1,5 +1,5 @@
 // Task 13 section test: jump-start a fresh account to the magic section
-// (docs/tutorial-map.md's 610 -> 1000 ladder) and assert TutorialBot's five
+// (the 610 -> 1000 ladder) and assert TutorialBot's five
 // Magic.ts stages carry it through Terrova, the two forced Wind Strike
 // casts and the mainland prompt to Lumbridge unattended.
 //
@@ -111,7 +111,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     // Terminal observable: the mainland teleport.

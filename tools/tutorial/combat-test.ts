@@ -1,11 +1,11 @@
 // Task 11 section test: jump-start a fresh account to the combat section
-// (docs/tutorial-map.md's 360 -> 500 ladder) and assert TutorialBot's
+// (the 360 -> 500 ladder) and assert TutorialBot's
 // eleven Combat.ts stages carry it to the ladder-out surface crossing
 // unattended.
 //
 // Same jump-start shape as `mining-test.ts` (Task 10): two-step setvar (a
 // bare `setvar tutorial N` from a fresh spawn silently reverts --
-// docs/tutorial-map.md's "Stage-jump recipe corrections") + the FAITHFUL-
+// the "Stage-jump recipe corrections") + the FAITHFUL-
 // ACCOUNT KIT (axe/net/bread + firemaking/cooking xp) so Survival/Chef stay
 // permanently quiet, then a `::tele` into the mine + relog so every earlier
 // tab is attached.
@@ -30,7 +30,7 @@ const TARGET = 500;
 const DEADLINE_MS = 16 * 60_000; // mining re-run (~1-2 min) + the combat section itself (two kill waits, up to 60s/90s each) + travel
 const POLL_MS = 3000;
 
-/** Live-probed mine-arrival tile (docs/tutorial-map.md, QuestGuide.ts's `ClimbToMine` / mining-test.ts's `ARRIVAL`). */
+/** Live-probed mine-arrival tile (QuestGuide.ts's `ClimbToMine` / mining-test.ts's `ARRIVAL`). */
 const ARRIVAL = { x: 3081, z: 9519 };
 /** `tele level,mx,mz,lx,lz` for ARRIVAL: mapsquare 48,148 (world >> 6), local (9,47). */
 const TELE_CMD = 'tele 0,48,148,9,47';
@@ -67,7 +67,7 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (docs/tutorial-map.md's "Stage-jump recipe corrections").
+    // Two-step setvar (the "Stage-jump recipe corrections").
     await cheatQuiet(page, 'setvar tutorial 1');
     await cheatQuiet(page, 'setvar tutorial 360');
     const jumped = await getServerVarQuiet(page, 'tutorial');
@@ -124,7 +124,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     // Surface observable: confirm the client tile agrees (ClimbOutLadder's terminal outcome).

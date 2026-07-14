@@ -6,6 +6,7 @@
 // Usage: bun tools/nav-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `nav${Date.now().toString(36).slice(-7)}`;
@@ -74,7 +75,7 @@ try {
     if (!backIn) fail('re-login failed');
     console.log('re-logged in at Lumbridge');
 
-    await page.selectOption('.rs2b0t-select', 'WalkTo');
+    await startFromLibrary(page, 'Navigation', 'WalkTo');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log('WalkTo (-> Varrock) started...');
 

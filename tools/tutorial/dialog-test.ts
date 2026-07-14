@@ -158,7 +158,7 @@ try {
     // prompt ("No, thank you."), not accept it. Accepting jumps straight to
     // ^tutorial_complete (1000); declining continues the welcome and advances
     // 1 -> 4 (^newbie_basics_instructor_interact_with_scenery). See the Task 3
-    // report + docs/tutorial-map.md for the original short-circuit finding.
+    // report for the original short-circuit finding.
     //
     // Task 7 update: TutorialBot keeps driving past 4 (OpenGuideDoor -> 10,
     // the survival stages beyond), and its next dialogue can be open by the

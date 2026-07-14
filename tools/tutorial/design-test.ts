@@ -61,7 +61,7 @@ try {
         .then(() => true)
         .catch(() => false);
     if (!closed) {
-        fail('design modal never closed -- DesignAccept did not click Accept (see docs/tutorial-map.md; component renumbered?)');
+        fail('design modal never closed -- DesignAccept did not click Accept (component renumbered?)');
     }
     console.log('design modal closed by DesignAccept');
 

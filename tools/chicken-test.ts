@@ -4,36 +4,23 @@
 //
 // Usage: bun tools/chicken-test.ts [minutes] [base-url] [username]
 
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '4');
-const base = process.argv[3] ?? 'http://localhost:8888';
-const username = process.argv[4] ?? `chick${Date.now().toString(36).slice(-7)}`;
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 4 });
+const username = rest[0] ?? `chick${Date.now().toString(36).slice(-7)}`;
 
 // pen at world (3232, 3298) -> jagex coords 0,50,51,32,34
 const TELE = '::tele 0,50,51,32,34';
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
-        host: { tickCount: number };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
     await page.goto(`${base}/bot.html`);
-    await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+    await boot(page);
 
     await page.evaluate(
         ([user, pass]) => {
@@ -58,7 +45,7 @@ try {
     await page.waitForTimeout(2000);
 
     await page.reload();
-    await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
+    await boot(page);
 
     // the server takes a few seconds to process the disconnect; retry past
     // the already-online window

@@ -4,57 +4,27 @@
 //
 // Usage: bun tools/fishing-test.ts [minutes] [base-url]
 
-import { chromium } from 'playwright-core';
+import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '3');
-const base = process.argv[3] ?? 'http://localhost:8888';
+const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 3 });
 const username = `fish${Date.now().toString(36).slice(-7)}`;
 
 const FISH_TELE = '::tele 0,51,49,3,12'; // Al Kharid riverside (3267,3148)
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
-        runner: { state: string; ctx: { log: { msg: string }[] } | null };
-        reader: { inventory(): { name: string | null }[]; npcs(): { name: string | null; ops: (string | null)[]; tile: { x: number; z: number } }[]; worldTile(): { x: number; z: number } | null; chat(n: number): { text: string }[] };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
-    };
-    const type = async (t: string) => {
-        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
-        await page.waitForTimeout(400);
-        await page.keyboard.type(t, { delay: 25 });
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1400);
-    };
     const hasFish = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('raw')));
 
     await page.goto(`${base}/bot.html`);
-    await boot();
-    if (!(await login())) fail('login failed');
-    await type('::tele 0,50,50,20,20');
-    await page.reload();
-    await boot();
-    let backIn = false;
-    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
-    if (!backIn) fail('relogin failed');
-    await type('::give net');
-    await type(FISH_TELE);
+    await boot(page);
+    if (!(await login(page, username))) fail('login failed');
+    await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
+    await type(page, '::give net', 1400);
+    await type(page, FISH_TELE, 1400);
 
     const spots = await page.evaluate(() => {
         const r = (globalThis as never as Rs2b0t).rs2b0t.reader;

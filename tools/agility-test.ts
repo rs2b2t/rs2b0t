@@ -3,28 +3,21 @@
 // ~46xp of obstacle xp plus the 39xp completion bonus, so gaining >= 80xp
 // proves every obstacle (including the level-2 rope -> climb-down transition
 // that used to wedge on the op-less rope mid segments) and the lap rollover.
-import { chromium } from 'playwright-core';
+import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 const LAP_XP = 80;
-const minutes = parseFloat(process.argv[2] ?? '4');
-const base = process.argv[3] ?? 'http://localhost:8888';
+const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 4 });
 const username = `agil${Date.now().toString(36).slice(-7)}`;
-function fail(m: string): never { console.error(`FAIL: ${m}`); process.exit(1); }
-type Rs2b0t = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string; ctx: { log: { msg: string }[] } | null }; reader: { worldTile(): { x: number; z: number } | null; stat(i: number): { name: string; base: number; xp: number }; chat(n: number): { text: string }[] } } };
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => { await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']); return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false); };
-    const type = async (t: string) => { await page.locator('#canvas').click({ position: { x: 380, y: 250 } }); await page.waitForTimeout(400); await page.keyboard.type(t, { delay: 25 }); await page.keyboard.press('Enter'); await page.waitForTimeout(1400); };
     const agiXp = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.stat(16).xp); // 16 = agility
-    await page.goto(`${base}/bot.html`); await boot();
-    if (!(await login())) fail('login failed');
-    await type('::tele 0,50,50,20,20'); await page.reload(); await boot();
-    let backIn = false; for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
-    if (!backIn) fail('relogin failed');
-    await type('::advancestat agility 10');
-    await type('::tele 0,38,53,42,44'); // (2474,3436) at the gnome log balance
+    await page.goto(`${base}/bot.html`); await boot(page);
+    if (!(await login(page, username))) fail('login failed');
+    await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
+    await type(page, '::advancestat agility 10', 1400);
+    await type(page, '::tele 0,38,53,42,44', 1400); // (2474,3436) at the gnome log balance
     const baseXp = await agiXp();
     console.log(`at gnome course, agility xp baseline ${baseXp}`);
     await page.getByRole('button', { name: 'Browse…' }).click();
@@ -33,7 +26,7 @@ try {
     await page.locator('.rs2b0t-library-card', { hasText: 'GnomeCourse' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
-    console.log(`GnomeCourse started...`);
+    console.log('GnomeCourse started...');
     const deadline = Date.now() + minutes * 60_000; let gained = false, lastLogged = 0;
     while (Date.now() < deadline && !gained) {
         await page.waitForTimeout(6000);

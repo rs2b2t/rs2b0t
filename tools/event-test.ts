@@ -9,6 +9,7 @@
 // Usage: bun tools/event-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `evt${Date.now().toString(36).slice(-7)}`;
@@ -69,7 +70,7 @@ try {
         await type(`::npcadd ${npc}`);
         if (!(await npcPresent(displayName))) fail(`${displayName} did not spawn`);
 
-        await page.selectOption('.rs2b0t-select', 'ChickenKiller');
+        await startFromLibrary(page, 'Combat', 'ChickenKiller');
         await page.getByRole('button', { name: 'Start' }).click();
 
         const detected = await page.waitForFunction(m => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes(m)), detectMsg, { timeout: 30000 }).then(() => true).catch(() => false);

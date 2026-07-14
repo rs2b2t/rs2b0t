@@ -122,7 +122,7 @@ try {
         if (picked) { break; }
     }
 
-    console.log(`--- recent bot log ---`);
+    console.log('--- recent bot log ---');
     for (const l of (await logLines()).slice(-14)) { console.log(`  ${l}`); }
     console.log(`thieving xp: ${xpBefore} -> ${await thieveXp()}  (picked=${picked}, chatConfirm=${chatHit})`);
     if (!picked) {

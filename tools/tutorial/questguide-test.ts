@@ -1,5 +1,5 @@
 // Task 9 section test: jump-start a fresh account to the Quest Guide section
-// (docs/tutorial-map.md's 220 -> 260 ladder) and assert TutorialBot's four
+// (the 220 -> 260 ladder) and assert TutorialBot's four
 // QuestGuide.ts stages carry it into the mine unattended.
 //
 // THE JUMP RECIPE HERE IS DELIBERATELY MORE THAN `setvar + relog` -- it makes
@@ -106,7 +106,7 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (docs/tutorial-map.md's "Stage-jump recipe corrections"):
+    // Two-step setvar (the "Stage-jump recipe corrections"):
     // a single `setvar tutorial 220` from a fresh spawn silently reverts to 1
     // (the design-modal close cascade rewrites it a tick later). ALL commands
     // go through cheatQuiet, not the typed `cheat`: the first setvar closes
@@ -173,7 +173,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     // Mine-arrival observable: the climb shifts world z by +6400; confirm the

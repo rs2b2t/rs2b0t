@@ -103,7 +103,7 @@ try {
     }
     stopWalk();
     const coinsAfter = await coins();
-    console.log(`--- bot log tail ---`);
+    console.log('--- bot log tail ---');
     for (const l of (await logLines()).slice(-16)) { console.log(`  ${l}`); }
     console.log(`Phase A: crossed=${crossed}, coins ${coinsBefore} -> ${coinsAfter}, at ${JSON.stringify(await tile())}`);
     if (!crossed) { await page.screenshot({ path: 'out/tollgate-test.png' }); fail('did not cross the gate with >=10 coins'); }

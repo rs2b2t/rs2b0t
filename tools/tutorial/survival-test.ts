@@ -2,7 +2,7 @@
 // design-accept and welcome-dialogue stages already exist from Tasks 3/4) and
 // this task's survival section (Game.openSideTab, WelcomeScreen, TalkToGuide
 // + the 10 Survival.ts stage tasks wired into TutorialBot.onStart), asserting
-// the server ladder reaches stage 130 (docs/tutorial-map.md) with NO cheats
+// the server ladder reaches stage 130 with NO cheats
 // FROM THE BOT -- TutorialBot drives 0 -> 130 unattended on observable state
 // only (ADR-0007).
 //
@@ -17,8 +17,7 @@
 // chat dialog is open.
 //
 // Every DISTINCT value seen is logged with a timestamp, so a stalled run's
-// last line names the broken stage via the ladder table in
-// docs/tutorial-map.md.
+// last line names the broken stage via the ladder table.
 //
 // Usage: bun tools/tutorial/survival-test.ts [base-url]
 
@@ -76,7 +75,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     console.log(`PASS: TutorialBot drove a fresh account 0 -> ${v} unattended (no cheats)`);

@@ -3,7 +3,7 @@
 // start a registered script, and poll a varp for progress.
 //
 // All game-state access goes through the page's `globalThis.rs2b0t` inside
-// page.evaluate()/waitForFunction() (docs/OPERATING.md §5). Like every other
+// page.evaluate()/waitForFunction(). Like every other
 // tools/*-test.ts file, this re-declares the minimal structural type it
 // needs rather than importing from src/bot/ — the tools run under Node, the
 // bot runtime is browser-only.
@@ -189,7 +189,7 @@ export async function cheatQuiet(page: Page, command: string): Promise<boolean> 
  * through the exact same server-side storage, this isn't just a debug-
  * command quirk: TutorialBot.progress() (reader.varp(281)) cannot observe
  * real tutorial advancement either, on this content build. See
- * docs/tutorial-map.md and the Task 3 report for the full writeup —
+ * the Task 3 report for the full writeup —
  * flagged as a concern blocking Task 4+ until resolved (most likely fix:
  * add `transmit=yes` to tutorial.varp's `[tutorial]` section).
  *
@@ -212,7 +212,7 @@ export async function getServerVar(page: Page, name: string): Promise<number | n
 /**
  * `getServerVar` without the keyboard: writes the CLIENT_CHEAT packet
  * directly (`out.p1Enc(224) + p1(len+1) + pjstr` — byte-identical to the
- * client's own Enter handler; Task 6's recipe, docs/quest-campaign-map.md)
+ * client's own Enter handler; Task 6's recipe)
  * and parses the same chat echo. Use this over `getServerVar` whenever a
  * script is RUNNING on the page: the typed path first clicks the canvas at
  * a fixed pixel to focus it — a real game click injected into the bot's
@@ -265,8 +265,8 @@ const OFF_ISLAND_TELE = '0,50,51,32,34';
  * setting the varp while still standing on the island silently reverts
  * before the relog's login script re-evaluates it (same gotcha the retired
  * farm template-save tool hit). Fix, proven live in
- * `tools/quests-tab-test.ts` (see `docs/quest-campaign-map.md`'s
- * "Tab-attachment requirement" note): teleport off-island FIRST, then
+ * `tools/quests-tab-test.ts` (the "Tab-attachment requirement"
+ * finding): teleport off-island FIRST, then
  * setvar, then relog. Skipping the teleport left every side tab except
  * logout/options at -1 even after the relog, confirmed empirically.
  */

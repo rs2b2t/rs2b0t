@@ -8,6 +8,7 @@
 // Usage: bun tools/e2e-smoke.ts [base-url] [username] [password]
 
 import { chromium } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 // default to a per-run name: fresh save, and immune to a lingering
@@ -131,7 +132,7 @@ try {
     const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.state);
     const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log.length ?? 0);
 
-    await page.selectOption('.rs2b0t-select', 'QuestDashboard');
+    await startFromLibrary(page, 'Quest', 'QuestDashboard');
     await page.getByRole('button', { name: 'Start' }).click();
 
     await page.waitForFunction(() => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: { msg: string }[] } | null } } }).rs2b0t.runner.ctx?.log ?? []).filter(l => l.msg.toLowerCase().includes('quest')).length >= 2, undefined, { timeout: 20000 });

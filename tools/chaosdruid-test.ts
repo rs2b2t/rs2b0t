@@ -1,26 +1,19 @@
 // Validates ChaosDruidKiller combat + loot at the Edgeville dungeon druids.
 // (Banking round-trip is validated separately by chaosdruid-bank-test.ts.)
-import { chromium } from 'playwright-core';
-const minutes = parseFloat(process.argv[2] ?? '2.5');
-const base = process.argv[3] ?? 'http://localhost:8888';
+import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
+const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 2.5 });
 const username = `cd${Date.now().toString(36).slice(-7)}`;
-function fail(m: string): never { console.error(`FAIL: ${m}`); process.exit(1); }
-type Rs2b0t = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string; ctx: { log: { msg: string }[] } | null }; reader: { inventory(): { name: string | null }[]; npcs(): { name: string | null }[]; worldTile(): { x: number; z: number } | null; chat(n: number): { text: string }[] } } };
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => { await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']); return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false); };
-    const type = async (t: string) => { await page.locator('#canvas').click({ position: { x: 380, y: 250 } }); await page.waitForTimeout(400); await page.keyboard.type(t, { delay: 25 }); await page.keyboard.press('Enter'); await page.waitForTimeout(1300); };
     const lootCount = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().filter(i => { const n = (i.name ?? '').toLowerCase(); return n.includes('herb') || n.includes('law rune'); }).length);
-    await page.goto(`${base}/bot.html`); await boot();
-    if (!(await login())) fail('login failed');
-    await type('::tele 0,50,50,20,20'); await page.reload(); await boot();
-    let backIn = false; for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
-    if (!backIn) fail('relogin failed');
-    for (const s of ['attack', 'strength', 'defence', 'hitpoints']) await type(`::advancestat ${s} 80`);
-    await type('::tele 0,48,155,38,8'); // (3110,9928) among the druids
+    await page.goto(`${base}/bot.html`); await boot(page);
+    if (!(await login(page, username))) fail('login failed');
+    await bringUpOffIsland(page, { user: username, typeWaitMs: 1300 });
+    for (const s of ['attack', 'strength', 'defence', 'hitpoints']) await type(page, `::advancestat ${s} 80`, 1300);
+    await type(page, '::tele 0,48,155,38,8', 1300); // (3110,9928) among the druids
     await page.waitForTimeout(1500);
     const druids = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Chaos druid').length);
     console.log(`chaos druids in scene: ${druids}`);
@@ -31,7 +24,7 @@ try {
     await page.locator('.rs2b0t-library-card', { hasText: 'ChaosDruidKiller' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
-    console.log(`ChaosDruidKiller started...`);
+    console.log('ChaosDruidKiller started...');
     const deadline = Date.now() + minutes * 60_000; let looted = 0, lastLogged = 0;
     while (Date.now() < deadline && looted === 0) {
         await page.waitForTimeout(7000);

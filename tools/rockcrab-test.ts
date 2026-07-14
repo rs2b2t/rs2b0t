@@ -4,81 +4,47 @@
 //
 // Usage: bun tools/rockcrab-test.ts [minutes] [base-url] [username]
 
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '8');
-const base = process.argv[3] ?? 'http://localhost:8888';
-const username = process.argv[4] ?? `crab${Date.now().toString(36).slice(-7)}`;
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 8 });
+const username = rest[0] ?? `crab${Date.now().toString(36).slice(-7)}`;
 
 // drop the bot right in the field (jagex coords for ~2710,3720)
 const TELE = '::tele 0,42,58,22,8';
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
-        reader: { npcs(): { name: string | null }[] };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => {
-        await page.evaluate(
-            ([u, p]) => {
-                const c = (globalThis as never as Rs2b0t).rs2b0t.client;
-                c.loginUser = u;
-                c.loginPass = p;
-                void c.login(u, p, false);
-            },
-            [username, 'test']
-        );
-        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
-    };
-    const type = async (t: string) => {
-        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
-        await page.waitForTimeout(400);
-        await page.keyboard.type(t, { delay: 30 });
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1500);
-    };
-
     await page.goto(`${base}/bot.html`);
-    await boot();
-    if (!(await login())) fail('first login failed');
+    await boot(page);
+    if (!(await login(page, username))) fail('first login failed');
 
     // unlock tabs (fresh account spawns tutorial-locked): tele off-island + relog
-    await type('::tele 0,50,50,20,20');
+    await type(page, '::tele 0,50,50,20,20', 1500);
     await page.reload();
-    await boot();
+    await boot(page);
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) {
         await page.waitForTimeout(5000);
-        backIn = await login();
+        backIn = await login(page, username);
     }
     if (!backIn) fail('re-login failed');
 
     // give it survivable combat stats so it can actually clear stacks
     for (const s of ['attack', 'strength', 'defence', 'hitpoints']) {
-        await type(`::setstat ${s} 40`);
+        await type(page, `::setstat ${s} 40`, 1500);
     }
-    await type(TELE);
+    await type(page, TELE, 1500);
 
     const atField = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().some(n => n.name === 'Rocks' || n.name === 'Rock Crab'));
     if (!atField) fail('no rock crabs in scene after teleport — wrong coords?');
     console.log('at the rock crab field');
 
-    await page.selectOption('.rs2b0t-select', 'RockCrab');
+    await startFromLibrary(page, 'Combat', 'RockCrab');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`RockCrab started, running ${minutes}min...`);
 

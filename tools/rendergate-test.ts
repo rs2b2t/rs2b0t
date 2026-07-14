@@ -4,7 +4,7 @@
 // synthetic walking script still renders at full rate during gestures and
 // never logs synthetic-fail.
 //
-// Part 2's script picker: BotPanel.ts no longer exposes the `.rs2b0t-select`
+// Part 2's script picker: BotPanel.ts no longer exposes the old script-select
 // dropdown the original desktop-test.ts copies from — script choice now goes
 // through the ScriptLibrary modal (Browse… -> category chip -> script card ->
 // close), same pattern already used by tools/chicken-test.ts / library-test.ts.
@@ -72,7 +72,7 @@ try {
     // ---- (2) constraint #5: backgrounded synthetic gestures still render ----
     await setMode('background');
     // Bot panel script picker: Browse… -> category chip -> script card -> Start
-    // (the `.rs2b0t-select` dropdown this test's original brief was drafted
+    // (the old script-select dropdown this test's original brief was drafted
     // against has been replaced by the ScriptLibrary modal; pattern matches
     // tools/chicken-test.ts / tools/library-test.ts). WalkTo web-walks from
     // Lumbridge to Falador (set via the ?WalkTo.destination override above),

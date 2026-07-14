@@ -1,10 +1,10 @@
 // Task 10 section test: jump-start a fresh account to the mining + smithing
-// section (docs/tutorial-map.md's 260 -> 360 ladder) and assert
+// section (the 260 -> 360 ladder) and assert
 // TutorialBot's ten Mining.ts stages carry it to the exit gate unattended.
 //
 // Same jump-start shape as `questguide-test.ts` (Task 9), extended one
 // section further: two-step setvar (a bare `setvar tutorial N` from a fresh
-// spawn silently reverts -- docs/tutorial-map.md's "Stage-jump recipe
+// spawn silently reverts -- the "Stage-jump recipe
 // corrections") + the FAITHFUL-ACCOUNT KIT (Task 9 addendum) so every
 // EARLIER section's stages -- which run first in `TutorialBot`'s stage
 // array and would otherwise re-open and starve Mining.ts's stages the
@@ -47,7 +47,7 @@ const TARGET = 360;
 const DEADLINE_MS = 10 * 60_000;
 const POLL_MS = 3000;
 
-/** Live-probed mine-arrival tile (docs/tutorial-map.md §Task 9, QuestGuide.ts's `ClimbToMine`). */
+/** Live-probed mine-arrival tile (Task 9, QuestGuide.ts's `ClimbToMine`). */
 const ARRIVAL = { x: 3081, z: 9519 };
 /** `tele level,mx,mz,lx,lz` for ARRIVAL: mapsquare 48,148 (world >> 6), local (9,47). */
 const TELE_CMD = 'tele 0,48,148,9,47';
@@ -84,7 +84,7 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (docs/tutorial-map.md's "Stage-jump recipe corrections").
+    // Two-step setvar (the "Stage-jump recipe corrections").
     await cheatQuiet(page, 'setvar tutorial 1');
     await cheatQuiet(page, 'setvar tutorial 260');
     const jumped = await getServerVarQuiet(page, 'tutorial');
@@ -140,7 +140,7 @@ try {
 
     console.log(`[${ts()}] final tutorial=${v} -- ${v >= TARGET ? 'PASS' : 'FAIL'}`);
     if (v < TARGET) {
-        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- see docs/tutorial-map.md's ladder table for which stage this names`);
+        fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
     // Exit-gate crossing observable: confirm the client tile agrees.

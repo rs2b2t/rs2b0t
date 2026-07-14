@@ -30,8 +30,9 @@ import { join } from 'node:path';
 
 // Smokes that need a special environment (Electron desktop shell / prod origin /
 // the multibox wall / a different port + Chrome channel) — not part of the
-// local-engine bot sweep. Run these by hand when relevant.
-const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test'];
+// local-engine bot sweep. Run these by hand when relevant. rendergate-test is
+// Electron-based (npx tsx, not bun) like desktop-test, so it belongs here too.
+const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test', 'rendergate-test'];
 
 // Default per-smoke kill timeout (s). Smokes that legitimately run far longer
 // than this (e.g. a full quest walk) get a bigger budget via LONG — keyed by

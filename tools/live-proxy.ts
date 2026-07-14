@@ -35,7 +35,7 @@ const SOUNDFONT = process.env.SOUNDFONT ?? join(homedir(), 'code/rs2b2t-engine/p
 
 // Startup sanity: confirm out/botclient.js is a LIVE build (has the live host baked in).
 if (!existsSync(join(OUT, 'botclient.js'))) {
-    console.error(`No out/botclient.js. Build first: TARGET=live LIVE_RSAN=<modulus> bun run build:bot`);
+    console.error('No out/botclient.js. Build first: TARGET=live LIVE_RSAN=<modulus> bun run build:bot');
     process.exit(1);
 }
 const bundleSrc = await Bun.file(join(OUT, 'botclient.js')).text();
@@ -47,7 +47,7 @@ if (!bundleSrc.includes(LIVE_HOST)) {
 // unavailable: Failed to fetch") and walking silently degrades to the 52-tile
 // scene stepper. Refuse to serve a wall that is broken in that way.
 if (!existsSync(join(OUT, 'collision.lcnav.gz'))) {
-    console.error(`No out/collision.lcnav.gz — the nav worker's collision pack is missing (a fresh checkout/worktree won't have it). Build it: bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine`);
+    console.error('No out/collision.lcnav.gz — the nav worker\'s collision pack is missing (a fresh checkout/worktree won\'t have it). Build it: bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine');
     process.exit(1);
 }
 
@@ -130,4 +130,4 @@ const server = Bun.serve({
 
 console.log(`live-proxy: http://localhost:${server.port}/  ->  ${LIVE_HOST}`);
 console.log(`(serving local live build from out/; forwarding /crc + cache WS to ${LIVE_HOST})`);
-console.log(`Log in with a REGISTERED rs2b2t account.`);
+console.log('Log in with a REGISTERED rs2b2t account.');

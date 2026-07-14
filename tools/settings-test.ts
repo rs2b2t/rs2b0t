@@ -6,6 +6,7 @@
 // Usage: bun tools/settings-test.ts [base-url]
 
 import { chromium, type Page } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 
@@ -58,7 +59,7 @@ try {
         await boot(page);
         await setup(page, `set${Date.now().toString(36).slice(-6)}`);
 
-        await page.selectOption('.rs2b0t-select', 'ChickenKiller');
+        await startFromLibrary(page, 'Combat', 'ChickenKiller');
         // the param form should show the feather checkbox
         const checkbox = page.locator('.rs2b0t-setting-bool', { hasText: 'Gather feathers?' }).locator('input[type=checkbox]');
         if ((await checkbox.count()) === 0) fail('parameter form has no "Gather feathers?" checkbox');
@@ -92,7 +93,7 @@ try {
         await boot(page);
         await setup(page, `url${Date.now().toString(36).slice(-6)}`);
 
-        await page.selectOption('.rs2b0t-select', 'ChickenKiller');
+        await startFromLibrary(page, 'Combat', 'ChickenKiller');
         await page.getByRole('button', { name: 'Start' }).click();
         await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.startsWith('anchored')), undefined, { timeout: 20000 });
         const log = await logs(page);

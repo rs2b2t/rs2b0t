@@ -7,8 +7,8 @@
 // landing spot (the Lumbridge east chicken pen, off Tutorial Island):
 //   shop need   -> Hammer x1 from the Lumbridge general store ('Shop keeper',
 //                  world (3211,3246) -- the real working tele confirmed live
-//                  in Task 4, docs/quest-campaign-map.md's "Shop interface
-//                  ids" section; NOT the brief's guessed coords)
+//                  in Task 4's "Shop interface ids" work; NOT the brief's
+//                  guessed coords)
 //   ground need -> Egg x1 from the chicken-pen ground spawn (EGG_PEN,
 //                  world (3227,3300) -- copied verbatim from
 //                  src/bot/scripts/CooksAssistant.ts, NOT the brief's guess)
@@ -35,8 +35,8 @@ const base = process.argv[2] ?? 'http://localhost:8888';
 const user = 'acq' + Date.now().toString(36).slice(-6);
 
 const SHOP_NPC = 'Shop keeper';
-// Lumbridge general store, world (3211,3246) -- confirmed live in Task 4
-// (docs/quest-campaign-map.md), NOT the task-5 brief's guessed coords.
+// Lumbridge general store, world (3211,3246) -- confirmed live in Task 4,
+// NOT the task-5 brief's guessed coords.
 const HAMMER_NEAR = { x: 3211, z: 3246, level: 0 };
 // EGG_PEN, copied verbatim from src/bot/scripts/CooksAssistant.ts (NOT the
 // task-5 brief's guessed coords) -- also right where mainlandAccount's

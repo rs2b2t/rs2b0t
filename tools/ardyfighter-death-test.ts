@@ -18,10 +18,10 @@
 // this harness drives. See tools/death-test.ts for the death-kill recipe.)
 //
 // Usage: bun tools/ardyfighter-death-test.ts [minutes] [base-url]
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '10');
-const base = process.argv[3] ?? 'http://localhost:8890';
+const { base, minutes } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8890', minutes: 10 });
 const username = `ap${Date.now().toString(36).slice(-7)}`;
 // food=zzz-nothing -> matches no item (foodCount always 0); panicHp=85 fires
 // after ~7 damage on a 40-hp bar; restUntilHp=40 is already met at the panic
@@ -34,26 +34,12 @@ const BANK = { x: 2655, z: 3286 }; // DEFAULT_BANK_STAND
 const UNLOCK_TELE = 'tele 0,50,50,20,20';
 const ANCHOR_TELE = 'tele 0,41,51,37,42'; // -> (2661,3306,0)
 
-function fail(m: string): never {
-    console.error(`FAIL: ${m}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void>; out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } | null };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null; bot: Record<string, unknown> | null };
-        reader: { worldTile(): { x: number; z: number; level: number } | null; stat(i: number): { effective: number; base: number }; npcs(): { name: string | null }[] };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     const login = async () => {
         await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
         return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 }).then(() => true).catch(() => false);
@@ -75,12 +61,12 @@ try {
     const runnerState = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
 
     // --- bring-up ---------------------------------------------------------
-    await page.goto(PAGE); await boot();
+    await page.goto(PAGE); await boot(page);
     let firstIn = false;
     for (let i = 0; i < 3 && !firstIn; i++) firstIn = await login();
     if (!firstIn) fail('first login failed');
     await cheat(UNLOCK_TELE);
-    await page.reload(); await boot();
+    await page.reload(); await boot(page);
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) fail('re-login failed');
@@ -148,10 +134,10 @@ try {
 
         if (panicked && reachedBank && returned) {
             console.log('\nresult summary (PANIC-RETREAT path):');
-            console.log(`  panic fired          : yes (HP below panicHp with no usable food)`);
-            console.log(`  retreated to the bank: yes (reached the south-bank stand)`);
+            console.log('  panic fired          : yes (HP below panicHp with no usable food)');
+            console.log('  retreated to the bank: yes (reached the south-bank stand)');
             console.log(`  withdrew nothing     : ${bankEmptyWait ? 'yes (bank empty, regen-gated)' : 'bank opened, no matching food to withdraw'}`);
-            console.log(`  returned to market   : yes (back within 8 of the anchor)`);
+            console.log('  returned to market   : yes (back within 8 of the anchor)');
             console.log('\nverified path: PANIC RETREAT (behavior 5)');
             console.log('PASS');
             await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});

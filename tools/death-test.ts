@@ -18,9 +18,9 @@
 //   timeout there as the known nav flake, not a recovery failure.
 //
 // Cheats are delivered as direct CLIENT_CHEAT packets, not keyboard input
-// (typed commands can be silently swallowed — see docs/quest-campaign-map.md,
-// Task 6 section). Script selection uses the "Browse..." modal (the old
-// `.rs2b0t-select` dropdown is gone from BotPanel).
+// (typed commands can be silently swallowed — a Task 6 finding).
+// Script selection uses the "Browse..." modal (the old script-select
+// dropdown is gone from BotPanel).
 //
 // Usage: bun tools/death-test.ts [base-url] [username] [script]
 //        script = ChickenKiller (default) | ChaosDruidKiller
@@ -220,7 +220,7 @@ try {
         });
 
     // script-library modal (Browse... -> category chip -> card), the current
-    // (post `.rs2b0t-select` dropdown) selection UI
+    // (post-dropdown) selection UI
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();

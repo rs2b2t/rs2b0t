@@ -4,6 +4,7 @@
 // Usage: bun tools/relogin-test.ts [base-url] [username]
 
 import { chromium } from 'playwright-core';
+import { startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `relog${Date.now().toString(36).slice(-7)}`;
@@ -39,7 +40,7 @@ try {
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 });
     console.log(`logged in as '${username}'`);
 
-    await page.selectOption('.rs2b0t-select', 'QuestDashboard');
+    await startFromLibrary(page, 'Quest', 'QuestDashboard');
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
     await page.waitForTimeout(3000);

@@ -4,11 +4,11 @@
 //
 // Usage: PATH="/opt/homebrew/opt/node@24/bin:$PATH" bun tools/cow-test.ts [minutes] [base-url] [username]
 
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '6');
-const base = process.argv[3] ?? 'http://localhost:8888';
-const username = process.argv[4] ?? `cow${Date.now().toString(36).slice(-7)}`;
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 6 });
+const username = rest[0] ?? `cow${Date.now().toString(36).slice(-7)}`;
 
 // Lumbridge east cow field. Confirmed via tools/scout-npcs.ts: jagex coord
 // 0,50,51,55,6 lands at world (3255,3270), with 6-7 attackable Cows within
@@ -16,67 +16,29 @@ const username = process.argv[4] ?? `cow${Date.now().toString(36).slice(-7)}`;
 // actually duck/chicken/sheep territory at world (3220,3284) -- no cows).
 const TELE = '::tele 0,50,51,55,6';
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void>; sideIcon: number[] };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[] } | null };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => {
-        await page.evaluate(
-            ([user, pass]) => {
-                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-                client.loginUser = user;
-                client.loginPass = pass;
-                void client.login(user, pass, false);
-            },
-            [username, 'test']
-        );
-        return page
-            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
-            .then(() => true)
-            .catch(() => false);
-    };
-    // chat is sent by clicking the canvas (focuses game input) and typing --
-    // there is no sendChatMessage helper.
-    const type = async (t: string) => {
-        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
-        await page.waitForTimeout(400);
-        await page.keyboard.type(t, { delay: 25 });
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1400);
-    };
-
     await page.goto(`${base}/bot.html?nodeid=10`);
-    await boot();
+    await boot(page);
 
-    if (!(await login())) fail('login failed');
+    if (!(await login(page, username))) fail('login failed');
     console.log(`logged in as '${username}'`);
 
     // fresh accounts spawn tutorial-locked on Tutorial Island (no sidebar
     // tabs -> no inventory component). Teleport off the island and reload +
     // re-login until the tabs unlock (see tools/chicken-test.ts:50-86).
-    await type(TELE);
+    await type(page, TELE, 1400);
     await page.reload();
-    await boot();
+    await boot(page);
 
     let backIn = false;
     for (let attempt = 0; attempt < 8 && !backIn; attempt++) {
         await page.waitForTimeout(5000);
-        backIn = await login();
+        backIn = await login(page, username);
     }
     if (!backIn) fail('could not re-login after tutorial unlock');
 
@@ -86,7 +48,7 @@ try {
 
     // land exactly on the cow field (re-send: relogin isn't guaranteed to
     // resume precisely on the pre-reload tile)
-    await type(TELE);
+    await type(page, TELE, 1400);
 
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });

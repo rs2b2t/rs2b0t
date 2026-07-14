@@ -4,76 +4,34 @@
 //
 // Usage: bun tools/woodcut-test.ts [minutes] [base-url] [username]
 
-import { chromium } from 'playwright-core';
+import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '5');
-const base = process.argv[3] ?? 'http://localhost:8888';
-const username = process.argv[4] ?? `wood${Date.now().toString(36).slice(-7)}`;
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 5 });
+const username = rest[0] ?? `wood${Date.now().toString(36).slice(-7)}`;
 
 // trees north-east of Lumbridge: world (3230, 3250) -> 0,50,50,30,50
 const TELE = '::tele 0,50,50,30,50';
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
-        host: { tickCount: number };
-        runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null };
-        reader: { inventory(): { name: string | null }[]; locs(): { name: string | null; distance: number; ops: (string | null)[] }[]; worldTile(): { x: number; z: number } | null };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
     page.on('pageerror', err => console.log(`pageerror: ${err}`));
 
-    const login = async () => {
-        await page.evaluate(
-            ([user, pass]) => {
-                const { client } = (globalThis as never as Rs2b0t).rs2b0t;
-                client.loginUser = user;
-                client.loginPass = pass;
-                void client.login(user, pass, false);
-            },
-            [username, 'test']
-        );
-        return page
-            .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 })
-            .then(() => true)
-            .catch(() => false);
-    };
-
-    const type = async (text: string) => {
-        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
-        await page.waitForTimeout(400);
-        await page.keyboard.type(text, { delay: 30 });
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1200);
-    };
-
-    const boot = async () => {
-        await page.waitForFunction(() => (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t !== undefined && (globalThis as never as { rs2b0t: { client: { constructor: { loopCycle: number } } } }).rs2b0t.client.constructor.loopCycle > 10, undefined, { timeout: 60000 });
-    };
-
     await page.goto(`${base}/bot.html`);
-    await boot();
-    if (!(await login())) fail('first login failed');
+    await boot(page);
+    if (!(await login(page, username))) fail('first login failed');
     console.log(`logged in as '${username}'`);
 
-    await type(TELE);
+    await type(page, TELE, 1200);
 
     await page.reload();
-    await boot();
+    await boot(page);
     let backIn = false;
     for (let attempt = 0; attempt < 8 && !backIn; attempt++) {
         await page.waitForTimeout(5000);
-        backIn = await login();
+        backIn = await login(page, username);
     }
     if (!backIn) fail('re-login failed');
 
@@ -81,7 +39,7 @@ try {
     if (!invTab) fail('sidebar tabs still locked after re-login');
     console.log('tabs unlocked');
 
-    await type('::give bronze_axe');
+    await type(page, '::give bronze_axe', 1200);
     const hasAxe = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => i.name?.toLowerCase().includes('axe')));
     if (!hasAxe) {
         const inv = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().map(i => i.name));
@@ -103,7 +61,7 @@ try {
         fail(`no plain Trees nearby; tree-ish locs: [${near.join(', ')}]`);
     }
 
-    await page.selectOption('.rs2b0t-select', 'Woodcutter');
+    await startFromLibrary(page, 'Woodcutting', 'Woodcutter');
     await page.getByRole('button', { name: 'Start' }).click();
     console.log(`Woodcutter started, running ${minutes}min...`);
 

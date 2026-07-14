@@ -5,58 +5,28 @@
 //
 // Usage: bun tools/gathering-test.ts [minutes] [base-url]
 
-import { chromium } from 'playwright-core';
+import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
+import type { Rs2b0t } from './lib/harness.js';
 
-const minutes = parseFloat(process.argv[2] ?? '4');
-const base = process.argv[3] ?? 'http://localhost:8888';
+const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 4 });
 const username = `mine${Date.now().toString(36).slice(-7)}`;
 
 const MINE_TELE = '::tele 0,50,49,38,24'; // Lumbridge Swamp mine floor near the rock wall
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
-type Rs2b0t = {
-    rs2b0t: {
-        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; sideIcon: number[]; login(u: string, p: string, r: boolean): Promise<void> };
-        runner: { state: string; ctx: { log: { msg: string }[] } | null };
-        reader: { inventory(): { name: string | null }[]; locs(): { name: string | null; ops: (string | null)[]; tile: { x: number; z: number } }[]; worldTile(): { x: number; z: number } | null; stat(i: number): { name: string; base: number; xp: number }; chat(n: number): { text: string }[] };
-    };
-};
-
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
 
-    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
-    const login = async () => {
-        await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
-        return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
-    };
-    const type = async (t: string) => {
-        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
-        await page.waitForTimeout(400);
-        await page.keyboard.type(t, { delay: 25 });
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1400);
-    };
     const hasOre = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('ore')));
 
     await page.goto(`${base}/bot.html`);
-    await boot();
-    if (!(await login())) fail('login failed');
-    await type('::tele 0,50,50,20,20');
-    await page.reload();
-    await boot();
-    let backIn = false;
-    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
-    if (!backIn) fail('relogin failed');
-    await type('::give rune_pickaxe');
-    await type('::advancestat mining 99'); // the SE swamp mine is mithril (lvl 55+)
-    await type(MINE_TELE);
+    await boot(page);
+    if (!(await login(page, username))) fail('login failed');
+    await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
+    await type(page, '::give rune_pickaxe', 1400);
+    await type(page, '::advancestat mining 99', 1400); // the SE swamp mine is mithril (lvl 55+)
+    await type(page, MINE_TELE, 1400);
 
     const rocks = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().filter(l => l.name === 'Rocks' && l.ops.some(o => o === 'Mine')).length);
     console.log(`minable rocks in scene: ${rocks}`);
