@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { Bank } from '../api/hud/Bank.js';
+import { Bank, withdrawOp } from '../api/hud/Bank.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -125,18 +125,13 @@ class BankTrip implements Task {
             return;
         }
         const bankName = fishItem.name;
-        // Pick the REAL withdraw-all op label off the item's OWN ops — the client
-        // labels it 'Withdraw All' / 'Withdraw-All' depending on build, so read it
-        // rather than hardcode (a wrong label silently withdraws nothing). Fall
-        // back to filling 10 at a time.
-        const ops = fishItem.ops.filter((o): o is string => o !== null);
-        const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o));
+        const allOp = withdrawOp(fishItem.ops, 'all');
         if (allOp) {
             this.bot.log(`withdrawing all ${bankName} ('${allOp}')`);
             await Bank.withdraw(bankName, allOp);
             await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(bankName) === 0, 4000);
         } else {
-            const tenOp = ops.find(o => /withdraw[\s-]*10/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-10';
+            const tenOp = withdrawOp(fishItem.ops, '10') ?? withdrawOp(fishItem.ops, 'any') ?? 'Withdraw-10';
             this.bot.log(`withdrawing ${bankName} 10 at a time ('${tenOp}')`);
             for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
                 const before = this.bot.rawCount();

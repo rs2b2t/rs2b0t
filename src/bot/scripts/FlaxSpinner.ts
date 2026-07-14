@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { Bank } from '../api/hud/Bank.js';
+import { Bank, withdrawOp } from '../api/hud/Bank.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -175,8 +175,7 @@ class BankTrip implements Task {
             return;
         }
         const flaxName = flaxBank.name;
-        const ops = flaxBank.ops.filter((o): o is string => o !== null);
-        const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-All';
+        const allOp = withdrawOp(flaxBank.ops, 'all') ?? withdrawOp(flaxBank.ops, 'any') ?? 'Withdraw-All';
         this.bot.setStatus(`withdrawing ${flaxName}`);
         await Bank.withdraw(flaxName, allOp);
         await Execution.delayUntil(() => this.bot.fibreCount() > 0 || Bank.count(flaxName) === 0, 4000);

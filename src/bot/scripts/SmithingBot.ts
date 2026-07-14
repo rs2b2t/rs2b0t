@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
-import { Bank } from '../api/hud/Bank.js';
+import { Bank, withdrawOp } from '../api/hud/Bank.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -203,14 +203,13 @@ class BankTrip implements Task {
             return;
         }
         const barName = barBank.name;
-        const ops = barBank.ops.filter((o): o is string => o !== null);
-        const allOp = ops.find(o => /withdraw[\s-]*all/i.test(o));
+        const allOp = withdrawOp(barBank.ops, 'all');
         if (allOp) {
             this.bot.log(`withdrawing all ${barName} ('${allOp}')`);
             await Bank.withdraw(barName, allOp);
             await Execution.delayUntil(() => this.bot.barCount() > 0 || Bank.count(barName) === 0, 4000);
         } else {
-            const tenOp = ops.find(o => /withdraw[\s-]*10/i.test(o)) ?? ops.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-10';
+            const tenOp = withdrawOp(barBank.ops, '10') ?? withdrawOp(barBank.ops, 'any') ?? 'Withdraw-10';
             for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(barName) > 0; n++) {
                 const before = this.bot.barCount();
                 await Bank.withdraw(barName, tenOp);
