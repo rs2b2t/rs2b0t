@@ -534,16 +534,22 @@ class WalkExecutorImpl {
                 await Execution.delayTicks(2);
             } else {
                 // No canReach route to the landing: the swung leaf occupies the
-                // sole gap (a 1-tile door in a solid wall — no bypass). canReach
-                // then gates out every click, so the baked walker click-starves
-                // (0 clicks) and wedges one tile from the door until the resilient
-                // ladder escalates 30-90s later (live-confirmed). Step through with
-                // the SAME scene walker that ladder uses — DirectNavigator crosses
-                // tile-by-tile where canReach refuses — bounded and still inside
-                // MULTI_DOOR_CROSS_MS, so a genuinely stuck door times out here too
-                // and falls through to the repath below.
+                // sole gap and there is no bypass to route a click around it — a
+                // straight 1-tile door in a solid wall, OR a turning-path door
+                // whose landing is straight-ahead wall (the >= 1 gate sends every
+                // doors.json edge through here). canReach gates out every click, so
+                // the baked walker click-starves (0 clicks) and wedges until the
+                // ladder escalates 30-90s later (live-confirmed). Issue the raw
+                // client walk-click toward the landing (DirectNavigator.walk is NOT
+                // canReach-gated) and return the INSTANT we're past the door plane.
+                // We wait on onFarSide, not on reaching `landing`: a radius-0
+                // walkTo to a still-unreachable landing would block the whole
+                // budget even after the player has already stepped onto `step`.
+                // Bounded by SCENE_STEP_MS, still inside MULTI_DOOR_CROSS_MS, so a
+                // genuinely stuck door times out and falls through to the repath.
                 log(`leaf blocks landing — scene-stepping through '${transport.locName}'`);
-                await DirectNavigator.walkTo(landing, 0, SCENE_STEP_MS);
+                DirectNavigator.walk(landing);
+                await Execution.delayUntil(onFarSide, SCENE_STEP_MS);
             }
         }
         log(`${transport.locName} at (${transport.locX},${transport.locZ}) did not cross in time, repathing`);
