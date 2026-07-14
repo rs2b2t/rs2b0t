@@ -45,3 +45,15 @@ describe('route data integrity vs generated shopdb', () => {
         expect(SMOKE_ROUTE.clusters[0].shops[0].shopId).toBe('runeshop');
     });
 });
+
+describe('buys[] priority order', () => {
+    test('every shop lists its buys in descending item cost — the planner allocates the gp cap greedily in buys[] order, so a cheap-first list starves the valuable tail (the death-rune bug)', () => {
+        for (const cluster of ROUTE.clusters) {
+            for (const shop of cluster.shops) {
+                const costs = shop.buys.map(b => SHOP_DB[shop.shopId]!.items.find(i => i.obj === b.obj)!.cost);
+                const sorted = [...costs].sort((a, b) => b - a);
+                expect({ shop: shop.shopId, costs }).toEqual({ shop: shop.shopId, costs: sorted });
+            }
+        }
+    });
+});

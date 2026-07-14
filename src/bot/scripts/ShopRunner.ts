@@ -17,7 +17,7 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { cheapestUnmetGate, clusterEligible, decide, filterRouteBuys, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '../shops/Planner.js';
+import { BUDGET_BUFFER, cheapestUnmetGate, clusterEligible, decide, filterRouteBuys, planCluster, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '../shops/Planner.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import { ROUTE, SMOKE_ROUTE } from '../shops/data/route.js';
 import type { AccountView, BuyPolicy, NavPointLike, Route, SeenMap } from '../shops/types.js';
@@ -309,6 +309,9 @@ class BankLeg implements Task {
                 return;
             }
             bot.log(`[shoprun] withdraw ${d.withdrawFor.budget}gp cluster=${d.withdrawFor.clusterId}`);
+            if (d.withdrawFor.trimmed.length > 0) {
+                bot.log(`[shoprun] gp cap ${bot.cfg.maxGpPerLeg} trims this leg: ${d.withdrawFor.trimmed.join(', ')} — raise maxGpPerLeg or narrow buyItems to prioritize them`);
+            }
             bot.fundedPlan = d.withdrawFor;
             bot.visited = [];
         }
@@ -356,13 +359,38 @@ class BuyLeg implements Task {
             }
         };
         record(); // observation on arrival corrects the model (world-shared stock)
-        for (const want of shop.items) {
+
+        // RE-PLAN from what the open shop actually holds: the funded plan was
+        // priced off predictions (baseline on a first visit), and the world-
+        // shared stock can be nothing like it — the live wall once withdrew
+        // 100k for a plan whose real stock was 210 fire runes and a feather.
+        // record() just wrote the live counts into `seen`, so re-planning the
+        // cluster now re-allocates the remaining coins against reality (and
+        // against corrected numbers for shops visited earlier this leg).
+        const coins = Inventory.count('Coins');
+        const replanned = planCluster(
+            bot.route.clusters.find(c => c.shops.some(s => s.shopId === shop.shopId)) ?? { id: '?', bank: { stand: shop.stand, boothName: '', boothOp: '' }, shops: [], gates: [] },
+            SHOP_DB, bot.seen, Date.now(),
+            { ...bot.cfg, maxGpPerLeg: Math.min(bot.cfg.maxGpPerLeg, Math.floor(coins * BUDGET_BUFFER)) },
+            bot.cooldowns
+        ).shops.find(s => s.shopId === shop.shopId);
+        const items = replanned?.items ?? shop.items;
+        const stale = shop.items.map(i => `${i.obj}:${i.units}`).join(' ');
+        const fresh = items.map(i => `${i.obj}:${i.units}`).join(' ');
+        if (fresh !== stale) {
+            bot.log(`[shoprun] re-planned ${shop.shopId} from live stock: ${fresh || '(nothing worth buying)'} (funded plan said: ${stale})`);
+        }
+
+        for (const want of items) {
             if (want.units <= 0) {
                 continue;
             }
             const gpBefore = Inventory.count('Coins');
             const bought = await Shop.buy(want.name, want.units);
             const spent = gpBefore - Inventory.count('Coins');
+            if (bought === 0) {
+                bot.log(`[shoprun] buy shop=${shop.shopId} item=${want.obj} n=0 of ${want.units} — stock empty or coins short`);
+            }
             if (bought > 0) {
                 bot.sessionHaul[want.obj] = (bot.sessionHaul[want.obj] ?? 0) + bought;
                 bot.sessionSpent += spent;

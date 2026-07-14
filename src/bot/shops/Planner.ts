@@ -26,6 +26,10 @@ export interface ClusterPlan {
     haulFraction: number;  // pre-trim available units / maxUnits
     estCost: number;       // post-trim
     budget: number;        // gp to withdraw for this cluster
+    /** Display names with stock available but ZERO planned units — starved by
+     *  the gp cap. Surfaced so the runner can log the trim instead of silently
+     *  never buying an item (the death-rune mystery). */
+    trimmed: string[];
 }
 
 export function clusterEligible(cluster: RouteCluster, acct: AccountView): boolean {
@@ -119,7 +123,8 @@ export function planCluster(
         maxUnits,
         haulFraction: maxUnits === 0 ? 0 : availableUnits / maxUnits,
         estCost,
-        budget
+        budget,
+        trimmed: allocated.filter(a => a.available > 0 && a.units === 0).map(a => a.name)
     };
 }
 

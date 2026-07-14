@@ -99,6 +99,17 @@ describe('planCluster', () => {
         // haulFraction reflects PRE-trim availability (visit-worthiness), not the trim
         expect(plan.haulFraction).toBe(1);
     });
+    test('cap-starved items are reported in plan.trimmed so the runner can log them', () => {
+        // 300gp cap: mindrune (first in buys[]) eats it all; deathrune gets 0 units
+        const tiny: PlannerCfg = { ...CFG, maxGpPerLeg: 300 };
+        const plan = planCluster(CLUSTER, DB, {}, 0, tiny, {});
+        const death = plan.shops[0]?.items.find(i => i.obj === 'deathrune');
+        expect(death?.units ?? 0).toBe(0);
+        expect(plan.trimmed).toContain('Death rune');
+        // an uncapped plan trims nothing
+        const roomy = planCluster(CLUSTER, DB, {}, 0, { ...CFG, maxGpPerLeg: 10_000_000 }, {});
+        expect(roomy.trimmed).toEqual([]);
+    });
     test('budget rounds up to the next 1k', () => {
         // restrict to mindrune only, floor 99 → 10 units ≈ 30gp → budget 1000
         const cluster: RouteCluster = { ...CLUSTER, shops: [{ ...CLUSTER.shops[0], buys: [{ obj: 'mindrune', policy: { kind: 'floor', pct: 99 } }] }] };

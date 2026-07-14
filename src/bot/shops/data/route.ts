@@ -9,8 +9,12 @@
 import type { Route } from '#/bot/shops/types.js';
 
 const BOOTH = { boothName: 'Bank booth', boothOp: 'Use-quickly' };
-const RUNES = ['firerune', 'waterrune', 'airrune', 'earthrune', 'mindrune', 'bodyrune', 'chaosrune', 'deathrune'].map(obj => ({ obj }));
-const TIPS = ['bronze_arrowheads', 'iron_arrowheads', 'steel_arrowheads', 'mithril_arrowheads', 'adamant_arrowheads', 'rune_arrowheads'].map(obj => ({ obj }));
+// buys[] is the planner's PRIORITY order: the gp cap is allocated greedily
+// down each list, so the valuable/slow-restock items must come FIRST — the
+// original cheapest-first ordering spent the whole cap on elemental runes and
+// death/chaos got zero units every leg (found live). Descending item cost;
+// test/shops/route.test.ts gates the ordering.
+const RUNES = ['deathrune', 'chaosrune', 'firerune', 'waterrune', 'airrune', 'earthrune', 'mindrune', 'bodyrune'].map(obj => ({ obj }));
 
 export const ROUTE: Route = {
     clusters: [
@@ -19,7 +23,7 @@ export const ROUTE: Route = {
             bank: { stand: { x: 3251, z: 3420, level: 0 }, ...BOOTH },
             shops: [
                 { shopId: 'runeshop', keeperNpc: 'Aubury', stand: { x: 3253, z: 3401, level: 0 }, buys: RUNES },
-                { shopId: 'archeryshop', keeperNpc: 'Lowe', stand: { x: 3231, z: 3421, level: 0 }, buys: [{ obj: 'bronze_arrow' }, { obj: 'iron_arrow' }, { obj: 'steel_arrow' }] }
+                { shopId: 'archeryshop', keeperNpc: 'Lowe', stand: { x: 3231, z: 3421, level: 0 }, buys: [{ obj: 'steel_arrow' }, { obj: 'iron_arrow' }, { obj: 'bronze_arrow' }] }
             ],
             gates: []
         },
@@ -36,7 +40,7 @@ export const ROUTE: Route = {
             id: 'catherby',
             bank: { stand: { x: 2809, z: 3441, level: 0 }, ...BOOTH },
             shops: [
-                { shopId: 'archeryshop2', keeperNpc: 'Hickton', stand: { x: 2821, z: 3442, level: 0 }, buys: [{ obj: 'bronze_arrow' }, { obj: 'iron_arrow' }, ...TIPS] }
+                { shopId: 'archeryshop2', keeperNpc: 'Hickton', stand: { x: 2821, z: 3442, level: 0 }, buys: [{ obj: 'rune_arrowheads' }, { obj: 'adamant_arrowheads' }, { obj: 'mithril_arrowheads' }, { obj: 'steel_arrowheads' }, { obj: 'iron_arrow' }, { obj: 'iron_arrowheads' }, { obj: 'bronze_arrow' }, { obj: 'bronze_arrowheads' }] }
             ],
             gates: [{ members: true }]
         },
@@ -54,7 +58,7 @@ export const ROUTE: Route = {
             shops: [
                 {
                     shopId: 'ranging_guild_bowshop', keeperNpc: 'Bow and Arrow salesman', stand: { x: 2678, z: 3440, level: 0 },
-                    buys: [{ obj: 'bronze_arrow' }, { obj: 'iron_arrow' }, { obj: 'steel_arrow' }, { obj: 'mithril_arrow' }, { obj: 'adamant_arrow' }, { obj: 'rune_arrow' }, ...TIPS]
+                    buys: [{ obj: 'rune_arrow' }, { obj: 'rune_arrowheads' }, { obj: 'adamant_arrow' }, { obj: 'adamant_arrowheads' }, { obj: 'mithril_arrow' }, { obj: 'mithril_arrowheads' }, { obj: 'steel_arrow' }, { obj: 'steel_arrowheads' }, { obj: 'iron_arrow' }, { obj: 'iron_arrowheads' }, { obj: 'bronze_arrow' }, { obj: 'bronze_arrowheads' }]
                 }
             ],
             gates: [{ members: true }, { skill: { name: 'ranged', level: 40 } }]
