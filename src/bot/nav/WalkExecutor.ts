@@ -22,7 +22,7 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
-import { locateOnPath, selectClickTarget } from './followMath.js';
+import { chebyshev, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 
@@ -84,10 +84,6 @@ interface PathStep extends WorldTile {
 }
 
 type FollowResult = 'arrived' | 'closest' | 'repath' | 'failed' | 'interrupted';
-
-function chebyshev(a: WorldTile, b: WorldTile): number {
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
 
 /**
  * A shut door/gate we can walk through: its NAME reads as a door/gate AND it
@@ -554,15 +550,9 @@ class WalkExecutorImpl {
     private async crossMultiTileDoor(approach: PathStep, step: PathStep, transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
         const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
         const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
-        // On the far side once we're strictly closer to `step` than to the
-        // `approach` tile we started from — mirrors handleSpecialCrossing's test.
-        const onFarSide = (): boolean => {
-            const me = reader.worldTile();
-            return me !== null && me.level === step.level && chebyshev(me, step) < chebyshev(me, approach);
-        };
         const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
         while (performance.now() < deadline) {
-            if (onFarSide()) {
+            if (isOnFarSide(reader.worldTile(), approach, step)) {
                 log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
                 return true;
             }
@@ -602,7 +592,7 @@ class WalkExecutorImpl {
                 // genuinely stuck door times out and falls through to the repath.
                 log(`leaf blocks landing — scene-stepping through '${transport.locName}'`);
                 DirectNavigator.walk(landing);
-                await Execution.delayUntil(onFarSide, SCENE_STEP_MS);
+                await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), SCENE_STEP_MS);
             }
         }
         log(`${transport.locName} at (${transport.locX},${transport.locZ}) did not cross in time, repathing`);
@@ -634,15 +624,7 @@ class WalkExecutorImpl {
             return false;
         }
 
-        const crossed = (): boolean => {
-            const me = reader.worldTile();
-            // "Crossed" = now strictly on the far side of the gate: closer to the
-            // far tile (step) than to the near approach tile. approach and step
-            // are coordinate-adjacent (a 1-tile door hop), so a plain proximity
-            // check to step would be true while still standing on approach; this
-            // relative check only trips once we have actually moved across.
-            return me !== null && me.level === step.level && chebyshev(me, step) < chebyshev(me, approach);
-        };
+        const crossed = (): boolean => isOnFarSide(reader.worldTile(), approach, step);
         for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
             const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
             if (pick) {

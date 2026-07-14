@@ -5,6 +5,7 @@ import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { WalkExecutor, type WalkOptions } from '../nav/WalkExecutor.js';
 import { advance, initialLadderState, pickUnstickStep, type LadderState, type LastOutcome } from '../nav/walkLadder.js';
 import { isArrived } from '../nav/arrival.js';
+import { chebyshev } from '../nav/followMath.js';
 import { Reachability } from './Reachability.js';
 import { EventSignal } from './EventSignal.js';
 import { Execution } from './Execution.js';
@@ -56,7 +57,7 @@ export const Traversal = {
 
         const dist = (): number => {
             const me = reader.worldTile();
-            return me ? Math.max(Math.abs(me.x - dest.x), Math.abs(me.z - dest.z)) : Number.POSITIVE_INFINITY;
+            return me ? chebyshev(me, dest) : Number.POSITIVE_INFINITY;
         };
         const withinRadius = (): boolean => {
             const me = reader.worldTile();

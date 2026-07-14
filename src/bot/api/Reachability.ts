@@ -1,6 +1,7 @@
 import { reader, type WorldTile } from '../adapter/ClientAdapter.js';
 import { canReachLocal, canStepLocal, type ReachOptions } from '../nav/localReach.js';
 import type { ArrivalProbe } from '../nav/arrival.js';
+import { chebyshev } from '../nav/followMath.js';
 import { CollisionFlag } from '#/dash3d/CollisionFlag.js';
 
 // BFS budget for the per-tick arrival reach probe. Arrival is checked every
@@ -32,7 +33,7 @@ export const Reachability = {
 
     /** Single-tile step check between two ADJACENT world tiles (same level). */
     canStep(from: WorldTile, to: WorldTile): boolean {
-        if (from.level !== to.level || Math.max(Math.abs(from.x - to.x), Math.abs(from.z - to.z)) !== 1) {
+        if (from.level !== to.level || chebyshev(from, to) !== 1) {
             return false;
         }
         const a = reader.toLocal(from.x, from.z);

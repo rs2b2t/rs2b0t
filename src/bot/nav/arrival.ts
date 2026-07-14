@@ -14,6 +14,7 @@
 // legitimately-unwalkable target never becomes a never-arrives hang.
 
 import type { NavPoint } from './PathFinder.js';
+import { chebyshev } from './followMath.js';
 
 /** Live "can I stand where I'm aiming?" surface, injected so `isArrived` stays
  *  pure/testable. In production both wrap the current scene CollisionMap
@@ -23,10 +24,6 @@ export interface ArrivalProbe {
     canReach(t: NavPoint): boolean;
     /** `t` is a stand-able floor tile (not a whole-tile blocker). */
     walkable(t: NavPoint): boolean;
-}
-
-function chebyshev(a: NavPoint, b: NavPoint): number {
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 }
 
 /**

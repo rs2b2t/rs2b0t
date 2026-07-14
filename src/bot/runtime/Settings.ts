@@ -187,56 +187,50 @@ class SettingsStoreImpl {
     }
 
     /**
-     * The string an input should show. Mirrors resolve()'s precedence so the
-     * panel never contradicts what the bot runs: per-script URL > per-script
-     * saved > (for global-eligible keys) global URL > global saved > global
-     * default > schema default.
+     * The winning raw string (null = no override, use the default) and the def
+     * to parse/format against, across the ONE precedence ladder: per-script URL
+     * > per-script saved > (for global-eligible keys, not when resolving Global
+     * itself) global URL > global saved > default. Global-eligible keys hand
+     * back the Global schema's def so they parse/floor the same way regardless
+     * of which bot asked. displayString and resolve both ride this ladder, so
+     * the panel can never contradict what the bot runs.
      */
-    displayString(name: string, key: string, def: SettingDef): string {
+    private winningRaw(name: string, key: string, def: SettingDef): { raw: string | null; def: SettingDef } {
         const url = this.urlOverride(name, key);
         if (url !== null) {
-            return url;
+            return { raw: url, def };
         }
         const saved = this.saved(name, key);
         if (saved !== undefined) {
-            return saved;
+            return { raw: saved, def };
         }
         if (name !== 'Global' && key in GLOBAL_SETTINGS) {
+            const gdef = GLOBAL_SETTINGS[key];
             const gurl = this.urlOverride('Global', key);
             if (gurl !== null) {
-                return gurl;
+                return { raw: gurl, def: gdef };
             }
             const gsaved = this.saved('Global', key);
             if (gsaved !== undefined) {
-                return gsaved;
+                return { raw: gsaved, def: gdef };
             }
-            return settingToString(GLOBAL_SETTINGS[key], GLOBAL_SETTINGS[key].default);
+            return { raw: null, def: gdef };
         }
-        return settingToString(def, def.default);
+        return { raw: null, def };
+    }
+
+    /** The string an input should show. */
+    displayString(name: string, key: string, def: SettingDef): string {
+        const w = this.winningRaw(name, key, def);
+        return w.raw !== null ? w.raw : settingToString(w.def, w.def.default);
     }
 
     /** Resolve the full value map for a run: default <- saved <- URL. */
     resolve(name: string, schema: SettingsSchema): Record<string, unknown> {
         const out: Record<string, unknown> = {};
         for (const [key, def] of Object.entries(schema)) {
-            const url = this.urlOverride(name, key);
-            if (url !== null) { out[key] = parseValue(def, url); continue; }
-            const saved = this.saved(name, key);
-            if (saved !== undefined) { out[key] = parseValue(def, saved); continue; }
-            // global fallback for global-eligible keys (not when resolving Global itself)
-            if (name !== 'Global' && key in GLOBAL_SETTINGS) {
-                // parse + floor against the Global schema's def, not the
-                // requesting bot's, so a global-eligible key resolves the same
-                // way regardless of which bot asked for it
-                const gdef = GLOBAL_SETTINGS[key];
-                const gurl = this.urlOverride('Global', key);
-                if (gurl !== null) { out[key] = parseValue(gdef, gurl); continue; }
-                const gsaved = this.saved('Global', key);
-                if (gsaved !== undefined) { out[key] = parseValue(gdef, gsaved); continue; }
-                out[key] = gdef.default;
-                continue;
-            }
-            out[key] = def.default;
+            const w = this.winningRaw(name, key, def);
+            out[key] = w.raw !== null ? parseValue(w.def, w.raw) : w.def.default;
         }
         return out;
     }
