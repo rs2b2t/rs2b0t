@@ -20,6 +20,7 @@ import { specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing }
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
+import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
 import { locateOnPath, selectClickTarget } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
@@ -48,6 +49,11 @@ const TRANSPORT_WAIT_MS = 8000;
 // ticks — enough headroom that a genuine cross always lands, small vs the 90s
 // walkTo attempt so a truly stuck one still repaths.
 const MULTI_DOOR_CROSS_MS = 20_000;
+// One scene-walk hop budget when the swung-open leaf blocks canReach to the
+// landing (a 1-tile door in a solid wall — no bypass to route a click around).
+// Small vs MULTI_DOOR_CROSS_MS so a genuinely stuck door still falls through to
+// repath after a hop or two.
+const SCENE_STEP_MS = 8000;
 const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing dialogue
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
@@ -413,18 +419,21 @@ class WalkExecutorImpl {
             return this.handleSpecialCrossing(approach, step, special, log);
         }
 
-        // A hand-added edge that bridges tiles >1 apart is a MULTI-TILE door
-        // (the wizard-tower shape-9 diagonal Door@3107,3162 seals the whole
-        // tile, so the graph hops the walkable neighbours 3106<->3108). Opening
-        // it does NOT put us on the far side, and the RS door auto-reverts after
-        // a few ticks, so — unlike a 1-tile door — we must actively walk THROUGH
-        // and only report success once we're across. Otherwise the old path
-        // declared victory on "door opened", followPath cleared the crossing
-        // annotation, the door re-closed before the canReach-gated click-through
-        // could fire, and the crossing could never re-trigger: gotoNpc's
-        // ladder-stand hop froze ~5 min at (3108,3162) while walkResilient burned
-        // 3x90s (RuneMysteries smoke, t=170-460).
-        if (transport.toLevel === undefined && chebyshev(approach, step) > 1) {
+        // EVERY door (no level change) is driven to COMPLETION — opened AND
+        // walked THROUGH — before we report success, because opening a door does
+        // NOT put us on the far side and the RS door auto-reverts after a few
+        // ticks. The old 1-tile path declared victory on "door opened" and
+        // followPath cleared the crossing annotation, so when the swung-open leaf
+        // then blocked the step tile (canReach false ⇒ zero click-throughs) the
+        // crossing could never re-fire: the bot wedged ONE tile from the door
+        // until walkResilient escalated to the scene-walker — live-confirmed 6/6,
+        // 30-92s, at Door@(3248,3411). Same root as the wizard-tower shape-9
+        // MULTI-tile Door@(3107,3162) (a hand-added edge bridging the walkable
+        // neighbours 3106<->3108 across the sealed centre tile), which first
+        // needed this and froze gotoNpc ~5 min there. crossMultiTileDoor degrades
+        // to the 1-tile case cleanly: dir is the unit step approach→step, so
+        // landing = step + dir is the tile one PAST the door either way.
+        if (transport.toLevel === undefined && chebyshev(approach, step) >= 1) {
             return this.crossMultiTileDoor(approach, step, transport, log);
         }
 
@@ -501,7 +510,7 @@ class WalkExecutorImpl {
         const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
         while (performance.now() < deadline) {
             if (onFarSide()) {
-                log(`crossed ${transport.locName} at (${transport.locX},${transport.locZ})`);
+                log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
                 return true;
             }
             const shut = this.findTransportLoc(transport);
@@ -515,15 +524,27 @@ class WalkExecutorImpl {
                 await Execution.delayUntil(() => this.findTransportLoc(transport) === null, TRANSPORT_WAIT_MS);
                 continue;
             }
-            // door open — walk to the landing tile PAST the door; the client
-            // routes around the swung-open loc (canReach mirrors that route, so a
-            // click only issues when one exists), and we loop back to re-open if
-            // it reverts before we cross
+            // door open — get to the landing tile PAST the door.
             const local = reader.toLocal(landing.x, landing.z);
             if (local && Reachability.canReach(landing, { maxSteps: 128 })) {
+                // A walkable route around the swung-open loc exists (multi-tile
+                // doors) — click it. canReach mirrors that route, so a click only
+                // issues when one exists; we loop back to re-open if it reverts.
                 ActionRouter.driver.walk(local.lx, local.lz);
+                await Execution.delayTicks(2);
+            } else {
+                // No canReach route to the landing: the swung leaf occupies the
+                // sole gap (a 1-tile door in a solid wall — no bypass). canReach
+                // then gates out every click, so the baked walker click-starves
+                // (0 clicks) and wedges one tile from the door until the resilient
+                // ladder escalates 30-90s later (live-confirmed). Step through with
+                // the SAME scene walker that ladder uses — DirectNavigator crosses
+                // tile-by-tile where canReach refuses — bounded and still inside
+                // MULTI_DOOR_CROSS_MS, so a genuinely stuck door times out here too
+                // and falls through to the repath below.
+                log(`leaf blocks landing — scene-stepping through '${transport.locName}'`);
+                await DirectNavigator.walkTo(landing, 0, SCENE_STEP_MS);
             }
-            await Execution.delayTicks(2);
         }
         log(`${transport.locName} at (${transport.locX},${transport.locZ}) did not cross in time, repathing`);
         return false;
