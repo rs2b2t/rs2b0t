@@ -12,6 +12,7 @@ import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
 import { AmmoStackTracker, planAmmoCollection } from '../api/combat/AmmoLogic.js';
@@ -66,6 +67,7 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve easy clues' },
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' },
     combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage', 'range'], label: 'Combat style' },
+    meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', help: 'which melee stat to train (attack/strength/defence); re-applied each login since com_mode is not saved' },
     weapon: { type: 'string', default: '', label: 'Weapon (mage/range)', help: 'wielded item, withdrawn from bank when missing — e.g. Staff of fire, Shortbow' },
     spell: { type: 'string', default: 'Wind Strike', label: 'Autocast spell (mage)', help: 'Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave' },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip' },
@@ -92,6 +94,7 @@ let BANK_COMMON = true;
 let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
+let MELEE_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
 let WEAPON = '';
 let SPELL = 'Wind Strike';
 let RUNES_WITHDRAW = 150;
@@ -145,6 +148,7 @@ export default class RockCrab extends TaskBot {
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         SPADE_NAME = this.settings.str('spade', 'Spade');
         STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
+        MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         WEAPON = this.settings.str('weapon', '');
         SPELL = this.settings.str('spell', 'Wind Strike');
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
@@ -161,7 +165,7 @@ export default class RockCrab extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (collect@${COLLECT_AT})` : '';
+        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (collect@${COLLECT_AT})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
@@ -192,6 +196,7 @@ export default class RockCrab extends TaskBot {
             }),
             new Eat(this),
             new GearEquip(this),
+            new SetMeleeStyle(this),
             new ArmAutocast(this),
             new CollectAmmo(this), // before SolveClue/BankRun: sweep arrows before anything walks us out
             this.solveClue!,
@@ -471,6 +476,29 @@ class GearEquip implements Task {
             this.fails = 0;
         } else if (++this.fails >= 5) {
             this.bot.log(`WARNING: could not move '${AMMO}' from the pack to the quiver after 5 tries`);
+        }
+    }
+}
+
+/** Keep the melee attack style on the configured stat (ArdyFighter shape).
+ *  com_mode isn't persisted, so this re-asserts once per session — and again
+ *  if a weapon swap resets it. Melee only; mage owns its style via autocast. */
+class SetMeleeStyle implements Task {
+    private announced = false;
+
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        return STYLE === 'melee' && !Game.inCombat() && Game.combatMode() !== MELEE_MODE;
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('setting combat style');
+        Game.setCombatStyle(MELEE_MODE);
+        const ok = await Execution.delayUntil(() => Game.combatMode() === MELEE_MODE, 3000);
+        if (ok && !this.announced) {
+            this.announced = true;
+            this.bot.log(`combat style: ${['accurate', 'aggressive', 'defensive'][MELEE_MODE] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][MELEE_MODE] ?? '?'})`);
         }
     }
 }
