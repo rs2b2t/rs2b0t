@@ -19,3 +19,9 @@ export interface ClueRow {
     casketId?: number; // dig only: casket obj id
     npc?: string; // talk only: NPC display name, e.g. 'Ned'
 }
+
+/** One actionable step the solver hands the executor. Either a clue row
+ *  (search/dig/talk) or — when a reward casket is already held — the
+ *  open-casket step that must run first to advance the trail. Discriminated
+ *  on `type` ('open-casket' vs ClueType). */
+export type ClueStep = ClueRow | { type: 'open-casket'; casketObj: string; casketId: number };
