@@ -341,8 +341,15 @@ export function loadMapsquares(engineDir: string): MapsquareData[] {
  * First pass of GameMap.loadGround: walk the land opcode stream and collect
  * the per-tile flag bytes (BLOCK_MAP_SQUARE/LINK_BELOW/REMOVE_ROOFS),
  * indexed by packCoord.
+ *
+ * `ground` (optional out, MAPSQUARE bytes) is set to 1 where the tile has
+ * DRAWN ground — an overlay (opcode 2..49) or underlay (opcode >= 82). Levels
+ * above 0 are mostly void: the collision engine leaves un-floored sky OPEN
+ * (walls + reachability contain real players), but a world-scale A* must not
+ * route through it — a tile the client never draws can never be clicked or
+ * stood on, so ground presence is the truth for upper-level walkability.
  */
-export function parseLands(packet: Reader): Int8Array {
+export function parseLands(packet: Reader, ground?: Uint8Array): Int8Array {
     const lands = new Int8Array(MAPSQUARE);
     for (let level: number = 0; level < LEVELS; level++) {
         for (let x: number = 0; x < MAP_X; x++) {
@@ -358,8 +365,13 @@ export function parseLands(packet: Reader): Int8Array {
 
                     if (opcode <= 49) {
                         packet.pos++;
+                        if (ground) {
+                            ground[packCoord(x, z, level)] = 1;
+                        }
                     } else if (opcode <= 81) {
                         lands[packCoord(x, z, level)] = opcode - 49;
+                    } else if (ground) {
+                        ground[packCoord(x, z, level)] = 1;
                     }
                 }
             }

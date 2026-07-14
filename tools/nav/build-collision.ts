@@ -34,6 +34,8 @@ import { BLOCK_MAP_SQUARE, LEVELS, MAP_X, MAP_Z, OPEN, REMOVE_ROOFS, Reader, bri
 
 class CollisionBuilder {
     readonly collision = new CollisionEngine();
+    /** Per-mapsquare drawn-ground bitmaps (packCoord-indexed), keyed mx<<8|mz. */
+    private readonly grounds = new Map<number, Uint8Array>();
     private readonly members: boolean;
     private readonly freemap = new Set<number>();
     private readonly locTypes: LocDef[];
@@ -68,9 +70,28 @@ class CollisionBuilder {
     }
 
     loadMapsquare(landData: Uint8Array, locData: Uint8Array, mapsquareX: number, mapsquareZ: number): void {
-        const lands = parseLands(new Reader(landData));
+        const ground = new Uint8Array(MAP_X * MAP_Z * LEVELS);
+        const lands = parseLands(new Reader(landData), ground);
+        this.grounds.set(((mapsquareX >> 6) << 8) | (mapsquareZ >> 6), ground);
         this.loadGround(lands, mapsquareX, mapsquareZ);
         this.loadLocations(lands, new Reader(locData), mapsquareX, mapsquareZ);
+    }
+
+    /**
+     * The client draws ground here (underlay/overlay present) — the standable
+     * truth for levels above 0. The collision engine leaves un-floored sky
+     * OPEN (real players are contained by walls + reachability), which is fine
+     * for scene-scoped movement but poison for world A*: baked stair edges
+     * made the empty upper planes reachable and every long route flew across
+     * them (Seers→Varrock via a Catherby ladder, live-observed). Level 0 is
+     * always ground. Missing mapsquares read as no ground.
+     */
+    hasGround(absX: number, absZ: number, level: number): boolean {
+        if (level === 0) {
+            return true;
+        }
+        const ground = this.grounds.get(((absX >> 6) << 8) | (absZ >> 6));
+        return ground !== undefined && ground[packCoord(absX & 0x3f, absZ & 0x3f, level)] === 1;
     }
 
     private loadGround(lands: Int8Array, mapsquareX: number, mapsquareZ: number): void {
@@ -165,7 +186,7 @@ interface BakedMapsquare {
     levels: (BakedLevel | null)[];
 }
 
-function bakeMapsquare(collision: CollisionEngine, mx: number, mz: number): BakedMapsquare {
+function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: number, level: number) => boolean, mx: number, mz: number): BakedMapsquare {
     const mapsquareX = mx << 6;
     const mapsquareZ = mz << 6;
     const levels: (BakedLevel | null)[] = [null, null, null, null];
@@ -201,6 +222,10 @@ function bakeMapsquare(collision: CollisionEngine, mx: number, mz: number): Bake
                 const absZ = mapsquareZ + z;
                 const index = x * 64 + z;
 
+                if (!hasGround(absX, absZ, level)) {
+                    continue; // un-floored sky: exit 0, walkable 0 (see Builder.hasGround)
+                }
+
                 if ((collision.get(absX, absZ, level) & CollisionFlag.WALK_BLOCKED) === CollisionFlag.OPEN) {
                     walk[index >> 3] |= 1 << (index & 0x7);
                     walkableTiles++;
@@ -208,7 +233,7 @@ function bakeMapsquare(collision: CollisionEngine, mx: number, mz: number): Bake
 
                 let mask = 0;
                 for (let dir = 0; dir < 8; dir++) {
-                    if (canTravel(collision, level, absX, absZ, DIRS[dir][0], DIRS[dir][1], 1, 0, CollisionType.NORMAL)) {
+                    if (canTravel(collision, level, absX, absZ, DIRS[dir][0], DIRS[dir][1], 1, 0, CollisionType.NORMAL) && hasGround(absX + DIRS[dir][0], absZ + DIRS[dir][1], level)) {
                         mask |= 1 << dir;
                     }
                 }
@@ -332,6 +357,12 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
     v.check('(3232,3298) chicken pen east Lumbridge walkable', v.walkable(3232, 3298, 0));
     v.check('(3230,3250) walkable', v.walkable(3230, 3250, 0));
 
+    // upper levels: drawn floors stay walkable, un-floored sky does not (the
+    // Seers→Varrock ladder detour — A* flew across the empty level-1 plane)
+    v.check('(3205,3209,1) Lumbridge castle first floor walkable', v.walkable(3205, 3209, 1));
+    v.check('(3000,3430,1) open sky west of Barbarian Village NOT walkable', !v.walkable(3000, 3430, 1));
+    v.check('(2960,3320,1) sky above the sea NOT walkable', !v.walkable(2960, 3320, 1));
+
     // water: River Lum south of the Lumbridge bridge. The plan's guess
     // (3228,3265) turned out to be the west bank (walkable); probing the
     // baked grid puts the river at x=3231..3238 there, with pure FLOOR
@@ -442,7 +473,7 @@ function main(): void {
     const loaded = performance.now();
     console.log(`mapsquares loaded: ${squares.length} (${(loaded - started).toFixed(0)}ms, ${builder.collision.zoneCount()} zones)`);
 
-    const baked: BakedMapsquare[] = squares.map(({ mx, mz }) => bakeMapsquare(builder.collision, mx, mz));
+    const baked: BakedMapsquare[] = squares.map(({ mx, mz }) => bakeMapsquare(builder.collision, (x, z, level) => builder.hasGround(x, z, level), mx, mz));
     const raw = writePack(baked, opts.members);
     const gz = Bun.gzipSync(raw, { level: 9 });
 

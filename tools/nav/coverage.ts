@@ -54,5 +54,24 @@ for (const t of NAV_TARGETS) {
     console.log(`FAIL      ${t.bot} — ${t.label} (${t.tile.x},${t.tile.z},${t.tile.level}): ${kind}; nearest connected = ${near ? `(${near.x},${near.z},${near.level})` : 'none within ' + MAX_RING}`);
     failures++;
 }
+// Level discipline: long ground routes must stay on level 0. Un-floored upper
+// planes read OPEN in engine collision (walls + reachability contain real
+// players), so before the pack gated walkability on drawn ground, the baked
+// stair edges let A* fly the empty level-1 sky (Seers→Varrock detoured up a
+// Catherby ladder, live-observed). These pin that class of regression.
+const GROUND_ROUTES: [string, NavPoint, NavPoint][] = [
+    ['Seers bank → Varrock centre', { x: 2722, z: 3493, level: 0 }, { x: 3213, z: 3424, level: 0 }],
+    ['Lumbridge → Rellekka crab field', { x: 3222, z: 3218, level: 0 }, { x: 2710, z: 3720, level: 0 }]
+];
+for (const [label, from, to] of GROUND_ROUTES) {
+    const r = finder.findPath(from, to, undefined, BUDGET);
+    const levels = r.ok ? new Set(r.waypoints.map(w => w.level)) : null;
+    const ok = r.ok && levels !== null && levels.size === 1 && levels.has(0);
+    console.log(`${ok ? 'ok       ' : 'FAIL     '} route ${label}: ${r.ok ? `cost ${r.cost}, levels [${[...(levels ?? [])].join(',')}]` : 'NO PATH'}`);
+    if (!ok) {
+        failures++;
+    }
+}
+
 console.log(failures === 0 ? '\nall nav-targets reachable (or expected)' : `\n${failures} unreachable nav-target(s)`);
 process.exit(failures === 0 ? 0 : 1);
