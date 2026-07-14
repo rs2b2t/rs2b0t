@@ -6,9 +6,9 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { isArrived } from './arrival.js';
 
 /**
- * Scene-local walking via the client's own tryMove BFS (Slice 3). Web-walking
- * across map squares lands in Slice 5; this navigator only handles targets
- * inside (or clamped to) the loaded 104x104 scene.
+ * Scene-local walking via the client's own tryMove BFS. Web-walking across
+ * map squares is Traversal/WalkExecutor's job; this navigator only handles
+ * targets inside (or clamped to) the loaded 104x104 scene.
  */
 export const DirectNavigator = {
     /** Fire one walk click toward the tile (clamped into the scene).

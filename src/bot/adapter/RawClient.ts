@@ -79,7 +79,7 @@ export interface RawClient {
     // true while a p_countdialog "Enter amount" input is open (Withdraw-X etc.)
     dialogInputOpen: boolean;
 
-    // interaction primitives (Slice 3): doAction dispatches a menu slot to
+    // interaction primitives: doAction dispatches a menu slot to
     // the byte-identical OP packet a human click produces; tryMove runs the
     // local BFS and writes MOVE_GAMECLICK(0)/MINIMAPCLICK(1)/OPCLICK(2)
     doAction(optionId: number): void;
@@ -89,12 +89,12 @@ export interface RawClient {
     // tryMove path doesn't cover (public chat: MESSAGE_PUBLIC + WordPack text).
     out: Packet;
 
-    // packet pump (H4): tcpIn processes ONE packet per `true` return and
+    // packet pump: tcpIn processes ONE packet per `true` return and
     // records its opcode in ptype0 just before dispatch (Client.ts ~5923)
     ptype0: number;
     tcpIn(): Promise<boolean>;
 
-    // login state for auto-relogin (Slice 7). NOTE: Client.logout() clears
+    // login state for auto-relogin. NOTE: Client.logout() clears
     // loginUser/loginPass, so credentials are captured while still ingame.
     loginUser: string;
     loginPass: string;

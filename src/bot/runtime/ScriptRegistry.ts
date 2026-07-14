@@ -17,7 +17,7 @@ export interface ScriptMeta {
 }
 
 /** Available scripts. Built-ins register at module load (scripts/index.ts);
- *  external scripts register through the loader (Slice 7) — re-registering a
+ *  external scripts register through the loader — re-registering a
  *  name replaces it (the hot-reload path). */
 class ScriptRegistryImpl {
     private metas = new Map<string, ScriptMeta>();

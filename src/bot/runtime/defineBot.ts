@@ -19,7 +19,7 @@ export interface BotManifest {
 export type BotManifestInput = Omit<BotManifest, '__rs2b0tManifest'>;
 
 /**
- * Script manifest helper (Slice 7). External scripts default-export
+ * Script manifest helper. External scripts default-export
  * `defineBot({...})`; the loader registers the result. Works for built-ins
  * too.
  */

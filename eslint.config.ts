@@ -32,7 +32,7 @@ export default defineConfig([
         }
     },
 
-    // ---- rs2b0t fences (H8, see HOOKS.md) ----
+    // ---- rs2b0t fences ----
     // Only adapter/ may name client internals; everything else in src/bot/
     // imports the adapter. Protocol const-enums are exempt (inlined, no
     // runtime coupling).
@@ -46,7 +46,7 @@ export default defineConfig([
                     patterns: [
                         {
                             group: ['#/client/*', '#/io/*', '#/config/*', '#/dash3d/*', '#/datastruct/*', '#/graphics/*', '#/sound/*', '#/wordfilter/*', '#3rdparty/*', '!#/io/ServerProt.js', '!#/io/ClientProt.js', '!#/dash3d/CollisionFlag.js'],
-                            message: 'Only src/bot/adapter/ may touch client internals (see HOOKS.md).'
+                            message: 'Only src/bot/adapter/ may touch client internals.'
                         }
                     ]
                 }
@@ -61,7 +61,7 @@ export default defineConfig([
         files: ['src/bot/**/*.ts'],
         ignores: ['src/bot/ui/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/main.ts'],
         rules: {
-            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,main}.ts (see HOOKS.md).' }, { name: 'window', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,main}.ts (see HOOKS.md).' }]
+            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,main}.ts.' }, { name: 'window', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,main}.ts.' }]
         }
     }
 ]);

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-// rs2b0t build (H7) — clone of bundle.ts with three deliberate differences:
+// rs2b0t build — clone of bundle.ts with three deliberate differences:
 //   1. entrypoint is src/bot/main.ts (the bot client), emitted as botclient.js
 //   2. NO terser pass and therefore NO property mangling: the bot API surface
 //      (globalThis.__rs2b0t, Slice 7) keeps stable property names for

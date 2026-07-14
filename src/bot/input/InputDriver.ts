@@ -1,6 +1,6 @@
 /**
- * Semantic input operations. DIRECT (Slice 3) dispatches them through the
- * client's doAction synchronously (boolean); SYNTHETIC (Slice 6) resolves
+ * Semantic input operations. DIRECT dispatches them through the
+ * client's doAction synchronously (boolean); SYNTHETIC resolves
  * the same ops through a virtual cursor + the real minimenu, so its methods
  * return a Promise that settles when the gesture completes. `op` is the
  * 1-based option index (OP_*1..5), already resolved from an action name by
@@ -8,7 +8,7 @@
  * resolves false (and logs) rather than degrading to direct (ADR-0003).
  */
 export interface InputDriver {
-    /** The label telemetry/dataset rows get (PLAN.md §humanization). */
+    /** The label telemetry/dataset rows get. */
     readonly mode: 'direct' | 'synthetic';
 
     interactNpc(index: number, op: number): boolean | Promise<boolean>;

@@ -1,7 +1,7 @@
 import Tile from '../api/Tile.js';
 
 /**
- * Per-bot parameters (Slice 7 finish). A bot's manifest declares a
+ * Per-bot parameters. A bot's manifest declares a
  * `settingsSchema`; the runner resolves values (schema default -> saved
  * localStorage edit -> URL override) and injects a SettingsBag onto the bot
  * before onStart. Bots read `this.settings.bool('gatherFeathers')` etc.

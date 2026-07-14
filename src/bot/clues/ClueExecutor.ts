@@ -1,8 +1,8 @@
 /**
- * ClueExecutor — the reactive easy-clue solve loop (Task 5).
+ * ClueExecutor — the reactive easy-clue solve loop.
  *
  * Drives a held clue trail to completion by RE-IDENTIFYING the next step from
- * the pack every iteration (identifyStep is pure — Task 4) and dispatching the
+ * the pack every iteration (identifyStep is pure) and dispatching the
  * matching client action. Because the whole decision is a function of the held
  * items, the loop is idempotent: a relog or mis-timed interrupt just re-enters
  * at the same step on the next call. No progress varp is read (trail_status is

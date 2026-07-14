@@ -1,4 +1,4 @@
-// World-scale A* over the baked collision pack (Slice 5b). Pure module — no
+// World-scale A* over the baked collision pack. Pure module — no
 // worker glue, no client imports — so the same code runs inside NavWorker in
 // the browser and under Bun for offline benches (tools/nav/bench-path.ts).
 //

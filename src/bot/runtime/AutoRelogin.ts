@@ -9,7 +9,7 @@ const RECONNECT_INTERVAL_MS = 9000; // spacing between attempts (non-overlapping
 const MAX_ATTEMPTS = 15;
 
 /**
- * Login keeper (Slice 7 + credential store). While ingame it captures the
+ * Login keeper. While ingame it captures the
  * live session credentials (Client.logout() clears them); on a drop to the
  * title screen it logs back in with backoff (the server rejects "already
  * online" for ~10s) and resumes the running script. Credentials fall back to

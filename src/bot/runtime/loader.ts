@@ -13,7 +13,7 @@ export interface LoadResult {
 }
 
 /**
- * External script loading (Slice 7). Trusted code, no sandbox in v1 — a
+ * External script loading. Trusted code, no sandbox in v1 — a
  * loaded script runs with full page access, same as a built-in. The module's
  * default export must be a defineBot(...) manifest.
  */

@@ -6,7 +6,7 @@ import { pumpProducers } from './events/producers.js';
 type FrameListener = () => void;
 
 /**
- * Singleton fan-out between the BotClient hooks (H1-H4) and everything bot-
+ * Singleton fan-out between the BotClient hooks and everything bot-
  * side. Every listener call is wrapped in try/catch: a bot bug can never
  * crash the client.
  */

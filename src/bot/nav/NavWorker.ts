@@ -1,4 +1,4 @@
-// Web Worker entrypoint for world pathfinding (Slice 5b). Bundled separately
+// Web Worker entrypoint for world pathfinding. Bundled separately
 // by bot.bundle.ts as out/navworker.js; spawned lazily by Navigator.ts the
 // same way the client spawns the OnDemand worker.
 //

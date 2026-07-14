@@ -1,7 +1,7 @@
 // Vendored from LostCityRS/Engine-TS@274: src/engine/routefinder/flags.ts
 // (a TypeScript port of rsmod's pathfinder, https://github.com/rsmod/rsmod — MIT licensed).
 // Verbatim except imports rewritten from '#/engine/routefinder/*' to relative paths,
-// per the rs2b0t import fences (HOOKS.md).
+// per the rs2b0t import fences (eslint.config.ts).
 export const CollisionFlag = {
     OPEN: 0x0,
     WALL_NORTH_WEST: 0x1,

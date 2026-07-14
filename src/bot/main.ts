@@ -43,14 +43,14 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     // globalThis.__rs2b0t through the @rs2b0t/api shim (ADR-0004).
     installAbi();
 
-    // Login keeper (Slice 7): re-login on disconnect while a script is active.
+    // Login keeper: re-login on disconnect while a script is active.
     // disable with bot.html?autorelogin=0; bot.html?autologin=1 also logs in
     // unprompted from the title screen using saved credentials (unattended).
     if (params.get('autorelogin') !== '0') {
         AutoRelogin.enable(params.get('autologin') === '1');
     }
 
-    // Tier-2 stall recovery (Task 12): host-side frame listener that restarts a
+    // Tier-2 stall recovery: host-side frame listener that restarts a
     // hard-stalled script (frozen await the in-script watchdog can't reach),
     // preserving its anchor via RecoveryHints.
     StallGuard.enable();

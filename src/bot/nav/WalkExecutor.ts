@@ -1,7 +1,7 @@
-// Tick-driven walk executor (Slice 5b): turns a NavWorker path into game
+// Tick-driven walk executor: turns a NavWorker path into game
 // clicks. Called from scripts via Traversal.walkTo, so every wait goes
 // through Execution.* — stop/pause/abort semantics hold exactly like any
-// other script action (PLAN.md §2).
+// other script action.
 //
 // Loop: walk toward the furthest path tile within ~18 tiles that's inside
 // the loaded scene; when the next path segment is an annotated door/
@@ -34,10 +34,10 @@ const CORRIDOR = 3; // on-path tolerance (client micro-routes differ from ours)
 const OFF_CORRIDOR_STRIKES = 2; // consecutive off-corridor checks before repathing
 const STALL_TICKS = 6; // no tile change for this many ticks while short of the target ⇒ stalled
 // canReach BFS budget for re-checking the committed click target during stall
-// bookkeeping (Amendment 1b): an RS door can swing shut AFTER we select a
-// target, so re-probe reachability before crediting a no-move tick as progress.
+// bookkeeping: an RS door can swing shut AFTER we select a target, so re-probe
+// reachability before crediting a no-move tick as progress.
 const STALL_REACH_STEPS = 256;
-// Backstop (Amendment 1c): consecutive no-move loop iterations before the stall
+// Backstop: consecutive no-move loop iterations before the stall
 // counter is allowed to grow regardless of target distance — catches the
 // probe-proven click-starvation where canReach reads TRUE yet the bot never
 // steps. Resets on any movement. Loose enough (each loop ≈ 2 ticks) not to trip

@@ -6,7 +6,7 @@ import { RenderGate } from './runtime/RenderGate.js';
 
 /**
  * The only place that extends or instantiates the upstream client.
- * Hooks H1-H3 (see HOOKS.md): each override is one line into BotHost after
+ * The client hook points: each override is one line into BotHost after
  * deferring to the real implementation, so game behavior is untouched.
  */
 export default class BotClient extends Client {

@@ -17,7 +17,7 @@ const SCRATCH_SLOT = 499;
 
 /**
  * THE ONLY file that reads or writes client internals. Everything else in
- * src/bot/ goes through `reader` (and, from Slice 3, `actions`). An upstream
+ * src/bot/ goes through `reader` (and `actions`). An upstream
  * rename is fixed here and in RawClient.ts — nowhere else.
  */
 
@@ -110,7 +110,7 @@ export interface InvItemSnapshot {
 }
 
 /**
- * Bind the adapter to the live client and install the packet hook (H4).
+ * Bind the adapter to the live client and install the packet hook.
  * Returns the list of expected internal names missing on the instance —
  * non-empty means an upstream merge moved something (shown as a red banner
  * in the panel; fix in adapter/).
@@ -853,7 +853,7 @@ export const reader = {
 };
 
 /**
- * Direct interaction surface (Slice 3). Only input drivers call these. Every
+ * Direct interaction surface. Only input drivers call these. Every
  * op goes through the client's own doAction/tryMove so anticheat counters,
  * approach logic and packet bytes are exactly what a human click produces.
  */

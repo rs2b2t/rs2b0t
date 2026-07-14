@@ -24,7 +24,7 @@ import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { defineBot, registerScript } from './defineBot.js';
 
 /**
- * The script-facing ABI (Slice 7). `globalThis.__rs2b0t` is the ONE global
+ * The script-facing ABI. `globalThis.__rs2b0t` is the ONE global
  * externally-compiled scripts bind to (via the @rs2b0t/api shim); its
  * property names are stable because the bot bundle never mangles
  * (ADR-0004). Bump API_VERSION on breaking surface changes — the shim

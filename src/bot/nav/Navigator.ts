@@ -1,11 +1,11 @@
-// Main-thread facade over the NavWorker (Slice 5b). Lazy-spawns the worker
+// Main-thread facade over the NavWorker. Lazy-spawns the worker
 // exactly like the client spawns OnDemand (src/io/OnDemand.ts), fetches the
 // collision pack relative to the bundle and transfers it in init, and
 // correlates path requests by id.
 //
 // findPath() is plain-promise async: infrastructure code. Scripts never await
 // it directly — WalkExecutor bridges it into Execution.delayUntil so stop/
-// abort semantics hold (PLAN.md §2).
+// abort semantics hold.
 
 import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
 

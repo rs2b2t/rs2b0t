@@ -11,7 +11,7 @@ const NOMINAL_FRAME_MS = 20;
  * The frame pump. Scripts only make progress here: BotHost.onFrame() calls
  * pump() once per client frame, which resolves due waiters and launches loop
  * iterations. Between awaits a script therefore sees frozen, consistent game
- * state (PLAN.md §2).
+ * state.
  *
  * v1 runs a single active script; Execution.* binds to it implicitly.
  */
@@ -99,7 +99,7 @@ class SchedulerImpl {
 
         // watchdog: in flight, nothing registered with the pump, no progress
         // — either a synchronous hang (can't be killed in-thread) or an await
-        // on a promise the pump doesn't own (unsupported, see PLAN.md)
+        // on a promise the pump doesn't own (unsupported)
         if (ctx.loopInFlight && ctx.waiters.length === 0 && now - ctx.lastProgressAt > WATCHDOG_MS && !ctx.watchdogWarned) {
             ctx.watchdogWarned = true;
             ctx.addLog('warn', `watchdog: loop() has made no scheduler progress for ${Math.round((now - ctx.lastProgressAt) / 1000)}s — sync-stuck or awaiting a non-Execution promise`);
