@@ -164,7 +164,7 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
     taglist: {
         edit(_def, current, onChange, { disabled }) {
             const wrap = el('div', 'rs2b0t-ctl-chips');
-            let items = listItems(current);
+            const items = listItems(current);
             const commit = () => onChange(items.join(', '));
             const rebuild = () => {
                 wrap.replaceChildren();
