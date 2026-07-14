@@ -3,7 +3,7 @@
 // NOT exercised here — supplies start in the pack), injects the style
 // settings, and asserts the style actually worked:
 //   mage  — autocast armed (varp 108 = 3), kills logged, runes consumed.
-//   range — kills logged, a mature ground stack collected (OBJ_COUNT reads).
+//   range — kills logged, arrows swept off the ground after kills.
 //
 // Usage: bun tools/rockcrab-style-test.ts <mage|range> [minutes] [base-url] [username]
 
@@ -89,7 +89,7 @@ try {
         } else {
             localStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Shortbow');
             localStorage.setItem('rs2b0t:set:RockCrab:ammo', 'Bronze arrow');
-            localStorage.setItem('rs2b0t:set:RockCrab:collectAt', '8'); // mature quickly for the smoke window
+            localStorage.setItem('rs2b0t:set:RockCrab:minStack', '1'); // sweep-on-kill takes everything
         }
     }, style);
 
@@ -140,9 +140,9 @@ try {
         if (end.varp108 !== 3) fail(`attackstyle_magic is ${end.varp108}, expected 3 (armed)`);
         if (end.minds >= runesBefore) fail('no runes consumed — kills were not casts');
     } else {
-        const collected = end.log.filter(l => /collected a stack of/.test(l));
-        console.log(`stack collections: ${collected.length}${collected.length ? ` (${collected[collected.length - 1]})` : ''}`);
-        if (collected.length === 0) fail('never collected a mature arrow stack');
+        const collected = end.log.filter(l => /swept \d+/.test(l));
+        console.log(`sweeps: ${collected.length}${collected.length ? ` (${collected[collected.length - 1]})` : ''}`);
+        if (collected.length === 0) fail('never swept arrows off the ground');
     }
     console.log('PASS');
 } finally {

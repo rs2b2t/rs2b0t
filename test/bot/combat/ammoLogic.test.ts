@@ -1,64 +1,31 @@
 import { describe, expect, test } from 'bun:test';
-import { AmmoStackTracker, planAmmoCollection } from '#/bot/api/combat/AmmoLogic.js';
+import { sweepPlan } from '#/bot/api/combat/AmmoLogic.js';
 
-const OPTS = { collectAt: 20, staleMs: 90_000 };
+describe('sweepPlan', () => {
+    test('ignores stacks below minStack, keeps the rest nearest-first', () => {
+        const plan = sweepPlan(
+            [
+                { key: 'far-big', count: 9, distance: 8 },
+                { key: 'near-big', count: 5, distance: 1 },
+                { key: 'near-tiny', count: 1, distance: 0 }
+            ],
+            { minStack: 3, range: 12, force: false }
+        );
+        expect(plan).toEqual(['near-big', 'far-big']);
+    });
 
-describe('planAmmoCollection', () => {
-    test('immature stacks are left to grow', () => {
-        const plan = planAmmoCollection([{ key: 'a', count: 5, sinceChangeMs: 1000 }], { ...OPTS, quiverEmpty: false, leavingField: false });
+    test('minStack 1 collects everything in range', () => {
+        const plan = sweepPlan([{ key: 'a', count: 1, distance: 4 }], { minStack: 1, range: 12, force: false });
+        expect(plan).toEqual(['a']);
+    });
+
+    test('out-of-range stacks are never swept, even forced', () => {
+        const plan = sweepPlan([{ key: 'a', count: 50, distance: 13 }], { minStack: 1, range: 12, force: true });
         expect(plan).toEqual([]);
     });
 
-    test('mature stack (count >= collectAt) is collected', () => {
-        const plan = planAmmoCollection(
-            [
-                { key: 'a', count: 20, sinceChangeMs: 0 },
-                { key: 'b', count: 3, sinceChangeMs: 0 }
-            ],
-            { ...OPTS, quiverEmpty: false, leavingField: false }
-        );
+    test('force takes sub-minStack stacks (quiver empty / leaving field)', () => {
+        const plan = sweepPlan([{ key: 'a', count: 1, distance: 2 }], { minStack: 5, range: 12, force: true });
         expect(plan).toEqual(['a']);
-    });
-
-    test('stale stack is collected regardless of size (despawn backstop)', () => {
-        const plan = planAmmoCollection([{ key: 'a', count: 2, sinceChangeMs: 91_000 }], { ...OPTS, quiverEmpty: false, leavingField: false });
-        expect(plan).toEqual(['a']);
-    });
-
-    test('empty quiver force-collects everything', () => {
-        const plan = planAmmoCollection(
-            [
-                { key: 'a', count: 1, sinceChangeMs: 0 },
-                { key: 'b', count: 2, sinceChangeMs: 0 }
-            ],
-            { ...OPTS, quiverEmpty: true, leavingField: false }
-        );
-        expect(plan).toEqual(['a', 'b']);
-    });
-
-    test('leaving the field force-collects everything', () => {
-        const plan = planAmmoCollection([{ key: 'a', count: 1, sinceChangeMs: 0 }], { ...OPTS, quiverEmpty: false, leavingField: true });
-        expect(plan).toEqual(['a']);
-    });
-});
-
-describe('AmmoStackTracker', () => {
-    test('tracks count changes per tile and reports time since last change', () => {
-        const tracker = new AmmoStackTracker();
-        tracker.observe([{ key: 'a', count: 1 }], 0);
-        tracker.observe([{ key: 'a', count: 1 }], 10_000);
-        expect(tracker.stacks(10_000)).toEqual([{ key: 'a', count: 1, sinceChangeMs: 10_000 }]);
-
-        // a merge (count grew) resets the stale clock — mirrors the engine
-        // resetting the despawn timer on merge
-        tracker.observe([{ key: 'a', count: 5 }], 20_000);
-        expect(tracker.stacks(21_000)).toEqual([{ key: 'a', count: 5, sinceChangeMs: 1000 }]);
-    });
-
-    test('vanished stacks are dropped (picked up / despawned)', () => {
-        const tracker = new AmmoStackTracker();
-        tracker.observe([{ key: 'a', count: 3 }], 0);
-        tracker.observe([], 1000);
-        expect(tracker.stacks(1000)).toEqual([]);
     });
 });

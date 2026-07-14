@@ -16,7 +16,7 @@ import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRange
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
-import { AmmoStackTracker, planAmmoCollection } from '../api/combat/AmmoLogic.js';
+import { sweepPlan } from '../api/combat/AmmoLogic.js';
 import type { GroundItem } from '../api/queries/GroundItems.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
@@ -79,7 +79,8 @@ export const SETTINGS: SettingsSchema = {
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
     ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
     ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
-    collectAt: { type: 'number', default: 20, min: 1, max: 100, label: 'Collect arrows at stack size', group: 'Combat', showIf: SHOW_RANGE },
+    minStack: { type: 'number', default: 1, min: 1, max: 50, label: 'Ignore arrow stacks smaller than', group: 'Combat', showIf: SHOW_RANGE, help: 'every kill sweeps your arrows off the ground; stacks below this size are not worth the walk' },
+    collectRange: { type: 'number', default: 12, min: 2, max: 30, label: 'Arrow sweep range (tiles)', group: 'Combat', showIf: SHOW_RANGE },
 
     food: { type: 'string', default: 'Lobster', options: FOOD_OPTIONS, label: 'Food', group: 'Food & healing' },
     eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', group: 'Food & healing' },
@@ -124,9 +125,8 @@ let SPELL = 'Wind Strike';
 let RUNES_WITHDRAW = 150;
 let AMMO = 'Bronze arrow';
 let AMMO_WITHDRAW = 200;
-let COLLECT_AT = 20;
-// stacks a stack must sit unchanged before the despawn-backstop sweep grabs it
-const AMMO_STALE_MS = 90_000;
+let MIN_STACK = 1;
+let COLLECT_RANGE = 12;
 
 
 /**
@@ -179,7 +179,8 @@ export default class RockCrab extends TaskBot {
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
         AMMO = this.settings.str('ammo', 'Bronze arrow');
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 200);
-        COLLECT_AT = this.settings.num('collectAt', 20);
+        MIN_STACK = this.settings.num('minStack', 1);
+        COLLECT_RANGE = this.settings.num('collectRange', 12);
         this.solveClue = new SolveClue({
             log: m => this.log(m),
             setStatus: s => this.setStatus(s),
@@ -190,7 +191,7 @@ export default class RockCrab extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (${this.settings.str('rangeStyle', 'rapid')}, collect@${COLLECT_AT})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
+        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (${this.settings.str('rangeStyle', 'rapid')}, sweep>=${MIN_STACK})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
@@ -408,6 +409,37 @@ function cluePending(): boolean {
     return SOLVE_CLUES && Inventory.items().some(i => (i.name ?? '').toLowerCase() === 'clue scroll');
 }
 
+/** Sweep our fired ammo off the ground: every stack within COLLECT_RANGE, at
+ *  least MIN_STACK big (force takes the small ones too), nearest first. Runs
+ *  after each kill and on the leave-field/empty-quiver forces. Returns the
+ *  number of stacks collected. */
+async function sweepAmmoOnce(bot: RockCrab, force: boolean): Promise<number> {
+    const stacks = ammoStacksOnGround();
+    const plan = new Set(
+        sweepPlan(
+            stacks.map(g => ({ key: stackKey(g), count: g.count, distance: g.distance() })),
+            { minStack: MIN_STACK, range: COLLECT_RANGE, force }
+        )
+    );
+    let collected = 0;
+    for (const stack of stacks) {
+        if (EventSignal.pending() || bot.died || !plan.has(stackKey(stack))) {
+            continue;
+        }
+        const before = Inventory.count(AMMO);
+        await stack.interact('Take');
+        if (await Execution.delayUntil(() => Inventory.count(AMMO) > before, 5000)) {
+            collected++;
+            bot.log(`swept ${Inventory.count(AMMO) - before} ${AMMO} off the ground`);
+        }
+    }
+    // straight into the quiver so the pack stays free for loot
+    if (Inventory.count(AMMO) > 0) {
+        await quiverPackAmmo();
+    }
+    return collected;
+}
+
 /** Wield pack ammo into the quiver — ALWAYS dispatches the Wield op (unlike
  *  Equipment.equip, which short-circuits when any ammo is already worn, so a
  *  top-up would never move). True once the pack count dropped / no ammo held. */
@@ -569,88 +601,37 @@ class ArmAutocast implements Task {
 }
 
 /**
- * Collect our fired ammo off the ground — but only MATURE stacks. Each shot
- * drops 1 ammo on the target tile and the engine merges our stacks per tile
- * (live count is readable), so we let a stack grow to `collectAt` before one
- * pickup recovers the lot. Force-collects everything when the quiver is dry
- * or we're about to leave the field (bank/clue), and sweeps stacks that
- * stopped growing before the despawn timer can eat them.
+ * Out-of-fight ammo sweeps. The primary sweep runs INSIDE Fight after each
+ * kill (sweep-on-kill — see sweepAmmoOnce); this task covers the forces that
+ * happen between fights: an empty quiver (grab everything now) and leaving
+ * the field (bank/clue — abandon nothing). Also warns once about ground ammo
+ * that doesn't match the Ammo setting (it would never be collected).
  */
 class CollectAmmo implements Task {
-    private tracker = new AmmoStackTracker();
-    private lastDeferLog = 0;
     private warnedMismatch = false;
 
     constructor(private bot: RockCrab) {}
 
-    /** Make "waiting" legible: while stacks are on the ground but none is
-     *  collectable yet, say so (rate-limited) — otherwise a growing pile just
-     *  looks like a broken collector. Also catches a misconfigured ammo name:
-     *  ground arrows/bolts that don't match the setting would NEVER collect. */
-    private logDeferred(): void {
-        const now = Date.now();
-        if (!this.warnedMismatch && GroundItems.query().where(g => /arrow|bolt/i.test(g.name ?? '') && (g.name ?? '').toLowerCase() !== AMMO.toLowerCase() && inField(g.tile())).nearest() !== null) {
-            this.warnedMismatch = true;
-            this.bot.log(`WARNING: ground ammo in the field does not match the '${AMMO}' setting — those will never be collected. Fix the Ammo dropdown if they're yours.`);
-        }
-        if (now - this.lastDeferLog < 30_000) {
-            return;
-        }
-        const stacks = this.tracker.stacks(now);
-        if (stacks.length > 0) {
-            this.lastDeferLog = now;
-            this.bot.log(`[range] ${stacks.length} ${AMMO} stack(s) on the ground (${stacks.map(s => s.count).join(', ')}) — collecting at ${COLLECT_AT}, or ${Math.round(AMMO_STALE_MS / 1000)}s after a stack stops growing`);
-        }
-    }
-
-    private plan(): Set<string> {
-        this.tracker.observe(
-            ammoStacksOnGround().map(g => ({ key: stackKey(g), count: g.count })),
-            Date.now()
-        );
-        const leaving = (!hasFood() && !this.bot.bankIsKnownEmpty()) || needStyleSupplies() || cluePending();
-        return new Set(
-            planAmmoCollection(this.tracker.stacks(Date.now()), {
-                collectAt: COLLECT_AT,
-                staleMs: AMMO_STALE_MS,
-                quiverEmpty: quiverCount() === 0 && Inventory.count(AMMO) === 0,
-                leavingField: leaving
-            })
-        );
+    private force(): boolean {
+        const quiverDry = quiverCount() === 0 && Inventory.count(AMMO) === 0;
+        return quiverDry || (!hasFood() && !this.bot.bankIsKnownEmpty()) || needStyleSupplies() || cluePending();
     }
 
     validate(): boolean {
         if (STYLE !== 'range') {
             return false;
         }
-        if (this.plan().size > 0) {
-            return true;
+        if (!this.warnedMismatch && GroundItems.query().where(g => /arrow|bolt/i.test(g.name ?? '') && (g.name ?? '').toLowerCase() !== AMMO.toLowerCase() && inField(g.tile())).nearest() !== null) {
+            this.warnedMismatch = true;
+            this.bot.log(`WARNING: ground ammo in the field does not match the '${AMMO}' setting — those will never be collected. Fix the Ammo dropdown if they're yours.`);
         }
-        this.logDeferred();
-        return false;
+        const stacks = ammoStacksOnGround().map(g => ({ key: stackKey(g), count: g.count, distance: g.distance() }));
+        return sweepPlan(stacks, { minStack: MIN_STACK, range: COLLECT_RANGE, force: this.force() }).length > 0;
     }
 
     async execute(): Promise<void> {
-        const keys = this.plan();
-        for (const stack of ammoStacksOnGround()) {
-            if (EventSignal.pending() || this.bot.died) {
-                return;
-            }
-            if (!keys.has(stackKey(stack))) {
-                continue;
-            }
-            const size = stack.count;
-            this.bot.setStatus(`collecting ${size} ${AMMO}`);
-            const before = Inventory.count(AMMO);
-            await stack.interact('Take');
-            if (await Execution.delayUntil(() => Inventory.count(AMMO) > before, 5000)) {
-                this.bot.log(`collected a stack of ${Inventory.count(AMMO) - before} ${AMMO}`);
-            }
-        }
-        // straight into the quiver so the pack stays free for loot
-        if (Inventory.count(AMMO) > 0) {
-            await quiverPackAmmo();
-        }
+        this.bot.setStatus(`sweeping ${AMMO}`);
+        await sweepAmmoOnce(this.bot, this.force());
     }
 }
 
@@ -918,6 +899,10 @@ class Fight implements Task {
                     this.bot.countKill();
                 }
                 this.bot.log(`rock crab down — ${this.bot.killsTotal()} kills total`);
+                // sweep-on-kill: grab our arrows while we're standing in the pile
+                if (STYLE === 'range') {
+                    await sweepAmmoOnce(this.bot, false);
+                }
             }
             this.lastCount = remaining;
         }

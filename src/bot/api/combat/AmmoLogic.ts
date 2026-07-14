@@ -1,62 +1,35 @@
 /**
  * Pure decision core for ranged ground-ammo collection (no client imports).
- * Fired ammo lands on the target's tile; the engine merges OUR stackable
- * drops per tile and the client exposes the live count (OBJ_COUNT), so a
- * stack's size is readable. Every merge resets the server despawn timer, so
- * an actively-fed stack persists — only stacks that STOPPED growing age out,
- * which is what `sinceChangeMs` measures.
+ *
+ * Design: sweep on kill. Every crab kill triggers a sweep of our ammo stacks
+ * within range; `minStack` filters out piles too small to be worth the walk
+ * (the engine does not reliably merge same-tile drops, so fired arrows land
+ * as many small per-tile stacks — a size-maturity rule can never see "the
+ * pile", but a kill-triggered sweep collects it while we're standing in it).
+ * Force mode (quiver empty / leaving the field) takes everything.
  */
 
 export interface AmmoStack {
     /** Stable identity for a stack: its tile (e.g. "x|z|level"). */
     key: string;
     count: number;
-    /** ms since the stack's count last changed (0 for just-seen/just-grown). */
-    sinceChangeMs: number;
+    /** Chebyshev distance from the player. */
+    distance: number;
 }
 
-export interface CollectOptions {
-    /** Collect a stack once it reaches this many (the "mature" rule). */
-    collectAt: number;
-    /** Collect stacks unchanged for this long — despawn safety backstop. */
-    staleMs: number;
-    /** Out of ammo NOW → grab everything on the ground. */
-    quiverEmpty: boolean;
-    /** About to bank/reset/solve-clue → sweep everything before leaving. */
-    leavingField: boolean;
+export interface SweepOptions {
+    /** Ignore stacks smaller than this (the panel slider). */
+    minStack: number;
+    /** Only sweep stacks within this many tiles of the player. */
+    range: number;
+    /** Quiver empty / leaving the field: take everything in range. */
+    force: boolean;
 }
 
-/** Keys of the stacks worth collecting right now, input order preserved. */
-export function planAmmoCollection(stacks: AmmoStack[], opts: CollectOptions): string[] {
-    const all = opts.quiverEmpty || opts.leavingField;
-    return stacks.filter(s => all || s.count >= opts.collectAt || s.sinceChangeMs >= opts.staleMs).map(s => s.key);
-}
-
-/** Tracks per-tile stack counts across loop iterations so the planner can see
- *  how long each stack has sat unchanged. Feed it every observation. */
-export class AmmoStackTracker {
-    private seen = new Map<string, { count: number; changedAt: number }>();
-
-    observe(stacks: { key: string; count: number }[], nowMs: number): void {
-        const alive = new Set(stacks.map(s => s.key));
-        for (const key of [...this.seen.keys()]) {
-            if (!alive.has(key)) {
-                this.seen.delete(key); // picked up or despawned
-            }
-        }
-        for (const s of stacks) {
-            const prev = this.seen.get(s.key);
-            if (!prev || prev.count !== s.count) {
-                this.seen.set(s.key, { count: s.count, changedAt: nowMs });
-            }
-        }
-    }
-
-    stacks(nowMs: number): AmmoStack[] {
-        return [...this.seen.entries()].map(([key, s]) => ({ key, count: s.count, sinceChangeMs: nowMs - s.changedAt }));
-    }
-
-    reset(): void {
-        this.seen.clear();
-    }
+/** Keys of the stacks worth collecting, nearest first. */
+export function sweepPlan(stacks: AmmoStack[], opts: SweepOptions): string[] {
+    return stacks
+        .filter(s => s.distance <= opts.range && (opts.force || s.count >= opts.minStack))
+        .sort((a, b) => a.distance - b.distance)
+        .map(s => s.key);
 }
