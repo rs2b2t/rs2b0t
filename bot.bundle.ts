@@ -3,7 +3,7 @@ import fs from 'fs';
 // rs2b0t build — clone of bundle.ts with three deliberate differences:
 //   1. entrypoint is src/bot/main.ts (the bot client), emitted as botclient.js
 //   2. NO terser pass and therefore NO property mangling: the bot API surface
-//      (globalThis.__rs2b0t, Slice 7) keeps stable property names for
+//      (globalThis.__rs2b0t) keeps stable property names for
 //      externally-compiled scripts, and string-keyed self-test checks work
 //   3. console is always kept — bot logs matter
 // Bun's own minifier (prod) shortens locals but never mangles property names.
@@ -14,7 +14,7 @@ const TARGET_NAME = process.env.TARGET ?? 'local';
 // login keys on 1024-bit RSA with exponent 65537 — upstream's 512-bit default
 // was rotated out in engine commit 6031c06b. local = the rs2b2t-engine repo's
 // committed data/config/private.pem public half (verified end-to-end via
-// tools/login-probe against the local engine → login response 2). live =
+// against the local engine → login response 2). live =
 // prod's own rotated modulus, a PUBLIC value supplied via LIVE_RSAN at
 // live-build time (extract from prod client.js).
 const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {

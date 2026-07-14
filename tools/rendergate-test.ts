@@ -25,7 +25,7 @@ type Rs2b0t = { rs2b0t: {
 } };
 
 const app = await electron.launch({
-    args: ['desktop/main.cjs', `--server=${server}/bot.html?inputmode=synthetic&WalkTo.destination=Falador`],
+    args: ['desktop/main.cjs', `--server=${server}/bot.html?WalkTo.destination=Falador`],
     executablePath: 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 });
 

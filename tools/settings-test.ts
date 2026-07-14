@@ -8,7 +8,7 @@
 import { chromium, type Page } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
-const base = process.argv[2] ?? 'http://localhost:8888';
+const base = process.argv[2] ?? 'http://localhost:8890';
 
 function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);

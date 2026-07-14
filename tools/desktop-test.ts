@@ -11,7 +11,7 @@
 import { _electron as electron } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
-const server = process.argv[2] ?? 'http://localhost:8888';
+const server = process.argv[2] ?? 'http://localhost:8890';
 const username = `desk${Date.now().toString(36).slice(-7)}`;
 
 function fail(msg: string): never {

@@ -474,8 +474,7 @@ class SmithDagger extends StageTask {
  * side.
  *
  * ALSO entry-gated on still being WEST of the line (`x <= EXIT_GATE_X`) —
- * the same jump-re-arm class as Chef's `OpenQuestGuideDoor` (same
- * addendum): a future combat-section stage-jump re-arms this
+ * the same jump-re-arm class as Chef's `OpenQuestGuideDoor`: a future combat-section stage-jump re-arms this
  * one-shot on a bot standing EAST of the gate with the dagger still in its
  * pack, and `[oploc1,_tut_mining_exit]` teleports across on EVERY open —
  * an unguarded re-fire would ping-pong the bot back west forever (the

@@ -10,7 +10,7 @@
 import { chromium } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
-const base = process.argv[2] ?? 'http://localhost:8888';
+const base = process.argv[2] ?? 'http://localhost:8890';
 // default to a per-run name: fresh save, and immune to a lingering
 // "already online" session from a previous run
 const username = process.argv[3] ?? `smoke${Date.now().toString(36).slice(-7)}`;

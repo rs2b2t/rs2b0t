@@ -8,7 +8,7 @@
 import { chromium } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
-const base = process.argv[2] ?? 'http://localhost:8888';
+const base = process.argv[2] ?? 'http://localhost:8890';
 const username = process.argv[3] ?? `nav${Date.now().toString(36).slice(-7)}`;
 
 // Lumbridge castle courtyard

@@ -6,7 +6,7 @@
 import { chromium } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
-const base = process.argv[2] ?? 'http://localhost:8888';
+const base = process.argv[2] ?? 'http://localhost:8890';
 const username = process.argv[3] ?? `relog${Date.now().toString(36).slice(-7)}`;
 
 function fail(msg: string): never {
