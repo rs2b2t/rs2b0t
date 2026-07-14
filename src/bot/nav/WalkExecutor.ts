@@ -33,6 +33,16 @@ const PROGRESS_WINDOW = 26; // how far ahead we look for our own position on the
 const CORRIDOR = 3; // on-path tolerance (client micro-routes differ from ours)
 const OFF_CORRIDOR_STRIKES = 2; // consecutive off-corridor checks before repathing
 const STALL_TICKS = 6; // no tile change for this many ticks while short of the target ⇒ stalled
+// canReach BFS budget for re-checking the committed click target during stall
+// bookkeeping (Amendment 1b): an RS door can swing shut AFTER we select a
+// target, so re-probe reachability before crediting a no-move tick as progress.
+const STALL_REACH_STEPS = 256;
+// Backstop (Amendment 1c): consecutive no-move loop iterations before the stall
+// counter is allowed to grow regardless of target distance — catches the
+// probe-proven click-starvation where canReach reads TRUE yet the bot never
+// steps. Resets on any movement. Loose enough (each loop ≈ 2 ticks) not to trip
+// on legitimate slow server-walks.
+const STUCK_ITERS = 12;
 // Handle a crossing once we're within reach of its approach tile. MUST be >=
 // ARRIVE_RADIUS: the walker stops advancing its click target once within
 // ARRIVE_RADIUS of it (the approach tile, when a crossing caps the click
@@ -77,6 +87,18 @@ type FollowResult = 'arrived' | 'closest' | 'repath' | 'failed' | 'interrupted';
 
 function chebyshev(a: WorldTile, b: WorldTile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+
+/**
+ * A shut door/gate we can walk through: its NAME reads as a door/gate AND it
+ * offers an Open-style op. Pure — the filter behind the stall opener. Both gates
+ * are load-bearing: the NAME filter stops the opener clicking a same-'Open'-op
+ * Wardrobe/Chest next to a stalled bot (the live wardrobe-opening incident), and
+ * matching the Open PREFIX (not the literal 'Open') catches 'Open-quietly'
+ * variants. An OPEN door offers 'Close', so this only ever matches shut ones.
+ */
+export function isOpenableBarrier(name: string | null, ops: readonly (string | null)[]): boolean {
+    return /(door|gate)/i.test(name ?? '') && ops.some(op => op !== null && /^open/i.test(op));
 }
 
 /** Expand direction-change waypoints back into the full tile path. */
@@ -218,6 +240,7 @@ class WalkExecutorImpl {
         let clicks = 0;
         let warnedCombat = false;
         let lastTile: WorldTile | null = null;
+        let stillIters = 0; // consecutive no-move loop iterations (stall backstop c)
 
         const clickable = (t: WorldTile): boolean => reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
 
@@ -255,11 +278,29 @@ class WalkExecutorImpl {
             }
             this.remaining = tiles.length - 1 - pathIdx;
 
-            // stall bookkeeping: counts while short of the target — and also
-            // while we have NO target (nothing clickable at a scene edge)
+            // Stall bookkeeping. A no-move loop iteration grows the stall counter
+            // when ANY of three conditions holds; ANY movement resets it (and the
+            // no-move backstop counter). This only widens WHEN the existing counter
+            // is allowed to grow — STALL_TICKS, retry ordering, and the recovery
+            // flow below are unchanged.
+            //   (a) short of the committed click target (or none): asked to move
+            //       and haven't reached it — the original condition, unchanged.
+            //   (b) door-reverted-after-selection: the target was reachable at
+            //       click time but an RS door swung shut and canReach now refuses
+            //       it — a real starve (a) misses when we're near the target.
+            //   (c) probe-proven unpinned starvation: canReach can read TRUE mid
+            //       click-starve (mechanism lives in click-selection/corridor
+            //       bookkeeping), so back it with a plain no-movement timer.
+            // (b)'s BFS is placed last so it only runs when (a)/(c) didn't fire.
             const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
+            stillIters = moved ? 0 : stillIters + 1;
             const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]) > ARRIVE_RADIUS;
-            stallTicks = moved || !shortOfTarget ? 0 : stallTicks + 2;
+            const noMoveStall = !moved && (
+                shortOfTarget ||
+                stillIters >= STUCK_ITERS ||
+                (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx], { maxSteps: STALL_REACH_STEPS }))
+            );
+            stallTicks = noMoveStall ? stallTicks + 2 : 0;
             lastTile = me;
 
             // The next crossing AHEAD caps how far we click (we stop before it).
@@ -367,31 +408,37 @@ class WalkExecutorImpl {
 
     /**
      * Stalled (not in combat): a closed door/gate is blocking us. Open the
-     * nearest 'Open'-able loc next to the PLAYER — searched player-relative, NOT
-     * relative to pathIdx. `locateOnPath` can snap our path index PAST a crossing
-     * on a winding approach (a 2-wide gate at the edge of a field), and a
-     * path-relative search then looks north of the very gate we're stuck against
-     * to the south and never opens it — the "constantly stuck on gates" failure.
-     * `.within(3).nearest()` is player-relative, so it always finds the blocker.
+     * nearest openable door/gate next to the PLAYER — searched player-relative,
+     * NOT relative to pathIdx. `locateOnPath` can snap our path index PAST a
+     * crossing on a winding approach (a 2-wide gate at the edge of a field), and
+     * a path-relative search then looks north of the very gate we're stuck
+     * against to the south and never opens it — the "constantly stuck on gates"
+     * failure. `.within(3).nearest()` is player-relative, so it always finds the
+     * blocker. The filter is `isOpenableBarrier` (name-gated door/gate + Open-op),
+     * NOT a bare `.action('Open')`: the loose op filter clicked a same-'Open'-op
+     * Wardrobe next to a stalled bot (live incident).
      */
     async tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
         const door = Locs.query()
-            .action('Open')
+            .where(l => isOpenableBarrier(l.name, l.actions()))
             .within(3)
             .nearest();
         if (!door) {
             return false;
         }
 
+        // Click the loc's OWN Open-style op (mirrors walkOpening's openOp), never
+        // a hardcoded 'Open' literal — the loc passed isOpenableBarrier so it has
+        // one; this covers 'Open-quietly' and any other Open-prefixed variant.
+        const op = door.actions().find(a => /^open/i.test(a));
         const t = door.tile();
         log(`stalled next to closed '${door.name}' at (${t.x},${t.z}) — opening it`);
-        if (!door.interact('Open')) {
+        if (!op || !door.interact(op)) {
             return false;
         }
         return Execution.delayUntil(() => {
             const cur = Locs.query()
-                .action('Open')
-                .where(l => l.tile().x === t.x && l.tile().z === t.z && (l.name ?? '') === (door.name ?? ''))
+                .where(l => l.tile().x === t.x && l.tile().z === t.z && (l.name ?? '') === (door.name ?? '') && isOpenableBarrier(l.name, l.actions()))
                 .nearest();
             return cur === null || Reachability.canReach(t, { maxSteps: 200, adjacentOk: true });
         }, 5000);
