@@ -6,9 +6,11 @@ import { fleeCandidates } from './eventEvade.js';
 import { Game } from './Game.js';
 import { Reachability } from './Reachability.js';
 import { Traversal } from './Traversal.js';
+import { Bank } from './hud/Bank.js';
 import { ChatDialog } from './hud/ChatDialog.js';
 import { Equipment } from './hud/Equipment.js';
 import { Inventory } from './hud/Inventory.js';
+import { Shop } from './hud/Shop.js';
 import { Npcs } from './queries/Npcs.js';
 import { GroundItems } from './queries/GroundItems.js';
 import { MIME_SQUARE, performMimeStage } from './solvers/Mime.js';
@@ -74,6 +76,48 @@ const WHIRLPOOL_NPC_IDS = [403, 404, 405];
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
 const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fly fishing rod', 'harpoon', 'lobster pot'];
+// The big-fish drop lasts ^lootdrop_duration/2 (~1min); a loss older than this
+// can't still be our gear on the ground.
+const GEAR_LOSS_WINDOW_MS = 90_000;
+
+/**
+ * Remembers fishing gear that recently LEFT the pack, because gear-on-the-
+ * ground alone proves nothing: the world has PERMANENT gear ground spawns
+ * (found live: big_net/harpoon/lobster_pot sit at the Fishing Guild gate,
+ * 2605-2608,3395-3397), and detecting on presence alone hijacked every bot
+ * that walked past into an endless pick-it-up loop. The real event
+ * (macro_event_big_fish.rs2) inv_del's the gear from the PACK and drops it
+ * within 7 tiles — so a genuine knock-off always shows as a held item
+ * vanishing moments before it appears on the ground. Bank/shop suppression
+ * covers deposits/sales, plus the FOLLOWING update: the vanish is usually
+ * noticed one detect cycle after the interface closes. Pure (times injected).
+ */
+export class GearLossTracker {
+    private held = new Set<string>();
+    private lost = new Map<string, number>();
+    private wasSuppressed = false;
+
+    constructor(private readonly windowMs = GEAR_LOSS_WINDOW_MS) {}
+
+    /** Feed the currently-held gear names each detect cycle. */
+    update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number): void {
+        const now = new Set(heldNow.map(s => s.toLowerCase()));
+        if (!suppressedNow && !this.wasSuppressed) {
+            for (const gear of this.held) {
+                if (!now.has(gear)) {
+                    this.lost.set(gear, nowMs);
+                }
+            }
+        }
+        this.held = now;
+        this.wasSuppressed = suppressedNow;
+    }
+
+    recentlyLost(gear: string, nowMs: number): boolean {
+        const at = this.lost.get(gear.toLowerCase());
+        return at !== undefined && nowMs - at <= this.windowMs;
+    }
+}
 
 // Teleport-minigame stages, detected by mapsquare (survives relogs into the
 // stage). macro_event_mime.rs2 / macro_event_maze.rs2.
@@ -153,6 +197,9 @@ class RandomEventsImpl {
 
     /** Which skill genie lamps train (fleet default: strength). */
     lampSkill = 'strength';
+
+    /** Big-fish evidence: only gear that recently left the pack counts as lost. */
+    private readonly gearLoss = new GearLossTracker();
 
     // Per-event-signature bookkeeping so an unclearable event (a context the
     // handler can't fully resolve — e.g. mime/maze, or a plant that won't
@@ -259,13 +306,24 @@ class RandomEventsImpl {
             }
         }
 
-        // big fish aftermath: our fishing gear got knocked onto the ground
+        // big fish aftermath: our fishing gear got knocked onto the ground.
+        // Gated on the gear having RECENTLY LEFT the pack — gear lying around
+        // is not evidence by itself (permanent guild-gate ground spawns froze
+        // passing world-walks in an event loop; see GearLossTracker).
+        this.gearLoss.update(
+            FISHING_GEAR.filter(g => Inventory.contains(g)),
+            Bank.isOpen() || Shop.isOpen(),
+            Date.now()
+        );
         for (const gear of FISHING_GEAR) {
+            if (!this.gearLoss.recentlyLost(gear, Date.now()) || Inventory.contains(gear)) {
+                continue;
+            }
             const onGround = GroundItems.query()
                 .where(g => (g.name?.toLowerCase() ?? '') === gear)
                 .within(10)
                 .nearest();
-            if (onGround && !Inventory.contains(gear)) {
+            if (onGround) {
                 return { kind: 'lost-gear', name: gear };
             }
         }
