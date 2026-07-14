@@ -11,7 +11,7 @@ import type TutorialBot from '../../TutorialBot.js';
 import { StageTask } from '../StageTask.js';
 
 /**
- * Survival section — server ladder 4 -> 130 (docs/tutorial-map.md), content
+ * Survival section — server ladder 4 -> 130, content
  * confirmed against `lostcity-dev/content/scripts/tutorial/` (274): the
  * guide's door -> Survival Expert (Brynna) -> inventory tab -> chop -> fire
  * -> stats tab -> talk again -> net -> cook (burn then success) -> gate.
@@ -62,7 +62,7 @@ import { StageTask } from '../StageTask.js';
  *    through the whole tutorial.
  *
  * Geometry locked from a live probe (fresh account, spawn (3094,3106) —
- * recorded in docs/tutorial-map.md): guide door `newbie_door1` at
+ * recorded in the tutorial varp ladder): guide door `newbie_door1` at
  * (3098,3107), guide room west of it; Survival Expert wanders ~(3102,3094);
  * fishing spots (3101,3092)/(3103,3092); survival gate halves
  * (3089,3091)/(3089,3092); chop-able trees all over the clearing (nearest

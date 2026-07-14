@@ -12,7 +12,7 @@ import { StageTask } from '../StageTask.js';
 import { doorAt, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
 
 /**
- * Chef + controls section — server ladder 130 -> 220 (docs/tutorial-map.md),
+ * Chef + controls section — server ladder 130 -> 220,
  * content confirmed against `lostcity-dev/content/scripts/tutorial/` (274):
  * the Master Chef's door (140) -> talk (150, grants flour+water) -> make
  * dough (160) -> bake bread (170) -> music tab (180) -> exit door (190) ->
@@ -24,7 +24,7 @@ import { doorAt, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  * flag as soon as the dialogue OPENS and return, letting the
  * higher-priority `AdvanceDialog` click the pages.
  *
- * HOUSE RULE (Task 7 review) + a Task 8 addendum it took a live stall to
+ * HOUSE RULE + an addendum it took a live stall to
  * learn: every stage needs a PERMANENT completion gate, and a one-shot flag
  * may only latch on VERIFIED OUTCOME — never on dispatch. This section's
  * first cut latched `OpenChefDoor.opened` on `interact()` returning true
@@ -48,10 +48,10 @@ import { doorAt, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  * complete the path; from farther out, `actions.walkTo` (MOVE_GAMECLICK,
  * tryNearest=true — snaps to the nearest reachable tile) must close the
  * distance first, iteratively. Hence the shared `walkToward()` helper
- * (`stages/helpers.ts` — promoted there in Task 9 so QuestGuide.ts's ladder
+ * (`stages/helpers.ts` — promoted there so QuestGuide.ts's ladder
  * stage didn't have to copy it) + per-stage distance gates below. ALSO:
  * doors/gates on this build re-close ~3 ticks after
- * opening (`loc_change(inviswall, 3)` — the Task 7 gate finding is
+ * opening (`loc_change(inviswall, 3)` — the gate finding is
  * actually generic to every tutorial door), so "the closed door loc is
  * still there" is NEVER evidence an open failed — only the
  * teleport-through position change is.
@@ -92,7 +92,7 @@ import { doorAt, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  *    (content hint: `hint_coord(^hint_south, 0_48_48_14_54)`); crossing to
  *    z >= 3126 is the verified outcome the one-shot latches on.
  *
- * Geometry (live probes, this task — recorded in docs/tutorial-map.md):
+ * Geometry (live probes, this task):
  * survival gate teleport lands ON the gate tile (3089,3091); Master Chef
  * wanders ~(3075,3086) inside his house (interior ~x 3073-3078, z
  * 3081-3091); entrance `newbie_door2` (3079,3084, loc id 3017, wall on its
@@ -102,7 +102,7 @@ import { doorAt, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  */
 
 const CHEF = 'Master Chef';
-/** general/configs/tabs.constant — confirmed live (docs/tutorial-map.md's tab table). */
+/** general/configs/tabs.constant — confirmed live. */
 const MUSIC_TAB = 13;
 const CONTROLS_TAB = 12;
 
@@ -331,7 +331,7 @@ class ToggleRunOn extends StageTask {
  * (crossing to z >= 3126); latching matters because later sections come
  * back south of that line (the mine ladder is at z 3119).
  *
- * ALSO gated on being on the SURFACE south of the door line (Task 10): the
+ * ALSO gated on being on the SURFACE south of the door line: the
  * whole real 200 -> 220 leg happens at z < 3126, but a mine-section
  * stage-jump re-arms this one-shot on a bot whose (equally re-armed)
  * `ToggleRunOn` turns run on UNDERGROUND (z ~9500, where `newbie_door4`
@@ -341,7 +341,7 @@ class ToggleRunOn extends StageTask {
  * misfire without touching the real flow — including questguide-test's
  * DELIBERATE re-arm (that jump starts at spawn, z ~3106 < 3126).
  *
- * AND on `Skills.xp('mining') === 0` (Task 12): the bank section runs on
+ * AND on `Skills.xp('mining') === 0`: the bank section runs on
  * the surface at z 3124 < 3126, so the z gate alone no longer covers every
  * "elsewhere" — a 500 stage-jump (or a mid-bank-section restart) would
  * re-arm this stage and walk the bot back to the quest door, feeding it to

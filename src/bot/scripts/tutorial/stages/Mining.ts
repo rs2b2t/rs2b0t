@@ -10,7 +10,7 @@ import { StageTask } from '../StageTask.js';
 import { MINE_Z, walkToward } from './helpers.js';
 
 /**
- * Mining + smithing section — server ladder 260 -> 360 (docs/tutorial-map.md),
+ * Mining + smithing section — server ladder 260 -> 360,
  * content confirmed against `lostcity-dev/content/scripts/tutorial/` (274)'s
  * `guides/mining_instructor.rs2` + `skills/tut_mining.rs2` +
  * `skills/tut_smelting.rs2` + `skills/tut_smithing.rs2` +
@@ -88,7 +88,7 @@ import { MINE_Z, walkToward } from './helpers.js';
  *    (z 9502-9503) — live-probed teleport: opening from the mine side
  *    (x < 3094) lands the player at x = 3095, one tile PAST the line, so
  *    `t.x > EXIT_GATE_X` is the section's terminal one-shot outcome. The
- *    Combat Instructor's rat-pen area (Task 11) is further east
+ *    Combat Instructor's rat-pen area is further east
  *    (`newbiedoor5_l/r` at x = 3111) and ALSO underground (same z range),
  *    so `inMine()` alone can't separate the two sections — every stage here
  *    additionally gates on section-local observables (item possession, the
@@ -474,8 +474,8 @@ class SmithDagger extends StageTask {
  * side.
  *
  * ALSO entry-gated on still being WEST of the line (`x <= EXIT_GATE_X`) —
- * the same jump-re-arm class as Chef's `OpenQuestGuideDoor` (Task 10
- * addendum in the map doc): a future combat-section stage-jump re-arms this
+ * the same jump-re-arm class as Chef's `OpenQuestGuideDoor` (same
+ * addendum): a future combat-section stage-jump re-arms this
  * one-shot on a bot standing EAST of the gate with the dagger still in its
  * pack, and `[oploc1,_tut_mining_exit]` teleports across on EVERY open —
  * an unguarded re-fire would ping-pong the bot back west forever (the

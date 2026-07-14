@@ -12,7 +12,7 @@ import { StageTask } from '../StageTask.js';
 import { MINE_Z, walkToward } from './helpers.js';
 
 /**
- * Combat section — server ladder 360 -> 500 (docs/tutorial-map.md), content
+ * Combat section — server ladder 360 -> 500, content
  * confirmed against `lostcity-dev/content/scripts/tutorial/`'s
  * `guides/combat_instructor.rs2` + `tutorial.rs2` + `tut_chatbox_steps.rs2`
  * + `tut_doors_and_gates.rs2` + `npcs/tut_giant_rat.rs2` +
@@ -29,7 +29,7 @@ import { MINE_Z, walkToward } from './helpers.js';
  * 470) -> climb the ladder out (470 -> 500, skipping the unused 480/490
  * slots).
  *
- * `Equipment.equip`'s first real workout (Task 3 proved it in isolation):
+ * `Equipment.equip`'s first real workout (proven in isolation first):
  * four chained equips including the codebase's first STACKABLE equip
  * (Bronze arrow x50 — `iop2=Wield` in skill_combat/configs/ranged/
  * arrows.obj, so the normal held-op path applies unchanged; note 7).

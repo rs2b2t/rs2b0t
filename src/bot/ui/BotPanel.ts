@@ -82,7 +82,7 @@ export default class BotPanel {
 
         this.scriptStatus = row(script, 'status');
 
-        // Slice 7: load external scripts (URL with cache-busting reload, or
+        // load external scripts (URL with cache-busting reload, or
         // a local file). Trusted code, no sandbox.
         const loadRow = el('div', 'rs2b0t-buttons');
         this.loadUrlInput = document.createElement('input');

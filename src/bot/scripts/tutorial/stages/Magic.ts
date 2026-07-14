@@ -11,8 +11,8 @@ import { StageTask } from '../StageTask.js';
 import { walkToward } from './helpers.js';
 
 /**
- * Magic section + mainland — server ladder 610 -> 1000 (docs/
- * tutorial-map.md), content confirmed against `lostcity-dev/content/
+ * Magic section + mainland — server ladder 610 -> 1000, content
+ * confirmed against `lostcity-dev/content/
  * scripts/tutorial/` (274)'s `guides/magic_instructor.rs2` +
  * `npcs/tut_chicken.rs2` + `skills/tut_player_magic.rs2` + `tutorial.rs2` +
  * `tut_chatbox_steps.rs2`: talk to the Magic Instructor (610 -> 620) ->
@@ -23,7 +23,7 @@ import { walkToward } from './helpers.js';
  * writes **1000**, telejumps to Lumbridge (3222,3222), replaces the pack
  * with the full starter kit).
  *
- * First consumer of `Game.castOnNpc` (Task 13): the spell is a
+ * First consumer of `Game.castOnNpc`: the spell is a
  * BUTTON_TARGET component found by `targetBase` caption at runtime; the
  * armed cast dispatches TGT_BUTTON + TGT_NPC and the client walks/OPNPCTs
  * itself (`DirectInputDriver.castOnNpc`).
@@ -67,7 +67,7 @@ import { walkToward } from './helpers.js';
 const TERROVA = 'Magic Instructor';
 const CHICKEN = 'Chicken';
 
-/** general/configs/tabs.constant — 6 = magic (docs/tutorial-map.md tab table). */
+/** general/configs/tabs.constant — 6 = magic (the tutorial varp ladder tab table). */
 const MAGIC_TAB = 6;
 
 /** Caged-chicken pen center (hint coord 0_49_48_3_20, probe-confirmed area). */

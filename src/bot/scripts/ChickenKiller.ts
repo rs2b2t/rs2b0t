@@ -38,7 +38,7 @@ export const SETTINGS: SettingsSchema = {
 
 
 /**
- * Slice 3 exit-criterion bot: kills a configurable target NPC (settings:
+ * Kills a configurable target NPC (settings:
  * targetName, default 'Chicken'), loots ground items matching lootMatch and
  * optionally buries bones, unattended. Anchors to wherever it was started —
  * stand among the target NPCs. Also fronts the CowKiller preset (same class,

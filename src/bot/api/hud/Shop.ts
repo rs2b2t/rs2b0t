@@ -5,9 +5,8 @@ import { Npcs } from '../queries/Npcs.js';
 import { Inventory } from './Inventory.js';
 
 /**
- * Ids discovered live against the dev engine (Task 4, 2026-07-05) -- see
- * docs/quest-campaign-map.md's "Shop interface ids (Task 4)" section for the
- * full probe output. Every shop in the game (general store, sword shop,
+ * Ids discovered live against the dev engine (2026-07-05).
+ * Every shop in the game (general store, sword shop,
  * ...) opens the same `shop_template`/`shop_template_side` interface pair
  * (content/scripts/shop/scripts/shop.rs2 `openshop`/`openshop_activenpc`),
  * so these are content-build constants, not per-shop values -- same
@@ -20,7 +19,7 @@ const SHOP_PLAYER_COM = 3823; // shop_template_side:inv -- iop Value/Sell 1/Sell
 
 /**
  * Shop access (read + component-button buy/sell) -- the first buy/sell
- * primitive in the bot (Task 4). The shop screen is a main+side modal
+ * primitive in the bot. The shop screen is a main+side modal
  * exactly like the bank (`hud/Bank.ts`): the main panel is the shop's stock,
  * the side panel swaps the backpack to a Sell-* view while it's open.
  */
@@ -35,7 +34,7 @@ export const Shop = {
      * nearby, or the shop window never opens.
      *
      * Retries the click up to 3 times (re-querying the npc each time, in
-     * case it wandered or left the scene). Confirmed live (Task 4 probe)
+     * case it wandered or left the scene). Confirmed live
      * that a single 'Trade' click can silently not register -- attempt 1
      * dispatches fine (`interactNpc` returns true, a real OPNPC3 packet
      * goes out) but the shop never opens within a generous window, while an
@@ -168,7 +167,7 @@ export const Shop = {
  * `reader.inventory()` (the same source `Inventory.contains`/`first` use),
  * NOT `reader.shopInv(SHOP_PLAYER_COM)` -- the shop-mode side panel is a
  * second, independently-`inv_transmit`'d mirror of the same underlying
- * container, and empirically (Task 4 probe, both directions observed live)
+ * container, and empirically (probed live, both directions observed)
  * the two can each land a tick or so ahead of the other under load, with no
  * fixed winner. Buying/selling still *dispatches* against
  * `shopInv(SHOP_PLAYER_COM)`'s item (it's the only component exposing

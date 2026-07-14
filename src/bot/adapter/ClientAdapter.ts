@@ -485,7 +485,7 @@ export const reader = {
      * dev-only "skip the tutorial?" — "Yes please." / "No, thank you.") carries
      * the real choice in `com.text` while `buttonText` is a generic "Ok" on
      * both, so a caller matching on the label can only discriminate them via
-     * `text` (verified live, Task 4 probe).
+     * `text` (verified live).
      */
     chatOptions(): { comId: number; text: string }[] {
         const out: { comId: number; text: string }[] = [];
@@ -682,7 +682,7 @@ export const reader = {
      * same read shape as `bankItems()`/`bankSideItems()`, generalized to a
      * caller-supplied component id. Used for the shop stock panel (Value/Buy
      * 1/5/10) and the shop-mode backpack panel (Value/Sell 1/5/10); see
-     * docs/quest-campaign-map.md's "Shop interface ids" section for the
+     * the engine pack's shop interface ids for the
      * locked component ids.
      */
     shopInv(comId: number): InvItemSnapshot[] {
@@ -700,7 +700,7 @@ export const reader = {
      * rebuild renumbering it needs no code change. Note: unlike BUTTON_OK,
      * a close button isn't required to carry `buttonText` (the shop's
      * "Close Window" caption lives in `com.text` instead -- confirmed live,
-     * Task 4 probe), so this matches on `buttonType` alone.
+     * probed live), so this matches on `buttonType` alone.
      */
     closeButtonComId(rootComId: number): number {
         if (!raw || rootComId === -1) {
@@ -737,7 +737,7 @@ export const reader = {
      * renumbers components needs no code change. Clickable buttons carry their
      * caption in `buttonText`; a static text label with the same caption sits
      * in `text` instead, so matching `buttonText` selects the clickable one
-     * (verified on the character-design "Accept" button, Task 4 probe).
+     * (verified live on the character-design "Accept" button).
      */
     buttonByText(rootComId: number, label: string): number {
         if (!raw) {
@@ -823,7 +823,7 @@ export const reader = {
      * TYPE_TEXT component under the quest tab's root interface
      * (sideTabInterface(2)). Colour is the server-set value from
      * `~update_questlist` (content/scripts/general/scripts/quests.rs2,
-     * red/yellow/green per quest progress) — see docs/quest-campaign-map.md
+     * red/yellow/green per quest progress)
      * for the locked constants. No manual tab-click is needed — the quest tab
      * attaches as a side effect of the login script's `initalltabs` proc
      * (content/scripts/login_logout/login.rs2: `if_settab(questlist,
@@ -832,7 +832,7 @@ export const reader = {
      * Tutorial Island (login.rs2 gates it behind `~in_tutorial_island`, and an
      * on-island watchdog reverts `%tutorial` every tick) — empty (`[]`) for
      * every still-tutorial-locked account, confirmed live in Task 2 (see the
-     * map doc's "Tab-attachment requirement" note for the exact repro).
+     * tab-attachment requirement above for the exact repro).
      */
     questStatuses(): { name: string; colour: number }[] {
         const QUEST_TAB = 2; // ^tab_quest_journal (general/configs/tabs.constant)

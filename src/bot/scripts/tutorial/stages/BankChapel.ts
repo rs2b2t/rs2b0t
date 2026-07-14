@@ -12,7 +12,7 @@ import { StageTask } from '../StageTask.js';
 import { doorAt, MINE_Z, walkToward } from './helpers.js';
 
 /**
- * Bank & chapel section — server ladder 500 -> 610 (docs/tutorial-map.md),
+ * Bank & chapel section — server ladder 500 -> 610,
  * content confirmed against `lostcity-dev/content/scripts/tutorial/` (274)'s
  * `locs/tut_bank_booth.rs2` + `npcs/tut_banker.rs2` +
  * `guides/financial_advisor.rs2` + `guides/brother_brace.rs2` +
@@ -35,7 +35,7 @@ import { doorAt, MINE_Z, walkToward } from './helpers.js';
  * 1. THE BANKER PROMPT IS ANSWERED BY `AdvanceDialog`, NOT HERE: the booth's
  *    `[oploc1,newbiebankbooth]` finds the Banker within 2 and runs his
  *    "would you like to access your bank account?" multi2 ("Yes." /
- *    "No thanks."). Task 12 rescoped `Dialog.ts`'s `DECLINE_SKIP` to the
+ *    "No thanks."). `Dialog.ts`'s `DECLINE_SKIP` was rescoped to the
  *    skip-prompt's exact label — 'no thanks' was in that list and matched
  *    the banker's decline FIRST, which would have refused the bank forever
  *    (`MOVE_ON`'s existing 'yes.' now picks "Yes.", writing 500 -> 510 and
@@ -95,7 +95,7 @@ import { doorAt, MINE_Z, walkToward } from './helpers.js';
  *    — the exit crossing (z <= 3102) leaves every box, and the one-shots/
  *    attach gates are all latched by then anyway.
  * 7. The 500-jump hazard this task's test exposed lives in the EARLIER
- *    sections, fixed there (Task 12): a fresh script instance at 500
+ *    sections, fixed there: a fresh script instance at 500
  *    re-armed Chef's `OpenQuestGuideDoor` + the whole QuestGuide chain,
  *    whose `ClimbToMine` would drag a >= 500 account back down the mine and
  *    strand it (the combat chain can't re-run at 500 — the rat-pen gate
@@ -107,7 +107,7 @@ import { doorAt, MINE_Z, walkToward } from './helpers.js';
 const ADVISOR = 'Financial Advisor';
 const BRACE = 'Brother Brace';
 
-/** general/configs/tabs.constant — verified live via the tabs list in docs/tutorial-map.md. */
+/** general/configs/tabs.constant — verified live. */
 const PRAYER_TAB = 5;
 const FRIENDS_TAB = 8;
 const IGNORE_TAB = 9;
@@ -187,7 +187,7 @@ interface BankChapelProgress {
  * `AdvanceDialog` — file-header note 1) opens the bank and writes 510.
  * Latches `progress.bankOpened` only on the OBSERVED open. The booth is a
  * solid 1x1 loc: dispatch the loc-aware click within `CLICK_RANGE` and
- * walk-snap only beyond it (Task 10's furnace lesson — never require
+ * walk-snap only beyond it (the furnace lesson — never require
  * `walkToward` to converge onto a solid loc's own tile).
  */
 class UseBankBooth extends StageTask {
@@ -385,7 +385,7 @@ class ExitAdvisorRoom extends StageTask {
 /**
  * The 540 leg's un-varped middle step: walk the field south from door7 and
  * enter the chapel through its Large doors. THESE ARE NOT `newbie_door*`
- * DOORS — live-probed (Task 12): opening them does NOT teleport the player
+ * DOORS — live-probed: opening them does NOT teleport the player
  * through. The open swings the pair to their open-state locs (hosted one
  * tile WEST at x=3128, op "Close" only) and they stay open for 14s+; the
  * player is left standing on/next to the doorway tile (x=3129) — still

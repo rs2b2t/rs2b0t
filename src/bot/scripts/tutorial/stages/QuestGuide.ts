@@ -11,7 +11,7 @@ import { StageTask } from '../StageTask.js';
 import { doorAt, MINE_Z, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
 
 /**
- * Quest Guide section — server ladder 220 -> 260 (docs/tutorial-map.md),
+ * Quest Guide section — server ladder 220 -> 260,
  * content confirmed against `lostcity-dev/content/scripts/tutorial/` (274)'s
  * `guides/quest_guide.rs2` + `tutorial.rs2` + `tut_doors_and_gates.rs2`:
  * get inside the hall -> talk to the Quest Guide (230) -> open the Quest
@@ -92,7 +92,7 @@ import { doorAt, MINE_Z, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  *    (`~climb_ladder` -> `movecoord(coord, 0, 0, 6400)`, confirmed against
  *    the engine's MOVECOORD handler; x/level unchanged) — live landing
  *    ~(3088,9519,0), so `z >= MINE_Z` is the section's terminal observable.
- * 8. SECTION-ERA GATE (Task 12): every stage also requires
+ * 8. SECTION-ERA GATE: every stage also requires
  *    `Skills.xp('mining') === 0` — zero throughout the section's real
  *    220 -> 260 window (the first mining xp lands at 294, in the mine) and
  *    permanently non-zero afterwards. Without it, a bank-section stage-jump
@@ -102,14 +102,14 @@ import { doorAt, MINE_Z, QUEST_GUIDE_DOOR, walkToward } from './helpers.js';
  *    recaps set — dragged a >= 500 account back down the mine, where
  *    nothing could bring it back up (the combat chain can't re-run at 500:
  *    the rat-pen gate refuses outside exactly 420-460). Same law as the
- *    Task 10 addendum: a one-shot's entry gates must be false everywhere a
+ *    Addendum: a one-shot's entry gates must be false everywhere a
  *    LATER section's jump can strand the bot, and mining xp is the earliest
  *    permanent observable that separates this section's era from
  *    everything after the mine.
  */
 
 const GUIDE = 'Quest Guide';
-/** general/configs/tabs.constant — ^tab_quest_journal (Task 2 confirmed the index; this task confirms the live attach timing). */
+/** general/configs/tabs.constant — ^tab_quest_journal (index + live attach timing both confirmed live). */
 const QUEST_TAB = 2;
 
 const noDialog = () => !ChatDialog.isOpen();
@@ -159,7 +159,7 @@ interface QuestGuideProgress {
  * and not yet latched, owns the door until the bot has crossed north) nor
  * from anywhere else on the island.
  *
- * NO one-shot latch (Task 13, the full-run stall this fixed): the door's
+ * NO one-shot latch (a full-run stall fix): the door's
  * teleport is a multi-hop sequence with a 1-tick pause, so a
  * `delayUntil(insideHall())` can read true MID-TRANSIT while the bot
  * settles back on the door's host tile (3086,3126 — z = 3126, OUTSIDE the
@@ -234,7 +234,7 @@ class TalkQuestGuide extends StageTask {
  * 3). Entry/one-shot shape identical to Chef's `OpenMusicTab`/
  * `OpenControlsTab`: the tab's attach is permanent once granted, so without
  * the one-shot this would re-fire any time a LATER section's stage clicks
- * some other tab (the exact `OpenStatsTab` hijack Task 8 fixed).
+ * some other tab (the exact `OpenStatsTab` hijack fixed before).
  */
 class OpenQuestTab extends StageTask {
     private opened = false;

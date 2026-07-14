@@ -28,7 +28,7 @@ export interface DeathRecoveryOptions {
 }
 
 /**
- * Generalized death & stuck recovery (Task 6): lifts the copy-pasted
+ * Generalized death & stuck recovery: lifts the copy-pasted
  * per-script death task (ChaosDruidKiller/RockCrab/ChickenKiller all had
  * their own identical-shaped one) into shared machinery every quest module
  * installs.

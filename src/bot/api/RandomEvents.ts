@@ -16,9 +16,8 @@ import { rubLamp, solveAllBoxes } from './solvers/StrangeBox.js';
 import { MAZE_SQUARE, solveMaze } from './maze/solveMaze.js';
 
 /**
- * Comprehensive random-event ("macro event") handling, shared by every bot
- * (PLAN.md / user request: "handle all current events"). Verified against the
- * 21 implemented events in content/scripts/macro events/.
+ * Comprehensive random-event ("macro event") handling, shared by every bot.
+ * Verified against the 21 implemented events in content/scripts/macro events/.
  *
  * The runtime Supervisor (ScriptRunner) consults detect()/handle() before
  * every loop() iteration — scripts install nothing; combat scripts declare
@@ -629,5 +628,5 @@ class RandomEventsImpl {
 export const RandomEvents = new RandomEventsImpl();
 
 // The walker (and long script loops) poll EventSignal.pending() to yield at a
-// safe point; register RandomEvents as the provider at module init (Task 6).
+// safe point; register RandomEvents as the provider at module init.
 EventSignal.setProvider(() => RandomEvents.pending());

@@ -98,7 +98,7 @@ export const Game = {
     },
 
     /**
-     * Click a sidebar tab icon (0-13 — see docs/tutorial-map.md's confirmed
+     * Click a sidebar tab icon (0-13 — see the tutorial varp ladder's confirmed
      * tab-index table, e.g. 3 = inventory, 1 = stats). Used for the
      * tutorial's flashing-tab steps. Idempotent: resolves true immediately if
      * already on `tab`; false if that tab has no interface loaded yet, or if
@@ -118,7 +118,7 @@ export const Game = {
 
     /**
      * Cast a magic-tab spell on an npc by the spell's `targetBase` caption
-     * (e.g. 'Wind Strike') — the first spell-cast primitive (Task 13). Opens
+     * (e.g. 'Wind Strike') — the first spell-cast primitive. Opens
      * the magic tab, finds the spell's BUTTON_TARGET component at runtime
      * (ids are pack-assigned), then dispatches the armed cast; the client
      * walks toward the target and sends OPNPCT itself. False if the magic

@@ -328,7 +328,7 @@ class WalkExecutorImpl {
             // PAST the real next crossing (the staircase down) without the player
             // moving. locateOnPath then can't place the upstairs player among the
             // downstairs tiles → deviate → repath → give up: the ~270s post-Duke
-            // descent stall (Task 6 live smoke). Gating on tiles[i-1].level keeps
+            // descent stall (seen in a live smoke). Gating on tiles[i-1].level keeps
             // staircases working (approached from their own level) while ignoring
             // the vertically-stacked doorway below.
             let crossingIdx = -1;

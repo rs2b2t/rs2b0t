@@ -11,7 +11,7 @@ import { ChatDialog } from '../../api/hud/ChatDialog.js';
  * declining advances the tutorial normally (1 → 4). Checked before any
  * progressing pick so we can never skip.
  *
- * Scoped to that prompt's EXACT label (Task 12): a looser 'no thanks' used to
+ * Scoped to that prompt's EXACT label: a looser 'no thanks' used to
  * live here too and matched the Banker's decline ("Yes." / "No thanks.",
  * `tut_banker.rs2`) ahead of MOVE_ON's "Yes." — which would refuse the bank
  * forever at stage 500. The only other "No thanks." in the tutorial content

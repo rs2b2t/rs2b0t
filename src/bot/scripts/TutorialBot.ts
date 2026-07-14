@@ -32,7 +32,7 @@ import { WelcomeScreen } from './tutorial/WelcomeScreen.js';
  * `questGuideStages` (220 -> 260), then `miningStages` (260 -> 360), then
  * `combatStages` (360 -> 500), then `bankChapelStages` (500 -> 610), then
  * `magicStages` (610 -> 1000 — the mainland teleport). The full varp
- * ladder is mapped in `docs/tutorial-map.md`.
+ * ladder is mapped in `the tutorial varp ladder`.
  */
 export default class TutorialBot extends TaskBot {
     override loopDelay = 600;

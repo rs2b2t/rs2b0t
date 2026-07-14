@@ -2,8 +2,7 @@ import { reader } from '../../adapter/ClientAdapter.js';
 
 export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 
-// Colour constants CONFIRMED live by tools/quests-tab-test.ts (Task 2) --
-// see docs/quest-campaign-map.md, "Quest-tab colour constants (Task 2)".
+// Colour constants CONFIRMED live by tools/quests-tab-test.ts.
 // These are NOT the classic client palette (general/configs/colour.constant:
 // red_rgb=0xFF0000, yellow_rgb=0xFFFF00, green_rgb=0x00FF00): the server
 // pipes if_setcolour through a 15-bit (5/5/5) wire format

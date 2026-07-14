@@ -8,7 +8,7 @@ import { StageTask } from './StageTask.js';
  * (content: `tutorial.rs2` `[label,start_tutorial]` → `if_openmain(player_kit)`).
  *
  * Cache interface id on the current 274 content build — re-verify in
- * `docs/tutorial-map.md` after a Content upgrade. `validate()` only acts while
+ * the tutorial interface pack after a Content upgrade. `validate()` only acts while
  * this is the open main modal, so a stale id just makes this stage a no-op
  * rather than misfiring on some other screen.
  */
@@ -33,7 +33,7 @@ export class DesignAccept extends StageTask {
     async execute(): Promise<void> {
         const accept = reader.buttonByText(DESIGN_MODAL, 'Accept');
         if (accept === -1) {
-            this.bot.log('DesignAccept: no "Accept" button under the design modal — component renumbered? (see docs/tutorial-map.md)');
+            this.bot.log('DesignAccept: no "Accept" button under the design modal — component renumbered?');
             return;
         }
 

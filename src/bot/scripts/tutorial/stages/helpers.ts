@@ -4,14 +4,14 @@ import { reader } from '../../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../../input/ActionRouter.js';
 
 /**
- * Shared tutorial-stage helpers (promoted out of `Chef.ts` in Task 9 so
- * `QuestGuide.ts` didn't have to copy them -- see docs/tutorial-map.md's
+ * Shared tutorial-stage helpers (promoted out of `Chef.ts` so
+ * `QuestGuide.ts` didn't have to copy them -- see
  * "Interaction-at-range" note for the full mechanics writeup).
  */
 
 /**
  * The Quest Guide's door (`newbie_door4`, live-probed tile — docs/
- * tutorial-map.md's 200 → 220 row). Shared between Chef.ts (whose last
+ * the tutorial varp ladder, 200 → 220). Shared between Chef.ts (whose last
  * stage opens it to END the chef section, crossing to z >= 3126) and
  * QuestGuide.ts (whose first stage opens it again to get back INSIDE the
  * hall — the open teleports through in either direction).
@@ -22,7 +22,7 @@ export const QUEST_GUIDE_DOOR = { x: 3086, z: 3126 };
  * Climbing the mine ladder adds +6400 to world z (mapsquare z 48 -> 148 —
  * QuestGuide.ts's `ClimbToMine`); far above any surface z in this arc
  * (~3070-3134), so `Game.tile()!.z >= MINE_Z` is a reliable "am I
- * underground" gate. Promoted here in Task 10 (Mining.ts) so it and
+ * underground" gate. Promoted here from Mining.ts so it and
  * QuestGuide.ts share one constant instead of two copies drifting.
  */
 export const MINE_Z = 9000;
