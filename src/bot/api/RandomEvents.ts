@@ -1,4 +1,4 @@
-import { actions, reader } from '../adapter/ClientAdapter.js';
+import { reader } from '../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from './EventSignal.js';
 import { Execution } from './Execution.js';
@@ -11,11 +11,9 @@ import { Equipment } from './hud/Equipment.js';
 import { Inventory } from './hud/Inventory.js';
 import { Npcs } from './queries/Npcs.js';
 import { GroundItems } from './queries/GroundItems.js';
-import { Locs } from './queries/Locs.js';
-import { MIME_EMOTE_BY_SEQ, MIME_IF, mimeAnswer } from './solvers/Mime.js';
-import { CUBE_IF, LAMP_IF, solveCube } from './solvers/StrangeBox.js';
-import { MAZE_ROUTES } from './maze/mazeRoutes.js';
-import { selectRoute } from './maze/selectRoute.js';
+import { MIME_SQUARE, performMimeStage } from './solvers/Mime.js';
+import { rubLamp, solveAllBoxes } from './solvers/StrangeBox.js';
+import { MAZE_SQUARE, solveMaze } from './maze/solveMaze.js';
 
 /**
  * Comprehensive random-event ("macro event") handling, shared by every bot
@@ -80,8 +78,6 @@ const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fl
 
 // Teleport-minigame stages, detected by mapsquare (survives relogs into the
 // stage). macro_event_mime.rs2 / macro_event_maze.rs2.
-const MIME_SQUARE = { mx: 31, mz: 74 };
-const MAZE_SQUARE = { mx: 45, mz: 71 };
 
 type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
 
@@ -338,10 +334,10 @@ class RandomEventsImpl {
                     acted = await this.handleHazard(event.name, log);
                     break;
                 case 'mime':
-                    acted = await this.handleMime(log);
+                    acted = await performMimeStage(log);
                     break;
                 case 'maze':
-                    acted = await this.handleMaze(log);
+                    acted = await solveMaze(log);
                     break;
                 case 'lost-tool':
                     acted = await this.handleLostTool(log);
@@ -350,10 +346,10 @@ class RandomEventsImpl {
                     acted = await this.handleLostGear(event.name, log);
                     break;
                 case 'box':
-                    acted = await this.handleBox(log);
+                    acted = await solveAllBoxes(log);
                     break;
                 case 'lamp':
-                    acted = await this.handleLamp(log);
+                    acted = await rubLamp(this.lampSkill, log);
                     break;
                 default:
                     break;
@@ -481,171 +477,6 @@ class RandomEventsImpl {
             await Execution.delayTicks(4);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
-        return true;
-    }
-
-    /**
-     * Mime stage: watch the mime's performance and mirror it. The mime plays
-     * an answerable emote (phase 1); when the macro_mime_emotes chat interface
-     * opens (phase 4) we click the matching emote button. 4 correct in a row
-     * releases us and teleports us home — the loop repeats across cycles, and
-     * a wrong answer just resets the server-side chain. Runs while
-     * handling===true so its own waits don't self-interrupt.
-     */
-    private async handleMime(log: (msg: string) => void): Promise<boolean> {
-        log('random event: mime stage — copying the performance');
-        const onStage = (): boolean => {
-            const me = reader.worldTile();
-            return me !== null && me.level === 0 && me.x >> 6 === MIME_SQUARE.mx && me.z >> 6 === MIME_SQUARE.mz;
-        };
-
-        let lastSeen: number | null = null;
-        const deadline = performance.now() + 180_000; // ~9 full cycles
-
-        while (onStage() && performance.now() < deadline) {
-            // remember the mime's most recent ANSWERABLE emote (phase 1);
-            // bow/cheer/idle are filtered by the mapping
-            const mime = reader.npcs().find(n => (n.name ?? '').toLowerCase() === 'mime');
-            if (mime && MIME_EMOTE_BY_SEQ[mime.anim] !== undefined) {
-                lastSeen = mime.anim;
-            }
-
-            if (reader.modals().chat === MIME_IF.root) {
-                const answer = mimeAnswer(lastSeen);
-                if (answer !== null) {
-                    actions.ifButton(MIME_IF.buttons[answer]);
-                    log(`mime: performed emote ${answer}`);
-                    lastSeen = null;
-                    await Execution.delayUntil(() => reader.modals().chat !== MIME_IF.root || !onStage(), 10_000);
-                    continue;
-                }
-                // joined mid-cycle with nothing seen — let this round pass
-            }
-            await Execution.delayTicks(1);
-        }
-
-        log(onStage() ? 'mime: still on stage after 3min — will retry' : 'random event: mime solved — returned');
-        return true;
-    }
-
-    /** Maze (macro_event_maze.rs2, region 0_45_71): a fixed wall/door layout with
-     *  4 corner spawns. We match the spawn to its pre-derived route (tools/maze-derive.ts)
-     *  and Open each door in order; the client interact-walks to each door and, when
-     *  opened from the correct side, teleports us through. A refused door ("not the
-     *  right way") is a benign branch door from another corner's path — we dismiss it
-     *  and press on to the final door. Then Touch the shrine to finish. */
-    private static readonly MAZE_SHRINE_LOC = 3634;
-    private static readonly MAZE_DOOR_IDS = new Set([3628, 3629, 3630, 3631, 3632]);
-    /** The one tile the purple-path finish is reached from: stand here, Open the
-     *  door on it, then Touch the 3x3 shrine (proven live — the shrine completes
-     *  from this approach only). All 4 spawn routes converge to it. */
-    private static readonly MAZE_FINAL_TILE = { x: 2910, z: 4576 };
-
-    private async handleMaze(log: (msg: string) => void): Promise<boolean> {
-        const inMaze = (): boolean => {
-            const me = reader.worldTile();
-            return me !== null && me.level === 0 && me.x >> 6 === MAZE_SQUARE.mx && me.z >> 6 === MAZE_SQUARE.mz;
-        };
-        const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-
-        const start = reader.worldTile();
-        if (!start) { return true; }
-        const route = selectRoute(start, MAZE_ROUTES);
-        log(`random event: maze — spawn (${start.x},${start.z}) -> route ${route.spawn.x},${route.spawn.z} (${route.doors.length} doors)`);
-
-        // Each maze corridor has one in-door and one out-door; interacting a door
-        // does NOT walk us there (direct-input sends OPLOC from where we stand), so
-        // we WALK to each door first (the client's tryMove paths the open corridor),
-        // then Open it — a valid open teleports us into the next corridor.
-        const walkTowards = async (d: { x: number; z: number }, onto: boolean): Promise<void> => {
-            const reached = (t: { x: number; z: number }): boolean => (onto ? t.x === d.x && t.z === d.z : cheb(t, d) <= 1);
-            for (let w = 0; w < 8 && inMaze(); w++) {
-                const now = reader.worldTile();
-                if (now && reached(now)) { return; }
-                const local = reader.toLocal(d.x, d.z);
-                if (!local) { await Execution.delayTicks(1); continue; }
-                const before = reader.worldTile();
-                actions.walkTo(local.lx, local.lz); // client-side path over the live scene collision
-                // The FIRST walk click right after a door Open is swallowed (the
-                // player stays put); a SECOND click registers. Detect the swallow
-                // — no movement within ~1 tick — and re-issue once, instead of
-                // sitting out the full timeout below. A real step lands in ~0.3-0.6s
-                // (well under 1s), so a moving walk never triggers the re-kick.
-                const moved = await Execution.delayUntil(() => {
-                    const t = reader.worldTile();
-                    return t !== null && before !== null && cheb(t, before) >= 1;
-                }, 1_000);
-                if (!moved && inMaze()) { actions.walkTo(local.lx, local.lz); }
-                // Then the normal wait (reached, or a full 2-tile step). Budget is
-                // 1s + 3s = the baseline's ~4s, so a genuinely stuck door still
-                // burns the same total before the loop gives up — solving behaviour
-                // is unchanged; only the swallowed-click waste is removed.
-                await Execution.delayUntil(() => {
-                    const t = reader.worldTile();
-                    return t !== null && (reached(t) || (before !== null && cheb(t, before) >= 2));
-                }, 3_000);
-            }
-        };
-        const walkAdjacent = (d: { x: number; z: number }): Promise<void> => walkTowards(d, false);
-
-        for (let i = 0; i < route.doors.length && inMaze(); i++) {
-            const d = route.doors[i];
-            await walkAdjacent(d);
-            const door = Locs.query()
-                .where(l => RandomEventsImpl.MAZE_DOOR_IDS.has(l.id) && l.tile().x === d.x && l.tile().z === d.z)
-                .nearest();
-            if (!door) { log(`random event: maze — door (${d.x},${d.z}) not in scene, skipping`); continue; }
-            const pre = reader.worldTile();
-            await door.interact('Open');
-            // Wait for the through (a full 2-tile displacement) or a "not the right
-            // way" dialog, THEN move on. We keep the >=2 threshold (a 1-tile drift
-            // must NOT be mistaken for a through — that desyncs the route and wedges
-            // us), but a 1-tile through never trips it, so cap the wait at 2s, not
-            // 6s: by then the open has fully resolved and we're safely on the far
-            // side, so proceeding is correct — we just stop idling for 4 extra sec.
-            await Execution.delayUntil(() => {
-                const t = reader.worldTile();
-                return ChatDialog.canContinue() || (t !== null && pre !== null && cheb(t, pre) >= 2);
-            }, 2_000);
-            if (ChatDialog.canContinue()) {
-                await ChatDialog.continue(); // "not the right way" — benign branch door; press on
-                log(`random event: maze — door (${d.x},${d.z}) refused (branch), continuing`);
-            } else {
-                const now = reader.worldTile();
-                log(`random event: maze — through (${d.x},${d.z}) -> (${now?.x},${now?.z})`);
-            }
-        }
-
-        // Fixed purple-path finish (all 4 routes converge here): stand ON the
-        // final tile, Open the door on it — that teleports us beside the 3x3 shrine,
-        // which only completes from this one approach — then Touch the shrine. The
-        // finish plays a cheer emote before the return teleport, so the wait is
-        // generous.
-        for (let pass = 0; pass < 4 && inMaze(); pass++) {
-            await walkTowards(RandomEventsImpl.MAZE_FINAL_TILE, true);
-            const me = reader.worldTile();
-            if (!me || me.x !== RandomEventsImpl.MAZE_FINAL_TILE.x || me.z !== RandomEventsImpl.MAZE_FINAL_TILE.z) {
-                await Execution.delayTicks(2);
-                continue; // not on the final tile yet
-            }
-            const finalDoor = Locs.query()
-                .where(l => RandomEventsImpl.MAZE_DOOR_IDS.has(l.id) && l.tile().x === RandomEventsImpl.MAZE_FINAL_TILE.x && l.tile().z === RandomEventsImpl.MAZE_FINAL_TILE.z)
-                .nearest();
-            if (finalDoor) {
-                await finalDoor.interact('Open'); // teleports us beside the shrine
-                await Execution.delayUntil(() => {
-                    const t = reader.worldTile();
-                    return t !== null && (t.x !== RandomEventsImpl.MAZE_FINAL_TILE.x || t.z !== RandomEventsImpl.MAZE_FINAL_TILE.z);
-                }, 6_000);
-            }
-            const shrine = Locs.query()
-                .where(l => l.id === RandomEventsImpl.MAZE_SHRINE_LOC || (l.name ?? '').toLowerCase() === 'strange shrine')
-                .nearest();
-            if (!shrine) { await Execution.delayTicks(3); continue; }
-            await shrine.interact(shrine.actions().find(a => /touch/i.test(a)) ?? 'Touch');
-            await Execution.delayUntil(() => !inMaze(), 20_000);
-        }
-        log(inMaze() ? 'random event: maze — still inside; will retry' : 'random event: maze solved — returned');
         return true;
     }
 
@@ -793,66 +624,6 @@ class RandomEventsImpl {
         return true;
     }
 
-    private async handleBox(log: (msg: string) => void): Promise<boolean> {
-        // Each Strange box is its OWN cube puzzle, solved one at a time, and the
-        // reward only lands once EVERY box is gone (the server inv_del's one per
-        // correct answer). Unsolved boxes REPLICATE until they fill the pack — so
-        // solve them ALL in this single pass. (Solving one per handle() call let
-        // the generic MAX_ATTEMPTS backstop give up after 4 boxes — the attempt
-        // counter never resets while more boxes remain — and the rest replicated.)
-        let solved = 0;
-        for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
-            const box = Inventory.first('Strange box');
-            if (!box) {
-                break;
-            }
-            const before = Inventory.count('Strange box');
-            await box.interact('Open');
-            if (!(await Execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
-                log('random event: strange box interface did not open');
-                return solved > 0;
-            }
-
-            const question = reader.ifText(CUBE_IF.question) ?? '';
-            const models: [number | null, number | null, number | null] = [reader.ifModelObjId(CUBE_IF.models[0]), reader.ifModelObjId(CUBE_IF.models[1]), reader.ifModelObjId(CUBE_IF.models[2])];
-            const answer = solveCube(question, models);
-            if (answer === null) {
-                log(`random event: could not solve strange box ('${question}' models=${models}) — closing`);
-                actions.closeModal();
-                return solved > 0;
-            }
-
-            actions.ifButton(CUBE_IF.buttons[answer]);
-            if (!(await Execution.delayUntil(() => Inventory.count('Strange box') < before, 4000))) {
-                log('random event: strange box answer did not consume a box');
-                return solved > 0;
-            }
-            solved++;
-        }
-        log(`random event: solved ${solved} strange box${solved === 1 ? '' : 'es'}`);
-        return solved > 0;
-    }
-
-    private async handleLamp(log: (msg: string) => void): Promise<boolean> {
-        const lamp = Inventory.first('Lamp');
-        if (!lamp) {
-            return false;
-        }
-
-        await lamp.interact('Rub');
-        if (!(await Execution.delayUntil(() => reader.modals().main === LAMP_IF.root, 5000))) {
-            log('random event: lamp interface did not open');
-            return false;
-        }
-
-        const skillCom = LAMP_IF.skills[this.lampSkill.toLowerCase()] ?? LAMP_IF.skills.strength;
-        actions.ifButton(skillCom);
-        await Execution.delayTicks(1);
-        actions.ifButton(LAMP_IF.confirm);
-        const used = await Execution.delayUntil(() => !Inventory.contains('Lamp'), 4000);
-        log(used ? `random event: rubbed lamp (+xp ${this.lampSkill})` : 'random event: lamp did not consume');
-        return true;
-    }
 }
 
 export const RandomEvents = new RandomEventsImpl();

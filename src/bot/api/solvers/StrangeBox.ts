@@ -6,6 +6,10 @@
 // slow solving) REPLICATE the box, so it must be solved promptly + correctly.
 // All ids from rs2b2t-content/pack — guarded at runtime by the modal-root check.
 
+import { actions, reader } from '../../adapter/ClientAdapter.js';
+import { Execution } from '../Execution.js';
+import { Inventory } from '../hud/Inventory.js';
+
 export const CUBE_IF = {
     root: 6554,
     models: [6555, 6557, 6559] as const, // center, side, top
@@ -81,3 +85,65 @@ export const LAMP_IF = {
         fletching: 2830
     } as Record<string, number>
 };
+
+export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean> {
+    // Each Strange box is its OWN cube puzzle, solved one at a time, and the
+    // reward only lands once EVERY box is gone (the server inv_del's one per
+    // correct answer). Unsolved boxes REPLICATE until they fill the pack — so
+    // solve them ALL in this single pass. (Solving one per handle() call let
+    // the generic MAX_ATTEMPTS backstop give up after 4 boxes — the attempt
+    // counter never resets while more boxes remain — and the rest replicated.)
+    let solved = 0;
+    for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
+        const box = Inventory.first('Strange box');
+        if (!box) {
+            break;
+        }
+        const before = Inventory.count('Strange box');
+        await box.interact('Open');
+        if (!(await Execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
+            log('random event: strange box interface did not open');
+            return solved > 0;
+        }
+
+        const question = reader.ifText(CUBE_IF.question) ?? '';
+        const models: [number | null, number | null, number | null] = [reader.ifModelObjId(CUBE_IF.models[0]), reader.ifModelObjId(CUBE_IF.models[1]), reader.ifModelObjId(CUBE_IF.models[2])];
+        const answer = solveCube(question, models);
+        if (answer === null) {
+            log(`random event: could not solve strange box ('${question}' models=${models}) — closing`);
+            actions.closeModal();
+            return solved > 0;
+        }
+
+        actions.ifButton(CUBE_IF.buttons[answer]);
+        if (!(await Execution.delayUntil(() => Inventory.count('Strange box') < before, 4000))) {
+            log('random event: strange box answer did not consume a box');
+            return solved > 0;
+        }
+        solved++;
+    }
+    log(`random event: solved ${solved} strange box${solved === 1 ? '' : 'es'}`);
+    return solved > 0;
+}
+
+/** Rub a reward Lamp and put the xp on `lampSkill` (falls back to strength). */
+export async function rubLamp(lampSkill: string, log: (msg: string) => void): Promise<boolean> {
+    const lamp = Inventory.first('Lamp');
+    if (!lamp) {
+        return false;
+    }
+
+    await lamp.interact('Rub');
+    if (!(await Execution.delayUntil(() => reader.modals().main === LAMP_IF.root, 5000))) {
+        log('random event: lamp interface did not open');
+        return false;
+    }
+
+    const skillCom = LAMP_IF.skills[lampSkill.toLowerCase()] ?? LAMP_IF.skills.strength;
+    actions.ifButton(skillCom);
+    await Execution.delayTicks(1);
+    actions.ifButton(LAMP_IF.confirm);
+    const used = await Execution.delayUntil(() => !Inventory.contains('Lamp'), 4000);
+    log(used ? `random event: rubbed lamp (+xp ${lampSkill})` : 'random event: lamp did not consume');
+    return true;
+}

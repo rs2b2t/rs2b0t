@@ -1,8 +1,11 @@
-// Mime random event solver tables. Server truth (macro_event_mime.rs2):
+// Mime random event solver. Server truth (macro_event_mime.rs2):
 // the mime (npc 1056 'Mime') plays anim random(8) at cycle phase 1; the
 // macro_mime_emotes CHAT interface opens at phase 4; buttons com_2..com_9
 // answer emotes 0..7; 4 correct in a row releases you. Seq ids from
 // pack/seq.pack, interface com ids from pack/interface.pack.
+
+import { actions, reader } from '../../adapter/ClientAdapter.js';
+import { Execution } from '../Execution.js';
 
 export const MIME_IF = {
     root: 6543,
@@ -29,4 +32,51 @@ export function mimeAnswer(lastSeenSeq: number | null): number | null {
         return null;
     }
     return MIME_EMOTE_BY_SEQ[lastSeenSeq] ?? null;
+}
+
+/** The mime stage's mapsquare (detection + on-stage checks key off it). */
+export const MIME_SQUARE = { mx: 31, mz: 74 };
+
+/**
+ * Mime stage: watch the mime's performance and mirror it. The mime plays
+ * an answerable emote (phase 1); when the macro_mime_emotes chat interface
+ * opens (phase 4) we click the matching emote button. 4 correct in a row
+ * releases us and teleports us home — the loop repeats across cycles, and
+ * a wrong answer just resets the server-side chain. The caller runs this
+ * while handling===true so its own waits don't self-interrupt.
+ */
+export async function performMimeStage(log: (msg: string) => void): Promise<boolean> {
+    log('random event: mime stage — copying the performance');
+    const onStage = (): boolean => {
+        const me = reader.worldTile();
+        return me !== null && me.level === 0 && me.x >> 6 === MIME_SQUARE.mx && me.z >> 6 === MIME_SQUARE.mz;
+    };
+
+    let lastSeen: number | null = null;
+    const deadline = performance.now() + 180_000; // ~9 full cycles
+
+    while (onStage() && performance.now() < deadline) {
+        // remember the mime's most recent ANSWERABLE emote (phase 1);
+        // bow/cheer/idle are filtered by the mapping
+        const mime = reader.npcs().find(n => (n.name ?? '').toLowerCase() === 'mime');
+        if (mime && MIME_EMOTE_BY_SEQ[mime.anim] !== undefined) {
+            lastSeen = mime.anim;
+        }
+
+        if (reader.modals().chat === MIME_IF.root) {
+            const answer = mimeAnswer(lastSeen);
+            if (answer !== null) {
+                actions.ifButton(MIME_IF.buttons[answer]);
+                log(`mime: performed emote ${answer}`);
+                lastSeen = null;
+                await Execution.delayUntil(() => reader.modals().chat !== MIME_IF.root || !onStage(), 10_000);
+                continue;
+            }
+            // joined mid-cycle with nothing seen — let this round pass
+        }
+        await Execution.delayTicks(1);
+    }
+
+    log(onStage() ? 'mime: still on stage after 3min — will retry' : 'random event: mime solved — returned');
+    return true;
 }
