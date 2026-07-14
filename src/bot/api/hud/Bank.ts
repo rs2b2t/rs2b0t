@@ -246,9 +246,17 @@ function clickInvButton(items: InvItemSnapshot[], name: string, opLabel: string)
         return false;
     }
 
-    const opWanted = opLabel.toLowerCase();
+    // Match the op tolerant of the hyphen/space split: callers pass the panel
+    // form "Withdraw-1"/"Deposit-1", but the real bank interface labels are the
+    // SPACE form "Withdraw 1"/"Deposit 1" (bank_main.if) — a strict `===` matched
+    // nothing, silently dropping every withdraw (found live in the Task 7 clue
+    // smoke: RockCrab never got a spade/food). Collapsing runs of spaces/hyphens
+    // makes "withdraw-1" == "withdraw 1" without ever conflating "1" and "10".
+    const norm = (s: string): string => s.toLowerCase().replace(/[\s-]+/g, ' ').trim();
+    const opWanted = norm(opLabel);
     for (let i = 0; i < item.ops.length; i++) {
-        if (item.ops[i]?.toLowerCase() === opWanted) {
+        const op = item.ops[i];
+        if (op !== null && norm(op) === opWanted) {
             return ActionRouter.driver.invButton(item.id, item.slot, item.comId, i + 1);
         }
     }
