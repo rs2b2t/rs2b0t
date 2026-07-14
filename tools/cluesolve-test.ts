@@ -65,6 +65,13 @@ async function dumpTail(label: string): Promise<void> {
     } catch (err) {
         console.error(`(could not read runner log: ${err instanceof Error ? err.message : String(err)})`);
     }
+    try {
+        const traces = await page.evaluate(() => (globalThis as never as { rs2b0t: { clueTraces(): unknown } }).rs2b0t.clueTraces());
+        console.error(`--- ${label}: persisted clue-failure traces (newest first) ---`);
+        console.error(JSON.stringify(traces, null, 2));
+    } catch (err) {
+        console.error(`(could not read clue traces: ${err instanceof Error ? err.message : String(err)})`);
+    }
 }
 
 /** Seed the bank + a held clue, point RockCrab at a nearby bank, tele beside it, and start. */

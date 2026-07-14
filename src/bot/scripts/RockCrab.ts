@@ -191,7 +191,9 @@ export default class RockCrab extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`, `clue: ${CLUE_STATUS}`];
+        const cur = ClueExecutor.current;
+        const clueLine = cur ? `clue: ${CLUE_STATUS} — ${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}` : `clue: ${CLUE_STATUS}`;
+        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`, clueLine];
         drawStatusBox(ctx, lines, '#7ad0ff');
     }
 

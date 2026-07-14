@@ -51,6 +51,7 @@ import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { Locs } from '#/bot/api/queries/Locs.js';
 import type { Loc } from '#/bot/api/entities/index.js';
 import { identifyStep } from '#/bot/clues/ClueLogic.js';
+import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import type { ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
@@ -99,6 +100,39 @@ export const TALK_ANCHORS: Record<number, Tile> = {
     3513: new Tile(2734, 3581, 0), // Louisa — Sinclair Mansion (Seers' area)
     3514: new Tile(3361, 3242, 0) // Jeed — Duel Arena, east of Al Kharid
 };
+
+export const TRACE_STORAGE_KEY = 'rs2b0t:cluetrace';
+
+/** Live progress of the solve in flight (overlays/debugging), null when idle.
+ *  `leg` is the trail position BEST GUESS — steps completed this session + 1;
+ *  the server's real trail position isn't client-readable. */
+export interface ClueProgress {
+    clueId: number;
+    name: string;
+    step: string;
+    leg: number;
+    attempt: number;
+    startedAt: number;
+}
+
+/** 'trail_clue_easy_simple021' → 'easy simple021' (overlay-sized name). */
+function shortClueName(obj: string): string {
+    return obj.replace(/^trail_clue_/, '').replace(/_/g, ' ');
+}
+
+const trace = new ClueTrace({
+    pos: () => {
+        const me = reader.worldTile();
+        return me ? `${me.x},${me.z},${me.level}` : '?';
+    }
+});
+
+// One logical solve spans MANY solveHeldClue calls (every random event yields
+// back to loop() and the caller re-invokes) — so the trace, the leg counter,
+// and the published progress live at module scope and only reset when the
+// solve genuinely ends (done/abandon), not on a yield.
+let sessionActive = false;
+let sessionLegs = 0;
 
 /** Held obj ids in the pack right now. */
 function heldIds(): number[] {
@@ -184,7 +218,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (pick) {
                 await pick.loc.interact(pick.op);
             } else {
-                log(`[clue] no searchable loc at (${step.coord.x},${step.coord.z},${step.coord.level})`);
+                log(`no searchable loc at (${step.coord.x},${step.coord.z},${step.coord.level})`);
             }
             return;
         }
@@ -242,7 +276,7 @@ function blockReason(step: ClueStep): string | null {
  * is stuck OR a random event fired mid-step — the caller distinguishes the two
  * (it re-checks EventSignal.pending() and yields rather than abandoning).
  */
-async function solveStep(step: ClueStep, log: (m: string) => void): Promise<boolean> {
+async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean> {
     const tracked = trackedId(step);
     const sigBefore = heldSignature();
     const progressed = (): boolean => !heldIds().includes(tracked) || heldSignature() !== sigBefore;
@@ -254,6 +288,7 @@ async function solveStep(step: ClueStep, log: (m: string) => void): Promise<bool
         if (EventSignal.pending()) {
             return false; // bail to the caller → loop() boundary so the Supervisor can handle it
         }
+        onAttempt(attempt + 1);
         await drainChat();
         await dispatch(step, log);
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
@@ -273,6 +308,9 @@ async function dismissRewardModal(): Promise<void> {
 }
 
 export const ClueExecutor = {
+    /** Live progress of the solve in flight — overlays read this; null when idle. */
+    current: null as ClueProgress | null,
+
     /**
      * Run the held clue trail. Returns 'done' when nothing clue-like remains in
      * the pack (the trail finished — the reward modal is dismissed on the way
@@ -282,9 +320,23 @@ export const ClueExecutor = {
      * caller re-invokes this (the re-identify resumes the same step).
      */
     async solveHeldClue(log: (m: string) => void): Promise<'done' | 'abandon' | 'yield'> {
-        let solved = 0;
+        const tlog = (m: string): void => {
+            trace.note(m);
+            log(m);
+        };
+        const end = (outcome: 'done' | 'abandon', reason?: string): 'done' | 'abandon' => {
+            if (outcome === 'abandon') {
+                dumpFailure(reason ?? 'unknown', log);
+            }
+            sessionActive = false;
+            sessionLegs = 0;
+            ClueExecutor.current = null;
+            return outcome;
+        };
+
         for (let guard = 0; guard < OUTER_GUARD; guard++) {
             if (EventSignal.pending()) {
+                trace.note('yield — random event pending');
                 return 'yield'; // hand back to loop(); loopInFlight blocks the Supervisor until we return
             }
             await drainChat();
@@ -292,33 +344,72 @@ export const ClueExecutor = {
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);
             if (step === null) {
                 await dismissRewardModal();
-                log('[clue] trail complete');
-                return 'done';
+                tlog('trail complete');
+                return end('done');
             }
 
-            if (solved >= MAX_STEPS) {
-                log(`[clue] abandoning ${describeStep(step)}: exceeded ${MAX_STEPS} steps`);
-                return 'abandon';
+            const clueId = trackedId(step);
+            const name = shortClueName(step.type === 'open-casket' ? step.casketObj : step.obj);
+            if (!sessionActive) {
+                // First step of a NEW solve (yield re-entries keep the session)
+                trace.begin(clueId, name);
+                sessionActive = true;
+                sessionLegs = 0;
+            }
+            ClueExecutor.current = { clueId, name, step: describeStep(step), leg: sessionLegs + 1, attempt: 0, startedAt: ClueExecutor.current?.startedAt ?? Date.now() };
+
+            if (sessionLegs >= MAX_STEPS) {
+                const reason = `exceeded ${MAX_STEPS} steps`;
+                tlog(`abandoning ${describeStep(step)}: ${reason}`);
+                return end('abandon', reason);
             }
 
             const blocked = blockReason(step);
             if (blocked) {
-                log(`[clue] abandoning ${describeStep(step)}: ${blocked}`);
-                return 'abandon';
+                tlog(`abandoning ${describeStep(step)}: ${blocked}`);
+                return end('abandon', blocked);
             }
 
-            log(`[clue] solving ${describeStep(step)}`);
-            if (!(await solveStep(step, log))) {
+            tlog(`leg ${sessionLegs + 1} — solving ${describeStep(step)} [${clueId}]`);
+            const onAttempt = (n: number): void => {
+                if (ClueExecutor.current) {
+                    ClueExecutor.current.attempt = n;
+                }
+                if (n > 1) {
+                    trace.note(`attempt ${n}/${STEP_ATTEMPTS}`);
+                }
+            };
+            if (!(await solveStep(step, tlog, onAttempt))) {
                 if (EventSignal.pending()) {
+                    trace.note('yield — event fired mid-step');
                     return 'yield'; // Supervisor handles it next loop; idempotent re-identify resumes this step
                 }
-                log(`[clue] abandoning ${describeStep(step)}: no progress after ${STEP_ATTEMPTS} attempts`);
-                return 'abandon';
+                const reason = `no progress after ${STEP_ATTEMPTS} attempts`;
+                tlog(`abandoning ${describeStep(step)}: ${reason}`);
+                return end('abandon', reason);
             }
-            log('[clue] step done');
-            solved++;
+            tlog('step done');
+            sessionLegs++;
         }
-        log('[clue] abandoning: loop guard reached (stuck?)');
-        return 'abandon';
+        tlog('abandoning: loop guard reached (stuck?)');
+        return end('abandon', 'loop guard reached');
     }
 };
+
+/** Emit the trace three ways: a marked block in the script log, one structured
+ *  console.error (copy from devtools), and the persisted last-5-failures ring
+ *  (localStorage) that rs2b0t.clueTraces() reads back. */
+function dumpFailure(reason: string, log: (m: string) => void): void {
+    const dump = trace.dump(reason, sessionLegs);
+    log(`==== clue trace (abandon: ${reason}) — ${dump.name} [${dump.clueId ?? '?'}], ${dump.legs} leg${dump.legs === 1 ? '' : 's'} solved ====`);
+    const t0 = dump.lines[0]?.t ?? dump.startedAt;
+    for (let i = 0; i < dump.lines.length; i++) {
+        const l = dump.lines[i];
+        log(`  ${i + 1}. +${((l.t - t0) / 1000).toFixed(1)}s @${l.pos} ${l.m}`);
+    }
+    log('==== end clue trace ====');
+    console.error('[rs2b0t] clue solve failed', JSON.stringify(dump));
+    if (typeof localStorage !== 'undefined') {
+        pushTraceRing(localStorage, TRACE_STORAGE_KEY, dump);
+    }
+}

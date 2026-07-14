@@ -1,6 +1,8 @@
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './BotClient.js';
 import { BotHost } from './BotHost.js';
+import { ClueExecutor, TRACE_STORAGE_KEY } from './clues/ClueExecutor.js';
+import { readTraceRing } from './clues/ClueTrace.js';
 import { ActionRouter } from './input/ActionRouter.js';
 import { Navigator } from './nav/Navigator.js';
 import { installAbi } from './runtime/abi.js';
@@ -84,6 +86,9 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         renderGate: RenderGate,
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),
-        setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on)
+        setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),
+        /** Live solve progress + the persisted last-5-failed-solve traces. */
+        clueProgress: () => ClueExecutor.current,
+        clueTraces: () => readTraceRing(localStorage, TRACE_STORAGE_KEY)
     };
 }
