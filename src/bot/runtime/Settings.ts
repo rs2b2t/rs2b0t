@@ -11,7 +11,7 @@ import Tile from '../api/Tile.js';
  * parsed values the panel produces, for headless/scripted runs.
  */
 
-export type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
+type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
 export interface SettingDef {
     type: SettingType;
@@ -114,7 +114,7 @@ function parseTile(raw: string): Tile | null {
 }
 
 /** Serialize a resolved value back to the string form inputs/localStorage use. */
-export function settingToString(def: SettingDef, value: unknown): string {
+function settingToString(def: SettingDef, value: unknown): string {
     if (def.type === 'tile' && value instanceof Tile) {
         return `${value.x},${value.z},${value.level}`;
     }
@@ -129,7 +129,7 @@ export function settingToString(def: SettingDef, value: unknown): string {
 
 /** Genie/lamp skills (keys of LAMP_IF.skills) — the lampSkill dropdown options.
  *  Kept local to avoid a runtime→api import; handleLamp falls back to strength. */
-export const LAMP_SKILLS: string[] = [
+const LAMP_SKILLS: string[] = [
     'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer',
     'agility', 'herblore', 'thieving', 'crafting', 'runecraft', 'mining',
     'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'fletching'

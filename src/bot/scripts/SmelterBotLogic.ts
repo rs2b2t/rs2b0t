@@ -11,7 +11,7 @@ export interface PackItem {
 }
 
 /** One ore in a recipe, and how many are consumed per bar. */
-export interface Ingredient {
+interface Ingredient {
     /** Bank/inventory name substring, e.g. 'Copper ore', 'Coal'. */
     readonly ore: string;
     /** Count consumed per bar smelted. */

@@ -177,7 +177,7 @@ interface QuestGuideProgress {
  * let the multi-hop teleport finish before the next validate reads the
  * resting tile.
  */
-export class EnterQuestHall extends StageTask {
+class EnterQuestHall extends StageTask {
     validate(): boolean {
         return noDialog() && beforeMine() && northOfHall() && Npcs.query().name(GUIDE).within(12).exists();
     }
@@ -209,7 +209,7 @@ export class EnterQuestHall extends StageTask {
  * dispatching — `nearGuide()` alone can be true across the wall (Npc
  * queries are scene-wide, walls don't matter to them).
  */
-export class TalkQuestGuide extends StageTask {
+class TalkQuestGuide extends StageTask {
     private talked = false;
 
     validate(): boolean {
@@ -236,7 +236,7 @@ export class TalkQuestGuide extends StageTask {
  * the one-shot this would re-fire any time a LATER section's stage clicks
  * some other tab (the exact `OpenStatsTab` hijack Task 8 fixed).
  */
-export class OpenQuestTab extends StageTask {
+class OpenQuestTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -260,7 +260,7 @@ export class OpenQuestTab extends StageTask {
  * (file-header note 5) — there is no independent item/xp/tab signal for
  * this transition.
  */
-export class TalkQuestGuideAgain extends StageTask {
+class TalkQuestGuideAgain extends StageTask {
     private talked = false;
 
     constructor(
@@ -296,7 +296,7 @@ export class TalkQuestGuideAgain extends StageTask {
  * `walkToward`). One-shot latches on the observed z-jump into the mine —
  * the section's terminal outcome.
  */
-export class ClimbToMine extends StageTask {
+class ClimbToMine extends StageTask {
     private done = false;
 
     constructor(

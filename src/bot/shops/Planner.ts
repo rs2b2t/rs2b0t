@@ -16,8 +16,8 @@ export interface PlannerCfg {
     maxGpPerLeg: number;
 }
 
-export interface BuyPlanItem { obj: string; name: string; units: number; estCost: number }
-export interface ShopPlan { shopId: string; keeperNpc: string; stand: NavPointLike; items: BuyPlanItem[] }
+interface BuyPlanItem { obj: string; name: string; units: number; estCost: number }
+interface ShopPlan { shopId: string; keeperNpc: string; stand: NavPointLike; items: BuyPlanItem[] }
 export interface ClusterPlan {
     clusterId: string;
     shops: ShopPlan[];
@@ -123,7 +123,7 @@ export function planCluster(
     };
 }
 
-export type Decision =
+type Decision =
     | { kind: 'buy'; clusterId: string; shop: ShopPlan }
     | { kind: 'bank'; clusterId: string; stand: NavPointLike; boothName: string; boothOp: string; withdrawFor: ClusterPlan | null }
     | { kind: 'idle'; stand: NavPointLike; boothName: string; boothOp: string; untilMs: number; bestClusterId: string | null; bestFractionPct: number };

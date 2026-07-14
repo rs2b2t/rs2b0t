@@ -17,7 +17,7 @@ import { GroundItems } from './queries/GroundItems.js';
  * 'gather' (skilling trainers) and 'make' (make-chains) are Plan B/C
  * territory — deliberately unimplemented; see AcquireTask.execute() below.
  */
-export type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
+type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
 
 export type ItemNeed = { name: string; count: number; source: ItemSource };
 

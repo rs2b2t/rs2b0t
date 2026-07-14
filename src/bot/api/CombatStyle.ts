@@ -4,7 +4,7 @@
  * the actual button ids are pack-assigned per weapon and resolved from the live
  * combat tab. com_mode isn't persisted, so a bot re-asserts it each session.
  */
-export const COMBAT_STYLE_MODE: Record<string, number> = {
+const COMBAT_STYLE_MODE: Record<string, number> = {
     attack: 0,
     accurate: 0,
     strength: 1,

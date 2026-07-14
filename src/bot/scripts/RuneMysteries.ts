@@ -16,8 +16,8 @@ const TALISMAN = 'air talisman';
 const PACKAGE = 'research package';
 const NOTES = 'notes';
 
-export type Held = 'talisman' | 'package' | 'notes' | null;
-export type StepId = 'DUKE' | 'SEDRIDOR' | 'AUBURY' | 'RECOVER' | 'DONE' | 'WAIT';
+type Held = 'talisman' | 'package' | 'notes' | null;
+type StepId = 'DUKE' | 'SEDRIDOR' | 'AUBURY' | 'RECOVER' | 'DONE' | 'WAIT';
 
 /** Which quest item the pack holds — most-advanced wins (can't co-occur
  *  server-side, but stay deterministic). Exact CI full-name equality. Pure. */

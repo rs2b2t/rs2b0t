@@ -100,7 +100,7 @@ interface MagicProgress {
  * from the chapel exit first (talk-approach only paths a few unobstructed
  * tiles under the NAIVE routefinder).
  */
-export class TalkTerrova extends StageTask {
+class TalkTerrova extends StageTask {
     validate(): boolean {
         return noDialog() && inMagicArea() && reader.sideTabInterface(MAGIC_TAB) === -1;
     }
@@ -126,7 +126,7 @@ export class TalkTerrova extends StageTask {
  * Stage 620 -> 630 (-> 640 via the auto-chain, note 2): click the flashing
  * Magic tab. One-shot, the standard flashing-tab idiom.
  */
-export class OpenMagicTab extends StageTask {
+class OpenMagicTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -149,7 +149,7 @@ export class OpenMagicTab extends StageTask {
  * 660/default case runs the mainland prompt), which `FinishTutorial` also
  * covers.
  */
-export class TalkForRunes extends StageTask {
+class TalkForRunes extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: MagicProgress
@@ -184,7 +184,7 @@ export class TalkForRunes extends StageTask {
  * not. Waits out `Game.inCombat()` between casts (the successful hit can
  * briefly flag combat).
  */
-export class CastWindStrike extends StageTask {
+class CastWindStrike extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: MagicProgress
@@ -228,7 +228,7 @@ export class CastWindStrike extends StageTask {
  * teleport itself is the terminal outcome, and every gate here goes false
  * with it.
  */
-export class FinishTutorial extends StageTask {
+class FinishTutorial extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: MagicProgress

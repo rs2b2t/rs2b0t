@@ -1,6 +1,6 @@
 import type { SettingDef } from '../runtime/Settings.js';
 
-export type ControlKind =
+type ControlKind =
     | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'multiselect' | 'taglist' | 'tile';
 
 /** Pick the control kind from a SettingDef's shape (pure — no DOM). */
@@ -20,7 +20,7 @@ export function resolveControl(def: SettingDef): ControlKind {
 }
 
 /** Split a comma-joined list value into trimmed, non-empty items. */
-export function listItems(value: string): string[] {
+function listItems(value: string): string[] {
     return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
 }
 
@@ -51,11 +51,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLEle
     return node;
 }
 
-export interface ParamControl {
+interface ParamControl {
     edit(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }): HTMLElement;
 }
 
-export const CONTROLS: Record<ControlKind, ParamControl> = {
+const CONTROLS: Record<ControlKind, ParamControl> = {
     checkbox: {
         edit(_def, current, onChange, { disabled }) {
             const box = el('input', 'rs2b0t-param-cb');

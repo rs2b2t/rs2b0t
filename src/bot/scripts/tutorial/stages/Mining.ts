@@ -154,7 +154,7 @@ interface MiningProgress {
  * dialogue-open, same shape as every other section's first talk — letting
  * the higher-priority `AdvanceDialog` click through the introduction.
  */
-export class TalkMiningInstructor extends StageTask {
+class TalkMiningInstructor extends StageTask {
     private talked = false;
 
     validate(): boolean {
@@ -187,7 +187,7 @@ export class TalkMiningInstructor extends StageTask {
  * (array order: this stage can't out-race the first talk since it stays
  * the first validating stage until its own one-shot latches).
  */
-export class ProspectCopper extends StageTask {
+class ProspectCopper extends StageTask {
     private done = false;
 
     constructor(
@@ -221,7 +221,7 @@ export class ProspectCopper extends StageTask {
 }
 
 /** Stage 274/275 -> 279/280: prospect the tin rock, after copper. */
-export class ProspectTin extends StageTask {
+class ProspectTin extends StageTask {
     private done = false;
 
     constructor(
@@ -258,7 +258,7 @@ export class ProspectTin extends StageTask {
  * Stage 279/280 -> 290: talk to Dezzick again for the bronze pickaxe
  * (file-header note 8 — latches on the ITEM, not dialogue-open).
  */
-export class TalkForPickaxe extends StageTask {
+class TalkForPickaxe extends StageTask {
     private done = false;
 
     constructor(
@@ -298,7 +298,7 @@ export class TalkForPickaxe extends StageTask {
  * but a real house-rule violation: a one-shot must latch for the run, not
  * just until the item is next missing).
  */
-export class MineCopper extends StageTask {
+class MineCopper extends StageTask {
     private done = false;
 
     validate(): boolean {
@@ -324,7 +324,7 @@ export class MineCopper extends StageTask {
 }
 
 /** Stage 294/295 -> 320: mine a tin ore, after copper (same latch reasoning as `MineCopper`). */
-export class MineTin extends StageTask {
+class MineTin extends StageTask {
     private done = false;
 
     validate(): boolean {
@@ -371,7 +371,7 @@ export class MineTin extends StageTask {
  * within USE_ON_RANGE and only walk-snaps beyond it (both ore clusters are
  * within ~13 tiles of the furnace, so the walk branch is a safety net).
  */
-export class SmeltBronze extends StageTask {
+class SmeltBronze extends StageTask {
     validate(): boolean {
         return inMine() && noDialog() && Inventory.contains('Copper ore') && Inventory.contains('Tin ore');
     }
@@ -401,7 +401,7 @@ export class SmeltBronze extends StageTask {
  * Stage 330 -> 340: talk to Dezzick a third time for the hammer
  * (file-header note 8 — latches on the ITEM).
  */
-export class TalkForHammer extends StageTask {
+class TalkForHammer extends StageTask {
     private done = false;
 
     validate(): boolean {
@@ -434,7 +434,7 @@ export class TalkForHammer extends StageTask {
  * `SmeltBronze`: the anvils are solid 1x1 locs (their own tile is blocked,
  * the same `walkToward` trap), and the loc-aware use-click paths itself.
  */
-export class SmithDagger extends StageTask {
+class SmithDagger extends StageTask {
     validate(): boolean {
         return (noDialog() || ChatDialog.isMainMakePanel()) && inMine() && Inventory.contains('Bronze bar') && Inventory.contains('Hammer');
     }
@@ -483,7 +483,7 @@ export class SmithDagger extends StageTask {
  * is where every real 350 run stands, so the gate costs the real flow
  * nothing.
  */
-export class OpenMineGate extends StageTask {
+class OpenMineGate extends StageTask {
     private done = false;
 
     validate(): boolean {

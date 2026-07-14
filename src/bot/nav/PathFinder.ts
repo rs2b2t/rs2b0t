@@ -59,9 +59,9 @@ export type NavResponse =
 
 // ---- costs / limits ----
 
-export const DOOR_COST = 4;
-export const TRANSPORT_COST = 10;
-export const MAX_EXPANSIONS = 300_000;
+const DOOR_COST = 4;
+const TRANSPORT_COST = 10;
+const MAX_EXPANSIONS = 300_000;
 
 // direction bit order must match tools/nav/build-collision.ts DIRS
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];

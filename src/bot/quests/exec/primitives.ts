@@ -78,7 +78,7 @@ export interface NpcStop {
  * (from the engine's ladders.rs2) is the only reliable signal for both
  * directions.
  */
-export async function hopLadder(hop: LadderHop, log: (m: string) => void): Promise<boolean> {
+async function hopLadder(hop: LadderHop, log: (m: string) => void): Promise<boolean> {
     const ladder = Locs.query().name(hop.locName).action(hop.op).where(l => l.tile().distanceTo(hop.stand) <= 3).nearest();
     if (!ladder) {
         log(`no '${hop.locName}' offering '${hop.op}' near (${hop.stand.x},${hop.stand.z})`);

@@ -27,14 +27,14 @@ export interface ShopRecord {
 
 export type BuyPolicy = { kind: 'buyout' } | { kind: 'floor'; pct: number };
 
-export interface GateSpec {
+interface GateSpec {
     quest?: string;                            // journal name, needs 'complete'
     skill?: { name: string; level: number };   // base level requirement
     qp?: number;                               // minimum quest points
     members?: boolean;                         // needs a members world
 }
 
-export interface RouteShop {
+interface RouteShop {
     shopId: string;     // ShopRecord.inv
     keeperNpc: string;  // display name for Shop.open()
     stand: NavPointLike;

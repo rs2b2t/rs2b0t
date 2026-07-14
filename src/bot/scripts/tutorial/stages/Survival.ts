@@ -95,7 +95,7 @@ const onGuideSide = () => {
  * dialogue is observed open, so a whiffed click retries but a finished
  * conversation is never restarted (re-talking would just loop the recap).
  */
-export class TalkToGuide extends StageTask {
+class TalkToGuide extends StageTask {
     private talked = false;
 
     validate(): boolean {
@@ -125,7 +125,7 @@ export class TalkToGuide extends StageTask {
  * guide-proximity gate this stage would "helpfully" open next section's
  * door.
  */
-export class OpenGuideDoor extends StageTask {
+class OpenGuideDoor extends StageTask {
     validate(): boolean {
         return noDialog() && onGuideSide() && inGuideRoom() && Locs.query().name('Door').action('Open').within(10).exists();
     }
@@ -147,7 +147,7 @@ export class OpenGuideDoor extends StageTask {
  * logic). One-shot on dialogue-open; the axe/tinderbox grant is deferred to
  * the tab click (file-header note 1), so inventory can't gate this.
  */
-export class TalkSurvivalExpert extends StageTask {
+class TalkSurvivalExpert extends StageTask {
     private talked = false;
 
     validate(): boolean {
@@ -174,7 +174,7 @@ export class TalkSurvivalExpert extends StageTask {
  * no axe yet = the TUT_CLICKSIDE hasn't been accepted yet; activeSideTab
  * guard = don't re-click while the grant is in flight.
  */
-export class OpenInventoryTab extends StageTask {
+class OpenInventoryTab extends StageTask {
     validate(): boolean {
         return noDialog() && reader.sideTabInterface(INVENTORY_TAB) !== -1 && !Inventory.contains('Bronze axe') && reader.activeSideTab() !== INVENTORY_TAB;
     }
@@ -191,7 +191,7 @@ export class OpenInventoryTab extends StageTask {
  * has its own inline re-chop for the relight case. Two-phase wait: first
  * for the walk+chop to start (animation), then for the logs.
  */
-export class ChopTree extends StageTask {
+class ChopTree extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('firemaking') === 0 && Inventory.contains('Bronze axe') && !Inventory.contains('Logs') && !Game.animating();
     }
@@ -214,7 +214,7 @@ export class ChopTree extends StageTask {
  * picked up later must not trigger fires); before it, a failed light
  * ("You can't light a fire here") leaves the logs in place for a retry.
  */
-export class LightFire extends StageTask {
+class LightFire extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('firemaking') === 0 && Inventory.contains('Logs') && Inventory.contains('Tinderbox') && !Game.animating();
     }
@@ -237,7 +237,7 @@ export class LightFire extends StageTask {
  * transient activeSideTab !== STATS_TAB gate doesn't re-trigger this stage
  * when later sections click other tabs (music=13, controls=12, quest=2, etc.).
  */
-export class OpenStatsTab extends StageTask {
+class OpenStatsTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -260,7 +260,7 @@ export class OpenStatsTab extends StageTask {
  * (`OpenStatsTab`, listed first, validates false until `sideIcon[1]`
  * arrives) — harmless: the expert just answers with a reminder.
  */
-export class TalkSurvivalAgain extends StageTask {
+class TalkSurvivalAgain extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('firemaking') > 0 && !Inventory.contains('Small fishing net') && expertInScene();
     }
@@ -283,7 +283,7 @@ export class TalkSurvivalAgain extends StageTask {
  * shrimps" alone would re-trigger forever; cooking xp only lands with the
  * successful second cook.
  */
-export class NetShrimp extends StageTask {
+class NetShrimp extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('cooking') === 0 && Inventory.contains('Small fishing net') && !Inventory.contains('Raw shrimps') && !Game.animating();
     }
@@ -306,7 +306,7 @@ export class NetShrimp extends StageTask {
  * the fire timed out (placed for ~90s), relight — re-chopping first if the
  * logs are gone too.
  */
-export class CookShrimp extends StageTask {
+class CookShrimp extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('cooking') === 0 && Inventory.contains('Raw shrimps');
     }
@@ -351,7 +351,7 @@ export class CookShrimp extends StageTask {
  * `p_teleport` for any %tutorial >= 120), so re-validating on proximity
  * alone would ping-pong us across it forever after 130.
  */
-export class OpenSurvivalGate extends StageTask {
+class OpenSurvivalGate extends StageTask {
     private opened = false;
 
     validate(): boolean {

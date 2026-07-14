@@ -6,11 +6,11 @@ export class ScriptAborted extends Error {
     }
 }
 
-export type ScriptState = 'running' | 'paused' | 'stopping' | 'stopped' | 'crashed';
+type ScriptState = 'running' | 'paused' | 'stopping' | 'stopped' | 'crashed';
 
-export type LogLevel = 'info' | 'warn' | 'error';
+type LogLevel = 'info' | 'warn' | 'error';
 
-export interface LogLine {
+interface LogLine {
     time: number;
     level: LogLevel;
     msg: string;
@@ -23,7 +23,7 @@ export type Waiter = WaiterSpec & {
     reject: (err: Error) => void;
 };
 
-export const LOG_RING_CAPACITY = 500;
+const LOG_RING_CAPACITY = 500;
 
 /**
  * Per-run bookkeeping shared by the Scheduler (pump) and ScriptRunner

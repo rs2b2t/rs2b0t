@@ -10,7 +10,7 @@
 
 export type LastOutcome = 'arrived' | 'closest' | 'budget' | 'failed' | 'interrupted' | null;
 
-export type LadderAction =
+type LadderAction =
     | { kind: 'baked'; bigBudget: boolean }
     | { kind: 'scene' }
     | { kind: 'unstick' }
@@ -18,7 +18,7 @@ export type LadderAction =
     | { kind: 'arrived' }
     | { kind: 'interrupted' };
 
-export type StepPhase = 'baked' | 'scene' | 'unstick';
+type StepPhase = 'baked' | 'scene' | 'unstick';
 
 export interface LadderState {
     /** Best (smallest) Chebyshev distance to the target seen so far. */

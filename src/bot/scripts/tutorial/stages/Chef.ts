@@ -147,7 +147,7 @@ const breadChainNotStarted = () => !Inventory.contains('Pot of flour') && !Inven
  * (the door's own teleport-through) and, permanently, the bread chain
  * (file-header house-rule addendum: no dispatch-latched one-shot).
  */
-export class OpenChefDoor extends StageTask {
+class OpenChefDoor extends StageTask {
     validate(): boolean {
         return noDialog() && Skills.xp('cooking') > 0 && onChefSide() && !insideChefHouse() && breadChainNotStarted();
     }
@@ -171,7 +171,7 @@ export class OpenChefDoor extends StageTask {
  * One-shot on dialogue-open (Survival's `TalkToGuide` pattern): blocking
  * here until dialog-close would starve `AdvanceDialog`.
  */
-export class TalkChef extends StageTask {
+class TalkChef extends StageTask {
     private talked = false;
 
     validate(): boolean {
@@ -196,7 +196,7 @@ export class TalkChef extends StageTask {
  * No one-shot needed — flour+water are consumed into dough, closing the
  * gate permanently on its own (Survival's `LightFire` pattern).
  */
-export class MakeDough extends StageTask {
+class MakeDough extends StageTask {
     validate(): boolean {
         return noDialog() && Inventory.contains('Pot of flour') && Inventory.contains('Bucket of water');
     }
@@ -218,7 +218,7 @@ export class MakeDough extends StageTask {
  * only run of this stage lands on the content-forced success branch). No
  * one-shot needed: the dough is consumed either way.
  */
-export class BakeBread extends StageTask {
+class BakeBread extends StageTask {
     validate(): boolean {
         return noDialog() && Inventory.contains('Bread dough');
     }
@@ -241,7 +241,7 @@ export class BakeBread extends StageTask {
  * stage-20/50 tab stages; one-shot because the attach is permanent and
  * `OpenControlsTab` later moves the active tab away from 13.
  */
-export class OpenMusicTab extends StageTask {
+class OpenMusicTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -264,7 +264,7 @@ export class OpenMusicTab extends StageTask {
  * click always lands first; at exactly 180 the door script advances to
  * 190, and at <180 it just mesboxes (cleared by `AdvanceDialog`, retried).
  */
-export class ExitChefHouse extends StageTask {
+class ExitChefHouse extends StageTask {
     validate(): boolean {
         return noDialog() && insideChefHouse() && Inventory.contains('Bread');
     }
@@ -285,7 +285,7 @@ export class ExitChefHouse extends StageTask {
  * Stage 190 -> 195: click the flashing Player Controls tab — same
  * attach-gate + one-shot shape as `OpenMusicTab` (file header note 4).
  */
-export class OpenControlsTab extends StageTask {
+class OpenControlsTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -308,7 +308,7 @@ export class OpenControlsTab extends StageTask {
  * house-rule pattern. The stage-195 entry proc's forced run-off self-heals
  * the pre-195 race.
  */
-export class ToggleRunOn extends StageTask {
+class ToggleRunOn extends StageTask {
     private done = false;
 
     validate(): boolean {
@@ -349,7 +349,7 @@ export class ToggleRunOn extends StageTask {
  * 8). Mining xp is zero through the whole real 130 -> 220 window and
  * permanently non-zero from 294 onward.
  */
-export class OpenQuestGuideDoor extends StageTask {
+class OpenQuestGuideDoor extends StageTask {
     private done = false;
 
     validate(): boolean {

@@ -35,7 +35,7 @@ export function shouldBankNow(strategy: BankStrategy, s: BankTriggerState): bool
     }
 }
 
-export const BANK_STRATEGY_OPTIONS = ['Off', 'Loot count', 'Time', 'Either'];
+const BANK_STRATEGY_OPTIONS = ['Off', 'Loot count', 'Time', 'Either'];
 
 /** Map the settings-dropdown label to a BankStrategy (unknown -> off). */
 export function parseBankStrategy(label: string): BankStrategy {

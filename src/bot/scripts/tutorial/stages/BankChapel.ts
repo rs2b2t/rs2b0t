@@ -190,7 +190,7 @@ interface BankChapelProgress {
  * walk-snap only beyond it (Task 10's furnace lesson — never require
  * `walkToward` to converge onto a solid loc's own tile).
  */
-export class UseBankBooth extends StageTask {
+class UseBankBooth extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: BankChapelProgress
@@ -235,7 +235,7 @@ export class UseBankBooth extends StageTask {
  * Also latches `bankOpened` — it can be the first observer when the open
  * happened during `AdvanceDialog`'s turn.
  */
-export class CloseBank extends StageTask {
+class CloseBank extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: BankChapelProgress
@@ -261,7 +261,7 @@ export class CloseBank extends StageTask {
  * the bank opened without the Banker prompt, varp still 500 (file-header
  * note 2) — re-arm the booth stage.
  */
-export class OpenAdvisorDoor extends StageTask {
+class OpenAdvisorDoor extends StageTask {
     private done = false;
 
     constructor(
@@ -307,7 +307,7 @@ export class OpenAdvisorDoor extends StageTask {
  * one-shot latches on dialogue-open and threads `advisorTalked` to the exit
  * door, which re-arms it if the door proves the talk didn't finish.
  */
-export class TalkAdvisor extends StageTask {
+class TalkAdvisor extends StageTask {
     private talked = false;
 
     constructor(
@@ -343,7 +343,7 @@ export class TalkAdvisor extends StageTask {
  * `talked` one-shot on `TalkAdvisor` stays latched; only the shared flag
  * re-arms, so a genuinely-interrupted talk retries via a fresh recap.
  */
-export class ExitAdvisorRoom extends StageTask {
+class ExitAdvisorRoom extends StageTask {
     private done = false;
 
     constructor(
@@ -403,7 +403,7 @@ export class ExitAdvisorRoom extends StageTask {
  * and a flag here could never latch anyway (validate() goes false the
  * moment the walk-through succeeds).
  */
-export class EnterChapel extends StageTask {
+class EnterChapel extends StageTask {
     validate(): boolean {
         return noDialog() && pastCombat() && chapelApproach();
     }
@@ -430,7 +430,7 @@ export class EnterChapel extends StageTask {
  * PRAYER TAB ATTACHING (the 550 step proc; login re-attach only > 550 —
  * file-header note 4, the `TalkVannaka` idiom): no flag, relog-proof.
  */
-export class TalkBrace extends StageTask {
+class TalkBrace extends StageTask {
     validate(): boolean {
         return noDialog() && pastCombat() && insideChapel() && reader.sideTabInterface(PRAYER_TAB) === -1 && Npcs.query().name(BRACE).within(10).exists();
     }
@@ -451,7 +451,7 @@ export class TalkBrace extends StageTask {
  * the varp on the click — file-header note 5). One-shot, `OpenWornTab`
  * idiom.
  */
-export class OpenPrayerTab extends StageTask {
+class OpenPrayerTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -473,7 +473,7 @@ export class OpenPrayerTab extends StageTask {
  * the prayer click, which `OpenPrayerTab` — earlier in the array — normally
  * wins) just gets the "open the indicated menu" reminder and self-heals.
  */
-export class TalkBrace2 extends StageTask {
+class TalkBrace2 extends StageTask {
     validate(): boolean {
         return (
             noDialog() &&
@@ -497,7 +497,7 @@ export class TalkBrace2 extends StageTask {
 }
 
 /** Stage 570 -> 580: click the flashing Friends tab. One-shot (note 5). */
-export class OpenFriendsTab extends StageTask {
+class OpenFriendsTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -517,7 +517,7 @@ export class OpenFriendsTab extends StageTask {
  * CLICK's own step proc — its presence is a faithful 580 signal, note 5).
  * One-shot.
  */
-export class OpenIgnoreTab extends StageTask {
+class OpenIgnoreTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -538,7 +538,7 @@ export class OpenIgnoreTab extends StageTask {
  * (file-header note 4) — one-shot on dialogue-open, `braceFinished`
  * threaded to the exit door (which re-arms it on a mesbox).
  */
-export class TalkBrace3 extends StageTask {
+class TalkBrace3 extends StageTask {
     private talked = false;
 
     constructor(
@@ -582,7 +582,7 @@ export class TalkBrace3 extends StageTask {
  * re-talk lands on Brace's recap, which `AdvanceDialog` terminates via its
  * "ready to move on" match).
  */
-export class ExitChapel extends StageTask {
+class ExitChapel extends StageTask {
     private done = false;
 
     constructor(

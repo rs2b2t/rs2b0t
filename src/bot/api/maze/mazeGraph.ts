@@ -21,7 +21,7 @@ export const MAZE_SPAWNS = [
     { x: 2891, z: 4555 }  // SW  local (11,11)
 ] as const;
 
-export const WALL_ID = 3626;
+const WALL_ID = 3626;
 // door id -> approach_direction: 0 both sides, 1 axis-aligned side, 2 off-axis side
 export const DOOR_DIRS: Record<number, number> = { 3628: 0, 3629: 1, 3630: 2, 3631: 2, 3632: 1 };
 

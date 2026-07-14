@@ -10,7 +10,7 @@ import { StallGuard } from './StallGuard.js';
 const WEDGE_MS = 10 * 60_000; // no xp AND no movement this long ⇒ wedged
 const RETRY_MS = 15 * 60_000; // at most one recovery attempt per this window
 
-export interface SupervisorIteration {
+interface SupervisorIteration {
     label: string;
     run: () => Promise<void>;
 }

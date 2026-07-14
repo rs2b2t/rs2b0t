@@ -249,7 +249,7 @@ class RatFight {
  * carrying its smithed dagger) and not a private flag (the attach is the
  * verified outcome itself, and it's permanent for the run).
  */
-export class TalkVannaka extends StageTask {
+class TalkVannaka extends StageTask {
     validate(): boolean {
         return noDialog() && inCombatArea() && reader.sideTabInterface(WORN_TAB) === -1;
     }
@@ -275,7 +275,7 @@ export class TalkVannaka extends StageTask {
  * TUT_CLICKSIDE handler advances the varp on the click itself). One-shot —
  * same idiom as Chef's `OpenMusicTab` / QuestGuide's `OpenQuestTab`.
  */
-export class OpenWornTab extends StageTask {
+class OpenWornTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -296,7 +296,7 @@ export class OpenWornTab extends StageTask {
  * (note 4) keeps the dagger — auto-returned to the backpack when the sword
  * takes its slot — from being re-wielded later in the run.
  */
-export class WieldDagger extends StageTask {
+class WieldDagger extends StageTask {
     validate(): boolean {
         return (
             noDialog() &&
@@ -320,7 +320,7 @@ export class WieldDagger extends StageTask {
  * talks). Gated on the dagger being WORN — the content case that advances
  * (`^..._dagger_equipped`) only exists once the wield wrote 390.
  */
-export class TalkForSword extends StageTask {
+class TalkForSword extends StageTask {
     validate(): boolean {
         return noDialog() && inCombatArea() && Equipment.contains('Bronze dagger') && !hasSwordOrShield();
     }
@@ -353,7 +353,7 @@ export class TalkForSword extends StageTask {
  * (section-test jumps), where the one-shot starts false but the bow's
  * presence proves the section is past 410.
  */
-export class EquipSwordShield extends StageTask {
+class EquipSwordShield extends StageTask {
     private done = false;
 
     validate(): boolean {
@@ -385,7 +385,7 @@ export class EquipSwordShield extends StageTask {
  * 410 step proc's `~update_weapon_category`; the TUT_CLICKSIDE handler
  * advances the varp on the click). One-shot, same idiom as `OpenWornTab`.
  */
-export class OpenCombatTab extends StageTask {
+class OpenCombatTab extends StageTask {
     private opened = false;
 
     validate(): boolean {
@@ -417,7 +417,7 @@ export class OpenCombatTab extends StageTask {
  * self-heals: the refusal dialogue is cleared by `AdvanceDialog` and the
  * unlatched stage retries.
  */
-export class EnterRatPen extends StageTask {
+class EnterRatPen extends StageTask {
     private done = false;
 
     constructor(
@@ -456,7 +456,7 @@ export class EnterRatPen extends StageTask {
  * `progress.meleeKillDone` only when the tracked rat despawns (file-header
  * note 5) — raw xp flips true on the first hit and is NOT the kill.
  */
-export class MeleeKillRat extends StageTask {
+class MeleeKillRat extends StageTask {
     private readonly fight = new RatFight();
 
     constructor(
@@ -483,7 +483,7 @@ export class MeleeKillRat extends StageTask {
  * the ITEMS appearing (house rule); gated on the CONFIRMED melee kill,
  * never raw xp (note 5).
  */
-export class TalkForBow extends StageTask {
+class TalkForBow extends StageTask {
     constructor(
         bot: TutorialBot,
         private readonly progress: CombatProgress
@@ -533,7 +533,7 @@ export class TalkForBow extends StageTask {
  * 6). Same death-latched fight driver as the melee kill; the pen gate's
  * own 460 refusal plus the `!inPen()` gate keep the shot outside.
  */
-export class RangedKillRat extends StageTask {
+class RangedKillRat extends StageTask {
     private readonly fight = new RatFight();
 
     constructor(
@@ -574,7 +574,7 @@ export class RangedKillRat extends StageTask {
  * (it IS the transition), and the progress flag + latch keep it quiet on
  * both sides.
  */
-export class ClimbOutLadder extends StageTask {
+class ClimbOutLadder extends StageTask {
     private done = false;
 
     constructor(

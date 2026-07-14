@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { clusterEligible, decide, earliestQualifyMs, planCluster, type PlannerCfg, type RuntimeState } from '#/bot/shops/Planner.js';
+import { BUDGET_BUFFER, clusterEligible, decide, earliestQualifyMs, planCluster, type PlannerCfg, type RuntimeState } from '#/bot/shops/Planner.js';
 import type { AccountView, Route, RouteCluster, SeenMap, ShopRecord } from '#/bot/shops/types.js';
 
 const DB: Record<string, ShopRecord> = {
@@ -70,7 +70,7 @@ describe('planCluster', () => {
         expect(mind?.units).toBe(1000);                    // ~10.6k — fits
         expect(death!.units).toBeGreaterThan(0);
         expect(death!.units).toBeLessThan(1000);           // trimmed by the cap
-        expect(plan.estCost).toBeLessThanOrEqual(CFG.maxGpPerLeg / 1.25);
+        expect(plan.estCost).toBeLessThanOrEqual(CFG.maxGpPerLeg / BUDGET_BUFFER);
         expect(plan.budget).toBe(CFG.maxGpPerLeg);
         expect(plan.haulFraction).toBe(1);                 // fraction is PRE-trim
     });
@@ -95,7 +95,7 @@ describe('planCluster', () => {
         const death = plan.shops[0].items.find(i => i.obj === 'deathrune');
         expect(mind!.units).toBeGreaterThan(0);
         expect(death!.units).toBeLessThan(1000);
-        expect(plan.estCost).toBeLessThanOrEqual(5000 / 1.25);
+        expect(plan.estCost).toBeLessThanOrEqual(5000 / BUDGET_BUFFER);
         // haulFraction reflects PRE-trim availability (visit-worthiness), not the trim
         expect(plan.haulFraction).toBe(1);
     });

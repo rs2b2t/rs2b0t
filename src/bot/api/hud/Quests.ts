@@ -14,9 +14,9 @@ export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 // COLOUR_NOT_STARTED before any varp is changed; setting a quest's progress
 // varp complete/mid-complete and relogging flips it to COLOUR_COMPLETE /
 // COLOUR_IN_PROGRESS respectively.
-export const COLOUR_NOT_STARTED = 0xf80000;
-export const COLOUR_IN_PROGRESS = 0xf8f800;
-export const COLOUR_COMPLETE = 0x00f800;
+const COLOUR_NOT_STARTED = 0xf80000;
+const COLOUR_IN_PROGRESS = 0xf8f800;
+const COLOUR_COMPLETE = 0x00f800;
 
 export const Quests = {
     all(): { name: string; status: QuestStatus }[] {

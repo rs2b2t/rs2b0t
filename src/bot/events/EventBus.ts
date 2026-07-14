@@ -1,20 +1,20 @@
 import type { ChatLine } from '../adapter/ClientAdapter.js';
 
-export interface SkillXpEvent {
+interface SkillXpEvent {
     skill: number;
     name: string;
     xp: number;
     delta: number;
 }
 
-export interface SkillLevelEvent {
+interface SkillLevelEvent {
     skill: number;
     name: string;
     level: number;
     previous: number;
 }
 
-export interface InventoryChangedEvent {
+interface InventoryChangedEvent {
     slot: number;
     id: number;
     name: string | null;
@@ -23,13 +23,13 @@ export interface InventoryChangedEvent {
     previousCount: number;
 }
 
-export interface VarpChangedEvent {
+interface VarpChangedEvent {
     index: number;
     value: number;
     previous: number;
 }
 
-export interface TickEvent {
+interface TickEvent {
     tick: number;
 }
 

@@ -83,9 +83,9 @@ const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fl
 const MIME_SQUARE = { mx: 31, mz: 74 };
 const MAZE_SQUARE = { mx: 45, mz: 71 };
 
-export type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
+type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
 
-export interface DetectedEvent {
+interface DetectedEvent {
     kind: EventKind;
     name: string;
 }
