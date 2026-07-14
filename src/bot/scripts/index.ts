@@ -29,6 +29,7 @@ import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import RuneMysteries, { SETTINGS as RUNEMYSTERIES_SETTINGS } from './RuneMysteries.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
+import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -333,6 +334,15 @@ ScriptRegistry.register({
 });
 
 // --- money making ---
+ScriptRegistry.register({
+    name: 'ShopBuyout',
+    description: "Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing. Defaults to Lundail's Mage Arena rune shop (banks via Gundai's dialog); get the bot to the shop yourself.",
+    category: 'Money making',
+    tags: ['members', 'wilderness', 'shopping', 'banking', 'runes', 'afk'],
+    settingsSchema: SHOPBUYOUT_SETTINGS,
+    create: () => new ShopBuyout()
+});
+
 ScriptRegistry.register({
     name: 'ShopRunner',
     description: 'World shop-run supply loop — cycles shop clusters buying feathers, runes, and arrows/arrowtips, banking between clusters with capped gp withdrawals; skips shops until stock regenerates',
