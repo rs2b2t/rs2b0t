@@ -4,9 +4,16 @@
  * Drives a held clue trail to completion by RE-IDENTIFYING the next step from
  * the pack every iteration (identifyStep is pure — Task 4) and dispatching the
  * matching client action. Because the whole decision is a function of the held
- * items, the loop is idempotent and self-healing: a relog, a random event, or a
- * mis-timed interrupt just re-enters at the same step next pass. No progress
- * varp is read (trail_status is server-only), and no client state is cached.
+ * items, the loop is idempotent: a relog or mis-timed interrupt just re-enters
+ * at the same step on the next call. No progress varp is read (trail_status is
+ * server-only), and no client state is cached.
+ *
+ * Random events: this function CANNOT handle them itself — the Supervisor only
+ * runs the event handler on a fresh loop() launch, and Scheduler.pump() gates
+ * that on `!loopInFlight`, which stays true for this entire call. So on a
+ * pending event solveHeldClue RETURNS 'yield' immediately, handing control back
+ * to the loop() boundary; the caller re-invokes it after the Supervisor clears
+ * the event and the idempotent re-identify resumes the same step.
  *
  * Step mechanics (verified against the rs2b2t-content game_trail scripts):
  *   - search: walk to the clue coord and interact the loc there with its
@@ -61,8 +68,7 @@ const ARRIVE_RADIUS = 1; // dig checks distance<=1; search locs sit on the clue 
 const NPC_LEASH = 10; // NPCs wander; talkThrough re-finds them from the anchor
 const WALK_ATTEMPTS = 4; // bounded so an unreachable coord escalates to abandon
 const WALK_TIMEOUT_MS = 45_000; // per baked-walk pass
-const STEP_ATTEMPTS = 4; // real interact tries per step (random-event yields don't count)
-const STEP_GUARD = 200; // total per-step iterations incl. yields (anti-spin)
+const STEP_ATTEMPTS = 4; // interact tries per step before abandoning
 const PROGRESS_MS = 6000; // wait for the held id set to change after an action
 const MAX_STEPS = 20; // trail steps solved before giving up (trails are 2-4)
 const OUTER_GUARD = 1000; // total loop iterations incl. random-event yields
@@ -168,7 +174,12 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (!step.coord) {
                 return;
             }
-            await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
+            // On a failed/interrupted walk, don't interact from wherever we
+            // stopped — bail and let the next attempt re-walk (or the outer loop
+            // yield on a pending event). Avoids wasted attempts mid-event.
+            if (!(await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log }))) {
+                return;
+            }
             const pick = pickSearchLoc(step.coord);
             if (pick) {
                 await pick.loc.interact(pick.op);
@@ -181,7 +192,11 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (!step.coord) {
                 return;
             }
-            await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
+            // Dig is a held-op that acts in place, so we MUST be within 1 tile —
+            // bail if the walk didn't arrive rather than dig at the wrong spot.
+            if (!(await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log }))) {
+                return;
+            }
             const spade = Inventory.first(SPADE);
             if (spade) {
                 await spade.interact('Dig');
@@ -223,27 +238,22 @@ function blockReason(step: ClueStep): string | null {
 /**
  * Solve one identified step: retry the client action up to STEP_ATTEMPTS times,
  * verifying after each that the held id set moved (the step consumed its clue /
- * casket, or dug one up). Random-event yields don't count against the attempt
- * budget. Returns true once progress is seen, false if the step is stuck.
+ * casket, or dug one up). Returns true once progress is seen; false if the step
+ * is stuck OR a random event fired mid-step — the caller distinguishes the two
+ * (it re-checks EventSignal.pending() and yields rather than abandoning).
  */
 async function solveStep(step: ClueStep, log: (m: string) => void): Promise<boolean> {
     const tracked = trackedId(step);
     const sigBefore = heldSignature();
     const progressed = (): boolean => !heldIds().includes(tracked) || heldSignature() !== sigBefore;
 
-    let attempts = 0;
-    for (let guard = 0; guard < STEP_GUARD; guard++) {
+    for (let attempt = 0; attempt < STEP_ATTEMPTS; attempt++) {
         if (progressed()) {
             return true;
         }
         if (EventSignal.pending()) {
-            await Execution.delayTicks(1); // yield to the random-event handler; not an attempt
-            continue;
+            return false; // bail to the caller → loop() boundary so the Supervisor can handle it
         }
-        if (attempts >= STEP_ATTEMPTS) {
-            break;
-        }
-        attempts++;
         await drainChat();
         await dispatch(step, log);
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
@@ -264,17 +274,18 @@ async function dismissRewardModal(): Promise<void> {
 
 export const ClueExecutor = {
     /**
-     * Run the whole held clue trail to completion. Returns 'done' when nothing
-     * clue-like remains in the pack (the trail finished — the reward modal is
-     * dismissed on the way out), or 'abandon' when a step can't be made or makes
-     * no progress after its bounded attempts.
+     * Run the held clue trail. Returns 'done' when nothing clue-like remains in
+     * the pack (the trail finished — the reward modal is dismissed on the way
+     * out); 'abandon' when a step can't be made or makes no progress after its
+     * bounded attempts; or 'yield' when a random event is pending — solveHeldClue
+     * returns to the loop() boundary so the Supervisor can handle it, and the
+     * caller re-invokes this (the re-identify resumes the same step).
      */
-    async solveHeldClue(log: (m: string) => void): Promise<'done' | 'abandon'> {
+    async solveHeldClue(log: (m: string) => void): Promise<'done' | 'abandon' | 'yield'> {
         let solved = 0;
         for (let guard = 0; guard < OUTER_GUARD; guard++) {
             if (EventSignal.pending()) {
-                await Execution.delayTicks(1); // defer to the random-event handler before touching chat
-                continue;
+                return 'yield'; // hand back to loop(); loopInFlight blocks the Supervisor until we return
             }
             await drainChat();
 
@@ -298,6 +309,9 @@ export const ClueExecutor = {
 
             log(`[clue] solving ${describeStep(step)}`);
             if (!(await solveStep(step, log))) {
+                if (EventSignal.pending()) {
+                    return 'yield'; // Supervisor handles it next loop; idempotent re-identify resumes this step
+                }
                 log(`[clue] abandoning ${describeStep(step)}: no progress after ${STEP_ATTEMPTS} attempts`);
                 return 'abandon';
             }
