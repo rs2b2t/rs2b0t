@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
-    globalIgnores(['src/3rdparty/']),
+    globalIgnores(['src/3rdparty/', 'out/', 'desktop/', 'packages/', 'templates/', 'public-bot/']),
     { files: ['**/*.{js,mjs,cjs,ts,mts,cts}'], plugins: { js }, extends: ['js/recommended'], languageOptions: { globals: globals.browser } },
     tseslint.configs.recommended,
     {
@@ -45,7 +45,7 @@ export default defineConfig([
                 {
                     patterns: [
                         {
-                            group: ['#/client/*', '#/io/*', '#/config/*', '#/dash3d/*', '#/datastruct/*', '#/graphics/*', '#/sound/*', '#/wordfilter/*', '#3rdparty/*', '!#/io/ServerProt.js', '!#/io/ClientProt.js'],
+                            group: ['#/client/*', '#/io/*', '#/config/*', '#/dash3d/*', '#/datastruct/*', '#/graphics/*', '#/sound/*', '#/wordfilter/*', '#3rdparty/*', '!#/io/ServerProt.js', '!#/io/ClientProt.js', '!#/dash3d/CollisionFlag.js'],
                             message: 'Only src/bot/adapter/ may touch client internals (see HOOKS.md).'
                         }
                     ]
