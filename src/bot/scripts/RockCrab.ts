@@ -511,6 +511,7 @@ class GearEquip implements Task {
  *  and again if a weapon swap resets it. Mage owns its style via autocast. */
 class SetAttackStyle implements Task {
     private announced = false;
+    private fails = 0;
 
     constructor(private bot: RockCrab) {}
 
@@ -519,7 +520,9 @@ class SetAttackStyle implements Task {
     }
 
     validate(): boolean {
-        return STYLE !== 'mage' && !Game.inCombat() && Game.combatMode() !== this.target();
+        // bounded: a stale combat tab (tutorial-gated accounts) makes the click
+        // land nowhere — warn and move on rather than starving every task below
+        return STYLE !== 'mage' && this.fails < 5 && !Game.inCombat() && Game.combatMode() !== this.target();
     }
 
     async execute(): Promise<void> {
@@ -529,8 +532,11 @@ class SetAttackStyle implements Task {
         const ok = await Execution.delayUntil(() => Game.combatMode() === mode, 3000);
         if (ok && !this.announced) {
             this.announced = true;
+            this.fails = 0;
             const label = STYLE === 'range' ? ['accurate', 'rapid', 'longrange'][mode] : `${['accurate', 'aggressive', 'defensive'][mode]} (training ${['Attack', 'Strength', 'Defence'][mode]})`;
             this.bot.log(`combat style: ${label ?? '?'}`);
+        } else if (!ok && ++this.fails >= 5) {
+            this.bot.log(`WARNING: could not set the ${STYLE} attack style after 5 tries — if the weapon IS wielded, this account's combat tab is stale (tutorial-gated): relog once with it wielded.`);
         }
     }
 }
@@ -572,8 +578,30 @@ class ArmAutocast implements Task {
  */
 class CollectAmmo implements Task {
     private tracker = new AmmoStackTracker();
+    private lastDeferLog = 0;
+    private warnedMismatch = false;
 
     constructor(private bot: RockCrab) {}
+
+    /** Make "waiting" legible: while stacks are on the ground but none is
+     *  collectable yet, say so (rate-limited) — otherwise a growing pile just
+     *  looks like a broken collector. Also catches a misconfigured ammo name:
+     *  ground arrows/bolts that don't match the setting would NEVER collect. */
+    private logDeferred(): void {
+        const now = Date.now();
+        if (!this.warnedMismatch && GroundItems.query().where(g => /arrow|bolt/i.test(g.name ?? '') && (g.name ?? '').toLowerCase() !== AMMO.toLowerCase() && inField(g.tile())).nearest() !== null) {
+            this.warnedMismatch = true;
+            this.bot.log(`WARNING: ground ammo in the field does not match the '${AMMO}' setting — those will never be collected. Fix the Ammo dropdown if they're yours.`);
+        }
+        if (now - this.lastDeferLog < 30_000) {
+            return;
+        }
+        const stacks = this.tracker.stacks(now);
+        if (stacks.length > 0) {
+            this.lastDeferLog = now;
+            this.bot.log(`[range] ${stacks.length} ${AMMO} stack(s) on the ground (${stacks.map(s => s.count).join(', ')}) — collecting at ${COLLECT_AT}, or ${Math.round(AMMO_STALE_MS / 1000)}s after a stack stops growing`);
+        }
+    }
 
     private plan(): Set<string> {
         this.tracker.observe(
@@ -592,7 +620,14 @@ class CollectAmmo implements Task {
     }
 
     validate(): boolean {
-        return STYLE === 'range' && this.plan().size > 0;
+        if (STYLE !== 'range') {
+            return false;
+        }
+        if (this.plan().size > 0) {
+            return true;
+        }
+        this.logDeferred();
+        return false;
     }
 
     async execute(): Promise<void> {
