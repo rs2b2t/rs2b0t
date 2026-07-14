@@ -73,6 +73,8 @@
             flex: 0 0 330px;
             height: 100vh;
             overflow-y: auto;
+            /* never scroll sideways — anything wide must wrap or clip */
+            overflow-x: hidden;
             box-sizing: border-box;
             background: #111;
             border-left: 1px solid #333;
@@ -154,9 +156,8 @@
 
         .rs2b0t-chat-line {
             line-height: 1.5;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .rs2b0t-dim {
@@ -411,9 +412,11 @@
 
         /* parameters: read-only panel summary */
         .rs2b0t-param-summary { display: flex; flex-wrap: wrap; gap: 3px 10px; font: 11px ui-monospace, monospace; margin-bottom: 8px; }
-        .rs2b0t-param-sitem { white-space: nowrap; }
+        /* long list values (multi-select summaries) wrap instead of forcing a
+           horizontal scrollbar on the 330px pane */
+        .rs2b0t-param-sitem { max-width: 100%; }
         .rs2b0t-param-skey { color: #7d8590; }
-        .rs2b0t-param-sval { color: #fff; margin-left: 4px; }
+        .rs2b0t-param-sval { color: #fff; margin-left: 4px; overflow-wrap: anywhere; }
         .rs2b0t-param-edit { width: 100%; color: #ffb86c; }
 
         /* parameters modal body */

@@ -17,12 +17,18 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { cheapestUnmetGate, clusterEligible, decide, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '../shops/Planner.js';
+import { cheapestUnmetGate, clusterEligible, decide, filterRouteBuys, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '../shops/Planner.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import { ROUTE, SMOKE_ROUTE } from '../shops/data/route.js';
 import type { AccountView, BuyPolicy, NavPointLike, Route, SeenMap } from '../shops/types.js';
 
+/** Every distinct display name the live route can buy — the buyItems options. */
+const BUYABLE_NAMES: string[] = [...new Set(
+    ROUTE.clusters.flatMap(c => c.shops.flatMap(s => s.buys.map(b => SHOP_DB[s.shopId]?.items.find(i => i.obj === b.obj)?.name).filter((n): n is string => n !== undefined)))
+)].sort();
+
 export const SHOPRUNNER_SETTINGS: SettingsSchema = {
+    buyItems: { type: 'string[]', default: BUYABLE_NAMES, options: BUYABLE_NAMES, label: 'Items to buy', help: 'multi-select — shops with none of the selected items are skipped; deselect everything and the bot stops at start' },
     strategy: { type: 'string', default: 'Buyout', options: ['Buyout', 'Floor %'], label: 'Buy strategy', help: 'Buyout empties the stock; Floor % buys down to floorPct of each shop\'s baseline (per-item overrides in route data win)' },
     floorPct: { type: 'number', default: 50, min: 1, max: 99, label: 'Floor % of baseline', help: 'only used when strategy = Floor %' },
     haulThreshold: { type: 'number', default: 25, min: 1, max: 100, label: 'Min haul % to visit', help: 'a cluster is skipped until its predicted haul reaches this fraction of a full haul' },
@@ -93,6 +99,14 @@ export class ShopRunner extends TaskBot {
         this.stopFloorGp = this.settings.num('stopFloorGp', 5000);
         this.membersWorld = this.settings.bool('membersWorld', true);
         this.route = this.settings.str('route', 'live') === 'smoke-varrock' ? SMOKE_ROUTE : ROUTE;
+
+        const chosen = new Set(this.settings.list('buyItems', BUYABLE_NAMES).map(s => s.toLowerCase()));
+        this.route = filterRouteBuys(this.route, SHOP_DB, chosen);
+        if (this.route.clusters.every(c => c.shops.length === 0)) {
+            this.log('[shoprun] stopping — no buy items selected (see the buyItems parameter)');
+            ScriptRunner.stop();
+            return;
+        }
 
         for (const cluster of this.route.clusters) {
             for (const shop of cluster.shops) {

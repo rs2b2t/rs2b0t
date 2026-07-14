@@ -246,3 +246,27 @@ export function earliestQualifyMs(
     }
     return nowMs + QUALIFY_FALLBACK_MS;
 }
+
+/**
+ * The route with only the CHOSEN items to buy (display names, lowercase):
+ * unchosen buys drop out of every shop, and a shop with nothing left to buy
+ * drops out of its cluster — the planner then prices, gates, and hauls
+ * against exactly what the user selected. Pure; the input route is untouched.
+ */
+export function filterRouteBuys(route: Route, db: Record<string, ShopRecord>, chosen: ReadonlySet<string>): Route {
+    return {
+        ...route,
+        clusters: route.clusters.map(cluster => ({
+            ...cluster,
+            shops: cluster.shops
+                .map(shop => ({
+                    ...shop,
+                    buys: shop.buys.filter(buy => {
+                        const name = db[shop.shopId]?.items.find(i => i.obj === buy.obj)?.name;
+                        return name !== undefined && chosen.has(name.toLowerCase());
+                    })
+                }))
+                .filter(shop => shop.buys.length > 0)
+        }))
+    };
+}

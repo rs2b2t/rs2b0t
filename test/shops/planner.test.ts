@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BUDGET_BUFFER, clusterEligible, decide, earliestQualifyMs, planCluster, type PlannerCfg, type RuntimeState } from '#/bot/shops/Planner.js';
+import { BUDGET_BUFFER, clusterEligible, decide, earliestQualifyMs, filterRouteBuys, planCluster, type PlannerCfg, type RuntimeState } from '#/bot/shops/Planner.js';
 import type { AccountView, Route, RouteCluster, SeenMap, ShopRecord } from '#/bot/shops/types.js';
 
 const DB: Record<string, ShopRecord> = {
@@ -190,5 +190,34 @@ describe('earliestQualifyMs', () => {
     test('nothing ever qualifies → 30min re-check fallback', () => {
         const gated: Route = { clusters: [{ ...CLUSTER, gates: [{ members: true }] }], ring: ['varrock'] };
         expect(earliestQualifyMs(gated, DB, {}, 0, CFG, acct({ members: false }), {})).toBe(30 * 60_000);
+    });
+});
+
+describe('filterRouteBuys', () => {
+    const route: Route = {
+        ring: ['a', 'b'],
+        clusters: [
+            {
+                id: 'a', label: 'A', members: false, gates: [],
+                bank: { tile: { x: 0, z: 0, level: 0 }, boothName: 'Bank booth', boothOp: 'Use-quickly' },
+                shops: [
+                    { shopId: 'runeshop', keeperNpc: 'Aubury', stand: { x: 1, z: 1, level: 0 }, buys: [{ obj: 'mindrune' }, { obj: 'deathrune' }] },
+                    { shopId: 'runeshop', keeperNpc: 'Aubury', stand: { x: 2, z: 2, level: 0 }, buys: [{ obj: 'deathrune' }] }
+                ]
+            }
+        ]
+    } as unknown as Route;
+
+    test('keeps only chosen buys and drops shops left empty', () => {
+        const filtered = filterRouteBuys(route, DB, new Set(['mind rune']));
+        expect(filtered.clusters[0].shops.length).toBe(1);
+        expect(filtered.clusters[0].shops[0].buys).toEqual([{ obj: 'mindrune' }]);
+    });
+
+    test('everything chosen is a no-op; nothing chosen empties the route', () => {
+        const all = filterRouteBuys(route, DB, new Set(['mind rune', 'death rune']));
+        expect(all.clusters[0].shops.length).toBe(2);
+        const none = filterRouteBuys(route, DB, new Set());
+        expect(none.clusters[0].shops.length).toBe(0);
     });
 });
