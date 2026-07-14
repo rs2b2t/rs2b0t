@@ -223,9 +223,11 @@ export class PathFinder {
         return slot ? slot.exit[(x & 0x3f) * 64 + (z & 0x3f)] : 0;
     }
 
-    /** Compile door + transport edges into the search graph. Edges whose
-     *  endpoints are not walkable in the pack are dropped. */
-    addEdges(doors: DoorEdgeData[], transports: TransportEdgeData[]): void {
+    /** Compile door + transport + stair edges into the search graph. Edges
+     *  whose endpoints are not walkable in the pack are dropped. `stairs` are
+     *  TransportEdgeData too (baked cross-level hops from derive-stairs.ts) and
+     *  are processed by the same loop as `transports`. */
+    addEdges(doors: DoorEdgeData[], transports: TransportEdgeData[], stairs: TransportEdgeData[] = []): void {
         for (const door of doors) {
             const [dx, dz] = DOOR_DIR[door.dir];
             const ax = door.x;
@@ -241,7 +243,7 @@ export class PathFinder {
             this.doorEdges++;
         }
 
-        for (const edge of transports) {
+        for (const edge of [...transports, ...stairs]) {
             if (!this.walkable(edge.from.x, edge.from.z, edge.from.level) || !this.walkable(edge.to.x, edge.to.z, edge.to.level)) {
                 continue;
             }

@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
 import doorsJson from '../../src/bot/nav/data/doors.json';
 import transportsJson from '../../src/bot/nav/data/transports.json';
+import stairsJson from '../../src/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData, type NavPoint } from '../../src/bot/nav/PathFinder.js';
 import { NAV_TARGETS } from '../../src/bot/nav/data/navTargets.js';
 import { classifyTarget, nearestConnected, type ReachChecker } from '../../src/bot/nav/coverageLogic.js';
@@ -30,7 +31,7 @@ const anchor: NavPoint = anchorArg
 let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
 if (bytes[0] === 0x1f && bytes[1] === 0x8b) { bytes = gunzipSync(bytes); }
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson);
+finder.addEdges(doorsJson as DoorEdgeData[], transportsJson, stairsJson);
 
 const rc: ReachChecker = {
     walkable: (x, z, level) => finder.walkable(x, z, level),

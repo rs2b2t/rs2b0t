@@ -11,6 +11,7 @@ import { gunzipSync } from 'fflate';
 
 import doorsJson from '#/bot/nav/data/doors.json';
 import transportsJson from '#/bot/nav/data/transports.json';
+import stairsJson from '#/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
 
 const args = process.argv.slice(2);
@@ -27,7 +28,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
 }
 
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson);
+finder.addEdges(doorsJson as DoorEdgeData[], transportsJson, stairsJson);
 console.log(`pack: ${finder.mapsquares} mapsquares, ${finder.doorEdges} door edges, ${finder.transportEdges} transport edges (members=${finder.members})`);
 
 // bun tools/nav/route-probe.ts — is the Lumbridge → Rellekka crab route
