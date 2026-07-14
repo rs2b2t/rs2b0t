@@ -3,6 +3,7 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
 import { evaluateAll } from './EligibilityEvaluator.js';
@@ -120,11 +121,6 @@ export default class QuestDashboard extends LoopingBot {
                 ...this.results.filter(r => r.status === 'READY').slice(0, 12).map(r => `READY  ${r.name}${this.tag(r)}`)
             ];
 
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width), 160) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#7ad0ff';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#7ad0ff', 160);
     }
 }

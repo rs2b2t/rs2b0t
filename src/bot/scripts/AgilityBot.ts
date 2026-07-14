@@ -3,7 +3,9 @@ import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -68,12 +70,7 @@ export default class AgilityBot extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`Agility — ${this.status}`, `obstacles ${this.obstaclesCleared}  laps ${this.laps}`, `tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void {
@@ -117,15 +114,6 @@ export default class AgilityBot extends TaskBot {
         this.log(`course re-sync: step ${this.step} (${this.currentName()}) -> ${idx} (${name})`);
         this.step = idx;
         return true;
-    }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
     }
 }
 

@@ -1,4 +1,5 @@
 import type { SettingDef } from '../runtime/Settings.js';
+import { el } from './dom.js';
 
 type ControlKind =
     | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'multiselect' | 'taglist' | 'tile';
@@ -43,12 +44,6 @@ export function summarize(def: SettingDef, value: string): string {
         default: // slider, number, dropdown
             return value;
     }
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    node.className = cls;
-    return node;
 }
 
 interface ParamControl {

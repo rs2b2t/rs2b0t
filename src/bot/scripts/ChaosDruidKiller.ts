@@ -2,12 +2,14 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -90,7 +92,7 @@ export default class ChaosDruidKiller extends TaskBot {
         });
 
         this.add(
-            new ContinueDialog(this),
+            new ContinueDialog(),
             new DeathRecovery(this, {
                 anchor: this.getAnchor(),
                 radius: 3,
@@ -140,12 +142,7 @@ export default class ChaosDruidKiller extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`ChaosDruidKiller — ${this.status}`, `kills ${this.kills}  looted ${this.looted}  bank trips ${this.trips}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void {
@@ -264,21 +261,6 @@ export default class ChaosDruidKiller extends TaskBot {
     }
 }
 
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
-}
-
-class ContinueDialog implements Task {
-    constructor(private bot: ChaosDruidKiller) {}
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
-    }
-}
-
 /** Full pack -> ladder up -> Edgeville bank -> deposit loot -> ladder down -> anchor. */
 class BankRun implements Task {
     constructor(private bot: ChaosDruidKiller) {}
@@ -356,11 +338,11 @@ class Loot implements Task {
 class Rest implements Task {
     constructor(private bot: ChaosDruidKiller) {}
     validate(): boolean {
-        return !Game.inCombat() && hpFraction() < this.bot.hpGate();
+        return !Game.inCombat() && Skills.hpFraction() < this.bot.hpGate();
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`resting (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
-        await Execution.delayUntil(() => hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(), 120000);
+        await Execution.delayUntil(() => Skills.hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(), 120000);
     }
 }
 
@@ -368,7 +350,7 @@ class Fight implements Task {
     constructor(private bot: ChaosDruidKiller) {}
 
     validate(): boolean {
-        return !Game.inCombat() && hpFraction() >= this.bot.hpGate() && this.findDruid() !== null;
+        return !Game.inCombat() && Skills.hpFraction() >= this.bot.hpGate() && this.findDruid() !== null;
     }
 
     async execute(): Promise<void> {

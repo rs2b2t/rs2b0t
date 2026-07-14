@@ -1,4 +1,5 @@
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
+import { el } from './dom.js';
 
 /** Preferred category order; anything else falls in alphabetically after. */
 const CATEGORY_ORDER = ['Combat', 'Woodcutting', 'Fishing', 'Mining', 'Cooking', 'Smithing', 'Fletching', 'Firemaking', 'Crafting', 'Herblore', 'Agility', 'Thieving', 'Runecrafting', 'Prayer', 'Magic', 'Navigation', 'Utility', 'Develop'];
@@ -160,10 +161,4 @@ export default class ScriptLibrary {
             this.listEl.appendChild(card);
         }
     }
-}
-
-function el(tag: string, className: string): HTMLElement {
-    const node = document.createElement(tag);
-    node.className = className;
-    return node;
 }

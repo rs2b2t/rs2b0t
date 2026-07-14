@@ -6,14 +6,15 @@
  * the bot recovers from any position by re-planning.
  */
 import { Bank } from '../api/hud/Bank.js';
-import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Shop } from '../api/hud/Shop.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Game } from '../api/Game.js';
 import { Traversal } from '../api/Traversal.js';
 import { TaskBot, type Task } from '../api/Bot.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { cheapestUnmetGate, clusterEligible, decide, type ClusterPlan, type PlanOutcome, type PlannerCfg } from '../shops/Planner.js';
@@ -232,18 +233,8 @@ export class ShopRunner extends TaskBot {
             `haul ${haul}`,
             `last skip ${this.lastSkip ?? '—'}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#8be9fd';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#8be9fd');
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 const cheb = (a: NavPointLike, b: NavPointLike): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));

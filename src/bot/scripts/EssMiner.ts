@@ -8,8 +8,10 @@ import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
@@ -139,12 +141,7 @@ export default class EssMiner extends TaskBot {
             `trips ${this.trips}  ess banked ${this.banked}  pack ${essCount()}`,
             `mined ${this.mined}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#8be9fd';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#8be9fd');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -166,11 +163,6 @@ export default class EssMiner extends TaskBot {
         if (here && dest.distanceTo(here) <= radius) { return; }
         await Traversal.walkResilient(dest, { radius, attempts: 6, timeoutMs: 240_000, log: m => this.log(`  ${m}`) });
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** In the mine with space: one Mine click on the nearest crystal auto-repeats

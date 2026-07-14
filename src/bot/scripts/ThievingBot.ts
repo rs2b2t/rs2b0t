@@ -5,7 +5,9 @@ import { Reachability } from '../api/Reachability.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { walkOpening } from '../api/walkOpening.js';
@@ -30,11 +32,6 @@ function splitKeywords(raw: string): string[] {
         .split(',')
         .map(s => s.trim().toLowerCase())
         .filter(Boolean);
-}
-
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
 }
 
 /**
@@ -93,12 +90,7 @@ export default class ThievingBot extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`ThievingBot — ${this.status}`, `${this.target}: ${this.steals} steals  ate ${this.eats}  picked ${this.picked}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void {
@@ -139,15 +131,6 @@ export default class ThievingBot extends TaskBot {
     }
 }
 
-class ContinueDialog implements Task {
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
-    }
-}
-
 /** HP dropped from a failed steal: eat, if we're carrying food. */
 class EatFood implements Task {
     constructor(private bot: ThievingBot) {}
@@ -156,7 +139,7 @@ class EatFood implements Task {
         return kw ? Inventory.items().find(i => i.name?.toLowerCase().includes(kw)) ?? null : null;
     }
     validate(): boolean {
-        return hpFraction() < this.bot.eatGate() && this.food() !== null;
+        return Skills.hpFraction() < this.bot.eatGate() && this.food() !== null;
     }
     async execute(): Promise<void> {
         const food = this.food();
@@ -284,7 +267,7 @@ class Steal implements Task {
         // stuns us for a few ticks: wait it out (yielding to EatFood if the hit
         // dropped us) rather than hammering inputs the stun ignores.
         await Execution.delayUntil(
-            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < this.bot.eatGate(),
+            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || Skills.hpFraction() < this.bot.eatGate(),
             3000
         );
     }

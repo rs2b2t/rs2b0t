@@ -5,6 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
@@ -121,12 +123,7 @@ export default class FlaxSpinner extends TaskBot {
             `${this.product}: spun ${this.spun}  bank trips ${this.trips}`,
             `flax left ${this.fibreCount()}  level ${Game.tile()?.level ?? '?'}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#a0e0ff';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#a0e0ff');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -152,11 +149,6 @@ export default class FlaxSpinner extends TaskBot {
         const pat = this.product.toLowerCase();
         return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** Ground floor, no flax → cross to the bank (opening the house door), deposit

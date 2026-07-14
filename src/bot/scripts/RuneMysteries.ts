@@ -4,7 +4,9 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Quests, type QuestStatus } from '../api/hud/Quests.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { gotoNpc, talkThrough, type LadderHop, type NpcStop } from '../quests/exec/primitives.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -142,12 +144,7 @@ export default class RuneMysteries extends TaskBot {
             `journal ${Quests.status(this.questName)}  held ${heldQuestItem(Inventory.items().map(i => i.name)) ?? '—'}`,
             `step ${this.step}  QP ${Quests.points()}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#b8ffb8';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#b8ffb8');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -180,11 +177,6 @@ export default class RuneMysteries extends TaskBot {
     }
 
     noteStep(step: StepId): void { this.step = step; }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** One decision + one leg per pass: read (journal, held), walk to the right

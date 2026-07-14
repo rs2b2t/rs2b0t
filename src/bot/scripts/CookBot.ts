@@ -5,6 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -62,12 +64,7 @@ export default class CookBot extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`CookBot — ${this.status}`, `${this.fish}: cooked ${this.cooked}  bank trips ${this.trips}`, `raw left ${this.rawCount()}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#ffd479';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#ffd479');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -87,11 +84,6 @@ export default class CookBot extends TaskBot {
         const idx = lastRawIndex(items, this.fish);
         return idx >= 0 ? items[idx] : null;
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** Standard fish don't prompt, but karambwan (and future picks) open a make-X

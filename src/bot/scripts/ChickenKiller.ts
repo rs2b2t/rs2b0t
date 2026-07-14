@@ -2,6 +2,7 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
@@ -11,6 +12,7 @@ import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Traversal } from '../api/Traversal.js';
 import { RecoveryHints } from '../runtime/RecoveryHints.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -102,7 +104,7 @@ export default class ChickenKiller extends TaskBot {
         });
 
         this.add(
-            new ContinueDialog(this),
+            new ContinueDialog(() => this.setStatus('continuing dialog')),
             new DeathRecovery(this, {
                 anchor: this.getAnchor(),
                 radius: 3,
@@ -178,12 +180,7 @@ export default class ChickenKiller extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`${this.target} Killer — ${this.status}`, `kills ${this.kills}  buried ${this.buried}${this.gatherFeathers ? `  feathers ${this.feathers}` : ''}${this.deaths > 0 ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#5be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#5be05b');
     }
 
     setStatus(status: string): void {
@@ -210,11 +207,6 @@ export default class ChickenKiller extends TaskBot {
     }
 }
 
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
-}
-
 /**
  * Select the configured combat style (default aggressive = Strength xp) before
  * fighting. com_mode isn't persisted, so this re-asserts it whenever it drifts
@@ -237,19 +229,6 @@ class SetCombatStyle implements Task {
             this.announced = true;
             this.bot.log(`combat style set to ${['accurate', 'aggressive', 'defensive'][mode] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][mode] ?? '?'})`);
         }
-    }
-}
-
-class ContinueDialog implements Task {
-    constructor(private bot: ChickenKiller) {}
-
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-
-    async execute(): Promise<void> {
-        this.bot.setStatus('continuing dialog');
-        await ChatDialog.continue();
     }
 }
 
@@ -357,12 +336,12 @@ class Rest implements Task {
     constructor(private bot: ChickenKiller) {}
 
     validate(): boolean {
-        return !Game.inCombat() && hpFraction() < this.bot.hpGate();
+        return !Game.inCombat() && Skills.hpFraction() < this.bot.hpGate();
     }
 
     async execute(): Promise<void> {
         this.bot.setStatus(`resting (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
-        await Execution.delayUntil(() => hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(), 120000);
+        await Execution.delayUntil(() => Skills.hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(), 120000);
     }
 }
 
@@ -370,7 +349,7 @@ class Fight implements Task {
     constructor(private bot: ChickenKiller) {}
 
     validate(): boolean {
-        return !Game.inCombat() && hpFraction() >= this.bot.hpGate() && this.findTarget() !== null;
+        return !Game.inCombat() && Skills.hpFraction() >= this.bot.hpGate() && this.findTarget() !== null;
     }
 
     async execute(): Promise<void> {

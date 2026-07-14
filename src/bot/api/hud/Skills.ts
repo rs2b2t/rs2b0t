@@ -29,5 +29,11 @@ export const Skills = {
     xp(name: string): number {
         const i = Skills.index(name);
         return i === -1 ? 0 : reader.stat(i).xp;
+    },
+
+    /** Effective/base hitpoints, 1 while the stat isn't readable yet. */
+    hpFraction(): number {
+        const base = Skills.level('hitpoints');
+        return base > 0 ? Skills.effective('hitpoints') / base : 1;
     }
 };

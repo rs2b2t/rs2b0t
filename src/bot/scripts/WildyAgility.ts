@@ -5,10 +5,12 @@ import { EventSignal } from '../api/EventSignal.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { Traversal } from '../api/Traversal.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -151,11 +153,6 @@ export function classifyAttempt(xpGained: boolean, tookDamage: boolean): 'cleare
     return tookDamage ? 'failed' : 'noop';
 }
 
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
-}
-
 /** Carried food slots (contains-match on the food name; food is non-stacking). */
 function foodCount(): number {
     return Inventory.items().filter(i => i.name?.toLowerCase().includes(FOOD)).length;
@@ -273,12 +270,7 @@ export default class WildyAgility extends TaskBot {
             `laps ${this.laps}  obstacles ${this.cleared}  ate ${this.eats}${this.deaths ? `  deaths ${this.deaths}` : ''}`,
             `food ${foodCount()}  hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#e0a15b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#e0a15b');
     }
 
     /**
@@ -379,15 +371,6 @@ export default class WildyAgility extends TaskBot {
     }
 }
 
-class ContinueDialog implements Task {
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
-    }
-}
-
 /**
  * Eat carried food up to the eat-to target once HP drops below the gate (not
  * just one bite) — ranks above EnterCourse/RunLap so it fires mid-lap too (the
@@ -398,7 +381,7 @@ class EatFood implements Task {
     constructor(private bot: WildyAgility) {}
 
     validate(): boolean {
-        return hpFraction() < EAT_AT && foodCount() > 0;
+        return Skills.hpFraction() < EAT_AT && foodCount() > 0;
     }
 
     async execute(): Promise<void> {
@@ -406,14 +389,14 @@ class EatFood implements Task {
             if (this.bot.died || ChatDialog.canContinue() || EventSignal.pending()) {
                 return; // yield to death / dialog / runtime-event handling
             }
-            if (hpFraction() >= EAT_TO || foodCount() === 0) {
+            if (Skills.hpFraction() >= EAT_TO || foodCount() === 0) {
                 return;
             }
             const food = Inventory.items().find(i => i.name?.toLowerCase().includes(FOOD));
             if (!food) {
                 return;
             }
-            this.bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+            this.bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
             const before = Skills.effective('hitpoints');
             if (!(await food.interact('Eat'))) {
                 return;

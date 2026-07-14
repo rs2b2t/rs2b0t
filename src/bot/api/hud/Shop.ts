@@ -2,6 +2,7 @@ import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
 import { Npcs } from '../queries/Npcs.js';
+import { Inventory } from './Inventory.js';
 
 /**
  * Ids discovered live against the dev engine (Task 4, 2026-07-05) -- see
@@ -176,11 +177,7 @@ export const Shop = {
  * or "still holds it" read on the boundary tick.
  */
 function countHeld(name: string): number {
-    const wanted = name.toLowerCase();
-    return reader
-        .inventory()
-        .filter(s => s.name?.toLowerCase() === wanted)
-        .reduce((sum, s) => sum + s.count, 0);
+    return Inventory.count(name);
 }
 
 /** Index of the largest `${verb} <10|5|1>` op that fits `remaining`, or -1 if none of the three is offered. */

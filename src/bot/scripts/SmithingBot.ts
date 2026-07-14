@@ -5,6 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
@@ -77,12 +79,7 @@ export default class SmithingBot extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`SmithingBot — ${this.status}`, `${this.bar} ${this.product}: ${this.made} bars used  trips ${this.trips}`, `bars left ${this.barCount()}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#ffb066';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#ffb066');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -122,11 +119,6 @@ export default class SmithingBot extends TaskBot {
         const pat = this.hammer.toLowerCase();
         return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** The smithing panel is open → make the chosen item at the largest quantity and

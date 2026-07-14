@@ -11,6 +11,7 @@ import { CASKET_IDS, CLUE_DB } from '../clues/data/cluedb.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
@@ -191,12 +192,7 @@ export default class RockCrab extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`, `clue: ${CLUE_STATUS}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#7ad0ff';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#7ad0ff');
     }
 
     setStatus(s: string): void {
@@ -235,11 +231,6 @@ export default class RockCrab extends TaskBot {
     clearWakes(): void {
         this.failedWakes = 0;
     }
-}
-
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
 }
 
 function inField(tile: Tile): boolean {
@@ -300,7 +291,7 @@ async function eatOnce(bot: RockCrab): Promise<boolean> {
     if (!food) {
         return false;
     }
-    bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+    bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
     const before = Skills.effective('hitpoints');
     await food.interact('Eat');
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
@@ -327,7 +318,7 @@ class Eat implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        return hpFraction() < EAT_HP && hasFood();
+        return Skills.hpFraction() < EAT_HP && hasFood();
     }
 
     async execute(): Promise<void> {
@@ -589,7 +580,7 @@ class RegroupAtField implements Task {
 
     validate(): boolean {
         // only once we've stacked enough and we're healthy; Eat/ResetAggro own low HP
-        return hpFraction() >= FIGHT_HP_GATE && stackReady() && !atCentre();
+        return Skills.hpFraction() >= FIGHT_HP_GATE && stackReady() && !atCentre();
     }
 
     async execute(): Promise<void> {
@@ -607,7 +598,7 @@ class Fight implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        if (hpFraction() < FIGHT_HP_GATE) {
+        if (Skills.hpFraction() < FIGHT_HP_GATE) {
             return false; // too low to keep fighting — Eat or ResetAggro takes over
         }
         // Clear the pile only once it's stacked to size (or there are no more
@@ -628,11 +619,11 @@ class Fight implements Task {
                 return;
             }
             // eat mid-fight so we sustain without leaving the pile
-            if (hpFraction() < EAT_HP && hasFood()) {
+            if (Skills.hpFraction() < EAT_HP && hasFood()) {
                 await eatOnce(this.bot);
                 continue;
             }
-            if (hpFraction() < FIGHT_HP_GATE) {
+            if (Skills.hpFraction() < FIGHT_HP_GATE) {
                 return; // out of food and low — Eat/ResetAggro handles it next loop
             }
 
@@ -675,7 +666,7 @@ class Aggro implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        if (hpFraction() < FIGHT_HP_GATE || this.bot.deAggroed()) {
+        if (Skills.hpFraction() < FIGHT_HP_GATE || this.bot.deAggroed()) {
             return false;
         }
         return activeCrabs().length < DESIRED_STACK && dormantRocks().length > 0;
@@ -719,14 +710,14 @@ class ResetAggro implements Task {
     validate(): boolean {
         // reset when the rocks stopped waking, or when we're low with no food to
         // eat (the no-food fallback: drop aggro at the reset tile and regen)
-        return this.bot.deAggroed() || (hpFraction() < FIGHT_HP_GATE && !hasFood() && !Game.inCombat());
+        return this.bot.deAggroed() || (Skills.hpFraction() < FIGHT_HP_GATE && !hasFood() && !Game.inCombat());
     }
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
             return; // runtime event guard takes over next loop
         }
-        const low = hpFraction() < FIGHT_HP_GATE;
+        const low = Skills.hpFraction() < FIGHT_HP_GATE;
         this.bot.setStatus(low ? 'low HP, no food — retreating to regen' : 'running out to reset aggression');
         this.bot.countReset();
 
@@ -734,7 +725,7 @@ class ResetAggro implements Task {
 
         if (low) {
             this.bot.log(`resting at the reset tile (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
-            await Execution.delayUntil(() => hpFraction() >= REST_HP, 120000);
+            await Execution.delayUntil(() => Skills.hpFraction() >= REST_HP, 120000);
         } else {
             // brief pause so the crabs fully revert before we walk back in
             await Execution.delayTicks(3);

@@ -4,6 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
@@ -58,12 +59,7 @@ export default class ProcessingBot extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`Processing — ${this.status}`, `${this.material}: ${this.made} used`, `left ${this.materialCount()}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void {

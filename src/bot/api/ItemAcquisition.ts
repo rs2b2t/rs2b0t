@@ -7,26 +7,23 @@ import { Shop } from './hud/Shop.js';
 import { GroundItems } from './queries/GroundItems.js';
 
 /**
- * Declarative item acquisition (Task 5): turns "I need 1x Hammer and 1x Egg"
- * into an executable Task. Quest modules (Plan B) declare an ItemNeed[] up
- * front; AcquireTask fulfils it one step at a time; Task 6's DeathRecovery
+ * Declarative item acquisition: turns "I need 1x Hammer and 1x Egg"
+ * into an executable Task. Quest modules declare an ItemNeed[] up
+ * front; AcquireTask fulfils it one step at a time; DeathRecovery
  * re-runs the same needs list to recover items lost on death. Every building
  * block already exists (Shop, GroundItems, Traversal, Inventory) — this is
  * pure composition, no adapter changes.
  *
- * 'gather' (skilling trainers) and 'make' (make-chains) are Plan B/C
- * territory — deliberately unimplemented; see AcquireTask.execute() below.
+ * 'gather' (skilling trainers) and 'make' (make-chains) are deliberately
+ * unimplemented; see AcquireTask.execute() below.
  */
 type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
 
 export type ItemNeed = { name: string; count: number; source: ItemSource };
 
-/** Held count of `name` across every matching backpack slot (case-insensitive, like Inventory.contains/Shop's countHeld). */
+/** Held count of `name` across every matching backpack slot (case-insensitive, like Inventory.contains). */
 export function held(name: string): number {
-    const wanted = name.toLowerCase();
-    return Inventory.items()
-        .filter(i => i.name?.toLowerCase() === wanted)
-        .reduce((sum, i) => sum + i.count, 0);
+    return Inventory.count(name);
 }
 
 /** True once every need's count is already met. */
@@ -39,7 +36,7 @@ export function hasAll(needs: ItemNeed[]): boolean {
  * need is unmet; execute() advances exactly one (the first unmet, in list
  * order) — walking then acting within that single call is fine (e.g. a shop
  * trip fully completes in one execute() if nothing goes wrong). Reusable by
- * any TaskBot (quest modules) and by Task 6's DeathRecovery.
+ * any TaskBot (quest modules) and by DeathRecovery.
  */
 export class AcquireTask implements Task {
     constructor(
@@ -95,6 +92,6 @@ export class AcquireTask implements Task {
             return;
         }
 
-        throw new Error(`ItemSource.${src.kind}: implemented in Plan B`);
+        throw new Error(`ItemSource.${src.kind}: not implemented yet`);
     }
 }

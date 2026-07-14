@@ -10,6 +10,7 @@ import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
 import { summarize } from './paramControls.js';
+import { el } from './dom.js';
 
 /**
  * Live state panel + script controls. Plain DOM, no framework. The only
@@ -477,12 +478,6 @@ export default class BotPanel {
         // on this ~5Hz render tick to show/clear the ⚡ event banner promptly
         this.renderScriptControls();
     }
-}
-
-function el(tag: string, className: string): HTMLElement {
-    const node = document.createElement(tag);
-    node.className = className;
-    return node;
 }
 
 function sectionTitle(text: string): HTMLElement {

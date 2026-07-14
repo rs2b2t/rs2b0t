@@ -4,6 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -57,12 +58,7 @@ export default class CooksAssistant extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const have = [Inventory.contains(EGG) ? 'egg' : '', Inventory.contains(MILK) ? 'milk' : '', Inventory.contains(GRAIN) ? 'grain' : ''].filter(Boolean).join(' ') || 'nothing yet';
         const lines = [`Cook's Assistant — ${this.status}`, `started: ${this.started}   have: ${have}`, `tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#ffd27b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#ffd27b');
     }
 
     setStatus(s: string): void {

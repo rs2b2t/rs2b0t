@@ -1,5 +1,6 @@
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { renderControl } from './paramControls.js';
+import { el } from './dom.js';
 
 /**
  * Full-screen modal that edits the selected script's parameters, mirroring
@@ -91,10 +92,4 @@ export default class ParamsModal {
             this.bodyEl.appendChild(row);
         }
     }
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    node.className = cls;
-    return node;
 }

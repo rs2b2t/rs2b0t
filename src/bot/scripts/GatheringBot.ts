@@ -5,6 +5,8 @@ import Tile from '../api/Tile.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
@@ -129,7 +131,7 @@ export default class GatheringBot extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(this), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
+        this.add(new ContinueDialog(), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -137,12 +139,7 @@ export default class GatheringBot extends TaskBot {
         if (this.location) {
             lines.splice(1, 0, `loc ${this.location.name}  banked ${this.banked} (${this.trips} trips)`);
         }
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void {
@@ -218,16 +215,6 @@ export default class GatheringBot extends TaskBot {
 /** Stable per-tile key for the reject/cooldown maps. */
 function keyOf(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
-}
-
-class ContinueDialog implements Task {
-    constructor(private bot: GatheringBot) {}
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
-    }
 }
 
 class DropProduct implements Task {

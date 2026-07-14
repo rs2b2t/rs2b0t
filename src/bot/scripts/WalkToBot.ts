@@ -4,6 +4,7 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { Traversal } from '../api/Traversal.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { WALK_OPTIONS, resolveDestination } from './WalkDestinations.js';
 
@@ -62,12 +63,7 @@ export default class WalkToBot extends TaskBot {
             `dest ${this.label}  ${this.arrived ? 'ARRIVED' : dist >= 0 ? `${dist} tiles away` : ''}`,
             `tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = this.arrived ? '#9be05b' : '#6cb6ff';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, this.arrived ? '#9be05b' : '#6cb6ff');
     }
 
     setStatus(s: string): void {

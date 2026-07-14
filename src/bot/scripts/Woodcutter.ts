@@ -6,7 +6,9 @@ import { Traversal } from '../api/Traversal.js';
 import { Banking } from '../api/Banking.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -91,17 +93,12 @@ export default class Woodcutter extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(this), new BankLogs(this), new Chop(this), new ReturnToAnchor(this));
+        this.add(new ContinueDialog(() => this.setStatus('continuing dialog')), new BankLogs(this), new Chop(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const lines = [`Woodcutter — ${this.status}`, `chopped ${this.logsChopped}  banked ${this.banked} (${this.trips} trips)`, `wc xp +${this.xpGained}  lvl ${Skills.level('woodcutting')}  tick ${Game.tick()}`];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#5be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#5be05b');
     }
 
     setStatus(status: string): void {
@@ -138,19 +135,6 @@ export default class Woodcutter extends TaskBot {
         const was = this.chopping;
         this.chopping = false;
         return was;
-    }
-}
-
-class ContinueDialog implements Task {
-    constructor(private bot: Woodcutter) {}
-
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-
-    async execute(): Promise<void> {
-        this.bot.setStatus('continuing dialog');
-        await ChatDialog.continue();
     }
 }
 

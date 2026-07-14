@@ -5,6 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Traversal } from '../api/Traversal.js';
 import { Reachability } from '../api/Reachability.js';
@@ -104,12 +106,7 @@ export default class FlaxPicker extends TaskBot {
             `${this.flaxName}: picked ${this.picked}  bank trips ${this.trips}`,
             `free slots ${size}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -356,11 +353,6 @@ export default class FlaxPicker extends TaskBot {
         await this.travelTo(this.fieldTile, FIELD_ARRIVE);
         return true;
     }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** Full pack AND walled into a flax pocket → carve out (a full pack can't pick

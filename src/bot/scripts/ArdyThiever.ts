@@ -3,6 +3,7 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { Reachability } from '../api/Reachability.js';
 import Tile from '../api/Tile.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
@@ -10,6 +11,7 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Traversal } from '../api/Traversal.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
@@ -88,10 +90,6 @@ let RESTOCK_AT = 3;
 let BANK_AT = 12;
 let BANK_COMMON = true;
 
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
-}
 function foodCount(): number {
     return countMatching(Inventory.items(), FOOD);
 }
@@ -204,12 +202,7 @@ export default class ArdyThiever extends TaskBot {
             `loot ${this.looted}  bank trips ${this.trips}  food ${foodCount()}  lootslots ${lootSlots()}`,
             `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#9be05b';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#9be05b');
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -227,11 +220,6 @@ export default class ArdyThiever extends TaskBot {
     countTrip(): void { this.trips++; }
     countFlee(): void { this.flees++; }
     countKill(): void { this.kills++; }
-}
-
-class ContinueDialog implements Task {
-    validate(): boolean { return ChatDialog.canContinue(); }
-    async execute(): Promise<void> { await ChatDialog.continue(); }
 }
 
 /** A low-level thief never trades hits: on a REAL attack (a guard that caught us
@@ -286,7 +274,7 @@ class FightBack implements Task {
         const deadline = performance.now() + 90_000;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died) { return; }
-            if (shouldEat(hpFraction(), EAT_AT, foodCount()) || shouldPanic(hpFraction(), PANIC_AT, foodCount())) {
+            if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount()) || shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount())) {
                 return; // EatFood / PanicRetreat outrank us next loop
             }
             // No displaced-mid-fight leash bail (unlike ArdyFighter's Fight): as the responder the attacker is already adjacent, and any runtime-event displacement is caught by EventSignal.pending() above.
@@ -337,14 +325,14 @@ class LootDrops implements Task {
 /** Eat below the gate up to the eat-to target (standard mechanic). */
 class EatFood implements Task {
     constructor(private bot: ArdyThiever) {}
-    validate(): boolean { return shouldEat(hpFraction(), EAT_AT, foodCount()); }
+    validate(): boolean { return shouldEat(Skills.hpFraction(), EAT_AT, foodCount()); }
     async execute(): Promise<void> {
         for (let bite = 0; bite < 28; bite++) {
             if (this.bot.died || ChatDialog.canContinue() || EventSignal.pending()) { return; }
-            if (hpFraction() >= EAT_TO || foodCount() === 0) { return; }
+            if (Skills.hpFraction() >= EAT_TO || foodCount() === 0) { return; }
             const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
             if (!food) { return; }
-            this.bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+            this.bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
             const before = Skills.effective('hitpoints');
             if (!(await food.interact('Eat'))) { return; }
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
@@ -356,7 +344,7 @@ class EatFood implements Task {
 /** Out of food + very low HP: retreat to the bank, withdraw food or wait out regen. */
 class PanicRetreat implements Task {
     constructor(private bot: ArdyThiever) {}
-    validate(): boolean { return shouldPanic(hpFraction(), PANIC_AT, foodCount()); }
+    validate(): boolean { return shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount()); }
     async execute(): Promise<void> {
         this.bot.setStatus('panic: no food — retreating to the bank');
         await Traversal.walkTo(BANK_STAND, { radius: 2, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
@@ -372,7 +360,7 @@ class PanicRetreat implements Task {
         }
         if (foodCount() === 0) {
             this.bot.setStatus('panic: bank empty — waiting for regen');
-            await Execution.delayUntil(() => hpFraction() >= REST_UNTIL || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
+            await Execution.delayUntil(() => Skills.hpFraction() >= REST_UNTIL || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
         }
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
     }
@@ -420,7 +408,7 @@ class RestockCakes implements Task {
                 this.bot.log(`stocked ${foodCount()} food`);
                 return;
             }
-            if (shouldEat(hpFraction(), EAT_AT, foodCount())) { return; }
+            if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount())) { return; }
             const stall = Locs.query()
                 .name(STALL_NAME)
                 .action(STALL_OP)
@@ -467,7 +455,7 @@ class Pickpocket implements Task {
         // which the stun ignores anyway. NOT gated on Game.inCombat(): the fail
         // itself shows the health bar, and breaking on it just spins the attempt.
         await Execution.delayUntil(
-            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || hpFraction() < EAT_AT,
+            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || Skills.hpFraction() < EAT_AT,
             3000
         );
         if (Skills.xp('thieving') > xpBefore) { this.bot.countSteal(); this.bot.log(`pickpocketed ${TARGET}`); }

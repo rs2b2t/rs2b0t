@@ -2,6 +2,7 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
@@ -10,6 +11,7 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Traversal } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -90,11 +92,6 @@ let FOOD_TARGET = 8;
 let BANK_AT = 12;
 let BANK_COMMON = true;
 let COMBAT_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
-
-function hpFraction(): number {
-    const base = Skills.level('hitpoints');
-    return base > 0 ? Skills.effective('hitpoints') / base : 1;
-}
 
 /** Total carried food (sums the cake bite-stages too — they all contain 'cake'). */
 function foodCount(): number {
@@ -222,12 +219,7 @@ export default class ArdyFighter extends TaskBot {
             `bank trips ${this.trips}${this.deaths ? `  deaths ${this.deaths}` : ''}  food ${foodCount()}  lootslots ${lootSlots()}`,
             `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
         ];
-        ctx.font = '12px monospace';
-        const width = Math.max(...lines.map(l => ctx.measureText(l).width)) + 12;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(6, 6, width, lines.length * 16 + 10);
-        ctx.fillStyle = '#ffb86c';
-        lines.forEach((line, i) => ctx.fillText(line, 12, 24 + i * 16));
+        drawStatusBox(ctx, lines, '#ffb86c');
     }
 
     setStatus(s: string): void {
@@ -256,15 +248,6 @@ export default class ArdyFighter extends TaskBot {
     }
 }
 
-class ContinueDialog implements Task {
-    validate(): boolean {
-        return ChatDialog.canContinue();
-    }
-    async execute(): Promise<void> {
-        await ChatDialog.continue();
-    }
-}
-
 /** Walk back when outside the leash (start-anywhere travel + displacement recovery). */
 class ReturnToAnchor implements Task {
     constructor(private bot: ArdyFighter) {}
@@ -287,7 +270,7 @@ class EatFood implements Task {
     constructor(private bot: ArdyFighter) {}
 
     validate(): boolean {
-        return shouldEat(hpFraction(), EAT_AT, foodCount());
+        return shouldEat(Skills.hpFraction(), EAT_AT, foodCount());
     }
 
     async execute(): Promise<void> {
@@ -297,14 +280,14 @@ class EatFood implements Task {
             if (this.bot.died || ChatDialog.canContinue() || EventSignal.pending()) {
                 return; // yield to death / dialog / runtime-event handling
             }
-            if (hpFraction() >= EAT_TO || foodCount() === 0) {
+            if (Skills.hpFraction() >= EAT_TO || foodCount() === 0) {
                 return; // reached the eat-to target, or out of food
             }
             const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
             if (!food) {
                 return;
             }
-            this.bot.setStatus(`eating ${food.name} (${Math.round(hpFraction() * 100)}% hp)`);
+            this.bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
             const before = Skills.effective('hitpoints');
             if (!(await food.interact('Eat'))) {
                 return;
@@ -356,7 +339,7 @@ class RestockCakes implements Task {
                 this.bot.log(`stocked ${foodCount()} food`);
                 return;
             }
-            if (shouldEat(hpFraction(), EAT_AT, foodCount())) {
+            if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount())) {
                 return; // EatFood outranks us next loop
             }
 
@@ -457,7 +440,7 @@ class PanicRetreat implements Task {
     constructor(private bot: ArdyFighter) {}
 
     validate(): boolean {
-        return shouldPanic(hpFraction(), PANIC_AT, foodCount());
+        return shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount());
     }
 
     async execute(): Promise<void> {
@@ -483,7 +466,7 @@ class PanicRetreat implements Task {
 
         if (foodCount() === 0) {
             this.bot.setStatus('panic: bank empty — waiting for regen');
-            await Execution.delayUntil(() => hpFraction() >= REST_UNTIL || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
+            await Execution.delayUntil(() => Skills.hpFraction() >= REST_UNTIL || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
         }
 
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
@@ -532,7 +515,7 @@ class Fight implements Task {
     }
 
     validate(): boolean {
-        return !Game.inCombat() && hpFraction() >= EAT_AT && this.findTarget() !== null;
+        return !Game.inCombat() && Skills.hpFraction() >= EAT_AT && this.findTarget() !== null;
     }
 
     async execute(): Promise<void> {
@@ -560,7 +543,7 @@ class Fight implements Task {
             if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died || Inventory.isFull()) {
                 return;
             }
-            if (shouldEat(hpFraction(), EAT_AT, foodCount()) || hpFraction() < PANIC_AT) {
+            if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount()) || Skills.hpFraction() < PANIC_AT) {
                 return; // EatFood / PanicRetreat outrank us next loop
             }
 

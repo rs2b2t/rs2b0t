@@ -6,6 +6,7 @@ import { Reachability } from '../Reachability.js';
 import { Traversal } from '../Traversal.js';
 import { Locs } from '../queries/Locs.js';
 import { ChatDialog } from './ChatDialog.js';
+import { Inventory } from './Inventory.js';
 
 /**
  * Bank access (read + component-button withdraw/deposit). The bank screen is
@@ -47,7 +48,7 @@ export const Bank = {
             return true;
         }
         const wanted = name.toLowerCase();
-        const invCount = (): number => reader.inventory().filter(i => i.name?.toLowerCase() === wanted).reduce((s, i) => s + i.count, 0);
+        const invCount = (): number => Inventory.count(name);
         const item = reader.bankItems().find(i => i.name?.toLowerCase() === wanted);
         const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
         if (!xOp) {
