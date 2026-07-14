@@ -1,4 +1,3 @@
-// src/bot/api/Banking.ts
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { nearestBank } from './BankLocations.js';

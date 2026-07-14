@@ -22,10 +22,6 @@ class SchedulerImpl {
     /** Launches one loop iteration; installed by ScriptRunner at start(). */
     launchLoop: ((ctx: ScriptContext) => void) | null = null;
 
-    /** When set and returning true, new loop iterations are withheld (human
-     *  breaks). In-flight loops and Execution.* waiters are unaffected. */
-    launchGate: (() => boolean) | null = null;
-
     /** Times the frame-gap insurance fired (telemetry; see pump()). */
     gapShifts = 0;
 
@@ -95,8 +91,8 @@ class SchedulerImpl {
         ctx.waiters = still;
 
         // launch the next loop iteration when the previous settled and the
-        // requested delay elapsed — unless a human break is in progress
-        if (!ctx.loopInFlight && now >= ctx.nextLoopAt && this.launchLoop && !(this.launchGate && this.launchGate())) {
+        // requested delay elapsed
+        if (!ctx.loopInFlight && now >= ctx.nextLoopAt && this.launchLoop) {
             ctx.progress();
             this.launchLoop(ctx);
         }

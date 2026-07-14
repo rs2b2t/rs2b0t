@@ -82,15 +82,3 @@ export function countPrimary(items: readonly PackItem[], recipe: Recipe): number
     const pat = primaryOre(recipe);
     return items.filter(i => matches(i.name, pat)).length;
 }
-
-/** Index of the LAST primary-ore slot, or -1. We useOn the last one so, as slots
- *  empty, we keep hitting an ore slot (mirrors CookBot's lastRawIndex). */
-export function lastPrimaryIndex(items: readonly PackItem[], recipe: Recipe): number {
-    const pat = primaryOre(recipe);
-    for (let i = items.length - 1; i >= 0; i--) {
-        if (matches(items[i].name, pat)) {
-            return i;
-        }
-    }
-    return -1;
-}

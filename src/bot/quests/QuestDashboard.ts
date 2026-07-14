@@ -103,7 +103,7 @@ export default class QuestDashboard extends LoopingBot {
         this.log(`Quests — READY ${ready} | BLOCKED ${blocked} | DONE ${done}`);
         const readyList = this.results.filter(r => r.status === 'READY');
         for (const r of readyList) {
-            this.log(`  READY: ${r.name}${r.members ? ' [M]' : ''}`);
+            this.log(`  READY: ${r.name}${this.tag(r)}`);
         }
     }
 

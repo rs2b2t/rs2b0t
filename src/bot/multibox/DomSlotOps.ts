@@ -17,11 +17,11 @@ interface Lcb {
 interface LcbWindow extends Window { rs2b0t?: Lcb; }
 
 /**
- * One bot tile: an iframe of /bot.html?inputmode=synthetic at a fixed logical
- * size, CSS-scaled to a grid thumbnail or (when focused) letterboxed to the
- * window. The iframe is NEVER reparented — focus toggles a class, so the
- * WebSocket/session survive fullscreen↔wall. Control calls buffer until the
- * iframe's rs2b0t handle appears, then flush in order.
+ * One bot tile: an iframe of /bot.html at a fixed logical size, CSS-scaled to
+ * a grid thumbnail or (when focused) letterboxed to the window. The iframe is
+ * NEVER reparented — focus toggles a class, so the WebSocket/session survive
+ * fullscreen↔wall. Control calls buffer until the iframe's rs2b0t handle
+ * appears, then flush in order.
  */
 class DomSlotHandle implements SlotHandle {
     readonly el: HTMLDivElement;
@@ -45,8 +45,14 @@ class DomSlotHandle implements SlotHandle {
         // Forward nodeid/members from the wall's own URL, so a relay launch can
         // target a specific world (e.g. multibox.html?nodeid=1 for rs2b2t).
         const q = new URLSearchParams(location.search);
-        const extra = (['nodeid', 'members'] as const).filter(k => q.has(k)).map(k => `&${k}=${encodeURIComponent(q.get(k)!)}`).join('');
-        this.iframe.src = `/bot.html?inputmode=synthetic${extra}`;
+        const forwarded = new URLSearchParams();
+        for (const k of ['nodeid', 'members'] as const) {
+            if (q.has(k)) {
+                forwarded.set(k, q.get(k)!);
+            }
+        }
+        const qs = forwarded.toString();
+        this.iframe.src = qs ? `/bot.html?${qs}` : '/bot.html';
         this.scaler.appendChild(this.iframe);
         this.el.appendChild(this.scaler);
         this.applyLayout();
@@ -130,5 +136,3 @@ export class DomSlotOps implements SlotOps {
         return handle;
     }
 }
-
-export { LOGICAL_W, LOGICAL_H, THUMB_W };

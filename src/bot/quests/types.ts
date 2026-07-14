@@ -30,8 +30,6 @@ export interface QuestRecord {
     questPoints: number; // QP awarded on completion
     requirements: QuestRequirements;
     items: QuestItem[];
-    /** RESERVED executor seam — typed `never` so nothing depends on it in v1. */
-    solver?: never;
 }
 
 export interface PlayerState {

@@ -57,8 +57,6 @@ export interface MazeRoute {
     doors: { x: number; z: number }[];
 }
 
-export const MAZE_SHRINE = { x: ${MAZE_SHRINE.x}, z: ${MAZE_SHRINE.z} } as const;
-
 export const MAZE_ROUTES: MazeRoute[] = [
 ${body}
 ];

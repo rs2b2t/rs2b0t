@@ -28,14 +28,6 @@ export function unitPrice(item: ShopItemDef, shop: { sell: number; delta: number
     return Math.max(1, Math.floor((pct * item.cost) / 1000));
 }
 
-export function buyCost(item: ShopItemDef, shop: { sell: number; delta: number }, fromStock: number, units: number): number {
-    let total = 0;
-    for (let i = 0; i < units; i++) {
-        total += unitPrice(item, shop, fromStock - i);
-    }
-    return total;
-}
-
 export function unitsUnderPolicy(policy: BuyPolicy, stock: number, baseline: number): number {
     if (policy.kind === 'buyout') {
         return Math.max(0, stock);

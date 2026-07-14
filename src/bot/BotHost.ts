@@ -4,8 +4,6 @@ import { attach as adapterAttach, setPacketListener } from './adapter/ClientAdap
 import { pumpProducers } from './events/producers.js';
 
 type FrameListener = () => void;
-type TickListener = (tick: number) => void;
-type PacketListener = (ptype: number) => void;
 
 /**
  * Singleton fan-out between the BotClient hooks (H1-H4) and everything bot-
@@ -26,9 +24,6 @@ class BotHostImpl {
 
     private frameListeners = new Set<FrameListener>();
     private drawListeners = new Set<FrameListener>();
-    private shutdownListeners = new Set<FrameListener>();
-    private tickListeners = new Set<TickListener>();
-    private packetListeners = new Set<PacketListener>();
 
     /** Called once from the BotClient constructor. */
     attach(client: unknown): void {
@@ -74,39 +69,21 @@ class BotHostImpl {
         this.fire(this.drawListeners);
     }
 
-    onShutdown(): void {
-        this.fire(this.shutdownListeners);
-    }
-
     private handlePacket(ptype: number): void {
-        if (ptype === ServerProt.PLAYER_INFO) {
-            this.tickCount++;
-
-            const now = performance.now();
-            if (this.lastTickAt > 0) {
-                this.tickIntervals.push(now - this.lastTickAt);
-                if (this.tickIntervals.length > 10) {
-                    this.tickIntervals.shift();
-                }
-            }
-            this.lastTickAt = now;
-
-            for (const listener of this.tickListeners) {
-                try {
-                    listener(this.tickCount);
-                } catch (err) {
-                    console.error('[rs2b0t] tick listener error', err);
-                }
-            }
+        if (ptype !== ServerProt.PLAYER_INFO) {
+            return;
         }
 
-        for (const listener of this.packetListeners) {
-            try {
-                listener(ptype);
-            } catch (err) {
-                console.error('[rs2b0t] packet listener error', err);
+        this.tickCount++;
+
+        const now = performance.now();
+        if (this.lastTickAt > 0) {
+            this.tickIntervals.push(now - this.lastTickAt);
+            if (this.tickIntervals.length > 10) {
+                this.tickIntervals.shift();
             }
         }
+        this.lastTickAt = now;
     }
 
     // ---- subscriptions ----
@@ -119,21 +96,6 @@ class BotHostImpl {
     addDrawListener(cb: FrameListener): () => void {
         this.drawListeners.add(cb);
         return () => this.drawListeners.delete(cb);
-    }
-
-    addShutdownListener(cb: FrameListener): () => void {
-        this.shutdownListeners.add(cb);
-        return () => this.shutdownListeners.delete(cb);
-    }
-
-    addTickListener(cb: TickListener): () => void {
-        this.tickListeners.add(cb);
-        return () => this.tickListeners.delete(cb);
-    }
-
-    addPacketListener(cb: PacketListener): () => void {
-        this.packetListeners.add(cb);
-        return () => this.packetListeners.delete(cb);
     }
 
     private fire(listeners: Set<FrameListener>): void {

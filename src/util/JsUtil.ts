@@ -2,12 +2,6 @@ export const sleep = async (ms: number): Promise<void> => new Promise((resolve):
 
 export const downloadUrl = async (url: string): Promise<Uint8Array> => new Uint8Array(await (await fetch(url)).arrayBuffer());
 
-export const downloadText = async (url: string): Promise<string> => (await fetch(url)).text();
-
-export function arraycopy(src: Int32Array | Uint8Array, srcPos: number, dst: Int32Array | Uint8Array, dstPos: number, length: number): void {
-    while (length--) dst[dstPos++] = src[srcPos++];
-}
-
 export function bytesToBigInt(bytes: Uint8Array): bigint {
     let result: bigint = 0n;
     for (let index: number = 0; index < bytes.length; index++) {

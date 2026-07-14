@@ -40,9 +40,4 @@ export default class BotClient extends Client {
         RenderGate.markDrawn(now);
         BotHost.onDraw();
     }
-
-    protected override mainquit(): void {
-        BotHost.onShutdown();
-        super.mainquit();
-    }
 }

@@ -82,9 +82,6 @@ export default class CooksAssistant extends TaskBot {
             this.started = true;
         }
     }
-    log2(m: string): void {
-        this.log(m);
-    }
 }
 
 /** Click through any open dialogue; pick the quest-progressing option. */
@@ -128,7 +125,7 @@ class StartQuest implements Task {
             return;
         }
         this.bot.setStatus('heading to the Cook');
-        await walk(COOK, m => this.bot.log2(m));
+        await walk(COOK, m => this.bot.log(m));
     }
 }
 
@@ -148,7 +145,7 @@ class GetEgg implements Task {
             return;
         }
         this.bot.setStatus('off to the chicken pen for an egg');
-        await walk(EGG_PEN, m => this.bot.log2(m));
+        await walk(EGG_PEN, m => this.bot.log(m));
     }
 }
 
@@ -168,7 +165,7 @@ class GetBucket implements Task {
             return;
         }
         this.bot.setStatus('off to the farmhouse for a bucket');
-        await walk(FARMHOUSE, m => this.bot.log2(m));
+        await walk(FARMHOUSE, m => this.bot.log(m));
     }
 }
 
@@ -189,7 +186,7 @@ class MilkCow implements Task {
             return;
         }
         this.bot.setStatus('off to the field to milk a cow');
-        await walk(COW_FIELD, m => this.bot.log2(m));
+        await walk(COW_FIELD, m => this.bot.log(m));
     }
 }
 
@@ -209,7 +206,7 @@ class PickGrain implements Task {
             return;
         }
         this.bot.setStatus('off to the wheat field');
-        await walk(WHEAT_FIELD, m => this.bot.log2(m));
+        await walk(WHEAT_FIELD, m => this.bot.log(m));
     }
 }
 
@@ -225,7 +222,7 @@ class Loiter implements Task {
     async execute(): Promise<void> {
         if (Math.random() < 0.3) {
             this.bot.setStatus('back to the Cook, still stuck on the flour');
-            await walk(COOK, m => this.bot.log2(m));
+            await walk(COOK, m => this.bot.log(m));
             const cook = Npcs.query().name('Cook').action('Talk-to').nearest();
             if (cook && cook.distance() <= 4) {
                 await cook.interact('Talk-to');

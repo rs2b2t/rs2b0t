@@ -1,4 +1,3 @@
-// src/bot/api/tasks/PeriodicBank.ts
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { Task } from '../Bot.js';
 import { Execution } from '../Execution.js';

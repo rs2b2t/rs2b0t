@@ -7,7 +7,6 @@ import {
     setsPerTrip,
     withdrawPlan,
     countPrimary,
-    lastPrimaryIndex,
     type PackItem
 } from './SmelterBotLogic.js';
 
@@ -108,7 +107,7 @@ describe('withdrawPlan', () => {
     });
 });
 
-describe('countPrimary / lastPrimaryIndex', () => {
+describe('countPrimary', () => {
     test('counts only the primary ore, ignoring coal + tin + bars', () => {
         const steel = recipeForBar('Steel')!;
         const items = pack('Iron ore', 'Coal', 'Coal', 'Iron ore', 'Steel bar', null);
@@ -122,16 +121,9 @@ describe('countPrimary / lastPrimaryIndex', () => {
         expect(countPrimary(items, bronze)).toBe(2);
     });
 
-    test('lastPrimaryIndex points at the last primary-ore slot', () => {
-        const steel = recipeForBar('Steel')!;
-        const items = pack('Iron ore', 'Coal', 'Iron ore', 'Coal', 'Coal');
-        expect(lastPrimaryIndex(items, steel)).toBe(2);
-    });
-
-    test('lastPrimaryIndex is -1 when the primary ore is exhausted', () => {
+    test('is 0 when the primary ore is exhausted', () => {
         const steel = recipeForBar('Steel')!;
         const items = pack('Steel bar', 'Coal', 'Coal');
-        expect(lastPrimaryIndex(items, steel)).toBe(-1);
         expect(countPrimary(items, steel)).toBe(0);
     });
 });

@@ -50,4 +50,3 @@ class RenderGateImpl {
 }
 
 export const RenderGate = new RenderGateImpl();
-export type { RenderGateImpl };

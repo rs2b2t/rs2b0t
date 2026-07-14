@@ -84,4 +84,3 @@ class WorkerClockImpl {
 }
 
 export const WorkerClock = new WorkerClockImpl();
-export type { WorkerClockImpl };
