@@ -10,7 +10,12 @@ import { ClueExecutor } from '../clues/ClueExecutor.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { Autocast } from '../api/combat/Autocast.js';
+import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
+import { AmmoStackTracker, planAmmoCollection } from '../api/combat/AmmoLogic.js';
+import type { GroundItem } from '../api/queries/GroundItems.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -60,6 +65,13 @@ export const SETTINGS: SettingsSchema = {
     loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names' },
     solveClues: { type: 'boolean', default: true, label: 'Solve easy clues' },
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' },
+    combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage', 'range'], label: 'Combat style' },
+    weapon: { type: 'string', default: '', label: 'Weapon (mage/range)', help: 'wielded item, withdrawn from bank when missing — e.g. Staff of fire, Shortbow' },
+    spell: { type: 'string', default: 'Wind Strike', label: 'Autocast spell (mage)', help: 'Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave' },
+    runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip' },
+    ammo: { type: 'string', default: 'Bronze arrow', label: 'Ammo (range)' },
+    ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Ammo per bank trip' },
+    collectAt: { type: 'number', default: 20, min: 1, max: 100, label: 'Collect arrows at stack size' },
     ...PERIODIC_BANK_SETTINGS
 };
 
@@ -79,6 +91,15 @@ let LOOT_NAMES = DEFAULT_LOOT.split(',').map(s => s.trim());
 let BANK_COMMON = true;
 let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
+let STYLE: 'melee' | 'mage' | 'range' = 'melee';
+let WEAPON = '';
+let SPELL = 'Wind Strike';
+let RUNES_WITHDRAW = 150;
+let AMMO = 'Bronze arrow';
+let AMMO_WITHDRAW = 200;
+let COLLECT_AT = 20;
+// stacks a stack must sit unchanged before the despawn-backstop sweep grabs it
+const AMMO_STALE_MS = 90_000;
 
 
 /**
@@ -100,6 +121,8 @@ export default class RockCrab extends TaskBot {
     private bankTrips = 0;
     private failedWakes = 0;
     private bankKnownEmpty = false;
+    private weaponMissing = false;
+    private styleSupplyEmpty = false;
     private status = 'starting';
     private solveClue: SolveClue | undefined;
     died = false;
@@ -121,6 +144,13 @@ export default class RockCrab extends TaskBot {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         SPADE_NAME = this.settings.str('spade', 'Spade');
+        STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
+        WEAPON = this.settings.str('weapon', '');
+        SPELL = this.settings.str('spell', 'Wind Strike');
+        RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
+        AMMO = this.settings.str('ammo', 'Bronze arrow');
+        AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 200);
+        COLLECT_AT = this.settings.num('collectAt', 20);
         this.solveClue = new SolveClue({
             log: m => this.log(m),
             setStatus: s => this.setStatus(s),
@@ -131,7 +161,14 @@ export default class RockCrab extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, attack lvl ${Skills.level('attack')}`);
+        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (collect@${COLLECT_AT})` : '';
+        this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
+        if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
+            this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
+        }
+        if (STYLE !== 'melee' && WEAPON === '') {
+            this.log(`WARNING: no weapon configured for style '${STYLE}' — fighting with whatever is wielded`);
+        }
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -154,6 +191,9 @@ export default class RockCrab extends TaskBot {
                 }
             }),
             new Eat(this),
+            new GearEquip(this),
+            new ArmAutocast(this),
+            new CollectAmmo(this), // before SolveClue/BankRun: sweep arrows before anything walks us out
             this.solveClue!,
             new BankRun(this),
             new PeriodicBank({
@@ -187,7 +227,8 @@ export default class RockCrab extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const cur = ClueExecutor.current;
         const clueLine = cur ? `clue: ${this.solveClue?.clueStatus() ?? 'idle'} — ${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}` : `clue: ${this.solveClue?.clueStatus() ?? 'idle'}`;
-        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`, clueLine];
+        const styleLine = STYLE === 'mage' ? `  casts ${castsLeft()}${Autocast.armed() ? '' : '  (autocast OFF)'}` : STYLE === 'range' ? `  quiver ${quiverCount()}  ground ${ammoStacksOnGround().reduce((n, g) => n + g.count, 0)}` : '';
+        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}${styleLine}  tick ${Game.tick()}`, clueLine];
         drawStatusBox(ctx, lines, '#7ad0ff');
     }
 
@@ -217,6 +258,18 @@ export default class RockCrab extends TaskBot {
     }
     bankIsKnownEmpty(): boolean {
         return this.bankKnownEmpty;
+    }
+    noteWeaponMissing(): void {
+        this.weaponMissing = true;
+    }
+    weaponKnownMissing(): boolean {
+        return this.weaponMissing;
+    }
+    noteStyleSupplyEmpty(empty: boolean): void {
+        this.styleSupplyEmpty = empty;
+    }
+    styleSupplyKnownEmpty(): boolean {
+        return this.styleSupplyEmpty;
     }
     noteWake(success: boolean): void {
         this.failedWakes = success ? 0 : this.failedWakes + 1;
@@ -281,6 +334,67 @@ function hasFood(): boolean {
     return foodCount() > 0;
 }
 
+// ---- combat-style helpers (mage/range) ----
+
+function wieldedNames(): string[] {
+    return Equipment.items().map(i => i.name ?? '');
+}
+
+/** Ammo count in the worn quiver slot. */
+function quiverCount(): number {
+    return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
+}
+
+/** Full casts of the configured spell affordable with the held runes. */
+function castsLeft(): number {
+    return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
+}
+
+/** Our fired-ammo stacks on the ground in the field. */
+function ammoStacksOnGround(): GroundItem[] {
+    return GroundItems.query()
+        .where(g => (g.name ?? '').toLowerCase() === AMMO.toLowerCase() && inField(g.tile()))
+        .results();
+}
+
+function stackKey(g: GroundItem): string {
+    const t = g.tile();
+    return `${t.x}|${t.z}|${t.level}`;
+}
+
+/** Out of the style's consumable with nothing recoverable in the field. */
+function needStyleSupplies(): boolean {
+    if (STYLE === 'mage') {
+        return castsLeft() < 1;
+    }
+    if (STYLE === 'range') {
+        return quiverCount() === 0 && Inventory.count(AMMO) === 0 && ammoStacksOnGround().length === 0;
+    }
+    return false;
+}
+
+/** A clue solve is about to walk us out of the field. */
+function cluePending(): boolean {
+    return SOLVE_CLUES && Inventory.items().some(i => (i.name ?? '').toLowerCase() === 'clue scroll');
+}
+
+/** Wield pack ammo into the quiver — ALWAYS dispatches the Wield op (unlike
+ *  Equipment.equip, which short-circuits when any ammo is already worn, so a
+ *  top-up would never move). True once the pack count dropped / no ammo held. */
+async function quiverPackAmmo(): Promise<boolean> {
+    const item = Inventory.first(AMMO);
+    if (!item) {
+        return true;
+    }
+    const op = item.actions().find(o => /wield|wear|equip/i.test(o));
+    if (!op) {
+        return false;
+    }
+    const before = Inventory.count(AMMO);
+    await item.interact(op);
+    return Execution.delayUntil(() => Inventory.count(AMMO) < before, 3000);
+}
+
 /** Eat one piece of food if we have any (any form); resolves true if HP went up. */
 async function eatOnce(bot: RockCrab): Promise<boolean> {
     const food = Inventory.items().find(i => isFoodItem(i.name));
@@ -322,22 +436,157 @@ class Eat implements Task {
     }
 }
 
-/** Out of food -> web-walk to the Seers bank, withdraw more, and return to the field. */
+/** Wield the style weapon / stow loose arrows whenever they're in the pack
+ *  (start, post-bank, post-death salvage). No walking — BankRun owns trips.
+ *  Bounded fails so an un-wieldable item can't starve the loop below it. */
+class GearEquip implements Task {
+    private fails = 0;
+
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        if (STYLE === 'melee' || this.fails >= 5) {
+            return false;
+        }
+        if (WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null) {
+            return true;
+        }
+        // loose arrows in the pack (withdrawn or collected) belong in the quiver
+        return STYLE === 'range' && Inventory.count(AMMO) > 0;
+    }
+
+    async execute(): Promise<void> {
+        if (WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null) {
+            this.bot.setStatus(`wielding ${WEAPON}`);
+            if (await Equipment.equip(WEAPON)) {
+                this.bot.log(`wielded ${WEAPON}`);
+                this.fails = 0;
+            } else {
+                this.fails++;
+            }
+            return;
+        }
+        if (await quiverPackAmmo()) {
+            this.bot.log(`quivered ${AMMO} — ${quiverCount()} carried`);
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.bot.log(`WARNING: could not move '${AMMO}' from the pack to the quiver after 5 tries`);
+        }
+    }
+}
+
+/** Arm the staff's autocast spell (once per session — the style varp resets
+ *  on login). Bounded retries so a bad spell name can't hot-loop. */
+class ArmAutocast implements Task {
+    private fails = 0;
+
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        if (STYLE !== 'mage' || this.fails >= 5 || Autocast.armed()) {
+            return false;
+        }
+        // staff tab attached, or the staff is at least worn (a stale combat
+        // tab still deserves attempts so the failure gets LOGGED, not silent)
+        return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus(`arming autocast: ${SPELL}`);
+        await Execution.delayTicks(3); // give a fresh wield's tab swap a moment to land
+        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' after 5 tries — check the spell name, magic level and staff. If the staff IS wielded but the combat tab stayed unarmed, this account's equip-time tab update is tutorial-gated — relog once with the staff wielded.`);
+        }
+    }
+}
+
+/**
+ * Collect our fired ammo off the ground — but only MATURE stacks. Each shot
+ * drops 1 ammo on the target tile and the engine merges our stacks per tile
+ * (live count is readable), so we let a stack grow to `collectAt` before one
+ * pickup recovers the lot. Force-collects everything when the quiver is dry
+ * or we're about to leave the field (bank/clue), and sweeps stacks that
+ * stopped growing before the despawn timer can eat them.
+ */
+class CollectAmmo implements Task {
+    private tracker = new AmmoStackTracker();
+
+    constructor(private bot: RockCrab) {}
+
+    private plan(): Set<string> {
+        this.tracker.observe(
+            ammoStacksOnGround().map(g => ({ key: stackKey(g), count: g.count })),
+            Date.now()
+        );
+        const leaving = (!hasFood() && !this.bot.bankIsKnownEmpty()) || needStyleSupplies() || cluePending();
+        return new Set(
+            planAmmoCollection(this.tracker.stacks(Date.now()), {
+                collectAt: COLLECT_AT,
+                staleMs: AMMO_STALE_MS,
+                quiverEmpty: quiverCount() === 0 && Inventory.count(AMMO) === 0,
+                leavingField: leaving
+            })
+        );
+    }
+
+    validate(): boolean {
+        return STYLE === 'range' && this.plan().size > 0;
+    }
+
+    async execute(): Promise<void> {
+        const keys = this.plan();
+        for (const stack of ammoStacksOnGround()) {
+            if (EventSignal.pending() || this.bot.died) {
+                return;
+            }
+            if (!keys.has(stackKey(stack))) {
+                continue;
+            }
+            const size = stack.count;
+            this.bot.setStatus(`collecting ${size} ${AMMO}`);
+            const before = Inventory.count(AMMO);
+            await stack.interact('Take');
+            if (await Execution.delayUntil(() => Inventory.count(AMMO) > before, 5000)) {
+                this.bot.log(`collected a stack of ${Inventory.count(AMMO) - before} ${AMMO}`);
+            }
+        }
+        // straight into the quiver so the pack stays free for loot
+        if (Inventory.count(AMMO) > 0) {
+            await quiverPackAmmo();
+        }
+    }
+}
+
+/** Out of food or style supplies -> web-walk to the Seers bank, restock, and
+ *  return to the field. Also withdraws + wields the style weapon when it's
+ *  missing (start and after a death that lost it). */
 class BankRun implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
         // restock when we've run out — unless we've already learned the bank is
-        // empty of this food (then fall back to no-food combat + resting)
+        // empty of what we need (then fall back to no-food combat + resting)
+        if (this.needWeapon()) {
+            return true;
+        }
+        if (needStyleSupplies() && !this.bot.styleSupplyKnownEmpty()) {
+            return true;
+        }
         return !hasFood() && !this.bot.bankIsKnownEmpty();
+    }
+
+    private needWeapon(): boolean {
+        return STYLE !== 'melee' && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null && !this.bot.weaponKnownMissing();
     }
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
             return; // runtime event guard takes over next loop
         }
-        this.bot.setStatus('out of food — walking to the bank');
-        this.bot.log(`out of ${FOOD_NAME} — banking at ${BANK_TILE} for more`);
+        this.bot.setStatus('restocking — walking to the bank');
+        this.bot.log(`banking at ${BANK_TILE} (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, ammo ${quiverCount()}` : ''}${this.needWeapon() ? `, need ${WEAPON}` : ''})`);
 
         // long web-walk south; the crabs de-aggro as we leave the field
         if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
@@ -369,12 +618,74 @@ class BankRun implements Task {
             this.bot.log(`WARNING: no '${FOOD_NAME}' in the bank — falling back to no-food combat. Deposit food (or fix the food name) and it'll resume eating.`);
         } else {
             this.bot.countBankTrip();
-            this.bot.log(`withdrew ${got} ${FOOD_NAME} — walking back to the field`);
+            this.bot.log(`withdrew ${got} ${FOOD_NAME}`);
         }
 
-        this.bot.setStatus('food restocked — walking back to the field');
+        await this.withdrawStyleSupplies();
+
+        this.bot.setStatus('restocked — walking back to the field');
         await Traversal.walkResilient(FIELD, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
+    }
+
+    /** Top an item up to `target` with the era's 1/5/10 withdraw buttons.
+     *  Returns the amount gained (0 = the bank has none). */
+    private async withdrawTo(name: string, target: number): Promise<number> {
+        const start = Inventory.count(name);
+        for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
+            const need = target - Inventory.count(name);
+            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
+            const before = Inventory.count(name);
+            await Bank.withdraw(name, op);
+            if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
+                break; // bank ran out, or the button didn't fire
+            }
+        }
+        return Inventory.count(name) - start;
+    }
+
+    /** Weapon + runes/ammo for the configured style (bank already open). */
+    private async withdrawStyleSupplies(): Promise<void> {
+        if (this.needWeapon()) {
+            this.bot.setStatus(`withdrawing ${WEAPON}`);
+            if ((await this.withdrawTo(WEAPON, 1)) > 0) {
+                await Equipment.equip(WEAPON);
+                this.bot.log(`withdrew and wielded ${WEAPON}`);
+            } else {
+                this.bot.noteWeaponMissing();
+                this.bot.log(`WARNING: no '${WEAPON}' in the bank — carrying on with current gear. Deposit it (or fix the weapon name) and restart to retry.`);
+            }
+        }
+
+        if (STYLE === 'mage') {
+            this.bot.setStatus('withdrawing runes');
+            let short = false;
+            for (const { rune, count } of runeWithdrawList(SPELL, wieldedNames(), RUNES_WITHDRAW)) {
+                const have = Inventory.count(rune);
+                if (have < count) {
+                    const gained = await this.withdrawTo(rune, count);
+                    this.bot.log(`withdrew ${gained} ${rune} (${Inventory.count(rune)}/${count})`);
+                }
+                short ||= Inventory.count(rune) === 0;
+            }
+            if (castsLeft() < 1) {
+                this.bot.noteStyleSupplyEmpty(true);
+                this.bot.log(`WARNING: bank can't supply a single '${SPELL}' cast${short ? ' (a rune is missing entirely)' : ''} — deposit runes to resume casting.`);
+            } else {
+                this.bot.noteStyleSupplyEmpty(false);
+            }
+        } else if (STYLE === 'range') {
+            this.bot.setStatus(`withdrawing ${AMMO}`);
+            const gained = await this.withdrawTo(AMMO, AMMO_WITHDRAW);
+            if (gained > 0) {
+                await Equipment.equip(AMMO);
+                this.bot.log(`withdrew ${gained} ${AMMO} — quiver ${quiverCount()}`);
+                this.bot.noteStyleSupplyEmpty(false);
+            } else if (quiverCount() === 0 && Inventory.count(AMMO) === 0) {
+                this.bot.noteStyleSupplyEmpty(true);
+                this.bot.log(`WARNING: no '${AMMO}' in the bank and none carried — deposit ammo to resume. Collected arrows will re-enable shooting.`);
+            }
+        }
     }
 }
 

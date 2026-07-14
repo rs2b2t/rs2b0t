@@ -149,13 +149,17 @@ export type Rs2b0t = {
             stop(): void;
         };
         reader: {
-            inventory(): { name: string | null; count: number }[];
+            inventory(): { name: string | null; count: number; id: number; slot: number; comId: number; ops: (string | null)[] }[];
+            equipment(): { name: string | null; count: number }[];
             npcs(): { name: string | null; health: number; totalHealth: number; inCombat: boolean; distance: number; ops: (string | null)[]; tile: { x: number; z: number } }[];
             locs(): { name: string | null; ops: (string | null)[]; tile: { x: number; z: number }; distance: number }[];
             worldTile(): { x: number; z: number; level: number } | null;
             stat(i: number): { name: string; base: number; xp: number; effective: number };
             chat(n: number): { text: string }[];
             inCombat(): boolean;
+            sideTabInterface(tab: number): number;
+            varp(id: number): number;
         };
+        router: { driver: { heldOp(id: number, slot: number, comId: number, op: number): boolean | Promise<boolean> } };
     };
 };
