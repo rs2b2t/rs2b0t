@@ -7,7 +7,7 @@ import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
 import { ClueExecutor } from '../clues/ClueExecutor.js';
-import { CASKET_IDS, CLUE_DB } from '../clues/data/cluedb.js';
+import { SolveClue } from '../clues/SolveClue.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -80,19 +80,6 @@ let BANK_COMMON = true;
 let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
 
-// Clue-solver overlay/status line (banking/solving/returning/idle).
-let CLUE_STATUS = 'idle';
-// A clue/casket id we've given up on stays flagged so SolveClue.validate() stops
-// re-firing on it (the clue stays in the pack, so without this the abandon would
-// retry forever). Cleared in validate() once that clue is no longer held, so a
-// later re-drop of the same obj id isn't permanently suppressed.
-let ABANDONED_CLUE_ID: number | null = null;
-// Session flag: have we already banked for the CURRENT solve? Set on bankFirst()
-// success, kept across a mid-trail yield (so a random event doesn't re-trek to
-// Seers), reset on 'done'/'abandon'. A boolean, NOT a clue id — scroll obj ids
-// repeat across trails (random of ~60) and advance every step within one trail,
-// so an id key would both re-trek per step and skip banking for a same-id new clue.
-let BANKED_THIS_SOLVE = false;
 
 /**
  * Rock crab trainer for the Rellekka shoreline. Walks among the dormant
@@ -114,6 +101,7 @@ export default class RockCrab extends TaskBot {
     private failedWakes = 0;
     private bankKnownEmpty = false;
     private status = 'starting';
+    private solveClue: SolveClue | undefined;
     died = false;
 
     override async onStart(): Promise<void> {
@@ -133,9 +121,15 @@ export default class RockCrab extends TaskBot {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         SPADE_NAME = this.settings.str('spade', 'Spade');
-        BANKED_THIS_SOLVE = false;
-        ABANDONED_CLUE_ID = null;
-        CLUE_STATUS = 'idle';
+        this.solveClue = new SolveClue({
+            log: m => this.log(m),
+            setStatus: s => this.setStatus(s),
+            isFood: isFoodItem,
+            foodName: () => FOOD_NAME,
+            foodWithdraw: () => FOOD_WITHDRAW,
+            spadeName: () => SPADE_NAME,
+            enabled: () => SOLVE_CLUES
+        });
 
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, attack lvl ${Skills.level('attack')}`);
 
@@ -152,7 +146,7 @@ export default class RockCrab extends TaskBot {
                 onDeath: () => {
                     this.setStatus('died — recovering');
                     this.countDeath();
-                    BANKED_THIS_SOLVE = false; // died mid-solve: force a food re-bank before resuming a retained clue
+                    this.solveClue?.noteDeath(); // died mid-solve: force a food re-bank before resuming a retained clue
                     this.log('died! waiting for respawn, then web-walking back to the field');
                 },
                 onRecovered: () => {
@@ -160,7 +154,7 @@ export default class RockCrab extends TaskBot {
                 }
             }),
             new Eat(this),
-            new SolveClue(this),
+            this.solveClue!,
             new BankRun(this),
             new PeriodicBank({
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
@@ -192,7 +186,7 @@ export default class RockCrab extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const cur = ClueExecutor.current;
-        const clueLine = cur ? `clue: ${CLUE_STATUS} — ${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}` : `clue: ${CLUE_STATUS}`;
+        const clueLine = cur ? `clue: ${this.solveClue?.clueStatus() ?? 'idle'} — ${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}` : `clue: ${this.solveClue?.clueStatus() ?? 'idle'}`;
         const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}  tick ${Game.tick()}`, clueLine];
         drawStatusBox(ctx, lines, '#7ad0ff');
     }
@@ -381,143 +375,6 @@ class BankRun implements Task {
         this.bot.setStatus('food restocked — walking back to the field');
         await Traversal.walkResilient(FIELD, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
-    }
-}
-
-/** The held easy-clue SCROLL or reward CASKET obj id (what SolveClue works on), or null. */
-function heldClueLikeId(): number | null {
-    const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
-    return it ? it.id : null;
-}
-
-/** The held easy-clue SCROLL id (not a reward casket) — bank-first only preps a scroll trail. */
-function heldClueScrollId(): number | null {
-    const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined);
-    return it ? it.id : null;
-}
-
-/**
- * Solve a held easy clue trail, then resume crabbing. Ordered below survival
- * (Eat/DeathRecovery) but above BankRun/Fight/Aggro/loot, so a held clue
- * preempts combat. Banks the crab loot first (keeping the clue/casket, food and
- * spade) and withdraws a spade for dig clues, then hands the pack to
- * ClueExecutor. On a pending random event ClueExecutor returns 'yield' and we
- * simply return so loop() re-cycles and the Supervisor handles the event —
- * validate() is still true next loop (clue still held) and the idempotent
- * re-identify resumes the same step. Never loops on 'yield' here.
- */
-class SolveClue implements Task {
-    constructor(private bot: RockCrab) {}
-
-    validate(): boolean {
-        if (!SOLVE_CLUES || EventSignal.pending()) {
-            return false;
-        }
-        const id = heldClueLikeId();
-        // Clear a stale abandon flag once that clue is no longer the held one, so a
-        // later re-drop of the same obj id isn't permanently suppressed for the session.
-        if (ABANDONED_CLUE_ID !== null && id !== ABANDONED_CLUE_ID) {
-            ABANDONED_CLUE_ID = null;
-        }
-        // Skip a clue/casket we've already abandoned (missing tool / unreachable /
-        // stuck): it stays in the pack, so without this guard validate() would
-        // re-fire forever. Any different (or absent) clue id re-arms the task.
-        return id !== null && id !== ABANDONED_CLUE_ID;
-    }
-
-    async execute(): Promise<void> {
-        // Bank-first, ONCE per solve: dump crab loot and ensure a spade + food
-        // before trekking the trail. Skipped on post-yield re-entry (already banked
-        // this solve) and when only a reward casket is held (open-casket needs no
-        // prep). Keyed to a session flag, NOT a scroll id — see BANKED_THIS_SOLVE.
-        if (heldClueScrollId() !== null && !BANKED_THIS_SOLVE) {
-            if (!(await this.bankFirst())) {
-                return; // walk/open failed — retry next loop (flag stays unset)
-            }
-            BANKED_THIS_SOLVE = true;
-        }
-
-        CLUE_STATUS = 'solving';
-        this.bot.setStatus('solving clue trail');
-        const outcome = await ClueExecutor.solveHeldClue(m => this.bot.log(`[clue] ${m}`));
-
-        if (outcome === 'yield') {
-            // Random event pending — hand back to loop() so the Supervisor handles
-            // it; validate() re-fires next loop and re-identify resumes the step.
-            // Keep BANKED_THIS_SOLVE set so the resume doesn't re-trek to the bank.
-            CLUE_STATUS = 'event — yielding';
-            return;
-        }
-        if (outcome === 'abandon') {
-            // Flag whatever is currently stuck so validate() stops firing on it;
-            // leave it in the pack and resume crabbing. This solve is over.
-            ABANDONED_CLUE_ID = heldClueLikeId();
-            BANKED_THIS_SOLVE = false;
-            CLUE_STATUS = 'abandoned';
-            this.bot.log(`[clue] abandoned ${ABANDONED_CLUE_ID ?? '?'} — leaving it in the pack, resuming crabbing`);
-            return;
-        }
-
-        // done — trail complete; GoToField walks us back to the field next loop.
-        BANKED_THIS_SOLVE = false;
-        CLUE_STATUS = 'idle';
-        this.bot.setStatus('clue solved — returning to the field');
-        this.bot.log('[clue] trail complete — resuming crabbing');
-    }
-
-    /** Dump crab loot, keep the clue/casket + food + spade, top up food, withdraw a
-     *  spade if needed. Returns false if the walk to or opening of the bank failed. */
-    private async bankFirst(): Promise<boolean> {
-        CLUE_STATUS = 'banking';
-        this.bot.setStatus('clue — banking loot before the trail');
-        this.bot.log(`[clue] banking crab loot at ${BANK_TILE} before solving`);
-
-        if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
-            this.bot.log('[clue] walk to the bank failed — will retry');
-            return false;
-        }
-        if (!(await Bank.openNearest(BANK_NAME, BANK_OP, m => this.bot.log(`  ${m}`)))) {
-            this.bot.log('[clue] could not open the bank — will retry');
-            return false;
-        }
-
-        // Deposit everything EXCEPT the keep-set. depositAllMatching matches by
-        // NAME, so protect the held clue/casket by their real (id-resolved) names,
-        // with a 'clue'/'casket' substring belt, plus every food form and the spade.
-        const protectedNames = new Set<string>();
-        for (const it of Inventory.items()) {
-            if ((CLUE_DB[it.id] !== undefined || CASKET_IDS[it.id] !== undefined) && it.name) {
-                protectedNames.add(it.name.toLowerCase());
-            }
-        }
-        const spade = SPADE_NAME.toLowerCase();
-        const isKeep = (name: string): boolean => {
-            const n = name.toLowerCase();
-            return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || isFoodItem(name) || n === spade;
-        };
-        await Bank.depositAllMatching(name => !isKeep(name));
-
-        // Withdraw a spade for dig clues if we don't already hold one.
-        if (!Inventory.first(SPADE_NAME)) {
-            await Bank.withdraw(SPADE_NAME, 'Withdraw-1');
-            if (!(await Execution.delayUntil(() => Inventory.first(SPADE_NAME) !== null, 2500))) {
-                this.bot.log(`[clue] no '${SPADE_NAME}' in the bank — dig clues will be abandoned`);
-            }
-        }
-
-        // Top up food (same withdraw loop as BankRun) so the trail is sustainable.
-        this.bot.setStatus(`clue — withdrawing ${FOOD_NAME}`);
-        for (let guard = 0; guard < 12 && Inventory.count(FOOD_NAME) < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
-            const need = FOOD_WITHDRAW - Inventory.count(FOOD_NAME);
-            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
-            const before = Inventory.count(FOOD_NAME);
-            await Bank.withdraw(FOOD_NAME, op);
-            if (!(await Execution.delayUntil(() => Inventory.count(FOOD_NAME) > before, 2500))) {
-                break;
-            }
-        }
-
-        return true;
     }
 }
 

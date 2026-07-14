@@ -1,0 +1,70 @@
+import { TaskBot } from '../api/Bot.js';
+import { Execution } from '../api/Execution.js';
+import { Game } from '../api/Game.js';
+import { drawStatusBox } from '../api/hud/Overlay.js';
+import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
+import { ClueExecutor } from '../clues/ClueExecutor.js';
+import { SolveClue, heldClueLikeId } from '../clues/SolveClue.js';
+import type { SettingsSchema } from '../runtime/Settings.js';
+
+export const SETTINGS: SettingsSchema = {
+    food: { type: 'string', default: '', label: 'Food item name', help: 'withdrawn during the pre-trail bank stop and kept out of the deposit; blank = run foodless (easy trails are low-risk)' },
+    foodWithdraw: { type: 'number', default: 8, min: 1, max: 27, label: 'Food to withdraw' },
+    spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' }
+};
+
+/**
+ * Standalone easy-clue solver. Watches the pack for a clue scroll or reward
+ * casket and runs the shared bank-first solve flow: dump everything except
+ * the clue + food + spade at the NEAREST known bank, walk the trail, open the
+ * casket. Between clues it idles wherever it stands — hand it a clue (or
+ * start it holding one) and it goes. Abandoned clues (missing tool,
+ * unreachable step) stay in the pack and are skipped until they change.
+ */
+export default class ClueSolver extends TaskBot {
+    override loopDelay = 600;
+
+    private status = 'waiting for a clue';
+    private solved = 0;
+    private solveClue: SolveClue | undefined;
+
+    override async onStart(): Promise<void> {
+        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+
+        const food = this.settings.str('food', '');
+        const foodPat = food.toLowerCase();
+        this.solveClue = new SolveClue({
+            log: m => this.log(m),
+            setStatus: s => {
+                if (s === 'clue solved') {
+                    this.solved++;
+                }
+                this.setStatus(s);
+            },
+            isFood: name => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat),
+            foodName: () => food,
+            foodWithdraw: () => this.settings.num('foodWithdraw', 8),
+            spadeName: () => this.settings.str('spade', 'Spade')
+        });
+
+        this.log(`ClueSolver — watching the pack for easy clue scrolls/caskets${food ? `, food '${food}'` : ', foodless'}`);
+        this.add(new ContinueDialog(), this.solveClue);
+    }
+
+    setStatus(s: string): void {
+        this.status = s;
+    }
+
+    override onPaint(ctx: CanvasRenderingContext2D): void {
+        const cur = ClueExecutor.current;
+        const held = heldClueLikeId();
+        const lines = [
+            `ClueSolver — ${held === null ? 'waiting for a clue' : this.status}`,
+            `solved ${this.solved}  held clue: ${held ?? 'none'}  status: ${this.solveClue?.clueStatus() ?? 'idle'}`
+        ];
+        if (cur) {
+            lines.push(`${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}`);
+        }
+        drawStatusBox(ctx, lines, '#e8c35b');
+    }
+}

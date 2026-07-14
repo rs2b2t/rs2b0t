@@ -10,6 +10,7 @@ import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
 import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
+import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import CooksAssistant from './CooksAssistant.js';
 import GatheringBot from './GatheringBot.js';
@@ -339,6 +340,16 @@ ScriptRegistry.register({
     tags: ['shopping', 'banking', 'worldwalker', 'f2p', 'members'],
     settingsSchema: SHOPRUNNER_SETTINGS,
     create: () => new ShopRunner()
+});
+
+// --- treasure trails ---
+ScriptRegistry.register({
+    name: 'ClueSolver',
+    description: 'Solves the easy clue scroll (or opens the casket) in your pack — banks everything except clue/food/spade at the nearest bank, walks the trail, opens the reward. Idles until you hand it a clue.',
+    category: 'Treasure Trails',
+    tags: ['members', 'clues', 'banking', 'utility'],
+    settingsSchema: CLUESOLVER_SETTINGS,
+    create: () => new ClueSolver()
 });
 
 // --- navigation ---
