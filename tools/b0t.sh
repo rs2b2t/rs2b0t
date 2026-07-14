@@ -29,6 +29,15 @@ MOD=$(curl -s --max-time 15 "$HTTP/client/client.js" | grep -oE '[0-9]+' | awk '
 TARGET=live LIVE_RSAN="$MOD" bun run build:bot >/dev/null
 echo "  built live client (login key fetched from $HOST)."
 
+# The nav worker needs the baked collision pack; `build:bot` does NOT produce it
+# (it's generated from the engine's map cache). A fresh checkout/worktree without
+# it would 404 the pack and every bot's navigator dies silently — build it here,
+# like deploy-local.sh does.
+if [ ! -f out/collision.lcnav.gz ]; then
+    echo "→ collision pack missing — baking it from the engine map cache…"
+    bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
+fi
+
 echo "→ starting local proxy on :$PORT → $HOST …"
 pkill -f live-proxy 2>/dev/null || true
 sleep 0.4

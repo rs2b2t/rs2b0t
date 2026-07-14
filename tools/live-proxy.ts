@@ -43,6 +43,13 @@ if (!bundleSrc.includes(LIVE_HOST)) {
     console.error(`out/botclient.js does not target ${LIVE_HOST} — did you build with TARGET=live? Aborting.`);
     process.exit(1);
 }
+// Without the baked collision pack every bot's navigator dies on boot ("navigator
+// unavailable: Failed to fetch") and walking silently degrades to the 52-tile
+// scene stepper. Refuse to serve a wall that is broken in that way.
+if (!existsSync(join(OUT, 'collision.lcnav.gz'))) {
+    console.error(`No out/collision.lcnav.gz — the nav worker's collision pack is missing (a fresh checkout/worktree won't have it). Build it: bun tools/nav/build-collision.ts --engine ~/code/rs2b2t-engine`);
+    process.exit(1);
+}
 
 // Resolve a /bot/<file> request to a local file (our built bundle + soundfont).
 function localBotAsset(pathname: string): string | null {
