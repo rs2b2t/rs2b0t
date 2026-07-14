@@ -21,6 +21,10 @@ export interface TransportInfo {
     locZ: number;
     /** Present when the crossing changes level (stairs/ladders). */
     toLevel?: number;
+    /** Present when the crossing teleports across the map on the SAME level
+     *  (kind 'dungeon': trapdoor/ladder z±6400 jumps). The walker interacts and
+     *  waits to land near this tile — door/stair checks can't see the jump. */
+    toTile?: { x: number; z: number };
 }
 
 /** Tile path compressed to direction-change points; transport crossings are
@@ -271,7 +275,8 @@ export class PathFinder {
                 action: edge.action,
                 locX: edge.from.x,
                 locZ: edge.from.z,
-                toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined
+                toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
+                toTile: edge.kind === 'dungeon' ? { x: edge.to.x, z: edge.to.z } : undefined
             };
             this.addEdge(nodeId(edge.from.x, edge.from.z, edge.from.level), nodeId(edge.to.x, edge.to.z, edge.to.level), TRANSPORT_COST, transport);
             this.transportEdges++;

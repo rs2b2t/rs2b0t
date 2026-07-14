@@ -482,14 +482,14 @@ class WalkExecutorImpl {
         // needed this and froze gotoNpc ~5 min there. crossMultiTileDoor degrades
         // to the 1-tile case cleanly: dir is the unit step approach→step, so
         // landing = step + dir is the tile one PAST the door either way.
-        if (transport.toLevel === undefined && chebyshev(approach, step) >= 1) {
+        if (transport.toLevel === undefined && transport.toTile === undefined && chebyshev(approach, step) >= 1) {
             return this.crossMultiTileDoor(approach, step, transport, log);
         }
 
         for (let attempt = 0; attempt < 2; attempt++) {
             const loc = this.findTransportLoc(transport);
             if (!loc) {
-                if (transport.toLevel === undefined) {
+                if (transport.toLevel === undefined && transport.toTile === undefined) {
                     // No CLOSED door loc here (an open door offers 'Close', not
                     // 'Open', so findTransportLoc misses it) — is the way already
                     // clear? For a 1-tile door canStep settles it; canReach is the
@@ -516,6 +516,15 @@ class WalkExecutorImpl {
             if (transport.toLevel !== undefined) {
                 const toLevel = transport.toLevel;
                 crossed = await Execution.delayUntil(() => reader.worldTile()?.level === toLevel, TRANSPORT_WAIT_MS);
+            } else if (transport.toTile !== undefined) {
+                // teleport crossing (dungeon trapdoor/ladder z±6400): the script
+                // telejumps the player's own tile, so we land NEAR the edge's to
+                // tile, not on it — arrival is proximity on the same level
+                const toTile = transport.toTile;
+                crossed = await Execution.delayUntil(() => {
+                    const me = reader.worldTile();
+                    return me !== null && me.level === step.level && chebyshev(me, toTile) <= 3;
+                }, TRANSPORT_WAIT_MS);
             } else {
                 crossed = await Execution.delayUntil(() => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step), TRANSPORT_WAIT_MS);
             }

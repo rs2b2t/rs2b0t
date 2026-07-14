@@ -71,6 +71,18 @@ function asV1(pack: Uint8Array): Uint8Array {
     return out;
 }
 
+/** Two-square v2 pack (a surface square and its z+6400 dungeon twin). */
+function buildPackTwo(mxA: number, mzA: number, mxB: number, mzB: number, walkableAt: (x: number, z: number) => boolean): Uint8Array {
+    const a = buildPack(walkableAt, () => 0, mxA, mzA);
+    const b = buildPack(walkableAt, () => 0, mxB, mzB);
+    const out = new Uint8Array(10 + 2 * (3 + 4096 + 512 + 2048));
+    out.set(a.subarray(0, 10));
+    new DataView(out.buffer).setUint16(8, 2, true);
+    out.set(a.subarray(10), 10);
+    out.set(b.subarray(10), 10 + (a.length - 10));
+    return out;
+}
+
 // The Varrock diagonal-door house in miniature: an open field with a room
 // whose walls are unwalkable tiles, an unwalkable 'box' at BOX inside, and the
 // only way in a curated door edge bridging OUTSIDE<->INSIDE across the sealed
@@ -208,5 +220,35 @@ describe('PathFinder cardinal goals vs directional walls (LCNV v2)', () => {
         }
         const last = r.waypoints[r.waypoints.length - 1];
         expect({ x: last.x, z: last.z }).toEqual(WRONG_SIDE);
+    });
+});
+
+// Dungeon teleport edges (kind 'dungeon'): the trapdoor script telejumps the
+// player z+6400 on the SAME level — the Dwarven Mine (vague009). The edge must
+// carry a toTile annotation (the walker waits on proximity, not level change)
+// and A* must route through the jump both ways.
+describe('PathFinder dungeon teleport edges', () => {
+    const SURFACE = { x: 3219, z: 3229, level: 0 };
+    const CAVE = SURFACE.z + 6400; // (3219,9629) in the mz+100 twin square
+    const DUNGEON_EDGES: TransportEdgeData[] = [
+        { from: { x: SURFACE.x, z: SURFACE.z, level: 0 }, to: { x: SURFACE.x, z: CAVE, level: 0 }, locName: 'Trapdoor', action: 'Climb-down', kind: 'dungeon' },
+        { from: { x: SURFACE.x, z: CAVE, level: 0 }, to: { x: SURFACE.x, z: SURFACE.z, level: 0 }, locName: 'Ladder', action: 'Climb-up', kind: 'dungeon' }
+    ];
+
+    test('routes down through the teleport with a toTile annotation, and back up', () => {
+        const finder = new PathFinder(buildPackTwo(50, 50, 50, 150, () => true));
+        finder.addEdges([], DUNGEON_EDGES);
+        const down = finder.findPath({ x: 3210, z: 3210, level: 0 }, { x: 3230, z: CAVE + 10, level: 0 });
+        expect(down.ok).toBe(true);
+        if (down.ok) {
+            const hop = down.waypoints.find(wp => wp.transport?.locName === 'Trapdoor');
+            expect(hop?.transport?.toTile).toEqual({ x: SURFACE.x, z: CAVE });
+            expect(down.waypoints[down.waypoints.length - 1].z).toBe(CAVE + 10);
+        }
+        const up = finder.findPath({ x: 3230, z: CAVE + 10, level: 0 }, { x: 3210, z: 3210, level: 0 });
+        expect(up.ok).toBe(true);
+        if (up.ok) {
+            expect(up.waypoints.some(wp => wp.transport?.toTile?.z === SURFACE.z)).toBe(true);
+        }
     });
 });
