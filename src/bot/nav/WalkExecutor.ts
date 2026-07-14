@@ -13,6 +13,7 @@ import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
+import { Sustain } from '../api/Sustain.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
@@ -249,6 +250,9 @@ class WalkExecutorImpl {
             if (EventSignal.pending()) {
                 return 'interrupted';
             }
+            // bot-registered sustain (eat mid-walk) — hostiles chip HP on long
+            // walks and the bot's own task loop can't run while we hold it
+            await Sustain.run();
 
             const me = reader.worldTile();
             if (!me) {

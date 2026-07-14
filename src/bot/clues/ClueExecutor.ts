@@ -44,6 +44,7 @@
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/Execution.js';
 import { EventSignal } from '#/bot/api/EventSignal.js';
+import { Sustain } from '#/bot/api/Sustain.js';
 import { Traversal } from '#/bot/api/Traversal.js';
 import { ChatDialog } from '#/bot/api/hud/ChatDialog.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
@@ -265,6 +266,7 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
         if (EventSignal.pending()) {
             return false; // bail to the caller → loop() boundary so the Supervisor can handle it
         }
+        await Sustain.run(); // eat between interact attempts — steps can sit in aggro zones
         onAttempt(attempt + 1);
         await drainChat();
         await dispatch(step, log);
@@ -316,6 +318,7 @@ export const ClueExecutor = {
                 trace.note('yield — random event pending');
                 return 'yield'; // hand back to loop(); loopInFlight blocks the Supervisor until we return
             }
+            await Sustain.run(); // eat between trail legs (walks cover themselves via the walker's hook)
             await drainChat();
 
             const step = identifyStep(heldIds(), CLUE_DB, CASKET_IDS);

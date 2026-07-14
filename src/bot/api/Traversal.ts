@@ -9,6 +9,7 @@ import { chebyshev } from '../nav/followMath.js';
 import { Reachability } from './Reachability.js';
 import { EventSignal } from './EventSignal.js';
 import { Execution } from './Execution.js';
+import { Sustain } from './Sustain.js';
 
 export interface WalkResilientOptions {
     /** Arrive when within this Chebyshev distance of dest. */
@@ -77,6 +78,7 @@ export const Traversal = {
         // that is astronomically above any real walk but prevents a hot spin if
         // reader.worldTile() is null forever.
         for (let iter = 0; iter < 100_000; iter++) {
+            await Sustain.run(); // eat mid-ladder: scene/unstick/backoff passes can stall in aggro zones
             if (EventSignal.pending()) {
                 log('walk interrupted by a random event — yielding to the runtime');
                 // Surface the interruption on WalkExecutor.lastOutcome so a caller

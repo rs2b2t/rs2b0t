@@ -22,6 +22,7 @@ import { drawStatusBox } from '../api/hud/Overlay.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
+import { Sustain } from '../api/Sustain.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -203,6 +204,14 @@ export default class RockCrab extends TaskBot {
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
                 this.died = true;
+            }
+        });
+
+        // eat mid-walk/mid-clue-solve: hostiles chip HP on long walks and the
+        // Eat task can't run while a walk or solve holds the task loop
+        Sustain.set(async () => {
+            if (Skills.hpFraction() < EAT_HP && hasFood()) {
+                await eatOnce(this);
             }
         });
 

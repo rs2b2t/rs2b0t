@@ -1,5 +1,6 @@
 import type { AbstractBot } from '../api/Bot.js';
 import { RandomEvents } from '../api/RandomEvents.js';
+import { Sustain } from '../api/Sustain.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
@@ -202,6 +203,9 @@ class ScriptRunnerImpl {
         } catch (err) {
             ctx.addLog('warn', `onStop threw: ${err}`);
         }
+
+        // a stopped bot's sustain hook (mid-walk eating) must not outlive it
+        Sustain.set(null);
 
         // cancel in-flight synthetic gestures (releases held buttons/keys)
         // and restore the default input mode

@@ -1,7 +1,10 @@
 import { TaskBot } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
+import { Sustain } from '../api/Sustain.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Inventory } from '../api/hud/Inventory.js';
+import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ClueExecutor } from '../clues/ClueExecutor.js';
 import { SolveClue, heldClueLikeId } from '../clues/SolveClue.js';
@@ -10,6 +13,7 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 export const SETTINGS: SettingsSchema = {
     food: { type: 'string', default: '', label: 'Food item name', help: 'withdrawn during the pre-trail bank stop and kept out of the deposit; blank = run foodless (easy trails are low-risk)' },
     foodWithdraw: { type: 'number', default: 8, min: 1, max: 27, label: 'Food to withdraw' },
+    eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', help: 'eats mid-walk too — hostiles along a trail chip HP' },
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' }
 };
 
@@ -45,6 +49,24 @@ export default class ClueSolver extends TaskBot {
             foodName: () => food,
             foodWithdraw: () => this.settings.num('foodWithdraw', 8),
             spadeName: () => this.settings.str('spade', 'Spade')
+        });
+
+        // eat mid-walk/mid-step: solves cross aggro zones and nothing else can
+        // run while the solve holds the loop (no-op when running foodless)
+        const eatAt = this.settings.num('eatAtHp', 50) / 100;
+        const isFood = (name: string | null | undefined): boolean => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat);
+        Sustain.set(async () => {
+            if (foodPat === '' || Skills.hpFraction() >= eatAt) {
+                return;
+            }
+            const bite = Inventory.items().find(i => isFood(i.name));
+            if (!bite) {
+                return;
+            }
+            this.log(`eating ${bite.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
+            const before = Skills.effective('hitpoints');
+            await bite.interact('Eat');
+            await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
         });
 
         this.log(`ClueSolver — watching the pack for easy clue scrolls/caskets${food ? `, food '${food}'` : ', foodless'}`);
