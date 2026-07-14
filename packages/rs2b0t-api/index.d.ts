@@ -57,11 +57,22 @@ export const Game: {
     /** Local player's world tile, or null before login/scene load. */
     tile(): WorldTile | null;
     energy(): number;
+    /** The run toggle is on. */
+    runEnabled(): boolean;
     weight(): number;
     /** Local player in combat (health bar showing). */
     inCombat(): boolean;
+    /** Local player is playing a non-idle animation. */
+    animating(): boolean;
     /** Server ticks observed since the client booted. */
     tick(): number;
+    /** Current com_mode varp (combat style index). */
+    combatMode(): number;
+    setCombatStyle(mode: number): boolean;
+    /** Local player's display name, or null before login. */
+    myName(): string | null;
+    openSideTab(tab: number): Promise<boolean>;
+    castOnNpc(spell: string, npc: Npc): Promise<boolean>;
 };
 
 // ---- entities + queries ----
@@ -169,6 +180,8 @@ export const Inventory: {
     items(): InvItem[];
     first(name: string): InvItem | null;
     contains(name: string): boolean;
+    /** Total quantity of an item across the backpack (sums stacks + slots). */
+    count(name: string): number;
     /** Occupied slots. */
     used(): number;
     isFull(): boolean;
@@ -187,6 +200,8 @@ export const Skills: {
     /** Current (boosted/drained) level. */
     effective(name: string): number;
     xp(name: string): number;
+    /** Effective/base hitpoints, 1 while the stat isn't readable yet. */
+    hpFraction(): number;
 };
 
 export interface BankItemSnapshot {
@@ -205,6 +220,29 @@ export const Bank: {
     withdraw(name: string, op?: string): boolean | Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
     depositInventory(): Promise<void>;
+};
+
+export const Shop: {
+    isOpen(): boolean;
+    /** Trade with `npcName` — walks nothing, the caller must already be near. */
+    open(npcName: string): Promise<boolean>;
+    /** The shop-side stock rows of the open shop. */
+    stock(): { name: string; count: number; slot: number }[];
+    /** Buy up to `n` of `name`; resolves the units actually bought. */
+    buy(name: string, n: number): Promise<number>;
+    /** Sell up to `n` of `name`; resolves the units actually sold. */
+    sell(name: string, n: number): Promise<number>;
+    close(): Promise<void>;
+};
+
+export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
+
+export const Quests: {
+    /** Every quest on the quest tab with its journal-colour status. */
+    all(): { name: string; status: QuestStatus }[];
+    status(name: string): QuestStatus;
+    /** Quest points shown on the tab. */
+    points(): number;
 };
 
 export const ChatDialog: {
@@ -238,6 +276,20 @@ export interface WalkOptions {
     log?: (msg: string) => void;
 }
 
+export interface WalkResilientOptions {
+    /** Arrive when within this Chebyshev distance of dest. */
+    radius: number;
+    /** Bound the escalation to this many baked-walk passes; default = retry forever. */
+    attempts?: number;
+    /** Per baked-walk budget (default 90s). */
+    timeoutMs?: number;
+    /** Client-scene-walk arrival radius when bridging a baked gap (default = radius+1). */
+    sceneRadius?: number;
+    /** Big-budget baked retry's node budget (default 1.2M). */
+    maxBudget?: number;
+    log?: (msg: string) => void;
+}
+
 export const Traversal: {
     /**
      * Web-walk across the world (A* over the baked collision pack + door/
@@ -246,6 +298,12 @@ export const Traversal: {
      * tile.
      */
     walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean>;
+    /**
+     * walkTo behind an escalation ladder (re-path, big-budget retry, scene-walk
+     * bridging) that by default never gives up — only a random event or Stop
+     * ends it early. Prefer this for unattended walks.
+     */
+    walkResilient(dest: WorldTile, opts: WalkResilientOptions): Promise<boolean>;
     /** Warm the nav worker + collision pack before the first walk. */
     preload(): void;
     /** Path tiles left in the active walk (overlay/progress display). */
@@ -311,6 +369,16 @@ export abstract class AbstractBot {
     onResume?(): void;
     /** Draw on the overlay canvas; called every client redraw while running. */
     onPaint?(ctx: CanvasRenderingContext2D): void;
+    /**
+     * Where recovery flows (watchdog, guarded restarts) should walk the bot
+     * back to. Scripts with a working anchor implement this.
+     */
+    recoveryAnchor?(): Tile | null;
+    /**
+     * NPC names this bot legitimately fights — the runtime event guard never
+     * treats them as hostile random events. Override in combat scripts.
+     */
+    grindTargets(): string[];
     log(msg: string): void;
     /**
      * Subscribe to a game event for this run (auto-removed on stop/crash).
@@ -327,6 +395,25 @@ export abstract class LoopingBot extends AbstractBot {
 export interface Task {
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
+}
+
+// ---- item acquisition ----
+
+export type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
+
+export type ItemNeed = { name: string; count: number; source: ItemSource };
+
+/** Held count of `name` across every matching backpack slot (case-insensitive). */
+export function held(name: string): number;
+
+/** True once every need's count is already met. */
+export function hasAll(needs: ItemNeed[]): boolean;
+
+/** Task that acquires the first unmet ItemNeed (shop trip / ground pickup). */
+export class AcquireTask implements Task {
+    constructor(bot: AbstractBot, needs: ItemNeed[]);
+    validate(): boolean;
+    execute(): Promise<void>;
 }
 
 /** Runs the first task whose validate() returns true, once per loop. */
