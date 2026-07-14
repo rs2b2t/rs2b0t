@@ -311,22 +311,57 @@ export class PathFinder {
         return goals;
     }
 
+    /** Walkable tiles CARDINALLY adjacent to an unwalkable target — the only
+     *  tiles a server interact (search a box, open a booth) can be issued from.
+     *  Empty when the target itself is walkable. */
+    private cardinalGoals(p: NavPoint): Set<number> {
+        const goals = new Set<number>();
+        if (this.walkable(p.x, p.z, p.level)) {
+            return goals;
+        }
+        for (const [dx, dz] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+            if (this.walkable(p.x + dx, p.z + dz, p.level)) {
+                goals.add(nodeId(p.x + dx, p.z + dz, p.level));
+            }
+        }
+        return goals;
+    }
+
     findPath(fromRaw: NavPoint, toRaw: NavPoint, avoidDoors?: Set<string>, maxExpansions: number = MAX_EXPANSIONS): PathOutcome {
         const from = this.snapWalkable(fromRaw, 2);
         if (!from) {
             return { ok: false, reason: `start (${fromRaw.x},${fromRaw.z},${fromRaw.level}) not walkable`, expanded: 0 };
         }
+
+        // Interact-first: for an unwalkable target, search the cardinal-adjacent
+        // goals before the ring — the ring happily terminates within 5 tiles on
+        // the WRONG SIDE of a wall (the Varrock diagonal-door clue house), where
+        // no interact can ever succeed. Fall back to the ring when no cardinal
+        // tile exists or none is reachable (Varrock-fountain enclave: the ring
+        // is what keeps those harmless).
+        const cardinal = this.cardinalGoals(toRaw);
+        if (cardinal.size > 0) {
+            const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions);
+            if (direct.ok) {
+                return direct;
+            }
+        }
+
         const goals = this.goalCandidates(toRaw, 5);
         if (goals.size === 0) {
             return { ok: false, reason: `target (${toRaw.x},${toRaw.z},${toRaw.level}) not walkable within 5 tiles`, expanded: 0 };
         }
+        const goalSlack = goals.size === 1 && goals.has(nodeId(toRaw.x, toRaw.z, toRaw.level)) ? 0 : 5;
+        return this.search(from, toRaw, goals, goalSlack, avoidDoors, maxExpansions);
+    }
 
+    /** One A* run to whichever of `goals` pops first. `goalSlack` keeps the
+     *  heuristic admissible for every candidate: distance to the requested
+     *  centre minus the candidate ring radius. */
+    private search(from: NavPoint, toRaw: NavPoint, goals: Set<number>, goalSlack: number, avoidDoors: Set<string> | undefined, maxExpansions: number): PathOutcome {
         const start = nodeId(from.x, from.z, from.level);
         const goalX = toRaw.x;
         const goalZ = toRaw.z;
-        // heuristic must stay admissible for every candidate: distance to the
-        // requested centre minus the candidate ring radius
-        const goalSlack = goals.size === 1 && goals.has(nodeId(toRaw.x, toRaw.z, toRaw.level)) ? 0 : 5;
 
         const gScore = new Map<number, number>();
         const cameFrom = new Map<number, number>();

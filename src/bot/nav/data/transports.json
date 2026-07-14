@@ -8,5 +8,7 @@
     {"from":{"x":3205,"z":3228,"level":1},"to":{"x":3205,"z":3228,"level":0},"locName":"Staircase","action":"Climb-down","kind":"stair"},
     {"from":{"x":3206,"z":3229,"level":2},"to":{"x":3205,"z":3228,"level":1},"locName":"Staircase","action":"Climb-down","kind":"stair"},
     {"from":{"x":3106,"z":3162,"level":0},"to":{"x":3108,"z":3162,"level":0},"locName":"Door","action":"Open","kind":"door"},
-    {"from":{"x":3108,"z":3162,"level":0},"to":{"x":3106,"z":3162,"level":0},"locName":"Door","action":"Open","kind":"door"}
+    {"from":{"x":3108,"z":3162,"level":0},"to":{"x":3106,"z":3162,"level":0},"locName":"Door","action":"Open","kind":"door"},
+    {"from":{"x":3207,"z":3385,"level":0},"to":{"x":3205,"z":3385,"level":0},"locName":"Door","action":"Open","kind":"door"},
+    {"from":{"x":3205,"z":3385,"level":0},"to":{"x":3207,"z":3385,"level":0},"locName":"Door","action":"Open","kind":"door"}
 ]
