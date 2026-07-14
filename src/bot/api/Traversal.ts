@@ -4,6 +4,7 @@ import { Navigator } from '../nav/Navigator.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { WalkExecutor, type WalkOptions } from '../nav/WalkExecutor.js';
 import { advance, initialLadderState, pickUnstickStep, type LadderState, type LastOutcome } from '../nav/walkLadder.js';
+import { isArrived } from '../nav/arrival.js';
 import { Reachability } from './Reachability.js';
 import { EventSignal } from './EventSignal.js';
 import { Execution } from './Execution.js';
@@ -59,7 +60,10 @@ export const Traversal = {
         };
         const withinRadius = (): boolean => {
             const me = reader.worldTile();
-            return me !== null && me.level === dest.level && Math.max(Math.abs(me.x - dest.x), Math.abs(me.z - dest.z)) <= radius;
+            // SAME predicate as WalkExecutor/DirectNavigator: if the outer ladder
+            // and the inner baked-walk disagreed on "arrived", walkResilient would
+            // spin (outer says done, inner refuses / vice-versa).
+            return me !== null && isArrived(me, dest, radius, Reachability.arrivalProbe());
         };
 
         let state: LadderState = initialLadderState(dist());

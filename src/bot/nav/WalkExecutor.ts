@@ -24,6 +24,7 @@ import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
 import { locateOnPath, selectClickTarget } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
+import { isArrived } from './arrival.js';
 
 const TARGET_STEPS = 20; // click target this many steps ALONG the path
 const TARGET_JITTER = 4; // ± human-ish variance on TARGET_STEPS
@@ -134,7 +135,7 @@ class WalkExecutorImpl {
                     this.lastOutcome = 'failed';
                     return false;
                 }
-                if (chebyshev(me, dest) <= radius && me.level === dest.level) {
+                if (isArrived(me, dest, radius, Reachability.arrivalProbe())) {
                     this.lastOutcome = 'arrived';
                     return true;
                 }
@@ -230,7 +231,7 @@ class WalkExecutorImpl {
                 return 'failed';
             }
 
-            if (chebyshev(me, dest) <= radius && me.level === dest.level) {
+            if (isArrived(me, dest, radius, Reachability.arrivalProbe())) {
                 log(`arrived (${clicks} clicks)`);
                 return 'arrived';
             }

@@ -1,7 +1,9 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { Execution } from '../api/Execution.js';
+import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
+import { isArrived } from './arrival.js';
 
 /**
  * Scene-local walking via the client's own tryMove BFS (Slice 3). Web-walking
@@ -47,7 +49,7 @@ export const DirectNavigator = {
                 return false;
             }
 
-            if (Math.max(Math.abs(me.x - dest.x), Math.abs(me.z - dest.z)) <= radius) {
+            if (isArrived(me, dest, radius, Reachability.arrivalProbe())) {
                 return true;
             }
 
