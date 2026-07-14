@@ -12,9 +12,10 @@ import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
+import { SPELL_DB } from '../api/combat/data/spelldb.js';
 import { AmmoStackTracker, planAmmoCollection } from '../api/combat/AmmoLogic.js';
 import type { GroundItem } from '../api/queries/GroundItems.js';
 import { drawStatusBox } from '../api/hud/Overlay.js';
@@ -50,31 +51,53 @@ const CENTRE_RADIUS = 2;
 // name "Half of a key"; the rest are the notable rock-crab drops.
 const DEFAULT_LOOT = 'half of a key, casket, clue scroll, small oyster pearls, oyster pearls, uncut sapphire, uncut emerald, uncut ruby, uncut diamond';
 
+/** Every edible the era banks stock (single-item foods + the multi-bite
+ *  bakes the FOOD_FORMS table below knows how to eat down). */
+const FOOD_OPTIONS = [
+    'Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout', 'Pike', 'Bass', 'Herring', 'Sardine', 'Anchovies', 'Shrimps',
+    'Cooked meat', 'Cooked chicken', 'Bread', 'Stew',
+    'Cake', 'Chocolate cake', 'Plain pizza', 'Meat pizza', 'Anchovy pizza', 'Pineapple pizza', 'Redberry pie', 'Meat pie', 'Apple pie'
+];
+
+const AMMO_OPTIONS = ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Ogre arrow', 'Bolts', 'Barbed bolts'];
+
+const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
+const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
+const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
+const SHOW_ARMED = { key: 'combatStyle', anyOf: ['mage', 'range'] };
+
 /** Tunable parameters (panel + `?RockCrab.<key>=...`). The field/reset tiles
- *  let you point it at a different rock-crab spot entirely. */
+ *  let you point it at a different rock-crab spot entirely. Grouped for the
+ *  panel; style-specific rows show only under their combatStyle. */
 export const SETTINGS: SettingsSchema = {
-    field: { type: 'tile', default: DEFAULT_FIELD, label: 'Field centre (x,z)' },
-    resetTile: { type: 'tile', default: DEFAULT_RESET, label: 'Run-out reset tile (x,z)' },
-    fieldRadius: { type: 'number', default: 15, min: 5, max: 30, label: 'Field radius (tiles)' },
-    stack: { type: 'number', default: 3, min: 1, max: 8, label: 'Crabs to stack before clearing' },
-    fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Retreat below HP%' },
-    restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP% (no-food fallback)' },
-    food: { type: 'string', default: 'Lobster', label: 'Food item name', help: 'exact item name, e.g. Lobster, Swordfish, Trout' },
-    eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%' },
-    foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run' },
-    bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Seers)' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names' },
-    solveClues: { type: 'boolean', default: true, label: 'Solve easy clues' },
-    spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' },
     combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage', 'range'], label: 'Combat style' },
-    meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', help: 'which melee stat to train (attack/strength/defence); re-applied each login since com_mode is not saved' },
-    weapon: { type: 'string', default: '', label: 'Weapon (mage/range)', help: 'wielded item, withdrawn from bank when missing — e.g. Staff of fire, Shortbow' },
-    spell: { type: 'string', default: 'Wind Strike', label: 'Autocast spell (mage)', help: 'Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave' },
-    runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip' },
-    ammo: { type: 'string', default: 'Bronze arrow', label: 'Ammo (range)' },
-    ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Ammo per bank trip' },
-    collectAt: { type: 'number', default: 20, min: 1, max: 100, label: 'Collect arrows at stack size' },
-    ...PERIODIC_BANK_SETTINGS
+
+    meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
+    rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE, help: 'rapid trains Ranged fastest; longrange splits xp with Defence' },
+    weapon: { type: 'string', default: '', label: 'Weapon', group: 'Combat', showIf: SHOW_ARMED, help: 'wielded item, withdrawn from bank when missing — e.g. Staff of fire, Shortbow' },
+    spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
+    runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
+    ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
+    ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
+    collectAt: { type: 'number', default: 20, min: 1, max: 100, label: 'Collect arrows at stack size', group: 'Combat', showIf: SHOW_RANGE },
+
+    food: { type: 'string', default: 'Lobster', options: FOOD_OPTIONS, label: 'Food', group: 'Food & healing' },
+    eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', group: 'Food & healing' },
+    foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
+    fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Retreat below HP%', group: 'Food & healing' },
+    restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP% (no-food fallback)', group: 'Food & healing' },
+
+    field: { type: 'tile', default: DEFAULT_FIELD, label: 'Field centre (x,z)', group: 'Field' },
+    resetTile: { type: 'tile', default: DEFAULT_RESET, label: 'Run-out reset tile (x,z)', group: 'Field' },
+    fieldRadius: { type: 'number', default: 15, min: 5, max: 30, label: 'Field radius (tiles)', group: 'Field' },
+    stack: { type: 'number', default: 3, min: 1, max: 8, label: 'Crabs to stack before clearing', group: 'Field' },
+
+    bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Seers)', group: 'Banking & loot' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names', group: 'Banking & loot' },
+    ...Object.fromEntries(Object.entries(PERIODIC_BANK_SETTINGS).map(([key, def]) => [key, { ...def, group: 'Banking & loot' }])),
+
+    solveClues: { type: 'boolean', default: true, label: 'Solve easy clues', group: 'Clues' },
+    spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)', group: 'Clues' }
 };
 
 // Active run config — set from settings in onStart. Safe as module state
@@ -95,6 +118,7 @@ let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
 let MELEE_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
+let RANGE_MODE = 1; // com_mode: 0 accurate, 1 rapid, 2 longrange
 let WEAPON = '';
 let SPELL = 'Wind Strike';
 let RUNES_WITHDRAW = 150;
@@ -149,6 +173,7 @@ export default class RockCrab extends TaskBot {
         SPADE_NAME = this.settings.str('spade', 'Spade');
         STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
         MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         WEAPON = this.settings.str('weapon', '');
         SPELL = this.settings.str('spell', 'Wind Strike');
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
@@ -165,7 +190,7 @@ export default class RockCrab extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (collect@${COLLECT_AT})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
+        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (${this.settings.str('rangeStyle', 'rapid')}, collect@${COLLECT_AT})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
@@ -196,7 +221,7 @@ export default class RockCrab extends TaskBot {
             }),
             new Eat(this),
             new GearEquip(this),
-            new SetMeleeStyle(this),
+            new SetAttackStyle(this),
             new ArmAutocast(this),
             new CollectAmmo(this), // before SolveClue/BankRun: sweep arrows before anything walks us out
             this.solveClue!,
@@ -480,25 +505,32 @@ class GearEquip implements Task {
     }
 }
 
-/** Keep the melee attack style on the configured stat (ArdyFighter shape).
- *  com_mode isn't persisted, so this re-asserts once per session — and again
- *  if a weapon swap resets it. Melee only; mage owns its style via autocast. */
-class SetMeleeStyle implements Task {
+/** Keep the attack style on the configured com_mode (ArdyFighter shape) —
+ *  melee attack/strength/defence, ranged accurate/rapid/longrange (bow0/1/2
+ *  share the same varp). Not persisted, so this re-asserts once per session
+ *  and again if a weapon swap resets it. Mage owns its style via autocast. */
+class SetAttackStyle implements Task {
     private announced = false;
 
     constructor(private bot: RockCrab) {}
 
+    private target(): number {
+        return STYLE === 'range' ? RANGE_MODE : MELEE_MODE;
+    }
+
     validate(): boolean {
-        return STYLE === 'melee' && !Game.inCombat() && Game.combatMode() !== MELEE_MODE;
+        return STYLE !== 'mage' && !Game.inCombat() && Game.combatMode() !== this.target();
     }
 
     async execute(): Promise<void> {
+        const mode = this.target();
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(MELEE_MODE);
-        const ok = await Execution.delayUntil(() => Game.combatMode() === MELEE_MODE, 3000);
+        Game.setCombatStyle(mode);
+        const ok = await Execution.delayUntil(() => Game.combatMode() === mode, 3000);
         if (ok && !this.announced) {
             this.announced = true;
-            this.bot.log(`combat style: ${['accurate', 'aggressive', 'defensive'][MELEE_MODE] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][MELEE_MODE] ?? '?'})`);
+            const label = STYLE === 'range' ? ['accurate', 'rapid', 'longrange'][mode] : `${['accurate', 'aggressive', 'defensive'][mode]} (training ${['Attack', 'Strength', 'Defence'][mode]})`;
+            this.bot.log(`combat style: ${label ?? '?'}`);
         }
     }
 }

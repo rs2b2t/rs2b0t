@@ -25,3 +25,38 @@ test('summarize formats each kind compactly', () => {
     expect(summarize(def({ type: 'string[]', default: [] }), '')).toBe('(none)');
     expect(summarize(def({ type: 'tile', default: null }), '2661,3306,0')).toBe('2661, 3306');
 });
+
+// ---- grouping + conditional visibility ----
+import { groupSchema, isVisible, visibilityDeps } from '#/bot/ui/paramControls.js';
+import type { SettingsSchema } from '#/bot/runtime/Settings.js';
+
+const grouped: SettingsSchema = {
+    style: { type: 'string', default: 'melee', options: ['melee', 'mage'] },
+    spell: { type: 'string', default: 'Wind Strike', group: 'Combat', showIf: { key: 'style', anyOf: ['mage'] } },
+    food: { type: 'string', default: 'Lobster', group: 'Food' },
+    eatAt: { type: 'number', default: 50, group: 'Food' },
+    weapon: { type: 'string', default: '', group: 'Combat' }
+};
+
+test('groupSchema: ungrouped lead section first, then groups in first-appearance order', () => {
+    expect(groupSchema(grouped)).toEqual([
+        { name: '', keys: ['style'] },
+        { name: 'Combat', keys: ['spell', 'weapon'] },
+        { name: 'Food', keys: ['food', 'eatAt'] }
+    ]);
+});
+
+test('groupSchema: fully ungrouped schema is a single lead section', () => {
+    const flat: SettingsSchema = { a: { type: 'number', default: 1 }, b: { type: 'boolean', default: true } };
+    expect(groupSchema(flat)).toEqual([{ name: '', keys: ['a', 'b'] }]);
+});
+
+test('isVisible: unconditioned always shows; showIf matches case-insensitively', () => {
+    expect(isVisible(grouped.food, () => 'anything')).toBe(true);
+    expect(isVisible(grouped.spell, key => (key === 'style' ? 'MAGE' : ''))).toBe(true);
+    expect(isVisible(grouped.spell, key => (key === 'style' ? 'melee' : ''))).toBe(false);
+});
+
+test('visibilityDeps: only keys referenced by a showIf', () => {
+    expect(visibilityDeps(grouped)).toEqual(new Set(['style']));
+});

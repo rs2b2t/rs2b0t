@@ -25,6 +25,13 @@ export interface SettingDef {
     /** string enums: the panel renders a dropdown and values are snapped to
      *  the list (case-insensitive) instead of free text. */
     options?: string[];
+    /** Collapsible section this setting renders under; ungrouped settings
+     *  render first, above every named group. Groups appear in schema order. */
+    group?: string;
+    /** Render only while another setting's CURRENT value is in `anyOf`
+     *  (case-insensitive) — e.g. mage-only params behind combatStyle. Hidden
+     *  settings still resolve normally at runtime; this is panel-only. */
+    showIf?: { key: string; anyOf: string[] };
 }
 
 export type SettingsSchema = Record<string, SettingDef>;

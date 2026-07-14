@@ -1,5 +1,51 @@
-import type { SettingDef } from '../runtime/Settings.js';
+import type { SettingDef, SettingsSchema } from '../runtime/Settings.js';
 import { el } from './dom.js';
+
+// ---- grouping + conditional visibility (pure — no DOM) ----
+
+export interface SettingGroup {
+    /** '' = the ungrouped lead section (rendered without a header). */
+    name: string;
+    keys: string[];
+}
+
+/** Partition a schema into its render sections: ungrouped settings first (in
+ *  schema order), then each named group in first-appearance order. */
+export function groupSchema(schema: SettingsSchema): SettingGroup[] {
+    const byName = new Map<string, string[]>([['', []]]);
+    for (const [key, def] of Object.entries(schema)) {
+        const name = def.group ?? '';
+        const keys = byName.get(name);
+        if (keys) {
+            keys.push(key);
+        } else {
+            byName.set(name, [key]);
+        }
+    }
+    return [...byName.entries()].filter(([, keys]) => keys.length > 0).map(([name, keys]) => ({ name, keys }));
+}
+
+/** showIf gate: visible when unconditioned, or when the referenced setting's
+ *  current value matches any listed option (case-insensitive). */
+export function isVisible(def: SettingDef, valueOf: (key: string) => string): boolean {
+    if (!def.showIf) {
+        return true;
+    }
+    const value = valueOf(def.showIf.key).trim().toLowerCase();
+    return def.showIf.anyOf.some(v => v.toLowerCase() === value);
+}
+
+/** Keys other settings' visibility depends on — a change to one of these
+ *  needs a re-render, anything else can just save in place. */
+export function visibilityDeps(schema: SettingsSchema): Set<string> {
+    const deps = new Set<string>();
+    for (const def of Object.values(schema)) {
+        if (def.showIf) {
+            deps.add(def.showIf.key);
+        }
+    }
+    return deps;
+}
 
 type ControlKind =
     | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'multiselect' | 'taglist' | 'tile';

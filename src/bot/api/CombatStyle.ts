@@ -21,3 +21,20 @@ export const COMBAT_STYLE_OPTIONS = ['attack', 'strength', 'defence'];
 export function parseCombatStyle(name: string): number {
     return COMBAT_STYLE_MODE[name.trim().toLowerCase()] ?? 1;
 }
+
+/** Ranged styles share the com_mode varp: bow0/1/2 = accurate/rapid/longrange
+ *  (rapid trains Ranged fastest; longrange splits xp with Defence). */
+const RANGE_STYLE_MODE: Record<string, number> = {
+    accurate: 0,
+    rapid: 1,
+    longrange: 2,
+    'long range': 2,
+    'long-range': 2
+};
+
+export const RANGE_STYLE_OPTIONS = ['accurate', 'rapid', 'longrange'];
+
+/** Ranged-style name → com_mode (unknown → 1, rapid). */
+export function parseRangeStyle(name: string): number {
+    return RANGE_STYLE_MODE[name.trim().toLowerCase()] ?? 1;
+}

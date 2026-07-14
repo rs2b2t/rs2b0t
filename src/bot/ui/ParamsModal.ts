@@ -1,5 +1,5 @@
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
-import { renderControl } from './paramControls.js';
+import { groupSchema, isVisible, renderControl, visibilityDeps } from './paramControls.js';
 import { el } from './dom.js';
 
 /**
@@ -7,6 +7,12 @@ import { el } from './dom.js';
  * ScriptLibrary. Live-saves each change through SettingsStore and calls
  * onChanged() so the panel summary refreshes. Controls are disabled while a
  * script is active (isActive()).
+ *
+ * Schemas can declare `group` (collapsible sections, remembered per script for
+ * the session) and `showIf` (rows hidden until another setting matches — a
+ * change to a depended-on key re-renders the body so dependent rows appear
+ * in place; independent edits save without a re-render, keeping slider drags
+ * and half-typed text alive).
  */
 export default class ParamsModal {
     private backdrop: HTMLElement;
@@ -14,6 +20,8 @@ export default class ParamsModal {
     private bodyEl: HTMLElement;
     private scriptName = '';
     private schema: SettingsSchema = {};
+    /** collapsed group names per script (session-scoped). */
+    private collapsed = new Map<string, Set<string>>();
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
@@ -67,29 +75,67 @@ export default class ParamsModal {
         this.titleEl.textContent = `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
         const disabled = this.isActive();
+        const deps = visibilityDeps(this.schema);
+        const valueOf = (key: string): string => (this.schema[key] ? SettingsStore.displayString(this.scriptName, key, this.schema[key]) : '');
+        const collapsed = this.collapsed.get(this.scriptName) ?? new Set<string>();
+        this.collapsed.set(this.scriptName, collapsed);
 
-        for (const [key, def] of Object.entries(this.schema)) {
-            const row = el('div', 'rs2b0t-param-row');
-
-            const label = el('div', 'rs2b0t-param-label');
-            label.textContent = def.label ?? key;
-            row.appendChild(label);
-
-            if (def.help) {
-                const help = el('div', 'rs2b0t-param-help');
-                help.textContent = def.help;
-                row.appendChild(help);
+        for (const group of groupSchema(this.schema)) {
+            const visibleKeys = group.keys.filter(key => isVisible(this.schema[key], valueOf));
+            if (visibleKeys.length === 0) {
+                continue; // a group whose every row is hidden disappears whole
             }
 
-            const current = SettingsStore.displayString(this.scriptName, key, def);
-            const control = renderControl(def, current, raw => {
-                SettingsStore.save(this.scriptName, key, raw);
-                this.onChanged();
-            }, { disabled });
-            control.classList.add('rs2b0t-param-control');
-            row.appendChild(control);
+            let host = this.bodyEl;
+            if (group.name !== '') {
+                const isCollapsed = collapsed.has(group.name);
+                const header = el('button', 'rs2b0t-param-group');
+                header.type = 'button';
+                header.textContent = `${isCollapsed ? '▸' : '▾'} ${group.name}`;
+                header.addEventListener('click', () => {
+                    if (!collapsed.delete(group.name)) {
+                        collapsed.add(group.name);
+                    }
+                    this.render();
+                });
+                this.bodyEl.appendChild(header);
+                if (isCollapsed) {
+                    continue;
+                }
+                host = el('div', 'rs2b0t-param-groupbody');
+                this.bodyEl.appendChild(host);
+            }
 
-            this.bodyEl.appendChild(row);
+            for (const key of visibleKeys) {
+                host.appendChild(this.renderRow(key, disabled, deps));
+            }
         }
+    }
+
+    private renderRow(key: string, disabled: boolean, deps: Set<string>): HTMLElement {
+        const def = this.schema[key];
+        const row = el('div', 'rs2b0t-param-row');
+
+        const label = el('div', 'rs2b0t-param-label');
+        label.textContent = def.label ?? key;
+        row.appendChild(label);
+
+        if (def.help) {
+            const help = el('div', 'rs2b0t-param-help');
+            help.textContent = def.help;
+            row.appendChild(help);
+        }
+
+        const current = SettingsStore.displayString(this.scriptName, key, def);
+        const control = renderControl(def, current, raw => {
+            SettingsStore.save(this.scriptName, key, raw);
+            this.onChanged();
+            if (deps.has(key)) {
+                this.render(); // dependent rows appear/disappear in place
+            }
+        }, { disabled });
+        control.classList.add('rs2b0t-param-control');
+        row.appendChild(control);
+        return row;
     }
 }

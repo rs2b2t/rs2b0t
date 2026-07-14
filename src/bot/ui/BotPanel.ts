@@ -9,7 +9,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
-import { summarize } from './paramControls.js';
+import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
 /**
@@ -255,7 +255,11 @@ export default class BotPanel {
         const active = isActiveState(ScriptRunner.state);
 
         const summary = el('div', 'rs2b0t-param-summary');
+        const valueOf = (key: string): string => (schema[key] ? SettingsStore.displayString(meta.name, key, schema[key]) : '');
         for (const [key, def] of Object.entries(schema)) {
+            if (!isVisible(def, valueOf)) {
+                continue; // mirrors the modal: irrelevant params stay out of the summary
+            }
             const item = el('span', 'rs2b0t-param-sitem');
             const k = el('span', 'rs2b0t-param-skey');
             k.textContent = key;
