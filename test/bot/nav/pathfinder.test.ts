@@ -1,49 +1,73 @@
 import { describe, expect, test } from 'bun:test';
-import { PathFinder, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
+import { PathFinder, type DoorEdgeData, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
 
-// Synthetic LCNV v1 pack: one mapsquare (mx=mz=50 → world base 3200,3200),
-// walkability from a predicate, exit masks from mutual walkability with the
-// rsmod diagonal rule (a diagonal step needs both orthogonals clear). Matches
-// the tools/nav/build-collision.ts layout the PathFinder constructor parses.
+// Synthetic LCNV v2 pack: one mapsquare (mx=mz=50 → world base 3200,3200),
+// walkability + wall-edge nibbles from predicates, exit masks from mutual
+// walkability minus wall-blocked edges, with the rsmod diagonal rule (a
+// diagonal step needs both orthogonal L-routes clear). Matches the
+// tools/nav/build-collision.ts layout the PathFinder constructor parses.
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
+// wall nibble bit per cardinal dir index (0=N,1=E,2=S,3=W)
+const WALL_BIT = [1, 2, 4, 8];
+const OPP = [2, 3, 0, 1];
 
-function buildPack(walkableAt: (x: number, z: number) => boolean, mx = 50, mz = 50): Uint8Array {
+function buildPack(walkableAt: (x: number, z: number) => boolean, wallsAt: (x: number, z: number) => number = () => 0, mx = 50, mz = 50): Uint8Array {
     const exit = new Uint8Array(4096);
     const walk = new Uint8Array(512);
+    const wall = new Uint8Array(2048);
     const baseX = mx << 6;
     const baseZ = mz << 6;
     const w = (x: number, z: number): boolean => x >= baseX && x < baseX + 64 && z >= baseZ && z < baseZ + 64 && walkableAt(x, z);
+    // a cardinal step x,z -> dir is open when neither side has a wall on the shared edge
+    const open = (x: number, z: number, dir: number): boolean => w(x + DX[dir], z + DZ[dir]) && (wallsAt(x, z) & WALL_BIT[dir]) === 0 && (wallsAt(x + DX[dir], z + DZ[dir]) & WALL_BIT[OPP[dir]]) === 0;
     for (let lx = 0; lx < 64; lx++) {
         for (let lz = 0; lz < 64; lz++) {
             const x = baseX + lx;
             const z = baseZ + lz;
+            const index = lx * 64 + lz;
+            const nib = wallsAt(x, z) & 0xf;
+            wall[index >> 1] |= index & 1 ? nib << 4 : nib;
             if (!w(x, z)) {
                 continue;
             }
-            const index = lx * 64 + lz;
             walk[index >> 3] |= 1 << (index & 0x7);
             let mask = 0;
             for (let dir = 0; dir < 8; dir++) {
-                if (!w(x + DX[dir], z + DZ[dir])) {
+                if (dir < 4) {
+                    if (open(x, z, dir)) {
+                        mask |= 1 << dir;
+                    }
                     continue;
                 }
-                if (dir >= 4 && (!w(x + DX[dir], z) || !w(x, z + DZ[dir]))) {
-                    continue;
+                // diagonal: both L-routes must be fully open
+                const dxi = DX[dir] === 1 ? 1 : 3; // E or W
+                const dzi = DZ[dir] === 1 ? 0 : 2; // N or S
+                const viaX = open(x, z, dxi) && open(x + DX[dxi], z, dzi);
+                const viaZ = open(x, z, dzi) && open(x, z + DZ[dzi], dxi);
+                if (w(x + DX[dir], z + DZ[dir]) && viaX && viaZ) {
+                    mask |= 1 << dir;
                 }
-                mask |= 1 << dir;
             }
             exit[index] = mask;
         }
     }
-    const out = new Uint8Array(10 + 3 + 4096 + 512);
-    out.set([0x4c, 0x43, 0x4e, 0x56, 1, 0, 0, 0]);
+    const out = new Uint8Array(10 + 3 + 4096 + 512 + 2048);
+    out.set([0x4c, 0x43, 0x4e, 0x56, 2, 0, 0, 0]);
     new DataView(out.buffer).setUint16(8, 1, true);
     out[10] = mx;
     out[11] = mz;
     out[12] = 1; // level 0 only
     out.set(exit, 13);
     out.set(walk, 13 + 4096);
+    out.set(wall, 13 + 4096 + 512);
+    return out;
+}
+
+/** Same square but serialized as a v1 pack (no wall section). */
+function asV1(pack: Uint8Array): Uint8Array {
+    const out = pack.slice(0, pack.length - 2048);
+    out[4] = 1;
     return out;
 }
 
@@ -121,5 +145,68 @@ describe('PathFinder goal selection for unwalkable targets', () => {
             return;
         }
         expect(r.cost).toBe(0);
+    });
+});
+
+// The Seers drawers house (vague006) in miniature: DIRECTIONAL walls — every
+// tile stays walkable, wall-edge nibbles carry the blocking — with the drawers
+// against the west wall and a straight door in the south wall. The live bug:
+// the tile west of the drawers is walkable, cardinal-adjacent, and CHEAPER
+// than interior-via-door, but a wall separates it from the drawers, so Search
+// silently no-ops there.
+const DRAWERS = { x: 3229, z: 3228, level: 0 };
+const WRONG_SIDE = { x: 3228, z: 3228 }; // outside, wall on its east edge
+const HOUSE = { x0: 3229, x1: 3232, z0: 3227, z1: 3230 };
+const DOOR_X = 3231; // door in the south wall: (3231,3226)<->(3231,3227), a doors.json edge bridging the baked wall
+const WEST_START = { x: 3220, z: 3228, level: 0 };
+
+function houseWalkable(x: number, z: number): boolean {
+    return !(x === DRAWERS.x && z === DRAWERS.z);
+}
+
+function houseWalls(x: number, z: number): number {
+    let nib = 0;
+    const inside = x >= HOUSE.x0 && x <= HOUSE.x1 && z >= HOUSE.z0 && z <= HOUSE.z1;
+    if (inside) {
+        if (z === HOUSE.z1) nib |= 1; // N
+        if (x === HOUSE.x1) nib |= 2; // E
+        if (z === HOUSE.z0) nib |= 4; // S (the closed door bakes as a wall too)
+        if (x === HOUSE.x0) nib |= 8; // W
+    } else {
+        if (z === HOUSE.z0 - 1 && x >= HOUSE.x0 && x <= HOUSE.x1) nib |= 1; // facing N into the house
+        if (x === HOUSE.x0 - 1 && z >= HOUSE.z0 && z <= HOUSE.z1) nib |= 2; // facing E
+        if (z === HOUSE.z1 + 1 && x >= HOUSE.x0 && x <= HOUSE.x1) nib |= 4; // facing S
+        if (x === HOUSE.x1 + 1 && z >= HOUSE.z0 && z <= HOUSE.z1) nib |= 8; // facing W
+    }
+    return nib;
+}
+
+const HOUSE_DOOR: DoorEdgeData[] = [{ x: DOOR_X, z: HOUSE.z0 - 1, level: 0, locId: 1530, locName: 'Door', dir: 'N' }];
+
+describe('PathFinder cardinal goals vs directional walls (LCNV v2)', () => {
+    test('skips the wall-separated cardinal tile and routes through the door', () => {
+        const finder = new PathFinder(buildPack(houseWalkable, houseWalls));
+        finder.addEdges(HOUSE_DOOR, []);
+        const r = finder.findPath(WEST_START, DRAWERS);
+        expect(r.ok).toBe(true);
+        if (!r.ok) {
+            return;
+        }
+        const last = r.waypoints[r.waypoints.length - 1];
+        expect({ x: last.x, z: last.z }).not.toEqual(WRONG_SIDE);
+        expect(Math.abs(last.x - DRAWERS.x) + Math.abs(last.z - DRAWERS.z)).toBe(1);
+        expect(r.waypoints.some(wp => wp.transport?.locName === 'Door')).toBe(true);
+    });
+
+    test('v1 pack (no wall data) degrades gracefully: filter inert, wrong side allowed', () => {
+        const finder = new PathFinder(asV1(buildPack(houseWalkable, houseWalls)));
+        finder.addEdges(HOUSE_DOOR, []);
+        const r = finder.findPath(WEST_START, DRAWERS);
+        expect(r.ok).toBe(true);
+        if (!r.ok) {
+            return;
+        }
+        const last = r.waypoints[r.waypoints.length - 1];
+        expect({ x: last.x, z: last.z }).toEqual(WRONG_SIDE);
     });
 });

@@ -159,6 +159,9 @@ class MinHeap {
 interface LevelSlot {
     exit: Uint8Array;
     walk: Uint8Array;
+    /** v2 packs: packed 4-bit wall-edge nibbles (bit 0=N,1=E,2=S,3=W), two
+     *  tiles per byte. null on v1 packs — wall queries read as "no wall". */
+    wall: Uint8Array | null;
 }
 
 export class PathFinder {
@@ -176,8 +179,9 @@ export class PathFinder {
         if (pack.length < 10 || pack[0] !== 0x4c || pack[1] !== 0x43 || pack[2] !== 0x4e || pack[3] !== 0x56) {
             throw new Error('not an LCNV pack');
         }
-        if (pack[4] !== 1) {
-            throw new Error(`unsupported LCNV version ${pack[4]}`);
+        const version = pack[4];
+        if (version !== 1 && version !== 2) {
+            throw new Error(`unsupported LCNV version ${version}`);
         }
         this.members = pack[5] === 1;
 
@@ -196,7 +200,12 @@ export class PathFinder {
                 pos += 4096;
                 const walk = pack.subarray(pos, pos + 512);
                 pos += 512;
-                this.slots[(level << 16) | (mx << 8) | mz] = { exit, walk };
+                let wall: Uint8Array | null = null;
+                if (version >= 2) {
+                    wall = pack.subarray(pos, pos + 2048);
+                    pos += 2048;
+                }
+                this.slots[(level << 16) | (mx << 8) | mz] = { exit, walk, wall };
             }
         }
         if (pos !== pack.length) {
@@ -221,6 +230,16 @@ export class PathFinder {
     exitMask(x: number, z: number, level: number): number {
         const slot = this.slotAt(x, z, level);
         return slot ? slot.exit[(x & 0x3f) * 64 + (z & 0x3f)] : 0;
+    }
+
+    /** Wall-edge nibble of a tile (bit 0=N,1=E,2=S,3=W). 0 on v1 packs. */
+    wallMask(x: number, z: number, level: number): number {
+        const slot = this.slotAt(x, z, level);
+        if (!slot || !slot.wall) {
+            return 0;
+        }
+        const index = (x & 0x3f) * 64 + (z & 0x3f);
+        return (index & 1 ? slot.wall[index >> 1] >> 4 : slot.wall[index >> 1]) & 0xf;
     }
 
     /** Compile door + transport + stair edges into the search graph. Edges
@@ -313,15 +332,28 @@ export class PathFinder {
 
     /** Walkable tiles CARDINALLY adjacent to an unwalkable target — the only
      *  tiles a server interact (search a box, open a booth) can be issued from.
+     *  A candidate with a wall on its edge toward the target is excluded: it is
+     *  interact-ILLEGAL (the Seers drawers house — the tile west of the drawers
+     *  is walkable and adjacent but outside the wall, so Search no-ops there).
      *  Empty when the target itself is walkable. */
     private cardinalGoals(p: NavPoint): Set<number> {
         const goals = new Set<number>();
         if (this.walkable(p.x, p.z, p.level)) {
             return goals;
         }
-        for (const [dx, dz] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-            if (this.walkable(p.x + dx, p.z + dz, p.level)) {
-                goals.add(nodeId(p.x + dx, p.z + dz, p.level));
+        // candidate offset from target → wall bit on the candidate's edge FACING
+        // the target (nibble bits 0=N,1=E,2=S,3=W)
+        const sides: [number, number, number][] = [
+            [0, 1, 1 << 2], // candidate north of target, its S edge
+            [1, 0, 1 << 3], // east, its W edge
+            [0, -1, 1 << 0], // south, its N edge
+            [-1, 0, 1 << 1] // west, its E edge
+        ];
+        for (const [dx, dz, facingBit] of sides) {
+            const cx = p.x + dx;
+            const cz = p.z + dz;
+            if (this.walkable(cx, cz, p.level) && (this.wallMask(cx, cz, p.level) & facingBit) === 0) {
+                goals.add(nodeId(cx, cz, p.level));
             }
         }
         return goals;

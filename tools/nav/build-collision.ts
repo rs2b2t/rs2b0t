@@ -13,12 +13,16 @@
 //                                         [--out <file>] [--verify true|false]
 //
 // Output format (little-endian):
-//   magic 'LCNV' (4 bytes), version u8=1, members u8, reserved u16=0,
+//   magic 'LCNV' (4 bytes), version u8=2, members u8, reserved u16=0,
 //   mapsquareCount u16; then per mapsquare: mx u8, mz u8, levelMask u8
 //   (bit L = level L present), then for each present level ascending:
 //   4096 bytes exit mask (index = x*64+z; bit 0=N,1=E,2=S,3=W,4=NE,5=SE,
-//   6=SW,7=NW = step legal) followed by 512 bytes walkable bitset
-//   (bit (x*64+z)&7 of byte (x*64+z)>>3). Unallocated/void tiles: 0/0.
+//   6=SW,7=NW = step legal), 512 bytes walkable bitset (bit (x*64+z)&7 of
+//   byte (x*64+z)>>3), then (v2) 2048 bytes wall-edge nibbles — two tiles
+//   per byte (index&1 = high nibble), bit 0=N,1=E,2=S,3=W = a wall on that
+//   edge of the tile (closed doors included; PathFinder.cardinalGoals uses
+//   this to reject interact-illegal through-wall goal tiles).
+//   Unallocated/void tiles: 0/0/0.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -176,6 +180,7 @@ const DIRS: [number, number][] = [
 interface BakedLevel {
     exit: Uint8Array; // 4096 bytes, index = x*64+z
     walk: Uint8Array; // 512-byte bitset, bit (x*64+z)&7 of byte (x*64+z)>>3
+    wall: Uint8Array; // 2048 bytes, packed wall-edge nibbles (two tiles/byte)
     allocatedTiles: number;
     walkableTiles: number;
 }
@@ -208,6 +213,7 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
 
         const exit = new Uint8Array(MAP_X * MAP_Z);
         const walk = new Uint8Array((MAP_X * MAP_Z) >> 3);
+        const wall = new Uint8Array((MAP_X * MAP_Z) >> 1);
         let allocatedTiles = 0;
         let walkableTiles = 0;
 
@@ -226,10 +232,20 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
                     continue; // un-floored sky: exit 0, walkable 0 (see Builder.hasGround)
                 }
 
-                if ((collision.get(absX, absZ, level) & CollisionFlag.WALK_BLOCKED) === CollisionFlag.OPEN) {
+                const flags = collision.get(absX, absZ, level);
+                if ((flags & CollisionFlag.WALK_BLOCKED) === CollisionFlag.OPEN) {
                     walk[index >> 3] |= 1 << (index & 0x7);
                     walkableTiles++;
                 }
+
+                // wall-edge nibble: bit 0=N,1=E,2=S,3=W (closed doors count —
+                // they bake as walls; their doors.json edge bridges them)
+                let nib = 0;
+                if ((flags & CollisionFlag.WALL_NORTH) !== 0) nib |= 1;
+                if ((flags & CollisionFlag.WALL_EAST) !== 0) nib |= 2;
+                if ((flags & CollisionFlag.WALL_SOUTH) !== 0) nib |= 4;
+                if ((flags & CollisionFlag.WALL_WEST) !== 0) nib |= 8;
+                wall[index >> 1] |= index & 1 ? nib << 4 : nib;
 
                 let mask = 0;
                 for (let dir = 0; dir < 8; dir++) {
@@ -241,7 +257,7 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
             }
         }
 
-        levels[level] = { exit, walk, allocatedTiles, walkableTiles };
+        levels[level] = { exit, walk, wall, allocatedTiles, walkableTiles };
     }
 
     return { mx, mz, levels };
@@ -252,7 +268,7 @@ function writePack(baked: BakedMapsquare[], members: boolean): Uint8Array<ArrayB
 
     let size = 10;
     for (const ms of emitted) {
-        size += 3 + ms.levels.filter(level => level !== null).length * (4096 + 512);
+        size += 3 + ms.levels.filter(level => level !== null).length * (4096 + 512 + 2048);
     }
 
     const out = new Uint8Array(size);
@@ -263,7 +279,7 @@ function writePack(baked: BakedMapsquare[], members: boolean): Uint8Array<ArrayB
     out[pos++] = 0x43; // 'C'
     out[pos++] = 0x4e; // 'N'
     out[pos++] = 0x56; // 'V'
-    out[pos++] = 1; // version
+    out[pos++] = 2; // version
     out[pos++] = members ? 1 : 0;
     view.setUint16(pos, 0, true); // reserved
     pos += 2;
@@ -289,6 +305,8 @@ function writePack(baked: BakedMapsquare[], members: boolean): Uint8Array<ArrayB
             pos += 4096;
             out.set(baked.walk, pos);
             pos += 512;
+            out.set(baked.wall, pos);
+            pos += 2048;
         }
     }
 
