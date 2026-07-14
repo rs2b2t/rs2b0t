@@ -151,6 +151,7 @@ export default class RockCrab extends TaskBot {
                 onDeath: () => {
                     this.setStatus('died — recovering');
                     this.countDeath();
+                    BANKED_THIS_SOLVE = false; // died mid-solve: force a food re-bank before resuming a retained clue
                     this.log('died! waiting for respawn, then web-walking back to the field');
                 },
                 onRecovered: () => {

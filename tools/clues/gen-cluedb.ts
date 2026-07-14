@@ -25,8 +25,9 @@ const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-conte
 const OUT = 'src/bot/clues/data/cluedb.ts';
 const TRAIL = join(CONTENT, 'scripts', 'minigames', 'game_trail', 'configs');
 
-// vague003 ("Search the drawers upstairs in East Ardougne's houses") carries no
-// trail_coord; drawers.rs2 handles it as a search-loc at this tile.
+// vague003 ("search the drawers upstairs") carries no trail_coord; drawers.rs2
+// handles it as a search-loc at this tile — decodes to (2574,3326,1), the Fishing
+// Guild area (matches the navTargets 'vague003 Fishing Guild' label).
 const VAGUE003_COORD = '1_40_51_14_62';
 
 // _sailor is an abstract base npc with no config name; the sailor that hands over

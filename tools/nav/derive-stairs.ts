@@ -223,17 +223,20 @@ function main(): void {
     // one edge per line: greppable, hand-editable, diff-stable
     const json = '[\n' + finalEdges.map(e => '    ' + JSON.stringify(e)).join(',\n') + '\n]\n';
 
+    const stats = `${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; snapped + reversed)`;
     if (process.argv.includes('--check')) {
         const current = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
         if (current !== json) {
             console.error(`STALE: ${out} — run bun tools/nav/derive-stairs.ts`);
             process.exitCode = 1;
+        } else {
+            console.log(`ok: ${out} matches — ${stats}`);
         }
     } else {
         fs.mkdirSync(path.dirname(out), { recursive: true });
         fs.writeFileSync(out, json);
+        console.log(`wrote ${out}: ${stats}`);
     }
-    console.log(`wrote ${out}: ${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; snapped + reversed)`);
 
     // sanity gate: a cross-level edge with BOTH endpoints walkable must survive
     // near each known staircase/ladder (proves the snap kept it — addEdges would

@@ -15,7 +15,8 @@
         "build:bot:dev": "bun run bot.bundle.ts dev",
         "b0t": "sh tools/b0t.sh",
         "smoke": "bun tools/run-all-smokes.ts",
-        "gen:shopdb": "bun tools/shops/gen-shopdb.ts"
+        "gen:shopdb": "bun tools/shops/gen-shopdb.ts",
+        "gen:cluedb": "bun tools/clues/gen-cluedb.ts"
     },
     "dependencies": {
         "fflate": "^0.8.2"

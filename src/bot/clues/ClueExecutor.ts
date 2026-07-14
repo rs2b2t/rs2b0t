@@ -83,7 +83,7 @@ const REWARD_CLOSE_TRIES = 5;
  * (rs2b2t-content/maps); gotoNpc arrives within 1 tile and talkThrough re-finds
  * the NPC within NPC_LEASH, so a counter-front arrival is fine.
  */
-const TALK_ANCHORS: Record<number, Tile> = {
+export const TALK_ANCHORS: Record<number, Tile> = {
     2681: new Tile(3207, 3233, 0), // Hans — Lumbridge Castle courtyard
     2683: new Tile(3288, 3190, 0), // Zeke — Al Kharid scimitar stall
     2684: new Tile(3276, 3193, 0), // Tanner (Ellis) — Al Kharid tannery
