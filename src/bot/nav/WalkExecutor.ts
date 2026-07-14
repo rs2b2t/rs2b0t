@@ -177,11 +177,16 @@ class WalkExecutorImpl {
                 // standing there already is as arrived as we can get
                 const terminal = tiles[tiles.length - 1];
                 if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
-                    if (chebyshev(me, dest) > radius) {
-                        // standing on the nearest reachable tile but still short of dest —
-                        // honestly 'closest', so walkResilient keeps escalating (client-scene
-                        // walk) instead of believing it arrived. walkTo still returns true so
-                        // direct callers get the "as close as the baked graph reaches" contract.
+                    // arrived/closest must agree with the shared isArrived predicate:
+                    // raw chebyshev here could claim 'arrived' within radius of a
+                    // walkable-but-live-unreachable dest — the wall-blind case the
+                    // loop-top gate just refused. isArrived's !walkable fallback still
+                    // grants arrival on snapped-terminal booth/island dests.
+                    if (!isArrived(me, dest, radius, Reachability.arrivalProbe())) {
+                        // standing on the nearest reachable tile but not honestly arrived —
+                        // 'closest', so walkResilient keeps escalating (client-scene walk).
+                        // walkTo still returns true so direct callers get the "as close as
+                        // the baked graph reaches" contract.
                         log(`dest (${dest.x},${dest.z}) unreachable beyond (${me.x},${me.z}) — nearest reachable tile`);
                         this.lastOutcome = 'closest';
                         return true;
