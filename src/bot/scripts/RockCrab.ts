@@ -83,11 +83,15 @@ let SPADE_NAME = 'Spade';
 let CLUE_STATUS = 'idle';
 // A clue/casket id we've given up on stays flagged so SolveClue.validate() stops
 // re-firing on it (the clue stays in the pack, so without this the abandon would
-// retry forever). Cleared naturally once a different clue is held.
+// retry forever). Cleared in validate() once that clue is no longer held, so a
+// later re-drop of the same obj id isn't permanently suppressed.
 let ABANDONED_CLUE_ID: number | null = null;
-// The clue-scroll id we've already banked-for this solve, so a mid-trail yield
-// (random event) re-enters straight into solving instead of re-trekking to bank.
-let BANKED_CLUE_ID: number | null = null;
+// Session flag: have we already banked for the CURRENT solve? Set on bankFirst()
+// success, kept across a mid-trail yield (so a random event doesn't re-trek to
+// Seers), reset on 'done'/'abandon'. A boolean, NOT a clue id — scroll obj ids
+// repeat across trails (random of ~60) and advance every step within one trail,
+// so an id key would both re-trek per step and skip banking for a same-id new clue.
+let BANKED_THIS_SOLVE = false;
 
 /**
  * Rock crab trainer for the Rellekka shoreline. Walks among the dormant
@@ -128,6 +132,9 @@ export default class RockCrab extends TaskBot {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         SPADE_NAME = this.settings.str('spade', 'Spade');
+        BANKED_THIS_SOLVE = false;
+        ABANDONED_CLUE_ID = null;
+        CLUE_STATUS = 'idle';
 
         this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, attack lvl ${Skills.level('attack')}`);
 
@@ -413,22 +420,27 @@ class SolveClue implements Task {
             return false;
         }
         const id = heldClueLikeId();
+        // Clear a stale abandon flag once that clue is no longer the held one, so a
+        // later re-drop of the same obj id isn't permanently suppressed for the session.
+        if (ABANDONED_CLUE_ID !== null && id !== ABANDONED_CLUE_ID) {
+            ABANDONED_CLUE_ID = null;
+        }
         // Skip a clue/casket we've already abandoned (missing tool / unreachable /
         // stuck): it stays in the pack, so without this guard validate() would
-        // re-fire forever. Any different clue id re-arms the task.
+        // re-fire forever. Any different (or absent) clue id re-arms the task.
         return id !== null && id !== ABANDONED_CLUE_ID;
     }
 
     async execute(): Promise<void> {
-        // Bank-first, ONCE per clue scroll: dump crab loot and ensure a spade +
-        // food before trekking the trail. Skipped on post-yield re-entry (already
-        // banked) and when only a reward casket is held (open-casket needs no prep).
-        const scrollId = heldClueScrollId();
-        if (scrollId !== null && scrollId !== BANKED_CLUE_ID) {
+        // Bank-first, ONCE per solve: dump crab loot and ensure a spade + food
+        // before trekking the trail. Skipped on post-yield re-entry (already banked
+        // this solve) and when only a reward casket is held (open-casket needs no
+        // prep). Keyed to a session flag, NOT a scroll id — see BANKED_THIS_SOLVE.
+        if (heldClueScrollId() !== null && !BANKED_THIS_SOLVE) {
             if (!(await this.bankFirst())) {
-                return; // walk/open failed — retry next loop (BANKED_CLUE_ID stays unset)
+                return; // walk/open failed — retry next loop (flag stays unset)
             }
-            BANKED_CLUE_ID = scrollId;
+            BANKED_THIS_SOLVE = true;
         }
 
         CLUE_STATUS = 'solving';
@@ -438,19 +450,22 @@ class SolveClue implements Task {
         if (outcome === 'yield') {
             // Random event pending — hand back to loop() so the Supervisor handles
             // it; validate() re-fires next loop and re-identify resumes the step.
+            // Keep BANKED_THIS_SOLVE set so the resume doesn't re-trek to the bank.
             CLUE_STATUS = 'event — yielding';
             return;
         }
         if (outcome === 'abandon') {
             // Flag whatever is currently stuck so validate() stops firing on it;
-            // leave it in the pack and resume crabbing.
+            // leave it in the pack and resume crabbing. This solve is over.
             ABANDONED_CLUE_ID = heldClueLikeId();
+            BANKED_THIS_SOLVE = false;
             CLUE_STATUS = 'abandoned';
             this.bot.log(`[clue] abandoned ${ABANDONED_CLUE_ID ?? '?'} — leaving it in the pack, resuming crabbing`);
             return;
         }
 
         // done — trail complete; GoToField walks us back to the field next loop.
+        BANKED_THIS_SOLVE = false;
         CLUE_STATUS = 'idle';
         this.bot.setStatus('clue solved — returning to the field');
         this.bot.log('[clue] trail complete — resuming crabbing');
