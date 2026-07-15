@@ -16,6 +16,8 @@ import { ScriptRunner } from './runtime/ScriptRunner.js';
 import { StallGuard } from './runtime/StallGuard.js';
 import BotPanel from './ui/BotPanel.js';
 import Overlay from './ui/Overlay.js';
+import { installPaintInput } from './ui/PaintInput.js';
+import { paintState } from './api/hud/paintLogic.js';
 import './scripts/index.js';
 
 export { BotClient, BotHost };
@@ -39,6 +41,13 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const overlayCanvas = document.getElementById('overlay');
     if (overlayCanvas instanceof HTMLCanvasElement) {
         new Overlay(overlayCanvas);
+    }
+
+    // Interactive paints: capture-phase hit-testing on the game canvas so
+    // clicks inside a bot's paint never reach the client (see PaintInput.ts)
+    const gameCanvas = document.getElementById('canvas');
+    if (gameCanvas) {
+        installPaintInput(gameCanvas);
     }
 
     // The stable script-facing ABI: externally-compiled scripts bind to
@@ -89,6 +98,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),
         /** Live solve progress + the persisted last-5-failed-solve traces. */
         clueProgress: () => ClueExecutor.current,
+        paint: paintState,
         clueTraces: () => readTraceRing(localStorage, TRACE_STORAGE_KEY)
     };
 }

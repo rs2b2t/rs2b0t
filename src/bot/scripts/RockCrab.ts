@@ -18,7 +18,9 @@ import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
 import { sweepPlan } from '../api/combat/AmmoLogic.js';
 import type { GroundItem } from '../api/queries/GroundItems.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
@@ -59,6 +61,15 @@ const FOOD_OPTIONS = [
     'Cooked meat', 'Cooked chicken', 'Bread', 'Stew',
     'Cake', 'Chocolate cake', 'Plain pizza', 'Meat pizza', 'Anchovy pizza', 'Pineapple pizza', 'Redberry pie', 'Meat pie', 'Apple pie'
 ];
+
+// XP/hr tracks every stat this bot can train, whatever the style.
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const s = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
 
 const AMMO_OPTIONS = ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Ogre arrow', 'Bolts', 'Barbed bolts'];
 
@@ -152,6 +163,10 @@ export default class RockCrab extends TaskBot {
     private weaponMissing = false;
     private styleSupplyEmpty = false;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
+    private cluesSolved = 0;
+    private lootCounts = new Map<string, number>();
     private solveClue: SolveClue | undefined;
     died = false;
 
@@ -184,7 +199,12 @@ export default class RockCrab extends TaskBot {
         COLLECT_RANGE = this.settings.num('collectRange', 12);
         this.solveClue = new SolveClue({
             log: m => this.log(m),
-            setStatus: s => this.setStatus(s),
+            setStatus: s => {
+                if (s === 'clue solved') {
+                    this.cluesSolved++;
+                }
+                this.setStatus(s);
+            },
             isFood: isFoodItem,
             foodName: () => FOOD_NAME,
             foodWithdraw: () => FOOD_WITHDRAW,
@@ -200,6 +220,9 @@ export default class RockCrab extends TaskBot {
         if (STYLE !== 'melee' && WEAPON === '') {
             this.log(`WARNING: no weapon configured for style '${STYLE}' — fighting with whatever is wielded`);
         }
+
+        this.startedAt = Date.now();
+        this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -265,11 +288,67 @@ export default class RockCrab extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const cur = ClueExecutor.current;
-        const clueLine = cur ? `clue: ${this.solveClue?.clueStatus() ?? 'idle'} — ${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}` : `clue: ${this.solveClue?.clueStatus() ?? 'idle'}`;
-        const styleLine = STYLE === 'mage' ? `  casts ${castsLeft()}${Autocast.armed() ? '' : '  (autocast OFF)'}` : STYLE === 'range' ? `  quiver ${quiverCount()}  ground ${ammoStacksOnGround().reduce((n, g) => n + g.count, 0)}` : '';
-        const lines = [`RockCrab — ${this.status}`, `kills ${this.kills}  loot ${this.looted}  banks ${this.bankTrips}  resets ${this.resets}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  food ${foodCount()}${styleLine}  tick ${Game.tick()}`, clueLine];
-        drawStatusBox(ctx, lines, '#7ad0ff');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ad0ff' });
+        p.title(`RockCrab — ${this.status}`);
+
+        const tab = p.tabs('rc', ['Overview', 'Loot', 'Clues']);
+        if (tab === 'Overview') {
+            const mins = (Date.now() - this.startedAt) / 60_000;
+            const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+            const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
+            const styleCol = STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Quiver: ${quiverCount()}  ground ${ammoStacksOnGround().reduce((n, g) => n + g.count, 0)}` : `Resets: ${this.resets}`;
+            p.row(`Food: ${foodCount()}`, styleCol, this.deaths ? `Deaths: ${this.deaths}` : `Banks: ${this.bankTrips}`);
+            p.bar('HP', Skills.hpFraction());
+        } else if (tab === 'Loot') {
+            p.row(`Looted: ${this.looted}`, `Bank trips: ${this.bankTrips}`);
+            const top = [...this.lootCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (top.length === 0) {
+                p.text('nothing yet', '#8a919a');
+            }
+            for (let i = 0; i < top.length; i += 2) {
+                p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
+            }
+        } else {
+            const cur = ClueExecutor.current;
+            p.row(`Solved: ${this.solveClue?.clueStatus() === 'idle' ? '' : ''}${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            if (cur) {
+                p.text(`${cur.name} — leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
+                p.text(cur.step, '#8a919a');
+            } else {
+                p.text(SOLVE_CLUES ? 'watching the pack for clues' : 'clue solving disabled', '#8a919a');
+            }
+        }
+
+        p.gap();
+        // live controls — style switch converges via the gear/banking tasks
+        const styleNow = this.settings.str('combatStyle', STYLE);
+        const picked = p.select('style', 'style', ['melee', 'mage', 'range'], styleNow);
+        if (picked && picked !== STYLE) {
+            this.switchStyle(picked as typeof STYLE);
+        }
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
+    }
+
+    /** Live style switch from the paint: update the run config + persist; the
+     *  gear/banking/autocast tasks converge on the new style by themselves. */
+    private switchStyle(style: typeof STYLE): void {
+        STYLE = style;
+        SettingsStore.save('RockCrab', 'combatStyle', style);
+        this.log(`combat style switched to ${style} (from the paint)`);
     }
 
     setStatus(s: string): void {
@@ -281,8 +360,11 @@ export default class RockCrab extends TaskBot {
     killsTotal(): number {
         return this.kills;
     }
-    countLoot(): void {
+    countLoot(name?: string | null): void {
         this.looted++;
+        if (name) {
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
+        }
     }
     countDeath(): void {
         this.deaths++;
@@ -825,7 +907,7 @@ async function lootOnce(bot: RockCrab): Promise<boolean> {
     const before = Inventory.used();
     await drop.interact('Take');
     if (await Execution.delayUntil(() => Inventory.used() > before, 5000)) {
-        bot.countLoot();
+        bot.countLoot(drop.name);
         bot.log(`looted ${drop.name}`);
         return true;
     }

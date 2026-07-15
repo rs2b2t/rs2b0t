@@ -1,6 +1,7 @@
 import type { AbstractBot } from '../api/Bot.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Sustain } from '../api/Sustain.js';
+import { paintState } from '../api/hud/paintLogic.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
@@ -206,6 +207,10 @@ class ScriptRunnerImpl {
 
         // a stopped bot's sustain hook (mid-walk eating) must not outlive it
         Sustain.set(null);
+
+        // paint regions/state die with the script — nothing may keep
+        // swallowing canvas input after stop
+        paintState.reset();
 
         // cancel in-flight synthetic gestures (releases held buttons/keys)
         // and restore the default input mode
