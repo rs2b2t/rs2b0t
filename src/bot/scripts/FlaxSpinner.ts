@@ -5,7 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank, withdrawOp } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Skills } from '../api/hud/Skills.js';
+import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
@@ -37,6 +38,12 @@ const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
 const DEFAULT_LADDER_TILE = new Tile(2714, 3471, 0);
 const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
 const BOOTH = { op: 'Use-quickly' };
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SETTINGS: SettingsSchema = {
     product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'matched against the "What would you like to spin?" menu' },
@@ -83,6 +90,8 @@ export default class FlaxSpinner extends TaskBot {
     private spun = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private product = 'Flax';
     private bankStand = DEFAULT_BANK_STAND;
@@ -113,17 +122,39 @@ export default class FlaxSpinner extends TaskBot {
         this.obstacle = this.settings.str('obstacle', 'door').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 8);
 
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('crafting');
+
         this.log(`FlaxSpinner spinning ${this.product} — bank ${this.bankStand}, ladder ${this.ladderTile}, wheel ${this.wheelTile}`);
         this.add(new ContinueDialog(), new BankTrip(this), new Ascend(this), new Spin(this), new Descend(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `FlaxSpinner — ${this.status}`,
-            `${this.product}: spun ${this.spun}  bank trips ${this.trips}`,
-            `flax left ${this.fibreCount()}  level ${Game.tile()?.level ?? '?'}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#a0e0ff');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#a0e0ff' });
+        p.title(`FlaxSpinner — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('crafting') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Spun: ${this.spun}`, `XP/hr: ${xph}`);
+        p.row(`${this.product} left: ${this.fibreCount()}`, `Floor: ${Game.tile()?.level ?? '?'}`, `Bank trips: ${this.trips}`);
+
+        p.gap();
+        // processing bot — switching fibre mid-batch would cancel the weak-queue
+        // spin, so Pause/Stop only (no live selector)
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

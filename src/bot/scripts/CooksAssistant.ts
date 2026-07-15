@@ -4,7 +4,8 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -56,9 +57,28 @@ export default class CooksAssistant extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
+        const gathered = [EGG, MILK, GRAIN].filter(n => Inventory.contains(n));
         const have = [Inventory.contains(EGG) ? 'egg' : '', Inventory.contains(MILK) ? 'milk' : '', Inventory.contains(GRAIN) ? 'grain' : ''].filter(Boolean).join(' ') || 'nothing yet';
-        const lines = [`Cook's Assistant — ${this.status}`, `started: ${this.started}   have: ${have}`, `tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#ffd27b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffd27b' });
+        p.title(`Cook's Assistant — ${this.status}`);
+        p.row(`Started: ${this.started ? 'yes' : 'no'}`, `Have: ${have}`);
+        p.bar('Ingredients', gathered.length / 3, '#ffd27b');
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void {

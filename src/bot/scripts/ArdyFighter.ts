@@ -11,7 +11,9 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import { Traversal } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -45,6 +47,15 @@ const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const STALL_OP = 'Steal from';
 const DEFAULT_FOOD = 'cake, bread, chocolate slice';
 const DEFAULT_LOOT = 'clue scroll, blood rune, nature rune, chaos rune, body talisman, steel arrow, iron ore';
+
+// XP/hr sums every melee stat this bot can train (whichever com_mode is set).
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /** Tunable parameters (panel + `?ArdyFighter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -127,6 +138,8 @@ export default class ArdyFighter extends TaskBot {
     private trips = 0;
     private deaths = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
     died = false;
 
     override async onStart(): Promise<void> {
@@ -159,6 +172,9 @@ export default class ArdyFighter extends TaskBot {
             this.log(`ArdyFighter needs Thieving 5 for the Baker's stall (have ${Skills.level('thieving')}) — stopping.`);
             throw new Error('ArdyFighter: Thieving 5 required');
         }
+
+        this.startedAt = Date.now();
+        this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
 
         this.log(`ArdyFighter starting — anchor ${ANCHOR} r${LEASH}, target '${TARGET}', stall ${STALL_TILE}, bank ${BANK_STAND}`);
 
@@ -213,13 +229,52 @@ export default class ArdyFighter extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `ArdyFighter — ${this.status}`,
-            `kills ${this.kills}  steals ${this.steals}  ate ${this.eats}  loot ${this.looted}`,
-            `bank trips ${this.trips}${this.deaths ? `  deaths ${this.deaths}` : ''}  food ${foodCount()}  lootslots ${lootSlots()}`,
-            `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#ffb86c');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffb86c' });
+        p.title(`ArdyFighter — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const tab = p.tabs('af', ['Overview', 'Loot']);
+        if (tab === 'Overview') {
+            const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+            const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
+            p.row(`Food: ${foodCount()}`, `Steals: ${this.steals}`, this.deaths ? `Deaths: ${this.deaths}` : `Ate: ${this.eats}`);
+            p.bar('HP', Skills.hpFraction());
+        } else {
+            p.row(`Looted: ${this.looted}`, `Loot slots: ${lootSlots()}`);
+            p.row(`Bank trips: ${this.trips}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
+        }
+
+        p.gap();
+        // live style switch — SetStyle re-asserts COMBAT_MODE each loop, so a
+        // paint change converges out of combat on its own
+        const styleNow = this.settings.str('combatStyle', 'strength');
+        const picked = p.select('style', 'style', COMBAT_STYLE_OPTIONS, styleNow);
+        if (picked && picked !== styleNow) {
+            this.switchStyle(picked);
+        }
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
+    }
+
+    /** Live combat-style switch from the paint: update the com_mode target +
+     *  persist; SetStyle re-asserts it out of combat by itself. */
+    private switchStyle(style: string): void {
+        COMBAT_MODE = parseCombatStyle(style);
+        SettingsStore.save('ArdyFighter', 'combatStyle', style);
+        this.log(`combat style switched to ${style} (from the paint)`);
     }
 
     setStatus(s: string): void {

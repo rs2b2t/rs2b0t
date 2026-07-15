@@ -5,18 +5,27 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
 import { Bank, withdrawOp } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
-import type { SettingsSchema } from '../runtime/Settings.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { matchProduct } from './BankFletcherLogic.js';
 
 // Varrock West bank — a sane default; the exact stand tile is verified in the smoke.
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
+const PRODUCT_OPTIONS = ['Arrow shafts', 'Short bow', 'Long bow'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SETTINGS: SettingsSchema = {
     material: { type: 'string', default: 'Logs', label: 'Logs to fletch (contains)', help: 'bank item to withdraw — substring, resolved to the exact name (e.g. Logs / Oak logs / Willow logs)' },
-    product: { type: 'string', default: 'Arrow shafts', options: ['Arrow shafts', 'Short bow', 'Long bow'], label: 'Fletch product', help: 'which make-menu option to pick (matched by keyword, so item-name or label form both work)' },
+    product: { type: 'string', default: 'Arrow shafts', options: PRODUCT_OPTIONS, label: 'Fletch product', help: 'which make-menu option to pick (matched by keyword, so item-name or label form both work)' },
     knife: { type: 'string', default: 'Knife', label: 'Fletching tool (contains)', help: 'the tool used on the logs; lives in the bank between cycles' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'stand adjacent to a bank booth — start the bot here' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
@@ -39,6 +48,8 @@ export default class BankFletcher extends TaskBot {
     private made = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private material = 'Logs';
     private product = 'Arrow shafts';
@@ -57,13 +68,53 @@ export default class BankFletcher extends TaskBot {
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
         this.leash = this.settings.num('leashRadius', 6);
 
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('fletching');
+
         this.log(`BankFletcher fletching '${this.material}' → ${this.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
         this.add(new ContinueDialog(), new FletchDialog(this), new BankTrip(this), new Fletch(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`BankFletcher — ${this.status}`, `${this.product}: ${this.made} fletched  bank trips ${this.trips}`, `logs left ${this.logCount()}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#c9a0ff');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#c9a0ff' });
+        p.title(`BankFletcher — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('fletching') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `XP/hr: ${xph}`);
+        p.row(`${this.product}: ${this.made}`, `Bank trips: ${this.trips}`);
+        p.row(`Logs left: ${this.logCount()}`);
+
+        p.gap();
+        // live product switch — FletchDialog re-reads productName() each make-menu
+        // open, so the current batch finishes on the old product and the next one
+        // uses the new; no in-progress transaction to corrupt.
+        const picked = p.select('product', 'product', PRODUCT_OPTIONS, this.product);
+        if (picked && picked !== this.product) {
+            this.switchProduct(picked);
+        }
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
+    }
+
+    /** Live fletch-product switch from the paint — tasks read productName() live,
+     *  so the next make-menu open picks the new product. */
+    private switchProduct(product: string): void {
+        this.product = product;
+        SettingsStore.save('BankFletcher', 'product', product);
+        this.log(`fletch product switched to ${product} (from the paint)`);
     }
 
     setStatus(s: string): void { this.status = s; }

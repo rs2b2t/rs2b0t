@@ -7,7 +7,7 @@
  */
 import { Bank } from '../api/hud/Bank.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Shop } from '../api/hud/Shop.js';
 import { Skills } from '../api/hud/Skills.js';
@@ -37,6 +37,12 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
     membersWorld: { type: 'boolean', default: true, label: 'Members world', help: 'gates members clusters; a wrong value degrades to logged skips' },
     route: { type: 'string', default: 'live', options: ['live', 'smoke-varrock'], label: 'Route', help: 'smoke-varrock is the Aubury-only test route' }
 };
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 const STATE_KEY_PREFIX = 'rs2b0t:shoprun:state:';
 const hasStorage = typeof localStorage !== 'undefined';
@@ -87,8 +93,10 @@ export class ShopRunner extends TaskBot {
     status = 'starting';
     sessionHaul: Record<string, number> = {};
     sessionSpent = 0;
+    startedAt = Date.now();
 
     override async onStart(): Promise<void> {
+        this.startedAt = Date.now();
         const strategy = this.settings.str('strategy', 'Buyout');
         const policy: BuyPolicy = strategy === 'Floor %' ? { kind: 'floor', pct: this.settings.num('floorPct', 50) } : { kind: 'buyout' };
         this.cfg = {
@@ -239,15 +247,43 @@ export class ShopRunner extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const haul = Object.entries(this.sessionHaul).map(([k, v]) => `${k} +${v}`).join('  ') || '—';
-        const lines = [
-            `ShopRunner — ${this.status}`,
-            `stop → ${this.nextStopLabel()}`,
-            `gp held ${Inventory.count('Coins')}  spent ${this.sessionSpent}`,
-            `haul ${haul}`,
-            `last skip ${this.lastSkip ?? '—'}`
-        ];
-        drawStatusBox(ctx, lines, '#8be9fd');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#8be9fd' });
+        p.title(`ShopRunner — ${this.status}`);
+
+        const tab = p.tabs('sr', ['Overview', 'Route']);
+        if (tab === 'Overview') {
+            const mins = (Date.now() - this.startedAt) / 60_000;
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Gp held: ${Inventory.count('Coins')}`);
+            p.row(`Spent: ${this.sessionSpent}`);
+            p.text(`stop → ${this.nextStopLabel()}`);
+        } else {
+            const haul = Object.entries(this.sessionHaul).sort((a, b) => b[1] - a[1]);
+            if (haul.length === 0) {
+                p.text('no haul yet', '#8a919a');
+            }
+            for (let i = 0; i < haul.length; i += 2) {
+                p.row(...haul.slice(i, i + 2).map(([k, v]) => `${k} +${v}`));
+            }
+            p.text(`last skip: ${this.lastSkip ?? '—'}`, '#8a919a');
+        }
+
+        p.gap();
+        // Pause/Stop only — the route/plan is a funded multi-leg transaction; a
+        // mid-run route or strategy switch would corrupt the in-flight plan.
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 }
 

@@ -9,7 +9,8 @@ import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../ap
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Locs } from '../api/queries/Locs.js';
@@ -38,6 +39,15 @@ const LADDER = { name: 'Ladder', op: 'Climb-up', tile: new Tile(3096, 9867, 0) }
 const TRAPDOOR = { name: 'Trapdoor', tile: new Tile(3097, 3468, 0), stand: new Tile(3096, 3468, 0) }; // surface -> dungeon (Open then Climb-down); stand = the climb-up landing tile, adjacent to it
 const BANK = { name: 'Bank booth', op: 'Use-quickly', stand: new Tile(3094, 3491, 0) }; // Edgeville bank
 
+// XP/hr sums every melee stat this bot can train.
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
 /**
  * Kills Chaos druids in the Edgeville (wilderness) dungeon, loots the herb /
  * law-rune drops, and banks them: when the pack fills it climbs the dungeon
@@ -63,6 +73,8 @@ export default class ChaosDruidKiller extends TaskBot {
     private trips = 0;
     private deaths = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
     died = false;
 
     override async onStart(): Promise<void> {
@@ -80,6 +92,8 @@ export default class ChaosDruidKiller extends TaskBot {
 
         const here = Game.tile()!;
         this.anchor = new Tile(here.x, here.z, here.level);
+        this.startedAt = Date.now();
+        this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
         this.log(`anchored at ${this.anchor}, leash ${this.leash}, looting [${this.loot.join(', ')}]`);
         if (here.z < UNDERGROUND_Z) {
             this.log('warning: not underground — start me standing among the Chaos druids in the dungeon');
@@ -141,8 +155,31 @@ export default class ChaosDruidKiller extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`ChaosDruidKiller — ${this.status}`, `kills ${this.kills}  looted ${this.looted}  bank trips ${this.trips}${this.deaths ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#9be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`ChaosDruidKiller — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+        const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
+        p.row(`Looted: ${this.looted}`, `Bank trips: ${this.trips}`, `Deaths: ${this.deaths}`);
+        p.bar('HP', Skills.hpFraction());
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void {

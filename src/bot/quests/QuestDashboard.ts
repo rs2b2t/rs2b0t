@@ -3,7 +3,8 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
 import { evaluateAll } from './EligibilityEvaluator.js';
@@ -114,13 +115,35 @@ export default class QuestDashboard extends LoopingBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const { ready, blocked, done } = this.counts();
-        const lines: string[] = this.banner
-            ? ['QuestDashboard', this.banner]
-            : [
-                `QuestDashboard — READY ${ready}  BLOCKED ${blocked}  DONE ${done}`,
-                ...this.results.filter(r => r.status === 'READY').slice(0, 12).map(r => `READY  ${r.name}${this.tag(r)}`)
-            ];
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ad0ff' });
+        p.title('QuestDashboard');
+        if (this.banner) {
+            p.text(this.banner, '#8a919a');
+        } else {
+            p.row(`READY ${ready}`, `BLOCKED ${blocked}`, `DONE ${done}`);
+            const readyList = this.results.filter(r => r.status === 'READY').slice(0, 12);
+            if (readyList.length === 0) {
+                p.text('no quests ready', '#8a919a');
+            }
+            for (const r of readyList) {
+                p.text(`READY  ${r.name}${this.tag(r)}`);
+            }
+        }
 
-        drawStatusBox(ctx, lines, '#7ad0ff', 160);
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 }

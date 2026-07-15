@@ -4,7 +4,7 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { Quests, type QuestStatus } from '../api/hud/Quests.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { gotoNpc, talkThrough, type LadderHop, type NpcStop } from '../quests/exec/primitives.js';
@@ -139,12 +139,26 @@ export default class RuneMysteries extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `RuneMysteries — ${this.status}`,
-            `journal ${Quests.status(this.questName)}  held ${heldQuestItem(Inventory.items().map(i => i.name)) ?? '—'}`,
-            `step ${this.step}  QP ${Quests.points()}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#b8ffb8');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#b8ffb8' });
+        p.title(`RuneMysteries — ${this.status}`);
+        p.row(`Step: ${this.step}`, `Journal: ${Quests.status(this.questName)}`);
+        p.row(`Held: ${heldQuestItem(Inventory.items().map(i => i.name)) ?? '—'}`, `QP: ${Quests.points()}`);
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

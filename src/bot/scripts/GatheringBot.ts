@@ -5,11 +5,12 @@ import Tile from '../api/Tile.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
@@ -24,6 +25,12 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
     leashRadius: { type: 'number', default: 10, min: 2, max: 30, label: 'Leash radius (tiles)' }
 };
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /**
  * One bot for all gathering: find a target (scenery LOC or NPC) by name +
@@ -42,6 +49,7 @@ export default class GatheringBot extends TaskBot {
     private location: FishingLocation | null = null;
     private banked = 0;
     private trips = 0;
+    private startedAt = Date.now();
 
     private targetType = 'loc';
     private target = 'Rocks';
@@ -69,6 +77,7 @@ export default class GatheringBot extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        this.startedAt = Date.now();
         this.targetType = this.settings.str('targetType', 'loc').toLowerCase();
         this.target = this.settings.str('target', 'Rocks');
         this.action = this.settings.str('action', 'Mine');
@@ -135,11 +144,30 @@ export default class GatheringBot extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`Gathering — ${this.status}`, `${this.target}: ${this.gathered} gathered`, `inv ${Inventory.used()} used  tick ${Game.tick()}`];
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`Gathering — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        p.row(`Runtime: ${fmtDuration(mins)}`, `${this.target}: ${this.gathered}`, `Inv: ${Inventory.used()}/28`);
         if (this.location) {
-            lines.splice(1, 0, `loc ${this.location.name}  banked ${this.banked} (${this.trips} trips)`);
+            p.row(`Loc: ${this.location.name}`, `Banked: ${this.banked}`, `Trips: ${this.trips}`);
         }
-        drawStatusBox(ctx, lines, '#9be05b');
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void {

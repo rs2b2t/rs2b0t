@@ -2,7 +2,8 @@ import { TaskBot } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { Sustain } from '../api/Sustain.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
@@ -80,13 +81,34 @@ export default class ClueSolver extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const cur = ClueExecutor.current;
         const held = heldClueLikeId();
-        const lines = [
-            `ClueSolver — ${held === null ? 'waiting for a clue' : this.status}`,
-            `solved ${this.solved}  held clue: ${held ?? 'none'}  status: ${this.solveClue?.clueStatus() ?? 'idle'}`
-        ];
-        if (cur) {
-            lines.push(`${cur.name} leg ${cur.leg}${cur.attempt > 1 ? ` try ${cur.attempt}` : ''}: ${cur.step}`);
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#e8c35b' });
+        p.title(`ClueSolver — ${held === null ? 'waiting for a clue' : this.status}`);
+
+        const tab = p.tabs('cs', ['Overview', 'Clue']);
+        if (tab === 'Overview') {
+            p.row(`Solved: ${this.solved}`, `Held clue: ${held ?? 'none'}`);
+            p.text(`Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+        } else if (cur) {
+            p.text(`${cur.name} — leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
+            p.text(cur.step, '#8a919a');
+        } else {
+            p.text('no clue in progress', '#8a919a');
         }
-        drawStatusBox(ctx, lines, '#e8c35b');
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 }

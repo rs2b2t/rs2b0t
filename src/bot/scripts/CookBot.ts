@@ -5,7 +5,9 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank, withdrawOp } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Skills } from '../api/hud/Skills.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
@@ -15,6 +17,12 @@ import { countRaw, lastRawIndex } from './CookBotLogic.js';
 const DEFAULT_BANK_STAND = new Tile(2809, 3441, 0);
 const DEFAULT_RANGE_STAND = new Tile(2817, 3443, 0);
 const BOOTH = { op: 'Use-quickly' };
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SETTINGS: SettingsSchema = {
     fish: { type: 'string', default: 'Raw salmon', label: 'Raw fish to cook (contains)', help: 'e.g. Raw salmon / Raw shark / Raw lobster' },
@@ -38,6 +46,8 @@ export default class CookBot extends TaskBot {
     private cooked = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private fish = 'Raw salmon';
     private bankStand = DEFAULT_BANK_STAND;
@@ -58,13 +68,39 @@ export default class CookBot extends TaskBot {
         this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 8);
 
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('cooking');
+
         this.log(`CookBot cooking '${this.fish}' — bank ${this.bankStand}, range ${this.rangeStand}`);
         this.add(new ContinueDialog(), new CookDialog(this), new BankTrip(this), new CookTrip(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`CookBot — ${this.status}`, `${this.fish}: cooked ${this.cooked}  bank trips ${this.trips}`, `raw left ${this.rawCount()}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#ffd479');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffd479' });
+        p.title(`CookBot — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('cooking') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Cooked: ${this.cooked}`, `XP/hr: ${xph}`);
+        p.row(`Cooking: ${this.fish}`, `Raw left: ${this.rawCount()}`, `Bank trips: ${this.trips}`);
+
+        p.gap();
+        // processing bot — switching food mid-pack would strand a half-cooked
+        // batch, so Pause/Stop only (no live selector)
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

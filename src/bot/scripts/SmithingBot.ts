@@ -5,7 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
 import { Bank, withdrawOp } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Skills } from '../api/hud/Skills.js';
+import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
@@ -17,6 +18,12 @@ const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 // Keywords matched (substring, case-insensitive) against the anvil panel's
 // tier-specific item names — e.g. the Bronze panel offers "Bronze arrowtips",
 // "Bronze dart tip", "Bronze kiteshield" (NOT "arrowheads"/"dart tips"/"kite
@@ -49,6 +56,8 @@ export default class SmithingBot extends TaskBot {
     private made = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private bar = 'Bronze';
     private product = 'Dagger';
@@ -73,13 +82,39 @@ export default class SmithingBot extends TaskBot {
         this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 6);
 
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('smithing');
+
         this.log(`SmithingBot smithing ${this.bar} → ${this.product} — anvil ${this.anvilStand}, bank ${this.bankStand}`);
         this.add(new ContinueDialog(), new SmithPanel(this), new BankTrip(this), new Smith(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`SmithingBot — ${this.status}`, `${this.bar} ${this.product}: ${this.made} bars used  trips ${this.trips}`, `bars left ${this.barCount()}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#ffb066');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffb066' });
+        p.title(`SmithingBot — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('smithing') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Bars used: ${this.made}`, `XP/hr: ${xph}`);
+        p.row(`${this.bar} ${this.product}`, `Bars left: ${this.barCount()}`, `Bank trips: ${this.trips}`);
+
+        p.gap();
+        // processing bot — switching bar/product mid-batch strands the open anvil
+        // batch, so Pause/Stop only (no live selector)
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

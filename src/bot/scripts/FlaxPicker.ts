@@ -5,14 +5,21 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Traversal } from '../api/Traversal.js';
 import { Reachability } from '../api/Reachability.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 // Waypoints for the Seers loop (user-supplied, live). The bank run is a chain of
 // short, reliable hops — field centre → gate (the opening in the field boundary)
@@ -60,6 +67,7 @@ export default class FlaxPicker extends TaskBot {
     private picked = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
 
     private flaxName = 'Flax';
     private pickOp = 'Pick';
@@ -76,6 +84,7 @@ export default class FlaxPicker extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        this.startedAt = Date.now();
         this.flaxName = this.settings.str('flaxName', 'Flax');
         this.pickOp = this.settings.str('pickOp', 'Pick');
         this.fieldTile = this.settings.tile('fieldTile', DEFAULT_FIELD);
@@ -100,13 +109,29 @@ export default class FlaxPicker extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`FlaxPicker — ${this.status}`);
+
         const size = Inventory.isFull() ? 0 : Math.max(0, 28 - Inventory.used());
-        const lines = [
-            `FlaxPicker — ${this.status}`,
-            `${this.flaxName}: picked ${this.picked}  bank trips ${this.trips}`,
-            `free slots ${size}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#9be05b');
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        p.row(`Runtime: ${fmtDuration(mins)}`, `${this.flaxName} picked: ${this.picked}`, `Trips: ${this.trips}`);
+        p.row(`Free slots: ${size}`, `Held: ${this.flaxCount()}`);
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

@@ -5,7 +5,9 @@ import { Reachability } from '../api/Reachability.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -13,6 +15,12 @@ import { Npcs } from '../api/queries/Npcs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /** Tunable parameters (panel + `?ThievingBot.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -61,6 +69,8 @@ export default class ThievingBot extends TaskBot {
     private eats = 0;
     private picked = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -76,6 +86,8 @@ export default class ThievingBot extends TaskBot {
 
         const here = Game.tile()!;
         this.anchor = new Tile(here.x, here.z, here.level);
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('thieving');
         this.log(`thieving '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}${this.food ? `, eating *${this.food}* below ${Math.round(this.eatAtHp * 100)}% hp` : ''}`);
 
         // count successful steals for the overlay (chat confirms the pick)
@@ -89,8 +101,45 @@ export default class ThievingBot extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`ThievingBot — ${this.status}`, `${this.target}: ${this.steals} steals  ate ${this.eats}  picked ${this.picked}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#9be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`ThievingBot — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Target: ${this.target}`, `XP/hr: ${xph}`);
+        p.row(`Steals: ${this.steals}`, `Ate: ${this.eats}`, `Picked: ${this.picked}`);
+        p.bar('HP', Skills.hpFraction());
+
+        p.gap();
+        // live target switch — Steal/Loot re-read the target each loop, and each
+        // steal is atomic (no multi-step transaction to corrupt), so it's safe
+        const picked = p.select('target', 'target', PICKPOCKET_TARGET_NAMES, this.target);
+        if (picked && picked !== this.target) {
+            this.switchTarget(picked);
+        }
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
+    }
+
+    /** Live target switch from the paint — the Steal/Loot tasks re-read the
+     *  target name each loop, so the new target takes over immediately. The
+     *  leash anchor stays put (generic targets carry no location data). */
+    private switchTarget(target: string): void {
+        this.target = target;
+        SettingsStore.save('Thiever', 'target', target);
+        this.log(`pickpocket target switched to ${target} (from the paint)`);
     }
 
     setStatus(s: string): void {

@@ -12,10 +12,20 @@ import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Traversal } from '../api/Traversal.js';
 import { RecoveryHints } from '../runtime/RecoveryHints.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+// XP/hr sums every melee stat this bot can train (whichever com_mode is set).
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /** Tunable parameters (shown in the panel; also `?ChickenKiller.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -62,6 +72,8 @@ export default class ChickenKiller extends TaskBot {
     private feathers = 0;
     private deaths = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
     died = false;
 
     // resolved from settings in onStart (defaults match SETTINGS)
@@ -93,6 +105,8 @@ export default class ChickenKiller extends TaskBot {
         if (hinted) {
             this.log(`recovery restart — keeping original anchor ${this.anchor}`);
         }
+        this.startedAt = Date.now();
+        this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
         this.log(`anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}${this.gatherFeathers ? ', gathering feathers' : ''}`);
 
         // 274 content says "Oh dear you are dead!" (no comma); match loosely
@@ -179,8 +193,35 @@ export default class ChickenKiller extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`${this.target} Killer — ${this.status}`, `kills ${this.kills}  buried ${this.buried}${this.gatherFeathers ? `  feathers ${this.feathers}` : ''}${this.deaths > 0 ? `  deaths ${this.deaths}` : ''}`, `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#5be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#5be05b' });
+        p.title(`${this.target} Killer — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+        const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
+        if (this.gatherFeathers) {
+            p.row(`Buried: ${this.buried}`, `Feathers: ${this.feathers}`, `Deaths: ${this.deaths}`);
+        } else {
+            p.row(`Buried: ${this.buried}`, `Deaths: ${this.deaths}`);
+        }
+        p.bar('HP', Skills.hpFraction());
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(status: string): void {

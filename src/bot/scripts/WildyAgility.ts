@@ -10,7 +10,8 @@ import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -158,6 +159,12 @@ function foodCount(): number {
     return Inventory.items().filter(i => i.name?.toLowerCase().includes(FOOD)).length;
 }
 
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
 /**
  * Runs the Wilderness Agility Course: an agility-xp-gated 5-obstacle lap
  * (pipe -> ropeswing -> stepping stone -> log balance -> rocks), eating carried
@@ -183,6 +190,8 @@ export default class WildyAgility extends TaskBot {
     private eats = 0;
     private deaths = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
     died = false;
     // Latched once we've crossed the ridge into the course, so the lap loops
     // rocks -> pipe without EnterCourse re-firing when we pass back through the
@@ -218,6 +227,9 @@ export default class WildyAgility extends TaskBot {
             this.log(`WildyAgility needs Agility ${RIDGE_MIN_AGILITY} to cross the ridge (have ${agility}) — stopping.`);
             throw new Error(`WildyAgility: Agility ${RIDGE_MIN_AGILITY} required`);
         }
+
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('agility');
 
         this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}`);
 
@@ -265,12 +277,35 @@ export default class WildyAgility extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `WildyAgility — ${this.status}`,
-            `laps ${this.laps}  obstacles ${this.cleared}  ate ${this.eats}${this.deaths ? `  deaths ${this.deaths}` : ''}`,
-            `food ${foodCount()}  hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#e0a15b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#e0a15b' });
+        p.title(`WildyAgility — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const tab = p.tabs('wa', ['Overview', 'Survival']);
+        if (tab === 'Overview') {
+            const xph = mins > 0.5 ? `${(((Skills.xp('agility') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Laps: ${this.laps}`, `XP/hr: ${xph}`);
+            p.row(`Obstacles: ${this.cleared}`, `Step: ${this.currentName() ?? '—'}`);
+        } else {
+            p.row(`Food: ${foodCount()}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
+            p.bar('HP', Skills.hpFraction());
+        }
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     /**

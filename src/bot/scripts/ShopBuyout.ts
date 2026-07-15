@@ -6,7 +6,7 @@ import Tile from '../api/Tile.js';
 import { Traversal } from '../api/Traversal.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { Shop } from '../api/hud/Shop.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { talkThrough } from '../quests/exec/primitives.js';
@@ -27,6 +27,12 @@ const DEFAULT_BANK_STAND = new Tile(2533, 4714, 0);
 const DEFAULT_SHOP_STAND = new Tile(2535, 4719, 0);
 
 const DEFAULT_BUY_NAMES: string[] = (SHOP_DB[DEFAULT_SHOP]?.items ?? []).map(i => i.name).sort();
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SHOPBUYOUT_SETTINGS: SettingsSchema = {
     budgetGp: { type: 'number', default: 250_000, min: 100, label: 'Total gp to spend', help: 'the session budget — the bot stops cleanly once roughly this much has been spent' },
@@ -54,6 +60,7 @@ export default class ShopBuyout extends TaskBot {
 
     private status = 'starting';
     private phase: 'bank' | 'buy' = 'bank';
+    private startedAt = Date.now();
     sessionSpent = 0;
     sessionHaul: Record<string, number> = {};
 
@@ -90,6 +97,7 @@ export default class ShopBuyout extends TaskBot {
             this.log(`[buyout] '${this.keeper}' isn't a known shopkeeper — will buy ALL stock in shop order (no price model)`);
         }
 
+        this.startedAt = Date.now();
         this.log(`[buyout] ${this.keeper} — budget ${this.budgetGp}gp, ${this.perTripGp}gp/trip, ${this.chosen.size} item names selected`);
         this.add(new ContinueDialog(), new BankTrip(this), new BuyoutPass(this));
     }
@@ -108,14 +116,42 @@ export default class ShopBuyout extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const haul = Object.entries(this.sessionHaul).sort((a, b) => b[1] - a[1]);
-        const lines = [
-            `ShopBuyout — ${this.status}`,
-            `spent ${this.sessionSpent} / ${this.budgetGp}gp  coins ${Inventory.count('Coins')}`,
-            ...haul.slice(0, 3).map(([obj, n]) => `${obj}: ${n}`),
-            ...(haul.length > 3 ? [`+${haul.length - 3} more`] : [])
-        ];
-        drawStatusBox(ctx, lines, '#ffd76e');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffd76e' });
+        p.title(`ShopBuyout — ${this.status}`);
+
+        const tab = p.tabs('sb', ['Overview', 'Haul']);
+        if (tab === 'Overview') {
+            const mins = (Date.now() - this.startedAt) / 60_000;
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Coins: ${Inventory.count('Coins')}`);
+            p.row(`Spent: ${this.sessionSpent}`, `Budget: ${this.budgetGp}`);
+            p.bar('Budget', this.budgetGp > 0 ? this.sessionSpent / this.budgetGp : 0, '#ffd76e');
+        } else {
+            const haul = Object.entries(this.sessionHaul).sort((a, b) => b[1] - a[1]);
+            if (haul.length === 0) {
+                p.text('nothing bought yet', '#8a919a');
+            }
+            for (let i = 0; i < haul.length; i += 2) {
+                p.row(...haul.slice(i, i + 2).map(([obj, n]) => `${obj}: ${n}`));
+            }
+        }
+
+        p.gap();
+        // Pause/Stop only — a single-shop buyout has no safe mid-run switch (the
+        // shop/keeper/budget are baked into the funded trip).
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 }
 

@@ -6,11 +6,18 @@ import { Traversal } from '../api/Traversal.js';
 import { Banking } from '../api/Banking.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /** Tunable parameters (panel + `?Woodcutter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -51,6 +58,8 @@ export default class Woodcutter extends TaskBot {
     private xpGained = 0;
     private status = 'starting';
     private chopping = false;
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private leash = 15;
     private treeName = 'Tree';
@@ -66,6 +75,9 @@ export default class Woodcutter extends TaskBot {
         this.chopAction = this.settings.str('chopAction', 'Chop down');
         this.bankObject = this.settings.str('bankName', 'Bank booth');
         this.bankAction = this.settings.str('bankOp', 'Use-quickly');
+
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('woodcutting');
 
         const here = Game.tile()!;
         this.anchor = new Tile(here.x, here.z, here.level);
@@ -97,8 +109,30 @@ export default class Woodcutter extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`Woodcutter — ${this.status}`, `chopped ${this.logsChopped}  banked ${this.banked} (${this.trips} trips)`, `wc xp +${this.xpGained}  lvl ${Skills.level('woodcutting')}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#5be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#5be05b' });
+        p.title(`Woodcutter — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('woodcutting') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `WC lvl: ${Skills.level('woodcutting')}`, `XP/hr: ${xph}`);
+        p.row(`Chopped: ${this.logsChopped}`, `Banked: ${this.banked}`, `Trips: ${this.trips}`);
+        p.text(`Woodcutting XP gained: +${this.xpGained}`, '#8a919a');
+
+        p.gap();
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(status: string): void {

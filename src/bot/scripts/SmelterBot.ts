@@ -5,7 +5,8 @@ import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Skills } from '../api/hud/Skills.js';
+import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
@@ -25,6 +26,12 @@ const DEFAULT_BANK_STAND = new Tile(3269, 3167, 0);
 // you stand adjacent to its EAST footprint edge and use ore on it from here).
 const DEFAULT_FURNACE_STAND = new Tile(3275, 3185, 0);
 const BOOTH = { op: 'Use-quickly' };
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: [...BAR_OPTIONS], label: 'Bar to smelt', help: 'withdraw plan + coal ratio are derived from this' },
@@ -50,6 +57,8 @@ export default class SmelterBot extends TaskBot {
     private smelted = 0;
     private trips = 0;
     private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
 
     private recipe: Recipe = recipeForBar('Bronze')!;
     private bankStand = DEFAULT_BANK_STAND;
@@ -71,18 +80,40 @@ export default class SmelterBot extends TaskBot {
         this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 8);
 
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('smithing');
+
         const plan = withdrawPlan(this.recipe).map(p => `${p.count} ${p.ore}`).join(' + ');
         this.log(`SmelterBot smelting '${this.recipe.bar}' (${plan}) — bank ${this.bankStand}, furnace ${this.furnaceStand}`);
         this.add(new ContinueDialog(), new BankTrip(this), new SmeltTrip(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `SmelterBot — ${this.status}`,
-            `${this.recipe.bar}: smelted ${this.smelted}  bank trips ${this.trips}`,
-            `ore left ${this.primaryCount()}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#ffd479');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ffd479' });
+        p.title(`SmelterBot — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('smithing') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Smelted: ${this.smelted}`, `XP/hr: ${xph}`);
+        p.row(`Bar: ${this.recipe.bar}`, `Ore left: ${this.primaryCount()}`, `Bank trips: ${this.trips}`);
+
+        p.gap();
+        // processing bot — switching bar mid-pack strands a half-smelted ore mix,
+        // so Pause/Stop only (no live selector)
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void { this.status = s; }

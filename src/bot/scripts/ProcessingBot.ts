@@ -4,12 +4,19 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory, InvItem } from '../api/hud/Inventory.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import { Loc, Npc } from '../api/entities/index.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 /** Shared parameter schema for any processing preset (cook/fletch/smith/…). */
 export const PROCESSING_SETTINGS: SettingsSchema = {
@@ -34,6 +41,7 @@ export default class ProcessingBot extends TaskBot {
     private anchor: Tile | null = null;
     private made = 0;
     private status = 'starting';
+    private startedAt = Date.now();
 
     private material = 'Raw shrimps';
     private targetType = 'loc';
@@ -52,14 +60,39 @@ export default class ProcessingBot extends TaskBot {
 
         const here = Game.tile()!;
         this.anchor = new Tile(here.x, here.z, here.level);
+        this.startedAt = Date.now();
         this.log(`processing '${this.material}' on ${this.targetType} '${this.target}'${this.product ? ` → make *${this.product}*` : ''}, anchored at ${this.anchor}`);
 
         this.add(new MakeDialog(this), new Process(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [`Processing — ${this.status}`, `${this.material}: ${this.made} used`, `left ${this.materialCount()}  tick ${Game.tick()}`];
-        drawStatusBox(ctx, lines, '#9be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`Processing — ${this.status}`);
+
+        // generic processor (any skill) — no single trained skill to track, so
+        // runtime only, no XP/hr
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Made: ${this.made}`);
+        p.row(`${this.material} left: ${this.materialCount()}`, `On: ${this.targetType} ${this.target}`);
+
+        p.gap();
+        // free-text recipe driven from settings — a mid-recipe switch isn't a
+        // safe live toggle, so Pause/Stop only (no live selector)
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
     }
 
     setStatus(s: string): void {
