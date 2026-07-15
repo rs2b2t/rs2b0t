@@ -550,9 +550,16 @@ class GearEquip implements Task {
  *  melee attack/strength/defence, ranged accurate/rapid/longrange (bow0/1/2
  *  share the same varp). Not persisted, so this re-asserts once per session
  *  and again if a weapon swap resets it. Mage owns its style via autocast. */
+// Failed style/autocast asserts retry in bounded batches with a cooldown
+// between them — NEVER permanently. A DC used to burn the old hard cap in
+// seconds against the still-loading post-relogin UI, leaving the style wrong
+// for the rest of the session (live-hit: came back from a DC stuck off rapid).
+const ASSERT_BATCH = 5;
+const ASSERT_RETRY_MS = 60_000;
+
 class SetAttackStyle implements Task {
-    private announced = false;
     private fails = 0;
+    private retryAt = 0;
 
     constructor(private bot: RockCrab) {}
 
@@ -561,9 +568,12 @@ class SetAttackStyle implements Task {
     }
 
     validate(): boolean {
-        // bounded: a stale combat tab (tutorial-gated accounts) makes the click
-        // land nowhere — warn and move on rather than starving every task below
-        return STYLE !== 'mage' && this.fails < 5 && !Game.inCombat() && Game.combatMode() !== this.target();
+        // com_mode isn't persisted: this re-fires whenever the varp disagrees —
+        // session start, after a DC/relogin, after a weapon swap. Deliberately
+        // NOT gated on !inCombat: rock crabs keep you in combat near-constantly,
+        // so an out-of-combat-only assert never gets a window at the pile (the
+        // post-DC stuck-off-rapid failure). Style clicks are legal mid-fight.
+        return STYLE !== 'mage' && Game.combatMode() !== this.target() && Date.now() >= this.retryAt;
     }
 
     async execute(): Promise<void> {
@@ -571,26 +581,29 @@ class SetAttackStyle implements Task {
         this.bot.setStatus('setting combat style');
         Game.setCombatStyle(mode);
         const ok = await Execution.delayUntil(() => Game.combatMode() === mode, 3000);
-        if (ok && !this.announced) {
-            this.announced = true;
+        if (ok) {
             this.fails = 0;
             const label = STYLE === 'range' ? ['accurate', 'rapid', 'longrange'][mode] : `${['accurate', 'aggressive', 'defensive'][mode]} (training ${['Attack', 'Strength', 'Defence'][mode]})`;
             this.bot.log(`combat style: ${label ?? '?'}`);
-        } else if (!ok && ++this.fails >= 5) {
-            this.bot.log(`WARNING: could not set the ${STYLE} attack style after 5 tries — if the weapon IS wielded, this account's combat tab is stale (tutorial-gated): relog once with it wielded.`);
+        } else if (++this.fails >= ASSERT_BATCH) {
+            this.fails = 0;
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            this.bot.log(`could not set the ${STYLE} attack style (combat tab not ready?) — retrying in ${ASSERT_RETRY_MS / 1000}s`);
         }
     }
 }
 
-/** Arm the staff's autocast spell (once per session — the style varp resets
- *  on login). Bounded retries so a bad spell name can't hot-loop. */
+/** Arm the staff's autocast spell — the style varp resets on every login, so
+ *  this re-fires after DCs too. Failed batches back off (ASSERT_RETRY_MS)
+ *  rather than dying for the session. */
 class ArmAutocast implements Task {
     private fails = 0;
+    private retryAt = 0;
 
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        if (STYLE !== 'mage' || this.fails >= 5 || Autocast.armed()) {
+        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
             return false;
         }
         // staff tab attached, or the staff is at least worn (a stale combat
@@ -603,8 +616,10 @@ class ArmAutocast implements Task {
         await Execution.delayTicks(3); // give a fresh wield's tab swap a moment to land
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
-        } else if (++this.fails >= 5) {
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' after 5 tries — check the spell name, magic level and staff. If the staff IS wielded but the combat tab stayed unarmed, this account's equip-time tab update is tutorial-gated — relog once with the staff wielded.`);
+        } else if (++this.fails >= ASSERT_BATCH) {
+            this.fails = 0;
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' — retrying in ${ASSERT_RETRY_MS / 1000}s. Check the spell name, magic level and staff; if the staff IS wielded but the combat tab stayed unarmed, this account's equip-time tab update is tutorial-gated — relog once with it wielded.`);
         }
     }
 }
