@@ -21,7 +21,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
-import { isHostileAttacker, requiredThieving, targetSpot } from './ArdyThieverLogic.js';
+import { chooseTarget, isHostileAttacker, requiredThieving, targetSpot } from './ArdyThieverLogic.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
@@ -50,7 +50,13 @@ const FLEE_TILE = new Tile(2655, 3298, 0);
 // longer window (headroom for frame-rate dips) after each stun so a normal miss
 // isn't mistaken for a real attacker. Genuine combat never emits a stun message,
 // so it still flees once the window lapses.
-const STUN_COMBAT_TICKS = 17;
+// A failed pickpocket freezes us for the target's stun_ticks (content
+// pickpocket.dbrow — 8 ticks / ~4.8s for every Ardougne market target). We
+// suppress Flee/FightBack for exactly that window (so a normal miss isn't
+// read as a real attacker) and use it to re-attempt the INSTANT the stun
+// clears. It was 17 (~10s) — more than double the real stun — which both
+// delayed the next steal and blinded us to a genuine attacker for ~5s too long.
+const STUN_COMBAT_TICKS = 8; // matches the engine freeze; the "been stunned" chat lands ~1 tick in, so stunned() clears ~1 tick AFTER the real freeze — late enough not to re-fire mid-freeze, tight enough not to idle
 // How close an in-combat market hostile must be to count as "the one attacking
 // us" — melee attackers stand adjacent; 5 gives slack for a pathing hostile.
 const ENGAGE_RADIUS = 5;
@@ -274,7 +280,9 @@ export default class ArdyThiever extends TaskBot {
 
     setStatus(s: string): void { this.status = s; }
     /** True while a recent thieving stun still explains Game.inCombat() (a caught
-     *  pickpocket, not a real attacker). */
+     *  pickpocket, not a real attacker). Public so Pickpocket can wait EXACTLY
+     *  until the stun clears before re-attempting. */
+    stunned(): boolean { return this.inThievingStun(); }
     private inThievingStun(): boolean { return Game.tick() <= this.stunnedUntilTick; }
     /** In combat with an actual attacker — the self-inflicted pickpocket-fail
      *  stun (which also shows the health bar) does NOT count. Every task that
@@ -498,39 +506,71 @@ class RestockCakes implements Task {
 /** Pickpocket the target while we have food. Success = thieving XP/slot gain;
  *  failure = stun waited out. Combat (a retaliating guard) is handled by Flee. */
 class Pickpocket implements Task {
+    /** consecutive executes where no in-leash target was reachable — bounds the
+     *  path-clear so an un-openable fenced-off wanderer can't wedge us. */
+    private unreachableStreak = 0;
+
     constructor(private bot: ArdyThiever) {}
-    private find() {
+
+    /** In-leash targets offering the pickpocket op, nearest first. */
+    private candidates(): Npc[] {
         return Npcs.query()
             .name(TARGET)
             .action(PICKPOCKET_OP)
             .where(n => n.tile().distanceTo(ANCHOR) <= LEASH)
-            .nearest();
+            .results()
+            .sort((a, b) => a.distance() - b.distance());
     }
+
     validate(): boolean {
-        return !this.bot.inRealCombat() && foodCount() > RESTOCK_AT && !Inventory.isFull() && this.find() !== null;
+        return !this.bot.inRealCombat() && foodCount() > RESTOCK_AT && !Inventory.isFull() && this.candidates().length > 0;
     }
+
     async execute(): Promise<void> {
-        const npc = this.find();
-        if (!npc) { return; }
-        if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
-            this.bot.setStatus(`clearing path to ${TARGET}`);
-            await walkOpening(npc.tile(), 1, OBSTACLE, m => this.bot.log(m));
+        // Reachability-aware: pick the nearest target we can actually stand next
+        // to. Fixating on the nearest regardless (the old find().nearest()) is
+        // what wedged the bot when the closest knight wandered to a fenced market
+        // edge — it looped on walkOpening while reachable knights stood ignored.
+        const { target, blocked } = chooseTarget(this.candidates(), n => Reachability.canReach(n.tile(), { adjacentOk: true }));
+
+        if (!target) {
+            // Nothing reachable. Try ONE bounded path-clear toward the nearest
+            // (covers a genuinely walled-off target / us boxed in a shop), then
+            // stop and let it wander back — a fence has no door to open, and
+            // grinding walkOpening on it for minutes is the reported "stuck".
+            if (blocked && this.unreachableStreak++ < 2) {
+                this.bot.setStatus(`clearing path to ${TARGET}`);
+                await walkOpening(blocked.tile(), 1, OBSTACLE, m => this.bot.log(m));
+            } else {
+                this.bot.setStatus(`${TARGET} out of reach — waiting for it to wander back`);
+                await Execution.delayTicks(2);
+            }
             return;
         }
-        this.bot.setStatus(`pickpocketing ${TARGET} at ${npc.tile()}`);
+        this.unreachableStreak = 0;
+
+        this.bot.setStatus(`pickpocketing ${TARGET} at ${target.tile()}`);
         const xpBefore = Skills.xp('thieving');
         const usedBefore = Inventory.used();
-        if (!(await npc.interact(PICKPOCKET_OP))) { await Execution.delayTicks(2); return; }
-        // Wait out the attempt: a SUCCESS lands thieving xp/loot within a tick or
-        // two; a FAILURE stuns us instead (no xp/loot) — sit it out (yielding to
-        // EatFood if the hit dropped us) rather than re-firing opnpc every tick,
-        // which the stun ignores anyway. NOT gated on Game.inCombat(): the fail
-        // itself shows the health bar, and breaking on it just spins the attempt.
+        if (!(await target.interact(PICKPOCKET_OP))) { await Execution.delayTicks(2); return; }
+        // Resolve the attempt: a SUCCESS lands thieving xp/loot within a tick or
+        // two; a FAILURE stuns us (chat sets stunned()). Poll briefly for either.
         await Execution.delayUntil(
-            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || Skills.hpFraction() < EAT_AT,
-            3000
+            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || this.bot.stunned() || Skills.hpFraction() < EAT_AT,
+            2500
         );
-        if (Skills.xp('thieving') > xpBefore) { this.bot.countSteal(); this.bot.log(`pickpocketed ${TARGET}`); }
+        if (Skills.xp('thieving') > xpBefore) {
+            this.bot.countSteal();
+            this.bot.log(`pickpocketed ${TARGET}`);
+            return;
+        }
+        // Stunned: wait EXACTLY until it clears (or HP forces an eat), then return
+        // so the next loop re-attempts immediately — no blind idle after the stun.
+        // Re-firing opnpc mid-stun is dropped by the engine, so don't; just wait
+        // out the real 8-tick freeze precisely instead of a fixed 3s guess.
+        if (this.bot.stunned()) {
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < EAT_AT, 8000);
+        }
     }
 }
 

@@ -59,3 +59,23 @@ export function isHostileAttacker(c: AttackerCandidate, maxDistance: number): bo
         && c.distance <= maxDistance
         && c.actions.includes('Attack');
 }
+
+/**
+ * Pick which in-leash target to pickpocket. Candidates come nearest-first;
+ * return the nearest REACHABLE one. Fixating on the nearest target regardless
+ * of reachability is what wedges the bot when the closest knight wanders to a
+ * spot we can't stand next to (a fenced market edge — reachable() is false):
+ * the old code funnelled that into a minutes-long walk-to-open loop and never
+ * tried the reachable knights standing right there. When NONE are reachable
+ * (all wandered behind walls, or we're boxed in), returns {target: null,
+ * blocked: nearest} so the caller can attempt ONE bounded path-clear toward
+ * the nearest rather than pickpocket nothing.
+ */
+export function chooseTarget<T>(candidatesNearestFirst: T[], reachable: (t: T) => boolean): { target: T | null; blocked: T | null } {
+    for (const c of candidatesNearestFirst) {
+        if (reachable(c)) {
+            return { target: c, blocked: null };
+        }
+    }
+    return { target: null, blocked: candidatesNearestFirst[0] ?? null };
+}

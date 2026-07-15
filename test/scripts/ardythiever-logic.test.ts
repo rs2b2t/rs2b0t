@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from '#/bot/scripts/PickpocketTargets.js';
-import { HOSTILE_NAMES, isHostileAttacker, requiredThieving, targetSpot } from '#/bot/scripts/ArdyThieverLogic.js';
+import { HOSTILE_NAMES, chooseTarget, isHostileAttacker, requiredThieving, targetSpot } from '#/bot/scripts/ArdyThieverLogic.js';
 
 // Spawn tiles decoded from the engine's packed server maps (n40_51/n41_51) —
 // the source data behind the anchor table. Hero's far-SW spawn (2630,3288) is
@@ -68,5 +68,27 @@ describe('isHostileAttacker', () => {
     });
     test('rejects a hostile with no Attack op (mid-death / op-less variant)', () => {
         expect(isHostileAttacker({ ...guard, actions: ['Pickpocket'] }, 5)).toBe(false);
+    });
+});
+
+describe('chooseTarget (reachability-aware pickpocket selection)', () => {
+    const reach = (set: Set<string>) => (t: string) => set.has(t);
+
+    test('picks the nearest REACHABLE target, skipping closer unreachable ones', () => {
+        // nearest-first: A (unreachable, fenced edge), B (reachable), C (reachable)
+        const r = chooseTarget(['A', 'B', 'C'], reach(new Set(['B', 'C'])));
+        expect(r).toEqual({ target: 'B', blocked: null });
+    });
+
+    test('nearest reachable wins when the closest IS reachable', () => {
+        expect(chooseTarget(['A', 'B'], reach(new Set(['A', 'B'])))).toEqual({ target: 'A', blocked: null });
+    });
+
+    test('none reachable → no target, surfaces the nearest as blocked for a bounded clear', () => {
+        expect(chooseTarget(['A', 'B'], reach(new Set()))).toEqual({ target: null, blocked: 'A' });
+    });
+
+    test('empty candidate list → nothing to do', () => {
+        expect(chooseTarget([], reach(new Set()))).toEqual({ target: null, blocked: null });
     });
 });
