@@ -11,7 +11,9 @@ import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { drawStatusBox } from '../api/hud/Overlay.js';
+import { Paint } from '../api/hud/Paint.js';
+import { ScriptRunner } from '../runtime/ScriptRunner.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import { Traversal } from '../api/Traversal.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
@@ -62,6 +64,12 @@ const FOOD = ['cake', 'bread', 'chocolate slice'];
 // iron ore). Gems bank via the shared common-junk list.
 const LOOT = ['coins', 'chaos rune', 'death rune', 'blood rune', 'nature rune', 'jug of wine', 'fire orb', 'gold ore', 'clue scroll', 'body talisman', 'steel arrow', 'iron ore'];
 const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
+
+/** minutes → h:mm:ss for the paint's runtime line. */
+function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const SETTINGS: SettingsSchema = {
     thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target', help: 'the bot knows each target\'s market spot — no anchor to place' },
@@ -116,6 +124,9 @@ export default class ArdyThiever extends TaskBot {
     private kills = 0;
     private status = 'starting';
     private stunnedUntilTick = 0;
+    private startedAt = Date.now();
+    private xpAtStart = 0;
+    private lootCounts = new Map<string, number>();
     died = false;
 
     override async onStart(): Promise<void> {
@@ -134,6 +145,9 @@ export default class ArdyThiever extends TaskBot {
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('thieving');
 
         // Gate on the target's pickpocket requirement (subsumes the stall's
         // Thieving 5 — every market target needs 40+): stop with a clear
@@ -196,13 +210,66 @@ export default class ArdyThiever extends TaskBot {
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const lines = [
-            `ArdyThiever — ${this.status}`,
-            `target ${TARGET}  steals ${this.steals}  ate ${this.eats}  fled ${this.flees}  fought ${this.kills}`,
-            `loot ${this.looted}  bank trips ${this.trips}  food ${foodCount()}  lootslots ${lootSlots()}`,
-            `hp ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')}  tick ${Game.tick()}`
-        ];
-        drawStatusBox(ctx, lines, '#9be05b');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`ArdyThiever — ${this.status}`);
+
+        const tab = p.tabs('at', ['Overview', 'Loot', 'Combat']);
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        if (tab === 'Overview') {
+            const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            const sph = mins > 0.5 ? `${Math.round((this.steals / mins) * 60)}` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Steals: ${this.steals}`, `Steals/hr: ${sph}`);
+            p.row(`XP/hr: ${xph}`, `Food: ${foodCount()}`, `Loot slots: ${lootSlots()}`);
+            p.bar('HP', Skills.hpFraction());
+        } else if (tab === 'Loot') {
+            p.row(`Looted: ${this.looted}`, `Bank trips: ${this.trips}`);
+            const top = [...this.lootCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (top.length === 0) {
+                p.text('nothing yet', '#8a919a');
+            }
+            for (let i = 0; i < top.length; i += 2) {
+                p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
+            }
+        } else {
+            p.row(`Response: ${RESPONSE}`, `Fled: ${this.flees}`, `Fought: ${this.kills}`);
+            p.row(`Ate: ${this.eats}`, `Stunned: ${this.inThievingStun() ? 'yes' : 'no'}`, `In combat: ${this.inRealCombat() ? 'yes' : 'no'}`);
+        }
+
+        p.gap();
+        const picked = p.select('target', 'target', TARGET_OPTIONS, TARGET);
+        if (picked && picked !== TARGET) {
+            this.switchTarget(picked);
+        }
+        const clicked = p.buttons([
+            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (ScriptRunner.state === 'paused') {
+                ScriptRunner.resume();
+            } else {
+                ScriptRunner.pause();
+            }
+        } else if (clicked === 'stop') {
+            ScriptRunner.stop();
+        }
+        p.end();
+    }
+
+    /** Live target switch from the paint — level-gated; the anchor/leash move
+     *  with the target and ReturnToAnchor walks us to the new market spot. */
+    private switchTarget(target: string): void {
+        const need = requiredThieving(target);
+        if (Skills.level('thieving') < need) {
+            this.log(`can't switch to ${target}: needs Thieving ${need} (have ${Skills.level('thieving')})`);
+            return;
+        }
+        TARGET = target;
+        const spot = targetSpot(target);
+        ANCHOR = spot.anchor;
+        LEASH = spot.leash;
+        SettingsStore.save('ArdyThiever', 'thieveTarget', target);
+        this.log(`pickpocket target switched to ${target} (from the paint)`);
     }
 
     setStatus(s: string): void { this.status = s; }
@@ -216,7 +283,12 @@ export default class ArdyThiever extends TaskBot {
     inRealCombat(): boolean { return Game.inCombat() && !this.inThievingStun(); }
     countSteal(): void { this.steals++; }
     countEat(): void { this.eats++; }
-    countLoot(): void { this.looted++; }
+    countLoot(name?: string | null): void {
+        this.looted++;
+        if (name) {
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
+        }
+    }
     countTrip(): void { this.trips++; }
     countFlee(): void { this.flees++; }
     countKill(): void { this.kills++; }
@@ -317,7 +389,7 @@ class LootDrops implements Task {
         const before = Inventory.count(name);
         if (!(await drop.interact('Take'))) { await Execution.delayTicks(2); return; }
         if (await Execution.delayUntil(() => Inventory.count(name) > before, 3000)) {
-            this.bot.countLoot();
+            this.bot.countLoot(name);
         }
     }
 }
