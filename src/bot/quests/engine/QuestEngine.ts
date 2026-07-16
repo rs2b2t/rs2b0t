@@ -78,10 +78,16 @@ export class QuestEngine implements Task {
 
     /** Quests benched for no-progress; retried after every other quest's turn. */
     private readonly parked = new Set<string>();
+    /** Reasons for quests parked on a provisioning shortfall (unprovisionable
+     *  mustHave). Overlaid onto the PARKED row so the display names the specific
+     *  missing item instead of the generic 'no progress' string — the quest stays
+     *  in `parked` (retryable), NOT `blocked` (permanently excluded). */
+    private readonly parkedReasons = new Map<string, string[]>();
     /** Quests whose items have been provisioned once (consume-safe guard). */
     private readonly provisioned = new Set<string>();
-    /** Quests that can't proceed (unobtainable mustHave / def bug) -> reasons for
-     *  the queue rows; excluded from selection so they never re-pick-loop. */
+    /** Quests that can't proceed at all (def bug / internal error) -> reasons for
+     *  the queue rows; excluded from selection so they never re-pick-loop. A
+     *  provisioning shortfall is PARKED (retryable), not blocked — see parkedReasons. */
     private readonly blocked = new Map<string, string[]>();
 
     /** Bank-only counts (LOWERCASED), refreshed whenever the bank is open — the
@@ -119,7 +125,11 @@ export class QuestEngine implements Task {
         }
 
         // A manual Skip from the paint parks the running quest before selection.
-        if (this.runningId !== null && this.host.consumeSkip()) {
+        // Consume the flag EVERY loop (clearing it) regardless of runningId —
+        // otherwise a Skip pressed while nothing runs stays latched and would
+        // silently park the NEXT quest picked. Act on it only when one is running.
+        const skip = this.host.consumeSkip();
+        if (skip && this.runningId !== null) {
             this.host.log(`skip requested — parking ${this.nameOf(this.runningId, elig)}`);
             this.parked.add(this.runningId);
             this.resetWatchdog();
@@ -159,6 +169,7 @@ export class QuestEngine implements Task {
         if (snap.journal === 'complete') {
             this.host.log(`${module.record.name} COMPLETE — ${Quests.points()} QP`);
             this.parked.delete(id);
+            this.parkedReasons.delete(id);
             this.provisioned.delete(id);
             this.blocked.delete(id);
             this.resetWatchdog();
@@ -176,14 +187,19 @@ export class QuestEngine implements Task {
                 this.provisioned.add(id);
                 step = module.decide(snap);
             } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
-                // A mustHave we can't buy/gather and the bank doesn't hold — park
-                // with the reasons on the row (usually eligibility already caught
-                // this as BLOCKED, but a bank/inv race can surface it here).
-                this.host.log(`${module.record.name} blocked: ${plan.blocked.join(', ')}`);
-                this.block(id, plan.blocked.map(b => `missing: ${b}`));
+                // A mustHave we can't buy/gather and the bank doesn't hold. PARK
+                // (not block): this is usually a transient bank/inv read race, so
+                // the quest must stay retryable after everything else has had a
+                // turn — block() would permanently exclude it for the session.
+                // Mirror the watchdog park path (parked/reset/runningId=null) and
+                // record the shortfall so the PARKED row names the missing item.
+                this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
+                this.parkedReasons.set(id, plan.blocked.map(b => `missing: ${b}`));
+                this.parked.add(id);
+                this.resetWatchdog();
                 this.runningId = null;
                 const blk = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, null));
-                this.host.noteState(blk, null, `blocked: ${plan.blocked.join(', ')}`, this.noProgressCount, this.parked.size);
+                this.host.noteState(blk, null, `parked: ${plan.blocked.join(', ')}`, this.noProgressCount, this.parked.size);
                 return;
             } else if (plan.withdraw.length > 0) {
                 // Withdraw first, even if a gather is also pending — the bank trip
@@ -194,8 +210,11 @@ export class QuestEngine implements Task {
                 const want = plan.gather[0];
                 const gatherFn = module.gather?.[want.name.toLowerCase()];
                 if (!gatherFn) {
-                    // An acquirable item with no gatherer is a def bug — block it
-                    // (rather than spin) so the ERROR is visible and non-fatal.
+                    // An acquirable item with no gatherer is a def bug — PERMANENTLY
+                    // block it (deliberate: unlike a provisioning race, a broken def
+                    // cannot fix itself by retrying, so we exclude it for the session
+                    // rather than park — a reviewed deviation from the plan's 'park').
+                    // Blocks (not spins) so the ERROR is visible and non-fatal.
                     this.host.log(`ERROR: ${module.record.name} needs '${want.name}' but has no gather fn (def bug)`);
                     this.block(id, [`def bug: no gather for ${want.name}`]);
                     this.runningId = null;
@@ -244,11 +263,21 @@ export class QuestEngine implements Task {
         this.resetWatchdog();
     }
 
-    /** Overlay locally-tracked block reasons onto the pure queue rows. */
+    /** Overlay locally-tracked reasons onto the pure queue rows: hard blocks
+     *  become BLOCKED; a provisioning shortfall keeps its PARKED status but swaps
+     *  the generic 'no progress — parked' string for the specific missing item(s)
+     *  (guarded to the PARKED row so it never bleeds onto a RUNNING/READY row). */
     private applyBlocked(rows: QueueRow[]): QueueRow[] {
         return rows.map(r => {
-            const reasons = this.blocked.get(r.id);
-            return reasons ? { ...r, status: 'BLOCKED' as const, reasons } : r;
+            const blocked = this.blocked.get(r.id);
+            if (blocked) {
+                return { ...r, status: 'BLOCKED' as const, reasons: blocked };
+            }
+            const prov = this.parkedReasons.get(r.id);
+            if (prov && r.status === 'PARKED') {
+                return { ...r, reasons: prov };
+            }
+            return r;
         });
     }
 
