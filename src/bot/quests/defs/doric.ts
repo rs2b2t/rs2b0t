@@ -60,6 +60,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const doric: QuestModule = {
     record: F2P.find(r => r.id === 'doric')!,
+    // any pickaxe tier is the mining tool the gather fallback checks for
+    tools: ['pickaxe'],
     gather: {
         'clay': (s, n) => gatherOre(s, 'Clay', n),
         'copper ore': (s, n) => gatherOre(s, 'Copper ore', n),

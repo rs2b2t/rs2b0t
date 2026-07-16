@@ -47,6 +47,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const runemysteries: QuestModule = {
     record: F2P.find(r => r.id === 'runemysteries')!,
+    // quest-internal deliverables a restart may hold ('notes' is generic but a
+    // conservative keep is harmless)
+    tools: ['air talisman', 'research package', 'notes'],
     hops: WIZARD_HOPS,
     decide
 };

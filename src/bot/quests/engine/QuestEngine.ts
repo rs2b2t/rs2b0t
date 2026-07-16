@@ -13,7 +13,7 @@ import { evaluate } from '../EligibilityEvaluator.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
-import { planProvisioning } from './provisioning.js';
+import { depositPlan, planProvisioning } from './provisioning.js';
 import { nextQuest, queueRows, type QueueRow } from './queue.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from './types.js';
 import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature } from './watchdog.js';
@@ -66,6 +66,7 @@ function describeStep(step: QuestStep): string {
         case 'useOn': return `use ${step.item} on ${step.target}`;
         case 'equip': return `equip ${step.item}`;
         case 'withdraw': return `withdraw ${step.items.map(i => `${i.name}×${i.qty}`).join(', ')}`;
+        case 'deposit': return 'bank spillover from the last quest';
         case 'mineRock': return `mine ${step.item}`;
         case 'custom': return step.name;
         case 'wait': return step.reason;
@@ -112,6 +113,12 @@ export class QuestEngine implements Task {
     private readonly parkedReasons = new Map<string, string[]>();
     /** Quests whose items have been provisioned once (consume-safe guard). */
     private readonly provisioned = new Set<string>();
+    /** Quests that already had their between-quest spillover deposit. Once per
+     *  quest, BEFORE provisioning: everything the module doesn't keep goes to
+     *  the bank so long queues can't overflow the pack (live: sheep needs
+     *  shears + 20 wool = 21 free slots). Bank-first provisioning pulls back
+     *  whatever the quest actually needs, so depositing is always safe. */
+    private readonly deposited = new Set<string>();
     /** Quests that can't proceed at all (def bug / internal error) -> reasons for
      *  the queue rows; excluded from selection so they never re-pick-loop. A
      *  provisioning shortfall is PARKED (retryable), not blocked — see parkedReasons. */
@@ -222,6 +229,7 @@ export class QuestEngine implements Task {
             this.parkedReasons.delete(id);
             this.parkCounts.delete(id);
             this.provisioned.delete(id);
+            this.deposited.delete(id);
             this.blocked.delete(id);
             this.resetWatchdog();
             this.runningId = null;
@@ -230,8 +238,28 @@ export class QuestEngine implements Task {
             return;
         }
 
-        // --- 5. provisioning (once per quest) then decide ---
+        // --- 5. spillover deposit (once per quest), provisioning, then decide ---
         let step: QuestStep;
+        if (!this.deposited.has(id)) {
+            // Keep = the quest's own record items + its declared tools/internals.
+            const keep = [
+                ...module.record.items.map(i => i.name.toLowerCase()),
+                ...(module.tools ?? [])
+            ];
+            const spillover = depositPlan(snap.inv, keep);
+            if (spillover.length === 0) {
+                this.deposited.add(id); // clean pack: no bank trip earned
+            } else {
+                this.host.noteState(rows, id, 'banking spillover', this.noProgressCount, this.parked.size);
+                const banked = await executeStep({ kind: 'deposit', keep }, module.hops ?? [], m => this.host.log(`  ${m}`));
+                if (banked) {
+                    this.deposited.add(id);
+                }
+                this.refreshBankCounts(); // the trip just updated what bank-first can see
+                await Execution.delayTicks(1);
+                return; // re-enter with a fresh snapshot next loop
+            }
+        }
         if (!this.provisioned.has(id)) {
             const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts);
             if (plan.satisfied) {

@@ -103,6 +103,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const restlessghost: QuestModule = {
     record: F2P.find(r => r.id === 'priest')!,
+    // quest-internal items a restart may hold in the PACK (worn amulet is safe
+    // either way — deposits never touch equipment)
+    tools: ['ghostspeak amulet', 'skull'],
     hops: WIZARD_HOPS,
     decide
 };

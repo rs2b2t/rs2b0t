@@ -84,6 +84,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const cooksassistant: QuestModule = {
     record: F2P.find(r => r.id === 'cook')!,
+    // mid-quest intermediates ('pot' also matches 'pot of flour', 'bucket' also
+    // matches 'bucket of milk') — a restart must not bank them
+    tools: ['pot', 'grain', 'bucket', 'egg'],
     gather: {
         'egg': gatherEgg,
         'bucket of milk': gatherMilk,

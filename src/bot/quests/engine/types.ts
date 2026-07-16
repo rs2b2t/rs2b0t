@@ -30,6 +30,12 @@ export type QuestStep =
     | { kind: 'useOn'; item: string; targetKind: 'npc' | 'loc'; target: string; anchor: Tile; product?: string }
     | { kind: 'equip'; item: string }
     | { kind: 'withdraw'; items: { name: string; qty: number }[] }
+    /** Deposit every backpack item whose LOWERCASED name matches none of the
+     *  `keep` substrings (worn equipment is untouched). Issued by the engine
+     *  once per quest before provisioning so each quest starts with a clean
+     *  pack — provisioning is bank-first, so anything deposited that the quest
+     *  needs comes straight back via `withdraw`. */
+    | { kind: 'deposit'; keep: string[] }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
     | { kind: 'custom'; name: string; run: (log: (m: string) => void) => Promise<boolean> }
     | { kind: 'wait'; reason: string }
@@ -47,6 +53,12 @@ export interface QuestModule {
      *  more are required. decide-shaped so multi-leg gathers (windmill flour)
      *  re-plan from the snapshot each loop. */
     gather?: Record<string, (snap: QuestSnapshot, need: number) => QuestStep>;
+    /** LOWERCASED substring matchers for pack items the engine's between-quest
+     *  deposit must KEEP: gather tools ('pickaxe', 'shears') and quest-internal
+     *  items a mid-quest restart may be holding ('ghostspeak amulet', 'cadava').
+     *  record.items names are always kept implicitly. Conservative (substring)
+     *  on purpose — keeping too much is harmless, depositing a tool wedges. */
+    tools?: string[];
     /** PURE quest brain: (journal, inv, worn) -> next step. */
     decide(snap: QuestSnapshot): QuestStep;
 }

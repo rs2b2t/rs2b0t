@@ -121,6 +121,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const sheepshearer: QuestModule = {
     record: F2P.find(r => r.id === 'sheep')!,
+    // shears = the gather tool; 'wool' also matches 'ball of wool' (record item)
+    // so a mid-quest restart never banks half-gathered fleece
+    tools: ['shears', 'wool'],
     gather: { 'ball of wool': gatherBalls },
     decide
 };

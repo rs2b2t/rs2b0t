@@ -73,6 +73,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const romeojuliet: QuestModule = {
     record: F2P.find(r => r.id === 'romeojuliet')!,
+    // 'cadava' keeps both the berries (record item) and the potion; 'message'
+    // is Juliet's letter
+    tools: ['cadava', 'message'],
     grind: ['Imp'],
     gather: {
         'cadava berries': () => ({ kind: 'custom', name: 'hunt imps for cadava berries', run: huntImps })

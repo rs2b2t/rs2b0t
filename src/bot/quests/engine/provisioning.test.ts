@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { planProvisioning } from './provisioning.js';
+import { depositPlan, planProvisioning } from './provisioning.js';
 import type { QuestItem } from '../types.js';
 
 const it = (name: string, qty: number, kind: 'mustHave' | 'acquirable'): QuestItem => ({ name, qty, kind });
@@ -39,5 +39,20 @@ describe('planProvisioning', () => {
     test('name matching is case-insensitive against the lowercased maps', () => {
         const p = planProvisioning([it('Ball of wool', 20, 'acquirable')], new Map([['ball of wool', 20]]), new Map());
         expect(p.satisfied).toBe(true);
+    });
+});
+
+describe('depositPlan', () => {
+    const inv = (names: string[]): Map<string, number> => new Map(names.map(n => [n, 1]));
+
+    test('keeps substring matches, deposits the rest', () => {
+        const out = depositPlan(inv(['bronze pickaxe', 'logs', 'coins', 'clay']), ['pickaxe', 'clay']);
+        expect(out).toEqual(['logs', 'coins']);
+    });
+    test('clean pack -> nothing to deposit', () => {
+        expect(depositPlan(inv(['shears', 'wool']), ['shears', 'wool'])).toEqual([]);
+    });
+    test('substring keep covers derived forms (cadava berries + cadava potion)', () => {
+        expect(depositPlan(inv(['cadava berries', 'cadava potion', 'egg']), ['cadava'])).toEqual(['egg']);
     });
 });

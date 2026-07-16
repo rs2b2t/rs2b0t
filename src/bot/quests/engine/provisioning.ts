@@ -42,3 +42,15 @@ export function planProvisioning(
     }
     return plan;
 }
+
+/**
+ * Items the between-quest deposit should send to the bank: everything in the
+ * pack whose name matches none of the `keep` substrings. `inv` keys and `keep`
+ * entries are both LOWERCASED (the QuestSnapshot convention); matching is
+ * substring-inclusive so 'pickaxe' keeps every pickaxe tier and 'cadava' keeps
+ * both the berries and the potion. Pure — the engine only issues a deposit
+ * step when this is non-empty, so a clean pack never earns a bank trip.
+ */
+export function depositPlan(inv: Map<string, number>, keep: string[]): string[] {
+    return [...inv.keys()].filter(name => !keep.some(k => name.includes(k)));
+}

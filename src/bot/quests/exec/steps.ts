@@ -142,6 +142,30 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             actions.closeModal();
             return ok;
         }
+        case 'deposit': {
+            // Same bank leg as withdraw; deposit everything whose LOWERCASED name
+            // matches none of the keep substrings (SolveClue.bankFirst's keep-set
+            // idiom). Worn equipment is not in the backpack, so it is untouched.
+            const here = Game.tile();
+            const bank = here ? nearestBank(here) : null;
+            if (!bank) {
+                log('deposit: no known bank');
+                return false;
+            }
+            if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
+                return false;
+            }
+            if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
+                return false;
+            }
+            const kept = (name: string): boolean => {
+                const n = name.toLowerCase();
+                return step.keep.some(k => n.includes(k));
+            };
+            await Bank.depositAllMatching(name => !kept(name));
+            actions.closeModal();
+            return true;
+        }
         case 'mineRock': {
             // GatheringBot mining idiom: every mining rock shares the loc NAME
             // "Rocks"; only the loc ID distinguishes ore, so resolve the ore type
