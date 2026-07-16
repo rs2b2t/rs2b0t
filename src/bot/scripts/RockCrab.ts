@@ -102,7 +102,7 @@ export const SETTINGS: SettingsSchema = {
     fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Retreat below HP%', group: 'Food & healing' },
     restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP% (no-food fallback)', group: 'Food & healing' },
 
-    loc1: { type: 'tile', default: DEFAULT_SPOTS[0], label: 'Spot 1 (x,z)', group: 'Field', help: 'stand tiles whose 3x3 square touches 2-3 Rocks spawns; the bot rotates between spots. Set a slot to 0,0 to disable it.' },
+    loc1: { type: 'tile', default: DEFAULT_SPOTS[0], label: 'Spot 1 (x,z)', group: 'Field', help: 'stand tiles whose 3x3 square touches 2-3 Rocks spawns; switch the active spot live from the paint. Set a slot to 0,0 to disable it.' },
     loc2: { type: 'tile', default: DEFAULT_SPOTS[1], label: 'Spot 2 (x,z)', group: 'Field' },
     loc3: { type: 'tile', default: DEFAULT_SPOTS[2], label: 'Spot 3 (x,z)', group: 'Field' },
     loc4: { type: 'tile', default: DEFAULT_SPOTS[3], label: 'Spot 4 (x,z)', group: 'Field' },
@@ -122,8 +122,9 @@ export const SETTINGS: SettingsSchema = {
 // Active run config — set from settings in onStart. Safe as module state
 // because exactly one script runs at a time (ADR-0006).
 // The configured stand spots (loc1-5, zero/duplicate slots filtered) and the
-// index of the one currently worked. Rotation: aggro reset and a cleared-out
-// spot both advance to the next, spreading kills across respawn clusters.
+// index of the one currently worked. The spot is STATIC: nothing in the task
+// loop ever changes it — only the paint's live spot selector (and the
+// nearest-spot pick at start) sets locIdx.
 let LOCS: Tile[] = [...DEFAULT_SPOTS];
 let locIdx = 0;
 let RESET_TILE = DEFAULT_RESET;
@@ -183,9 +184,10 @@ export default class RockCrab extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        // loc1-5 → the rotation list: zero-coord slots are disabled, duplicates
+        // loc1-5 → the spot list: zero-coord slots are disabled, duplicates
         // collapse, and an all-disabled config falls back to the presets. Start
-        // at the spot nearest the player so a mid-field relaunch stays put.
+        // at the spot nearest the player so a mid-field relaunch stays put;
+        // after that only the paint's spot selector changes it.
         const slots = [1, 2, 3, 4, 5].map(i => this.settings.tile(`loc${i}`, DEFAULT_SPOTS[i - 1]));
         const seen = new Set<string>();
         LOCS = slots.filter(t => {
@@ -278,8 +280,9 @@ export default class RockCrab extends TaskBot {
                     this.log('died! waiting for respawn, then web-walking back to the field');
                 },
                 onRecovered: () => {
+                    // locIdx is untouched: the player's paint-selected spot
+                    // survives a death; the loop re-converges on it from here.
                     this.died = false;
-                    locIdx = 0; // recovery walked to spot 1 — work from there
                 }
             }),
             new Eat(this),
@@ -305,7 +308,6 @@ export default class RockCrab extends TaskBot {
             new RegroupAtField(this),
             new Fight(this),
             new Aggro(this),
-            new NextSpot(this),
             new ResetAggro(this)
         );
     }
@@ -357,6 +359,17 @@ export default class RockCrab extends TaskBot {
         const picked = p.select('style', 'style', ['melee', 'mage', 'range'], styleNow);
         if (picked && picked !== STYLE) {
             this.switchStyle(picked as typeof STYLE);
+        }
+        // spot selector — the ONLY thing that changes the active spot; the
+        // loop re-anchors on it (regroup/walk-backs) without any forced walk
+        if (LOCS.length > 1) {
+            const spotNow = `${locIdx + 1} @ ${currentSpot().x},${currentSpot().z}`;
+            const spotPick = p.select('spot', 'spot', LOCS.map((t, i) => `${i + 1} @ ${t.x},${t.z}`), spotNow);
+            const pickedIdx = spotPick ? LOCS.findIndex((t, i) => `${i + 1} @ ${t.x},${t.z}` === spotPick) : -1;
+            if (pickedIdx >= 0 && pickedIdx !== locIdx) {
+                locIdx = pickedIdx;
+                this.log(`spot switched to ${locIdx + 1}/${LOCS.length} (${currentSpot().x},${currentSpot().z})`);
+            }
         }
         const clicked = p.buttons([
             { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
@@ -438,12 +451,6 @@ export default class RockCrab extends TaskBot {
 /** The stand spot currently worked — the anchor every field query/walk uses. */
 function currentSpot(): Tile {
     return LOCS[locIdx % LOCS.length];
-}
-
-/** Advance the rotation to the next configured spot. */
-function nextSpot(): Tile {
-    locIdx = (locIdx + 1) % LOCS.length;
-    return currentSpot();
 }
 
 function inField(tile: Tile): boolean {
@@ -1110,32 +1117,6 @@ class Aggro implements Task {
     }
 }
 
-/** Current spot is worked out — nothing active, nothing dormant left in
- *  radius (all killed, respawn timers running) — so move to the next preset
- *  spot instead of idling in place until the same rocks come back. */
-class NextSpot implements Task {
-    constructor(private bot: RockCrab) {}
-
-    validate(): boolean {
-        if (LOCS.length < 2 || this.bot.deAggroed() || Skills.hpFraction() < FIGHT_HP_GATE) {
-            return false; // ResetAggro owns dud-wake streaks and low-HP retreats
-        }
-        const here = Game.tile();
-        return here !== null && inField(Tile.from(here)) && activeCrabs().length === 0 && dormantRocks().length === 0;
-    }
-
-    async execute(): Promise<void> {
-        if (EventSignal.pending()) {
-            return; // runtime event guard takes over next loop
-        }
-        const spot = nextSpot();
-        this.bot.setStatus(`spot cleared — moving to spot ${locIdx + 1}/${LOCS.length}`);
-        this.bot.log(`spot cleared out — rotating to spot ${locIdx + 1}/${LOCS.length} (${spot.x},${spot.z})`);
-        await DirectNavigator.walkTo(spot, CENTRE_RADIUS, 30000);
-        this.bot.clearWakes();
-    }
-}
-
 /** Run out of the field and back to reset aggression, or (with no food) to regen HP. */
 class ResetAggro implements Task {
     constructor(private bot: RockCrab) {}
@@ -1164,11 +1145,8 @@ class ResetAggro implements Task {
             await Execution.delayTicks(3);
         }
 
-        // come back in at the NEXT spot — the reset means this one stopped
-        // producing (dud wakes), so work a fresh respawn cluster
-        const spot = LOCS.length > 1 ? nextSpot() : currentSpot();
-        await DirectNavigator.walkTo(spot, 3, 60000);
+        await DirectNavigator.walkTo(currentSpot(), 3, 60000);
         this.bot.clearWakes();
-        this.bot.log(`back in the field at spot ${locIdx + 1}/${LOCS.length} (${spot.x},${spot.z})`);
+        this.bot.log('back in the field');
     }
 }

@@ -32,7 +32,7 @@ describe('DEFAULT_SPOTS', () => {
         }
     });
 
-    test('spots are pairwise > 4 apart (one per cluster, rotation hits fresh crabs)', () => {
+    test('spots are pairwise > 4 apart (one per cluster, switching hits fresh crabs)', () => {
         for (let i = 0; i < DEFAULT_SPOTS.length; i++) {
             for (let j = i + 1; j < DEFAULT_SPOTS.length; j++) {
                 expect(DEFAULT_SPOTS[i].distanceTo(DEFAULT_SPOTS[j])).toBeGreaterThan(4);
