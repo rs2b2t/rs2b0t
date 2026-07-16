@@ -49,7 +49,12 @@ const LUMBY_SHOP = { npc: 'Shop keeper', anchor: new Tile(3209, 3247, 0) };
 const ONION_PATCH = new Tile(3188, 3267, 0);      // loc 3366 'Onion' op2=Pick, beside Fred's farm
 const CLAY_ROCKS = new Tile(2986, 3240, 0);       // reuse Doric's Rimmington clay anchor
 const BUCKET_SPAWN = new Tile(3225, 3294, 0);     // proven farmhouse tile (cook def)
-const WELL = new Tile(3208, 3221, 0);             // Lumbridge courtyard well — LIVE-VERIFY
+// Rimmington Well (loc 884 'Well', category=well) at (2956,3212) — 30 tiles from
+// the Rimmington clay rocks the soft-clay/paste chains mine at, so bucket-fill
+// and soft-clay-making happen in one place. Live 2026-07-16: the earlier
+// Lumbridge (3208,3221) tile has NO 'Well' loc (a Fountain + Sink), so the
+// fill useOn found no target and spun.
+const WELL = new Tile(2956, 3212, 0);
 // Logs ground spawn for burnForAshes: no static Logs OBJ exists in Draynor town,
 // but m48_51 (0 17 1)/(0 17 2) -> (3089,3265,0)/(3089,3266,0) sit ~6t N of Aggie
 // in a fenced Draynor yard (obj.pack Logs id 1511). Closest level-0 pair to the
