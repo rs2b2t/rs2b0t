@@ -481,6 +481,10 @@ export class QuestEngine implements Task {
             return;
         }
         const next = new Map<string, number>();
+        // Coins are engine-relevant (buy steps / gpShort affordability), not a
+        // quest-record item — track them unconditionally or snap.bankCoins would
+        // stay 0 forever (no record declares Coins; review catch, PAW Task 1).
+        next.set('coins', Bank.count('Coins'));
         for (const r of this.records) {
             for (const it of r.items) {
                 const key = it.name.toLowerCase();
