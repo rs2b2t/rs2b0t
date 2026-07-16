@@ -65,12 +65,27 @@ export const Reachability = {
         return f !== null && (f & CollisionFlag.SQ_BLOCKED) === 0;
     },
 
-    /** The live ArrivalProbe (canReach bounded to ARRIVAL_MAX_STEPS + walkable)
-     *  the four walk gates feed to the shared `isArrived` predicate. */
+    /** The scene can read collision at `dest` — same level and inside the
+     *  loaded area. Distinguishes "blocked" from "can't even look": walkable()
+     *  is false for both, and arrival treats them differently. */
+    probeable(dest: WorldTile): boolean {
+        const me = reader.worldTile();
+        if (!me || me.level !== dest.level) {
+            return false;
+        }
+        const to = reader.toLocal(dest.x, dest.z);
+        return to !== null && reader.collisionFlags(to.lx, to.lz) !== null;
+    },
+
+    /** The live ArrivalProbe (canReach bounded to ARRIVAL_MAX_STEPS + walkable
+     *  + adjacency for unwalkable targets) the four walk gates feed to the
+     *  shared `isArrived` predicate. */
     arrivalProbe(): ArrivalProbe {
         return {
             canReach: t => Reachability.canReach(t, { maxSteps: ARRIVAL_MAX_STEPS }),
-            walkable: t => Reachability.walkable(t)
+            walkable: t => Reachability.walkable(t),
+            canReachAdjacent: t => Reachability.canReach(t, { maxSteps: ARRIVAL_MAX_STEPS, adjacentOk: true }),
+            probeable: t => Reachability.probeable(t)
         };
     }
 };

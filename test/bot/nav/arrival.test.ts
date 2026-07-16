@@ -5,7 +5,7 @@ import { isArrived, type ArrivalProbe } from '#/bot/nav/arrival.js';
 // Stub probe (like coverageLogic.test.ts): fixed answers, and records every
 // query so we can prove the short-circuits (level/radius/on-tile) never consult
 // the live scene.
-function probe(opts: { canReach?: boolean; walkable?: boolean }): ArrivalProbe & { asked: string[] } {
+function probe(opts: { canReach?: boolean; walkable?: boolean; canReachAdjacent?: boolean; probeable?: boolean }): ArrivalProbe & { asked: string[] } {
     const asked: string[] = [];
     return {
         asked,
@@ -16,6 +16,14 @@ function probe(opts: { canReach?: boolean; walkable?: boolean }): ArrivalProbe &
         walkable: (t: NavPoint): boolean => {
             asked.push(`walk ${t.x},${t.z},${t.level}`);
             return opts.walkable ?? true;
+        },
+        canReachAdjacent: (t: NavPoint): boolean => {
+            asked.push(`adj ${t.x},${t.z},${t.level}`);
+            return opts.canReachAdjacent ?? false;
+        },
+        probeable: (t: NavPoint): boolean => {
+            asked.push(`probe ${t.x},${t.z},${t.level}`);
+            return opts.probeable ?? true;
         }
     };
 }
@@ -34,10 +42,24 @@ describe('isArrived', () => {
         expect(isArrived(me, { x: 12, z: 12, level: 0 }, 2, probe({ canReach: false, walkable: true }))).toBe(false);
     });
 
-    test('within radius + unreachable + dest NOT walkable → arrived (booth fallback)', () => {
-        // Booth/counter/rock tile: never stand-able, so canReach is always false.
-        // Fall back to the old Chebyshev gate — never a never-arrives hang.
-        expect(isArrived(me, { x: 12, z: 12, level: 0 }, 2, probe({ canReach: false, walkable: false }))).toBe(true);
+    test('unwalkable dest with a wall-open adjacent stand → arrived (bank booth)', () => {
+        // Booth/counter/rock tile: never stand-able, so canReach is always
+        // false — arrival is having a tile beside it an interact could use.
+        expect(isArrived(me, { x: 12, z: 12, level: 0 }, 2, probe({ canReach: false, walkable: false, canReachAdjacent: true }))).toBe(true);
+    });
+
+    test('unwalkable dest through a wall → NOT arrived (ladder-in-a-house money test)', () => {
+        // A ladder just INSIDE a house wall, bot standing OUTSIDE within
+        // radius: the old Chebyshev fallback said "arrived" and the follow-up
+        // click spammed "I can't reach that!" forever. No adjacent stand ⇒
+        // keep walking (through the door).
+        expect(isArrived(me, { x: 12, z: 12, level: 0 }, 2, probe({ canReach: false, walkable: false, canReachAdjacent: false, probeable: true }))).toBe(false);
+    });
+
+    test('unwalkable dest the scene cannot probe → arrived (Chebyshev fallback survives)', () => {
+        // Out-of-scene target: reachability answers are vacuous, keep the old
+        // semantics so an unprobeable dest never becomes a never-arrives hang.
+        expect(isArrived(me, { x: 12, z: 12, level: 0 }, 2, probe({ canReach: false, walkable: false, canReachAdjacent: false, probeable: false }))).toBe(true);
     });
 
     test('outside radius → NOT arrived regardless of reachability', () => {
