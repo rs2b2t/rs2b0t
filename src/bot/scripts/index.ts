@@ -12,7 +12,6 @@ import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidK
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
-import CooksAssistant from './CooksAssistant.js';
 import GatheringBot from './GatheringBot.js';
 import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
@@ -28,7 +27,6 @@ import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
-import RuneMysteries, { SETTINGS as RUNEMYSTERIES_SETTINGS } from './RuneMysteries.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
@@ -44,23 +42,6 @@ ScriptRegistry.register({
 });
 
 // --- quest ---
-ScriptRegistry.register({
-    name: 'CooksAssistant',
-    description: "Works the Cook's Assistant quest around Lumbridge — starts it, then gathers egg/milk/grain",
-    category: 'Quest',
-    tags: ['f2p', 'quest', 'lumbridge', 'newbie'],
-    create: () => new CooksAssistant()
-});
-
-ScriptRegistry.register({
-    name: 'RuneMysteries',
-    description: 'Completes the Rune Mysteries quest — Duke Horacio → Sedridor (tower basement) → Aubury → back. No cheats.',
-    category: 'Quest',
-    tags: ['f2p', 'quest', 'lumbridge', 'wizard-tower', 'varrock'],
-    settingsSchema: RUNEMYSTERIES_SETTINGS,
-    create: () => new RuneMysteries()
-});
-
 ScriptRegistry.register({
     name: 'QuestDashboard',
     description: 'Reports DONE/READY/BLOCKED eligibility for all quests',

@@ -117,7 +117,7 @@ export default class EssMiner extends TaskBot {
         this.xpAtStart = Skills.xp('mining');
 
         if (Quests.status(RUNE_MYSTERIES) !== 'complete') {
-            this.log('EssMiner needs Rune Mysteries completed for Aubury\'s teleport — run the RuneMysteries bot first.');
+            this.log('EssMiner needs Rune Mysteries completed for Aubury\'s teleport — complete it with the AIOQuester bot first.');
             throw new Error('EssMiner: Rune Mysteries required');
         }
         const gate = requiredMiningLevel(PICK_CHOICE);

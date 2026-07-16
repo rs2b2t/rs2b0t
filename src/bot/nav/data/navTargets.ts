@@ -33,11 +33,12 @@ export const NAV_TARGETS: NavTarget[] = [
     { bot: 'RockCrab', label: 'Rellekka crab field', tile: { x: 2710, z: 3720, level: 0 } },
     { bot: 'RockCrab', label: 'crab reset tile', tile: { x: 2712, z: 3699, level: 0 } },
     { bot: 'RockCrab', label: 'Seers bank stand', tile: { x: 2725, z: 3491, level: 0 } },
-    { bot: 'RuneMysteries', label: 'wizard-tower surface ladder stand', tile: { x: 3105, z: 3162, level: 0 } },
+    { bot: 'AIOQuester', label: 'wizard-tower surface ladder stand', tile: { x: 3105, z: 3162, level: 0 } },
     // KNOWN island: the wizard-tower BASEMENT ladder landing is a separate
-    // underground region reached via the ladder transport; RuneMysteries handles
-    // the trapped-landing at runtime (climb-up re-roll). Expected, not a defect.
-    { bot: 'RuneMysteries', label: 'wizard-tower basement ladder landing', tile: { x: 3104, z: 9576, level: 0 }, expected: 'island' },
+    // underground region reached via the ladder transport; the quest exec
+    // (quests/exec/gotoNpc) handles the trapped-landing at runtime (climb-up
+    // re-roll). Expected, not a defect.
+    { bot: 'AIOQuester', label: 'wizard-tower basement ladder landing', tile: { x: 3104, z: 9576, level: 0 }, expected: 'island' },
     { bot: 'ShopRunner', label: 'Aubury shop stand', tile: { x: 3253, z: 3401, level: 0 } },
     { bot: 'ShopRunner', label: "Lowe's archery stand", tile: { x: 3231, z: 3421, level: 0 } },
     { bot: 'ShopRunner', label: "Betty's magic shop stand", tile: { x: 3012, z: 3258, level: 0 } },
