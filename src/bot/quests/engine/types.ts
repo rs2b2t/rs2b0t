@@ -31,7 +31,11 @@ export type QuestStep =
     | { kind: 'grabGround'; item: string; anchor: Tile }
     | { kind: 'pickLoc'; loc: string; op: string; item: string; anchor: Tile }
     | { kind: 'interactLoc'; loc: string; op: string; anchor: Tile; expectItem?: string }
-    | { kind: 'useOn'; item: string; targetKind: 'npc' | 'loc'; target: string; anchor: Tile; product?: string }
+    /** Use `item` on another world entity or on a second held item. For
+     *  targetKind 'item' the target is resolved from the pack (Inventory.first)
+     *  and `anchor` is unused (item-on-item needs no world position) — e.g. use
+     *  a Bucket of water on Clay to make Soft clay (Prince Ali). */
+    | { kind: 'useOn'; item: string; targetKind: 'npc' | 'loc' | 'item'; target: string; anchor: Tile; product?: string }
     | { kind: 'equip'; item: string }
     | { kind: 'withdraw'; items: { name: string; qty: number }[] }
     /** Deposit every backpack item whose LOWERCASED name matches none of the

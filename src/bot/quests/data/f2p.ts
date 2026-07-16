@@ -137,20 +137,18 @@ export const F2P: QuestRecord[] = [
     },
     {
         // source: prince_journal.rs2:22-46 — no gate; disguise pieces are assembled
-        // during the quest (see quest_prince.rs2:8-9,28-29), so all acquirable.
-        // quest.constant:110 QP; name questlist.if:183.
+        // during the quest (see quest_prince.rs2:8-9,28-29). items: [] on purpose:
+        // Wig/Paste/Bronze key are quest-internal STAGE-GATED crafts (Ned/Aggie/
+        // Osman only make them mid-quest) and Rope/Pink skirt are self-managed by
+        // the def's own acquisition rows — provisioning must NOT try to pre-gather
+        // any of them (they have no bank/shop source before their stage). The def
+        // (defs/princeali.ts) drives all acquisition. quest.constant:110 QP.
         id: 'prince',
         name: 'Prince Ali Rescue',
         members: false,
         questPoints: 3,
         requirements: {},
-        items: [
-            { name: 'Wig', qty: 1, kind: 'acquirable' },
-            { name: 'Paste', qty: 1, kind: 'acquirable' },
-            { name: 'Pink skirt', qty: 1, kind: 'acquirable' },
-            { name: 'Rope', qty: 1, kind: 'acquirable' },
-            { name: 'Bronze key', qty: 1, kind: 'acquirable' }
-        ]
+        items: []
     },
     {
         // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries are an

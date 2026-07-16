@@ -85,6 +85,32 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return true;
         }
         case 'useOn': {
+            // Item-on-item (targetKind 'item'): both operands are in the pack, so
+            // no walk is needed and `anchor` is ignored — resolve the target from
+            // the backpack and dispatch InvItem.useOn(InvItem) (driver-supported).
+            // Mirrors the npc/loc cases below for the held item + product wait.
+            if (step.targetKind === 'item') {
+                const held = Inventory.first(step.item);
+                if (!held) {
+                    log(`useOn: no '${step.item}' in the pack`);
+                    return false;
+                }
+                const targetItem = Inventory.first(step.target);
+                if (!targetItem) {
+                    log(`useOn: no '${step.target}' in the pack`);
+                    return false;
+                }
+                const beforeProduct = step.product !== undefined ? Inventory.count(step.product) : 0;
+                if (!(await held.useOn(targetItem))) {
+                    return false;
+                }
+                if (step.product !== undefined) {
+                    const product = step.product;
+                    return Execution.delayUntil(() => Inventory.count(product) > beforeProduct, 10_000);
+                }
+                await Execution.delayTicks(3);
+                return true;
+            }
             if (!(await ensureAt(step.anchor, 4, log))) {
                 return false;
             }
