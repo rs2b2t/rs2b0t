@@ -6,7 +6,8 @@ const snap = (journal: string, inv: string[] = [], noProgress = 0): QuestSnapsho
     journal: journal as QuestSnapshot['journal'],
     inv: new Map(inv.map(n => [n, 1])),
     worn: new Set(),
-    noProgress
+    noProgress,
+    bankCoins: 0
 });
 
 const npcOf = (s: ReturnType<typeof decide>): string => (s.kind === 'talk' ? s.stop.npc : `<${s.kind}>`);

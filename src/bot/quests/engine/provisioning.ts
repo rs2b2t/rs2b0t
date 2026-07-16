@@ -54,3 +54,12 @@ export function planProvisioning(
 export function depositPlan(inv: Map<string, number>, keep: string[]): string[] {
     return [...inv.keys()].filter(name => !keep.some(k => name.includes(k)));
 }
+
+/** How many MORE gp a purchase needs beyond pack + last-seen bank coins.
+ *  0 = affordable. bankCoins is last-SEEN (0 before any bank visit this run),
+ *  so a broke verdict can be stale-pessimistic on a fresh login; the buy
+ *  executor's own bank trip refreshes it and the next loop re-decides. Pure. */
+export function gpShort(snap: { inv: Map<string, number>; bankCoins: number }, estGp: number): number {
+    const have = (snap.inv.get('coins') ?? 0) + snap.bankCoins;
+    return Math.max(0, estGp - have);
+}

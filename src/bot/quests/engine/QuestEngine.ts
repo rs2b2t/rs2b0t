@@ -430,7 +430,8 @@ export class QuestEngine implements Task {
             journal: Quests.status(module.record.name),
             inv,
             worn,
-            noProgress: this.noProgressCount
+            noProgress: this.noProgressCount,
+            bankCoins: this.lastBankCounts.get('coins') ?? 0
         };
     }
 

@@ -6,7 +6,8 @@ const snap = (journal: string, items: [string, number][] = []): QuestSnapshot =>
     journal: journal as QuestSnapshot['journal'],
     inv: new Map(items),
     worn: new Set(),
-    noProgress: 0
+    noProgress: 0,
+    bankCoins: 0
 });
 
 describe('cooksassistant gathers', () => {

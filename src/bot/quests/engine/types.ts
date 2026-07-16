@@ -20,6 +20,10 @@ export interface QuestSnapshot {
      *  quest varps are never transmitted, so mid-quest stages with no
      *  inventory signal (Romeo & Juliet 30/40/60) are only reachable this way. */
     noProgress: number;
+    /** Last-SEEN bank coin count (0 until a bank has been opened this run) —
+     *  lets pure gather fns decide buy vs 'need ~N gp' wait. Same staleness
+     *  contract as provisioning's bank counts. */
+    bankCoins: number;
 }
 
 export type QuestStep =

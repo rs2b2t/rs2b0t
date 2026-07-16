@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { depositPlan, planProvisioning } from './provisioning.js';
+import { depositPlan, gpShort, planProvisioning } from './provisioning.js';
 import type { QuestItem } from '../types.js';
 
 const it = (name: string, qty: number, kind: 'mustHave' | 'acquirable'): QuestItem => ({ name, qty, kind });
@@ -54,5 +54,20 @@ describe('depositPlan', () => {
     });
     test('substring keep covers derived forms (cadava berries + cadava potion)', () => {
         expect(depositPlan(inv(['cadava berries', 'cadava potion', 'egg']), ['cadava'])).toEqual(['egg']);
+    });
+});
+
+describe('gpShort', () => {
+    const snapWith = (packCoins: number, bankCoins: number) => ({
+        inv: new Map(packCoins > 0 ? [['coins', packCoins]] : []),
+        bankCoins
+    });
+    test('pack + bank covers -> 0', () => {
+        expect(gpShort(snapWith(100, 0), 100)).toBe(0);
+        expect(gpShort(snapWith(40, 60), 100)).toBe(0);
+    });
+    test('short -> the exact shortfall', () => {
+        expect(gpShort(snapWith(0, 0), 150)).toBe(150);
+        expect(gpShort(snapWith(30, 20), 150)).toBe(100);
     });
 });

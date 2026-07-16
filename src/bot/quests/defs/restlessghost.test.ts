@@ -6,7 +6,8 @@ const snap = (journal: string, inv: string[] = [], worn: string[] = []): QuestSn
     journal: journal as QuestSnapshot['journal'],
     inv: new Map(inv.map(n => [n, 1])),
     worn: new Set(worn),
-    noProgress: 0
+    noProgress: 0,
+    bankCoins: 0
 });
 
 describe('restlessghost decide', () => {
