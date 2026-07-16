@@ -5,7 +5,7 @@ import { Paint } from '../api/hud/Paint.js';
 import { Quests } from '../api/hud/Quests.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { QuestEngine } from '../quests/engine/QuestEngine.js';
-import { QUEST_DEFS } from '../quests/defs/index.js';
+import { QUEST_DEFS, defById } from '../quests/defs/index.js';
 import type { QueueRow, QueueStatus } from '../quests/engine/queue.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -65,9 +65,11 @@ export default class AIOQuester extends TaskBot {
         this.add(new ContinueDialog(), new QuestEngine(this));
     }
 
-    /** No combat grinding — Task 12 wires per-module grind lists (YAGNI here). */
+    /** The running quest's declared grind quarry (e.g. Romeo & Juliet's imps),
+     *  so RandomEvents never flags them hostile. `runningId` is the engine's
+     *  live selection, mirrored here each loop via noteState(). */
     override grindTargets(): string[] {
-        return [];
+        return this.runningId ? defById(this.runningId)?.grind ?? [] : [];
     }
 
     // --- host accessors used by QuestEngine ---------------------------------

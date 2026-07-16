@@ -38,6 +38,10 @@ export type QuestStep =
 export interface QuestModule {
     record: QuestRecord;               // the existing quests/data record (one source of truth)
     hops?: LadderHop[];                // scripted level crossings the nav graph lacks
+    /** NPC names this quest legitimately fights, surfaced through
+     *  AIOQuester.grindTargets() so the random-event guard never mistakes the
+     *  quarry for a hostile event (the ArdyFighter mechanism). */
+    grind?: string[];
     /** Per acquirable item (LOWERCASED name): next step toward obtaining it.
      *  Called by provisioning when the bank lacks the item; `need` is how many
      *  more are required. decide-shaped so multi-leg gathers (windmill flour)

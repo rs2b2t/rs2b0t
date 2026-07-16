@@ -153,8 +153,9 @@ export const F2P: QuestRecord[] = [
         ]
     },
     {
-        // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries picked from
-        // bushes, potion made by Apothecary (acquirable). quest.constant:111 QP.
+        // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries are an
+        // IMP DROP in this content (imp.rs2:67, ~4/128 ~= 3%/kill) — no cadava bush
+        // exists — potion made by Apothecary (acquirable). quest.constant:111 QP.
         id: 'romeojuliet',
         name: 'Romeo & Juliet',
         members: false,
