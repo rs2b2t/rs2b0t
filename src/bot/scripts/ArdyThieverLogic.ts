@@ -14,17 +14,24 @@ export interface TargetSpot {
     leash: number;
 }
 
-// Anchors/leashes derived from the engine's packed spawn data (n40_51/n41_51):
-// Guard x7 and Knight x4 all wander within 12 of the market centre; the two
-// market Paladins sit a nudge south-west; the two market-side Heroes
-// ((2647,3306) + (2667,3316)) need a wider ring from a midpoint anchor. All
-// four spots are a short walk from the Baker's stall (2667,3310) and the
-// south bank (2655,3286).
+// Anchors/leashes derived from the engine's packed data. The leash must cover
+// each target's whole ROAM ENVELOPE — max over its market spawns (n40_51/
+// n41_51) of cheb(anchor, spawn) PLUS the npc's maxrange (npc.dat opcode 201,
+// the engine's hard cap on drift from a spawn; wander destinations are
+// spawn±wanderrange, combat drag is bounded by maxrange). Covering only the
+// SPAWN tiles starved candidates() whenever the wanderers dwelt past the
+// ring: Knights (wanderrange 15!) spent most of their time outside the old
+// r12, wedging the bot idle ("stuck, knights out of leash", live). Envelopes:
+// Guard 7 spawns d≤12 + maxrange 7 = 19; Knight x4 d≤12 + 17 = 29; the two
+// market Paladins d≤4 + 4 = 8 (12 kept for slack); market-side Heroes
+// ((2647,3306) + (2667,3316)) d≤10 + 7 = 17 — Hero's far-SW spawn (2630,3288)
+// stays deliberately outside (market-side only). All four anchors are a short
+// walk from the Baker's stall (2667,3310) and the south bank (2655,3286).
 const SPOTS: Record<string, TargetSpot> = {
-    'Guard': { anchor: new Tile(2661, 3306, 0), leash: 12 },
-    'Knight of Ardougne': { anchor: new Tile(2661, 3306, 0), leash: 12 },
+    'Guard': { anchor: new Tile(2661, 3306, 0), leash: 19 },
+    'Knight of Ardougne': { anchor: new Tile(2661, 3306, 0), leash: 29 },
     'Paladin': { anchor: new Tile(2655, 3311, 0), leash: 12 },
-    'Hero': { anchor: new Tile(2657, 3311, 0), leash: 14 }
+    'Hero': { anchor: new Tile(2657, 3311, 0), leash: 17 }
 };
 
 /** The thieving spot for a dropdown target; unknown names get the Guard spot. */

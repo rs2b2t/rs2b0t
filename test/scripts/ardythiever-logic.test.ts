@@ -12,6 +12,18 @@ const SPAWNS: Record<string, [number, number][]> = {
     'Hero': [[2647, 3306], [2667, 3316]]
 };
 
+// Engine maxrange per target (data/pack/server/npc.dat, opcode 201) — the hard
+// cap on how far the engine lets an npc drift from ITS OWN spawn (wander dests
+// are spawn±wanderrange; combat drag is bounded by maxrange). A leash that
+// covers spawns but not spawn+maxrange starves the Pickpocket task whenever
+// the wanderers dwell outside it — the live "stuck, knights out of leash" bug.
+const MAXRANGE: Record<string, number> = {
+    'Guard': 7, // ardougne_guard: wanderrange 5, maxrange 7
+    'Knight of Ardougne': 17, // wanderrange 15, maxrange 17
+    'Paladin': 4, // wanderrange 2, maxrange 4
+    'Hero': 7 // wanderrange 5, maxrange 7
+};
+
 describe('targetSpot', () => {
     test('resolves a spot for every Ardougne dropdown target', () => {
         for (const name of ARDOUGNE_PICKPOCKET_TARGETS) {
@@ -20,11 +32,14 @@ describe('targetSpot', () => {
             expect(spot.leash).toBeGreaterThanOrEqual(12);
         }
     });
-    test('every known spawn sits within its target leash (Chebyshev)', () => {
+    test('every spawn PLUS its engine roam cap sits within the target leash (Chebyshev)', () => {
+        // spawn-only coverage is not enough: the npc dwells anywhere in
+        // spawn±maxrange, so the leash must contain the whole roam envelope or
+        // candidates() starves while the target wanders (the knights bug).
         for (const [name, spawns] of Object.entries(SPAWNS)) {
             const spot = targetSpot(name);
             for (const [x, z] of spawns) {
-                expect(spot.anchor.distanceTo({ x, z, level: 0 })).toBeLessThanOrEqual(spot.leash);
+                expect(spot.anchor.distanceTo({ x, z, level: 0 }) + MAXRANGE[name]).toBeLessThanOrEqual(spot.leash);
             }
         }
     });
