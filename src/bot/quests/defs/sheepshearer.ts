@@ -1,5 +1,7 @@
 import { Execution } from '../../api/Execution.js';
+import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Inventory } from '../../api/hud/Inventory.js';
+import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Reachability } from '../../api/Reachability.js';
 import { Traversal } from '../../api/Traversal.js';
@@ -23,8 +25,50 @@ const SHEARS_SPAWN = new Tile(3152, 3306, 0);
 // x 3193-3202, and use-through-fence is silently dropped server-side; the
 // walker routes in via the curated north Gate (3197,3282) in doors.json).
 const SHEEP_PEN = new Tile(3197, 3266, 0);
-const WHEEL = new Tile(3209, 3212, 1);
+// FALADOR's ground-floor wheel (2981,3314,0), NOT Lumbridge castle's: the
+// castle wheel at (3209,3212,1) is dead SERVER-side — probe-verified 2026-07-16
+// that both OPLOCU (use-wool-on) and OPLOC2 (Spin op) at exact+neighbor coords
+// are silently dropped while a Candles loc two tiles away responds, so the
+// server cannot resolve that loc instance. Falador's is level 0 and pathable
+// from Lumbridge (cost ~315, pack-verified with full edge packs).
+const WHEEL_STAND = new Tile(2982, 3315, 0);
 const BALLS_NEEDED = 20;
+
+/**
+ * Spin the WHOLE wool batch at the wheel — the live-proven FlaxSpinner idiom
+ * (Spin op -> make-X menu -> ride the weak-queue drain; touching anything
+ * mid-batch cancels it). One successful call converts every held Wool.
+ */
+async function spinAllWool(log: (m: string) => void): Promise<boolean> {
+    const ballsBefore = Inventory.count('Ball of wool');
+    if (!ChatDialog.isMakeMenu()) {
+        const wheel = Locs.query().name('Spinning wheel').action('Spin').within(8).nearest();
+        if (!wheel) {
+            await Traversal.walkResilient(WHEEL_STAND, { radius: 2, attempts: 3, timeoutMs: 300_000, log });
+            return false;
+        }
+        if (!(await wheel.interact('Spin'))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => ChatDialog.isMakeMenu(), 8000))) {
+            log('Spin menu never opened');
+            return false;
+        }
+    }
+    if (!(await ChatDialog.makeX('Ball of wool', Inventory.count('Wool')))) {
+        log(`Spin menu open but couldn't Make-X — products: [${ChatDialog.makeProducts().join(', ')}]`);
+        return false;
+    }
+    // Ride the batch (~2 ticks/ball): done when wool stops draining.
+    let last = Inventory.count('Wool');
+    let idle = 0;
+    while (Inventory.count('Wool') > 0 && idle < 10) {
+        await Execution.delayTicks(2);
+        const now = Inventory.count('Wool');
+        if (now < last) { last = now; idle = 0; } else { idle++; }
+    }
+    return Inventory.count('Ball of wool') > ballsBefore;
+}
 
 /** One shearing attempt: use Shears on the nearest Sheep; the ~20% escape roll
  *  and "already shorn" both surface as no-wool-gained -> false -> retry. */
@@ -47,8 +91,7 @@ async function shearOne(log: (m: string) => void): Promise<boolean> {
 export function gatherBalls(snap: QuestSnapshot, need: number): QuestStep {
     const wool = snap.inv.get('wool') ?? 0;
     if (wool >= need) {
-        // one ball per use (spinning.rs2:1-34); the engine re-calls until need is met
-        return { kind: 'useOn', item: 'Wool', targetKind: 'loc', target: 'Spinning wheel', anchor: WHEEL, product: 'Ball of wool' };
+        return { kind: 'custom', name: 'spin wool at Falador', run: spinAllWool };
     }
     if (!snap.inv.has('shears')) {
         return { kind: 'grabGround', item: 'Shears', anchor: SHEARS_SPAWN };

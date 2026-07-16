@@ -17,9 +17,9 @@ describe('sheepshearer gatherBalls', () => {
         const s = gatherBalls(snap('inProgress', [['shears', 1], ['wool', 3]]), 20);
         expect(s.kind).toBe('custom');
     });
-    test('enough wool -> spin it (useOn wheel)', () => {
+    test('enough wool -> spin the batch (custom, Falador wheel)', () => {
         const s = gatherBalls(snap('inProgress', [['shears', 1], ['wool', 20]]), 20);
-        expect(s.kind === 'useOn' && s.target).toBe('Spinning wheel');
+        expect(s.kind === 'custom' && s.name).toBe('spin wool at Falador');
     });
 });
 
