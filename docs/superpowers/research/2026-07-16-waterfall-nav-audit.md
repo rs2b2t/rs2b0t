@@ -26,6 +26,18 @@ must sit on walkable standing tiles, not on the loc square.
 
 No other edges were needed — every walking leg below resolved out of the box.
 
+## Post-review corrections (verified by the Task-5 reviewer against client + content)
+
+- **forceapproach=north on the dungeon-side ladder (loc 1757):** the north stand
+  tile (2533,9556) is not merely the walkable choice — it is the ONLY side from
+  which the Climb-up interaction fires (LocConfig forceapproach -> reachedLoc).
+  The def/nav must deliver the bot to the NORTH tile. The surface loc 1754 has
+  no such constraint (asymmetric).
+- **Landing tile is deterministic, not an assumption:** ladder_cellar scripts
+  p_telejump(playerTile ± 6400) (ladders.rs2:83-98,154-161), so standing on the
+  edge's from tile lands EXACTLY on the to tile (chebyshev 0). Risk #4 below is
+  downgraded accordingly.
+
 ## Per-leg results
 
 ### Region 149 (Golrie / TGV dungeon)  — all RESOLVED, no curation
