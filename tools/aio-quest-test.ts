@@ -26,12 +26,16 @@
 // Budget default 25 min PER RUN (matches rune-mysteries-test's known-variance
 // headroom; multi-quest queues should raise it). Does NOT run the queue live
 // itself — deploy + live parity is the controller's job.
-// Usage: bun tools/aio-quest-test.ts [base-url] [username] [quests-csv] [budget-min] [give-csv]
+// Usage: bun tools/aio-quest-test.ts [base-url] [username] [quests-csv] [budget-min] [give-csv] [stats-csv]
 //   give-csv: optional account prep, `obj_debugname:count` pairs (e.g.
 //   `bronze_pickaxe:1`) issued via ::~item before the script starts. Needed
 //   because mainlandAccount SKIPS the tutorial, so the account has none of the
 //   starter kit a real player carries (a real account always has the tutorial
 //   pickaxe the Doric gather fallback relies on). Account prep, not a bot cheat.
+//   stats-csv: optional account prep, `stat:level` pairs (e.g. `mining:15,attack:40`)
+//   issued via ::advancestat before the script starts. Also needed because the
+//   mainland account skips the tutorial AND some gather fallbacks are level-gated
+//   (iron ore = Mining 15) — a fresh level-1 account can't mine it. Account prep.
 
 import { chromium } from 'playwright-core';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
@@ -45,6 +49,7 @@ const username = process.argv[3] || `aq${Date.now().toString(36).slice(-7)}`;
 const questsCsv = (process.argv[4] || 'runemysteries').trim();
 const budgetMin = Number(process.argv[5]) || 25;
 const giveCsv = (process.argv[6] || '').trim();
+const statsCsv = (process.argv[7] || '').trim();
 const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -91,6 +96,19 @@ try {
             fail(`account prep '~item ${pair}' not sent (not ingame?)`);
         }
         console.log(`gave ${pair}`);
+    }
+
+    // Account prep: raise the skills the tutorial would have trained. The
+    // mainland cheat skips the tutorial AND some gather fallbacks are level-gated
+    // (iron ore needs Mining 15), so a fresh level-1 account deadlocks there.
+    // Same cheatQuiet path as the give loop; precedent tools/ardyfighter-test.ts
+    // uses `advancestat` for the same account-prep purpose.
+    for (const pair of statsCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        const [stat, lvl] = pair.split(':');
+        if (!(await cheatQuiet(page, `advancestat ${stat} ${Number(lvl) || 1}`))) {
+            fail(`account prep 'advancestat ${pair}' not sent (not ingame?)`);
+        }
+        console.log(`advanced ${pair}`);
     }
 
     // Inject the quest queue BEFORE start — raw rs2b0t:set:<Script>:<key> string,

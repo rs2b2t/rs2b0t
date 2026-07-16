@@ -150,10 +150,16 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             // keys lack (Copper ore -> Copper, Iron ore -> Iron); Clay passes
             // through (ores.obj:13,27,59). Then walk-to-anchor fallback + count-
             // increase success signal, same as before.
+            //
+            // `step.qty` is the REMAINING need (informational only): the
+            // provisioning loop re-plans every iteration and decides when enough
+            // is enough — the executor's job is exactly ONE mining action per
+            // invocation, with success = the count increase awaited below. A
+            // former `if (count >= qty) return true` short-circuit compared TOTAL
+            // HELD against REMAINING NEED and froze the run at have=need (live:
+            // Doric mined Clay 0->1->2->3 then span forever at Clay x3, the
+            // watchdog seeing no change and parking); it is deliberately gone.
             const before = Inventory.count(step.item);
-            if (before >= step.qty) {
-                return true;
-            }
             const rockType = step.rock.replace(/ ore$/i, '');
             const rockIds = ROCK_TYPES[rockType];
             if (!rockIds) {

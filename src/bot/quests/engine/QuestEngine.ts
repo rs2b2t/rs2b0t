@@ -18,6 +18,15 @@ import type { QuestModule, QuestSnapshot, QuestStep } from './types.js';
 import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature } from './watchdog.js';
 import type AIOQuester from '../../scripts/AIOQuester.js'; // type-only: no runtime cycle
 
+/** How many no-progress parks a quest gets before we give up on it for good.
+ *  A parked quest that is the only runnable one is re-picked IMMEDIATELY
+ *  (parked = retry-last) and, with the watchdog reset on park, burns another
+ *  full no-progress budget and re-parks — forever. Live: Doric's Quest froze at
+ *  Clay x3 then alternated 'no progress after 8 steps — parking' endlessly, the
+ *  queue never draining and the runner never stopping. After this many parks we
+ *  block() the quest instead so the queue drains and the runner stops. */
+const PARK_GIVE_UP = 3;
+
 // The Skills reader is only needed to build the PlayerState for the eligibility
 // sweep; pulled in lazily-shaped (same idiom as QuestDashboard).
 import { Skills } from '../../api/hud/Skills.js';
@@ -78,6 +87,11 @@ export class QuestEngine implements Task {
 
     /** Quests benched for no-progress; retried after every other quest's turn. */
     private readonly parked = new Set<string>();
+    /** Per-quest tally of no-progress parks. At PARK_GIVE_UP the quest is
+     *  block()ed instead of parked again (see parkOrGiveUp) so a quest that can
+     *  never progress stops re-parking forever. Manual skips are excluded — a
+     *  human pressed Skip, so it should not count toward giving up. */
+    private readonly parkCounts = new Map<string, number>();
     /** Reasons for quests parked on a provisioning shortfall (unprovisionable
      *  mustHave). Overlaid onto the PARKED row so the display names the specific
      *  missing item instead of the generic 'no progress' string — the quest stays
@@ -130,6 +144,9 @@ export class QuestEngine implements Task {
         // silently park the NEXT quest picked. Act on it only when one is running.
         const skip = this.host.consumeSkip();
         if (skip && this.runningId !== null) {
+            // Plain park, NOT parkOrGiveUp: a human pressed Skip, so it must not
+            // count toward the no-progress give-up tally (that cap is only for
+            // quests the engine itself can't make progress on).
             this.host.log(`skip requested — parking ${this.nameOf(this.runningId, elig)}`);
             this.parked.add(this.runningId);
             this.resetWatchdog();
@@ -170,6 +187,7 @@ export class QuestEngine implements Task {
             this.host.log(`${module.record.name} COMPLETE — ${Quests.points()} QP`);
             this.parked.delete(id);
             this.parkedReasons.delete(id);
+            this.parkCounts.delete(id);
             this.provisioned.delete(id);
             this.blocked.delete(id);
             this.resetWatchdog();
@@ -195,7 +213,7 @@ export class QuestEngine implements Task {
                 // record the shortfall so the PARKED row names the missing item.
                 this.host.log(`${module.record.name} short on items: ${plan.blocked.join(', ')} — parking`);
                 this.parkedReasons.set(id, plan.blocked.map(b => `missing: ${b}`));
-                this.parked.add(id);
+                this.parkOrGiveUp(id, module.record.name);
                 this.resetWatchdog();
                 this.runningId = null;
                 const blk = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, null));
@@ -239,8 +257,8 @@ export class QuestEngine implements Task {
             if (count === NO_PROGRESS_WARN) {
                 this.host.log(`WARN: ${count} steps with no progress on ${module.record.name} — check the decide()/prefer lists`);
             } else if (count >= NO_PROGRESS_PARK) {
-                this.host.log(`no progress after ${count} steps — parking ${module.record.name}`);
-                this.parked.add(id);
+                this.host.log(`no progress after ${count} steps on ${module.record.name}`);
+                this.parkOrGiveUp(id, module.record.name);
                 this.resetWatchdog();
                 this.runningId = null;
             }
@@ -261,6 +279,28 @@ export class QuestEngine implements Task {
     private block(id: string, reasons: string[]): void {
         this.blocked.set(id, reasons);
         this.resetWatchdog();
+    }
+
+    /** Park a quest for no-progress — or, once it has been parked PARK_GIVE_UP
+     *  times, permanently block() it instead. Live: a parked quest that is the
+     *  only runnable one is re-picked immediately (parked = retry-last) and the
+     *  watchdog was reset on park, so it burns another no-progress budget and
+     *  re-parks, forever (Doric alternating 'no progress … parking' after the
+     *  Clay x3 freeze — queue never drains, runner never stops). Routing to the
+     *  existing block() path after N parks lets the queue drain and surfaces the
+     *  reason in the Queue tab. Callers still reset the watchdog / clear
+     *  runningId themselves. Manual Skip does NOT come through here (a human's
+     *  choice must not count toward giving up). */
+    private parkOrGiveUp(id: string, name: string): void {
+        const count = (this.parkCounts.get(id) ?? 0) + 1;
+        this.parkCounts.set(id, count);
+        if (count >= PARK_GIVE_UP) {
+            this.host.log(`${name} parked ${PARK_GIVE_UP}x with no progress — giving up`);
+            this.block(id, [`parked ${PARK_GIVE_UP}x with no progress — giving up`]);
+            return;
+        }
+        this.host.log(`parking ${name} (park ${count}/${PARK_GIVE_UP})`);
+        this.parked.add(id);
     }
 
     /** Overlay locally-tracked reasons onto the pure queue rows: hard blocks
