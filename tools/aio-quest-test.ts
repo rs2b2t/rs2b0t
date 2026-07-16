@@ -26,10 +26,15 @@
 // Budget default 25 min PER RUN (matches rune-mysteries-test's known-variance
 // headroom; multi-quest queues should raise it). Does NOT run the queue live
 // itself — deploy + live parity is the controller's job.
-// Usage: bun tools/aio-quest-test.ts [base-url] [username] [quests-csv] [budget-min]
+// Usage: bun tools/aio-quest-test.ts [base-url] [username] [quests-csv] [budget-min] [give-csv]
+//   give-csv: optional account prep, `obj_debugname:count` pairs (e.g.
+//   `bronze_pickaxe:1`) issued via ::~item before the script starts. Needed
+//   because mainlandAccount SKIPS the tutorial, so the account has none of the
+//   starter kit a real player carries (a real account always has the tutorial
+//   pickaxe the Doric gather fallback relies on). Account prep, not a bot cheat.
 
 import { chromium } from 'playwright-core';
-import { mainlandAccount, startScript } from './tutorial/harness.js';
+import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 import { F2P } from '../src/bot/quests/data/f2p.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -39,6 +44,7 @@ const username = process.argv[3] || `aq${Date.now().toString(36).slice(-7)}`;
 // smoke wants by default).
 const questsCsv = (process.argv[4] || 'runemysteries').trim();
 const budgetMin = Number(process.argv[5]) || 25;
+const giveCsv = (process.argv[6] || '').trim();
 const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -76,6 +82,16 @@ try {
 
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
+
+    // Account prep: replace the tutorial starter kit the mainland cheat skipped.
+    // cheatQuiet (not cheat): the typed path's focus click can start a dialogue.
+    for (const pair of giveCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        const [obj, n] = pair.split(':');
+        if (!(await cheatQuiet(page, `~item ${obj} ${Number(n) || 1}`))) {
+            fail(`account prep '~item ${pair}' not sent (not ingame?)`);
+        }
+        console.log(`gave ${pair}`);
+    }
 
     // Inject the quest queue BEFORE start — raw rs2b0t:set:<Script>:<key> string,
     // the ShopRunner-smoke mechanism (tools/shoprun-test.ts). string[] settings
