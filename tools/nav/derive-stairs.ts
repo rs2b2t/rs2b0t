@@ -28,6 +28,16 @@
 // Task 2) over the 16 upstairs clue tiles is the acceptance test. Out of scope
 // (angle-/literal-based, not baked here): wooden spiral / ship / cellar ladders.
 //
+// Curated-supersede (final pruning step): a spiral staircase's loc_coord sits ON
+// the (unwalkable) stairs, so the cardinal-first snap can pull the OPERATE tile to
+// the wrong side — and 2004 `stairs` are forceapproach=south, so an op-click from
+// there never fires server-side (the live "Climb-up Staircase did not resolve"
+// wedge at Lumbridge castle). Where transports.json — the hand-curated,
+// live-verified set — already reaches a cross-level destination, its from-tiles are
+// THE proven operate tiles; any derived edge to that destination from a different
+// tile is a snap artefact and is dropped. Destinations transports.json doesn't
+// cover (Draynor et al.) are untouched, so their synthesized reverses all survive.
+//
 // Usage: bun tools/nav/derive-stairs.ts [--engine <dir>] [--content <dir>] [--out <file>] [--check]
 
 import fs from 'node:fs';
@@ -108,8 +118,10 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
 
 // Snap every raw edge's endpoints to walkable tiles (else PathFinder.addEdges
 // drops them), then add a reverse for each cross-level hop with the opposite op
-// label. Dedupe by endpoints. See the file header for the rationale.
-function snapAndReverse(finder: PathFinder, raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number } {
+// label. Dedupe by endpoints. Finally drop any cross-level edge whose OPERATE
+// (from) tile is superseded by a curated transports.json edge (see below). The
+// `curated` arg is the live-verified transports.json set. See the file header.
+function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number; supersededDropped: number } {
     const snapped: TransportEdgeData[] = [];
     let dropped = 0;
     for (const e of raw) {
@@ -147,7 +159,45 @@ function snapAndReverse(finder: PathFinder, raw: TransportEdgeData[]): { edges: 
             add({ from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: e.kind });
         }
     }
-    return { edges, dropped };
+
+    // Curated-supersede pruning. transports.json is the hand-curated, live-verified
+    // set of operate tiles (two full RuneMysteries quest runs). For any cross-level
+    // DESTINATION that transports.json also reaches, its from-tiles are THE proven
+    // operate tiles; a derived edge to that same destination from any OTHER tile is
+    // a snap artefact and a liability. Concretely: `stairs.rs2`'s spiral-staircase
+    // Climb-up case has its loc-coord ON the (unwalkable) staircase, e.g. Lumbridge
+    // castle's Duke stairs at (3204,3229); snapWalkable pulls it CARDINAL-first to
+    // the wrong side — (3203,3229,0) — but 2004 `stairs` are forceapproach=south, so
+    // an op-click from the west never fires server-side, silently. That is the exact
+    // live wedge: the bot reached (3203,3229,0) and looped "Climb-up Staircase did
+    // not resolve, retrying" forever. The curated operate tile (3205,3228,0) reaches
+    // the same top (3205,3228,1), so we drop the wrong-side derived edge and keep the
+    // curated-matching one. Draynor-style manor stairs are NOT in transports.json, so
+    // no destination there is superseded and every synthesized reverse survives.
+    const tileKey = (p: NavPoint): string => `${p.x},${p.z},${p.level}`;
+    const curatedFromsByDest = new Map<string, Set<string>>();
+    for (const c of curated) {
+        if (c.from.level === c.to.level) {
+            continue; // only cross-level (stair/ladder) operate tiles are authoritative here
+        }
+        const dk = tileKey(c.to);
+        let froms = curatedFromsByDest.get(dk);
+        if (!froms) {
+            froms = new Set<string>();
+            curatedFromsByDest.set(dk, froms);
+        }
+        froms.add(tileKey(c.from));
+    }
+    let supersededDropped = 0;
+    const kept = edges.filter(e => {
+        const froms = curatedFromsByDest.get(tileKey(e.to));
+        if (froms && !froms.has(tileKey(e.from))) {
+            supersededDropped++;
+            return false;
+        }
+        return true;
+    });
+    return { edges: kept, dropped, supersededDropped };
 }
 
 function main(): void {
@@ -215,15 +265,21 @@ function main(): void {
         packBytes = gunzipSync(packBytes);
     }
     const finder = new PathFinder(packBytes);
+    // Curated operate tiles (always the canonical data dir, never --out's dir): the
+    // supersede pruning treats transports.json as the live-verified ground truth for
+    // any staircase it covers, and drops derived edges that reach a curated
+    // destination from a non-curated (snap-artefact) operate tile. See snapAndReverse.
+    const dataDir = path.join('src', 'bot', 'nav', 'data');
+    const curatedTransports = JSON.parse(fs.readFileSync(path.join(dataDir, 'transports.json'), 'utf8')) as TransportEdgeData[];
     const rawCount = edges.length;
-    const { edges: finalEdges, dropped } = snapAndReverse(finder, edges);
+    const { edges: finalEdges, dropped, supersededDropped } = snapAndReverse(finder, curatedTransports, edges);
 
     finalEdges.sort((a, b) => a.from.level - b.from.level || a.from.x - b.from.x || a.from.z - b.from.z || a.to.level - b.to.level || a.to.x - b.to.x || a.to.z - b.to.z);
 
     // one edge per line: greppable, hand-editable, diff-stable
     const json = '[\n' + finalEdges.map(e => '    ' + JSON.stringify(e)).join(',\n') + '\n]\n';
 
-    const stats = `${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; snapped + reversed)`;
+    const stats = `${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; ${supersededDropped} curated-superseded dropped; snapped + reversed)`;
     if (process.argv.includes('--check')) {
         const current = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
         if (current !== json) {

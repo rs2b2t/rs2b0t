@@ -459,7 +459,14 @@ export class PathFinder {
                     if (closed.has(edge.to)) {
                         continue;
                     }
-                    if (avoidDoors && edge.transport.toLevel === undefined && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
+                    // Any crossing that FAILED during this walkTo is excluded on
+                    // repath — door, staircase, ladder, or teleport alike (keyed by
+                    // its from-tile `locX|locZ`). Level-change transports used to be
+                    // exempt here, which stranded the bot looping "Climb-up Staircase
+                    // did not resolve, retrying" on a bad synthesized stair edge
+                    // (Lumbridge castle staircases, 2004 stairs forceapproach=south)
+                    // while the proven curated operate edge 2 tiles away went unused.
+                    if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
                         continue;
                     }
                     const tentative = g + edge.cost;

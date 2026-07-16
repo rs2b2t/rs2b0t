@@ -131,7 +131,8 @@ class WalkExecutorImpl {
      *  over and the caller should retry once the runtime clears it. */
     lastOutcome: 'arrived' | 'closest' | 'budget' | 'interrupted' | 'failed' | null = null;
 
-    /** Doors that failed to open during THIS walkTo — excluded on repath. */
+    /** Crossings (doors AND level-change staircases/ladders) that failed during
+     *  THIS walkTo — excluded on repath. */
     private avoidDoors: { x: number; z: number }[] = [];
 
     /**
@@ -451,7 +452,14 @@ class WalkExecutorImpl {
 
     private failedDoor(step: PathStep): void {
         const t = step.transport;
-        if (t && t.toLevel === undefined) {
+        if (t) {
+            // Any crossing that exhausted handleTransport's retries — a door OR a
+            // level-change staircase/ladder — is excluded on the next repath within
+            // this walkTo. Stairs used to be skipped here, so a failed synthesized
+            // stair edge (a descent-landing tile re-used as an UP operate tile;
+            // 2004 stairs forceapproach=south means the op never fires from there)
+            // re-pathed onto itself forever ("did not resolve, retrying"). Excluding
+            // it lets A* fall through to the proven curated operate tile nearby.
             this.avoidDoors.push({ x: t.locX, z: t.locZ });
         }
     }
