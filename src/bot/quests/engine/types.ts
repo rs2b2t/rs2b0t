@@ -41,6 +41,13 @@ export type QuestStep =
      *  needs comes straight back via `withdraw`. */
     | { kind: 'deposit'; keep: string[] }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
+    /** Buy `qty` of `item` from the shop run by `shop.npc` (Trade op). The
+     *  executor self-provisions coins: pack < estGp -> bank-leg withdraw of
+     *  estGp first. Gather fns pair this with gpShort(): affordable -> buy,
+     *  broke -> {kind:'wait', reason:`need ~N gp for <item>`} (wait-park
+     *  surfaces it). estGp is a deliberate overestimate (shop prices climb as
+     *  stock drops — ShopRunner's est×1.25 lesson). */
+    | { kind: 'buy'; item: string; qty: number; shop: { npc: string; anchor: Tile }; estGp: number }
     | { kind: 'custom'; name: string; run: (log: (m: string) => void) => Promise<boolean> }
     | { kind: 'wait'; reason: string }
     | { kind: 'done' };

@@ -5,6 +5,7 @@ import Tile from '../../api/Tile.js';
 import { Bank } from '../../api/hud/Bank.js';
 import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
+import { Shop } from '../../api/hud/Shop.js';
 import { nearestBank } from '../../api/BankLocations.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
@@ -165,6 +166,47 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             await Bank.depositAllMatching(name => !kept(name));
             actions.closeModal();
             return true;
+        }
+        case 'buy': {
+            const before = Inventory.count(step.item);
+            // Coins first: withdraw the estimate at the nearest bank when the
+            // pack can't cover it (the withdraw-leg idiom, same as the withdraw
+            // case; estGp deliberately overshoots so price climb mid-purchase
+            // doesn't strand us — ShopRunner's est×1.25 lesson).
+            if (Inventory.count('Coins') < step.estGp) {
+                const here = Game.tile();
+                const bank = here ? nearestBank(here) : null;
+                if (!bank) {
+                    log('buy: no known bank for coins');
+                    return false;
+                }
+                if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
+                    return false;
+                }
+                if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
+                    return false;
+                }
+                await Bank.withdrawX('Coins', step.estGp);
+                actions.closeModal();
+                if (Inventory.count('Coins') < step.estGp) {
+                    log(`buy: bank could not cover ${step.estGp} gp for ${step.item}`);
+                    return false; // gather fn's gpShort turns this into a parked wait next loop
+                }
+            }
+            if (!(await ensureAt(step.shop.anchor, 3, log))) {
+                return false;
+            }
+            // Open/close via the proven ShopBuyout idiom (ShopBuyout.ts:239,262):
+            // Shop.open re-queries the Trade npc + retries the click 3× (a single
+            // Trade click can silently drop, per Shop.ts:38-45), Shop.close sends
+            // the real CLOSE_MODAL and awaits the window closing.
+            if (!(await Shop.open(step.shop.npc))) {
+                log(`buy: could not open ${step.shop.npc}'s shop near the anchor`);
+                return false;
+            }
+            await Shop.buy(step.item, step.qty);
+            await Shop.close();
+            return Inventory.count(step.item) > before;
         }
         case 'mineRock': {
             // GatheringBot mining idiom: every mining rock shares the loc NAME

@@ -68,6 +68,7 @@ function describeStep(step: QuestStep): string {
         case 'withdraw': return `withdraw ${step.items.map(i => `${i.name}×${i.qty}`).join(', ')}`;
         case 'deposit': return 'bank spillover from the last quest';
         case 'mineRock': return `mine ${step.item}`;
+        case 'buy': return `buy ${step.qty}× ${step.item}`;
         case 'custom': return step.name;
         case 'wait': return step.reason;
         case 'done': return 'done';
