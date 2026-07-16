@@ -158,7 +158,14 @@ export const MEMBERS_C: QuestRecord[] = [
         members: true,
         questPoints: 1,
         requirements: {},
-        items: []
+        // Only the player-supplied Rope is a record item (never consumed —
+        // quest_waterfall.rs2:218-262). The runes (6 air + 6 earth + 6 water) and
+        // food are DEF-managed mid-quest: they cannot pass the tomb gate
+        // (quest_waterfall.rs2:44-100), so waterfall.ts withdraws them only AFTER
+        // the tomb rather than provisioning them up front.
+        items: [
+            { name: 'Rope', qty: 1, kind: 'acquirable' }
+        ]
     },
     {
         // source: zanaris_journal.rs2:10,15 crafting 31 + woodcutting 36 (stat_base); quest.constant:123 QP.

@@ -6,9 +6,10 @@ import { restlessghost } from './restlessghost.js';
 import { cooksassistant } from './cooksassistant.js';
 import { romeojuliet } from './romeojuliet.js';
 import { princeali } from './princeali.js';
+import { waterfall } from './waterfall.js';
 
 /** Implemented quests, in RUN ORDER (cheapest/most-certain first). */
-export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, romeojuliet, princeali];
+export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, romeojuliet, princeali, waterfall];
 
 export function defById(id: string): QuestModule | undefined {
     return QUEST_DEFS.find(d => d.record.id === id);
