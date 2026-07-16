@@ -275,12 +275,22 @@ export async function mainlandAccount(page: Page, base: string, user: string): P
 
     await cheat(page, `tele ${OFF_ISLAND_TELE}`);
     await page.waitForTimeout(1500);
-    await cheat(page, 'setvar tutorial 1000');
-    await page.waitForTimeout(1000);
 
-    const tut = await getServerVar(page, 'tutorial');
+    // The setvar/getvar round-trip flakes transiently (getvar=null — the typed
+    // cheat or its response gets swallowed; observed ~1-in-3 during the
+    // 2026-07-16 quest-smoke burst). Bounded retry: re-issue the pair, don't
+    // fail the whole account build on one dropped exchange.
+    let tut: number | null = null;
+    for (let attempt = 0; attempt < 3 && tut !== 1000; attempt++) {
+        if (attempt > 0) {
+            await page.waitForTimeout(1500);
+        }
+        await cheat(page, 'setvar tutorial 1000');
+        await page.waitForTimeout(1000);
+        tut = await getServerVar(page, 'tutorial');
+    }
     if (tut !== 1000) {
-        throw new Error(`mainlandAccount: setvar tutorial 1000 did not stick (getvar=${tut}) -- still on-island?`);
+        throw new Error(`mainlandAccount: setvar tutorial 1000 did not stick after 3 attempts (getvar=${tut}) -- still on-island?`);
     }
 
     await relog(page, user);
