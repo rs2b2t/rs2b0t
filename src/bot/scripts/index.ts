@@ -16,6 +16,7 @@ import CooksAssistant from './CooksAssistant.js';
 import GatheringBot from './GatheringBot.js';
 import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
+import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
@@ -66,6 +67,15 @@ ScriptRegistry.register({
     category: 'Quest',
     tags: ['quests', 'overlay', 'dashboard'],
     create: () => new QuestDashboard()
+});
+
+ScriptRegistry.register({
+    name: 'AIOQuester',
+    description: 'All-in-one quest completer — queues the implemented quests (empty selection = all), provisions items bank-first, runs each to journal-complete',
+    category: 'Quest',
+    tags: ['f2p', 'quest', 'queue', 'aio'],
+    settingsSchema: AIO_SETTINGS,
+    create: () => new AIOQuester()
 });
 
 // --- combat ---
