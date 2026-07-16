@@ -81,12 +81,14 @@ const GOLRIE_STAND = new Tile(2515, 9581, 0);       // Golrie, past the gate
 const TOMBSTONE_STAND = new Tile(2558, 3444, 0);    // "Tombstone of glarial" (oplocu pebble) -> tomb (2554,9844)
 const CHEST_STAND = new Tile(2530, 9845, 0);        // "Closed chest"->Open->"Open chest" Search -> amulet (forceapproach N)
 const COFFIN_STAND = new Tile(2542, 9812, 0);       // "Tomb of glarial" op1 Search -> urn
+const TOMB_LADDER_STAND = new Tile(2554, 9844, 0);  // tomb landing; a live Climb-up here exits to the surface
 const ROCK_STAND = new Tile(2512, 3478, 0);         // N-of-rock zone (2510-2514,3476-3481); useOn rope -> "Rock"
 const BAX_CRATE_STAND = new Tile(2589, 9888, 0);    // baxtorian_crate "Crate" op1 Search -> "A key"
 const PUZZLE_DOOR_STAND = new Tile(2566, 9900, 0);  // baxtorian_door_2 leaf "Door" @ (2566,9902); useOn key -> stage 6
 const PILLAR_STAND = new Tile(2563, 9911, 0);       // inside the pillar room
 const STATUE_STAND = new Tile(2565, 9915, 0);       // beside "Statue of Glarial" @ (2565,9916)
 const CHALICE_STAND = new Tile(2603, 9911, 0);      // beside "Chalice of eternity" @ (2603,9910)
+const DOOR_LEAF_STAND = new Tile(2603, 9900, 0);    // baxtorian_door_2 x>2600 leaf @ (2604,9900); useOn key TELEPORTS to the raised room
 // Six pillars (content §Dungeon finale): one air + one earth + one water on each.
 const PILLAR_TILES = [
     new Tile(2562, 9910, 0), new Tile(2562, 9912, 0), new Tile(2562, 9914, 0),
@@ -100,6 +102,19 @@ const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.
  *  surface inside fallsAndDungeon, so it never re-fires mid-dungeon). */
 function runesShortLive(): boolean {
     return RUNES.some(r => Inventory.count(r) < 6) || Inventory.count(FOOD) < 1;
+}
+
+/** Live amulet check — held in the pack OR worn (it has an iop2 Wear). Used to
+ *  split the urn-without-amulet signature: worn/held here = still have it. */
+function amuletHeldLive(): boolean {
+    return Inventory.count(AMULET) > 0 || Equipment.contains(AMULET);
+}
+
+/** Total runes in the pack (across all three types). The pillar sweep measures
+ *  progress by the DROP in this count, never by "pack empty" — free no-op
+ *  re-placements keep the rune, so a re-stocked death never empties it (Finding 3). */
+function totalRunes(): number {
+    return RUNES.reduce((n, r) => n + Inventory.count(r), 0);
 }
 
 // --- Custom legs (all live reads; each returns false to re-enter) --------------
@@ -223,18 +238,21 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     const inTomb = here !== null && isUnderground(here) && here.z >= 9800 && here.z < 9850;
     if (!inTomb) {
-        // Clear forbidden items from the pack (narrow keep = guaranteed entry).
-        if (!(await executeStep({ kind: 'deposit', keep: TOMB_KEEP }, WATERFALL_HOPS, log))) {
-            return false;
-        }
-        // Strip worn gear (also gate-forbidden). Unequipping drops it into the
-        // pack; the smoke account wears nothing so this is a no-op, and a worn-
-        // gear edge self-heals: the gate bounces (no loss, teleport to the fail
-        // coord) and the next re-entry deposits the now-in-pack gear.
+        // Strip worn gear FIRST (it is gate-forbidden). Unequipping drops each piece
+        // into the pack, so the deposit that follows sweeps it out in the SAME pass
+        // (Finding 4 — the old deposit-then-unequip order left the just-removed gear
+        // in the pack and guaranteed one tomb-gate bounce on geared accounts). The
+        // smoke account wears nothing, so this is a no-op there. Glarial's amulet, if
+        // ever worn, is gate-allowed and TOMB_KEEP-kept, so this never loses it.
         for (const it of Equipment.items()) {
             if (it.name) {
                 await Equipment.unequip(it.name);
             }
+        }
+        // Clear forbidden items from the pack (narrow keep = guaranteed entry); this
+        // also banks the gear just unequipped above.
+        if (!(await executeStep({ kind: 'deposit', keep: TOMB_KEEP }, WATERFALL_HOPS, log))) {
+            return false;
         }
         if (!(await walkWithHops(TOMBSTONE_STAND, 2, WATERFALL_HOPS, log))) {
             return false;
@@ -274,7 +292,8 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
         }
         return Execution.delayUntil(() => Inventory.contains(AMULET), 8000);
     }
-    // Then the coffin (urn).
+    // Then the coffin (urn) — SKIPPED in the amulet re-obtain path (Finding 2), which
+    // re-enters the tomb already holding the urn and only needs the chest amulet.
     if (!Inventory.contains(URN)) {
         if (!(await Traversal.walkResilient(COFFIN_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
@@ -289,12 +308,28 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
         }
         return Execution.delayUntil(() => Inventory.contains(URN), 8000);
     }
-    // Both looted — climb out. The exit ladder is UNPINNED (audit risk #1): find a
-    // live Climb-up near the landing (2554,9844); log + return false if absent so
-    // the smoke exposes it (no walk-out edge was curated).
-    const ladder = Locs.query().action('Climb-up').within(15).nearest();
+    // Both items held while still in the tomb: the EXIT is decide()'s job, not this
+    // leg's (Finding 1). hasUrn && hasAmulet routes to fallsAndDungeon, whose tomb
+    // branch (z < 9850) climbs out via tombExit(). The old in-leg Climb-up block was
+    // DEAD — decide() had always re-routed away the instant the urn appeared — so it
+    // moved to tombExit(). Return false to hand off to that routing.
+    return false;
+}
+
+/**
+ * Climb the tomb's exit ladder (region 153) back to the surface (Finding 1). The
+ * pebble-tele lands at (2554,9844) beside a Climb-up; the exit was never curated as
+ * a nav edge (audit exit-ladder risk), so walk to the landing and take the live
+ * Climb-up. Used by BOTH the happy path (amulet+urn just looted) and the amulet
+ * re-obtain path (Finding 2), which both re-surface through here.
+ */
+async function tombExit(log: (m: string) => void): Promise<boolean> {
+    if (!(await Traversal.walkResilient(TOMB_LADDER_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
+        return false;
+    }
+    const ladder = Locs.query().action('Climb-up').within(8).nearest();
     if (!ladder) {
-        log('tombLeg: no Climb-up ladder near the tomb landing (2554,9844) — LIVE-VERIFY the exit');
+        log('tombExit: no Climb-up ladder near the tomb landing (2554,9844) — LIVE-VERIFY the exit');
         return false;
     }
     if (!(await ladder.interact('Climb-up'))) {
@@ -304,10 +339,17 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
 }
 
 /**
- * Rows 6-7 dispatcher. Item-identical (amulet+urn) so the split is by LIVE
- * position: underground -> the dungeon finale; surface -> stock the runes/food
- * (they could not pass the tomb gate, so they are withdrawn only now) then the
- * rope-and-ledge falls crossing.
+ * Rows 6-8 dispatcher — the amulet+urn AND urn-only states share one item
+ * signature and split only by LIVE position:
+ *   underground, tomb region (z < 9850)    -> climb out to the surface (Finding 1)
+ *   underground, finale region (z >= 9850) -> the dungeon finale (dungeonLeg)
+ *   surface, amulet missing                -> re-obtain it via the tomb (Finding 2)
+ *   surface, amulet held                   -> stock runes/food, then the falls crossing
+ * The urn-without-amulet death respawns on the SURFACE and must re-obtain the amulet
+ * (the ledge door floods without it); the SAME item signature in the raised room is
+ * the happy-path chalice finish — so the split has to be live position, never a pure
+ * decide() row. (Runes/food could not pass the tomb gate, so they are withdrawn only
+ * on the surface here, never mid-dungeon.)
  */
 async function fallsAndDungeon(log: (m: string) => void): Promise<boolean> {
     const t = Game.tile();
@@ -315,7 +357,19 @@ async function fallsAndDungeon(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     if (isUnderground(t)) {
+        // Tomb (region 153, lands z~9844) vs finale (region 154, ledge drop z~9861,
+        // rooms z~9888-9916) by z. The tomb is a sealed island — never dungeonLeg it.
+        if (t.z < 9850) {
+            return tombExit(log);
+        }
         return dungeonLeg(log);
+    }
+    // Surface. Re-obtain a consumed amulet before the falls crossing (Finding 2 — the
+    // statue eats it at stage 8; a death respawns here holding only the urn, and the
+    // ledge door floods without it). The tomb chest re-gives the amulet (pebble
+    // persists), then the normal amulet+urn flow resumes.
+    if (!amuletHeldLive()) {
+        return tombLeg(log);
     }
     if (runesShortLive()) {
         return executeStep({ kind: 'withdraw', items: RUNE_WITHDRAW }, WATERFALL_HOPS, log);
@@ -377,12 +431,14 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
 }
 
 /**
- * Blind-place every remaining rune on every pillar (repeats are FREE no-ops —
- * the rune is kept when the bit is already set, waterfall_pillars.rs2:12). One
- * sweep per call; re-entrant until the pack is rune-empty (all 18 bits set), so
- * a silently dropped useOn self-corrects on the next sweep.
+ * ONE blind-place sweep: walk each pillar and use one of every rune type on it.
+ * Repeats are FREE no-ops (the rune is KEPT when the bit is already set —
+ * waterfall_pillars.rs2:12), so the caller measures progress by the DROP in the
+ * total rune count, never by "pack empty" (Finding 3). From a fresh 6+6+6 pack a
+ * single sweep sets all 18 bits; a silently dropped useOn is re-attempted on the
+ * caller's next re-entry (the rune is still held).
  */
-async function placeRunes(log: (m: string) => void): Promise<boolean> {
+async function placeRunes(log: (m: string) => void): Promise<void> {
     for (const pillarTile of PILLAR_TILES) {
         if (!(await Traversal.walkResilient(pillarTile, { radius: 1, attempts: 2, timeoutMs: 45_000, log }))) {
             continue;
@@ -400,24 +456,33 @@ async function placeRunes(log: (m: string) => void): Promise<boolean> {
             await Execution.delayTicks(2);
         }
     }
-    return false; // re-enter until rune-empty, then dungeonLeg routes to the statue
 }
 
 /**
  * Row 7 (content §Dungeon finale + quest_waterfall.rs2:370-488). Search the
  * baxtorian crate for the key; USE the key on the leaf at (2566,9902) to set
- * stage 6 (entered_puzzle_room — the statue's gate); blind-place all 18 runes;
+ * stage 6 (entered_puzzle_room — the statue's gate); SWEEP-place all 18 runes;
  * USE the amulet on the Statue of Glarial (all bits set -> tele to the raised
- * room x>2600, amulet consumed); then USE the full urn on the Chalice. NEVER op1
+ * room, amulet consumed); then USE the full urn on the Chalice. NEVER op1
  * 'Take treasure' the chalice (whirlpool) — only the urn USE completes it.
+ *
+ * TWO-ROUTE REDUNDANCY into the raised room (content §Dungeon finale :381-426):
+ * the statue tele is the primary route, but the baxtorian_door_2 leaves at x>2600
+ * ((2604,9900)/(2606,9892)) also TELEPORT original<->raised, opened with the
+ * baxtorian key (re-obtainable from the crate, not consumed). The door leaf covers
+ * the post-statue-death case where the statue is a permanent stage-8 no-op
+ * (Finding 2). The raised room proper sits at z>=9906 (chalice 9910, statue tele
+ * 9914); the x>2600 door leaf sits at z~9900, so z splits the two.
  */
 async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
     const t = Game.tile();
     if (t === null) {
         return false;
     }
-    // Raised room (statue tele lands at 2603,9914) -> urn on the chalice = done.
-    if (t.x >= 2600) {
+    // Raised room (chalice 2603,9910; statue/door tele land z~9910-9914) -> urn on the
+    // chalice = done. z>=9906 distinguishes it from the x>2600 door leaf (z~9900) in
+    // the original room, which must NOT be mistaken for "already at the chalice".
+    if (t.x >= 2600 && t.z >= 9906) {
         if (!(await Traversal.walkResilient(CHALICE_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
             return false;
         }
@@ -432,6 +497,19 @@ async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
         }
         await Execution.delayTicks(3);
         return true; // the complete queue flips the journal; next decide() -> done
+    }
+    // At the x>2600 teleport-door leaf in the ORIGINAL room (z<9906) — the post-statue
+    // recovery route (Finding 2). Open the leaf with the key and await the teleport to
+    // the raised room; keeps all door-leaf open logic in one place across re-entries.
+    if (t.x >= 2600 && t.z < 9906 && Inventory.contains(KEY)) {
+        const leaf = Locs.query().name('Door').action('Open').within(6).nearest();
+        const key = Inventory.first(KEY);
+        if (leaf && key) {
+            await key.useOn(leaf);
+        } else {
+            log('dungeonLeg: at the x>2600 leaf but no Door/key — LIVE-VERIFY the teleport door');
+        }
+        return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.x >= 2600 && g.z >= 9906; }, 12_000);
     }
     // Get the baxtorian key.
     if (!Inventory.contains(KEY)) {
@@ -464,25 +542,43 @@ async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
         await Traversal.walkResilient(PILLAR_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log });
         return false;
     }
-    // Blind-place all 18 runes.
-    if (Inventory.contains('Air rune') || Inventory.contains('Earth rune') || Inventory.contains('Water rune')) {
-        return placeRunes(log);
-    }
-    // All placed -> amulet on the statue (only reached rune-empty, so all bits are
-    // set and the 20-hp boulder bounce is avoided).
+    // SWEEP-THEN-STATUE (Finding 3): a re-stocked death leaves runes over already-set
+    // bits, and free no-op re-placements KEEP those runes, so a "pack rune-empty" gate
+    // would deadlock forever. Instead run one full placement sweep, then ALWAYS attempt
+    // the statue. Real progress = the DROP in the total rune count.
+    const runesBefore = totalRunes();
+    await placeRunes(log);
+    const placed = runesBefore - totalRunes();
+
+    // USE the amulet on the statue (all 18 bits set -> tele to the raised room x>2600,
+    // amulet consumed). Skip the useOn if the amulet is gone (a stage-8 recovery routes
+    // here with it re-obtained; the door-leaf fallback below is amulet-free anyway).
     if (!(await Traversal.walkResilient(STATUE_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
     const statue = Locs.query().name('Statue of Glarial').within(6).nearest();
     const amulet = Inventory.first(AMULET);
-    if (!statue || !amulet) {
-        log('dungeonLeg: no statue or amulet');
+    if (statue && amulet) {
+        await amulet.useOn(statue); // oplocu; the statue is a no-op past stage 8
+    }
+    // Success = the teleport arrival at the raised room (2603,9914). Bounded.
+    if (await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.x >= 2600 && g.z >= 9906; }, 12_000)) {
+        return false; // re-enter -> raised-room chalice branch
+    }
+    // No teleport. If THIS sweep still placed runes, the bits were merely completing (a
+    // dropped useOn, or a re-stock over partial bits) -> re-enter and re-sweep to finish.
+    if (placed > 0) {
         return false;
     }
-    if (!(await amulet.useOn(statue))) {
-        return false;
+    // The sweep placed nothing new (all 18 bits already set) yet the statue did not
+    // fire: the amulet was consumed at stage 8 (a post-statue death). The statue is a
+    // permanent no-op now, so reach the raised room the OTHER way — walk to the x>2600
+    // teleport-door leaf; the top-of-leg door branch opens it and awaits the teleport
+    // on the next pass (Finding 2's two-route redundancy).
+    if (Inventory.contains(KEY)) {
+        await Traversal.walkResilient(DOOR_LEAF_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log });
     }
-    return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.x >= 2600; }, 12_000);
+    return false;
 }
 
 // --- Pure quest brain (dispatches on HELD ITEMS only) -------------------------
@@ -497,11 +593,15 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const hasUrn = held(snap, URN);
     const hasBook = held(snap, BOOK);
 
-    // Row 8: the statue consumed the amulet -> only urn-on-chalice remains. Because
-    // tombLeg loots the chest (amulet) before the coffin (urn), urn-without-amulet
-    // is UNIQUELY the post-statue state. The pebble persists all quest
-    // (quest_waterfall.rs2:102 never deletes it), so routing keys on amulet/urn.
-    if (hasUrn && !hasAmulet) { return { kind: 'custom', name: 'chalice finale', run: fallsAndDungeon }; }
+    // Row 8: the statue consumed the amulet (urn-without-amulet is UNIQUELY post-statue
+    // — tombLeg loots the chest amulet before the coffin urn). This item signature has
+    // TWO live sub-states that fallsAndDungeon splits by position: in the raised room it
+    // is the happy-path chalice finish; on the SURFACE it is a post-statue-death respawn
+    // that must RE-OBTAIN the amulet before the ledge door (which floods without it —
+    // Finding 2), via tombLeg's chest re-give (the pebble persists;
+    // quest_waterfall.rs2:102 never deletes it). Pure decide() can't see position, so it
+    // routes to the dispatcher and lets it choose.
+    if (hasUrn && !hasAmulet) { return { kind: 'custom', name: 'amulet re-obtain', run: fallsAndDungeon }; }
     // Rows 5-7: tomb fully looted (amulet+urn) -> runes, falls crossing, dungeon.
     if (hasUrn && hasAmulet) { return { kind: 'custom', name: 'falls + dungeon', run: fallsAndDungeon }; }
     // Row 4: pebble in hand, tomb not fully looted (no urn yet).
