@@ -33,6 +33,11 @@ function hasPickaxe(snap: QuestSnapshot): boolean {
 }
 
 export function gatherOre(snap: QuestSnapshot, item: 'Clay' | 'Copper ore' | 'Iron ore', need: number): QuestStep {
+    // SKILL GATE, not modeled in QuestSnapshot: iron rocks need Mining 15
+    // (clay/copper are level 1). Below 15 the mine attempts fail silently and
+    // the engine retries forever (failed steps never feed the watchdog) — the
+    // 2026-07-16 acceptance runs prepped Mining 15 via account cheat. Banking
+    // the iron ore instead also works (bank-first provisioning skips the mine).
     if (!hasPickaxe(snap)) {
         // Tutorial accounts carry a bronze pickaxe; without one the quest parks
         // visibly rather than half-starting (mustHave semantics would be wrong —

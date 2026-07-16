@@ -32,7 +32,12 @@ const IMP_ANCHOR = new Tile(3234, 3506, 0);
 // noProgress and the held-item branches take over.
 const PROBES: NpcStop[] = [JULIET, LAWRENCE, APOTHECARY, ROMEO];
 
-/** Kill imps near the anchor until Cadava berries drop, then loot. ~3%/kill
+/** SKILL GATE, not modeled in QuestSnapshot: imps flee-teleport when damaged,
+ *  so a bare level-3 account cannot realistically kill one (a live 90-min run
+ *  produced zero berries); the acceptance runs prepped attack/strength 40 via
+ *  account cheat. Banking a Cadava berries also works (bank-first skips this).
+ *
+ *  Kill imps near the anchor until Cadava berries drop, then loot. ~3%/kill
  *  (imp.rs2:67): expect a grind; the smoke budget accounts for it. */
 async function huntImps(log: (m: string) => void): Promise<boolean> {
     const berry = GroundItems.query().name('Cadava berries').within(12).nearest();
