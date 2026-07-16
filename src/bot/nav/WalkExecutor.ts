@@ -12,6 +12,7 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { EventSignal } from '../api/EventSignal.js';
+import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { Execution } from '../api/Execution.js';
 import { Sustain } from '../api/Sustain.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
@@ -530,30 +531,43 @@ class WalkExecutorImpl {
                 return false;
             }
 
+            const mark = GameMessages.mark();
             if (!loc.interact(transport.action)) {
                 log(`'${transport.action}' not offered by ${transport.locName} (ops: ${loc.actions().join(', ')})`);
                 return false;
             }
 
+            // A fresh "I can't reach that!" after OUR click is the server saying
+            // this stand can never satisfy the interaction — end the wait now
+            // (not after TRANSPORT_WAIT_MS) and skip the second attempt, which
+            // would only reproduce the same answer.
+            const cantReach = (): boolean => GameMessages.sawSince(mark, CANT_REACH);
             let crossed: boolean;
             if (transport.toLevel !== undefined) {
                 const toLevel = transport.toLevel;
-                crossed = await Execution.delayUntil(() => reader.worldTile()?.level === toLevel, TRANSPORT_WAIT_MS);
+                const climbed = (): boolean => reader.worldTile()?.level === toLevel;
+                crossed = (await Execution.delayUntil(() => climbed() || cantReach(), TRANSPORT_WAIT_MS)) && climbed();
             } else if (transport.toTile !== undefined) {
                 // teleport crossing (dungeon trapdoor/ladder z±6400): the script
                 // telejumps the player's own tile, so we land NEAR the edge's to
                 // tile, not on it — arrival is proximity on the same level
                 const toTile = transport.toTile;
-                crossed = await Execution.delayUntil(() => {
+                const landed = (): boolean => {
                     const me = reader.worldTile();
                     return me !== null && me.level === step.level && chebyshev(me, toTile) <= 3;
-                }, TRANSPORT_WAIT_MS);
+                };
+                crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
             } else {
-                crossed = await Execution.delayUntil(() => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step), TRANSPORT_WAIT_MS);
+                const open = (): boolean => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step);
+                crossed = (await Execution.delayUntil(() => open() || cantReach(), TRANSPORT_WAIT_MS)) && open();
             }
             if (crossed) {
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
                 return true;
+            }
+            if (cantReach()) {
+                log(`server says can't reach ${transport.locName} at (${transport.locX},${transport.locZ}) — repathing`);
+                return false;
             }
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
@@ -592,11 +606,18 @@ class WalkExecutorImpl {
             if (shut) {
                 // closed (first arrival) or reverted mid-cross — open it and let
                 // the open register before trying to step through
+                const mark = GameMessages.mark();
                 if (!shut.interact(transport.action)) {
                     log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
                     return false;
                 }
-                await Execution.delayUntil(() => this.findTransportLoc(transport) === null, TRANSPORT_WAIT_MS);
+                await Execution.delayUntil(() => this.findTransportLoc(transport) === null || GameMessages.sawSince(mark, CANT_REACH), TRANSPORT_WAIT_MS);
+                if (GameMessages.sawSince(mark, CANT_REACH)) {
+                    // the door leaf itself is unreachable from this side — spinning
+                    // the rest of the budget can't fix that; bail to the repath
+                    log(`server says can't reach ${transport.locName} — repathing`);
+                    return false;
+                }
                 continue;
             }
             // door open — get to the landing tile PAST the door.
