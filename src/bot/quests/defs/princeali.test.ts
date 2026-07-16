@@ -68,9 +68,13 @@ describe('princeali decide — row 3 Osman/key', () => {
 });
 
 describe('princeali decide — rows 4/5/6 key acquisition', () => {
-    test('soft clay held -> imprint at Keli (custom)', () => {
+    test('soft clay held -> osman briefing + keli imprint (custom)', () => {
+        // Pins routing through the COMBINED custom: Keli's imprint is stage-20
+        // gated (lady_keli.rs2:90) and Osman is the only 10->20 advance
+        // (osman.rs2:48-50), so briefing Osman must precede the imprint — else
+        // the quest deadlocks at stage 10. The new custom name proves the fold.
         const s = decide(snap('inProgress', [['soft clay', 1]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('imprint');
+        expect(s.kind === 'custom' && s.name).toBe('osman briefing + keli imprint');
     });
     test('empty-handed, noProgress 0 -> probe Leela (collect a made key)', () => {
         const s = decide(snap('inProgress', [], 0));

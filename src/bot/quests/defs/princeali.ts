@@ -216,9 +216,23 @@ async function wigPipeline(log: (m: string) => void): Promise<boolean> {
     return dyeWigToBlond(log);
 }
 
-/** Imprint the cell key at Lady Keli (research doc §2): talk the prefer chain
- *  while holding soft clay; success = a 'Key print' appears. */
-async function imprintAtKeli(log: (m: string) => void): Promise<boolean> {
+/** Osman briefing THEN imprint the cell key at Lady Keli (research doc §2).
+ *  Keli's imprint is HARD-GATED on %princequest >= ^prince_spoken_osman (stage 20,
+ *  lady_keli.rs2:90); stage 20 is set ONLY by Osman's instruction dialogue
+ *  (osman.rs2:48-50). From stage 10 empty-handed, imprinting first deadlocks:
+ *  Keli refuses forever. So brief Osman FIRST (idempotent — a harmless status line
+ *  at stage >=20), then imprint. Both legs re-entrant; any failure -> false. */
+async function osmanBriefingThenImprint(log: (m: string) => void): Promise<boolean> {
+    // Osman leg: advance stage 10 -> 20 so Keli's imprint gate opens. The OSMAN
+    //  NpcStop prefer chain is the instruction dialogue itself.
+    if (!(await gotoNpc(OSMAN, [], log))) {
+        return false;
+    }
+    if (!(await talkThrough('Osman', OSMAN.prefer, log))) {
+        return false;
+    }
+    // Keli leg: talk the prefer chain while holding soft clay; success = a
+    //  'Key print' appears.
     if (!(await gotoNpc(KELI, [], log))) {
         return false;
     }
@@ -353,7 +367,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // Rows 4-6: build/collect the Bronze key while lacking key + print.
     if (!has(snap, 'bronze key') && !has(snap, 'key print')) {
         if (has(snap, 'soft clay')) {
-            return { kind: 'custom', name: 'imprint key at Lady Keli', run: imprintAtKeli };
+            // Keli's imprint is gated on %princequest >= stage 20 (lady_keli.rs2:90),
+            // and osman.rs2:48-50 is the ONLY 10->20 advance — so the custom briefs
+            // Osman BEFORE imprinting (hassan.rs2:22: "cannot proceed without
+            // reporting to him"). Imprinting first would deadlock forever.
+            return { kind: 'custom', name: 'osman briefing + keli imprint', run: osmanBriefingThenImprint };
         }
         // Empty-handed: the key may be made-but-uncollected (keystatus varp is
         // invisible). Probe Leela first (harmless, hands a made key); only build
@@ -382,7 +400,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 };
     }
 
-    // Row 10: defensive fallback for an invisible stage — rotate harmless probes.
+    // Row 10: defensive dead branch. Any state reaching here holds a bronze key
+    // (row 4 needs it absent) plus wig+paste+pink-skirt (rows 7-9 all satisfied),
+    // i.e. all4 — which rows 1-2 already catch. Kept only so decide() is total
+    // (every path returns a QuestStep) and as a belt-and-braces probe rotation.
     return { kind: 'talk', stop: PROBES[snap.noProgress % PROBES.length] };
 }
 
