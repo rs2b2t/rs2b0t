@@ -411,6 +411,10 @@ export const princeali: QuestModule = {
     record: F2P.find(r => r.id === 'prince')!,
     // Every pipeline intermediate the deposit must keep (broad on purpose;
     // deposit only bites on spillover from OTHER quests). 'wig' covers both wigs.
-    tools: ['bronze key', 'key print', 'wig', 'paste', 'pink skirt', 'rope', 'beer', 'soft clay', 'clay', 'yellow dye', 'onion', 'ball of wool', 'shears', 'redberries', 'pot of flour', 'ashes', 'bucket', 'jug', 'tinderbox', 'logs', 'bronze bar', 'coins'],
+    // 'pickaxe' is load-bearing: the soft-clay chain MINES clay, so the
+    // between-quest spillover deposit must not bank the tutorial pickaxe (live
+    // 2026-07-16: without it, the bot stood at the Rimmington clay rock forever
+    // with no pickaxe, mineRock failing silently — same class as Doric's keep).
+    tools: ['pickaxe', 'bronze key', 'key print', 'wig', 'paste', 'pink skirt', 'rope', 'beer', 'soft clay', 'clay', 'yellow dye', 'onion', 'ball of wool', 'shears', 'redberries', 'pot of flour', 'ashes', 'bucket', 'jug', 'tinderbox', 'logs', 'bronze bar', 'coins'],
     decide
 };
