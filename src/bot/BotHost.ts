@@ -1,6 +1,7 @@
 import { ServerProt } from '#/io/ServerProt.js';
 
-import { attach as adapterAttach, setPacketListener } from './adapter/ClientAdapter.js';
+import { attach as adapterAttach, reader, setPacketListener } from './adapter/ClientAdapter.js';
+import { GameMessages } from './events/gameMessages.js';
 import { pumpProducers } from './events/producers.js';
 
 type FrameListener = () => void;
@@ -70,6 +71,20 @@ class BotHostImpl {
     }
 
     private handlePacket(ptype: number): void {
+        if (ptype === ServerProt.MESSAGE_GAME) {
+            // addChat ran synchronously during this packet, so the new line is
+            // ring slot 0. Type-0 only: tradereq/duelreq suffixed messages add
+            // type-4 lines (or, when the sender is ignored, none at all — the
+            // one case where slot 0 is a stale type-0 line; a rare duplicate
+            // record there is benign, consumers just fail an attempt fast and
+            // repath).
+            const line = reader.chat(1)[0];
+            if (line && line.type === 0) {
+                GameMessages.record(line.text);
+            }
+            return;
+        }
+
         if (ptype !== ServerProt.PLAYER_INFO) {
             return;
         }
