@@ -71,8 +71,10 @@ the step via primitives in `quests/exec/` (which grow the new step executors).
 
 - **Progress watchdog:** RuneMysteries' signature idiom — a
   `journal|inventory-hash` unchanged after a completed step bumps a no-progress
-  counter. Warn at 3; at 6 **park** the quest at the back of the queue and
-  move on (never wedge the queue). Both are named constants, tunable.
+  counter. Warn at 3; at 8 **park** the quest at the back of the queue and
+  move on (never wedge the queue). Both are named constants, tunable. (Park
+  was provisionally 6; raised to 8 during planning because stage-invisible
+  quests probe up to 4 NPCs per rotation — see the plan's Task 12 trace.)
 - **Provisioning phase:** before running a quest, diff `record.items` against
   inventory; withdraw what the bank holds (`Bank.withdrawX`); return gather
   steps for the rest; BLOCK on unprovisionable `mustHave`.
@@ -107,7 +109,26 @@ Pause/Resume, Stop, **Skip quest** (manual park).
 | Sheep Shearer | shears `grabGround`; shear-to-20-wool loop; `useOn` wheel (castle stairs baked) | none |
 | Cook's Assistant | pot `grabGround`; grain→hopper→operate→flour-bin sequence | add the two windmill ladders to `transports.json` |
 
-## Testing & rollout
+## Planning amendments (2026-07-15, content research)
+
+Discovered while writing the implementation plan (see
+`docs/superpowers/plans/2026-07-15-aio-questbot.md`); they supersede the
+per-quest table above where they conflict:
+
+- **No nav-data work needed.** `nav/data/stairEdges.json` (the derive-stairs
+  pack) already contains the windmill ladders (3165,3307 levels 0↔1↔2) and
+  Juliet's staircase (3155,3435). Both spec rows drop to smoke verification.
+- **Romeo & Juliet: cadava berries are an IMP DROP on this server** (~3%/kill,
+  `imp.rs2:67`) — there is no cadava bush in the content. The gather step is a
+  kill-imps-and-loot custom, R&J moves to LAST in the run order, and the
+  module gains `grind: ['Imp']` so the event guard tolerates the fight.
+- **Stage-invisible quests** (R&J, Restless Ghost mid-stages) are handled by
+  threading the watchdog count into `QuestSnapshot.noProgress` so pure
+  `decide()` rotates NPC probes statelessly — the RuneMysteries RECOVER idiom,
+  generalized. This is also why park moved 6 → 8.
+- **Provisioning runs once per quest** (a per-quest `provisioned` flag):
+  quests CONSUME their items, so re-diffing after hand-in would re-gather
+  forever.
 
 1. Unit: per-quest `decide()` suites (journal×inventory → expected step, like
    `RuneMysteries.test.ts`); queue ordering/parking tests; new-primitive tests.
