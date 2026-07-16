@@ -6,6 +6,7 @@ import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
+import type { WorldTile } from '../../adapter/ClientAdapter.js';
 
 // Quest-executor primitives (first consumer: RuneMysteries). Pure helpers
 // here; the I/O walkers/talkers are added alongside them (gotoNpc,
@@ -94,6 +95,56 @@ async function hopLadder(hop: LadderHop, log: (m: string) => void): Promise<bool
 }
 
 /**
+ * Shared hop core for gotoNpc and walkWithHops: when `here`/`dest` straddle the
+ * surface/underground boundary, walk to the nearest same-side hop and cross it.
+ * Returns the post-hop tile (or `here` unchanged when no hop is needed); null on
+ * any failure (no reachable hop, failed walk to the stand, failed climb, no tile
+ * after landing). Factored verbatim out of gotoNpc's old inline hop block so
+ * gotoNpc's control flow — and its tests — are unchanged, while walkWithHops
+ * reuses the exact same crossing.
+ */
+async function crossHops(here: WorldTile, dest: { z: number }, hops: LadderHop[], log: (m: string) => void): Promise<WorldTile | null> {
+    if (!needsHop(here, dest)) {
+        return here;
+    }
+    const near = hops.filter(h => isUnderground(h.stand) === isUnderground(here));
+    const hop = near.sort((a, b) => a.stand.distanceTo(here) - b.stand.distanceTo(here))[0];
+    if (!hop) {
+        log(`no hop from (${here.x},${here.z}) toward z ${dest.z}`);
+        return null;
+    }
+    if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, attempts: 3, log }))) {
+        return null;
+    }
+    if (!(await hopLadder(hop, log))) {
+        return null;
+    }
+    return Game.tile();
+}
+
+/**
+ * Cross the surface/underground boundary via the nearest hop when needed, then
+ * web-walk to `dest` (radius `radius`). The public point-to-point walker for
+ * custom quest steps that move between fixed tiles (e.g. graveyard ↔ basement),
+ * sharing gotoNpc's hop crossing but without its NPC-anchor staged-approach and
+ * trapped-landing machinery. Returns true once within `radius` of `dest`.
+ */
+export async function walkWithHops(dest: Tile, radius: number, hops: LadderHop[], log: (m: string) => void): Promise<boolean> {
+    const start = Game.tile();
+    if (!start) {
+        return false;
+    }
+    const here = await crossHops(start, dest, hops, log);
+    if (!here) {
+        return false;
+    }
+    if (dest.distanceTo(here) > radius) {
+        return Traversal.walkResilient(dest, { radius, attempts: 3, log });
+    }
+    return true;
+}
+
+/**
  * Web-walk to the stop's `anchor` (a probe-verified walkable tile beside the
  * NPC's spawn), taking a region-crossing hop first when here/anchor straddle
  * the surface/underground boundary, then re-check the leash — NPCs wander, and
@@ -122,24 +173,11 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
         const n = Npcs.query().name(stop.npc).nearest();
         return n !== null && n.distance() <= stop.leash;
     };
-    if (needsHop(here, stop.anchor)) {
-        const near = hops.filter(h => isUnderground(h.stand) === isUnderground(here!));
-        const hop = near.sort((a, b) => a.stand.distanceTo(here!) - b.stand.distanceTo(here!))[0];
-        if (!hop) {
-            log(`no hop from (${here.x},${here.z}) toward (${stop.anchor.x},${stop.anchor.z})`);
-            return false;
-        }
-        if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, attempts: 3, log }))) {
-            return false;
-        }
-        if (!(await hopLadder(hop, log))) {
-            return false;
-        }
-        here = Game.tile();
-        if (!here) {
-            return false;
-        }
+    const hopped = await crossHops(here, stop.anchor, hops, log);
+    if (!hopped) {
+        return false;
     }
+    here = hopped;
     // Staged approach: walk each waypoint in order before the anchor leg, so a
     // horseshoe route is broken into segments the client can path (see
     // NpcStop.approach). No "already past it" shortcut — straight-line distance
