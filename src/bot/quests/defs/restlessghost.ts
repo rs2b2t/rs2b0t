@@ -14,15 +14,17 @@ import { WIZARD_HOPS } from './runemysteries.js';
 const AMULET = 'Ghostspeak amulet';
 const SKULL = 'Skull';
 
-// LIVE-VERIFY both anchors (guide-derived; church beside Lumbridge castle,
-// shack in the SE swamp — the walker's door handling covers both buildings).
-const AERECK: NpcStop = { npc: 'Father Aereck', anchor: new Tile(3243, 3206, 0), leash: 6, prefer: ["I'm looking for a quest!"] };
+// Anchors map-derived (npc 456 spawn m50_50 -> (3244,3206); npc 458 spawn
+// m50_49 -> (3235,3153) — the SE-swamp shack, NOT classic RS2's west shack,
+// which cost a live 40-min wedge on 2026-07-16; pack-pathable cost 224 from
+// Aereck incl. the shack door).
+const AERECK: NpcStop = { npc: 'Father Aereck', anchor: new Tile(3244, 3206, 0), leash: 6, prefer: ["I'm looking for a quest!"] };
 const URHNEY: NpcStop = {
-    npc: 'Father Urhney', anchor: new Tile(3147, 3172, 0), leash: 6,
+    npc: 'Father Urhney', anchor: new Tile(3235, 3154, 0), leash: 6,
     prefer: ['Father Aereck sent me to talk to you.', "He's got a ghost haunting his graveyard.", "I've lost the amulet."]
 };
 const GHOST_PREFER = ['Yep, now tell me what the problem is.'];
-const COFFIN_STAND = new Tile(3250, 3193, 0); // graveyard beside the coffin — LIVE-VERIFY
+const COFFIN_STAND = new Tile(3250, 3193, 0); // beside the coffin (shutghostcoffin 2145 @ (3249,3192), m50_49)
 const SKULL_TILE = new Tile(3120, 9565, 0);   // basement altar room (quest_priest.rs2:74)
 
 /** Open the coffin when its shut variant (op Open) is present; already-open
