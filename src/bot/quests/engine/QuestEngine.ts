@@ -1,3 +1,4 @@
+import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { type Task } from '../../api/Bot.js';
 import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
@@ -26,6 +27,18 @@ import type AIOQuester from '../../scripts/AIOQuester.js'; // type-only: no runt
  *  queue never draining and the runner never stopping. After this many parks we
  *  block() the quest instead so the queue drains and the runner stops. */
 const PARK_GIVE_UP = 3;
+
+/** Consecutive IDENTICAL wait steps (same quest + same reason) before the quest
+ *  is parked with that reason. Waits are excluded from the no-progress watchdog
+ *  (see advancesWorld) because journal-load waits at quest start must not park —
+ *  but a wait that never resolves (live 2026-07-16: a pickaxe-less account hit
+ *  Doric's 'need a pickaxe' wait and spun silently forever under the Rune
+ *  Mysteries completion scroll) needs its own liveness bound. ~1.5-2s per wait
+ *  loop, so 15 ≈ 25-30s — far above any journal-load (1-3 loops), far below a
+ *  human noticing the wedge. Failing (ok=false) steps are deliberately NOT
+ *  counted: the custom-step contract uses false = re-enter (the imp grind
+ *  returns false per attempt BY DESIGN). */
+const WAIT_PARK = 15;
 
 // The Skills reader is only needed to build the PlayerState for the eligibility
 // sweep; pulled in lazily-shaped (same idiom as QuestDashboard).
@@ -111,6 +124,11 @@ export class QuestEngine implements Task {
 
     private runningId: string | null = null;
 
+    /** Consecutive-identical-wait tracking (quest id + reason); see WAIT_PARK.
+     *  Reset on any non-wait step, key change, park, or quest completion. */
+    private waitKey = '';
+    private waitCount = 0;
+
     constructor(private readonly host: AIOQuester) {}
 
     /** Same guard as RuneMysteries' QuestStep: never decide while a chat dialog
@@ -123,6 +141,21 @@ export class QuestEngine implements Task {
         // Yield to the random-event handler first (RockCrab idiom) so teleports
         // and stuns clear before we act on a possibly-displaced world.
         if (EventSignal.pending()) {
+            await Execution.delayTicks(1);
+            return;
+        }
+
+        // Dismiss a leftover MAIN modal we don't recognize as one of ours — the
+        // quest-completion reward scroll (send_quest_complete opens it; nothing
+        // else in the loop closes it). A move packet closes it as a side effect,
+        // which is why walk-first transitions never showed this — but a
+        // transition that starts with a talk, or a quest that immediately waits
+        // (live 2026-07-16: pickaxe-less Doric after Rune Mysteries), leaves the
+        // scroll up and interactions swallowed. Bank/make-menu modals are OURS
+        // mid-step and must never be closed from here.
+        if (reader.modals().main !== -1 && !Bank.isOpen() && !ChatDialog.isMakeMenu() && !ChatDialog.isMainMakePanel()) {
+            this.host.log('closing a leftover main modal (quest-complete scroll)');
+            actions.closeModal();
             await Execution.delayTicks(1);
             return;
         }
@@ -248,6 +281,29 @@ export class QuestEngine implements Task {
 
         // --- 6. run the step ---
         this.host.noteState(rows, id, describeStep(step), this.noProgressCount, this.parked.size);
+
+        // Wait-step liveness: a wait that never resolves must park, not spin
+        // (see WAIT_PARK). Keyed by quest+reason so a NEW reason restarts the
+        // count and ordinary journal-load waits (1-3 loops) never come close.
+        if (step.kind === 'wait') {
+            const key = `${id}|${step.reason}`;
+            this.waitCount = key === this.waitKey ? this.waitCount + 1 : 1;
+            this.waitKey = key;
+            if (this.waitCount >= WAIT_PARK) {
+                this.host.log(`${module.record.name} waiting on '${step.reason}' with no way to resolve it — parking`);
+                this.parkedReasons.set(id, [`waiting: ${step.reason}`]);
+                this.parkOrGiveUp(id, module.record.name);
+                this.resetWatchdog();
+                this.runningId = null;
+                this.waitKey = '';
+                this.waitCount = 0;
+                return;
+            }
+        } else {
+            this.waitKey = '';
+            this.waitCount = 0;
+        }
+
         const ok = await executeStep(step, module.hops ?? [], m => this.host.log(`  ${m}`));
 
         // --- 7. watchdog: only steps that TRIED to move the world are counted ---

@@ -47,6 +47,12 @@ export class Npc implements Interactable, Locatable {
         return this.snap.name;
     }
 
+    /** NPC type (config) id — distinguishes same-name variants (e.g. unsheared
+     *  vs shorn 'Sheep', ids 43/42), matching Loc/GroundItem's `id` surface. */
+    get id(): number {
+        return this.snap.id;
+    }
+
     get level(): number {
         return this.snap.level;
     }

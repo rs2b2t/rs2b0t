@@ -25,6 +25,11 @@ const SHEARS_SPAWN = new Tile(3152, 3306, 0);
 // x 3193-3202, and use-through-fence is silently dropped server-side; the
 // walker routes in via the curated north Gate (3197,3282) in doors.json).
 const SHEEP_PEN = new Tile(3197, 3266, 0);
+// Both variants display as 'Sheep'; only the UNSHEARED one (npc id 43,
+// all.npc:1097-1123 — id 42 is the shorn swap, regrows via timer) yields wool.
+// A name-only pick wastes a 6s no-wool attempt per shorn sheep (live report
+// 2026-07-16), so filter by id.
+const UNSHEARED_SHEEP_ID = 43;
 // FALADOR's ground-floor wheel (2981,3314,0), NOT Lumbridge castle's: the
 // castle wheel at (3209,3212,1) is dead SERVER-side — probe-verified 2026-07-16
 // that both OPLOCU (use-wool-on) and OPLOC2 (Spin op) at exact+neighbor coords
@@ -78,7 +83,7 @@ async function shearOne(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.count('Wool');
     // Reachability-aware pick (the ArdyThiever precedent): a sheep seen THROUGH
     // the pen fence eats a silent 6s per attempt — the server drops the op.
-    const sheep = Npcs.query().name('Sheep').within(8).where(n => Reachability.canReach(n.tile(), { adjacentOk: true })).nearest();
+    const sheep = Npcs.query().name('Sheep').within(8).where(n => n.id === UNSHEARED_SHEEP_ID && Reachability.canReach(n.tile(), { adjacentOk: true })).nearest();
     if (!sheep) {
         await Traversal.walkResilient(SHEEP_PEN, { radius: 2, attempts: 2, timeoutMs: 60_000, log });
         return false;
