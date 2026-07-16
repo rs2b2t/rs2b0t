@@ -1,6 +1,7 @@
 import { Execution } from '../../api/Execution.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Reachability } from '../../api/Reachability.js';
 import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
@@ -17,7 +18,11 @@ const FRED: NpcStop = {
     prefer: ["I'm looking for a quest.", 'Yes okay. I can do that.']
 };
 const SHEARS_SPAWN = new Tile(3152, 3306, 0);
-const SHEEP_PEN = new Tile(3188, 3268, 0);
+// INSIDE the flock (probe-verified live 2026-07-16: sheared from here; the
+// researched (3188,3268) is OUTSIDE the pen's west fence — the flock lives at
+// x 3193-3202, and use-through-fence is silently dropped server-side; the
+// walker routes in via the curated north Gate (3197,3282) in doors.json).
+const SHEEP_PEN = new Tile(3197, 3266, 0);
 const WHEEL = new Tile(3209, 3212, 1);
 const BALLS_NEEDED = 20;
 
@@ -25,7 +30,9 @@ const BALLS_NEEDED = 20;
  *  and "already shorn" both surface as no-wool-gained -> false -> retry. */
 async function shearOne(log: (m: string) => void): Promise<boolean> {
     const before = Inventory.count('Wool');
-    const sheep = Npcs.query().name('Sheep').within(8).nearest();
+    // Reachability-aware pick (the ArdyThiever precedent): a sheep seen THROUGH
+    // the pen fence eats a silent 6s per attempt — the server drops the op.
+    const sheep = Npcs.query().name('Sheep').within(8).where(n => Reachability.canReach(n.tile(), { adjacentOk: true })).nearest();
     if (!sheep) {
         await Traversal.walkResilient(SHEEP_PEN, { radius: 2, attempts: 2, timeoutMs: 60_000, log });
         return false;
