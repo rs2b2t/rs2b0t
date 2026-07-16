@@ -10,6 +10,7 @@ import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
+import { ROCK_TYPES } from '../../scripts/MiningRocks.js';
 import type { QuestStep } from '../engine/types.js';
 import { gotoNpc, talkThrough, type LadderHop } from './primitives.js';
 
@@ -142,15 +143,25 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return ok;
         }
         case 'mineRock': {
-            // GatheringBot mining idiom, minimal: interact the named rock, wait for ore.
-            // Deliberately NAIVE — matches by loc NAME, but every rock is literally
-            // named "Rocks" in-game. Task 8 (Doric) refines this to resolve the ore
-            // type via MiningRocks.ts's rock-id mapping so rock: 'Clay' mines clay.
+            // GatheringBot mining idiom: every mining rock shares the loc NAME
+            // "Rocks"; only the loc ID distinguishes ore, so resolve the ore type
+            // to its rock ids via MiningRocks.ROCK_TYPES (MiningRocks.ts:8-19) and
+            // match by id. Item display names carry a trailing ' ore' the rock-type
+            // keys lack (Copper ore -> Copper, Iron ore -> Iron); Clay passes
+            // through (ores.obj:13,27,59). Then walk-to-anchor fallback + count-
+            // increase success signal, same as before.
             const before = Inventory.count(step.item);
             if (before >= step.qty) {
                 return true;
             }
-            const rock = Locs.query().name(step.rock).action('Mine').within(10).nearest();
+            const rockType = step.rock.replace(/ ore$/i, '');
+            const rockIds = ROCK_TYPES[rockType];
+            if (!rockIds) {
+                log(`mineRock: no rock-id mapping for '${rockType}'`);
+                return false;
+            }
+            const idSet = new Set(rockIds);
+            const rock = Locs.query().where(l => idSet.has(l.id)).action('Mine').within(10).nearest();
             if (!rock) {
                 return ensureAt(step.anchor, 3, log);
             }
