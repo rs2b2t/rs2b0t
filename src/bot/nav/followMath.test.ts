@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { locateOnPath, selectClickTarget, type PathTileLike } from './followMath.js';
+import { crossingEligible, locateOnPath, selectClickTarget, type PathTileLike } from './followMath.js';
 
 const t = (x: number, z: number, level = 0): PathTileLike => ({ x, z, level });
 
@@ -46,5 +46,37 @@ describe('selectClickTarget', () => {
     });
     test('skips tiles on another level', () => {
         expect(selectClickTarget(tiles, 15, 20, tiles.length - 1, 3, () => true)).toBe(-1);
+    });
+});
+
+describe('crossingEligible', () => {
+    const approach = t(10, 10);
+    const far = t(10, 11, 1); // stair hop: far endpoint on the level above
+
+    test('fires when proximate to the approach tile and it is reachable', () => {
+        expect(crossingEligible(t(8, 8), approach, far, 4, () => true)).toBe(true);
+    });
+
+    test('fires on proximity to the far tile too (horizontal), approach reachable', () => {
+        expect(crossingEligible(t(10, 14), approach, far, 4, () => true)).toBe(true);
+    });
+
+    test('does NOT fire when the approach tile is unreachable (ladder behind a wall)', () => {
+        expect(crossingEligible(t(9, 10), approach, far, 4, () => false)).toBe(false);
+    });
+
+    test('does NOT fire from a different level than the approach', () => {
+        expect(crossingEligible(t(10, 9, 1), approach, far, 4, () => true)).toBe(false);
+    });
+
+    test('does NOT run the reach probe when out of trigger range', () => {
+        let probed = false;
+        expect(
+            crossingEligible(t(30, 30), approach, far, 4, () => {
+                probed = true;
+                return true;
+            })
+        ).toBe(false);
+        expect(probed).toBe(false);
     });
 });

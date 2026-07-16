@@ -54,3 +54,24 @@ export function selectClickTarget(tiles: PathTileLike[], pathIdx: number, steps:
     }
     return -1;
 }
+
+/**
+ * Should followPath hand this crossing to handleTransport yet? Proximity alone
+ * (the old rule) is wall-blind: a baked stair edge whose operate tile sits just
+ * INSIDE a house wall came within trigger range of a bot walking past OUTSIDE,
+ * and the resulting through-the-wall ladder click could never resolve ("I
+ * can't reach that!" → two 8s waits → the ladder blacklisted → repath →
+ * forever). `reachable` (live-collision canReach with adjacentOk, injected)
+ * must accept the approach tile too — adjacentOk so a swung-open door leaf
+ * FLAGGING the approach tile (shape-9 diagonal doors) still fires. Checked
+ * last so the BFS only runs when proximate.
+ */
+export function crossingEligible(me: PathTileLike, approach: PathTileLike, far: PathTileLike, trigger: number, reachable: (t: PathTileLike) => boolean): boolean {
+    if (me.level !== approach.level) {
+        return false;
+    }
+    if (chebyshev(me, approach) > trigger && chebyshev(me, far) > trigger) {
+        return false;
+    }
+    return reachable(approach);
+}

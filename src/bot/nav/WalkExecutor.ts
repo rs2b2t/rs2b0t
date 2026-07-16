@@ -23,7 +23,7 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
-import { chebyshev, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
+import { chebyshev, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 
@@ -38,6 +38,10 @@ const STALL_TICKS = 6; // no tile change for this many ticks while short of the 
 // bookkeeping: an RS door can swing shut AFTER we select a target, so re-probe
 // reachability before crediting a no-move tick as progress.
 const STALL_REACH_STEPS = 256;
+// canReach BFS budget for the crossing-trigger gate: is the crossing's
+// approach tile actually attainable from here, or merely Chebyshev-close
+// through a wall? Runs at most once per proximate crossing per loop iteration.
+const TRIGGER_REACH_STEPS = 256;
 // Backstop: consecutive no-move loop iterations before the stall
 // counter is allowed to grow regardless of target distance — catches the
 // probe-proven click-starvation where canReach reads TRUE yet the bot never
@@ -336,10 +340,17 @@ class WalkExecutorImpl {
             // descent stall (seen in a live smoke). Gating on tiles[i-1].level keeps
             // staircases working (approached from their own level) while ignoring
             // the vertically-stacked doorway below.
+            //
+            // AND reach-gated: Chebyshev proximity alone is wall-blind, so a
+            // stair operate tile just inside a house wall used to fire from
+            // OUTSIDE the wall — see crossingEligible. An ineligible crossing is
+            // simply skipped this iteration; the walker keeps clicking along the
+            // path (through the door) until the approach becomes reachable.
             let crossingIdx = -1;
+            const approachable = (t: WorldTile): boolean => Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
             const scanHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
             for (let i = Math.max(1, pathIdx - 5); i < scanHi; i++) {
-                if (tiles[i].transport && me.level === tiles[i - 1].level && (chebyshev(me, tiles[i - 1]) <= TRANSPORT_TRIGGER || chebyshev(me, tiles[i]) <= TRANSPORT_TRIGGER)) {
+                if (tiles[i].transport && crossingEligible(me, tiles[i - 1], tiles[i], TRANSPORT_TRIGGER, approachable)) {
                     crossingIdx = i;
                     break;
                 }
