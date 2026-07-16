@@ -810,14 +810,23 @@ class BankRun implements Task {
         this.bot.clearWakes();
     }
 
-    /** Top an item up to `target` with the era's 1/5/10 withdraw buttons.
-     *  Returns the amount gained (0 = the bank has none). */
+    /** Top an item up to `target` — one Withdraw-X for the exact shortfall
+     *  (ammo/rune restocks are hundreds; button-batching was 20+ click-and-wait
+     *  round trips per trip), falling back to the era's 1/5/10 buttons when the
+     *  item offers no X op or the count dialog doesn't open. Returns the amount
+     *  gained (0 = the bank has none). */
     private async withdrawTo(name: string, target: number): Promise<number> {
         const start = Inventory.count(name);
         for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-            const need = target - Inventory.count(name);
-            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
             const before = Inventory.count(name);
+            const need = target - before;
+            if (need > 10 && (await Bank.withdrawX(name, need))) {
+                if (Inventory.count(name) > before) {
+                    continue; // got some (maybe all the bank had) — loop re-checks target
+                }
+                break; // X flow completed but nothing arrived — bank is dry
+            }
+            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
             await Bank.withdraw(name, op);
             if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
                 break; // bank ran out, or the button didn't fire
