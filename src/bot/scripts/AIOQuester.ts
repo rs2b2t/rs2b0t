@@ -10,6 +10,12 @@ import type { QueueRow, QueueStatus } from '../quests/engine/queue.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
+// Death detection: the SAME loose regex the shared DeathRecovery task uses
+// (src/bot/api/tasks/DeathRecovery.ts:8), matched loosely so upstream
+// punctuation drift can't silently break recovery. Re-declared (not imported)
+// because DeathRecovery keeps it module-local.
+const DEATH_RE = /oh dear.*you are dead/i;
+
 // Queue-status glyphs for the Queue tab (one per row).
 const ICON: Record<QueueStatus, string> = {
     DONE: '✓',
@@ -53,6 +59,12 @@ export default class AIOQuester extends TaskBot {
     // Skip button -> flag the engine consumes at the top of its next loop.
     private skipRequested = false;
 
+    // Death latch + lifetime tally. Death = an involuntary deposit-everything
+    // plus a teleport (the engine re-provisions and resumes on consumeDeath).
+    // `deaths` is cosmetic — surfaced on the Current tab.
+    private died = false;
+    private deaths = 0;
+
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
@@ -60,6 +72,15 @@ export default class AIOQuester extends TaskBot {
         const chosen = this.settings.list('quests', []).filter(id => all.includes(id));
         // Empty selection = every implemented quest (design decision).
         this.picked = new Set(chosen.length > 0 ? chosen : all);
+
+        // Latch a death the moment the chat line is matched; the engine consumes
+        // it next loop (WildyAgility.ts:241 installs the identical subscription).
+        this.on('chat.message', e => {
+            if (DEATH_RE.test(e.text)) {
+                this.died = true;
+                this.deaths++;
+            }
+        });
 
         this.log(`AIOQuester — queue: ${[...this.picked].join(', ') || '(none)'}`);
         this.add(new ContinueDialog(), new QuestEngine(this));
@@ -102,6 +123,16 @@ export default class AIOQuester extends TaskBot {
         return s;
     }
 
+    /** Read-and-clear the death latch (mirrors consumeSkip). The engine consumes
+     *  it EVERY loop so a death with no running quest can't stay latched and fire
+     *  recovery on the next quest picked (same unconditional-consume lesson as
+     *  Skip). */
+    consumeDeath(): boolean {
+        const d = this.died;
+        this.died = false;
+        return d;
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const rows = this.rows;
         const doneCount = rows.filter(r => r.status === 'DONE').length;
@@ -125,6 +156,7 @@ export default class AIOQuester extends TaskBot {
         } else {
             p.row(`Quest: ${running?.name ?? '—'}`, `Step: ${this.stepDesc}`);
             p.row(`No-progress: ${this.noProgress}`, `Parked: ${this.parkedCount}`);
+            p.row(`Deaths: ${this.deaths}`, '');
         }
 
         p.gap();

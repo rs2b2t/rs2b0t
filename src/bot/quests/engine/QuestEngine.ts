@@ -194,6 +194,25 @@ export class QuestEngine implements Task {
             this.runningId = null;
         }
 
+        // Death recovery (spec: death = involuntary deposit-everything + a
+        // teleport). Everything re-derives from journal + inventory, so the
+        // whole recovery is: forget this quest's provisioning state so
+        // bank-first re-gears it (spares come back out of the bank), reset the
+        // watchdog, and let the ordinary decide loop walk back via its own
+        // next step. No park: the quest keeps running. consumeDeath fires EVERY
+        // loop (clearing the latch) even when no quest runs — same
+        // unconditional-consume lesson as Skip above.
+        if (this.host.consumeDeath() && this.runningId !== null) {
+            const dead = this.nameOf(this.runningId, elig);
+            this.host.log(`died during ${dead} — re-provisioning and resuming`);
+            this.provisioned.delete(this.runningId);
+            this.deposited.delete(this.runningId);
+            this.resetWatchdog();
+            this.waitKey = '';
+            this.waitCount = 0;
+            return;
+        }
+
         // --- 2. pick the next quest (blocked ones are never selectable) ---
         if (this.runningId === null) {
             const selectable = new Set([...picked].filter(id => !this.blocked.has(id)));
