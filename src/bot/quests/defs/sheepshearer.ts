@@ -55,7 +55,9 @@ async function spinAllWool(log: (m: string) => void): Promise<boolean> {
             return false;
         }
     }
-    if (!(await ChatDialog.makeX('Ball of wool', Inventory.count('Wool')))) {
+    // The spin menu lists INGREDIENTS ("Wool"/"Flax"), not products — probe-
+    // verified live at Falador, and FlaxSpinner's `product` help says the same.
+    if (!(await ChatDialog.makeX('Wool', Inventory.count('Wool')))) {
         log(`Spin menu open but couldn't Make-X — products: [${ChatDialog.makeProducts().join(', ')}]`);
         return false;
     }
