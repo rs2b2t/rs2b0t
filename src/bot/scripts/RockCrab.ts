@@ -25,6 +25,7 @@ import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Sustain } from '../api/Sustain.js';
+import { DEFAULT_SPOTS } from './RockCrabSpots.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -32,8 +33,9 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 // The rock crab field east of Rellekka, on the northern shoreline (verified
 // live: dormant "Rocks" NPCs at x 2694-2719, z 3714-3729; walking adjacent
 // wakes them into attacking "Rock Crab" lvl 13). Two clusters share one
-// scene, so the whole spot is reachable with scene-local walking.
-const DEFAULT_FIELD = new Tile(2710, 3720, 0);
+// scene, so the whole spot is reachable with scene-local walking. The stand
+// spots the bot rotates between (loc1-5, defaults in RockCrabSpots.ts) are
+// tiles whose 3x3 square touches 2-3 dormant spawns.
 // Inland reset tile, ~21 tiles south of the field — far enough that the crabs
 // de-aggro and revert, so walking back in wakes them again (the "run out and
 // back" reset).
@@ -100,7 +102,11 @@ export const SETTINGS: SettingsSchema = {
     fightHpGate: { type: 'number', default: 40, min: 0, max: 100, label: 'Retreat below HP%', group: 'Food & healing' },
     restUntilHp: { type: 'number', default: 75, min: 0, max: 100, label: 'Rest until HP% (no-food fallback)', group: 'Food & healing' },
 
-    field: { type: 'tile', default: DEFAULT_FIELD, label: 'Field centre (x,z)', group: 'Field' },
+    loc1: { type: 'tile', default: DEFAULT_SPOTS[0], label: 'Spot 1 (x,z)', group: 'Field', help: 'stand tiles whose 3x3 square touches 2-3 Rocks spawns; the bot rotates between spots. Set a slot to 0,0 to disable it.' },
+    loc2: { type: 'tile', default: DEFAULT_SPOTS[1], label: 'Spot 2 (x,z)', group: 'Field' },
+    loc3: { type: 'tile', default: DEFAULT_SPOTS[2], label: 'Spot 3 (x,z)', group: 'Field' },
+    loc4: { type: 'tile', default: DEFAULT_SPOTS[3], label: 'Spot 4 (x,z)', group: 'Field' },
+    loc5: { type: 'tile', default: DEFAULT_SPOTS[4], label: 'Spot 5 (x,z)', group: 'Field' },
     resetTile: { type: 'tile', default: DEFAULT_RESET, label: 'Run-out reset tile (x,z)', group: 'Field' },
     fieldRadius: { type: 'number', default: 15, min: 5, max: 30, label: 'Field radius (tiles)', group: 'Field' },
     stack: { type: 'number', default: 3, min: 1, max: 8, label: 'Crabs to stack before clearing', group: 'Field' },
@@ -115,7 +121,11 @@ export const SETTINGS: SettingsSchema = {
 
 // Active run config — set from settings in onStart. Safe as module state
 // because exactly one script runs at a time (ADR-0006).
-let FIELD = DEFAULT_FIELD;
+// The configured stand spots (loc1-5, zero/duplicate slots filtered) and the
+// index of the one currently worked. Rotation: aggro reset and a cleared-out
+// spot both advance to the next, spreading kills across respawn clusters.
+let LOCS: Tile[] = [...DEFAULT_SPOTS];
+let locIdx = 0;
 let RESET_TILE = DEFAULT_RESET;
 let BANK_TILE = DEFAULT_BANK;
 let FIELD_RADIUS = 15;
@@ -173,7 +183,24 @@ export default class RockCrab extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        FIELD = this.settings.tile('field', DEFAULT_FIELD);
+        // loc1-5 → the rotation list: zero-coord slots are disabled, duplicates
+        // collapse, and an all-disabled config falls back to the presets. Start
+        // at the spot nearest the player so a mid-field relaunch stays put.
+        const slots = [1, 2, 3, 4, 5].map(i => this.settings.tile(`loc${i}`, DEFAULT_SPOTS[i - 1]));
+        const seen = new Set<string>();
+        LOCS = slots.filter(t => {
+            const key = `${t.x},${t.z}`;
+            if (t.x <= 0 || t.z <= 0 || seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+        if (LOCS.length === 0) {
+            LOCS = [...DEFAULT_SPOTS];
+        }
+        const here = Game.tile();
+        locIdx = here === null ? 0 : LOCS.reduce((best, t, i) => (t.distanceTo(here) < LOCS[best].distanceTo(here) ? i : best), 0);
         RESET_TILE = this.settings.tile('resetTile', DEFAULT_RESET);
         BANK_TILE = this.settings.tile('bankTile', DEFAULT_BANK);
         FIELD_RADIUS = this.settings.num('fieldRadius', 15);
@@ -213,7 +240,7 @@ export default class RockCrab extends TaskBot {
         });
 
         const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (${this.settings.str('rangeStyle', 'rapid')}, sweep>=${MIN_STACK})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
-        this.log(`RockCrab starting — field ${FIELD} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
+        this.log(`RockCrab starting — spots [${LOCS.map(t => `${t.x},${t.z}`).join(' | ')}] starting at ${currentSpot()} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
         }
@@ -240,7 +267,9 @@ export default class RockCrab extends TaskBot {
 
         this.add(
             new DeathRecovery(this, {
-                anchor: FIELD,
+                // static anchor: recovery always returns to spot 1 (locIdx is
+                // reset to match in onRecovered)
+                anchor: LOCS[0],
                 radius: 4,
                 onDeath: () => {
                     this.setStatus('died — recovering');
@@ -250,6 +279,7 @@ export default class RockCrab extends TaskBot {
                 },
                 onRecovered: () => {
                     this.died = false;
+                    locIdx = 0; // recovery walked to spot 1 — work from there
                 }
             }),
             new Eat(this),
@@ -266,7 +296,7 @@ export default class RockCrab extends TaskBot {
                 countLoot: () => Inventory.items().filter(i => LOOT_NAMES.includes((i.name ?? '').toLowerCase())).length,
                 deposit: (name) => LOOT_NAMES.includes(name.toLowerCase()),
                 commonJunk: () => BANK_COMMON,
-                returnTo: () => FIELD,
+                returnTo: () => currentSpot(),
                 setStatus: (s) => this.setStatus(s),
                 log: (m) => this.log(m)
             }),
@@ -275,6 +305,7 @@ export default class RockCrab extends TaskBot {
             new RegroupAtField(this),
             new Fight(this),
             new Aggro(this),
+            new NextSpot(this),
             new ResetAggro(this)
         );
     }
@@ -284,7 +315,7 @@ export default class RockCrab extends TaskBot {
     }
 
     override recoveryAnchor(): Tile | null {
-        return FIELD;
+        return currentSpot();
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -404,8 +435,19 @@ export default class RockCrab extends TaskBot {
     }
 }
 
+/** The stand spot currently worked — the anchor every field query/walk uses. */
+function currentSpot(): Tile {
+    return LOCS[locIdx % LOCS.length];
+}
+
+/** Advance the rotation to the next configured spot. */
+function nextSpot(): Tile {
+    locIdx = (locIdx + 1) % LOCS.length;
+    return currentSpot();
+}
+
 function inField(tile: Tile): boolean {
-    return FIELD.distanceTo(tile) <= FIELD_RADIUS;
+    return currentSpot().distanceTo(tile) <= FIELD_RADIUS;
 }
 
 /** True once we've stacked enough crabs (or there are no more rocks to gather). */
@@ -414,10 +456,10 @@ function stackReady(): boolean {
     return crabs >= DESIRED_STACK || (crabs >= 1 && dormantRocks().length === 0);
 }
 
-/** True when we're standing at (within CENTRE_RADIUS of) the field centre. */
+/** True when we're standing at (within CENTRE_RADIUS of) the current spot. */
 function atCentre(): boolean {
     const here = Game.tile();
-    return here !== null && FIELD.distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
+    return here !== null && currentSpot().distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
 }
 
 // Multi-bite foods eat DOWN through intermediate items (a cake is 3 items:
@@ -806,7 +848,7 @@ class BankRun implements Task {
         await this.withdrawStyleSupplies();
 
         this.bot.setStatus('restocked — walking back to the field');
-        await Traversal.walkResilient(FIELD, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(currentSpot(), { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
     }
 
@@ -891,7 +933,7 @@ class GoToField implements Task {
 
     async execute(): Promise<void> {
         this.bot.setStatus('walking to the field');
-        const ok = await Traversal.walkResilient(FIELD, { radius: 4, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
+        const ok = await Traversal.walkResilient(currentSpot(), { radius: 4, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
         if (ok) {
             this.bot.clearWakes();
         }
@@ -948,9 +990,9 @@ class RegroupAtField implements Task {
         if (EventSignal.pending()) {
             return; // runtime event guard takes over next loop
         }
-        this.bot.setStatus('regrouping — running back to the field centre');
-        // scene-local walk; the aggroed crabs chase us to the centre
-        await DirectNavigator.walkTo(FIELD, CENTRE_RADIUS, 30000);
+        this.bot.setStatus('regrouping — running back to the stand spot');
+        // scene-local walk; the aggroed crabs chase us to the spot
+        await DirectNavigator.walkTo(currentSpot(), CENTRE_RADIUS, 30000);
     }
 }
 
@@ -1068,6 +1110,32 @@ class Aggro implements Task {
     }
 }
 
+/** Current spot is worked out — nothing active, nothing dormant left in
+ *  radius (all killed, respawn timers running) — so move to the next preset
+ *  spot instead of idling in place until the same rocks come back. */
+class NextSpot implements Task {
+    constructor(private bot: RockCrab) {}
+
+    validate(): boolean {
+        if (LOCS.length < 2 || this.bot.deAggroed() || Skills.hpFraction() < FIGHT_HP_GATE) {
+            return false; // ResetAggro owns dud-wake streaks and low-HP retreats
+        }
+        const here = Game.tile();
+        return here !== null && inField(Tile.from(here)) && activeCrabs().length === 0 && dormantRocks().length === 0;
+    }
+
+    async execute(): Promise<void> {
+        if (EventSignal.pending()) {
+            return; // runtime event guard takes over next loop
+        }
+        const spot = nextSpot();
+        this.bot.setStatus(`spot cleared — moving to spot ${locIdx + 1}/${LOCS.length}`);
+        this.bot.log(`spot cleared out — rotating to spot ${locIdx + 1}/${LOCS.length} (${spot.x},${spot.z})`);
+        await DirectNavigator.walkTo(spot, CENTRE_RADIUS, 30000);
+        this.bot.clearWakes();
+    }
+}
+
 /** Run out of the field and back to reset aggression, or (with no food) to regen HP. */
 class ResetAggro implements Task {
     constructor(private bot: RockCrab) {}
@@ -1096,8 +1164,11 @@ class ResetAggro implements Task {
             await Execution.delayTicks(3);
         }
 
-        await DirectNavigator.walkTo(FIELD, 3, 60000);
+        // come back in at the NEXT spot — the reset means this one stopped
+        // producing (dud wakes), so work a fresh respawn cluster
+        const spot = LOCS.length > 1 ? nextSpot() : currentSpot();
+        await DirectNavigator.walkTo(spot, 3, 60000);
         this.bot.clearWakes();
-        this.bot.log('back in the field');
+        this.bot.log(`back in the field at spot ${locIdx + 1}/${LOCS.length} (${spot.x},${spot.z})`);
     }
 }
