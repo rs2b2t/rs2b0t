@@ -17,7 +17,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, bestPickaxe, resolveRockIds } from './MiningRocks.js';
-import { FISHING_METHOD_OPTIONS, resolveFishMethod } from './FishingMethods.js';
+import { FISHING_METHOD_OPTIONS, WHIRLPOOL_IDS, resolveFishMethod } from './FishingMethods.js';
 import { Banking } from '../api/Banking.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
@@ -71,8 +71,10 @@ export default class GatheringBot extends TaskBot {
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
     // Fishing mode: the method's equipment — the only pack items a bank trip
-    // keeps. Empty when not fishing.
+    // keeps — and its spot-id restriction (sharks share the tuna spots' op
+    // pair; only the npc id tells). Empty when not fishing / unrestricted.
     private gearKeep: string[] = [];
+    private fishSpotIds: number[] = [];
 
     // A target that gave a blocking dialog (too-high level / no tool) is dead
     // for this run; one that just yielded nothing (freshly depleted rock,
@@ -113,6 +115,7 @@ export default class GatheringBot extends TaskBot {
             this.action = method.op;
             this.pairOp = method.pair ?? '';
             this.gearKeep = method.gear;
+            this.fishSpotIds = method.spotIds ?? [];
             this.productKeywords = ['raw'];
         } else {
             this.productKeywords = [this.dropMatch];
@@ -230,6 +233,11 @@ export default class GatheringBot extends TaskBot {
     /** Running as the Miner preset (rock ids resolved from the multi-select). */
     mining(): boolean {
         return this.rockIds.size > 0;
+    }
+    /** Fishing-spot npc id filter: methods with ambiguous op pairs (sharks vs
+     *  tuna) restrict to their ids; an empty list matches any spot. */
+    matchesSpot(id: number): boolean {
+        return this.fishSpotIds.length === 0 || this.fishSpotIds.includes(id);
     }
 
     /** Bank-trip deposit policy. Miner banks the ore plus gems (they don't
@@ -429,7 +437,10 @@ class Gather implements Task {
             return Npcs.query()
                 .name(this.bot.targetName())
                 .action(this.bot.actionName())
-                .where(n => n.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(n.tile())) && (pair === '' || n.actions().some(a => a.toLowerCase() === pair)))
+                // never a whirlpool (anti-macro spot variant — re-clicking one
+                // swallows the gear), and only the method's spot ids when it
+                // has an ambiguous op pair (sharks vs tuna/swordfish)
+                .where(n => n.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(n.tile())) && !WHIRLPOOL_IDS.has(n.id) && this.bot.matchesSpot(n.id) && (pair === '' || n.actions().some(a => a.toLowerCase() === pair)))
                 .nearest();
         }
         return Locs.query()

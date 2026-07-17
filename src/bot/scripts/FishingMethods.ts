@@ -23,7 +23,24 @@ export interface FishingMethod {
      *  ONLY things a bank trip keeps; everything else in the pack is deposited
      *  (big-net junk, caskets, whatever the run accumulated). */
     gear: string[];
+    /** Restrict to these "Fishing spot" npc ids. Needed when the op PAIR is
+     *  ambiguous: the members Net/Harpoon spot (sharks) and the regular
+     *  Net/Harpoon spot (tuna/swordfish via Net=mackerel) present identical
+     *  ops — only the npc id tells them apart. Omit to match any spot. */
+    spotIds?: number[];
 }
+
+/** "Fishing spot" npc ids of the members Net/Harpoon spots (category
+ *  memberfish, pack/npc.pack) — Harpoon on THESE is sharks (76 Fishing);
+ *  the Fishing Guild cluster is 313. */
+export const SHARK_SPOT_IDS: number[] = [313, 322, 334, 1191, 1333];
+
+/** Whirlpool spot variants (fishing anti-macro): the worked spot is
+ *  npc_changetype'd into one of these for 60 ticks; it does NOT auto-continue
+ *  the fishing, but RE-clicking it a few times swallows the fishing
+ *  equipment. Same "Fishing spot" name and ops as the real thing — the
+ *  Fisher's find() refuses them by id so the re-click can never happen. */
+export const WHIRLPOOL_IDS: Set<number> = new Set([403, 404, 405, 406]);
 
 export const FISHING_METHODS: FishingMethod[] = [
     { name: 'Small net — shrimp/anchovy', op: 'Net', pair: 'Bait', gear: ['Small fishing net'] }, // Net/Bait spot: Shrimps (1), Anchovies (15)
@@ -32,7 +49,8 @@ export const FISHING_METHODS: FishingMethod[] = [
     { name: 'Bait rod — pike', op: 'Bait', pair: 'Lure', gear: ['Fishing rod', 'Fishing bait'] }, // Lure/Bait spot: Pike (25)
     { name: 'Big net — mackerel/cod/bass', op: 'Net', pair: 'Harpoon', gear: ['Big fishing net'] }, // Net/Harpoon spot: Mackerel (16), Cod (23), Bass (46)
     { name: 'Lobster cage — lobster', op: 'Cage', pair: 'Harpoon', gear: ['Lobster pot'] }, // Cage/Harpoon spot: Lobster (40)
-    { name: 'Harpoon — tuna/swordfish', op: 'Harpoon', gear: ['Harpoon'] } // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
+    { name: 'Harpoon — tuna/swordfish', op: 'Harpoon', gear: ['Harpoon'] }, // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
+    { name: 'Harpoon — sharks', op: 'Harpoon', pair: 'Net', gear: ['Harpoon'], spotIds: SHARK_SPOT_IDS } // members Net/Harpoon spot (Fishing Guild): Shark (76)
 ];
 
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);

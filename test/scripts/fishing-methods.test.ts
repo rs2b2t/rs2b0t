@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { FISHING_METHODS, FISHING_METHOD_OPTIONS, resolveFishMethod } from '#/bot/scripts/FishingMethods.js';
+import { FISHING_METHODS, FISHING_METHOD_OPTIONS, SHARK_SPOT_IDS, WHIRLPOOL_IDS, resolveFishMethod } from '#/bot/scripts/FishingMethods.js';
 
 test('Net disambiguates small (Net/Bait) vs big (Net/Harpoon) net by pair', () => {
     const small = resolveFishMethod('Small net — shrimp/anchovy');
@@ -36,4 +36,29 @@ test('every op/pair is a real fishing-spot op; options list matches the table', 
 
 test('unknown label falls back to the first method', () => {
     expect(resolveFishMethod('nonsense')).toBe(FISHING_METHODS[0]);
+});
+
+test('every method declares its gear (the bank-trip keep set)', () => {
+    for (const m of FISHING_METHODS) {
+        expect(m.gear.length, m.name).toBeGreaterThan(0);
+    }
+});
+
+test('sharks: Harpoon on the members Net/Harpoon spots, restricted by npc id', () => {
+    const shark = resolveFishMethod('Harpoon — sharks');
+    expect(shark.op).toBe('Harpoon');
+    expect(shark.pair).toBe('Net');
+    expect(shark.gear).toEqual(['Harpoon']);
+    expect(shark.spotIds).toEqual(SHARK_SPOT_IDS);
+    expect(SHARK_SPOT_IDS.length).toBeGreaterThan(0);
+});
+
+test('tuna/swordfish stays unrestricted — the shark ids must not shadow it', () => {
+    expect(resolveFishMethod('Harpoon — tuna/swordfish').spotIds).toBeUndefined();
+});
+
+test('whirlpool ids never overlap real shark spot ids', () => {
+    for (const id of SHARK_SPOT_IDS) {
+        expect(WHIRLPOOL_IDS.has(id)).toBe(false);
+    }
 });
