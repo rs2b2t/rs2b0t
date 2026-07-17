@@ -261,20 +261,31 @@ async function pebbleLeg(log: (m: string) => void): Promise<boolean> {
         }
         return Execution.delayUntil(() => Inventory.contains(KEY), 8000);
     }
-    // Open the gate with the key if it is still closed (offers 'Open'); re-enter
-    // so the next pass approaches Golrie through the opened gate.
-    if (!(await walkWithHops(GOLRIE_GATE_STAND, 2, WATERFALL_HOPS, log))) {
-        return false;
-    }
-    const closedGate = Locs.query().name('Door').action('Open').within(6).nearest();
-    if (closedGate) {
-        const key = Inventory.first(KEY);
-        if (key) {
-            await key.useOn(closedGate);
-            await Execution.delayTicks(3);
+    // The golrie gate (a wall @ 2515,9575) opens only when the KEY is USED from the
+    // OUTSIDE (south, z<9575): check_axis then forcewalks you THROUGH to the inside
+    // (quest_waterfall.rs2:358-368). Once through, do NOT walk back to the south stand
+    // — the gate auto-closes behind you and re-walking re-opens it forever (live
+    // 2026-07-17: oscillated at the gate, pebble never obtained). Guard on position:
+    // north of the gate (z>=9576) go straight to Golrie; else (re)open from the south.
+    const gateHere = Game.tile();
+    const insideGate = gateHere !== null && gateHere.z >= 9576;
+    if (!insideGate) {
+        if (!(await walkWithHops(GOLRIE_GATE_STAND, 1, WATERFALL_HOPS, log))) {
+            return false;
         }
-        return false;
+        const closedGate = Locs.query().name('Door').action('Open').within(6).nearest();
+        if (closedGate) {
+            const key = Inventory.first(KEY);
+            if (key) {
+                await key.useOn(closedGate);
+                // The key-use forcewalks us north through the gate — wait for it so
+                // we don't immediately re-loop and get pulled back south.
+                await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && t.z >= 9576; }, 6000);
+            }
+        }
+        return false; // re-enter -> inside branch (or retry the open)
     }
+    // Inside the gate -> Golrie hands the pebble (scripted, no real options).
     if (!(await Traversal.walkResilient(GOLRIE_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
