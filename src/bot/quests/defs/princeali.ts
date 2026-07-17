@@ -1,14 +1,16 @@
 // COMBAT-SURVIVABILITY GATE (not modeled in QuestSnapshot): Prince Ali never
 // fights, but the Draynor jail (Keli's imprint + the jailbreak) is ringed by
 // level-26 Jail guards (draynor.npc:152, op2=Attack) that aggro any account
-// under ~2x their level — a bare level-3 account dies mid-Keli-dialogue and,
-// because coins are tradeable, DROPS its whole toll/buy float on death, then
-// wedges broke at the Al Kharid toll gate (live 2026-07-16). Death recovery
-// (engine) re-provisions from the BANK, which can't restore dropped pack coins.
-// So run this quest on an account with combat stats high enough to survive (or
-// out-level the guard aggro) — the smoke preps attack/strength/defence/
-// hitpoints ~40. TODO(robustness): bank the coin float + carry only a small
-// toll reserve so a stray death can't strand the quest.
+// under ~2x their level (aggressive to combat level <= 26*2 = 52). A bare or
+// low-combat account dies at the jail and DROPS its coins AND the tradeable
+// disguise items (blond wig / bronze key / pink skirt — only Paste is
+// untradeable) on death; death recovery re-provisions from the BANK but can't
+// restore dropped pack items, so the run strands. THE FIX IS COMBAT LEVEL > 52:
+// at that point the guards do not aggro at all, so the imprint + the linger-
+// heavy jailbreak (tie Keli, unlock, hand over) are safe. The smoke preps
+// attack/strength/defence/hitpoints ~60 (combat ~65). Live-verified: combat 40
+// still died mid-jailbreak (2026-07-17). TODO(robustness): bank the coin float +
+// carry food eaten via a sustain hook, so a stray death can't strand the quest.
 import { Execution } from '../../api/Execution.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
@@ -42,7 +44,11 @@ const HASSAN: NpcStop = { npc: 'Hassan', anchor: new Tile(3302, 3163, 0), leash:
 // the menu that contains "Okay, I better go". (The opener line is auto-said, not
 // an option, so it's dropped.)
 const OSMAN: NpcStop = { npc: 'Osman', anchor: new Tile(3286, 3180, 0), leash: 6, prefer: ['Okay, I better go find some things.', 'What is the first thing I must do?', 'What is the second thing you need?'] };
-const LEELA: NpcStop = { npc: 'Leela', anchor: new Tile(3113, 3263, 0), leash: 6, prefer: [] };
+// 'I hoped to get him drunk.' is Leela's stage-30 guard-plan option (leela.rs2:47)
+// — she confirms the 3-beers approach. Informational (beers work at stage 30
+// regardless), but preferring it keeps the dialogue on the quest rail instead of
+// the fallback decline.
+const LEELA: NpcStop = { npc: 'Leela', anchor: new Tile(3113, 3263, 0), leash: 6, prefer: ['I hoped to get him drunk.'] };
 const NED_WIG: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Ned, could you make other things from wool?', 'How about some sort of wig?', 'I have that now. Please, make me a wig.'] };
 const NED_ROPE: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Yes, I would like some rope.', 'Okay, please sell me some rope.'] };
 const AGGIE_PASTE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leash: 6, prefer: ['Could you think of a way to make skin paste?', 'Yes please. Mix me some skin paste.'] };
