@@ -118,9 +118,13 @@ const STATUE_STAND = new Tile(2565, 9915, 0);       // beside "Statue of Glarial
 const CHALICE_STAND = new Tile(2603, 9911, 0);      // beside "Chalice of eternity" @ (2603,9910)
 const DOOR_LEAF_STAND = new Tile(2603, 9900, 0);    // baxtorian_door_2 x>2600 leaf @ (2604,9900); useOn key TELEPORTS to the raised room
 // Six pillars (content §Dungeon finale): one air + one earth + one water on each.
+// The pillar LOC tiles (2562,x)/(2569,x) are BLOCKED; standing on the WALKABLE inner
+// tile beside each and using the rune on the 'Pillar' within 3 works. Targeting the
+// blocked loc tile made walkResilient repath forever ("stuck 0 clicks") and crawl the
+// sweep to a halt (live 2026-07-17). These are the inner (east/west) approach tiles.
 const PILLAR_TILES = [
-    new Tile(2562, 9910, 0), new Tile(2562, 9912, 0), new Tile(2562, 9914, 0),
-    new Tile(2569, 9910, 0), new Tile(2569, 9912, 0), new Tile(2569, 9914, 0)
+    new Tile(2563, 9910, 0), new Tile(2563, 9912, 0), new Tile(2563, 9914, 0),
+    new Tile(2568, 9910, 0), new Tile(2568, 9912, 0), new Tile(2568, 9914, 0)
 ];
 
 const held = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
