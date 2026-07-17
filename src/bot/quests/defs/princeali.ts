@@ -240,8 +240,14 @@ async function osmanBriefingThenImprint(log: (m: string) => void): Promise<boole
     if (!(await gotoNpc(OSMAN, [], log))) {
         return false;
     }
+    // Best-effort, NOT fatal: at stage < 20 this opens the instruction dialogue
+    // and sets stage 20; at stage >= 20 (already briefed) Osman offers NO Talk-to
+    // dialogue while we hold soft clay but no key print, so talkThrough returns
+    // false — that must NOT bail the custom before Keli, or the bot wedges at
+    // Osman forever (live 2026-07-16: stuck 3+ min at (3286,3181) after the
+    // briefing already succeeded). Keli's imprint is the real success signal.
     if (!(await talkThrough('Osman', OSMAN.prefer, log))) {
-        return false;
+        log('  Osman offered no dialogue (already briefed) — proceeding to Keli');
     }
     // Keli leg: talk the prefer chain while holding soft clay; success = a
     //  'Key print' appears.
