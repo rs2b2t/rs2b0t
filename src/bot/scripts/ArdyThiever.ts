@@ -111,6 +111,16 @@ function lootSlots(): number {
     return slotsMatching(Inventory.items(), LOOT);
 }
 
+/** Inside ReturnToAnchor's boundary (LEASH+6 of the anchor) — the market-local
+ *  tasks (restock/bank/panic) only run here, so beyond it ReturnToAnchor owns
+ *  the travel with the resilient walker. Without this gate a zero-food restock
+ *  fired from ANYWHERE and preempted ReturnToAnchor forever with a plain 60s
+ *  walk it could never finish (cost-621 route looping 'walk timed out' live). */
+function nearMarket(): boolean {
+    const here = Game.tile();
+    return here !== null && ANCHOR.distanceTo(here) <= LEASH + 6;
+}
+
 /**
  * East Ardougne market pickpocket bot. Start it anywhere — it walks to the
  * chosen target's market spot (baked-in layout; nothing to place). Fills up on
@@ -424,7 +434,7 @@ class EatFood implements Task {
 /** Out of food + very low HP: retreat to the bank, withdraw food or wait out regen. */
 class PanicRetreat implements Task {
     constructor(private bot: ArdyThiever) {}
-    validate(): boolean { return shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount()); }
+    validate(): boolean { return nearMarket() && shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount()); }
     async execute(): Promise<void> {
         this.bot.setStatus('panic: no food — retreating to the bank');
         await Traversal.walkTo(BANK_STAND, { radius: 2, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
@@ -449,7 +459,7 @@ class PanicRetreat implements Task {
 /** Bank loot (+ shared junk) once it fills enough slots. */
 class BankRun implements Task {
     constructor(private bot: ArdyThiever) {}
-    validate(): boolean { return shouldBank(lootSlots(), BANK_AT, Inventory.isFull()); }
+    validate(): boolean { return nearMarket() && shouldBank(lootSlots(), BANK_AT, Inventory.isFull()); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking the loot');
         await Traversal.walkTo(BANK_STAND, { radius: 2, timeoutMs: 90000, log: m => this.bot.log(`  ${m}`) });
@@ -470,7 +480,7 @@ class BankRun implements Task {
 class RestockCakes implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean {
-        return !this.bot.inRealCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
+        return nearMarket() && !this.bot.inRealCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
