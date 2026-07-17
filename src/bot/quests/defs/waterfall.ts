@@ -9,6 +9,7 @@ import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import { isUnderground, talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
+import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { MEMBERS_C } from '../data/members-c.js';
 
@@ -61,6 +62,15 @@ const TOMB_KEEP = ['glarial', 'rope', FOOD.toLowerCase(), 'coins', 'book'];
 // 2026-07-17). Ardougne West (2616,3332) is accessible at ~the same distance; route
 // every Waterfall deposit/withdraw there explicitly.
 const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
+// Aemad's Adventuring Supplies (Ardougne East market general store — Aemad @
+// 2613,3291 / Kortan @ 2615,3292, both Trade; stocks rope 20/100), the accessible
+// place the def re-buys the player-supplied Rope. A death drops EVERYTHING on this
+// server (even the untradeable quest items go — the pebble/amulet/urn ARE
+// re-derivable in-quest), but Rope is a `record` item with no gather fn, so a death
+// hard-BLOCKED the quest ("no gather for Rope", live 2026-07-17 deliberate-death
+// test). gatherRope below is that gather fn. Live-verified Aemad's stand + Trade op;
+// a full death->recovery->complete run was not (re-run is ~25 min).
+const ARDOUGNE_GENERAL = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
 
 // --- NPC stops (content §NPCs; map-derived anchors). Almera starts the quest
 //     (choice "How can I help?"); Golrie hands the pebble (scripted chatplayer/
@@ -748,8 +758,22 @@ export function decide(snap: QuestSnapshot): QuestStep {
     return { kind: 'custom', name: 'book', run: bookLeg };
 }
 
+/** Re-buy the player-supplied Rope after a death drops it (record item, `acquirable`).
+ *  Buy at the Ardougne West general store if the bank/pack can cover it, else park a
+ *  WAIT — never let a missing gather fn hard-block the quest (deliberate-death test). */
+function gatherRope(snap: QuestSnapshot, need: number): QuestStep {
+    const estGp = 20 * Math.max(1, need);
+    if (gpShort(snap, estGp) > 0) {
+        return { kind: 'wait', reason: `need ~${estGp} gp to re-buy Rope after a death` };
+    }
+    return { kind: 'buy', item: 'Rope', qty: Math.max(1, need), shop: ARDOUGNE_GENERAL, estGp };
+}
+
 export const waterfall: QuestModule = {
     record: MEMBERS_C.find(r => r.id === 'waterfall')!,
+    // Rope is the only player-supplied record item; a death drops it, so it needs a
+    // gather fn or the engine hard-blocks re-provisioning (deliberate-death finding).
+    gather: { rope: gatherRope },
     // Every quest item a mid-quest restart may hold in the pack (the between-quest
     // deposit keeps these). 'glarial' covers pebble/amulet/urn; 'a key' covers both
     // keys; runes/food are def-withdrawn post-tomb but kept if already held.
