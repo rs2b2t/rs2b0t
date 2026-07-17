@@ -106,6 +106,12 @@ const LOGS_SPAWN = new Tile(3089, 3265, 0);
 const JAIL_DOOR_NORTH = new Tile(3123, 3244, 0);
 const PRINCE_TILE = new Tile(3123, 3242, 0);
 const JOE_TILE = new Tile(3123, 3245, 0);
+// A fixed jail-yard tile between Keli (3128,3244) and the cell door. The
+// jailbreak anchors here BEFORE checking Keli, so "Keli within range" is read
+// from a known spot — a roaming Keli momentarily >12t from a walking bot used
+// to false-negative into the unlock branch at stage 30 (door still locked ->
+// walker looped on the sealed cell; live 2026-07-17).
+const JAIL_ANCHOR = new Tile(3126, 3245, 0);
 
 // Both wigs display "Wig" (research doc §4) — only the obj id tells plain from
 // blond (quest_prince.obj: plainwig 2421, blondwig 2419). The snapshot is
@@ -356,7 +362,12 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
     // they're needed — otherwise the bot bounced off to re-buy beers it had
     // already drunk (live 2026-07-17: guard drunk + Keli tied, then walked to
     // Varrock to buy 3 more beers).
-    const keli = Npcs.query().name('Lady Keli').within(12).nearest();
+    // Anchor at the jail yard FIRST so the Keli check is from a fixed spot
+    // (a roaming Keli false-negatived a walking bot into the unlock branch).
+    if (!(await Traversal.walkResilient(JAIL_ANCHOR, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
+        return false;
+    }
+    const keli = Npcs.query().name('Lady Keli').within(8).nearest();
     if (keli) {
         // 1. Try the tie FIRST — it works iff the guard is already drunk, and is
         //    a harmless no-op mesbox otherwise (quest_prince.rs2:23-25, rope kept).
