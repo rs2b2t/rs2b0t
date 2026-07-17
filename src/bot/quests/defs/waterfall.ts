@@ -100,7 +100,7 @@ const GOLRIE_GATE_STAND = new Tile(2515, 9574, 0);  // south side of golrie_gate
 const GOLRIE_STAND = new Tile(2515, 9581, 0);       // Golrie, past the gate
 const TOMBSTONE_STAND = new Tile(2558, 3444, 0);    // "Tombstone of glarial" (oplocu pebble) -> tomb (2554,9844)
 const CHEST_STAND = new Tile(2530, 9845, 0);        // "Closed chest"->Open->"Open chest" Search -> amulet (forceapproach N)
-const COFFIN_STAND = new Tile(2542, 9812, 0);       // "Tomb of glarial" op1 Search -> urn
+const COFFIN_STAND = new Tile(2542, 9810, 0);       // S of "Tomb of glarial" (2542-2543,9811, 2x1) — CARDINALLY adjacent so the op1 Search fires (the old 2542,9812 is the blocked loc tile; the bot snapped DIAGONAL and the Search never reached, live 2026-07-17)
 const TOMB_LADDER_STAND = new Tile(2554, 9844, 0);  // tomb landing; a live Climb-up here exits to the surface
 const ROCK_STAND = new Tile(2512, 3478, 0);         // N-of-rock zone (2510-2514,3476-3481); useOn rope -> "Rock"
 const BAX_CRATE_STAND = new Tile(2589, 9888, 0);    // baxtorian_crate "Crate" op1 Search -> "A key"
@@ -373,7 +373,7 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
     // Then the coffin (urn) — SKIPPED in the amulet re-obtain path (Finding 2), which
     // re-enters the tomb already holding the urn and only needs the chest amulet.
     if (!Inventory.contains(URN)) {
-        if (!(await Traversal.walkResilient(COFFIN_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
+        if (!(await Traversal.walkResilient(COFFIN_STAND, { radius: 1, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
         const coffin = Locs.query().name('Tomb of glarial').action('Search').within(8).nearest();
