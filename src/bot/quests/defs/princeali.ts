@@ -12,6 +12,7 @@
 // still died mid-jailbreak (2026-07-17). TODO(robustness): bank the coin float +
 // carry food eaten via a sustain hook, so a stray death can't strand the quest.
 import { Execution } from '../../api/Execution.js';
+import { Game } from '../../api/Game.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
@@ -368,6 +369,13 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     const keli = Npcs.query().name('Lady Keli').within(8).nearest();
+    // `tied` gates the fall-through: a SUCCESSFUL tie must flow straight into the
+    // unlock+handover WITHIN THIS SAME PASS. Returning to decide() between the tie
+    // and the door lets Keli RESPAWN (her spawn is ~5t from the door, inside the
+    // unlock's "no Keli within 10" check, quest_prince.rs2:38) before we reach it,
+    // so the unlock bails "get rid of Keli" forever (live 2026-07-17: tied at t=72s,
+    // detoured to re-buy beers, unlock never took). Race the respawn contiguously.
+    let tied = false;
     if (keli) {
         // 1. Try the tie FIRST — it works iff the guard is already drunk, and is
         //    a harmless no-op mesbox otherwise (quest_prince.rs2:23-25, rope kept).
@@ -384,54 +392,57 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
                 await ChatDialog.continue();
                 await Execution.delayTicks(1);
             }
-            if (!Npcs.query().name('Lady Keli').within(12).nearest()) {
-                return false; // tied — next pass unlocks the door
-            }
+            tied = !Npcs.query().name('Lady Keli').within(12).nearest();
         }
-        // 2. Tie didn't take. Ensure a rope for the attempt (Ned, 15gp/pass).
-        if (Inventory.count('Rope') < 1) {
-            if (!(await gotoNpc(NED_ROPE, [], log))) {
-                return false;
-            }
-            await talkThrough('Ned', NED_ROPE.prefer, log);
-            return false;
-        }
-        // 3. Guard not drunk yet: accumulate 3 beers (bartender, 1/pass) then
-        //    drink them on Joe. joe_beer is a ~10-page conversation mixing
-        //    ~chatnpc (chat modal) and ~mesbox "You hand a beer..." (MAIN modal),
-        //    so it MUST be driven on canContinue() — isOpen() only sees the chat
-        //    modal and stalls on the mesbox pages (live 2026-07-17). ContinueDialog
-        //    can't help: this custom runs inside the QuestEngine task, so no
-        //    sibling task gets a turn mid-await.
-        if (Inventory.count('Beer') < 3) {
-            if (!(await gotoNpc(BARTENDER, [], log))) {
-                return false;
-            }
-            await talkThrough('Bartender', BARTENDER.prefer, log);
-            return false;
-        }
-        if (!(await Traversal.walkResilient(JOE_TILE, { radius: 3, attempts: 2, timeoutMs: 60_000, log }))) {
-            return false;
-        }
-        const joe = Npcs.query().name('Joe').within(6).nearest();
-        const beer = Inventory.first('Beer');
-        if (joe && beer && (await beer.useOn(joe))) {
-            await Execution.delayUntil(() => ChatDialog.canContinue(), 5000);
-            for (let i = 0; i < 40 && (ChatDialog.canContinue() || ChatDialog.options().length > 0); i++) {
-                if (ChatDialog.canContinue()) {
-                    await ChatDialog.continue();
-                } else {
-                    const opts = ChatDialog.options();
-                    await ChatDialog.chooseOption(opts[opts.length - 1]);
+        if (!tied) {
+            // 2. Tie didn't take (guard not drunk). Ensure a rope (Ned, 15gp/pass).
+            if (Inventory.count('Rope') < 1) {
+                if (!(await gotoNpc(NED_ROPE, [], log))) {
+                    return false;
                 }
-                await Execution.delayTicks(1);
+                await talkThrough('Ned', NED_ROPE.prefer, log);
+                return false;
             }
+            // 3. Accumulate 3 beers (bartender, 1/pass) then drink them on Joe.
+            //    joe_beer is a ~10-page conversation mixing ~chatnpc (chat modal)
+            //    and ~mesbox "You hand a beer..." (MAIN modal), so it MUST be driven
+            //    on canContinue() — isOpen() only sees the chat modal and stalls on
+            //    the mesbox pages (live 2026-07-17). ContinueDialog can't help: this
+            //    custom runs inside the QuestEngine task, so no sibling task gets a
+            //    turn mid-await.
+            if (Inventory.count('Beer') < 3) {
+                if (!(await gotoNpc(BARTENDER, [], log))) {
+                    return false;
+                }
+                await talkThrough('Bartender', BARTENDER.prefer, log);
+                return false;
+            }
+            if (!(await Traversal.walkResilient(JOE_TILE, { radius: 3, attempts: 2, timeoutMs: 60_000, log }))) {
+                return false;
+            }
+            const joe = Npcs.query().name('Joe').within(6).nearest();
+            const beer = Inventory.first('Beer');
+            if (joe && beer && (await beer.useOn(joe))) {
+                await Execution.delayUntil(() => ChatDialog.canContinue(), 5000);
+                for (let i = 0; i < 40 && (ChatDialog.canContinue() || ChatDialog.options().length > 0); i++) {
+                    if (ChatDialog.canContinue()) {
+                        await ChatDialog.continue();
+                    } else {
+                        const opts = ChatDialog.options();
+                        await ChatDialog.chooseOption(opts[opts.length - 1]);
+                    }
+                    await Execution.delayTicks(1);
+                }
+            }
+            return false; // next pass: guard drunk, the tie above takes
         }
-        return false; // next pass: guard drunk, the tie above takes
+        // tied === true: fall through to the unlock immediately (same pass).
     }
 
-    // 3. Keli gone -> unlock the Prison Door standing NORTH (z>=3244), using the
-    //    Bronze key. No item change on success ("You unlock the door").
+    // 4. Keli tied/gone -> unlock the Prison Door standing NORTH (z>=3244) with the
+    //    Bronze key. Success ("You unlock the door") p_teleports us onto the door
+    //    tile (open_and_close_metal_gate2), one tile north of the prince — the key
+    //    is NOT consumed here (quest_prince.rs2:34-44).
     if (!(await Traversal.walkResilient(JAIL_DOOR_NORTH, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
@@ -439,16 +450,38 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
     const door = Locs.query().name('Prison Door').within(6).nearest();
     if (key && door) {
         await key.useOn(door);
-        await Execution.delayTicks(3);
+        await Execution.delayUntil(() => Game.tile()?.z !== undefined && (Game.tile()?.z ?? 9999) <= 3243, 4000);
     }
 
-    // 4. Walk to the prince and hand over the disguise + key (stage 100). The
-    //    handover consumes all 4; success = the Bronze key leaves the pack.
+    // 5. Walk to the prince and hand over the disguise + key (prince_ali.rs2:11-18,
+    //    stage -> prince_saved). The handover consumes all 4; success = the Bronze
+    //    key leaves the pack. If it's still held the unlock was blocked (Keli
+    //    respawned) — re-decide and re-run the whole jailbreak.
     if (!(await Traversal.walkResilient(PRINCE_TILE, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
     await talkThrough('Prince Ali', [], log);
-    return !Inventory.contains('Bronze key');
+    // Drive the trailing handover mesbox pages ("The prince has escaped, well
+    // done!") so no leftover main modal blocks the walk to Hassan below.
+    for (let i = 0; i < 6 && ChatDialog.canContinue(); i++) {
+        await ChatDialog.continue();
+        await Execution.delayTicks(1);
+    }
+    if (Inventory.contains('Bronze key')) {
+        return false;
+    }
+
+    // 6. Prince freed (stage prince_saved) — the quest is NOT complete until we
+    //    RETURN TO HASSAN in Al-Kharid Palace to claim the reward: talking to him
+    //    at prince_saved queues prince_complete (hassan.rs2:24-26 -> +coins, quest
+    //    done). Without this leg decide() sees the disguise consumed, reads journal
+    //    still 'inProgress', and restarts the key pipeline (live 2026-07-17: freed
+    //    the prince then walked off to Rimmington to re-make a Bronze key).
+    if (!(await gotoNpc(HASSAN, [], log))) {
+        return false;
+    }
+    await talkThrough('Hassan', [], log);
+    return true;
 }
 
 // --- Pure quest brain --------------------------------------------------------
