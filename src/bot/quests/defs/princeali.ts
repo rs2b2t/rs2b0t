@@ -55,7 +55,12 @@ const AGGIE_DYE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leas
 // 'Yes, of course I have heard of you.' entry recovers the 'never heard of you'
 // branch (:33). Imprint menu is stage-20+softclay gated (:88).
 const KELI: NpcStop = { npc: 'Lady Keli', anchor: new Tile(3128, 3244, 0), leash: 6, prefer: ['Heard of you? You are famous in RuneScape!', 'Yes, of course I have heard of you.', 'What is your latest plan then?', 'Can you be sure they will not try to get him out?', 'Could I see the key please?', 'Could I touch the key for a moment?'] };
-const BARTENDER: NpcStop = { npc: 'Bartender', anchor: new Tile(3226, 3399, 0), leash: 8, prefer: ["I'll have a beer please."] }; // Varrock Blue Moon; LIVE-VERIFY exact display name + anchor
+// Varrock Blue Moon (3226,3399, bluemoon_bartender). His beer option is
+// "A glass of your finest ale please." (bartender.rs2:65-21), NOT the Jolly
+// Boar's "I'll have a beer please." — live 2026-07-16: the old single string
+// matched no Blue Moon menu, so talkThrough declined and never bought a beer.
+// Both strings are listed so either bar works; each talk buys ONE beer (2gp).
+const BARTENDER: NpcStop = { npc: 'Bartender', anchor: new Tile(3226, 3399, 0), leash: 8, prefer: ['A glass of your finest ale please.', "I'll have a beer please."] };
 
 // --- Shops (research doc §6). Thessalia/Shantay given; the two "general store"
 // sellers are derived the standard way (npc.pack id -> map jm2 NPC spawn): ---
