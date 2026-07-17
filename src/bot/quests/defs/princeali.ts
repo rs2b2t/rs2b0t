@@ -26,7 +26,14 @@ const NED_WIG: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6
 const NED_ROPE: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Yes, I would like some rope.', 'Okay, please sell me some rope.'] };
 const AGGIE_PASTE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leash: 6, prefer: ['Could you think of a way to make skin paste?', 'Yes please. Mix me some skin paste.'] };
 const AGGIE_DYE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leash: 6, prefer: ['Can you make dyes for me please?', 'What do you need to make yellow dye?', 'Okay, make me some yellow dye please.'] };
-const KELI: NpcStop = { npc: 'Lady Keli', anchor: new Tile(3128, 3244, 0), leash: 6, prefer: ['Are you the famous Lady Keli?', 'What is your latest plan then?', 'Can you be sure they will not try to get him out?', 'Could I see the key please?', 'Could I touch the key for a moment?'] };
+// prefer = the MENU OPTIONS along the flattery→plan→key path (lady_keli.rs2
+// menus at :13,18,57,out,key_please), NOT the player's auto-said opening line.
+// Live 2026-07-16: the old ['Are you the famous Lady Keli?', ...] matched no
+// menu (that string is the opener, not an option), so talkThrough fell through
+// to the last option (the decline) and the imprint never happened. The
+// 'Yes, of course I have heard of you.' entry recovers the 'never heard of you'
+// branch (:33). Imprint menu is stage-20+softclay gated (:88).
+const KELI: NpcStop = { npc: 'Lady Keli', anchor: new Tile(3128, 3244, 0), leash: 6, prefer: ['Heard of you? You are famous in RuneScape!', 'Yes, of course I have heard of you.', 'What is your latest plan then?', 'Can you be sure they will not try to get him out?', 'Could I see the key please?', 'Could I touch the key for a moment?'] };
 const BARTENDER: NpcStop = { npc: 'Bartender', anchor: new Tile(3226, 3399, 0), leash: 8, prefer: ["I'll have a beer please."] }; // Varrock Blue Moon; LIVE-VERIFY exact display name + anchor
 
 // --- Shops (research doc §6). Thessalia/Shantay given; the two "general store"
