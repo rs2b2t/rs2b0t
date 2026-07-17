@@ -487,6 +487,16 @@ class RestockCakes implements Task {
     validate(): boolean {
         return nearMarket() && !this.bot.inRealCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
     }
+    /** The stocked Baker's stall (the emptied variant drops the Steal-from op
+     *  and falls out of this query until the engine swaps the loc back). */
+    private stockedStall() {
+        return Locs.query()
+            .name(STALL_NAME)
+            .action(STALL_OP)
+            .where(l => l.tile().distanceTo(STALL_TILE) <= 3)
+            .nearest();
+    }
+
     /** The stand the Baker can't refuse thefts at: north stand normally, the
      *  SE-corner shade when he's wandered somewhere with sight of it. */
     private pickStand(): Tile {
@@ -525,14 +535,21 @@ class RestockCakes implements Task {
                 await Traversal.walkTo(stand, { radius: 0, timeoutMs: 20000, log: m => this.bot.log(`  ${m}`) });
                 continue; // re-check state/stand from the new tile before stealing
             }
-            const stall = Locs.query()
-                .name(STALL_NAME)
-                .action(STALL_OP)
-                .where(l => l.tile().distanceTo(STALL_TILE) <= 3)
-                .nearest();
-            if (!stall) { await Execution.delayTicks(2); continue; }
+            const stall = this.stockedStall();
+            if (!stall) {
+                // emptied by our own steal — the stocked loc swaps back after
+                // the dbrow respawn (8 ticks for the Baker's stall,
+                // playercount-scaled). A per-frame condition wait fires the
+                // next attempt the tick it restocks (the old blind 2-tick poll
+                // reacted up to ~1.2s late); interrupts still break in.
+                await Execution.delayUntil(
+                    () => this.stockedStall() !== null || EventSignal.pending() || this.bot.died || this.bot.inRealCombat() || ChatDialog.canContinue(),
+                    8000
+                );
+                continue;
+            }
             const before = foodCount();
-            if (!(await stall.interact(STALL_OP))) { await Execution.delayTicks(2); continue; }
+            if (!(await stall.interact(STALL_OP))) { await Execution.delayTicks(1); continue; }
             const got = await Execution.delayUntil(() => foodCount() > before || Game.inCombat(), 4000);
             if (got && foodCount() > before) { this.bot.countSteal(); }
         }
