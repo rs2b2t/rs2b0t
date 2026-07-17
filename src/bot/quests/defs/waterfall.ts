@@ -467,9 +467,13 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     const atFalls = t.x >= 2505 && t.x <= 2518;
-    // On the ledge (arrive 2511,3463) -> Open the Ledge into the dungeon.
+    // On the ledge (arrive 2511,3463) -> Open the Ledge into the dungeon. THREE
+    // 'Ledge' doors sit adjacent (2510/2511/2512,3464); only the CENTRE one (id
+    // 2010, waterfall_ledge_door) has an oploc1 that teleports you in — the flanking
+    // decoys (2011/2012) have NO handler, so opening them is a silent no-op and
+    // .nearest() ties into a dead stall (live 2026-07-17). Target id 2010 explicitly.
     if (atFalls && t.z >= 3461 && t.z <= 3465) {
-        const door = Locs.query().name('Ledge').action('Open').within(6).nearest();
+        const door = Locs.query().where(l => l.id === 2010).action('Open').within(6).nearest();
         if (!door) {
             log('fallsLeg: no Ledge door to Open');
             return false;
