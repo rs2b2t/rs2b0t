@@ -22,6 +22,10 @@ import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
+// Pocket money withdrawn with the spade: toll crossings on trail routes cost
+// coins (Al Kharid gate = 10/pass, specialCrossings.ts) and the walker takes
+// a detour when it can't pay — 100 covers a whole trail's worth of passes.
+const CLUE_COINS = 100;
 
 /** The held easy-clue SCROLL or reward CASKET obj id (what SolveClue works on), or null. */
 export function heldClueLikeId(): number | null {
@@ -159,7 +163,7 @@ export class SolveClue implements Task {
         const spade = this.host.spadeName().toLowerCase();
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
-            return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name) || n === spade;
+            return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name) || n === spade || n === 'coins';
         };
         await Bank.depositAllMatching(name => !isKeep(name));
 
@@ -169,6 +173,13 @@ export class SolveClue implements Task {
             if (!(await Execution.delayUntil(() => Inventory.first(this.host.spadeName()) !== null, 2500))) {
                 this.host.log(`[clue] no '${this.host.spadeName()}' in the bank — dig clues will be abandoned`);
             }
+        }
+
+        // Toll money rides along with the spade (best-effort: a coinless bank
+        // just means toll gates stay detoured, not a failed solve).
+        const coinsShort = CLUE_COINS - Inventory.count('Coins');
+        if (coinsShort > 0 && !(await Bank.withdrawX('Coins', coinsShort))) {
+            this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
         // Top up food (skipped when the bot runs foodless) so the trail is sustainable.
