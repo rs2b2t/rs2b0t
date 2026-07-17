@@ -104,7 +104,15 @@ const COFFIN_STAND = new Tile(2542, 9810, 0);       // S of "Tomb of glarial" (2
 const TOMB_LADDER_STAND = new Tile(2554, 9844, 0);  // tomb landing; a live Climb-up here exits to the surface
 const ROCK_STAND = new Tile(2512, 3477, 0);         // walkable mound tile in the rope-zone (2510-2514,3476-3481), N of the "Rock" (2512,3468); useOn rope. The mound is raft-only (sealed), so fallsLeg boards the raft to reach here.
 const BAX_CRATE_STAND = new Tile(2589, 9888, 0);    // baxtorian_crate "Crate" op1 Search -> "A key"
-const PUZZLE_DOOR_STAND = new Tile(2566, 9900, 0);  // baxtorian_door_2 leaf "Door" @ (2566,9902); useOn key -> stage 6
+// The pillar/statue room is behind TWO locked baxtorian_door_2 doors (id 2002) that
+// op1-Open reports "locked" both sides — the key-USE (oplocu) teleports you THROUGH
+// (open_and_close_door). The walker can't cross them, so the def keys them in
+// sequence by z-region (live-mapped 2026-07-17): the SOUTH door (2568,9893) from the
+// south (2568,9892) -> teleport to z>=9894; then the PUZZLE door (2566,9901) from
+// (2566,9900) -> stage 6 + teleport to z>=9902 (into the pillar room). Both stands
+// are reachable live without crossing the locked door they key.
+const SOUTH_DOOR_STAND = new Tile(2568, 9892, 0);   // S of the "south door" (2568,9893); useOn key -> teleport N
+const PUZZLE_DOOR_STAND = new Tile(2566, 9900, 0);  // S of the puzzle door (2566,9901); useOn key -> stage 6 + teleport N
 const PILLAR_STAND = new Tile(2563, 9911, 0);       // inside the pillar room
 const STATUE_STAND = new Tile(2565, 9915, 0);       // beside "Statue of Glarial" @ (2565,9916)
 const CHALICE_STAND = new Tile(2603, 9911, 0);      // beside "Chalice of eternity" @ (2603,9910)
@@ -630,19 +638,38 @@ async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
         }
         return Execution.delayUntil(() => Inventory.contains(KEY), 8000);
     }
-    // Unlock the puzzle-room door leaf (stage 6) then step into the pillar room
-    // (walkably open on the original side — audit §Region 154).
+    // Reach the pillar/statue room by key-crossing the two locked baxtorian_door_2
+    // doors in sequence (each key-USE teleports us N; the puzzle door also sets
+    // stage 6). Guard by z-region so a re-entry advances instead of re-keying.
     const inPuzzle = t.x >= 2558 && t.x <= 2572 && t.z >= 9908 && t.z <= 9918;
     if (!inPuzzle) {
-        if (!(await Traversal.walkResilient(PUZZLE_DOOR_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
+        const key = Inventory.first(KEY);
+        // (a) South of the SOUTH door -> key it from (2568,9892), teleport to z>=9894.
+        if (t.z < 9894) {
+            if (!(await Traversal.walkResilient(SOUTH_DOOR_STAND, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
+                return false;
+            }
+            const door = Locs.query().where(l => l.id === 2002).action('Open').within(3).nearest();
+            if (door && key) {
+                await key.useOn(door);
+                await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.z >= 9894; }, 6000);
+            }
             return false;
         }
-        const door = Locs.query().name('Door').action('Open').within(6).nearest();
-        const key = Inventory.first(KEY);
-        if (door && key) {
-            await key.useOn(door);
-            await Execution.delayTicks(3);
+        // (b) Between the doors -> key the PUZZLE door from (2566,9900): stage 6 +
+        //     teleport to z>=9902. (c) North of it -> walk into the pillar room.
+        if (t.z < 9902) {
+            if (!(await Traversal.walkResilient(PUZZLE_DOOR_STAND, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
+                return false;
+            }
+            const door = Locs.query().where(l => l.id === 2002).action('Open').within(3).nearest();
+            if (door && key) {
+                await key.useOn(door);
+                await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.z >= 9902; }, 6000);
+            }
+            return false;
         }
+        // North of the puzzle door -> step up into the pillar room.
         await Traversal.walkResilient(PILLAR_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log });
         return false;
     }
