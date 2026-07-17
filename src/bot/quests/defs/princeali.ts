@@ -12,6 +12,7 @@
 // still died mid-jailbreak (2026-07-17). TODO(robustness): bank the coin float +
 // carry food eaten via a sustain hook, so a stray death can't strand the quest.
 import { Execution } from '../../api/Execution.js';
+import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
@@ -347,22 +348,29 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
         return dyeWigToBlond(log);
     }
 
-    // 1. Beers on Joe -> guard drunk (stage 40). One opnpcu with 3 beers held
-    //    consumes all 3, but loop defensively (research doc §5.2: 1 then 2 more).
+    // 1. Beers on Joe -> guard drunk (stage 40). Using a beer on Joe opens the
+    //    joe_beer DIALOGUE (joe_guard.rs2:22-47), a ~10-page conversation that
+    //    drinks 1 beer then 2 more and sets stage 40 — it must be DRIVEN. The
+    //    old useOn + delayTicks(3) left it open and unconsumed: this custom runs
+    //    inside the QuestEngine task, so the sibling ContinueDialog task never
+    //    gets a turn to drive it (live 2026-07-17: beers stuck at 3, bounced
+    //    Leela<->jail forever). So drive it inline with talkThrough, which
+    //    continues an already-open dialogue without re-interacting.
     if (Inventory.count('Beer') > 0) {
         if (!(await Traversal.walkResilient(JOE_TILE, { radius: 3, attempts: 2, timeoutMs: 60_000, log }))) {
             return false;
         }
-        for (let i = 0; i < 3 && Inventory.count('Beer') > 0; i++) {
-            const joe = Npcs.query().name('Joe').within(6).nearest();
-            const beer = Inventory.first('Beer');
-            if (!joe || !beer) {
-                break;
-            }
-            await beer.useOn(joe);
-            await Execution.delayTicks(3);
+        const before = Inventory.count('Beer');
+        const joe = Npcs.query().name('Joe').within(6).nearest();
+        const beer = Inventory.first('Beer');
+        if (joe && beer && (await beer.useOn(joe))) {
+            await Execution.delayUntil(() => ChatDialog.isOpen(), 5000);
+            await talkThrough('Joe', [], log); // drives joe_beer to completion
         }
-        // Not done yet — fall through to try the rope this pass if beers are gone.
+        // Re-decide unless the beers actually went down this pass.
+        if (Inventory.count('Beer') >= before) {
+            return false;
+        }
     }
 
     // 2. Rope on Keli -> tied (stage 50), Keli npc_del'd. Only works once the
