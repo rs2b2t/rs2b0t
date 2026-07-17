@@ -1,13 +1,17 @@
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import { Game } from '../api/Game.js';
 import { BotHost } from '../BotHost.js';
+import { SettingsStore } from './Settings.js';
 
 // Re-enable run once energy has recovered to a useful level. The engine turns
 // the orb OFF at 0 energy (Player.ts), so we flip it back on after a regen —
-// with a moderate threshold so we run in real bursts instead of flip-flopping
-// back on at 1%. Once on, the orb stays on until energy hits 0 again, and the
-// game seamlessly walks-at-0 / runs-when-there's-energy in between.
-const ENERGY_MIN = 20; // percent
+// with a threshold so we run in real bursts instead of flip-flopping back on
+// at 1%. Once on, the orb stays on until energy hits 0 again, and the game
+// seamlessly walks-at-0 / runs-when-there's-energy in between. Both the
+// on/off switch and the threshold are Global settings (runAuto/runEnergyMin,
+// panel-editable live) — defaults here are the fallbacks for a bag miss.
+const RUN_AUTO_DEFAULT = true;
+const ENERGY_MIN_DEFAULT = 20; // percent
 const CHECK_MS = 1500;
 
 // The run toggle is [if_button,controls:com_5] on the player-controls interface,
@@ -47,7 +51,12 @@ class RunManagerImpl {
         if (!reader.ingame() || reader.sideTabInterface(CONTROLS_TAB) === -1) {
             return; // not in-game, or still on Tutorial Island (no controls tab)
         }
-        if (!Game.runEnabled() && Game.energy() >= ENERGY_MIN) {
+        // resolved per check so panel edits apply live, no restart needed
+        const globals = SettingsStore.globalBag();
+        if (!globals.bool('runAuto', RUN_AUTO_DEFAULT)) {
+            return;
+        }
+        if (!Game.runEnabled() && Game.energy() >= globals.num('runEnergyMin', ENERGY_MIN_DEFAULT)) {
             actions.setRun(true);
         }
     }

@@ -16,6 +16,24 @@ describe('GLOBAL_SETTINGS', () => {
         expect(GLOBAL_SETTINGS.bankCommonJunk.type).toBe('boolean');
         expect(GLOBAL_SETTINGS.bankCommonJunk.default).toBe(true);
     });
+
+    test('exposes runAuto (bool, default on) and runEnergyMin (number, 0-100, default 20)', () => {
+        expect(GLOBAL_SETTINGS.runAuto.type).toBe('boolean');
+        expect(GLOBAL_SETTINGS.runAuto.default).toBe(true);
+        expect(GLOBAL_SETTINGS.runEnergyMin.type).toBe('number');
+        expect(GLOBAL_SETTINGS.runEnergyMin.default).toBe(20);
+        expect(GLOBAL_SETTINGS.runEnergyMin.min).toBe(0);
+        expect(GLOBAL_SETTINGS.runEnergyMin.max).toBe(100);
+    });
+
+    test('runEnergyMin saved values clamp to 0-100 through the global bag', () => {
+        localStorage.setItem(K('Global', 'runEnergyMin'), '250');
+        expect(SettingsStore.globalBag().num('runEnergyMin', 20)).toBe(100);
+        localStorage.setItem(K('Global', 'runEnergyMin'), '-5');
+        expect(SettingsStore.globalBag().num('runEnergyMin', 20)).toBe(0);
+        localStorage.setItem(K('Global', 'runAuto'), 'false');
+        expect(SettingsStore.globalBag().bool('runAuto', true)).toBe(false);
+    });
 });
 
 describe('resolve global fallback (per-script overrides global)', () => {

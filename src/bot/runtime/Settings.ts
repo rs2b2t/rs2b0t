@@ -146,7 +146,9 @@ const LAMP_SKILLS: string[] = [
  *  below per-script values (per-script overrides global). */
 export const GLOBAL_SETTINGS: SettingsSchema = {
     lampSkill: { type: 'string', default: 'strength', options: LAMP_SKILLS, label: 'Genie lamp skill', help: 'which skill genie/lamp random events train' },
-    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs (default)' }
+    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs (default)' },
+    runAuto: { type: 'boolean', default: true, label: 'Auto re-enable run', help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)' },
+    runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' }
 };
 
 const hasStorage = typeof localStorage !== 'undefined';
