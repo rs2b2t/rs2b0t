@@ -556,20 +556,24 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
  */
 async function placeRunes(log: (m: string) => void): Promise<void> {
     for (const pillarTile of PILLAR_TILES) {
-        if (!(await Traversal.walkResilient(pillarTile, { radius: 1, attempts: 2, timeoutMs: 45_000, log }))) {
-            continue;
-        }
-        for (const rune of RUNES) {
-            const r = Inventory.first(rune);
-            if (!r) {
-                continue;
+        // Cheap single-attempt walk: the pillar room is cramped and walkResilient
+        // repaths endlessly ("stuck 0 clicks") between the tightly-packed loc tiles —
+        // don't burn 45s per stand. Then place a rune of EVERY type on EVERY 'Pillar'
+        // in range (not just the nearest): repeats over an already-set bit are free
+        // no-ops (waterfall_pillars.rs2:12), so covering neighbours here means a stand
+        // the walk can't perfectly reach still gets swept from an adjacent one (live
+        // 2026-07-17: per-tile walkResilient crawled the sweep to a near-halt).
+        await Traversal.walkResilient(pillarTile, { radius: 1, attempts: 1, timeoutMs: 12_000, log });
+        const pillars = Locs.query().name('Pillar').within(3).results();
+        for (const pillar of pillars) {
+            for (const rune of RUNES) {
+                const r = Inventory.first(rune);
+                if (!r) {
+                    continue;
+                }
+                await r.useOn(pillar);
+                await Execution.delayTicks(2);
             }
-            const pillar = Locs.query().name('Pillar').within(3).nearest();
-            if (!pillar) {
-                continue;
-            }
-            await r.useOn(pillar);
-            await Execution.delayTicks(2);
         }
     }
 }
