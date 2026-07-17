@@ -11,6 +11,7 @@
 // toll reserve so a stray death can't strand the quest.
 import { Execution } from '../../api/Execution.js';
 import { Inventory } from '../../api/hud/Inventory.js';
+import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
@@ -282,18 +283,34 @@ async function osmanBriefingThenImprint(log: (m: string) => void): Promise<boole
  *  fire burns 100-200 ticks then drops ashes). Assumes tinderbox + logs held
  *  (the paste chain gates on that). */
 async function burnForAshes(log: (m: string) => void): Promise<boolean> {
+    if (Inventory.contains('Ashes')) {
+        return true;
+    }
     const tinder = Inventory.first('Tinderbox');
     const logsItem = Inventory.first('Logs');
     if (!tinder || !logsItem) {
         log('burnForAshes: missing tinderbox or logs');
         return false;
     }
+    // Light the fire (tinderbox on logs). CRITICAL: firemaking.rs2:132 spawns
+    // the ashes as a GROUND OBJ on the fire tile after the burnout (100-200
+    // ticks = ~60-120s), NOT into the pack — so we must Take them off the
+    // ground, not wait on Inventory.contains (live 2026-07-16: the old
+    // inventory-wait never fired, the log was already consumed, and each pass
+    // re-lit a fresh fire forever -> park). The fire lights on our tile and we
+    // step back one, so the ashes land within a couple tiles.
     if (!(await tinder.useOn(logsItem))) {
         return false;
     }
-    // Fire burns out (<=200 ticks) then spawns Ashes on the tile; wait it out.
-    await Execution.delayUntil(() => Inventory.contains('Ashes'), 130_000);
-    return Inventory.contains('Ashes');
+    if (!(await Execution.delayUntil(() => GroundItems.query().name('Ashes').within(3).nearest() !== null, 150_000))) {
+        log('burnForAshes: no ashes appeared after the burn');
+        return false;
+    }
+    const ash = GroundItems.query().name('Ashes').within(3).nearest();
+    if (!ash || !(await ash.interact('Take'))) {
+        return false;
+    }
+    return Execution.delayUntil(() => Inventory.contains('Ashes'), 5000);
 }
 
 /**
