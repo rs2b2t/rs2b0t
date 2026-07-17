@@ -102,7 +102,7 @@ const TOMBSTONE_STAND = new Tile(2558, 3444, 0);    // "Tombstone of glarial" (o
 const CHEST_STAND = new Tile(2530, 9845, 0);        // "Closed chest"->Open->"Open chest" Search -> amulet (forceapproach N)
 const COFFIN_STAND = new Tile(2542, 9810, 0);       // S of "Tomb of glarial" (2542-2543,9811, 2x1) — CARDINALLY adjacent so the op1 Search fires (the old 2542,9812 is the blocked loc tile; the bot snapped DIAGONAL and the Search never reached, live 2026-07-17)
 const TOMB_LADDER_STAND = new Tile(2554, 9844, 0);  // tomb landing; a live Climb-up here exits to the surface
-const ROCK_STAND = new Tile(2512, 3478, 0);         // N-of-rock zone (2510-2514,3476-3481); useOn rope -> "Rock"
+const ROCK_STAND = new Tile(2512, 3477, 0);         // walkable mound tile in the rope-zone (2510-2514,3476-3481), N of the "Rock" (2512,3468); useOn rope. The mound is raft-only (sealed), so fallsLeg boards the raft to reach here.
 const BAX_CRATE_STAND = new Tile(2589, 9888, 0);    // baxtorian_crate "Crate" op1 Search -> "A key"
 const PUZZLE_DOOR_STAND = new Tile(2566, 9900, 0);  // baxtorian_door_2 leaf "Door" @ (2566,9902); useOn key -> stage 6
 const PILLAR_STAND = new Tile(2563, 9911, 0);       // inside the pillar room
@@ -492,11 +492,33 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
         }
         return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.z <= 3465; }, 8000);
     }
-    // Anywhere else on the surface -> walk N of the crossing rock and rope it.
-    if (!(await Traversal.walkResilient(ROCK_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
+    // The crossing "Rock" (2512,3468) is roped from the SEALED mound (rope-zone
+    // 2510-2514,3476-3481), reachable ONLY via the Log raft — the same island Hudon
+    // sits on. If we're not on the mound, board the raft (at stage>=5 it just
+    // p_teleports us there; the forced Hudon dialogue only fires at stage 1). Then
+    // rope the rock. Without this the leg walked to ROCK_STAND on the sealed mound
+    // and dead-looped 'unreachable' (audit + book-leg mound finding, 2026-07-17).
+    const onMound = t.x >= 2508 && t.x <= 2515 && t.z >= 3474 && t.z <= 3485;
+    if (!onMound) {
+        if (!(await Traversal.walkResilient(RAFT_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
+            return false;
+        }
+        const raft = Locs.query().name('Log raft').action('Board').within(8).nearest();
+        if (!raft) {
+            log('fallsLeg: no Log raft to Board');
+            return false;
+        }
+        if (!(await raft.interact('Board'))) {
+            return false;
+        }
+        await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && g.x <= 2515 && g.z <= 3485; }, 10_000);
+        return false; // re-enter on the mound -> rope the rock
+    }
+    // On the mound -> rope the crossing rock (forcemoves us across the river).
+    if (!(await Traversal.walkResilient(ROCK_STAND, { radius: 1, attempts: 3, timeoutMs: 45_000, log }))) {
         return false;
     }
-    const rock = Locs.query().name('Rock').within(8).nearest();
+    const rock = Locs.query().name('Rock').action('Swim to').within(10).nearest();
     const rope = Inventory.first(ROPE);
     if (!rock || !rope) {
         log('fallsLeg: no crossing rock or rope');
