@@ -55,6 +55,12 @@ const RUNE_WITHDRAW = [
 // coins + book are all allowed through; everything else (weapons/armour/runes/
 // logs/…) is forbidden, so a narrow keep guarantees entry.
 const TOMB_KEEP = ['glarial', 'rope', FOOD.toLowerCase(), 'coins', 'book'];
+// Waterfall's geometric-nearest bank is the Fishing Guild (2586,3420), gated behind
+// level-68 Fishing — a quester can't enter it (the offline pathfinder can't see the
+// skill gate, so nearestBank() picks it and the bot strands at the guild door, live
+// 2026-07-17). Ardougne West (2616,3332) is accessible at ~the same distance; route
+// every Waterfall deposit/withdraw there explicitly.
+const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 
 // --- NPC stops (content §NPCs; map-derived anchors). Almera starts the quest
 //     (choice "How can I help?"); Golrie hands the pebble (scripted chatplayer/
@@ -311,14 +317,19 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
         // in the pack and guaranteed one tomb-gate bounce on geared accounts). The
         // smoke account wears nothing, so this is a no-op there. Glarial's amulet, if
         // ever worn, is gate-allowed and TOMB_KEEP-kept, so this never loses it.
+        const hadGear = Equipment.items().length > 0;
         for (const it of Equipment.items()) {
             if (it.name) {
                 await Equipment.unequip(it.name);
             }
         }
-        // Clear forbidden items from the pack (narrow keep = guaranteed entry); this
-        // also banks the gear just unequipped above.
-        if (!(await executeStep({ kind: 'deposit', keep: TOMB_KEEP }, WATERFALL_HOPS, log))) {
+        // Only make the bank trip when there is a gate-forbidden item to shed: runes
+        // (the def-managed forbidden item) or gear just unequipped into the pack. With
+        // the runes already banked (their normal home — they can't pass the gate), the
+        // pack is clean here and the tomb entry needs no detour. Routed to Ardougne
+        // West, since the geometric-nearest bank is the gated Fishing Guild.
+        const needsDeposit = hadGear || RUNES.some(r => Inventory.count(r) > 0);
+        if (needsDeposit && !(await executeStep({ kind: 'deposit', keep: TOMB_KEEP, bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log))) {
             return false;
         }
         if (!(await walkWithHops(TOMBSTONE_STAND, 2, WATERFALL_HOPS, log))) {
@@ -439,7 +450,7 @@ async function fallsAndDungeon(log: (m: string) => void): Promise<boolean> {
         return tombLeg(log);
     }
     if (runesShortLive()) {
-        return executeStep({ kind: 'withdraw', items: RUNE_WITHDRAW }, WATERFALL_HOPS, log);
+        return executeStep({ kind: 'withdraw', items: RUNE_WITHDRAW, bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log);
     }
     return fallsLeg(log);
 }

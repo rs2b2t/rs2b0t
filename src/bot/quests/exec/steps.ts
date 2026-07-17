@@ -142,14 +142,15 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
         case 'equip':
             return Equipment.equip(step.item);
         case 'withdraw': {
-            // SolveClue.bankFirst pattern: nearest known bank -> openNearest -> withdrawX
+            // SolveClue.bankFirst pattern: nearest known bank -> openNearest -> withdrawX.
+            // `step.bank` overrides the geometric nearest where it is gated/unreachable.
             const here = Game.tile();
-            const bank = here ? nearestBank(here) : null;
-            if (!bank) {
+            const bankTile = step.bank ?? (here ? nearestBank(here)?.tile : undefined);
+            if (!bankTile) {
                 log('withdraw: no known bank');
                 return false;
             }
-            if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
+            if (!(await Traversal.walkResilient(bankTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
                 return false;
             }
             if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
@@ -174,12 +175,12 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             // matches none of the keep substrings (SolveClue.bankFirst's keep-set
             // idiom). Worn equipment is not in the backpack, so it is untouched.
             const here = Game.tile();
-            const bank = here ? nearestBank(here) : null;
-            if (!bank) {
+            const bankTile = step.bank ?? (here ? nearestBank(here)?.tile : undefined);
+            if (!bankTile) {
                 log('deposit: no known bank');
                 return false;
             }
-            if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
+            if (!(await Traversal.walkResilient(bankTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
                 return false;
             }
             if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {

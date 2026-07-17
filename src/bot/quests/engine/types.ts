@@ -37,13 +37,17 @@ export type QuestStep =
      *  a Bucket of water on Clay to make Soft clay (Prince Ali). */
     | { kind: 'useOn'; item: string; targetKind: 'npc' | 'loc' | 'item'; target: string; anchor: Tile; product?: string }
     | { kind: 'equip'; item: string }
-    | { kind: 'withdraw'; items: { name: string; qty: number }[] }
+    /** `bank` overrides the default nearestBank() target — needed where the
+     *  geometric nearest is gated/unreachable (Waterfall's nearest is the
+     *  Fishing-Guild bank behind a level-68 gate; it routes to Ardougne West). */
+    | { kind: 'withdraw'; items: { name: string; qty: number }[]; bank?: Tile }
     /** Deposit every backpack item whose LOWERCASED name matches none of the
      *  `keep` substrings (worn equipment is untouched). Issued by the engine
      *  once per quest before provisioning so each quest starts with a clean
      *  pack — provisioning is bank-first, so anything deposited that the quest
-     *  needs comes straight back via `withdraw`. */
-    | { kind: 'deposit'; keep: string[] }
+     *  needs comes straight back via `withdraw`. `bank` overrides nearestBank()
+     *  as in `withdraw`. */
+    | { kind: 'deposit'; keep: string[]; bank?: Tile }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
     /** Buy `qty` of `item` from the shop run by `shop.npc` (Trade op). The
      *  executor self-provisions coins: pack < estGp -> bank-leg withdraw of
