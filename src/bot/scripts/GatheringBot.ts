@@ -4,16 +4,19 @@ import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Paint } from '../api/hud/Paint.js';
+import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
-import { ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
+import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, bestPickaxe, resolveRockIds } from './MiningRocks.js';
 import { FISHING_METHOD_OPTIONS, resolveFishMethod } from './FishingMethods.js';
 import { Banking } from '../api/Banking.js';
 
@@ -45,6 +48,7 @@ export default class GatheringBot extends TaskBot {
 
     private anchor: Tile | null = null;
     private gathered = 0;
+    private gems = 0;
     private status = 'starting';
     private location: FishingLocation | null = null;
     private banked = 0;
@@ -135,12 +139,19 @@ export default class GatheringBot extends TaskBot {
         this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.productLabel()}* when full`);
 
         this.on('inventory.changed', e => {
-            if (e.id !== -1 && this.isProduct(e.name)) {
+            if (e.id === -1) {
+                return;
+            }
+            if (this.isProduct(e.name)) {
                 this.gathered++;
+            } else if (this.mining() && (e.name ?? '').toLowerCase().startsWith('uncut ')) {
+                // rocks roll a gem instead of the ore now and then — count them
+                this.gems++;
+                this.log(`gem! ${e.name} (${this.gems} this run)`);
             }
         });
 
-        this.add(new ContinueDialog(), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
+        this.add(new ContinueDialog(), ...(this.mining() ? [new ReplacePickaxe(this)] : []), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -148,9 +159,18 @@ export default class GatheringBot extends TaskBot {
         p.title(`Gathering — ${this.status}`);
 
         const mins = (Date.now() - this.startedAt) / 60_000;
-        p.row(`Runtime: ${fmtDuration(mins)}`, `${this.target}: ${this.gathered}`, `Inv: ${Inventory.used()}/28`);
+        const label = this.mining() ? 'Ore' : this.target;
+        const perHr = mins > 0.5 ? ` (${Math.round((this.gathered / mins) * 60)}/hr)` : '';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `${label}: ${this.gathered}${perHr}`, `Inv: ${Inventory.used()}/28`);
+        const extras: string[] = [];
+        if (this.mining()) {
+            extras.push(`Gems: ${this.gems}`);
+        }
         if (this.location) {
-            p.row(`Loc: ${this.location.name}`, `Banked: ${this.banked}`, `Trips: ${this.trips}`);
+            extras.push(`Loc: ${this.location.name}`, `Banked: ${this.banked} (${this.trips} trips)`);
+        }
+        if (extras.length > 0) {
+            p.row(...extras);
         }
 
         p.gap();
@@ -202,6 +222,10 @@ export default class GatheringBot extends TaskBot {
     /** Only mine the SELECTED rock ids; an empty set matches any rock. */
     matchesRock(id: number): boolean {
         return this.rockIds.size === 0 || this.rockIds.has(id);
+    }
+    /** Running as the Miner preset (rock ids resolved from the multi-select). */
+    mining(): boolean {
+        return this.rockIds.size > 0;
     }
     /** Short product label (e.g. "iron/coal") for status and log lines. */
     productLabel(): string {
@@ -286,7 +310,8 @@ class BankCatch implements Task {
         const had = this.bot.products().length;
         const loc = this.bot.getLocation();
         const log = (m: string) => this.bot.log(`  ${m}`);
-        const deposit = (name: string) => this.bot.isProduct(name);
+        // gems don't stack — bank them along with the ore or they eat the pack
+        const deposit = (name: string) => this.bot.isProduct(name) || (this.bot.mining() && name.toLowerCase().startsWith('uncut '));
 
         if (loc) {
             // known location: walk to its verified stand and open the adjacent booth
@@ -315,6 +340,63 @@ class BankCatch implements Task {
     }
 }
 
+/**
+ * A smoking rock blew up on us and the pickaxe (worn or pack) is now a
+ * "Broken pickaxe": bank it and withdraw the best replacement the mining
+ * level can use from what's actually banked (rune 41 → adamant 31 → mithril
+ * 21 → steel 6 → iron/bronze — the engine's own pickaxe_checker ladder).
+ * Without any usable pick the run is dead, so warn and stop.
+ */
+class ReplacePickaxe implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        return Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null;
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('pickaxe broke — fetching a replacement');
+        this.bot.log('pickaxe is broken — banking for the best replacement');
+        const loc = this.bot.getLocation();
+        const log = (m: string) => this.bot.log(`  ${m}`);
+
+        // a broken pick can sit in the WORN weapon slot (the explosion swaps it
+        // in place) — pull it into the pack so the deposit below reaches it
+        if (Equipment.contains(BROKEN_PICKAXE) && !Inventory.isFull()) {
+            await Equipment.unequip(BROKEN_PICKAXE);
+        }
+
+        let open: boolean;
+        if (loc) {
+            await Traversal.walkResilient(loc.bankStand, { radius: 2, log });
+            open = await Bank.openBooth(loc.bankStand, loc.boothName ?? 'Bank booth', loc.boothOp ?? 'Use-quickly', log);
+        } else {
+            open = await Bank.openNearest('Bank booth', 'Use-quickly', log);
+        }
+        if (!open) {
+            this.bot.log('could not open a bank — will retry');
+            return;
+        }
+
+        // stash the broken pick (repairable later) and take the best usable tier
+        await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
+        const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
+        if (!pick) {
+            this.bot.log('WARNING: no usable pickaxe in the bank — stopping. Deposit one and restart.');
+            ScriptRunner.stop();
+            return;
+        }
+        await Bank.withdraw(pick, 'Withdraw-1');
+        if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
+            this.bot.log('withdraw did not land — will retry');
+            return;
+        }
+        this.bot.log(`replaced the broken pickaxe with a ${pick}`);
+        await Equipment.equip(pick); // frees a pack slot when wieldable; a pack pick mines fine too
+        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+    }
+}
+
 class Gather implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -337,13 +419,39 @@ class Gather implements Task {
             .action(this.bot.actionName())
             // skip a target on our own tile — you can't mine/chop the tile you
             // stand on; the client must approach an adjacent square — restrict to
-            // the selected rock ids (mining), and skip blacklisted/cooled-down tiles
-            .where(l => l.distance() >= 1 && l.tile().distanceTo(anchor) <= within && this.bot.matchesRock(l.id) && this.bot.usable(keyOf(l.tile())))
+            // the selected rock ids (mining), never a smoking gas variant (same
+            // "Rocks"/Mine name+op, explodes and breaks the pick), and skip
+            // blacklisted/cooled-down tiles
+            .where(l => l.distance() >= 1 && l.tile().distanceTo(anchor) <= within && this.bot.matchesRock(l.id) && !GAS_ROCK_IDS.has(l.id) && this.bot.usable(keyOf(l.tile())))
             .nearest();
     }
 
     validate(): boolean {
         return !Inventory.isFull() && this.find() !== null;
+    }
+
+    /** The worked rock has turned into a smoking gas variant under us. The
+     *  engine re-interacts the miner automatically (p_oploc in the event
+     *  script), so waiting out the animation mines it to the explosion —
+     *  detect the loc swap and bail instead. */
+    private gasAt(t: Tile): boolean {
+        return Locs.query()
+            .where(l => {
+                const lt = l.tile();
+                return lt.x === t.x && lt.z === t.z && GAS_ROCK_IDS.has(l.id);
+            })
+            .nearest() !== null;
+    }
+
+    /** Step off the smoking rock: one raw walk click toward the anchor cancels
+     *  the engine's auto-continued mining, and the tile cools down past the
+     *  gas duration so find() won't come back until it reverts. */
+    private async fleeGas(key: string, tile: Tile): Promise<void> {
+        this.bot.log(`rock at ${tile} is smoking — backing off before it blows`);
+        this.bot.setStatus('smoking rock — backing off');
+        this.bot.cooldown(key, GAS_ROCK_TICKS + 10);
+        DirectNavigator.walk(this.bot.getAnchor());
+        await Execution.delayTicks(2);
     }
 
     async execute(): Promise<void> {
@@ -369,8 +477,15 @@ class Gather implements Task {
 
             // wait for the action to take hold: an item drops, the anim starts
             // (slow rocks swing before the first ore), the target moves/depletes,
-            // the bag fills, or a dialog interrupts us
-            await Execution.delayUntil(() => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue(), 12000);
+            // the bag fills, a dialog interrupts us, or the rock starts smoking
+            await Execution.delayUntil(
+                () => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue() || this.gasAt(target.tile()),
+                12000
+            );
+            if (this.gasAt(target.tile())) {
+                await this.fleeGas(key, target.tile());
+                return;
+            }
 
             if (Inventory.used() === before && !Game.animating()) {
                 // gained nothing and never started animating — the engine refused
@@ -393,7 +508,14 @@ class Gather implements Task {
                 return;
             }
             const mark = Inventory.used();
-            await Execution.delayUntil(() => Inventory.used() > mark || !Game.animating() || Inventory.isFull() || ChatDialog.canContinue() || this.find() === null, 8000);
+            await Execution.delayUntil(
+                () => Inventory.used() > mark || !Game.animating() || Inventory.isFull() || ChatDialog.canContinue() || this.find() === null || this.gasAt(target.tile()),
+                8000
+            );
+            if (this.gasAt(target.tile())) {
+                await this.fleeGas(key, target.tile());
+                return;
+            }
             if (Inventory.used() > mark) {
                 continue; // caught/gathered one — keep going, no re-click
             }
