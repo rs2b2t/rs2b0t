@@ -21,7 +21,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from './PickpocketTargets.js';
-import { chooseTarget, isHostileAttacker, requiredThieving, targetSpot } from './ArdyThieverLogic.js';
+import { chooseTarget, isHostileAttacker, ownerWatching, requiredThieving, targetSpot } from './ArdyThieverLogic.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 
@@ -33,6 +33,11 @@ const STALL_TILE = new Tile(2667, 3310, 0);
 // The stall sits behind a counter (like a bank booth), so we can't stand on it —
 // walk ONTO this reachable tile beside it and steal from there.
 const STALL_STAND = new Tile(2668, 3312, 0);
+// Fallback stand on the stall's south-east corner (the Baker's own spawn
+// tile, live-verified): when the Baker wanders to where he can SEE the north
+// stand, every theft there is refused (engine owner-watch, see ownerWatching)
+// — from this corner the counter shades the player from him instead.
+const STALL_STAND_ALT = new Tile(2669, 3310, 0);
 const STALL_NAME = 'Baker\'s stall';
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
@@ -482,16 +487,25 @@ class RestockCakes implements Task {
     validate(): boolean {
         return nearMarket() && !this.bot.inRealCombat() && !Inventory.isFull() && foodCount() <= RESTOCK_AT;
     }
+    /** The stand the Baker can't refuse thefts at: north stand normally, the
+     *  SE-corner shade when he's wandered somewhere with sight of it. */
+    private pickStand(): Tile {
+        const baker = Npcs.query().name('Baker').where(n => n.tile().distanceTo(STALL_TILE) <= 8).nearest();
+        if (!baker) {
+            return STALL_STAND;
+        }
+        const blocked = (x: number, z: number): boolean => !Reachability.walkable({ x, z, level: 0 });
+        return ownerWatching(baker.tile(), STALL_STAND, blocked) ? STALL_STAND_ALT : STALL_STAND;
+    }
+
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
         this.bot.log(`restocking cake (have ${foodCount()})`);
-        // Stand on the dedicated stand tile beside the stall and steal from there.
-        // A theft caught by the Baker just pulls a guard — the Flee task kites it.
-        const here = Game.tile();
-        if (!here || STALL_STAND.distanceTo(here) > 0) {
-            await Traversal.walkTo(STALL_STAND, { radius: 0, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
-        }
-        const deadline = performance.now() + 60000;
+        // Steal from whichever stand the Baker can't see (re-picked per attempt
+        // — he wanders every few ticks). A theft caught by the Baker just pulls
+        // a guard — the Flee task kites it.
+        let stand: Tile | null = null;
+        const deadline = performance.now() + 90000;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || this.bot.inRealCombat()) { return; }
             if (Inventory.isFull() || foodCount() >= FOOD_TARGET) {
@@ -499,6 +513,18 @@ class RestockCakes implements Task {
                 return;
             }
             if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount())) { return; }
+            const want = this.pickStand();
+            if (stand === null || !want.equals(stand)) {
+                if (stand !== null) {
+                    this.bot.log(`baker ${want.equals(STALL_STAND_ALT) ? 'is watching the north stand' : 'wandered off'} — stealing from (${want.x},${want.z})`);
+                }
+                stand = want;
+            }
+            const here = Game.tile();
+            if (!here || stand.distanceTo(here) > 0) {
+                await Traversal.walkTo(stand, { radius: 0, timeoutMs: 20000, log: m => this.bot.log(`  ${m}`) });
+                continue; // re-check state/stand from the new tile before stealing
+            }
             const stall = Locs.query()
                 .name(STALL_NAME)
                 .action(STALL_OP)

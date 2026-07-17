@@ -1,4 +1,5 @@
 import Tile from '../api/Tile.js';
+import { chebyshev } from '../nav/followMath.js';
 import { PICKPOCKET_TARGETS } from './PickpocketTargets.js';
 
 /**
@@ -85,4 +86,40 @@ export function chooseTarget<T>(candidatesNearestFirst: T[], reachable: (t: T) =
         }
     }
     return { target: null, blocked: candidatesNearestFirst[0] ?? null };
+}
+
+export interface Point {
+    x: number;
+    z: number;
+}
+
+/**
+ * Supercover line walk: no tile the segment from `from` to `to` passes
+ * through (endpoints excluded) is blocked. An approximation of the engine's
+ * `lineofsight` using whole-tile blockers — right for stall counters, which
+ * block walk AND sight alike; it doesn't model see-through-but-unwalkable
+ * quirks (windows, low fences), which the market stalls don't have.
+ */
+export function lineClear(blocked: (x: number, z: number) => boolean, from: Point, to: Point): boolean {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const steps = Math.max(Math.abs(dx), Math.abs(dz)) * 2; // half-tile sampling covers diagonal corner cuts
+    for (let i = 1; i < steps; i++) {
+        const x = Math.round(from.x + (dx * i) / steps);
+        const z = Math.round(from.z + (dz * i) / steps);
+        if ((x !== from.x || z !== from.z) && (x !== to.x || z !== to.z) && blocked(x, z)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * The engine's stall-owner catch (stealing.rs2 stealing_check_for_owner):
+ * a theft is refused while the OWNER npc is within 5 tiles of the player AND
+ * has line of sight — "Hey! Get your hands off there!", nothing stolen. The
+ * stall's own counter is the sight-blocker that makes the far stand safe.
+ */
+export function ownerWatching(owner: Point, stand: Point, blocked: (x: number, z: number) => boolean): boolean {
+    return chebyshev(owner, stand) <= 5 && lineClear(blocked, owner, stand);
 }
