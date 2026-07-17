@@ -19,16 +19,20 @@ export interface FishingMethod {
     /** The other op that must also be on the spot, to pick the right one of two
      *  spots that share `op`. Omit to match any spot offering `op`. */
     pair?: string;
+    /** The equipment this method uses (exact item names, pack-verified) — the
+     *  ONLY things a bank trip keeps; everything else in the pack is deposited
+     *  (big-net junk, caskets, whatever the run accumulated). */
+    gear: string[];
 }
 
 export const FISHING_METHODS: FishingMethod[] = [
-    { name: 'Small net — shrimp/anchovy', op: 'Net', pair: 'Bait' }, // Net/Bait spot: Shrimps (1), Anchovies (15)
-    { name: 'Bait rod — sardine/herring', op: 'Bait', pair: 'Net' }, // Net/Bait spot: Sardine (5), Herring (10)
-    { name: 'Fly fishing — trout/salmon', op: 'Lure', pair: 'Bait' }, // Lure/Bait spot: Trout (20), Salmon (30)
-    { name: 'Bait rod — pike', op: 'Bait', pair: 'Lure' }, // Lure/Bait spot: Pike (25)
-    { name: 'Big net — mackerel/cod/bass', op: 'Net', pair: 'Harpoon' }, // Net/Harpoon spot: Mackerel (16), Cod (23), Bass (46)
-    { name: 'Lobster cage — lobster', op: 'Cage', pair: 'Harpoon' }, // Cage/Harpoon spot: Lobster (40)
-    { name: 'Harpoon — tuna/swordfish', op: 'Harpoon' } // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
+    { name: 'Small net — shrimp/anchovy', op: 'Net', pair: 'Bait', gear: ['Small fishing net'] }, // Net/Bait spot: Shrimps (1), Anchovies (15)
+    { name: 'Bait rod — sardine/herring', op: 'Bait', pair: 'Net', gear: ['Fishing rod', 'Fishing bait'] }, // Net/Bait spot: Sardine (5), Herring (10)
+    { name: 'Fly fishing — trout/salmon', op: 'Lure', pair: 'Bait', gear: ['Fly fishing rod', 'Feather'] }, // Lure/Bait spot: Trout (20), Salmon (30)
+    { name: 'Bait rod — pike', op: 'Bait', pair: 'Lure', gear: ['Fishing rod', 'Fishing bait'] }, // Lure/Bait spot: Pike (25)
+    { name: 'Big net — mackerel/cod/bass', op: 'Net', pair: 'Harpoon', gear: ['Big fishing net'] }, // Net/Harpoon spot: Mackerel (16), Cod (23), Bass (46)
+    { name: 'Lobster cage — lobster', op: 'Cage', pair: 'Harpoon', gear: ['Lobster pot'] }, // Cage/Harpoon spot: Lobster (40)
+    { name: 'Harpoon — tuna/swordfish', op: 'Harpoon', gear: ['Harpoon'] } // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
 ];
 
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);

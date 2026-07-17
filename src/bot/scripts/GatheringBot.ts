@@ -70,6 +70,9 @@ export default class GatheringBot extends TaskBot {
     // selected ore's item. Empty when not mining a specific set.
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
+    // Fishing mode: the method's equipment — the only pack items a bank trip
+    // keeps. Empty when not fishing.
+    private gearKeep: string[] = [];
 
     // A target that gave a blocking dialog (too-high level / no tool) is dead
     // for this run; one that just yielded nothing (freshly depleted rock,
@@ -109,6 +112,7 @@ export default class GatheringBot extends TaskBot {
             this.target = 'Fishing spot';
             this.action = method.op;
             this.pairOp = method.pair ?? '';
+            this.gearKeep = method.gear;
             this.productKeywords = ['raw'];
         } else {
             this.productKeywords = [this.dropMatch];
@@ -227,6 +231,21 @@ export default class GatheringBot extends TaskBot {
     mining(): boolean {
         return this.rockIds.size > 0;
     }
+
+    /** Bank-trip deposit policy. Miner banks the ore plus gems (they don't
+     *  stack); Fisher banks EVERYTHING except the method's gear — big-net junk
+     *  (seaweed/boots/caskets) used to squat in the pack forever because only
+     *  'raw' items matched; other presets bank the product only. */
+    shouldDeposit(name: string): boolean {
+        if (this.gearKeep.length > 0) {
+            const n = name.toLowerCase();
+            return !this.gearKeep.some(g => g.toLowerCase() === n);
+        }
+        if (this.mining()) {
+            return this.isProduct(name) || name.toLowerCase().startsWith('uncut ');
+        }
+        return this.isProduct(name);
+    }
     /** Short product label (e.g. "iron/coal") for status and log lines. */
     productLabel(): string {
         return this.productKeywords.join('/');
@@ -310,8 +329,7 @@ class BankCatch implements Task {
         const had = this.bot.products().length;
         const loc = this.bot.getLocation();
         const log = (m: string) => this.bot.log(`  ${m}`);
-        // gems don't stack — bank them along with the ore or they eat the pack
-        const deposit = (name: string) => this.bot.isProduct(name) || (this.bot.mining() && name.toLowerCase().startsWith('uncut '));
+        const deposit = (name: string) => this.bot.shouldDeposit(name);
 
         if (loc) {
             // known location: walk to its verified stand and open the adjacent booth
