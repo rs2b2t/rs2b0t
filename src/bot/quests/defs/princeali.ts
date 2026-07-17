@@ -364,8 +364,22 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
         const joe = Npcs.query().name('Joe').within(6).nearest();
         const beer = Inventory.first('Beer');
         if (joe && beer && (await beer.useOn(joe))) {
-            await Execution.delayUntil(() => ChatDialog.isOpen(), 5000);
-            await talkThrough('Joe', [], log); // drives joe_beer to completion
+            // Drive joe_beer to completion on canContinue(), NOT isOpen(): the
+            // conversation mixes ~chatnpc (chat modal) and ~mesbox "You hand a
+            // beer to the guard" pages (MAIN modal), and isOpen() only sees the
+            // chat modal — so an isOpen-based drive (incl. talkThrough) stalls on
+            // the mesbox pages. canContinue() reads the continue component on
+            // either modal. Take the last option on the rare menu (safe decline).
+            await Execution.delayUntil(() => ChatDialog.canContinue(), 5000);
+            for (let i = 0; i < 40 && (ChatDialog.canContinue() || ChatDialog.options().length > 0); i++) {
+                if (ChatDialog.canContinue()) {
+                    await ChatDialog.continue();
+                } else {
+                    const opts = ChatDialog.options();
+                    await ChatDialog.chooseOption(opts[opts.length - 1]);
+                }
+                await Execution.delayTicks(1);
+            }
         }
         // Re-decide unless the beers actually went down this pass.
         if (Inventory.count('Beer') >= before) {
