@@ -90,7 +90,8 @@ const RAFT_STAND = new Tile(2509, 3493, 0);      // lograft "Log raft" op1 Board
 // with NO item loss (quest_waterfall.rs2:186-205), from which the bookcase IS
 // reachable (cost 52). So the book leg is raft -> Hudon -> swim-return -> bookcase.
 const MOUND_SWIM_STAND = new Tile(2512, 3476, 0); // southmost walkable mound tile, in the swim zone (2510-2514,3476-3481), ~8t N of the Rock
-const FAIL_COORD = new Tile(2527, 3413, 0);        // washed-downstream landing, near the tourist centre
+// The "Swim to" washes the bot downstream to (2527,3413) near the tourist centre —
+// detected below by leaving the mound (x>=2520), so no constant is needed for it.
 // The Bookcase (bookcase_waterfall_quest id 1989) is a 1x2 loc at (2520,3426,1) whose
 // OWN tile is blocked; stand on the walkable tile immediately west and Search from
 // there (the old stand was the blocked loc tile -> "no path unreachable" live).
@@ -115,17 +116,12 @@ const SOUTH_DOOR_STAND = new Tile(2568, 9892, 0);   // S of the "south door" (25
 const PUZZLE_DOOR_STAND = new Tile(2566, 9900, 0);  // S of the puzzle door (2566,9901); useOn key -> stage 6 + teleport N
 const PILLAR_STAND = new Tile(2563, 9911, 0);       // inside the pillar room
 const STATUE_STAND = new Tile(2565, 9915, 0);       // beside "Statue of Glarial" @ (2565,9916)
-const CHALICE_STAND = new Tile(2603, 9911, 0);      // beside "Chalice of eternity" @ (2603,9910)
 const DOOR_LEAF_STAND = new Tile(2603, 9900, 0);    // baxtorian_door_2 x>2600 leaf @ (2604,9900); useOn key TELEPORTS to the raised room
-// Six pillars (content §Dungeon finale): one air + one earth + one water on each.
-// The pillar LOC tiles (2562,x)/(2569,x) are BLOCKED; standing on the WALKABLE inner
-// tile beside each and using the rune on the 'Pillar' within 3 works. Targeting the
-// blocked loc tile made walkResilient repath forever ("stuck 0 clicks") and crawl the
-// sweep to a halt (live 2026-07-17). These are the inner (east/west) approach tiles.
-const PILLAR_TILES = [
-    new Tile(2563, 9910, 0), new Tile(2563, 9912, 0), new Tile(2563, 9914, 0),
-    new Tile(2568, 9910, 0), new Tile(2568, 9912, 0), new Tile(2568, 9914, 0)
-];
+// The six pillars are (2562,x)/(2569,x) for x in 9910/9912/9914; the chalice is at
+// (2603,9910). Both the pillar sweep and the chalice reach their loc via useOn's
+// NATIVE game-walk (placeRunes / the chalice branch) rather than pre-positioned
+// stands — walkResilient repathed forever ("stuck 0 clicks") in these cramped rooms —
+// so no PILLAR_TILES / CHALICE_STAND constants are needed.
 
 const held = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
 const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
@@ -708,12 +704,14 @@ async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
     if (placed > 0) {
         return false;
     }
-    // The sweep placed nothing new (all 18 bits already set) yet the statue did not
-    // fire: the amulet was consumed at stage 8 (a post-statue death). The statue is a
-    // permanent no-op now, so reach the raised room the OTHER way — walk to the x>2600
-    // teleport-door leaf; the top-of-leg door branch opens it and awaits the teleport
-    // on the next pass (Finding 2's two-route redundancy).
-    if (Inventory.contains(KEY)) {
+    // placed === 0 and no teleport. The TRUE stage-8 signal is the amulet being GONE
+    // (consumed by an earlier statue placement, e.g. a post-statue death) — then the
+    // statue is a permanent no-op and the raised room must be reached via the x>2600
+    // teleport-door leaf. But placed === 0 ALSO happens when a pillar useOn simply isn't
+    // landing (puzzle NOT yet solved); in that case the amulet is still held, so
+    // re-sweep to retry rather than abandoning to the door leaf with the puzzle
+    // incomplete (review finding: don't conflate "solved" with "placement failing").
+    if (!amuletHeldLive() && Inventory.contains(KEY)) {
         await Traversal.walkResilient(DOOR_LEAF_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log });
     }
     return false;
