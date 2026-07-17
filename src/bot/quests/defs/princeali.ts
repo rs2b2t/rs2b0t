@@ -31,7 +31,16 @@ import { gatherBalls } from './sheepshearer.js';
 
 // --- NPC stops (research doc §2 map-derived anchors; prefer chains verbatim) ---
 const HASSAN: NpcStop = { npc: 'Hassan', anchor: new Tile(3302, 3163, 0), leash: 6, prefer: ['Can I help you? You must need some help here in the desert.'] };
-const OSMAN: NpcStop = { npc: 'Osman', anchor: new Tile(3286, 3180, 0), leash: 6, prefer: ['The chancellor trusts me. I have come for instructions.', 'What is the first thing I must do?', 'What is the second thing you need?', 'Okay, I better go find some things.'] };
+// ORDER MATTERS: talkThrough greedily picks the FIRST prefer entry present in a
+// menu. 'Okay, I better go find some things.' MUST outrank 'What is the second
+// thing you need?' — both appear in the osman_first_thing menu (osman.rs2:49),
+// and picking "second thing" loops between the first/second-thing menus forever
+// without ever setting stage 20 (osman_better_go). Live 2026-07-16: the old
+// order looped Osman↔Keli ~65 min, stage 20 never set, Keli's imprint gate
+// (stage-20) never opened. 'What is the first thing I must do?' first surfaces
+// the menu that contains "Okay, I better go". (The opener line is auto-said, not
+// an option, so it's dropped.)
+const OSMAN: NpcStop = { npc: 'Osman', anchor: new Tile(3286, 3180, 0), leash: 6, prefer: ['Okay, I better go find some things.', 'What is the first thing I must do?', 'What is the second thing you need?'] };
 const LEELA: NpcStop = { npc: 'Leela', anchor: new Tile(3113, 3263, 0), leash: 6, prefer: [] };
 const NED_WIG: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Ned, could you make other things from wool?', 'How about some sort of wig?', 'I have that now. Please, make me a wig.'] };
 const NED_ROPE: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Yes, I would like some rope.', 'Okay, please sell me some rope.'] };
