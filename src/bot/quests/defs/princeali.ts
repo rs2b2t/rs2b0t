@@ -364,7 +364,15 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
         const rope = Inventory.first('Rope');
         if (rope) {
             await rope.useOn(keli);
-            await Execution.delayTicks(3);
+            // The tie either npc_del's Keli (success) or opens a "You cannot tie
+            // Keli up..." mesbox (guard not drunk, quest_prince.rs2:24). DRIVE
+            // that mesbox closed — a leftover open dialog would block the beer
+            // useOn below (live 2026-07-17: stuck at Keli, beers never drunk).
+            await Execution.delayUntil(() => ChatDialog.canContinue() || !Npcs.query().name('Lady Keli').within(12).nearest(), 4000);
+            for (let i = 0; i < 8 && ChatDialog.canContinue(); i++) {
+                await ChatDialog.continue();
+                await Execution.delayTicks(1);
+            }
             if (!Npcs.query().name('Lady Keli').within(12).nearest()) {
                 return false; // tied — next pass unlocks the door
             }
