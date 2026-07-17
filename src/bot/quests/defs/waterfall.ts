@@ -73,8 +73,20 @@ const WATERFALL_HOPS: LadderHop[] = [
 // --- Scripted-ride anchors/arrivals (content §Scripted rides; loc names + ops
 //     verified in waterfall.loc / all.loc). Loc squares read BLOCKED, so the
 //     stands are the reachable tiles beside them (walkResilient snaps the goal). ---
-const RAFT_STAND = new Tile(2509, 3493, 0);      // lograft "Log raft" op1 Board -> (2512,3481)
-const BOOKCASE_STAND = new Tile(2520, 3426, 1);  // "Bookcase" op1 Search, UPSTAIRS (level 1)
+const RAFT_STAND = new Tile(2509, 3493, 0);      // lograft "Log raft" op1 Board -> mound (2512,3481)
+// Hudon's mound is a SEALED 8-tile river island (2511-2512, 3476-3481): the raft
+// p_teleports you onto it (quest_waterfall.rs2:163), the forced Hudon dialogue sets
+// stage 2, and NOTHING there walks back — the bookcase/tourist-centre landmass is
+// nav-unreachable from the mound. The ONLY exit is the "Rock" (2512,3468) op1 "Swim
+// to": it washes you downstream to waterfall_fail_coord (2527,3413) on the mainland
+// with NO item loss (quest_waterfall.rs2:186-205), from which the bookcase IS
+// reachable (cost 52). So the book leg is raft -> Hudon -> swim-return -> bookcase.
+const MOUND_SWIM_STAND = new Tile(2512, 3476, 0); // southmost walkable mound tile, in the swim zone (2510-2514,3476-3481), ~8t N of the Rock
+const FAIL_COORD = new Tile(2527, 3413, 0);        // washed-downstream landing, near the tourist centre
+// The Bookcase (bookcase_waterfall_quest id 1989) is a 1x2 loc at (2520,3426,1) whose
+// OWN tile is blocked; stand on the walkable tile immediately west and Search from
+// there (the old stand was the blocked loc tile -> "no path unreachable" live).
+const BOOKCASE_STAND = new Tile(2519, 3426, 1);  // "Bookcase" op1 Search, UPSTAIRS (level 1), via the spiral staircase
 const GOLRIE_CRATE_STAND = new Tile(2548, 9565, 0); // golrie_crate "Crate" op1 Search -> "A key"
 const GOLRIE_GATE_STAND = new Tile(2515, 9574, 0);  // south side of golrie_gate "Door" (useOn key)
 const GOLRIE_STAND = new Tile(2515, 9581, 0);       // Golrie, past the gate
@@ -142,10 +154,14 @@ async function bookLeg(log: (m: string) => void): Promise<boolean> {
         return readBook(log);
     }
     const here = Game.tile();
-    // Still on Almera's (north) bank -> ride the raft south (fires Hudon). The
-    // arrival (2512,3481) and the bookcase area sit below z 3485, so a re-entry
-    // after the raft skips it (no re-ride oscillation).
-    if (here !== null && here.z > 3485) {
+    if (here === null) {
+        return false;
+    }
+    const onMound = here.x >= 2508 && here.x <= 2515 && here.z >= 3474 && here.z <= 3485;
+    // Almera's (north) bank -> board the raft (fires Hudon, stage 2, lands on the
+    // mound). z>3485 is Almera/raft; the mound (z~3481) and the mainland bookcase
+    // area (z<=3426) both sit below it, so this never re-fires post-raft.
+    if (here.z > 3485 && !onMound) {
         if (!(await Traversal.walkResilient(RAFT_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
@@ -157,10 +173,29 @@ async function bookLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await raft.interact('Board'))) {
             return false;
         }
-        await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && t.z <= 3485; }, 10_000);
-        return false; // re-enter now that we are across
+        // Land on the mound (x<=2515) — NOT merely z<=3485, which the mainland also is.
+        await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && t.x <= 2515 && t.z <= 3485; }, 10_000);
+        return false; // re-enter -> the swim-return below
     }
-    // Across: search the upstairs bookcase for the book, then read it.
+    // Hudon's sealed mound -> "Swim to" the Rock to be washed downstream to the
+    // mainland (FAIL_COORD). No item loss; the bookcase is unreachable from here.
+    if (onMound) {
+        if (!(await Traversal.walkResilient(MOUND_SWIM_STAND, { radius: 1, attempts: 3, timeoutMs: 30_000, log }))) {
+            return false;
+        }
+        const rock = Locs.query().name('Rock').action('Swim to').within(10).nearest();
+        if (!rock) {
+            log('bookLeg: no "Rock" to Swim to from the mound — LIVE-VERIFY the swim-return');
+            return false;
+        }
+        if (!(await rock.interact('Swim to'))) {
+            return false;
+        }
+        // Washed downstream lands at FAIL_COORD (2527,3413); success = off the mound.
+        await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && t.x >= 2520; }, 12_000);
+        return false; // re-enter -> walk to the bookcase from the mainland
+    }
+    // Mainland (post-swim, near the tourist centre) -> search the upstairs bookcase.
     if (!(await Traversal.walkResilient(BOOKCASE_STAND, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
