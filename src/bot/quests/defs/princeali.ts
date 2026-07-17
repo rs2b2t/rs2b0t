@@ -124,7 +124,6 @@ const BLONDWIG_ID = 2419;
 const DISGUISE = ['bronze key', 'wig', 'pink skirt', 'paste'];
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name) ?? 0) > 0;
-const count = (snap: QuestSnapshot, name: string): number => snap.inv.get(name) ?? 0;
 const packCoins = (snap: QuestSnapshot): number => snap.inv.get('coins') ?? 0;
 
 // Probe rotation for stage-invisible gaps (Romeo & Juliet idiom): quest varps
@@ -153,14 +152,16 @@ function hasBlondWig(): boolean {
 
 // --- Pure step chains --------------------------------------------------------
 
-/** Pack short of coins for a dialogue purchase: withdraw when the bank covers it
- *  (gpShort 0), else park a wait the engine surfaces. Fixed 60gp withdraw is
- *  enough for the whole mid-quest shopping list (research doc §6: ~30-35gp). */
-function coinsStep(snap: QuestSnapshot, need: number, thing: string): QuestStep {
-    if (gpShort(snap, need) === 0) {
-        return { kind: 'withdraw', items: [{ name: 'Coins', qty: 60 }] };
+/** Emit a buy, but if pack + bank together cannot cover it (gpShort > 0) park a
+ *  WAIT the engine surfaces instead — the `buy` executor self-provisions coins from
+ *  the bank, but a truly broke account makes it return false forever (a "re-enter"
+ *  the watchdog ignores), so a bare buy loops silently. This restores the engine's
+ *  "nothing loops silently" invariant for the coins-short case (review finding). */
+function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
+    if (gpShort(snap, step.estGp) > 0) {
+        return { kind: 'wait', reason: `need ~${step.estGp} gp for ${step.item}` };
     }
-    return { kind: 'wait', reason: `need ~${need} gp for ${thing}` };
+    return step;
 }
 
 /** Water sub-chain over a PURE snapshot: get an empty Bucket then fill it at the
@@ -189,14 +190,14 @@ function softClayChain(snap: QuestSnapshot): QuestStep {
  *  one water, free at Aggie). */
 function pasteChain(snap: QuestSnapshot): QuestStep {
     if (!has(snap, 'redberries')) {
-        return { kind: 'buy', item: 'Redberries', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 };
+        return buyOrWait(snap, { kind: 'buy', item: 'Redberries', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 });
     }
     if (!has(snap, 'pot of flour')) {
-        return { kind: 'buy', item: 'Pot of flour', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 };
+        return buyOrWait(snap, { kind: 'buy', item: 'Pot of flour', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 });
     }
     if (!has(snap, 'ashes')) {
         if (!has(snap, 'tinderbox')) {
-            return { kind: 'buy', item: 'Tinderbox', qty: 1, shop: LUMBY_SHOP, estGp: 5 };
+            return buyOrWait(snap, { kind: 'buy', item: 'Tinderbox', qty: 1, shop: LUMBY_SHOP, estGp: 5 });
         }
         if (!has(snap, 'logs')) {
             return { kind: 'grabGround', item: 'Logs', anchor: LOGS_SPAWN };
@@ -421,8 +422,14 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
                 return false;
             }
             const joe = Npcs.query().name('Joe').within(6).nearest();
-            const beer = Inventory.first('Beer');
-            if (joe && beer && (await beer.useOn(joe))) {
+            // Feed ALL held beers in this ONE visit (each is a full joe_beer dialogue).
+            // Feeding one-per-pass cost a Blue Moon round-trip between each (review
+            // finding) — drunkenness accrues server-side, so 3 in a row gets him drunk.
+            for (let fed = 0; joe && fed < 3 && Inventory.count('Beer') > 0; fed++) {
+                const beer = Inventory.first('Beer');
+                if (!beer || !(await beer.useOn(joe))) {
+                    break;
+                }
                 await Execution.delayUntil(() => ChatDialog.canContinue(), 5000);
                 for (let i = 0; i < 40 && (ChatDialog.canContinue() || ChatDialog.options().length > 0); i++) {
                     if (ChatDialog.canContinue()) {
@@ -511,7 +518,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     //        buy at Shantay if missing — research doc §3/§6).
     if (has(snap, 'key print')) {
         if (!has(snap, 'bronze bar')) {
-            return { kind: 'buy', item: 'Bronze bar', qty: 1, shop: SHANTAY_SHOP, estGp: 60 };
+            return buyOrWait(snap, { kind: 'buy', item: 'Bronze bar', qty: 1, shop: SHANTAY_SHOP, estGp: 60 });
         }
         return { kind: 'talk', stop: OSMAN };
     }
@@ -525,12 +532,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
             // reporting to him"). Imprinting first would deadlock forever.
             return { kind: 'custom', name: 'osman briefing + keli imprint', run: osmanBriefingThenImprint };
         }
+        // Mid clay-build (any intermediate held) -> stay in the chain. Each chain
+        // step changes inventory and RESETS noProgress to 0, so gating the Leela
+        // probe on noProgress alone re-probed Leela — a full Draynor round-trip —
+        // between every clay step (review finding). Only probe Leela on a genuinely
+        // empty pack.
+        const midClayBuild = has(snap, 'clay') || has(snap, 'bucket') || has(snap, 'bucket of water');
         // Empty-handed: the key may be made-but-uncollected (keystatus varp is
         // invisible). Probe Leela first (harmless, hands a made key); only build
         // fresh clay once Leela has stalled — this also avoids forging a SECOND
         // key print after Osman (Keli re-imprints at stage 20, which would wedge
         // row 3 forever). noProgress==0 = just progressed or fresh, so try Leela.
-        if (snap.noProgress === 0) {
+        if (!midClayBuild && snap.noProgress === 0) {
             return { kind: 'talk', stop: LEELA };
         }
         return softClayChain(snap);
@@ -549,7 +562,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // Row 9: pink skirt (bought — research doc §6).
     if (!has(snap, 'pink skirt')) {
-        return { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 };
+        return buyOrWait(snap, { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 });
     }
 
     // Row 10: defensive dead branch. Any state reaching here holds a bronze key

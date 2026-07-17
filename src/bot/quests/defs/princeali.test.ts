@@ -53,10 +53,14 @@ describe('princeali decide — row 3 Osman/key', () => {
         const s = decide(snap('inProgress', [['key print', 1], ['bronze bar', 1]]));
         expect(s.kind === 'talk' && s.stop.npc).toBe('Osman');
     });
-    test('key print, no bronze bar -> buy Bronze bar at Shantay', () => {
-        const s = decide(snap('inProgress', [['key print', 1]]));
+    test('key print, no bronze bar, bank covers -> buy Bronze bar at Shantay', () => {
+        const s = decide(snap('inProgress', [['key print', 1]], 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Bronze bar');
         expect(s.kind === 'buy' && s.shop.npc).toBe('Shantay');
+    });
+    test('key print, no bronze bar, BROKE (no pack/bank coins) -> park a wait, never loop', () => {
+        const s = decide(snap('inProgress', [['key print', 1]], 0, 0));
+        expect(s.kind).toBe('wait');
     });
 });
 
@@ -104,18 +108,19 @@ describe('princeali decide — row 7 wig', () => {
 });
 
 describe('princeali decide — row 8 paste chain', () => {
+    // bankCoins covers the chain's buys so gpShort===0 -> buy (not the broke wait).
     const base: [string, number][] = [['bronze key', 1], ['wig', 1]]; // past rows 1-7
     test('no redberries -> buy at Port Sarim (Wydin)', () => {
-        const s = decide(snap('inProgress', base));
+        const s = decide(snap('inProgress', base, 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Redberries');
         expect(s.kind === 'buy' && s.shop.npc).toBe('Wydin');
     });
     test('no pot of flour -> buy at Port Sarim', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1]]));
+        const s = decide(snap('inProgress', [...base, ['redberries', 1]], 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Pot of flour');
     });
     test('no ashes, no tinderbox -> buy Tinderbox at Lumbridge general', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1]]));
+        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1]], 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Tinderbox');
         expect(s.kind === 'buy' && s.shop.npc).toBe('Shop keeper');
     });
@@ -139,7 +144,7 @@ describe('princeali decide — row 8 paste chain', () => {
 
 describe('princeali decide — row 9 skirt', () => {
     test('no pink skirt -> buy at Thessalia', () => {
-        const s = decide(snap('inProgress', [['bronze key', 1], ['wig', 1], ['paste', 1]]));
+        const s = decide(snap('inProgress', [['bronze key', 1], ['wig', 1], ['paste', 1]], 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Pink skirt');
         expect(s.kind === 'buy' && s.shop.npc).toBe('Thessalia');
     });
