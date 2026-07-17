@@ -29,29 +29,22 @@ describe('princeali decide — lifecycle', () => {
     });
 });
 
-describe('princeali decide — row 1 jailbreak', () => {
-    test('all 4 + 3 beers + 2 ropes -> jailbreak custom', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['beer', 3], ['rope', 2]]));
+describe('princeali decide — row 1 commits to the jailbreak on all-4', () => {
+    test('all 4 + coins in pack -> jailbreak custom (custom self-provisions beers/rope)', () => {
+        const s = decide(snap('inProgress', [...ALL4, ['beer', 3], ['rope', 2], ['coins', 40]]));
         expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
     });
-});
-
-describe('princeali decide — row 2 supplies', () => {
-    test('all 4, short a beer, pack coins >= 10 -> talk Bartender', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['beer', 1], ['rope', 2], ['coins', 10]]));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Bartender');
+    test('all 4, no supplies, pack coins present -> STILL jailbreak (not a buy detour)', () => {
+        const s = decide(snap('inProgress', [...ALL4, ['coins', 40]]));
+        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
     });
-    test('all 4, short a beer, broke (no bank) -> wait', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['rope', 2]]));
-        expect(s.kind).toBe('wait');
-    });
-    test('all 4, short a beer, bank covers -> withdraw coins', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['rope', 2]], 0, 60));
+    test('all 4, pack short of coins but bank covers -> withdraw coins first', () => {
+        const s = decide(snap('inProgress', [...ALL4], 0, 60));
         expect(s.kind === 'withdraw' && s.items[0].name).toBe('Coins');
     });
-    test('all 4, beers ok, short rope, pack coins >= 15 -> talk Ned (rope)', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['beer', 3], ['coins', 20]]));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Ned');
+    test('all 4, pack has enough coins -> jailbreak (no withdraw)', () => {
+        const s = decide(snap('inProgress', [...ALL4, ['coins', 30]]));
+        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
     });
 });
 

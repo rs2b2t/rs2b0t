@@ -348,28 +348,55 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
         return dyeWigToBlond(log);
     }
 
-    // 1. Beers on Joe -> guard drunk (stage 40). Using a beer on Joe opens the
-    //    joe_beer DIALOGUE (joe_guard.rs2:22-47), a ~10-page conversation that
-    //    drinks 1 beer then 2 more and sets stage 40 — it must be DRIVEN. The
-    //    old useOn + delayTicks(3) left it open and unconsumed: this custom runs
-    //    inside the QuestEngine task, so the sibling ContinueDialog task never
-    //    gets a turn to drive it (live 2026-07-17: beers stuck at 3, bounced
-    //    Leela<->jail forever). So drive it inline with talkThrough, which
-    //    continues an already-open dialogue without re-interacting.
-    if (Inventory.count('Beer') > 0) {
+    // KELI PHASE — everything up to and including the tie, gated on Keli being
+    // present. Once she's tied she is npc_del'd (gone), so this whole block is
+    // skipped and we fall through to the unlock/handover below. decide() enters
+    // the jailbreak on all-4-held ALONE (it cannot see Keli or the drunk varp),
+    // so the beers + rope are (re)acquired HERE, only when the live world proves
+    // they're needed — otherwise the bot bounced off to re-buy beers it had
+    // already drunk (live 2026-07-17: guard drunk + Keli tied, then walked to
+    // Varrock to buy 3 more beers).
+    const keli = Npcs.query().name('Lady Keli').within(12).nearest();
+    if (keli) {
+        // 1. Try the tie FIRST — it works iff the guard is already drunk, and is
+        //    a harmless no-op mesbox otherwise (quest_prince.rs2:23-25, rope kept).
+        //    This avoids buying/drinking beers when the guard is already drunk.
+        const rope = Inventory.first('Rope');
+        if (rope) {
+            await rope.useOn(keli);
+            await Execution.delayTicks(3);
+            if (!Npcs.query().name('Lady Keli').within(12).nearest()) {
+                return false; // tied — next pass unlocks the door
+            }
+        }
+        // 2. Tie didn't take. Ensure a rope for the attempt (Ned, 15gp/pass).
+        if (Inventory.count('Rope') < 1) {
+            if (!(await gotoNpc(NED_ROPE, [], log))) {
+                return false;
+            }
+            await talkThrough('Ned', NED_ROPE.prefer, log);
+            return false;
+        }
+        // 3. Guard not drunk yet: accumulate 3 beers (bartender, 1/pass) then
+        //    drink them on Joe. joe_beer is a ~10-page conversation mixing
+        //    ~chatnpc (chat modal) and ~mesbox "You hand a beer..." (MAIN modal),
+        //    so it MUST be driven on canContinue() — isOpen() only sees the chat
+        //    modal and stalls on the mesbox pages (live 2026-07-17). ContinueDialog
+        //    can't help: this custom runs inside the QuestEngine task, so no
+        //    sibling task gets a turn mid-await.
+        if (Inventory.count('Beer') < 3) {
+            if (!(await gotoNpc(BARTENDER, [], log))) {
+                return false;
+            }
+            await talkThrough('Bartender', BARTENDER.prefer, log);
+            return false;
+        }
         if (!(await Traversal.walkResilient(JOE_TILE, { radius: 3, attempts: 2, timeoutMs: 60_000, log }))) {
             return false;
         }
-        const before = Inventory.count('Beer');
         const joe = Npcs.query().name('Joe').within(6).nearest();
         const beer = Inventory.first('Beer');
         if (joe && beer && (await beer.useOn(joe))) {
-            // Drive joe_beer to completion on canContinue(), NOT isOpen(): the
-            // conversation mixes ~chatnpc (chat modal) and ~mesbox "You hand a
-            // beer to the guard" pages (MAIN modal), and isOpen() only sees the
-            // chat modal — so an isOpen-based drive (incl. talkThrough) stalls on
-            // the mesbox pages. canContinue() reads the continue component on
-            // either modal. Take the last option on the rare menu (safe decline).
             await Execution.delayUntil(() => ChatDialog.canContinue(), 5000);
             for (let i = 0; i < 40 && (ChatDialog.canContinue() || ChatDialog.options().length > 0); i++) {
                 if (ChatDialog.canContinue()) {
@@ -381,22 +408,7 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
                 await Execution.delayTicks(1);
             }
         }
-        // Re-decide unless the beers actually went down this pass.
-        if (Inventory.count('Beer') >= before) {
-            return false;
-        }
-    }
-
-    // 2. Rope on Keli -> tied (stage 50), Keli npc_del'd. Only works once the
-    //    guard is drunk; a failure keeps the rope and we retry next pass.
-    const keli = Npcs.query().name('Lady Keli').within(10).nearest();
-    if (keli) {
-        const rope = Inventory.first('Rope');
-        if (rope) {
-            await rope.useOn(keli);
-            await Execution.delayTicks(3);
-        }
-        return false; // re-decide; next pass sees Keli gone if the tie took
+        return false; // next pass: guard drunk, the tie above takes
     }
 
     // 3. Keli gone -> unlock the Prison Door standing NORTH (z>=3244), using the
@@ -429,18 +441,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     const all4 = DISGUISE.every(item => has(snap, item));
 
-    // Row 1: fully equipped -> jailbreak.
-    if (all4 && count(snap, 'beer') >= 3 && count(snap, 'rope') >= 2) {
-        return { kind: 'custom', name: 'jailbreak', run: jailbreak };
-    }
-
-    // Row 2: equipped but short on consumables (beers x3, ropes x2 for Keli
-    //        respawns — research doc §7). Buy via dialogue; self-fund from bank.
+    // Row 1: disguise complete -> COMMIT to the jailbreak. The custom self-
+    //        provisions beers/rope and sequences drink->tie->unlock->handover
+    //        off the LIVE world (Keli's presence, the drunk varp) — none of which
+    //        the pure snapshot can see. A beer/rope gate here bounced the bot off
+    //        to re-buy beers after it had already drunk them and tied Keli (live
+    //        2026-07-17). The jailbreak needs coins in the pack for the beer/rope
+    //        buys, so top up from the bank first while short.
     if (all4) {
-        if (count(snap, 'beer') < 3) {
-            return packCoins(snap) >= 10 ? { kind: 'talk', stop: BARTENDER } : coinsStep(snap, 10, 'beer');
+        if (packCoins(snap) < 30 && gpShort(snap, 30) === 0) {
+            return { kind: 'withdraw', items: [{ name: 'Coins', qty: 40 }] };
         }
-        return packCoins(snap) >= 15 ? { kind: 'talk', stop: NED_ROPE } : coinsStep(snap, 15, 'rope');
+        return { kind: 'custom', name: 'jailbreak', run: jailbreak };
     }
 
     // Row 3: hold the key imprint -> Osman forges the key (needs a Bronze bar;
