@@ -34,6 +34,10 @@ export interface RawClient {
     npc: (ClientNpc | null)[];
     npcIds: Int32Array;
     npcCount: number;
+    // the local player's REAL scene slot — faceEntity player targets are
+    // slot+32768, so this is what "that npc is fighting ME" compares against
+    // (players[LOCAL_PLAYER_INDEX] is a render-side alias, not the real slot)
+    selfSlot: number;
 
     // stats (Int32Array[Skill.count])
     statBaseLevel: Int32Array;
@@ -133,6 +137,7 @@ export const SELF_TEST = [
     'npc',
     'npcIds',
     'npcCount',
+    'selfSlot',
     'statBaseLevel',
     'statEffectiveLevel',
     'statXP',

@@ -24,6 +24,7 @@ import { SettingsStore } from '../runtime/Settings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
+import { Players } from '../api/queries/Players.js';
 import { Sustain } from '../api/Sustain.js';
 import { DEFAULT_SPOTS } from './RockCrabSpots.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
@@ -51,6 +52,9 @@ const BANK_OP = 'Use-quickly';
 const MAX_FAILED_WAKES = 3; // consecutive dud wakes => area is de-aggro'd
 // How close to the field centre counts as "regrouped" for the run-back step.
 const CENTRE_RADIUS = 2;
+// The local player's render-alias slot in reader.players() — filtered out of
+// "other players" checks in case the scene list ever carries it.
+const LOCAL_PLAYER_SLOT = 2047;
 
 // Valuables to grab off the ground. Both crystal-key halves share the item
 // name "Half of a key"; the rest are the notable rock-crab drops.
@@ -609,19 +613,28 @@ async function eatOnce(bot: RockCrab): Promise<boolean> {
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
 }
 
-/** Active, attackable crabs inside the field. */
+/** Active, attackable crabs inside the field that are OURS to fight — free or
+ *  engaging us. A crab locked onto ANOTHER player is their stack: skipping it
+ *  here keeps Fight off it, keeps it out of the stack count, and keeps Aggro
+ *  topping OUR pile up instead. If someone invades OUR spot the same rule
+ *  still fights the crabs facing us and leaves theirs alone. */
 function activeCrabs(): Npc[] {
     return Npcs.query()
         .name('Rock Crab')
-        .where(n => inField(n.tile()))
+        .where(n => inField(n.tile()) && !n.targetsAnotherPlayer())
         .results();
 }
 
-/** Dormant "Rocks" NPCs (not the mining loc of the same name) inside the field. */
+/** Dormant "Rocks" NPCs (not the mining loc of the same name) inside the
+ *  field — minus any sitting in another player's lap (within 2 of them):
+ *  waking those is barging into an occupied spot's respawn cycle. */
 function dormantRocks(): Npc[] {
+    const others = Players.query()
+        .where(p => p.index !== LOCAL_PLAYER_SLOT && inField(p.tile()))
+        .results();
     return Npcs.query()
         .name('Rocks')
-        .where(n => inField(n.tile()))
+        .where(n => inField(n.tile()) && !others.some(p => n.tile().distanceTo(p.tile()) <= 2))
         .results();
 }
 

@@ -69,6 +69,14 @@ export class Npc implements Interactable, Locatable {
         return this.snap.health;
     }
 
+    /** Face/interaction target this npc is locked onto — someone ELSE's fight
+     *  when it's a player slot that isn't ours (player targets ride faceEntity
+     *  as slot+32768). False for untargeted npcs, npc-facing npcs, and ones
+     *  engaging US — those are fair game. */
+    targetsAnotherPlayer(): boolean {
+        return this.snap.faceEntity >= 32768 && this.snap.faceEntity - 32768 !== reader.selfSlot();
+    }
+
     tile(): Tile {
         return Tile.from(this.snap.tile);
     }
@@ -101,6 +109,11 @@ export class Player implements Locatable {
 
     get name(): string | null {
         return this.snap.name;
+    }
+
+    /** Scene slot index (the local player's render alias is 2047). */
+    get index(): number {
+        return this.snap.index;
     }
 
     get inCombat(): boolean {

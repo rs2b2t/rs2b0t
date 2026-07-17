@@ -62,6 +62,9 @@ export interface NpcSnapshot {
     inCombat: boolean;
     health: number;
     totalHealth: number;
+    /** Face/interaction target: -1 none, <32768 an npc scene slot, >=32768 a
+     *  player scene slot + 32768 (compare against reader.selfSlot()). */
+    faceEntity: number;
 }
 
 export interface PlayerSnapshot {
@@ -260,11 +263,18 @@ export const reader = {
                 ops: npc.type?.op ?? [],
                 inCombat: combatShowing(npc.combatCycle),
                 health: npc.health,
-                totalHealth: npc.totalHealth
+                totalHealth: npc.totalHealth,
+                faceEntity: npc.faceEntity
             });
         }
 
         return out;
+    },
+
+    /** The local player's REAL scene slot (what npc faceEntity player targets
+     *  encode as slot+32768), or -1 before login. */
+    selfSlot(): number {
+        return raw?.selfSlot ?? -1;
     },
 
     players(): PlayerSnapshot[] {
