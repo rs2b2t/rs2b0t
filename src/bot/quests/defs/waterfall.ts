@@ -1,5 +1,6 @@
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
+import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Locs } from '../../api/queries/Locs.js';
@@ -172,6 +173,18 @@ async function bookLeg(log: (m: string) => void): Promise<boolean> {
         }
         if (!(await raft.interact('Board'))) {
             return false;
+        }
+        // Board p_teleports onto the mound AND opens a forced ~7-page Hudon dialogue.
+        // The stage-2 set (^waterfall_spoken_to_hudon) is PARTWAY through it
+        // (quest_waterfall.rs2:178), and the script SUSPENDS on each chat page until
+        // continued — so DRIVE it to completion inline. Walking away (to the swim)
+        // abandons the suspended script and the stage stays 1, after which the tourist
+        // bookcase yields nothing forever (live 2026-07-17: stuck Searching, book=0).
+        // Same inline-drive as the Prince beer dialogue (canContinue, not isOpen).
+        await Execution.delayUntil(() => ChatDialog.canContinue(), 8000);
+        for (let i = 0; i < 14 && ChatDialog.canContinue(); i++) {
+            await ChatDialog.continue();
+            await Execution.delayTicks(1);
         }
         // Land on the mound (x<=2515) — NOT merely z<=3485, which the mainland also is.
         await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && t.x <= 2515 && t.z <= 3485; }, 10_000);
