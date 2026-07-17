@@ -601,13 +601,14 @@ async function dungeonLeg(log: (m: string) => void): Promise<boolean> {
     // chalice = done. z>=9906 distinguishes it from the x>2600 door leaf (z~9900) in
     // the original room, which must NOT be mistaken for "already at the chalice".
     if (t.x >= 2600 && t.z >= 9906) {
-        if (!(await Traversal.walkResilient(CHALICE_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
-            return false;
-        }
-        const chalice = Locs.query().name('Chalice of eternity').within(6).nearest();
+        // useOn's native walk-to-loc reaches the Chalice — walkResilient repaths
+        // endlessly here too ("stuck 0 clicks") the same way the pillar room did
+        // (live 2026-07-17: statue teleport landed the bot in the raised room but it
+        // then stalled 2-3t short of the chalice). The urn.useOn walks it in.
+        const chalice = Locs.query().name('Chalice of eternity').within(12).nearest();
         const urn = Inventory.first(URN);
         if (!chalice || !urn) {
-            log('dungeonLeg: no chalice or urn');
+            log('dungeonLeg: no chalice or urn in the raised room');
             return false;
         }
         if (!(await urn.useOn(chalice))) { // oplocu; op1 'Take treasure' is the trap
