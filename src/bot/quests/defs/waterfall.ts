@@ -555,25 +555,23 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
  * caller's next re-entry (the rune is still held).
  */
 async function placeRunes(log: (m: string) => void): Promise<void> {
-    for (const pillarTile of PILLAR_TILES) {
-        // Cheap single-attempt walk: the pillar room is cramped and walkResilient
-        // repaths endlessly ("stuck 0 clicks") between the tightly-packed loc tiles —
-        // don't burn 45s per stand. Then place a rune of EVERY type on EVERY 'Pillar'
-        // in range (not just the nearest): repeats over an already-set bit are free
-        // no-ops (waterfall_pillars.rs2:12), so covering neighbours here means a stand
-        // the walk can't perfectly reach still gets swept from an adjacent one (live
-        // 2026-07-17: per-tile walkResilient crawled the sweep to a near-halt).
-        await Traversal.walkResilient(pillarTile, { radius: 1, attempts: 1, timeoutMs: 12_000, log });
-        const pillars = Locs.query().name('Pillar').within(3).results();
-        for (const pillar of pillars) {
-            for (const rune of RUNES) {
-                const r = Inventory.first(rune);
-                if (!r) {
-                    continue;
-                }
-                await r.useOn(pillar);
-                await Execution.delayTicks(2);
+    // Iterate the six 'Pillar' locs and let useOn's NATIVE game-walk reach each — the
+    // server walks the player adjacent before applying the rune (oplocu). walkResilient
+    // pre-positioning was abandoned: in this cramped room it repaths endlessly ("stuck
+    // 0 clicks") between the packed loc tiles and stranded the sweep at 16/18 bits
+    // (live 2026-07-17, three attempts). Repeats over a set bit are free no-ops
+    // (waterfall_pillars.rs2:12), so a re-sweep harmlessly finishes any rune whose
+    // walk didn't land in time. Waypoint each pillar so its 3 runes place from adjacency.
+    const pillars = Locs.query().name('Pillar').within(20).results();
+    for (const pillar of pillars) {
+        for (const rune of RUNES) {
+            const r = Inventory.first(rune);
+            if (!r) {
+                continue;
             }
+            const before = totalRunes();
+            await r.useOn(pillar); // oplocu — native walk-to-loc then apply
+            await Execution.delayUntil(() => totalRunes() < before, 6000);
         }
     }
 }
