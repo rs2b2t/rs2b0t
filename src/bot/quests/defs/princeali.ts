@@ -1,3 +1,14 @@
+// COMBAT-SURVIVABILITY GATE (not modeled in QuestSnapshot): Prince Ali never
+// fights, but the Draynor jail (Keli's imprint + the jailbreak) is ringed by
+// level-26 Jail guards (draynor.npc:152, op2=Attack) that aggro any account
+// under ~2x their level — a bare level-3 account dies mid-Keli-dialogue and,
+// because coins are tradeable, DROPS its whole toll/buy float on death, then
+// wedges broke at the Al Kharid toll gate (live 2026-07-16). Death recovery
+// (engine) re-provisions from the BANK, which can't restore dropped pack coins.
+// So run this quest on an account with combat stats high enough to survive (or
+// out-level the guard aggro) — the smoke preps attack/strength/defence/
+// hitpoints ~40. TODO(robustness): bank the coin float + carry only a small
+// toll reserve so a stray death can't strand the quest.
 import { Execution } from '../../api/Execution.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Locs } from '../../api/queries/Locs.js';
