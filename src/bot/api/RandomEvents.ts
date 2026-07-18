@@ -57,12 +57,23 @@ const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sand
 const PICK_EVENT_NPCS = ['strange plant'];
 // Hostile event monsters. Server truth (macro_events.rs2
 // [proc,macro_event_lost_hostile]): EVERY one despawns once the player gets
-// away (mode=wander & range>3) — the universal handler is EVADE, never
-// fight. Ent events masquerade as normal tree names (Oak/Willow/...) and
-// cannot be name-detected — excluded. Names can collide with ordinary
-// monsters (zombie), so one is an event only when attacking us and not a
-// declared grind target.
-const HOSTILE_EVENT_NPCS = ['swarm', 'zombie', 'shade', 'rock golem', 'river troll', 'tree spirit', 'watchman'];
+// away (mode=wander & range>3) — the universal handler is EVADE, never fight.
+// Matched by NPC ID, NOT name: the event display names (Zombie, Shade, Rock
+// Golem, River troll, ...) collide with ordinary in-world monsters, and a name
+// match wedged non-combat scripts whenever a REGULAR monster of that name
+// attacked (a normal Zombie in the Baxtorian dungeon paused the waterfall quest).
+// These are the macro_* event spawns only (antimacro.npc / npc.pack). Ent events
+// (macro_ent_*, name "Tree") are excluded — same as before.
+const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+const HOSTILE_EVENT_NPC_IDS = new Set<number>([
+    ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
+    411,                  // Swarm        (macro_swarm)
+    ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
+    ...idRange(419, 424), // Zombie       (macro_zombie1..6)
+    ...idRange(425, 430), // Shade        (macro_shade1..6)
+    ...idRange(431, 436), // Watchman     (macro_watchman1..6)
+    ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
+]);
 
 // Hazards (fishing/thieving): step away / recover gear. antimacro configs:
 // chest_macro_gas loc 2141; whirlpool npcs 403/404/405; big fish npc 390.
@@ -284,9 +295,12 @@ class RandomEventsImpl {
         // woodcutting) until we walk off. Keying on the event NPC attacking
         // (npc.inCombat) or being adjacent is the reliable signal.
         for (const npc of reader.npcs()) {
-            const name = npc.name?.toLowerCase();
-            if (name && HOSTILE_EVENT_NPCS.includes(name) && !this.grindTargets.includes(name) && (npc.inCombat || npc.distance <= 1)) {
-                return { kind: 'evade', name };
+            // ID-based: a macro_* event spawn attacking us (or on top of us). No
+            // grind-target exclusion needed — the event ids never collide with a
+            // quarry's id, and excluding by NAME would wrongly suppress a real
+            // event for a bot grinding a same-named regular monster.
+            if (HOSTILE_EVENT_NPC_IDS.has(npc.id) && (npc.inCombat || npc.distance <= 1)) {
+                return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
         }
 
