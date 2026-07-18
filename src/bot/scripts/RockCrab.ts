@@ -750,6 +750,17 @@ class ArmAutocast implements Task {
         if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
             return false;
         }
+        // Arming needs the spell's runes IN THE PACK: the engine's set_autocast_spell
+        // runs check_spell_requirements (magic.rs2), which fails on missing runes, so
+        // the select silently no-ops and arm() times out. Without this gate — and
+        // because ArmAutocast outranks BankRun — a fresh mage with no runes spins a
+        // futile arm batch every loop instead of letting BankRun stock runes first.
+        // castsLeft() accounts for a rune-providing staff (matches staff_runes), so
+        // >=1 means the select can actually take. Deferring here hands the loop to
+        // BankRun, which restocks runes; we then arm cleanly on the next pass.
+        if (castsLeft() < 1) {
+            return false;
+        }
         // staff tab attached, or the staff is at least worn (a stale combat
         // tab still deserves attempts so the failure gets LOGGED, not silent)
         return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
