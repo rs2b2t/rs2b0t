@@ -82,9 +82,21 @@ export const Bank = {
      * Deposit every pack slot whose item name matches `match` (Deposit-all per
      * slot), leaving everything else — e.g. bank the loot but keep food/gear.
      */
-    async depositAllMatching(match: (name: string) => boolean): Promise<void> {
+    async depositAllMatching(match: (name: string) => boolean, log?: (msg: string) => void): Promise<void> {
         for (let guard = 0; guard < 32; guard++) {
-            const items = reader.bankSideItems();
+            let items = reader.bankSideItems();
+            // The deposit-side backpack view can read empty for a tick — right after
+            // the bank opens, or mid-update — while the main bank modal is already
+            // set. If we conclude "nothing to deposit" on that transient empty read,
+            // the caller walks off (which closes the bank) with the loot still held,
+            // so it immediately re-banks: the screen appears to "instantly open and
+            // shut" on a loop. Wait for the view while the bank is genuinely open.
+            // (The near-zero-latency dev engine never hits this; live can.)
+            if (items.length === 0 && Bank.isOpen()) {
+                log?.('deposit view not ready — waiting for the side backpack');
+                await Execution.delayUntil(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
+                items = reader.bankSideItems();
+            }
             const item = items.find(i => i.name !== null && match(i.name));
             if (!item) {
                 return;

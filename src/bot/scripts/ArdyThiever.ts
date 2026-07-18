@@ -478,8 +478,14 @@ class BankRun implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON));
+        // Loot delta around the deposit — a "banked N->N (nothing deposited)" line
+        // in the live log is the signature of the "bank instantly opens and shuts"
+        // report (bank opened, deposit no-op'd, walk-away closed it, re-triggered).
+        const before = lootSlots();
+        await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON), m => this.bot.log(`  ${m}`));
         await Execution.delayTicks(1);
+        const after = lootSlots();
+        this.bot.log(`banked: loot slots ${before}->${after}${after >= before ? ' (nothing deposited!)' : ''}`);
         this.bot.countTrip();
         this.bot.setStatus('heading back');
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
