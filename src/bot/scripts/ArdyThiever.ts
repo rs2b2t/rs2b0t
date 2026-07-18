@@ -38,6 +38,12 @@ const STALL_STAND = new Tile(2668, 3312, 0);
 // stand, every theft there is refused (engine owner-watch, see ownerWatching)
 // — from this corner the counter shades the player from him instead.
 const STALL_STAND_ALT = new Tile(2669, 3310, 0);
+// Preferred stand: directly south of the stall, reliably reachable. The two north
+// stands sit behind a counter tile that is sometimes LIVE-blocked (occupied by
+// the Baker/another player), and walkTo(radius 0) then can't reach them — the bot
+// wedged at exactly this tile trying to step onto (2668,3312) (live 2026-07-17).
+// Steal from HERE first; the Steal-from click walks the last tile in.
+const STALL_STAND_2 = new Tile(2667, 3312, 0);
 const STALL_NAME = 'Baker\'s stall';
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
@@ -497,15 +503,18 @@ class RestockCakes implements Task {
             .nearest();
     }
 
-    /** The stand the Baker can't refuse thefts at: north stand normally, the
-     *  SE-corner shade when he's wandered somewhere with sight of it. */
+    /** A stand the Baker can't refuse thefts at AND that we can actually reach.
+     *  Prefer the reliably-reachable south stand (2667,3312); the counter-blocked
+     *  north stands are fallbacks used only when they're walkable and unwatched. */
     private pickStand(): Tile {
-        const baker = Npcs.query().name('Baker').where(n => n.tile().distanceTo(STALL_TILE) <= 8).nearest();
-        if (!baker) {
-            return STALL_STAND;
-        }
         const blocked = (x: number, z: number): boolean => !Reachability.walkable({ x, z, level: 0 });
-        return ownerWatching(baker.tile(), STALL_STAND, blocked) ? STALL_STAND_ALT : STALL_STAND;
+        const baker = Npcs.query().name('Baker').where(n => n.tile().distanceTo(STALL_TILE) <= 8).nearest();
+        for (const s of [STALL_STAND_2, STALL_STAND, STALL_STAND_ALT]) {
+            if (!blocked(s.x, s.z) && (!baker || !ownerWatching(baker.tile(), s, blocked))) {
+                return s;
+            }
+        }
+        return STALL_STAND_2;
     }
 
     async execute(): Promise<void> {
@@ -526,7 +535,7 @@ class RestockCakes implements Task {
             const want = this.pickStand();
             if (stand === null || !want.equals(stand)) {
                 if (stand !== null) {
-                    this.bot.log(`baker ${want.equals(STALL_STAND_ALT) ? 'is watching the north stand' : 'wandered off'} — stealing from (${want.x},${want.z})`);
+                    this.bot.log(`switching stand (baker moved) — stealing from (${want.x},${want.z})`);
                 }
                 stand = want;
             }
