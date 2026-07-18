@@ -31,7 +31,6 @@ interface GateSpec {
     quest?: string;                            // journal name, needs 'complete'
     skill?: { name: string; level: number };   // base level requirement
     qp?: number;                               // minimum quest points
-    members?: boolean;                         // needs a members world
 }
 
 interface RouteShop {
@@ -60,7 +59,6 @@ export type SeenMap = Record<string, Record<string, Seen>>;
 
 /** Pure snapshot of the account, built by the runner from live APIs. */
 export interface AccountView {
-    members: boolean;
     qp: number;
     quests: Record<string, boolean>;    // journal name -> complete
     skills: Record<string, number>;     // lowercase skill -> base level

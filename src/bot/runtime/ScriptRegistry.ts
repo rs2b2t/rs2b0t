@@ -7,7 +7,7 @@ export interface ScriptMeta {
     version?: string;
     /** Primary category for the library filter (usually a skill). */
     category?: string;
-    /** Free-form tags for filtering/search (f2p, members, banking, afk, ...). */
+    /** Free-form tags for filtering/search (banking, afk, gathering, ...). */
     tags?: string[];
     /** Where the script came from: undefined = built-in, else URL/file label. */
     origin?: string;

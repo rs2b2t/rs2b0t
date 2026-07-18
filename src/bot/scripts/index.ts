@@ -54,7 +54,7 @@ ScriptRegistry.register({
     name: 'AIOQuester',
     description: 'All-in-one quest completer — queues the implemented quests (empty selection = all), provisions items bank-first, runs each to journal-complete',
     category: 'Quest',
-    tags: ['f2p', 'quest', 'queue', 'aio'],
+    tags: ['quest', 'queue', 'aio'],
     settingsSchema: AIO_SETTINGS,
     create: () => new AIOQuester()
 });
@@ -64,7 +64,7 @@ ScriptRegistry.register({
     name: 'ChickenKiller',
     description: 'Kills chickens, loots and buries bones (anchor = start tile)',
     category: 'Combat',
-    tags: ['f2p', 'lumbridge', 'bones', 'feathers', 'afk'],
+    tags: ['lumbridge', 'bones', 'feathers', 'afk'],
     settingsSchema: CHICKEN_SETTINGS,
     create: () => new ChickenKiller()
 });
@@ -82,7 +82,7 @@ ScriptRegistry.register({
     name: 'CowKiller',
     description: 'Kills cows in the Lumbridge field, loots cow hides + bones (anchor = start tile)',
     category: 'Combat',
-    tags: ['f2p', 'lumbridge', 'cowhide', 'bones', 'afk'],
+    tags: ['lumbridge', 'cowhide', 'bones', 'afk'],
     // 274 content: [cow] name=Cow; the hide drop is obj [cow_hide] name="Cow hide"
     // (confirmed in content/scripts/skill_crafting/configs/crafting.obj -- NOT
     // the one-word "Cowhide" the plan guessed).
@@ -94,7 +94,7 @@ ScriptRegistry.register({
     name: 'ChaosDruidKiller',
     description: 'Kills Chaos druids in the Edgeville dungeon, loots herbs/law runes, banks them',
     category: 'Combat',
-    tags: ['members', 'wilderness', 'edgeville', 'herbs', 'banking'],
+    tags: ['wilderness', 'edgeville', 'herbs', 'banking'],
     settingsSchema: CHAOSDRUID_SETTINGS,
     create: () => new ChaosDruidKiller()
 });
@@ -103,7 +103,7 @@ ScriptRegistry.register({
     name: 'RockCrab',
     description: 'Rellekka rock crabs: aggro-stack-kill-reset, loots key halves',
     category: 'Combat',
-    tags: ['members', 'rellekka', 'keys', 'afk'],
+    tags: ['rellekka', 'keys', 'afk'],
     settingsSchema: ROCKCRAB_SETTINGS,
     create: () => new RockCrab()
 });
@@ -112,7 +112,7 @@ ScriptRegistry.register({
     name: 'ArdyFighter',
     description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank (needs melee stats that beat the 60s guard respawn — ~str 80 unarmed)',
     category: 'Combat',
-    tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
+    tags: ['ardougne', 'thieving', 'banking', 'afk'],
     settingsSchema: ARDY_SETTINGS,
     create: () => new ArdyFighter()
 });
@@ -122,7 +122,7 @@ ScriptRegistry.register({
     name: 'Thiever',
     description: 'Pickpockets an NPC (Man by default); eats food when a failed steal hurts (anchor = start tile)',
     category: 'Thieving',
-    tags: ['f2p', 'pickpocket', 'coins'],
+    tags: ['pickpocket', 'coins'],
     settingsSchema: THIEVING_SETTINGS,
     create: () => new ThievingBot()
 });
@@ -131,7 +131,7 @@ ScriptRegistry.register({
     name: 'ArdyThiever',
     description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Paladin/Hero, flees (kites) or fights the guard per the guardResponse setting, banks loot + junk, grabs ground coins',
     category: 'Thieving',
-    tags: ['members', 'ardougne', 'thieving', 'banking', 'afk'],
+    tags: ['ardougne', 'thieving', 'banking', 'afk'],
     settingsSchema: ARDYTHIEVER_SETTINGS,
     create: () => new ArdyThiever()
 });
@@ -141,7 +141,7 @@ ScriptRegistry.register({
     name: 'Woodcutter',
     description: 'Chops trees and drops logs (anchor = start tile, needs an axe)',
     category: 'Woodcutting',
-    tags: ['f2p', 'gathering', 'drop'],
+    tags: ['gathering', 'drop'],
     settingsSchema: WOODCUTTER_SETTINGS,
     create: () => new Woodcutter()
 });
@@ -152,7 +152,7 @@ ScriptRegistry.register({
     name: 'Miner',
     description: 'Mines the selected rock types and banks the ore at the nearest bank (auto-detected), or drops it. Needs a pickaxe.',
     category: 'Mining',
-    tags: ['f2p', 'gathering', 'banking', 'drop'],
+    tags: ['gathering', 'banking', 'drop'],
     settingsSchema: {
         rocks: {
             type: 'string[]',
@@ -177,7 +177,7 @@ ScriptRegistry.register({
     name: 'EssMiner',
     description: 'Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries + a usable pickaxe (picks your best by default)',
     category: 'Mining',
-    tags: ['f2p', 'varrock', 'mining', 'banking', 'afk'],
+    tags: ['varrock', 'mining', 'banking', 'afk'],
     settingsSchema: ESSMINER_SETTINGS,
     create: () => new EssMiner()
 });
@@ -186,7 +186,7 @@ ScriptRegistry.register({
     name: 'Fisher',
     description: 'Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch at the nearest bank, or drops it (location: None)',
     category: 'Fishing',
-    tags: ['f2p', 'gathering', 'drop', 'banking'],
+    tags: ['gathering', 'drop', 'banking'],
     settingsSchema: {
         fishMethod: {
             type: 'string',
@@ -231,7 +231,7 @@ ScriptRegistry.register({
     name: 'Fletcher',
     description: 'Knife-fletches logs into the chosen product (needs a knife + logs)',
     category: 'Fletching',
-    tags: ['f2p', 'processing', 'make-x'],
+    tags: ['processing', 'make-x'],
     settingsSchema: processing({ material: 'Logs', targetType: 'item', target: 'Knife', product: 'arrow shaft', leashRadius: 4 }),
     create: () => new ProcessingBot()
 });
@@ -240,7 +240,7 @@ ScriptRegistry.register({
     name: 'BankFletcher',
     description: 'Bank-standing fletcher — withdraw logs, knife-fletch the chosen product (arrow shafts / unstrung bow), deposit, repeat',
     category: 'Fletching',
-    tags: ['members', 'fletching', 'banking', 'afk'],
+    tags: ['fletching', 'banking', 'afk'],
     settingsSchema: BANKFLETCHER_SETTINGS,
     create: () => new BankFletcher()
 });
@@ -281,7 +281,7 @@ ScriptRegistry.register({
     name: 'Runecrafter',
     description: 'Crafts runes from essence at an altar (needs rune essence + the altar)',
     category: 'Runecrafting',
-    tags: ['f2p', 'processing'],
+    tags: ['processing'],
     settingsSchema: processing({ material: 'essence', targetType: 'loc', target: 'Altar', product: '', leashRadius: 8 }),
     create: () => new ProcessingBot()
 });
@@ -291,7 +291,7 @@ ScriptRegistry.register({
     name: 'FlaxPicker',
     description: 'Seers flax field picker — pick flax until full, bank it at Seers, repeat',
     category: 'Crafting',
-    tags: ['members', 'seers', 'gathering', 'banking', 'afk'],
+    tags: ['seers', 'gathering', 'banking', 'afk'],
     settingsSchema: FLAXPICKER_SETTINGS,
     create: () => new FlaxPicker()
 });
@@ -300,7 +300,7 @@ ScriptRegistry.register({
     name: 'FlaxSpinner',
     description: 'Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat',
     category: 'Crafting',
-    tags: ['members', 'seers', 'crafting', 'banking', 'afk'],
+    tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,
     create: () => new FlaxSpinner()
 });
@@ -310,7 +310,7 @@ ScriptRegistry.register({
     name: 'GnomeCourse',
     description: 'Runs the Gnome Stronghold agility course (start at the log balance)',
     category: 'Agility',
-    tags: ['members', 'course', 'gnome'],
+    tags: ['course', 'gnome'],
     settingsSchema: AGILITY_SETTINGS,
     create: () => new AgilityBot()
 });
@@ -319,7 +319,7 @@ ScriptRegistry.register({
     name: 'WildyAgility',
     description: 'Runs the Wilderness Agility Course, eats while running, and on death banks (food-only) then returns — needs Agility 52 + carried food (start at the entrance)',
     category: 'Agility',
-    tags: ['members', 'course', 'wilderness', 'food', 'death-recovery'],
+    tags: ['course', 'wilderness', 'food', 'death-recovery'],
     settingsSchema: WILDY_AGILITY_SETTINGS,
     create: () => new WildyAgility()
 });
@@ -329,7 +329,7 @@ ScriptRegistry.register({
     name: 'ShopBuyout',
     description: "Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing. Defaults to Lundail's Mage Arena rune shop (banks via Gundai's dialog); get the bot to the shop yourself.",
     category: 'Money making',
-    tags: ['members', 'wilderness', 'shopping', 'banking', 'runes', 'afk'],
+    tags: ['wilderness', 'shopping', 'banking', 'runes', 'afk'],
     settingsSchema: SHOPBUYOUT_SETTINGS,
     create: () => new ShopBuyout()
 });
@@ -338,7 +338,7 @@ ScriptRegistry.register({
     name: 'ShopRunner',
     description: 'World shop-run supply loop — cycles shop clusters buying feathers, runes, and arrows/arrowtips, banking between clusters with capped gp withdrawals; skips shops until stock regenerates',
     category: 'Money making',
-    tags: ['shopping', 'banking', 'worldwalker', 'f2p', 'members'],
+    tags: ['shopping', 'banking', 'worldwalker'],
     settingsSchema: SHOPRUNNER_SETTINGS,
     create: () => new ShopRunner()
 });
@@ -348,7 +348,7 @@ ScriptRegistry.register({
     name: 'ClueSolver',
     description: 'Solves the easy clue scroll (or opens the casket) in your pack — banks everything except clue/food/spade at the nearest bank, walks the trail, opens the reward. Idles until you hand it a clue.',
     category: 'Treasure Trails',
-    tags: ['members', 'clues', 'banking', 'utility'],
+    tags: ['clues', 'banking', 'utility'],
     settingsSchema: CLUESOLVER_SETTINGS,
     create: () => new ClueSolver()
 });

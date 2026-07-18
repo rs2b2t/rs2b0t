@@ -1,7 +1,7 @@
 import Tile from '../../api/Tile.js';
 import type { NpcStop, LadderHop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 
 // Tiles/dialogue verbatim from scripts/RuneMysteries.ts (probe-verified;
 // dialogue from the quest .rs2 sources — see that file's header).
@@ -46,7 +46,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const runemysteries: QuestModule = {
-    record: F2P.find(r => r.id === 'runemysteries')!,
+    record: QUESTS.find(r => r.id === 'runemysteries')!,
     // quest-internal deliverables a restart may hold ('notes' is generic but a
     // conservative keep is harmless)
     tools: ['air talisman', 'research package', 'notes'],

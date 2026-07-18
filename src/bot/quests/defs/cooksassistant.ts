@@ -5,7 +5,7 @@ import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 
 // Facts: quest_cook.rs2 (start :2,29,32; all-three hand-in gate :45,:81-84),
 // windmills.rs2 (fill :77-94, operate :96-118, bin :58-75). Tiles: egg/bucket/
@@ -83,7 +83,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const cooksassistant: QuestModule = {
-    record: F2P.find(r => r.id === 'cook')!,
+    record: QUESTS.find(r => r.id === 'cook')!,
     // mid-quest intermediates ('pot' also matches 'pot of flour', 'bucket' also
     // matches 'bucket of milk') — a restart must not bank them
     tools: ['pot', 'grain', 'bucket', 'egg'],

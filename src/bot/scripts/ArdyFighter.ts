@@ -27,7 +27,7 @@ import { dodgeStallOwner, ownerNearStall } from './StallOwner.js';
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
 //   spawns in the market square (trio at z3309 just north of the anchor).
 // - Two Baker's stalls: (2667,3310) and (2655,3311). Loc name "Baker's stall",
-//   op "Steal from" (no hyphen). Thieving 5, members world, 8-tick respawn.
+//   op "Steal from" (no hyphen). Thieving 5, 8-tick respawn.
 //   Stealing is blocked within 10 ticks of combat, and an Ardougne guard with
 //   line of sight inside 5 tiles blocks the attempt and attacks instead —
 //   which is this bot's guard-pull mechanism, not a failure.

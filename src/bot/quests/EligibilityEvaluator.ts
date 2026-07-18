@@ -16,7 +16,7 @@ export function evaluate(
     journalStatus: QuestStatus
 ): QuestEligibility {
     if (journalStatus === 'complete') {
-        return { id: record.id, name: record.name, members: record.members, status: 'DONE', reasons: [] };
+        return { id: record.id, name: record.name, status: 'DONE', reasons: [] };
     }
 
     const reasons: string[] = [];
@@ -35,7 +35,6 @@ export function evaluate(
     return {
         id: record.id,
         name: record.name,
-        members: record.members,
         status: reasons.length === 0 ? 'READY' : 'BLOCKED',
         reasons
     };

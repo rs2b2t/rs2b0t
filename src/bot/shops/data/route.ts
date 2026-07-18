@@ -42,7 +42,7 @@ export const ROUTE: Route = {
             shops: [
                 { shopId: 'archeryshop2', keeperNpc: 'Hickton', stand: { x: 2821, z: 3442, level: 0 }, buys: [{ obj: 'rune_arrowheads' }, { obj: 'adamant_arrowheads' }, { obj: 'mithril_arrowheads' }, { obj: 'steel_arrowheads' }, { obj: 'iron_arrow' }, { obj: 'iron_arrowheads' }, { obj: 'bronze_arrow' }, { obj: 'bronze_arrowheads' }] }
             ],
-            gates: [{ members: true }]
+            gates: []
         },
         {
             id: 'fishingguild',
@@ -50,7 +50,7 @@ export const ROUTE: Route = {
             shops: [
                 { shopId: 'fishingguild', keeperNpc: 'Roachey', stand: { x: 2596, z: 3399, level: 0 }, buys: [{ obj: 'feather' }] }
             ],
-            gates: [{ members: true }, { skill: { name: 'fishing', level: 68 } }]
+            gates: [{ skill: { name: 'fishing', level: 68 } }]
         },
         {
             id: 'rangingguild',
@@ -61,7 +61,7 @@ export const ROUTE: Route = {
                     buys: [{ obj: 'rune_arrow' }, { obj: 'rune_arrowheads' }, { obj: 'adamant_arrow' }, { obj: 'adamant_arrowheads' }, { obj: 'mithril_arrow' }, { obj: 'mithril_arrowheads' }, { obj: 'steel_arrow' }, { obj: 'steel_arrowheads' }, { obj: 'iron_arrow' }, { obj: 'iron_arrowheads' }, { obj: 'bronze_arrow' }, { obj: 'bronze_arrowheads' }]
                 }
             ],
-            gates: [{ members: true }, { skill: { name: 'ranged', level: 40 } }]
+            gates: [{ skill: { name: 'ranged', level: 40 } }]
         }
     ],
     ring: ['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild']

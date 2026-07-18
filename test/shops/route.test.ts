@@ -30,13 +30,13 @@ describe('route data integrity vs generated shopdb', () => {
         checkRoute(ROUTE);
         expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild']);
     });
-    test('members/skill gates sit on the members clusters', () => {
+    test('skill gates sit on the guild clusters', () => {
         const byId = new Map(ROUTE.clusters.map(c => [c.id, c]));
         expect(byId.get('varrock')!.gates).toEqual([]);
         expect(byId.get('portsarim')!.gates).toEqual([]);
-        expect(byId.get('catherby')!.gates).toEqual([{ members: true }]);
-        expect(byId.get('fishingguild')!.gates).toEqual([{ members: true }, { skill: { name: 'fishing', level: 68 } }]);
-        expect(byId.get('rangingguild')!.gates).toEqual([{ members: true }, { skill: { name: 'ranged', level: 40 } }]);
+        expect(byId.get('catherby')!.gates).toEqual([]);
+        expect(byId.get('fishingguild')!.gates).toEqual([{ skill: { name: 'fishing', level: 68 } }]);
+        expect(byId.get('rangingguild')!.gates).toEqual([{ skill: { name: 'ranged', level: 40 } }]);
     });
     test('smoke route is the Aubury-only varrock cluster', () => {
         checkRoute(SMOKE_ROUTE);

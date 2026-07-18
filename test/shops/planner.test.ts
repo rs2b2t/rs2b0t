@@ -23,7 +23,7 @@ const CLUSTER: RouteCluster = {
 };
 
 const CFG: PlannerCfg = { defaultPolicy: { kind: 'buyout' }, haulThresholdPct: 25, maxGpPerLeg: 100_000 };
-const acct = (over: Partial<AccountView> = {}): AccountView => ({ members: true, qp: 0, quests: {}, skills: {}, ...over });
+const acct = (over: Partial<AccountView> = {}): AccountView => ({ qp: 0, quests: {}, skills: {}, ...over });
 
 const ROUTE_FX: Route = { clusters: [CLUSTER], ring: ['varrock'] };
 const rt = (over: Partial<RuntimeState> = {}): RuntimeState => ({
@@ -32,18 +32,17 @@ const rt = (over: Partial<RuntimeState> = {}): RuntimeState => ({
 });
 
 describe('clusterEligible', () => {
-    const gated: RouteCluster = { ...CLUSTER, gates: [{ members: true }, { skill: { name: 'fishing', level: 68 } }, { quest: 'Shilo Village' }, { qp: 32 }] };
+    const gated: RouteCluster = { ...CLUSTER, gates: [{ skill: { name: 'fishing', level: 68 } }, { quest: 'Shilo Village' }, { qp: 32 }] };
     test('all gates must pass', () => {
         expect(clusterEligible(gated, acct({ skills: { fishing: 68 }, quests: { 'Shilo Village': true }, qp: 32 }))).toBe(true);
     });
-    test('any failing gate blocks: f2p world / low skill / missing quest / low qp', () => {
-        expect(clusterEligible(gated, acct({ members: false, skills: { fishing: 68 }, quests: { 'Shilo Village': true }, qp: 32 }))).toBe(false);
+    test('any failing gate blocks: low skill / missing quest / low qp', () => {
         expect(clusterEligible(gated, acct({ skills: { fishing: 67 }, quests: { 'Shilo Village': true }, qp: 32 }))).toBe(false);
         expect(clusterEligible(gated, acct({ skills: { fishing: 68 }, qp: 32 }))).toBe(false);
         expect(clusterEligible(gated, acct({ skills: { fishing: 68 }, quests: { 'Shilo Village': true }, qp: 31 }))).toBe(false);
     });
     test('ungated cluster is always eligible', () => {
-        expect(clusterEligible(CLUSTER, acct({ members: false }))).toBe(true);
+        expect(clusterEligible(CLUSTER, acct({}))).toBe(true);
     });
 });
 
@@ -164,8 +163,8 @@ describe('decide', () => {
         expect(skipped).toEqual([{ clusterId: 'varrock', fractionPct: 0 }]);
     });
     test('ineligible cluster is invisible (no skip entry, no target)', () => {
-        const gated: Route = { clusters: [{ ...CLUSTER, gates: [{ members: true }] }], ring: ['varrock'] };
-        const { decision, skipped } = decide(gated, DB, {}, 0, CFG, acct({ members: false }), {}, rt());
+        const gated: Route = { clusters: [{ ...CLUSTER, gates: [{ skill: { name: 'fishing', level: 68 } }] }], ring: ['varrock'] };
+        const { decision, skipped } = decide(gated, DB, {}, 0, CFG, acct({}), {}, rt());
         expect(decision.kind).toBe('idle');
         expect(skipped).toEqual([]);
     });
@@ -199,8 +198,8 @@ describe('earliestQualifyMs', () => {
         expect(wake).toBeLessThanOrEqual(exact + 60_000);
     });
     test('nothing ever qualifies → 30min re-check fallback', () => {
-        const gated: Route = { clusters: [{ ...CLUSTER, gates: [{ members: true }] }], ring: ['varrock'] };
-        expect(earliestQualifyMs(gated, DB, {}, 0, CFG, acct({ members: false }), {})).toBe(30 * 60_000);
+        const gated: Route = { clusters: [{ ...CLUSTER, gates: [{ skill: { name: 'fishing', level: 68 } }] }], ring: ['varrock'] };
+        expect(earliestQualifyMs(gated, DB, {}, 0, CFG, acct({}), {})).toBe(30 * 60_000);
     });
 });
 
@@ -209,7 +208,7 @@ describe('filterRouteBuys', () => {
         ring: ['a', 'b'],
         clusters: [
             {
-                id: 'a', label: 'A', members: false, gates: [],
+                id: 'a', label: 'A', gates: [],
                 bank: { tile: { x: 0, z: 0, level: 0 }, boothName: 'Bank booth', boothOp: 'Use-quickly' },
                 shops: [
                     { shopId: 'runeshop', keeperNpc: 'Aubury', stand: { x: 1, z: 1, level: 0 }, buys: [{ obj: 'mindrune' }, { obj: 'deathrune' }] },

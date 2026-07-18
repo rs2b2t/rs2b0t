@@ -6,7 +6,7 @@ import { Npcs } from '../../api/queries/Npcs.js';
 import Tile from '../../api/Tile.js';
 import { talkThrough, walkWithHops, type NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 import { WIZARD_HOPS } from './runemysteries.js';
 
 // Facts: father_aereck.rs2, father_urhney.rs2, restless_ghost.rs2,
@@ -137,7 +137,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const restlessghost: QuestModule = {
-    record: F2P.find(r => r.id === 'priest')!,
+    record: QUESTS.find(r => r.id === 'priest')!,
     // quest-internal items a restart may hold in the PACK (worn amulet is safe
     // either way — deposits never touch equipment)
     tools: ['ghostspeak amulet', 'skull'],

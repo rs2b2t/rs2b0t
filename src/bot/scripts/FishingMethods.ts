@@ -24,13 +24,13 @@ export interface FishingMethod {
      *  (big-net junk, caskets, whatever the run accumulated). */
     gear: string[];
     /** Restrict to these "Fishing spot" npc ids. Needed when the op PAIR is
-     *  ambiguous: the members Net/Harpoon spot (sharks) and the regular
+     *  ambiguous: the Net/Harpoon spot (sharks) and the regular
      *  Net/Harpoon spot (tuna/swordfish via Net=mackerel) present identical
      *  ops — only the npc id tells them apart. Omit to match any spot. */
     spotIds?: number[];
 }
 
-/** "Fishing spot" npc ids of the members Net/Harpoon spots (category
+/** "Fishing spot" npc ids of the Net/Harpoon spots (category
  *  memberfish, pack/npc.pack) — Harpoon on THESE is sharks (76 Fishing);
  *  the Fishing Guild cluster is 313. */
 export const SHARK_SPOT_IDS: number[] = [313, 322, 334, 1191, 1333];
@@ -50,7 +50,7 @@ export const FISHING_METHODS: FishingMethod[] = [
     { name: 'Big net — mackerel/cod/bass', op: 'Net', pair: 'Harpoon', gear: ['Big fishing net'] }, // Net/Harpoon spot: Mackerel (16), Cod (23), Bass (46)
     { name: 'Lobster cage — lobster', op: 'Cage', pair: 'Harpoon', gear: ['Lobster pot'] }, // Cage/Harpoon spot: Lobster (40)
     { name: 'Harpoon — tuna/swordfish', op: 'Harpoon', gear: ['Harpoon'] }, // Cage/Harpoon OR Net/Harpoon spot: Tuna (35), Swordfish (50)
-    { name: 'Harpoon — sharks', op: 'Harpoon', pair: 'Net', gear: ['Harpoon'], spotIds: SHARK_SPOT_IDS } // members Net/Harpoon spot (Fishing Guild): Shark (76)
+    { name: 'Harpoon — sharks', op: 'Harpoon', pair: 'Net', gear: ['Harpoon'], spotIds: SHARK_SPOT_IDS } // Net/Harpoon spot (Fishing Guild): Shark (76)
 ];
 
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);

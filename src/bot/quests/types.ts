@@ -26,7 +26,6 @@ export interface QuestItem {
 export interface QuestRecord {
     id: string; // internal handle, matches journal component (e.g. 'cook')
     name: string; // display name; MUST match Quests.status() key
-    members: boolean;
     questPoints: number; // QP awarded on completion
     requirements: QuestRequirements;
     items: QuestItem[];
@@ -47,7 +46,6 @@ export type QuestStatusV = 'DONE' | 'READY' | 'BLOCKED';
 export interface QuestEligibility {
     id: string;
     name: string;
-    members: boolean;
     status: QuestStatusV;
     reasons: string[]; // empty for DONE/READY; one human string per unmet gate for BLOCKED
 }

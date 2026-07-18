@@ -11,7 +11,7 @@
 // rune-mysteries-test.ts covers.
 //
 // Quest ids -> journal display names come straight from the bot's own quest
-// table (F2P in src/bot/quests/data/f2p.ts, the same source AIOQuester's schema
+// table (QUESTS in src/bot/quests/data/quests.ts, the same source AIOQuester's schema
 // draws its option ids from), so the poll asks Quests.status() by the exact name
 // the journal uses. Precedent for a tool importing a bot DATA module (not the
 // browser-only runtime): tools/fisher-banking-test.ts imports FISHING_LOCATIONS.
@@ -39,7 +39,7 @@
 
 import { chromium } from 'playwright-core';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
-import { F2P } from '../src/bot/quests/data/f2p.js';
+import { QUESTS } from '../src/bot/quests/data/quests.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const username = process.argv[3] || `aq${Date.now().toString(36).slice(-7)}`;
@@ -54,18 +54,18 @@ const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 
-// id -> journal display name, straight from the bot's F2P quest table so the
+// id -> journal display name, straight from the bot's QUESTS quest table so the
 // poll matches Quests.status() on the exact string the journal renders.
-const NAME_BY_ID = new Map(F2P.map(q => [q.id, q.name]));
+const NAME_BY_ID = new Map(QUESTS.map(q => [q.id, q.name]));
 
 // The queue we actually watch: each picked id resolved to its journal name.
-// Unknown ids (not in F2P) fall back to the raw id so the run still starts and
+// Unknown ids (not in QUESTS) fall back to the raw id so the run still starts and
 // logs; they can never read 'complete', so the run will FAIL with a clear dump.
 const picked = questsCsv.split(',').map(s => s.trim()).filter(s => s.length > 0);
 if (picked.length === 0) { fail('no quest ids given'); }
 const queue = picked.map(id => {
     const name = NAME_BY_ID.get(id);
-    if (!name) { console.log(`WARN: quest id '${id}' is not in F2P — polling by id, it will not complete`); }
+    if (!name) { console.log(`WARN: quest id '${id}' is not in QUESTS — polling by id, it will not complete`); }
     return { id, name: name ?? id };
 });
 

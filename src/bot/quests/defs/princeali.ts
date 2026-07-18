@@ -26,7 +26,7 @@ import { gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 import { gatherBalls } from './sheepshearer.js';
 
 // Prince Ali Rescue — the fleet's most mechanical def. Content facts from
@@ -182,7 +182,7 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
 }
 
 /** Water for the soft-clay (row 5) and paste (row 8) chains: buy Jug(s) of water
- *  from the Shantay Pass shop (Jug of water, 1gp, F2P) — simpler and more reliable
+ *  from the Shantay Pass shop (Jug of water, 1gp) — simpler and more reliable
  *  than grabbing a Bucket and filling it at the Rimmington well. */
 function jugWater(snap: QuestSnapshot, qty: number): QuestStep {
     return buyOrWait(snap, { kind: 'buy', item: 'Jug of water', qty, shop: SHANTAY_SHOP, estGp: 5 * qty });
@@ -618,7 +618,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const princeali: QuestModule = {
-    record: F2P.find(r => r.id === 'prince')!,
+    record: QUESTS.find(r => r.id === 'prince')!,
     // Every pipeline intermediate the deposit must keep (broad on purpose;
     // deposit only bites on spillover from OTHER quests). 'wig' covers both wigs.
     // 'pickaxe' is load-bearing: the soft-clay chain MINES clay, so the

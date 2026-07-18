@@ -3,7 +3,7 @@ import { nextQuest, queueRows } from './queue.js';
 import type { QuestEligibility } from '../types.js';
 
 const e = (id: string, status: QuestEligibility['status'], reasons: string[] = []): [string, QuestEligibility] =>
-    [id, { id, name: id.toUpperCase(), members: false, status, reasons }];
+    [id, { id, name: id.toUpperCase(), status, reasons }];
 
 const ORDER = ['runemysteries', 'doric', 'sheep', 'priest'];
 

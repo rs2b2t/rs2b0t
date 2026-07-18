@@ -8,7 +8,7 @@ import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 
 // Facts: fred_the_farmer.rs2 (start :10-23,:51-55; hand-in loop :68-89),
 // shear_sheep.rs2 (use-Shears-on-Sheep, 20% escape), spinning.rs2:1-34
@@ -120,7 +120,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const sheepshearer: QuestModule = {
-    record: F2P.find(r => r.id === 'sheep')!,
+    record: QUESTS.find(r => r.id === 'sheep')!,
     // shears = the gather tool; 'wool' also matches 'ball of wool' (record item)
     // so a mid-quest restart never banks half-gathered fleece
     tools: ['shears', 'wool'],

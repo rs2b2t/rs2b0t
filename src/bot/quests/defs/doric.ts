@@ -1,7 +1,7 @@
 import Tile from '../../api/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 
 // Facts: quest_doric.rs2 (start :34-62, hand-in :68-89); ores.obj:13,27,59.
 // Doric spawn npc 284 @ m46_53.jm2:5943 -> (2952,3451,0), indoors (door on hut;
@@ -62,7 +62,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const doric: QuestModule = {
-    record: F2P.find(r => r.id === 'doric')!,
+    record: QUESTS.find(r => r.id === 'doric')!,
     // any pickaxe tier is the mining tool the gather fallback checks for
     tools: ['pickaxe'],
     gather: {

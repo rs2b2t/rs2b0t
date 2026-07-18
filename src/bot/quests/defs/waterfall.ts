@@ -10,7 +10,7 @@ import { isUnderground, talkThrough, walkWithHops, type LadderHop, type NpcStop 
 import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { MEMBERS_C } from '../data/members-c.js';
+import { QUESTS } from '../data/quests.js';
 import { QuestFood } from '../food.js';
 
 // Waterfall Quest — content facts from
@@ -50,7 +50,7 @@ const RUNES = ['Air rune', 'Earth rune', 'Water rune'];
 function foodName(): string | null { return QuestFood.name; }
 
 // Runes/food are withdrawn only AFTER the tomb (they cannot pass the tomb gate —
-// content §Gotchas), so they are def-managed, not in the members-c record. Built
+// content §Gotchas), so they are def-managed, not in the quest record. Built
 // dynamically: the food line is included only when a food is configured.
 function runeWithdraw(): { name: string; qty: number }[] {
     const f = foodName();
@@ -83,7 +83,7 @@ const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 // test). gatherRope below is that gather fn. Live-verified Aemad's stand + Trade op;
 // a full death->recovery->complete run was not (re-run is ~25 min).
 const ARDOUGNE_GENERAL = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
-// Betty's Magic Emporium (Port Sarim, F2P: air/earth/water runes @ ~4gp) — where
+// Betty's Magic Emporium (Port Sarim: air/earth/water runes @ ~4gp) — where
 // the def BUYS the 6/6/6 runes when the Ardougne bank is short of them, rather
 // than looping the withdraw forever. npc.pack betty=583, spawn m47_50 -> (3012,3259).
 const BETTY_SHOP = { npc: 'Betty', anchor: new Tile(3012, 3259, 0) };
@@ -802,7 +802,7 @@ function gatherRope(snap: QuestSnapshot, need: number): QuestStep {
 }
 
 export const waterfall: QuestModule = {
-    record: MEMBERS_C.find(r => r.id === 'waterfall')!,
+    record: QUESTS.find(r => r.id === 'waterfall')!,
     // Carry food for the dungeon/combat legs — the engine withdraws this many of
     // the AIOQuester's configured food item at provisioning time and the eat hook
     // consumes it when HP dips (the tomb/Golrie legs run past aggressive spawns).

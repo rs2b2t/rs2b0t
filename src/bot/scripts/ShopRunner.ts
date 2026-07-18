@@ -34,7 +34,6 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
     haulThreshold: { type: 'number', default: 25, min: 1, max: 100, label: 'Min haul % to visit', help: 'a cluster is skipped until its predicted haul reaches this fraction of a full haul' },
     maxGpPerLeg: { type: 'number', default: 100_000, min: 1000, label: 'Max gp per withdrawal', help: 'hard cap on any single coin withdrawal; plans are trimmed to fit' },
     stopFloorGp: { type: 'number', default: 5000, min: 0, label: 'Stop below bank gp', help: 'clean stop when the bank runs dry' },
-    membersWorld: { type: 'boolean', default: true, label: 'Members world', help: 'gates members clusters; a wrong value degrades to logged skips' },
     route: { type: 'string', default: 'live', options: ['live', 'smoke-varrock'], label: 'Route', help: 'smoke-varrock is the Aubury-only test route' }
 };
 
@@ -71,7 +70,6 @@ export class ShopRunner extends TaskBot {
     route: Route = ROUTE;
     cfg: PlannerCfg = { defaultPolicy: { kind: 'buyout' }, haulThresholdPct: 25, maxGpPerLeg: 100_000 };
     stopFloorGp = 5000;
-    membersWorld = true;
 
     seen: SeenMap = {};
     cooldowns: Record<string, number> = {};
@@ -105,7 +103,6 @@ export class ShopRunner extends TaskBot {
             maxGpPerLeg: this.settings.num('maxGpPerLeg', 100_000)
         };
         this.stopFloorGp = this.settings.num('stopFloorGp', 5000);
-        this.membersWorld = this.settings.bool('membersWorld', true);
         this.route = this.settings.str('route', 'live') === 'smoke-varrock' ? SMOKE_ROUTE : ROUTE;
 
         const chosen = new Set(this.settings.list('buyItems', BUYABLE_NAMES).map(s => s.toLowerCase()));
@@ -183,7 +180,7 @@ export class ShopRunner extends TaskBot {
                 }
             }
         }
-        return { members: this.membersWorld, qp: Quests.points(), quests, skills };
+        return { qp: Quests.points(), quests, skills };
     }
 
     stateKey(): string | null {

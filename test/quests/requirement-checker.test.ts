@@ -4,7 +4,7 @@ import { checkRequirements } from '#/bot/quests/RequirementChecker.js';
 import type { QuestRecord, PlayerState } from '#/bot/quests/types.js';
 
 function rec(requirements: QuestRecord['requirements']): QuestRecord {
-    return { id: 't', name: 'Test', members: false, questPoints: 1, requirements, items: [] };
+    return { id: 't', name: 'Test', questPoints: 1, requirements, items: [] };
 }
 function player(p: Partial<PlayerState> = {}): PlayerState {
     return {

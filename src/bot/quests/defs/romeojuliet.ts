@@ -5,7 +5,7 @@ import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { F2P } from '../data/f2p.js';
+import { QUESTS } from '../data/quests.js';
 
 // Facts: romeo.rs2 / juliet.rs2 / father_lawrence.rs2 / apothecary.rs2. NPC
 // anchors are map-derived (varrock.npc + m*.jm2 spawns): Romeo (3211,3425,0),
@@ -66,7 +66,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const romeojuliet: QuestModule = {
-    record: F2P.find(r => r.id === 'romeojuliet')!,
+    record: QUESTS.find(r => r.id === 'romeojuliet')!,
     // 'cadava' keeps both the berries (record item) and the potion; 'message'
     // is Juliet's letter
     tools: ['cadava', 'message'],

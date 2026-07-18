@@ -7,7 +7,6 @@ function rec(over: Partial<QuestRecord> = {}): QuestRecord {
     return {
         id: over.id ?? 't',
         name: over.name ?? 'Test Quest',
-        members: over.members ?? false,
         questPoints: over.questPoints ?? 1,
         requirements: over.requirements ?? {},
         items: over.items ?? []

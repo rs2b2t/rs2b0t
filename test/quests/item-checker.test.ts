@@ -4,7 +4,7 @@ import { checkItems } from '#/bot/quests/ItemChecker.js';
 import type { QuestRecord, BankInventorySnapshot } from '#/bot/quests/types.js';
 
 function rec(items: QuestRecord['items']): QuestRecord {
-    return { id: 't', name: 'T', members: false, questPoints: 1, requirements: {}, items };
+    return { id: 't', name: 'T', questPoints: 1, requirements: {}, items };
 }
 function snap(entries: [string, number][] = []): BankInventorySnapshot {
     return { counts: new Map(entries) };

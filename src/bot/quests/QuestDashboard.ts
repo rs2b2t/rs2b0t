@@ -105,12 +105,8 @@ export default class QuestDashboard extends LoopingBot {
         this.log(`Quests — READY ${ready} | BLOCKED ${blocked} | DONE ${done}`);
         const readyList = this.results.filter(r => r.status === 'READY');
         for (const r of readyList) {
-            this.log(`  READY: ${r.name}${this.tag(r)}`);
+            this.log(`  READY: ${r.name}`);
         }
-    }
-
-    private tag(r: QuestEligibility): string {
-        return r.members ? ' [M]' : '';
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -126,7 +122,7 @@ export default class QuestDashboard extends LoopingBot {
                 p.text('no quests ready', '#8a919a');
             }
             for (const r of readyList) {
-                p.text(`READY  ${r.name}${this.tag(r)}`);
+                p.text(`READY  ${r.name}`);
             }
         }
 

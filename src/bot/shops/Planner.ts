@@ -34,7 +34,6 @@ export interface ClusterPlan {
 
 export function clusterEligible(cluster: RouteCluster, acct: AccountView): boolean {
     return cluster.gates.every(g => {
-        if (g.members && !acct.members) { return false; }
         if (g.skill && (acct.skills[g.skill.name] ?? 0) < g.skill.level) { return false; }
         if (g.quest && !acct.quests[g.quest]) { return false; }
         if (g.qp !== undefined && acct.qp < g.qp) { return false; }
@@ -46,7 +45,6 @@ export function cheapestUnmetGate(route: Route, acct: AccountView): string {
     const unmet: string[] = [];
     for (const c of route.clusters) {
         for (const g of c.gates) {
-            if (g.members && !acct.members) { unmet.push('members world'); }
             if (g.skill && (acct.skills[g.skill.name] ?? 0) < g.skill.level) { unmet.push(`${g.skill.name} ${g.skill.level}`); }
             if (g.quest && !acct.quests[g.quest]) { unmet.push(`quest ${g.quest}`); }
             if (g.qp !== undefined && acct.qp < g.qp) { unmet.push(`${g.qp} quest points`); }
