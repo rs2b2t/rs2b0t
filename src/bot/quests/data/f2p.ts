@@ -144,8 +144,10 @@ export const F2P: QuestRecord[] = [
         // Ashes, Wig, BLOND wig, Paste, Key print, Bronze key are made mid-quest by
         // Ned/Aggie/Osman/Keli, and the blond wig shares the plain wig's display
         // name so provisioning must NEVER touch it. Clay + Bucket are also left to
-        // the def (their pack-presence drives decide()'s Leela restart-probe);
-        // Rope + Beer stay jailbreak-managed. quest.constant:110 QP.
+        // the def (their pack-presence drives decide()'s Leela restart-probe).
+        // Rope is bank-first then bought from Aemad's (Ardougne adventurershop) —
+        // a plain shop Trade, not Ned's dialogue. Beer stays jailbreak-managed
+        // (drunk on Joe, re-bought per pass). quest.constant:110 QP.
         id: 'prince',
         name: 'Prince Ali Rescue',
         members: false,
@@ -159,7 +161,8 @@ export const F2P: QuestRecord[] = [
             { name: 'Onion', qty: 2, kind: 'acquirable' },
             { name: 'Ball of wool', qty: 3, kind: 'acquirable' },
             { name: 'Bronze bar', qty: 1, kind: 'acquirable' },
-            { name: 'Pink skirt', qty: 1, kind: 'acquirable' }
+            { name: 'Pink skirt', qty: 1, kind: 'acquirable' },
+            { name: 'Rope', qty: 1, kind: 'acquirable' }
         ]
     },
     {

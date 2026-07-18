@@ -54,7 +54,10 @@ const OSMAN: NpcStop = { npc: 'Osman', anchor: new Tile(3286, 3180, 0), leash: 6
 // the fallback decline.
 const LEELA: NpcStop = { npc: 'Leela', anchor: new Tile(3113, 3263, 0), leash: 6, prefer: ['I hoped to get him drunk.'] };
 const NED_WIG: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Ned, could you make other things from wool?', 'How about some sort of wig?', 'I have that now. Please, make me a wig.'] };
-const NED_ROPE: NpcStop = { npc: 'Ned', anchor: new Tile(3100, 3258, 0), leash: 6, prefer: ['Yes, I would like some rope.', 'Okay, please sell me some rope.'] };
+// Aemad's Adventuring Supplies (Ardougne East market, adventurershop; keepers
+// Aemad/Kortan, op3 Trade, stocks Rope 20/100 @ ~18gp) — Rope is bought HERE with
+// a plain shop Trade rather than Ned's multi-line "sell me some rope" dialogue.
+const ADVENTURE_SHOP = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
 const AGGIE_PASTE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leash: 6, prefer: ['Could you think of a way to make skin paste?', 'Yes please. Mix me some skin paste.'] };
 const AGGIE_DYE: NpcStop = { npc: 'Aggie', anchor: new Tile(3086, 3259, 0), leash: 6, prefer: ['Can you make dyes for me please?', 'What do you need to make yellow dye?', 'Okay, make me some yellow dye please.'] };
 // prefer = the MENU OPTIONS along the flattery→plan→key path (lady_keli.rs2
@@ -435,12 +438,11 @@ async function jailbreak(log: (m: string) => void): Promise<boolean> {
             tied = !Npcs.query().name('Lady Keli').within(12).nearest();
         }
         if (!tied) {
-            // 2. Tie didn't take (guard not drunk). Ensure a rope (Ned, 15gp/pass).
+            // 2. Tie didn't take (guard not drunk). Rope is provisioned up front;
+            //    this only fires if it was consumed/lost — re-buy from Aemad's
+            //    (Ardougne, plain shop Trade), not Ned's dialogue.
             if (Inventory.count('Rope') < 1) {
-                if (!(await gotoNpc(NED_ROPE, [], log))) {
-                    return false;
-                }
-                await talkThrough('Ned', NED_ROPE.prefer, log);
+                await executeStep({ kind: 'buy', item: 'Rope', qty: 1, shop: ADVENTURE_SHOP, estGp: 40 }, [], log);
                 return false;
             }
             // 3. Accumulate 3 beers (bartender, 1/pass) then drink them on Joe.
@@ -637,7 +639,8 @@ export const princeali: QuestModule = {
         'onion': () => ({ kind: 'pickLoc', loc: 'Onion', op: 'Pick', item: 'Onion', anchor: ONION_PATCH }),
         'ball of wool': (s, n) => gatherBalls(s, n),
         'bronze bar': s => buyOrWait(s, { kind: 'buy', item: 'Bronze bar', qty: 1, shop: SHANTAY_SHOP, estGp: 60 }),
-        'pink skirt': s => buyOrWait(s, { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 })
+        'pink skirt': s => buyOrWait(s, { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 }),
+        'rope': s => buyOrWait(s, { kind: 'buy', item: 'Rope', qty: 1, shop: ADVENTURE_SHOP, estGp: 40 })
     },
     decide
 };

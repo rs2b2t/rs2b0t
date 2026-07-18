@@ -29,7 +29,7 @@ describe('princeali provisioning — raw items declared + gatherable', () => {
     });
     test('raw declarations are leaves only — no created/stage-gated or Leela-probe items', () => {
         const names = princeali.record.items.map(i => i.name.toLowerCase());
-        for (const created of ['wig', 'blond wig', 'paste', 'soft clay', 'yellow dye', 'ashes', 'key print', 'bronze key', 'clay', 'bucket', 'rope', 'beer']) {
+        for (const created of ['wig', 'blond wig', 'paste', 'soft clay', 'yellow dye', 'ashes', 'key print', 'bronze key', 'clay', 'bucket', 'beer']) {
             expect(names).not.toContain(created);
         }
     });
