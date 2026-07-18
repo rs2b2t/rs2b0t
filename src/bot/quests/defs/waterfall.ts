@@ -83,6 +83,10 @@ const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 // test). gatherRope below is that gather fn. Live-verified Aemad's stand + Trade op;
 // a full death->recovery->complete run was not (re-run is ~25 min).
 const ARDOUGNE_GENERAL = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
+// Betty's Magic Emporium (Port Sarim, F2P: air/earth/water runes @ ~4gp) — where
+// the def BUYS the 6/6/6 runes when the Ardougne bank is short of them, rather
+// than looping the withdraw forever. npc.pack betty=583, spawn m47_50 -> (3012,3259).
+const BETTY_SHOP = { npc: 'Betty', anchor: new Tile(3012, 3259, 0) };
 
 // --- NPC stops (content §NPCs; map-derived anchors). Almera starts the quest
 //     (choice "How can I help?"); Golrie hands the pebble (scripted chatplayer/
@@ -151,8 +155,23 @@ const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.
 /** Live count-short check for the runes/food withdraw (position-guarded to the
  *  surface inside fallsAndDungeon, so it never re-fires mid-dungeon). */
 function runesShortLive(): boolean {
-    const f = foodName();
-    return RUNES.some(r => Inventory.count(r) < 6) || (f !== null && Inventory.count(f) < 1);
+    // RUNES only — food is best-effort (the eat hook), so it must NOT gate the
+    // rune withdraw/buy, or a food-less bank would loop it forever.
+    return RUNES.some(r => Inventory.count(r) < 6);
+}
+
+/** Get the 6/6/6 air/earth/water runes for the finale: withdraw what the Ardougne
+ *  bank holds (+ food, best-effort), then BUY any shortfall from Betty's (Port
+ *  Sarim) so a rune-short bank doesn't loop the withdraw. */
+async function ensureRunes(log: (m: string) => void): Promise<boolean> {
+    await executeStep({ kind: 'withdraw', items: runeWithdraw(), bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log);
+    for (const rune of RUNES) {
+        const need = 6 - Inventory.count(rune);
+        if (need > 0) {
+            await executeStep({ kind: 'buy', item: rune, qty: need, shop: BETTY_SHOP, estGp: need * 10 }, WATERFALL_HOPS, log);
+        }
+    }
+    return RUNES.every(r => Inventory.count(r) >= 6);
 }
 
 /** Live amulet check — held in the pack OR worn (it has an iop2 Wear). Used to
@@ -481,7 +500,7 @@ async function fallsAndDungeon(log: (m: string) => void): Promise<boolean> {
         return tombLeg(log);
     }
     if (runesShortLive()) {
-        return executeStep({ kind: 'withdraw', items: runeWithdraw(), bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log);
+        return ensureRunes(log);
     }
     return fallsLeg(log);
 }
