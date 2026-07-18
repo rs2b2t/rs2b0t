@@ -114,7 +114,17 @@ export const Traversal = {
 
             if (action.kind === 'baked') {
                 await WalkExecutor.walkTo(dest, { radius, timeoutMs: bakedTimeout, log, ...(action.bigBudget ? { maxExpansions: maxBudget } : {}) });
-                lastOutcome = WalkExecutor.lastOutcome;
+                const outcome = WalkExecutor.lastOutcome;
+                if (outcome === 'blocked') {
+                    // The baked walker got adjacent to a destination blocked LIVE (an
+                    // occupied stall stand / booth). The scene walk can't beat a live
+                    // block and repathing loops, so accept adjacency as arrival here
+                    // (callers interact from range) rather than churning escalation
+                    // passes to the bounded give-up — the short-path "0 clicks stuck"
+                    // loop (ArdyThiever stall stand, Leela, the waterfall bookcase).
+                    return true;
+                }
+                lastOutcome = outcome;
             } else if (action.kind === 'scene') {
                 await DirectNavigator.walkTo(dest, sceneRadius, SCENE_TIMEOUT_MS);
                 lastOutcome = EventSignal.pending() ? 'interrupted' : 'failed'; // progress is read from the tile next iteration

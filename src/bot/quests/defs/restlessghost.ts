@@ -38,6 +38,51 @@ async function ensureCoffinOpen(log: (m: string) => void): Promise<void> {
     }
 }
 
+/** Take the altar skull, waiting out any concurrent quester rather than bailing.
+ *
+ *  The skull is a SINGLE SHARED world spawn — obj 553 `ghostskull` map-placed at
+ *  m48_149.jm2 with count 1 and no custom respawnrate, so the engine default
+ *  (`ObjType.respawnrate = 100` = ~60s) applies. When a second bot runs the quest
+ *  at the same time, the first bot's Take despawns the skull worldwide; a missing
+ *  skull therefore means "wait ~60s for the respawn", NOT "give up". Returning
+ *  false here would re-enter `ghostAndSkull` from the top and re-walk the whole
+ *  coffin+ghost trip, which reads as the bot abandoning the step — so we must not
+ *  leave the altar without the skull in the pack.
+ *
+ *  Standing here is safe: the skull_skeleton retaliates ONLY against the player
+ *  who took the skull (`~npc_retaliate` sets `%npc_aggressive_player = uid`,
+ *  npc_combat.rs2:357-360) and carries no aggression param, so a bot that has not
+ *  taken the skull is never attacked while it waits. */
+async function grabSkull(log: (m: string) => void): Promise<boolean> {
+    // Each cycle = one grab attempt + at most one ~60s respawn wait. A lone
+    // quester succeeds on cycle 0; with N concurrent questers a bot may lose the
+    // respawn race up to N-1 times, so the bound (10) comfortably covers realistic
+    // multibox. The cap only guards a truly absent spawn — then the outer loop
+    // re-enters (re-walking the trip) as a last resort, and the no-progress
+    // watchdog is the ultimate backstop.
+    for (let cycle = 0; cycle < 10; cycle++) {
+        const skull = GroundItems.query().name(SKULL).within(10).nearest();
+        if (skull) {
+            await skull.interact('Take');
+            // Skeleton spawns the same tick — do NOT fight; success = skull in the
+            // pack, and the next decide() walks us straight out. Confirm window
+            // matches the original single-grab path so a real pickup never gets
+            // mistaken for a lost race.
+            if (await Execution.delayUntil(() => Inventory.contains(SKULL), 8000)) {
+                return true;
+            }
+            log('lost the skull to another quester — waiting for it to respawn');
+        } else {
+            log('altar skull already taken — waiting for the shared spawn to respawn');
+        }
+        // Poll for the shared spawn to reappear (~60s respawn + margin); resolves
+        // early the instant it is back on the ground.
+        await Execution.delayUntil(() => !!GroundItems.query().name(SKULL).within(10).nearest(), 70000);
+    }
+    log('altar skull never returned — re-entering to re-check the ghost trip');
+    return false;
+}
+
 /** Graveyard talk then basement grab, idempotent: re-talking a stage-3+ ghost
  *  is a harmless status line; a stage-gated skull grab ("looks scary") gains
  *  nothing and the next pass re-talks. Two passes worst case. */
@@ -56,17 +101,7 @@ async function ghostAndSkull(log: (m: string) => void): Promise<boolean> {
     if (!(await walkWithHops(SKULL_TILE, 2, WIZARD_HOPS, log))) {
         return false;
     }
-    const skull = GroundItems.query().name(SKULL).within(10).nearest();
-    if (!skull) {
-        log('no Skull ground item in the altar room');
-        return false;
-    }
-    if (!(await skull.interact('Take'))) {
-        return false;
-    }
-    // skeleton spawns the same tick (quest_priest.rs2:74-77) — do NOT fight;
-    // success = skull in pack, and the next decide() walks us straight out.
-    return Execution.delayUntil(() => Inventory.contains(SKULL), 8000);
+    return grabSkull(log);
 }
 
 /** Skull onto the OPEN coffin (shut coffin refuses — quest_priest.rs2:46-51). */

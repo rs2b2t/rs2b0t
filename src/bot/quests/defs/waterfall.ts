@@ -1,4 +1,3 @@
-import { actions } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
@@ -166,12 +165,12 @@ async function readBook(log: (m: string) => void): Promise<boolean> {
     }
     await book.interact('Read');
     await Execution.delayTicks(3);
-    // The Read (opheld1) sets stage 3 immediately (baxtorian_book.rs2:6-7), but it
-    // also opens the book interface — a MAIN modal that BLOCKS the subsequent walk to
-    // the TGV dungeon. Close it, or the defensive re-read livelocks against the
-    // engine's per-loop modal-dismiss (live 2026-07-17: stuck at the bookcase,
-    // "closing a leftover main modal" every pass, never descending).
-    actions.closeModal();
+    // The Read (opheld1) sets stage 3 immediately (baxtorian_book.rs2:6-7). It also
+    // opens the book interface — a MAIN modal with NO close button, so closeModal()
+    // (a CLOSE_BUTTON click) can't dismiss it; only a MOVEMENT packet does. The very
+    // next leg (pebbleLeg's walk to the golrie crate) sends that movement, which
+    // closes it — and the engine's per-loop dismiss now falls through on a
+    // buttonless modal instead of livelocking on it (QuestEngine, 2026-07-17).
     await Execution.delayTicks(1);
     return true;
 }

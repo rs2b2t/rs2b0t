@@ -18,7 +18,7 @@ import { Sustain } from '../api/Sustain.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
-import { specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing } from './data/specialCrossings.js';
+import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing } from './data/specialCrossings.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
@@ -89,7 +89,7 @@ interface PathStep extends WorldTile {
     transport?: TransportInfo;
 }
 
-type FollowResult = 'arrived' | 'closest' | 'repath' | 'failed' | 'interrupted';
+type FollowResult = 'arrived' | 'closest' | 'blocked' | 'repath' | 'failed' | 'interrupted';
 
 /**
  * A shut door/gate we can walk through: its NAME reads as a door/gate AND it
@@ -134,7 +134,7 @@ class WalkExecutorImpl {
 
     /** How the last walkTo ended — 'interrupted' means a random event took
      *  over and the caller should retry once the runtime clears it. */
-    lastOutcome: 'arrived' | 'closest' | 'budget' | 'interrupted' | 'failed' | null = null;
+    lastOutcome: 'arrived' | 'closest' | 'blocked' | 'budget' | 'interrupted' | 'failed' | null = null;
 
     /** Crossings (doors AND level-change staircases/ladders) that failed during
      *  THIS walkTo — excluded on repath. */
@@ -152,6 +152,18 @@ class WalkExecutorImpl {
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.avoidDoors = [];
+        // Pre-avoid any special crossing we currently CAN'T satisfy (e.g. the Al
+        // Kharid 10gp toll gate while broke) so A* routes AROUND it on the FIRST
+        // path — instead of walking up to the gate, failing the toll, adding it to
+        // avoidDoors, and repathing (the gate back-and-forth). When the
+        // requirement IS met the gate stays in the graph and we cross it normally
+        // (far cheaper than the detour). If avoiding it leaves no route, walkTo
+        // fails cleanly rather than oscillating.
+        for (const sc of SPECIAL_CROSSINGS) {
+            if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
+                this.avoidDoors.push({ x: sc.x, z: sc.z });
+            }
+        }
 
         try {
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
@@ -207,6 +219,13 @@ class WalkExecutorImpl {
                     // on the nearest reachable tile but short of dest — true boolean
                     // (as close as the baked graph reaches), honest 'closest' outcome.
                     this.lastOutcome = 'closest';
+                    return true;
+                }
+                if (result === 'blocked') {
+                    // adjacent to a destination blocked LIVE (occupied stall/booth) —
+                    // as close as physically reachable; true, like 'closest', but the
+                    // distinct outcome tells walkResilient the scene walk won't help.
+                    this.lastOutcome = 'blocked';
                     return true;
                 }
                 if (result === 'failed') {
@@ -393,6 +412,21 @@ class WalkExecutorImpl {
                         clickIdx = -1;
                         lastTile = null;
                         continue;
+                    }
+                    // Stalled without ever advancing (clicks===0) and no door to
+                    // open: if we're adjacent to the path's terminal, that tile is
+                    // blocked LIVE — walkable in the baked pack but occupied (a
+                    // market-stall stand, a booth, a parked NPC). We are as close as
+                    // the live scene allows, so report 'blocked' NOW (walkResilient
+                    // treats it as arrival — the scene walk can't beat a live block)
+                    // instead of repathing the same short path 5× and timing out
+                    // (the "0 clicks stuck" loop). Repathing can't help: the baked
+                    // collision it plans against is unchanged. Distinct from 'closest'
+                    // (a snapped unwalkable terminal), which the scene walk CAN beat.
+                    const end = tiles[tiles.length - 1];
+                    if (clicks === 0 && me.level === end.level && chebyshev(me, end) <= 1) {
+                        log(`(${end.x},${end.z}) blocked live — as close as reachable`);
+                        return 'blocked';
                     }
                     log(`stuck at (${me.x},${me.z}) — repathing (${clicks} clicks)`);
                     return 'repath';

@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { depositPlan, gpShort, planProvisioning } from './provisioning.js';
+import { coinFloatWithdraw, depositPlan, gpShort, planProvisioning } from './provisioning.js';
 import type { QuestItem } from '../types.js';
 
 const it = (name: string, qty: number, kind: 'mustHave' | 'acquirable'): QuestItem => ({ name, qty, kind });
@@ -69,5 +69,29 @@ describe('gpShort', () => {
     test('short -> the exact shortfall', () => {
         expect(gpShort(snapWith(0, 0), 150)).toBe(150);
         expect(gpShort(snapWith(30, 20), 150)).toBe(100);
+    });
+});
+
+describe('coinFloatWithdraw', () => {
+    const packBank = (pack: number, bank: number): [Map<string, number>, Map<string, number>] =>
+        [new Map(pack > 0 ? [['coins', pack]] : []), new Map(bank > 0 ? [['coins', bank]] : [])];
+    test('empty pack, bank covers -> withdraw the full float', () => {
+        const [inv, bank] = packBank(0, 5000);
+        expect(coinFloatWithdraw(inv, bank, 1000)).toEqual({ name: 'Coins', qty: 1000 });
+    });
+    test('partial pack -> tops up to the float', () => {
+        const [inv, bank] = packBank(300, 5000);
+        expect(coinFloatWithdraw(inv, bank, 1000)).toEqual({ name: 'Coins', qty: 700 });
+    });
+    test('pack already at/over the float -> null', () => {
+        expect(coinFloatWithdraw(...packBank(1000, 5000), 1000)).toBeNull();
+        expect(coinFloatWithdraw(...packBank(1500, 5000), 1000)).toBeNull();
+    });
+    test('bank short -> withdraw only what the bank holds (drains in one trip)', () => {
+        const [inv, bank] = packBank(0, 250);
+        expect(coinFloatWithdraw(inv, bank, 1000)).toEqual({ name: 'Coins', qty: 250 });
+    });
+    test('bank dry -> null (no re-withdraw loop)', () => {
+        expect(coinFloatWithdraw(...packBank(300, 0), 1000)).toBeNull();
     });
 });

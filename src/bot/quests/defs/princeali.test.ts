@@ -77,9 +77,14 @@ describe('princeali decide — rows 4/5/6 key acquisition', () => {
         const s = decide(snap('inProgress', [], 0));
         expect(s.kind === 'talk' && s.stop.npc).toBe('Leela');
     });
-    test('empty-handed, Leela stalled (noProgress 1) -> mine Clay', () => {
-        const s = decide(snap('inProgress', [], 1));
+    test('empty-handed, Leela stalled (noProgress 1), pickaxe in pack -> mine Clay', () => {
+        const s = decide(snap('inProgress', [['bronze pickaxe', 1]], 1));
         expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
+    });
+    test('empty-handed, Leela stalled, NO pickaxe -> park a wait (never spins at the rock)', () => {
+        const s = decide(snap('inProgress', [], 1));
+        expect(s.kind).toBe('wait');
+        expect(s.kind === 'wait' && s.reason.toLowerCase()).toContain('pickaxe');
     });
     test('has clay, no bucket -> grab a Bucket', () => {
         const s = decide(snap('inProgress', [['clay', 1]], 1));

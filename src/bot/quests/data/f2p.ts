@@ -151,9 +151,10 @@ export const F2P: QuestRecord[] = [
         items: []
     },
     {
-        // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries are an
-        // IMP DROP in this content (imp.rs2:67, ~4/128 ~= 3%/kill) — no cadava bush
-        // exists — potion made by Apothecary (acquirable). quest.constant:111 QP.
+        // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries are a
+        // free GROUND PICK (obj 753 map-spawns at SE Varrock, m51_52.jm2; imps
+        // also drop them but that grind is far slower) — potion made by Apothecary
+        // (acquirable). quest.constant:111 QP.
         id: 'romeojuliet',
         name: 'Romeo & Juliet',
         members: false,

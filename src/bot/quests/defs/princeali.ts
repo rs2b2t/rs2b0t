@@ -125,6 +125,15 @@ const DISGUISE = ['bronze key', 'wig', 'pink skirt', 'paste'];
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name) ?? 0) > 0;
 const packCoins = (snap: QuestSnapshot): number => snap.inv.get('coins') ?? 0;
+/** Any pickaxe tier — the soft-clay chain MINES clay, so it needs one (matches
+ *  Doric's gatherOre gate). Tutorial accounts carry a bronze pickaxe, kept across
+ *  the between-quest deposit via `tools: ['pickaxe']`. */
+const hasPickaxe = (snap: QuestSnapshot): boolean => {
+    for (const name of snap.inv.keys()) {
+        if (name.endsWith('pickaxe')) { return true; }
+    }
+    return false;
+};
 
 // Probe rotation for stage-invisible gaps (Romeo & Juliet idiom): quest varps
 // never reach the snapshot, so rotate harmless talks by the watchdog count.
@@ -177,6 +186,11 @@ function bucketWaterChain(snap: QuestSnapshot): QuestStep {
  *  (the item-on-item useOn variant this task adds). */
 function softClayChain(snap: QuestSnapshot): QuestStep {
     if (!has(snap, 'clay')) {
+        if (!hasPickaxe(snap)) {
+            // Without a pickaxe mineRock spins silently at the Rimmington rock, so
+            // park VISIBLY instead of half-starting the clay chain (Doric idiom).
+            return { kind: 'wait', reason: 'need a pickaxe to mine clay' };
+        }
         return { kind: 'mineRock', rock: 'Clay', item: 'Clay', qty: 1, anchor: CLAY_ROCKS };
     }
     if (!has(snap, 'bucket of water')) {

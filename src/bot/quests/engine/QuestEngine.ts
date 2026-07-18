@@ -13,7 +13,7 @@ import { evaluate } from '../EligibilityEvaluator.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
-import { depositPlan, planProvisioning } from './provisioning.js';
+import { coinFloatWithdraw, depositPlan, planProvisioning } from './provisioning.js';
 import { nextQuest, queueRows, type QueueRow } from './queue.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from './types.js';
 import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature } from './watchdog.js';
@@ -39,6 +39,11 @@ const PARK_GIVE_UP = 3;
  *  counted: the custom-step contract uses false = re-enter (the imp grind
  *  returns false per attempt BY DESIGN). */
 const WAIT_PARK = 15;
+
+// Default coin float pulled from the bank at provisioning time. Coins are useful
+// in nearly every quest (gate tolls, shop buys), so every quest starts by topping
+// the pack up to this from the bank — capped at what the bank holds.
+const COIN_FLOAT = 1000;
 
 // The Skills reader is only needed to build the PlayerState for the eligibility
 // sweep; pulled in lazily-shaped (same idiom as QuestDashboard).
@@ -162,10 +167,19 @@ export class QuestEngine implements Task {
         // scroll up and interactions swallowed. Bank/make-menu modals are OURS
         // mid-step and must never be closed from here.
         if (reader.modals().main !== -1 && !Bank.isOpen() && !ChatDialog.isMakeMenu() && !ChatDialog.isMainMakePanel()) {
-            this.host.log('closing a leftover main modal (quest-complete scroll)');
-            actions.closeModal();
-            await Execution.delayTicks(1);
-            return;
+            // closeModal() clicks the modal's CLOSE_BUTTON — it clears reward scrolls
+            // and shops, but interfaces with NO close button (the Baxtorian book,
+            // opheld Read) make it return false. Only intercept-and-reenter when we
+            // actually closed something; otherwise fall through so the quest STEP
+            // runs — its own movement dismisses the buttonless modal server-side (a
+            // move packet closes these). Returning unconditionally livelocked at the
+            // waterfall bookcase, re-logging every loop while the book never closed
+            // and the quest step never got to walk (live 2026-07-17).
+            if (actions.closeModal()) {
+                this.host.log('closed a leftover main modal (quest-complete scroll)');
+                await Execution.delayTicks(1);
+                return;
+            }
         }
 
         const picked = this.host.pickedIds();
@@ -282,10 +296,12 @@ export class QuestEngine implements Task {
         }
         if (!this.provisioned.has(id)) {
             const plan = planProvisioning(module.record.items, snap.inv, this.lastBankCounts);
-            if (plan.satisfied) {
-                this.provisioned.add(id);
-                step = module.decide(snap);
-            } else if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
+            // Default coin float rides along with the record-item withdrawals so it
+            // costs no extra bank trip. null once the pack holds the float or the
+            // bank is dry; refreshBankCounts() after each step terminates a partial
+            // drain (next pass sees banked===0), so this can't re-withdraw forever.
+            const coinFloat = coinFloatWithdraw(snap.inv, this.lastBankCounts, COIN_FLOAT);
+            if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 // A mustHave we can't buy/gather and the bank doesn't hold. PARK
                 // (not block): this is usually a transient bank/inv read race, so
                 // the quest must stay retryable after everything else has had a
@@ -300,10 +316,13 @@ export class QuestEngine implements Task {
                 const blk = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, null));
                 this.host.noteState(blk, null, `parked: ${plan.blocked.join(', ')}`, this.noProgressCount, this.parked.size);
                 return;
-            } else if (plan.withdraw.length > 0) {
-                // Withdraw first, even if a gather is also pending — the bank trip
-                // is cheaper and re-planning next loop picks up the rest.
-                step = { kind: 'withdraw', items: plan.withdraw };
+            } else if (plan.withdraw.length > 0 || coinFloat) {
+                // Withdraw record items and/or the default coin float first (one
+                // bank trip); re-planning next loop picks up any pending gather.
+                step = { kind: 'withdraw', items: [...plan.withdraw, ...(coinFloat ? [coinFloat] : [])] };
+            } else if (plan.satisfied) {
+                this.provisioned.add(id);
+                step = module.decide(snap);
             } else {
                 // Gather the first shortfall via the module's per-item gatherer.
                 const want = plan.gather[0];
