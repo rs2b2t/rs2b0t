@@ -102,9 +102,13 @@ describe('princeali decide — rows 4/5/6 key acquisition', () => {
         const s = decide(snap('inProgress', [['soft clay', 1]]));
         expect(s.kind === 'custom' && s.name).toBe('osman briefing + keli imprint');
     });
-    test('fresh start (holds Bronze bar), noProgress 0 -> report to Osman FIRST', () => {
-        const s = decide(snap('inProgress', [['bronze bar', 1]], 0));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Osman');
+    test('fresh start (holds Bronze bar + pickaxe), noProgress 0 -> mine Clay, NOT a premature Osman trip', () => {
+        // The pre-forge Osman probe used to fire here and oscillate Al Kharid<->
+        // Rimmington (noProgress resets on the long mining walk, re-firing the probe).
+        // Osman is briefed inline by the soft-clay custom instead, so a fresh start
+        // goes straight to building clay.
+        const s = decide(snap('inProgress', [['bronze bar', 1], ['bronze pickaxe', 1]], 0));
+        expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
     });
     test('post-forge (Bronze bar consumed), noProgress 0 -> collect the key from Leela', () => {
         const s = decide(snap('inProgress', [], 0));

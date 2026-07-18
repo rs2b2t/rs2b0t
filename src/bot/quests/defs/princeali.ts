@@ -579,17 +579,20 @@ export function decide(snap: QuestSnapshot): QuestStep {
         // between every clay step (review finding). Only probe Leela on a genuinely
         // empty pack.
         const midClayBuild = has(snap, 'clay') || has(snap, 'jug of water');
-        // Empty-handed, one probe before building fresh clay (noProgress==0 = just
-        // progressed or fresh). WHICH npc depends on where we are in the key flow —
-        // the Bronze bar (provisioned up front, consumed by Osman's forge) tells us:
-        //   holding it  -> PRE-forge: report to OSMAN first (the quest's opening
-        //                  instruction, and the only stage-10->20 advance the Keli
-        //                  imprint gate needs). Talking Leela here was the bug.
-        //   lacking it  -> POST-forge: the key is forged and waiting at LEELA, so
-        //                  collect it from her rather than re-building clay and
-        //                  forging a SECOND key print (Keli re-imprints at stage 20).
-        if (!midClayBuild && snap.noProgress === 0) {
-            return { kind: 'talk', stop: has(snap, 'bronze bar') ? OSMAN : LEELA };
+        // POST-forge probe ONLY (Bronze bar consumed by Osman's forge): the finished
+        // key waits at LEELA — collect it rather than rebuilding clay and forging a
+        // second print. PRE-forge (still holding the Bronze bar) we do NOT pre-brief
+        // Osman here: the 'osman briefing + keli imprint' custom briefs him inline
+        // once soft clay is held (osman.rs2:48-50 is the stage-10->20 advance Keli's
+        // imprint gate needs), so a separate noProgress-gated Osman probe is redundant
+        // AND self-defeating. Talking an already-briefed Osman is a no-op that bumps
+        // noProgress; the long Rimmington mining walk then resets noProgress to 0,
+        // re-firing the probe — the bot oscillates Al Kharid <-> Rimmington forever,
+        // never reaching the clay (live 2026-07-18 diag: 13 min in, 0 clay mined). So
+        // pre-forge falls straight through to the clay build; probe Leela only, and
+        // only post-forge.
+        if (!midClayBuild && !has(snap, 'bronze bar') && snap.noProgress === 0) {
+            return { kind: 'talk', stop: LEELA };
         }
         return softClayChain(snap);
     }

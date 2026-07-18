@@ -255,6 +255,14 @@ class StartupWithdraw implements Task {
     constructor(private bot: AIOQuester) {}
     validate(): boolean { return !this.done; }
     async execute(): Promise<void> {
+        // Already carrying the float (coins carried over from a prior quest, or a
+        // fresh account handed coins directly) -> skip the bank trip. Withdrawing
+        // from an empty bank otherwise burns three failed attempts + a round-trip.
+        if (Inventory.count('Coins') >= COIN_FLOAT) {
+            this.bot.log(`already holding ${COIN_FLOAT}+ coins — skipping startup withdraw`);
+            this.done = true;
+            return;
+        }
         this.bot.log(`withdrawing ${COIN_FLOAT} starting coins`);
         const ok = await executeStep(
             { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }], bank: PROVISION_BANK },

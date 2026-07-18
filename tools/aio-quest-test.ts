@@ -74,6 +74,7 @@ type Snapshot = {
     statuses: Record<string, string>; // id -> journal status
     qp: number;
     runner: string;
+    logs: { time: number; level: string; msg: string }[]; // runner log ring tail
 };
 
 const browser = await chromium.launch({
@@ -83,7 +84,17 @@ const browser = await chromium.launch({
 });
 try {
     const page = await browser.newPage();
+    const t0 = Date.now();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
+    // Mirror the bot's own step log (this.log -> console.log('[bot] ...')) with an
+    // elapsed stamp, so a failed run shows WHICH step stalled — position polls alone
+    // can't distinguish a slow cross-map walk from a step looping in place.
+    page.on('console', m => {
+        const txt = m.text();
+        if (txt.startsWith('[bot]')) {
+            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
+        }
+    });
 
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
@@ -129,25 +140,32 @@ try {
                     reader: { worldTile(): { x: number; z: number; level: number } | null };
                     Quests: { status(n: string): string; points(): number };
                 };
-                rs2b0t: { runner: { state: string } };
+                rs2b0t: { runner: { state: string; ctx?: { log?: { time: number; level: string; msg: string }[] } } };
             };
             const statuses: Record<string, string> = {};
             for (const q of qq) { statuses[q.id] = g.__rs2b0t.Quests.status(q.name); }
+            const ring = g.rs2b0t.runner.ctx?.log ?? [];
             return {
                 pos: g.__rs2b0t.reader.worldTile(),
                 statuses,
                 qp: g.__rs2b0t.Quests.points(),
-                runner: g.rs2b0t.runner.state
+                runner: g.rs2b0t.runner.state,
+                logs: ring.slice(-60).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
             };
         }, queueArg);
 
     const deadline = Date.now() + BUDGET_MS;
     let last: Snapshot | null = null;
+    let lastLogTime = 0; // print only log lines newer than the last poll
     while (Date.now() < deadline) {
         last = await snap(queue);
         const t = Math.round((BUDGET_MS - (deadline - Date.now())) / 1000);
         const jrn = queue.map(q => `${q.id}=${last!.statuses[q.id]}`).join(' ');
         console.log(`  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'} ${jrn} qp=${last.qp} runner=${last.runner}`);
+        for (const l of last.logs) {
+            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
+        }
+        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
         const allDone = queue.every(q => last!.statuses[q.id] === 'complete');
         if (allDone && last.runner !== 'running') { break; }
         await page.waitForTimeout(10_000);
