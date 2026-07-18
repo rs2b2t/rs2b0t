@@ -101,6 +101,11 @@ const WELL = new Tile(2956, 3212, 0);
 // in a fenced Draynor yard (obj.pack Logs id 1511). Closest level-0 pair to the
 // paste-crafting hub. LIVE-VERIFY the yard is open (walkResilient pathable).
 const LOGS_SPAWN = new Tile(3089, 3265, 0);
+// Bronze-pickaxe ground spawn (obj 1265 @ m46_50 -> (2963,3216,0)) in a Rimmington
+// house — cost 37 / 0 doors from the clay rocks (2986,3240), the closest of the
+// world's pickaxe spawns to the soft-clay mining. Grabbed when the account holds
+// no pickaxe of any tier, so a pickaxe-less start still mines instead of parking.
+const PICKAXE_SPAWN = new Tile(2963, 3216, 0);
 
 // --- Jailbreak geometry (research doc §5: Joe z3245 > Keli z3244 > door z3243 >
 // prince z3242; unlock the door standing NORTH, z>=3244) ---
@@ -187,9 +192,9 @@ function bucketWaterChain(snap: QuestSnapshot): QuestStep {
 function softClayChain(snap: QuestSnapshot): QuestStep {
     if (!has(snap, 'clay')) {
         if (!hasPickaxe(snap)) {
-            // Without a pickaxe mineRock spins silently at the Rimmington rock, so
-            // park VISIBLY instead of half-starting the clay chain (Doric idiom).
-            return { kind: 'wait', reason: 'need a pickaxe to mine clay' };
+            // No pickaxe to mine with — grab the spawned Bronze pickaxe one screen
+            // west of the clay rocks rather than spinning silently at the rock.
+            return { kind: 'grabGround', item: 'Bronze pickaxe', anchor: PICKAXE_SPAWN };
         }
         return { kind: 'mineRock', rock: 'Clay', item: 'Clay', qty: 1, anchor: CLAY_ROCKS };
     }
