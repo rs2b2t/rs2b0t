@@ -43,7 +43,7 @@ const WAIT_PARK = 15;
 // Default coin float pulled from the bank at provisioning time. Coins are useful
 // in nearly every quest (gate tolls, shop buys), so every quest starts by topping
 // the pack up to this from the bank — capped at what the bank holds.
-const COIN_FLOAT = 1000;
+export const COIN_FLOAT = 1000;
 
 // The Skills reader is only needed to build the PlayerState for the eligibility
 // sweep; pulled in lazily-shaped (same idiom as QuestDashboard).

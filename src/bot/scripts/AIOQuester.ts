@@ -7,7 +7,8 @@ import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Sustain } from '../api/Sustain.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
-import { QuestEngine } from '../quests/engine/QuestEngine.js';
+import { COIN_FLOAT, QuestEngine } from '../quests/engine/QuestEngine.js';
+import { executeStep } from '../quests/exec/steps.js';
 import { QUEST_DEFS, defById } from '../quests/defs/index.js';
 import type { QueueRow, QueueStatus } from '../quests/engine/queue.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
@@ -105,7 +106,10 @@ export default class AIOQuester extends TaskBot {
         Sustain.set(async () => { if (this.shouldEat()) { await this.eatOnce(); } });
 
         this.log(`AIOQuester — queue: ${[...this.picked].join(', ') || '(none)'}`);
-        this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
+        // StartupWithdraw runs BEFORE the engine: first thing on start, head to the
+        // bank and pull the coin float so tolls/shop buys are always covered (the
+        // per-quest float is the fallback if this bank trip fails).
+        this.add(new ContinueDialog(), new EatFood(this), new StartupWithdraw(this), new QuestEngine(this));
     }
 
     override async onStop(): Promise<void> {
@@ -238,4 +242,23 @@ class EatFood implements Task {
     constructor(private bot: AIOQuester) {}
     validate(): boolean { return this.bot.shouldEat(); }
     async execute(): Promise<void> { await this.bot.eatOnce(); }
+}
+
+/** First action on start: head to the nearest bank and withdraw the coin float,
+ *  so tolls/shop buys are covered from the outset (reuses the withdraw executor's
+ *  bank-walk). Runs once — bounded retries, then defers to the per-quest float. */
+class StartupWithdraw implements Task {
+    private done = false;
+    private tries = 0;
+    constructor(private bot: AIOQuester) {}
+    validate(): boolean { return !this.done; }
+    async execute(): Promise<void> {
+        this.bot.log(`withdrawing ${COIN_FLOAT} starting coins`);
+        const ok = await executeStep(
+            { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }] },
+            [],
+            m => this.bot.log(`  ${m}`)
+        );
+        if (ok || ++this.tries >= 3) { this.done = true; }
+    }
 }
