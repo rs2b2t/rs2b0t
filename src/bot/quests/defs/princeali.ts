@@ -626,18 +626,15 @@ export const princeali: QuestModule = {
     // 2026-07-16: without it, the bot stood at the Rimmington clay rock forever
     // with no pickaxe, mineRock failing silently — same class as Doric's keep).
     tools: ['pickaxe', 'bronze key', 'key print', 'wig', 'paste', 'pink skirt', 'rope', 'beer', 'soft clay', 'clay', 'yellow dye', 'onion', 'ball of wool', 'shears', 'redberries', 'pot of flour', 'ashes', 'bucket', 'jug', 'tinderbox', 'logs', 'bronze bar', 'coins'],
-    // RAW leaf items provisioned BANK-FIRST at quest start (record.items above).
-    // Each supplies one declared raw; the same step-builders back the decide()
-    // acquisition rows, which stay as resilient fallbacks. Created/stage-gated
-    // items (wig/blond wig, paste, soft clay, key print, bronze key) and the
-    // Leela-probe signals (clay, bucket) are NOT here — the def drives them.
+    // Gather fns for the DECLARED raws (record.items above) — cheap one-shop-trip
+    // buyables, provisioned BANK-FIRST at quest start. The tightly-consumed / slow
+    // raws (clay, onion, logs, ball of wool, jug of water) are NOT declared — the
+    // decide() sub-chains gather them just-in-time, so provisioning doesn't
+    // criss-cross the map before the quest starts.
     gather: {
         'redberries': s => buyOrWait(s, { kind: 'buy', item: 'Redberries', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 }),
         'pot of flour': s => buyOrWait(s, { kind: 'buy', item: 'Pot of flour', qty: 1, shop: PORT_SARIM_SHOP, estGp: 20 }),
         'tinderbox': s => buyOrWait(s, { kind: 'buy', item: 'Tinderbox', qty: 1, shop: LUMBY_SHOP, estGp: 5 }),
-        'logs': () => ({ kind: 'grabGround', item: 'Logs', anchor: LOGS_SPAWN }),
-        'onion': () => ({ kind: 'pickLoc', loc: 'Onion', op: 'Pick', item: 'Onion', anchor: ONION_PATCH }),
-        'ball of wool': (s, n) => gatherBalls(s, n),
         'bronze bar': s => buyOrWait(s, { kind: 'buy', item: 'Bronze bar', qty: 1, shop: SHANTAY_SHOP, estGp: 60 }),
         'pink skirt': s => buyOrWait(s, { kind: 'buy', item: 'Pink skirt', qty: 1, shop: THESSALIA_SHOP, estGp: 10 }),
         'rope': s => buyOrWait(s, { kind: 'buy', item: 'Rope', qty: 1, shop: ADVENTURE_SHOP, estGp: 40 })

@@ -127,18 +127,17 @@ export const QUESTS: QuestRecord[] = [
         ]
     },
     {
-        // source: prince_journal.rs2:22-46 — no gate. RAW leaf items (freely
-        // bought/picked/gathered anytime) are declared here so provisioning fetches
-        // them BANK-FIRST at the start; the def's gather map supplies each, and its
-        // acquisition rows remain as resilient fallbacks. The CREATED / stage-gated
-        // crafts stay quest-internal in defs/princeali.ts — Soft clay, Yellow dye,
-        // Ashes, Wig, BLOND wig, Paste, Key print, Bronze key are made mid-quest by
-        // Ned/Aggie/Osman/Keli, and the blond wig shares the plain wig's display
-        // name so provisioning must NEVER touch it. Clay + Bucket are also left to
-        // the def (their pack-presence drives decide()'s Leela restart-probe).
-        // Rope is bank-first then bought from Aemad's (Ardougne adventurershop) —
-        // a plain shop Trade, not Ned's dialogue. Beer stays jailbreak-managed
-        // (drunk on Joe, re-bought per pass). quest.constant:110 QP.
+        // source: prince_journal.rs2:22-46 — no gate. Only the CHEAP, one-shop-trip
+        // buyables are declared here so provisioning fetches them BANK-FIRST at the
+        // start (redberries/flour/tinderbox at Wydin+Lumbridge, bronze bar at
+        // Shantay, pink skirt at Thessalia, rope at Aemad's/Ardougne). The
+        // tightly-consumed / slow raws (Clay, Onion, Logs, Ball of wool, Jug of
+        // water) are NOT declared — the def gathers them JUST-IN-TIME in their
+        // sub-chains, so provisioning doesn't criss-cross the map before the quest
+        // (a ~15min upfront sweep, live 2026-07-18). CREATED / stage-gated crafts
+        // (Soft clay, Yellow dye, Ashes, Wig, BLOND wig [name collides with plain
+        // wig], Paste, Key print, Bronze key) stay quest-internal; Beer is
+        // jailbreak-managed. quest.constant:110 QP.
         id: 'prince',
         name: 'Prince Ali Rescue',
         questPoints: 3,
@@ -147,9 +146,6 @@ export const QUESTS: QuestRecord[] = [
             { name: 'Redberries', qty: 1, kind: 'acquirable' },
             { name: 'Pot of flour', qty: 1, kind: 'acquirable' },
             { name: 'Tinderbox', qty: 1, kind: 'acquirable' },
-            { name: 'Logs', qty: 1, kind: 'acquirable' },
-            { name: 'Onion', qty: 2, kind: 'acquirable' },
-            { name: 'Ball of wool', qty: 3, kind: 'acquirable' },
             { name: 'Bronze bar', qty: 1, kind: 'acquirable' },
             { name: 'Pink skirt', qty: 1, kind: 'acquirable' },
             { name: 'Rope', qty: 1, kind: 'acquirable' }

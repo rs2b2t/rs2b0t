@@ -33,13 +33,17 @@ describe('princeali provisioning — raw items declared + gatherable', () => {
             expect(names).not.toContain(created);
         }
     });
-    test('gather fns yield the expected acquisition steps (bank covers the buys)', () => {
+    test('declared raws are the cheap buyables — buy steps; onion/logs/wool are NOT provisioned', () => {
         const s = snap('inProgress', [], 0, 100);
         expect(princeali.gather!['redberries'](s, 1).kind).toBe('buy');
         expect(princeali.gather!['bronze bar'](s, 1).kind).toBe('buy');
         expect(princeali.gather!['pink skirt'](s, 1).kind).toBe('buy');
-        expect(princeali.gather!['logs'](s, 1).kind).toBe('grabGround');
-        expect(princeali.gather!['onion'](s, 1).kind).toBe('pickLoc');
+        expect(princeali.gather!['rope'](s, 1).kind).toBe('buy');
+        // gathered just-in-time in the chains, not provisioned up front
+        for (const jit of ['onion', 'logs', 'ball of wool', 'clay', 'jug of water']) {
+            expect(princeali.gather?.[jit]).toBeUndefined();
+            expect(princeali.record.items.map(i => i.name.toLowerCase())).not.toContain(jit);
+        }
     });
 });
 
