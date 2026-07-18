@@ -6,11 +6,12 @@ const snap = (
     journal: string,
     items: [string, number][] = [],
     noProgress = 0,
-    bankCoins = 0
+    bankCoins = 0,
+    worn: string[] = []
 ): QuestSnapshot => ({
     journal: journal as QuestSnapshot['journal'],
     inv: new Map(items),
-    worn: new Set(),
+    worn: new Set(worn),
     noProgress,
     bankCoins
 });
@@ -97,7 +98,11 @@ describe('princeali decide — rows 4/5/6 key acquisition', () => {
         const s = decide(snap('inProgress', [['soft clay', 1]]));
         expect(s.kind === 'custom' && s.name).toBe('osman briefing + keli imprint');
     });
-    test('empty-handed, noProgress 0 -> probe Leela (collect a made key)', () => {
+    test('fresh start (holds Bronze bar), noProgress 0 -> report to Osman FIRST', () => {
+        const s = decide(snap('inProgress', [['bronze bar', 1]], 0));
+        expect(s.kind === 'talk' && s.stop.npc).toBe('Osman');
+    });
+    test('post-forge (Bronze bar consumed), noProgress 0 -> collect the key from Leela', () => {
         const s = decide(snap('inProgress', [], 0));
         expect(s.kind === 'talk' && s.stop.npc).toBe('Leela');
     });
@@ -105,9 +110,13 @@ describe('princeali decide — rows 4/5/6 key acquisition', () => {
         const s = decide(snap('inProgress', [['bronze pickaxe', 1]], 1));
         expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
     });
-    test('empty-handed, Leela stalled, NO pickaxe -> grab a spawned Bronze pickaxe (not a park)', () => {
+    test('empty-handed, Leela stalled, NO pickaxe -> get a pickaxe (bank-first, then spawn)', () => {
         const s = decide(snap('inProgress', [], 1));
-        expect(s.kind === 'grabGround' && s.item).toBe('Bronze pickaxe');
+        expect(s.kind === 'custom' && s.name).toBe('get a pickaxe');
+    });
+    test('a pickaxe EQUIPPED (worn) counts -> mine Clay, no fetch', () => {
+        const s = decide(snap('inProgress', [], 1, 0, ['iron pickaxe']));
+        expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
     });
     test('has clay, no bucket -> grab a Bucket', () => {
         const s = decide(snap('inProgress', [['clay', 1]], 1));

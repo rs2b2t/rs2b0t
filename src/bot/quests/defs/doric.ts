@@ -29,6 +29,9 @@ function hasPickaxe(snap: QuestSnapshot): boolean {
     for (const name of snap.inv.keys()) {
         if (name.endsWith('pickaxe')) { return true; }
     }
+    for (const name of snap.worn) { // any pickaxe tier EQUIPPED counts too
+        if (name.endsWith('pickaxe')) { return true; }
+    }
     return false;
 }
 

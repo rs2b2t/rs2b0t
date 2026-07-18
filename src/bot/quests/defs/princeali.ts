@@ -14,6 +14,8 @@
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
+import { Bank } from '../../api/hud/Bank.js';
+import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
@@ -130,11 +132,15 @@ const DISGUISE = ['bronze key', 'wig', 'pink skirt', 'paste'];
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name) ?? 0) > 0;
 const packCoins = (snap: QuestSnapshot): number => snap.inv.get('coins') ?? 0;
-/** Any pickaxe tier — the soft-clay chain MINES clay, so it needs one (matches
- *  Doric's gatherOre gate). Tutorial accounts carry a bronze pickaxe, kept across
- *  the between-quest deposit via `tools: ['pickaxe']`. */
+/** Any pickaxe tier in the pack OR EQUIPPED — the soft-clay chain MINES clay, so
+ *  it needs one but must never fetch a second when one is already worn/held
+ *  (matches Doric's gatherOre gate). Tutorial accounts carry a bronze pickaxe,
+ *  kept across the between-quest deposit via `tools: ['pickaxe']`. */
 const hasPickaxe = (snap: QuestSnapshot): boolean => {
     for (const name of snap.inv.keys()) {
+        if (name.endsWith('pickaxe')) { return true; }
+    }
+    for (const name of snap.worn) {
         if (name.endsWith('pickaxe')) { return true; }
     }
     return false;
@@ -192,9 +198,9 @@ function bucketWaterChain(snap: QuestSnapshot): QuestStep {
 function softClayChain(snap: QuestSnapshot): QuestStep {
     if (!has(snap, 'clay')) {
         if (!hasPickaxe(snap)) {
-            // No pickaxe to mine with — grab the spawned Bronze pickaxe one screen
-            // west of the clay rocks rather than spinning silently at the rock.
-            return { kind: 'grabGround', item: 'Bronze pickaxe', anchor: PICKAXE_SPAWN };
+            // No pickaxe worn or held — bank-FIRST (withdraw a banked one of any
+            // tier), else grab the spawned Bronze pickaxe near the clay rocks.
+            return { kind: 'custom', name: 'get a pickaxe', run: ensurePickaxe };
         }
         return { kind: 'mineRock', rock: 'Clay', item: 'Clay', qty: 1, anchor: CLAY_ROCKS };
     }
@@ -231,6 +237,27 @@ function pasteChain(snap: QuestSnapshot): QuestStep {
 }
 
 // --- Custom thunks (all live reads; re-entrant, false = re-decide) ------------
+
+/** Get a pickaxe to mine the soft-clay chain's clay. Any tier worn/held short-
+ *  circuits (belt to hasPickaxe). Otherwise scan the BANK first — withdraw a
+ *  banked pickaxe of any tier rather than fetching a fresh one — and only grab
+ *  the Rimmington Bronze pickaxe spawn when the bank has none. */
+async function ensurePickaxe(log: (m: string) => void): Promise<boolean> {
+    const isPick = (n: string | null | undefined): boolean => (n ?? '').toLowerCase().endsWith('pickaxe');
+    if (Equipment.items().some(i => isPick(i.name)) || Inventory.items().some(i => isPick(i.name))) {
+        return true;
+    }
+    if (await Bank.openNearest('Bank booth', 'Use-quickly', log)) {
+        const banked = Bank.items().find(i => isPick(i.name));
+        if (banked?.name) {
+            log(`withdrawing ${banked.name} from the bank`);
+            if (await Bank.withdrawX(banked.name, 1)) {
+                return Execution.delayUntil(() => Inventory.items().some(i => isPick(i.name)), 3000);
+            }
+        }
+    }
+    return executeStep({ kind: 'grabGround', item: 'Bronze pickaxe', anchor: PICKAXE_SPAWN }, [], log);
+}
 
 /** Yellow-dye a plain wig to blond (research doc §3). Multi-leg: pick 2 onions,
  *  buy dye from Aggie (2 onions + 5 coins), then use dye on the wig. Each leg
@@ -557,13 +584,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
         // between every clay step (review finding). Only probe Leela on a genuinely
         // empty pack.
         const midClayBuild = has(snap, 'clay') || has(snap, 'bucket') || has(snap, 'bucket of water');
-        // Empty-handed: the key may be made-but-uncollected (keystatus varp is
-        // invisible). Probe Leela first (harmless, hands a made key); only build
-        // fresh clay once Leela has stalled — this also avoids forging a SECOND
-        // key print after Osman (Keli re-imprints at stage 20, which would wedge
-        // row 3 forever). noProgress==0 = just progressed or fresh, so try Leela.
+        // Empty-handed, one probe before building fresh clay (noProgress==0 = just
+        // progressed or fresh). WHICH npc depends on where we are in the key flow —
+        // the Bronze bar (provisioned up front, consumed by Osman's forge) tells us:
+        //   holding it  -> PRE-forge: report to OSMAN first (the quest's opening
+        //                  instruction, and the only stage-10->20 advance the Keli
+        //                  imprint gate needs). Talking Leela here was the bug.
+        //   lacking it  -> POST-forge: the key is forged and waiting at LEELA, so
+        //                  collect it from her rather than re-building clay and
+        //                  forging a SECOND key print (Keli re-imprints at stage 20).
         if (!midClayBuild && snap.noProgress === 0) {
-            return { kind: 'talk', stop: LEELA };
+            return { kind: 'talk', stop: has(snap, 'bronze bar') ? OSMAN : LEELA };
         }
         return softClayChain(snap);
     }
