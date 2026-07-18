@@ -10,6 +10,7 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { COIN_FLOAT, QuestEngine } from '../quests/engine/QuestEngine.js';
 import { executeStep } from '../quests/exec/steps.js';
 import { QUEST_DEFS, defById } from '../quests/defs/index.js';
+import { QuestFood } from '../quests/food.js';
 import type { QueueRow, QueueStatus } from '../quests/engine/queue.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -100,6 +101,7 @@ export default class AIOQuester extends TaskBot {
         });
 
         this.eatAt = this.settings.num('eatAtHp', 50) / 100;
+        QuestFood.name = this.foodItem(); // defs (Waterfall) read the configured food from here
         // Sustain hook: awaited by the walker's follow/ladder loops (Sustain.run),
         // so the bot eats mid-walk past aggressive spawns. The EatFood task below
         // covers standing combat between engine steps. Both call eatOnce().

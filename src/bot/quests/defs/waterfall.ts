@@ -11,6 +11,7 @@ import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { MEMBERS_C } from '../data/members-c.js';
+import { QuestFood } from '../food.js';
 
 // Waterfall Quest — content facts from
 // docs/superpowers/research/2026-07-16-waterfall-content-facts.md and the nav
@@ -40,21 +41,33 @@ const URN = "Glarial's urn";
 const BOOK = 'Book on baxtorian';
 const KEY = 'A key';
 const ROPE = 'Rope';
-const FOOD = 'Trout'; // cheap, bankable, prepped by the smoke — the def's only food
 const RUNES = ['Air rune', 'Earth rune', 'Water rune'];
 
+/** Configured food display name (AIOQuester `food` setting), or null if unset —
+ *  read dynamically so it follows the parameter instead of a hardcoded 'Trout'
+ *  (which tried to withdraw food that doesn't exist on accounts banking a
+ *  different food). */
+function foodName(): string | null { return QuestFood.name; }
+
 // Runes/food are withdrawn only AFTER the tomb (they cannot pass the tomb gate —
-// content §Gotchas), so they are def-managed, not in the members-c record.
-const RUNE_WITHDRAW = [
-    { name: 'Air rune', qty: 6 },
-    { name: 'Earth rune', qty: 6 },
-    { name: 'Water rune', qty: 6 },
-    { name: FOOD, qty: 10 }
-];
+// content §Gotchas), so they are def-managed, not in the members-c record. Built
+// dynamically: the food line is included only when a food is configured.
+function runeWithdraw(): { name: string; qty: number }[] {
+    const f = foodName();
+    return [
+        { name: 'Air rune', qty: 6 },
+        { name: 'Earth rune', qty: 6 },
+        { name: 'Water rune', qty: 6 },
+        ...(f ? [{ name: f, qty: 10 }] : [])
+    ];
+}
 // The tomb-gate deposit keep (content §tomb-gate): glarial items + rope + food +
 // coins + book are all allowed through; everything else (weapons/armour/runes/
 // logs/…) is forbidden, so a narrow keep guarantees entry.
-const TOMB_KEEP = ['glarial', 'rope', FOOD.toLowerCase(), 'coins', 'book'];
+function tombKeep(): string[] {
+    const f = foodName();
+    return ['glarial', 'rope', 'coins', 'book', ...(f ? [f.toLowerCase()] : [])];
+}
 // Waterfall's geometric-nearest bank is the Fishing Guild (2586,3420), gated behind
 // level-68 Fishing — a quester can't enter it (the offline pathfinder can't see the
 // skill gate, so nearestBank() picks it and the bot strands at the guild door, live
@@ -138,7 +151,8 @@ const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.
 /** Live count-short check for the runes/food withdraw (position-guarded to the
  *  surface inside fallsAndDungeon, so it never re-fires mid-dungeon). */
 function runesShortLive(): boolean {
-    return RUNES.some(r => Inventory.count(r) < 6) || Inventory.count(FOOD) < 1;
+    const f = foodName();
+    return RUNES.some(r => Inventory.count(r) < 6) || (f !== null && Inventory.count(f) < 1);
 }
 
 /** Live amulet check — held in the pack OR worn (it has an iop2 Wear). Used to
@@ -346,7 +360,7 @@ async function tombLeg(log: (m: string) => void): Promise<boolean> {
         // pack is clean here and the tomb entry needs no detour. Routed to Ardougne
         // West, since the geometric-nearest bank is the gated Fishing Guild.
         const needsDeposit = hadGear || RUNES.some(r => Inventory.count(r) > 0);
-        if (needsDeposit && !(await executeStep({ kind: 'deposit', keep: TOMB_KEEP, bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log))) {
+        if (needsDeposit && !(await executeStep({ kind: 'deposit', keep: tombKeep(), bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log))) {
             return false;
         }
         if (!(await walkWithHops(TOMBSTONE_STAND, 2, WATERFALL_HOPS, log))) {
@@ -467,7 +481,7 @@ async function fallsAndDungeon(log: (m: string) => void): Promise<boolean> {
         return tombLeg(log);
     }
     if (runesShortLive()) {
-        return executeStep({ kind: 'withdraw', items: RUNE_WITHDRAW, bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log);
+        return executeStep({ kind: 'withdraw', items: runeWithdraw(), bank: ARDOUGNE_BANK }, WATERFALL_HOPS, log);
     }
     return fallsLeg(log);
 }
