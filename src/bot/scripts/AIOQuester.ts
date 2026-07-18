@@ -7,7 +7,7 @@ import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Sustain } from '../api/Sustain.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
-import { COIN_FLOAT, QuestEngine } from '../quests/engine/QuestEngine.js';
+import { COIN_FLOAT, PROVISION_BANK, QuestEngine } from '../quests/engine/QuestEngine.js';
 import { executeStep } from '../quests/exec/steps.js';
 import { QUEST_DEFS, defById } from '../quests/defs/index.js';
 import { QuestFood } from '../quests/food.js';
@@ -257,7 +257,7 @@ class StartupWithdraw implements Task {
     async execute(): Promise<void> {
         this.bot.log(`withdrawing ${COIN_FLOAT} starting coins`);
         const ok = await executeStep(
-            { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }] },
+            { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }], bank: PROVISION_BANK },
             [],
             m => this.bot.log(`  ${m}`)
         );

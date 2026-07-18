@@ -3,6 +3,7 @@ import { type Task } from '../../api/Bot.js';
 import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
+import Tile from '../../api/Tile.js';
 import { Bank } from '../../api/hud/Bank.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Equipment } from '../../api/hud/Equipment.js';
@@ -44,6 +45,15 @@ const WAIT_PARK = 15;
 // in nearly every quest (gate tolls, shop buys), so every quest starts by topping
 // the pack up to this from the bank — capped at what the bank holds.
 export const COIN_FLOAT = 1000;
+
+// Provisioning bank: startup coin withdraw + the bank-first item withdraws all go
+// HERE, not the geometric-nearest bank. Draynor is toll-free and next to the
+// Lumbridge spawn most bots start at (nearest-to-Lumbridge is Al Kharid, across
+// the 10gp toll gate). Fixing it also makes the bank READ deterministic — the
+// startup trip opens this bank so provisioning sees the real bank contents before
+// it buys anything. Quests that must bank elsewhere (Waterfall -> Ardougne) set
+// their own `bank` on their def-level steps.
+export const PROVISION_BANK = new Tile(3093, 3243, 0); // Draynor
 
 // The Skills reader is only needed to build the PlayerState for the eligibility
 // sweep; pulled in lazily-shaped (same idiom as QuestDashboard).
@@ -285,7 +295,7 @@ export class QuestEngine implements Task {
                 this.deposited.add(id); // clean pack: no bank trip earned
             } else {
                 this.host.noteState(rows, id, 'banking spillover', this.noProgressCount, this.parked.size);
-                const banked = await executeStep({ kind: 'deposit', keep }, module.hops ?? [], m => this.host.log(`  ${m}`));
+                const banked = await executeStep({ kind: 'deposit', keep, bank: PROVISION_BANK }, module.hops ?? [], m => this.host.log(`  ${m}`));
                 if (banked) {
                     this.deposited.add(id);
                 }
@@ -327,7 +337,7 @@ export class QuestEngine implements Task {
             } else if (plan.withdraw.length > 0 || extras.length > 0) {
                 // Withdraw record items and/or the coin/food floats first (one bank
                 // trip); re-planning next loop picks up any pending gather.
-                step = { kind: 'withdraw', items: [...plan.withdraw, ...extras] };
+                step = { kind: 'withdraw', items: [...plan.withdraw, ...extras], bank: PROVISION_BANK };
             } else if (plan.satisfied) {
                 this.provisioned.add(id);
                 step = module.decide(snap);
