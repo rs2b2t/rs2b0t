@@ -136,19 +136,31 @@ export const F2P: QuestRecord[] = [
         ]
     },
     {
-        // source: prince_journal.rs2:22-46 — no gate; disguise pieces are assembled
-        // during the quest (see quest_prince.rs2:8-9,28-29). items: [] on purpose:
-        // Wig/Paste/Bronze key are quest-internal STAGE-GATED crafts (Ned/Aggie/
-        // Osman only make them mid-quest) and Rope/Pink skirt are self-managed by
-        // the def's own acquisition rows — provisioning must NOT try to pre-gather
-        // any of them (they have no bank/shop source before their stage). The def
-        // (defs/princeali.ts) drives all acquisition. quest.constant:110 QP.
+        // source: prince_journal.rs2:22-46 — no gate. RAW leaf items (freely
+        // bought/picked/gathered anytime) are declared here so provisioning fetches
+        // them BANK-FIRST at the start; the def's gather map supplies each, and its
+        // acquisition rows remain as resilient fallbacks. The CREATED / stage-gated
+        // crafts stay quest-internal in defs/princeali.ts — Soft clay, Yellow dye,
+        // Ashes, Wig, BLOND wig, Paste, Key print, Bronze key are made mid-quest by
+        // Ned/Aggie/Osman/Keli, and the blond wig shares the plain wig's display
+        // name so provisioning must NEVER touch it. Clay + Bucket are also left to
+        // the def (their pack-presence drives decide()'s Leela restart-probe);
+        // Rope + Beer stay jailbreak-managed. quest.constant:110 QP.
         id: 'prince',
         name: 'Prince Ali Rescue',
         members: false,
         questPoints: 3,
         requirements: {},
-        items: []
+        items: [
+            { name: 'Redberries', qty: 1, kind: 'acquirable' },
+            { name: 'Pot of flour', qty: 1, kind: 'acquirable' },
+            { name: 'Tinderbox', qty: 1, kind: 'acquirable' },
+            { name: 'Logs', qty: 1, kind: 'acquirable' },
+            { name: 'Onion', qty: 2, kind: 'acquirable' },
+            { name: 'Ball of wool', qty: 3, kind: 'acquirable' },
+            { name: 'Bronze bar', qty: 1, kind: 'acquirable' },
+            { name: 'Pink skirt', qty: 1, kind: 'acquirable' }
+        ]
     },
     {
         // source: romeojuliet_journal.rs2:45-48 — no gate; cadava berries are a

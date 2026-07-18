@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { decide } from './princeali.js';
+import { decide, princeali } from './princeali.js';
 import type { QuestSnapshot } from '../engine/types.js';
 
 const snap = (
@@ -17,6 +17,30 @@ const snap = (
 
 // The four disguise pieces the prince handover consumes (research doc §5.5).
 const ALL4: [string, number][] = [['bronze key', 1], ['wig', 1], ['pink skirt', 1], ['paste', 1]];
+
+describe('princeali provisioning — raw items declared + gatherable', () => {
+    test('every acquirable record item has a gather fn (else the engine blocks it)', () => {
+        const acquirable = princeali.record.items.filter(i => i.kind === 'acquirable');
+        expect(acquirable.length).toBeGreaterThan(0);
+        for (const it of acquirable) {
+            expect(princeali.gather?.[it.name.toLowerCase()]).toBeDefined();
+        }
+    });
+    test('raw declarations are leaves only — no created/stage-gated or Leela-probe items', () => {
+        const names = princeali.record.items.map(i => i.name.toLowerCase());
+        for (const created of ['wig', 'blond wig', 'paste', 'soft clay', 'yellow dye', 'ashes', 'key print', 'bronze key', 'clay', 'bucket', 'rope', 'beer']) {
+            expect(names).not.toContain(created);
+        }
+    });
+    test('gather fns yield the expected acquisition steps (bank covers the buys)', () => {
+        const s = snap('inProgress', [], 0, 100);
+        expect(princeali.gather!['redberries'](s, 1).kind).toBe('buy');
+        expect(princeali.gather!['bronze bar'](s, 1).kind).toBe('buy');
+        expect(princeali.gather!['pink skirt'](s, 1).kind).toBe('buy');
+        expect(princeali.gather!['logs'](s, 1).kind).toBe('grabGround');
+        expect(princeali.gather!['onion'](s, 1).kind).toBe('pickLoc');
+    });
+});
 
 describe('princeali decide — lifecycle', () => {
     test('notStarted -> Hassan', () => {
