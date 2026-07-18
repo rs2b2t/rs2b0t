@@ -64,19 +64,33 @@ export function gpShort(snap: { inv: Map<string, number>; bankCoins: number }, e
     return Math.max(0, estGp - have);
 }
 
-/** Default coin float, fetched once at provisioning time: coins are useful in
- *  nearly every quest (gate tolls, shop buys), so top the PACK up to `float` from
- *  the BANK. Returns the withdraw to issue, or null when the pack already carries
- *  the float or the bank is dry. Capped at what the bank holds, so a partial bank
- *  drains in one trip and — with bank counts refreshed after the withdraw — the
- *  next pass sees `banked === 0` and stops (no re-withdraw loop). Pure. */
+/** Top the PACK up to `target` of a named item from the BANK, fetched once at
+ *  provisioning time. Returns the withdraw to issue, or null when the pack already
+ *  holds the target or the bank is dry. Capped at what the bank holds, so a partial
+ *  bank drains in one trip and — with bank counts refreshed after the withdraw —
+ *  the next pass sees `banked === 0` and stops (no re-withdraw loop). `inv`/`bank`
+ *  keys are LOWERCASED (snapshot convention); the returned name keeps its casing
+ *  for the withdraw step. Pure. */
+export function floatWithdraw(
+    inv: Map<string, number>,
+    bank: Map<string, number>,
+    name: string,
+    target: number
+): { name: string; qty: number } | null {
+    const key = name.toLowerCase();
+    const pack = inv.get(key) ?? 0;
+    const banked = bank.get(key) ?? 0;
+    const want = Math.min(target - pack, banked);
+    return want > 0 ? { name, qty: want } : null;
+}
+
+/** Default coin float: coins are useful in nearly every quest (gate tolls, shop
+ *  buys), so top the pack up to `float` from the bank. Thin wrapper over
+ *  {@link floatWithdraw}. */
 export function coinFloatWithdraw(
     inv: Map<string, number>,
     bank: Map<string, number>,
     float: number
 ): { name: string; qty: number } | null {
-    const pack = inv.get('coins') ?? 0;
-    const banked = bank.get('coins') ?? 0;
-    const want = Math.min(float - pack, banked);
-    return want > 0 ? { name: 'Coins', qty: want } : null;
+    return floatWithdraw(inv, bank, 'Coins', float);
 }

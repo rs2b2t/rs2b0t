@@ -67,6 +67,12 @@ export interface QuestModule {
      *  AIOQuester.grindTargets() so the random-event guard never mistakes the
      *  quarry for a hostile event (the ArdyFighter mechanism). */
     grind?: string[];
+    /** How many food items to carry for this quest — withdrawn from the bank at
+     *  provisioning time using the AIOQuester's configured `food` item (0/undefined
+     *  = none). The AIOQuester sustain hook eats it when HP dips during the run.
+     *  For combat/danger quests (e.g. Waterfall's dungeon). Best-effort: an empty
+     *  bank or unset food item simply carries none. */
+    food?: number;
     /** Per acquirable item (LOWERCASED name): next step toward obtaining it.
      *  Called by provisioning when the bank lacks the item; `need` is how many
      *  more are required. decide-shaped so multi-leg gathers (windmill flour)

@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { coinFloatWithdraw, depositPlan, gpShort, planProvisioning } from './provisioning.js';
+import { coinFloatWithdraw, depositPlan, floatWithdraw, gpShort, planProvisioning } from './provisioning.js';
 import type { QuestItem } from '../types.js';
 
 const it = (name: string, qty: number, kind: 'mustHave' | 'acquirable'): QuestItem => ({ name, qty, kind });
@@ -93,5 +93,19 @@ describe('coinFloatWithdraw', () => {
     });
     test('bank dry -> null (no re-withdraw loop)', () => {
         expect(coinFloatWithdraw(...packBank(300, 0), 1000)).toBeNull();
+    });
+});
+
+describe('floatWithdraw (generalised, e.g. quest food)', () => {
+    test('lowercases the lookup, keeps the display name on the withdraw', () => {
+        const inv = new Map<string, number>();               // no trout in pack
+        const bank = new Map<string, number>([['trout', 50]]); // 50 banked
+        expect(floatWithdraw(inv, bank, 'Trout', 10)).toEqual({ name: 'Trout', qty: 10 });
+    });
+    test('tops up to target, capped at the bank; null once held or bank dry', () => {
+        expect(floatWithdraw(new Map([['trout', 4]]), new Map([['trout', 50]]), 'Trout', 10)).toEqual({ name: 'Trout', qty: 6 });
+        expect(floatWithdraw(new Map(), new Map([['trout', 3]]), 'Trout', 10)).toEqual({ name: 'Trout', qty: 3 });
+        expect(floatWithdraw(new Map([['trout', 10]]), new Map([['trout', 50]]), 'Trout', 10)).toBeNull();
+        expect(floatWithdraw(new Map(), new Map(), 'Trout', 10)).toBeNull();
     });
 });

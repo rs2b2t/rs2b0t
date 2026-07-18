@@ -770,6 +770,10 @@ function gatherRope(snap: QuestSnapshot, need: number): QuestStep {
 
 export const waterfall: QuestModule = {
     record: MEMBERS_C.find(r => r.id === 'waterfall')!,
+    // Carry food for the dungeon/combat legs — the engine withdraws this many of
+    // the AIOQuester's configured food item at provisioning time and the eat hook
+    // consumes it when HP dips (the tomb/Golrie legs run past aggressive spawns).
+    food: 10,
     // Rope is the only player-supplied record item; a death drops it, so it needs a
     // gather fn or the engine hard-blocks re-provisioning (deliberate-death finding).
     gather: { rope: gatherRope },

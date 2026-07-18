@@ -13,7 +13,7 @@ import { evaluate } from '../EligibilityEvaluator.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
-import { coinFloatWithdraw, depositPlan, planProvisioning } from './provisioning.js';
+import { coinFloatWithdraw, depositPlan, floatWithdraw, planProvisioning } from './provisioning.js';
 import { nextQuest, queueRows, type QueueRow } from './queue.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from './types.js';
 import { NO_PROGRESS_PARK, NO_PROGRESS_WARN, ProgressWatchdog, progressSignature } from './watchdog.js';
@@ -301,6 +301,14 @@ export class QuestEngine implements Task {
             // bank is dry; refreshBankCounts() after each step terminates a partial
             // drain (next pass sees banked===0), so this can't re-withdraw forever.
             const coinFloat = coinFloatWithdraw(snap.inv, this.lastBankCounts, COIN_FLOAT);
+            // Quests that declare `food` carry N of the AIOQuester's configured food
+            // item, withdrawn from the bank once here (rides the same bank trip).
+            // Best-effort: no food configured or a dry bank simply carries none.
+            const foodItem = this.host.foodItem();
+            const foodFloat = (module.food && foodItem)
+                ? floatWithdraw(snap.inv, this.lastBankCounts, foodItem, module.food)
+                : null;
+            const extras = [coinFloat, foodFloat].filter((w): w is { name: string; qty: number } => w !== null);
             if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
                 // A mustHave we can't buy/gather and the bank doesn't hold. PARK
                 // (not block): this is usually a transient bank/inv read race, so
@@ -316,10 +324,10 @@ export class QuestEngine implements Task {
                 const blk = this.applyBlocked(queueRows(this.order, picked, elig, this.parked, null));
                 this.host.noteState(blk, null, `parked: ${plan.blocked.join(', ')}`, this.noProgressCount, this.parked.size);
                 return;
-            } else if (plan.withdraw.length > 0 || coinFloat) {
-                // Withdraw record items and/or the default coin float first (one
-                // bank trip); re-planning next loop picks up any pending gather.
-                step = { kind: 'withdraw', items: [...plan.withdraw, ...(coinFloat ? [coinFloat] : [])] };
+            } else if (plan.withdraw.length > 0 || extras.length > 0) {
+                // Withdraw record items and/or the coin/food floats first (one bank
+                // trip); re-planning next loop picks up any pending gather.
+                step = { kind: 'withdraw', items: [...plan.withdraw, ...extras] };
             } else if (plan.satisfied) {
                 this.provisioned.add(id);
                 step = module.decide(snap);

@@ -1,8 +1,11 @@
-import { TaskBot } from '../api/Bot.js';
+import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
+import { Inventory } from '../api/hud/Inventory.js';
 import { Paint } from '../api/hud/Paint.js';
 import { Quests } from '../api/hud/Quests.js';
+import { Skills } from '../api/hud/Skills.js';
+import { Sustain } from '../api/Sustain.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { QuestEngine } from '../quests/engine/QuestEngine.js';
 import { QUEST_DEFS, defById } from '../quests/defs/index.js';
@@ -33,6 +36,18 @@ export const AIO_SETTINGS: SettingsSchema = {
         options: QUEST_DEFS.map(d => d.record.id),
         label: 'Quest queue (empty = all)',
         help: 'which implemented quests to complete, run in the listed order; leave empty to run every implemented quest'
+    },
+    food: {
+        type: 'string',
+        default: 'Trout',
+        label: 'Food item',
+        help: 'display name of the food to withdraw for quests that ask for it (e.g. Waterfall) and to eat when HP dips; blank = no food'
+    },
+    eatAtHp: {
+        type: 'number',
+        default: 50, min: 1, max: 99,
+        label: 'Eat below HP%',
+        help: 'eat one food whenever hitpoints drop below this percent, during walks and between steps'
     }
 };
 
@@ -48,6 +63,7 @@ export default class AIOQuester extends TaskBot {
 
     private status = 'starting';
     private picked = new Set<string>();
+    private eatAt = 0.5; // HP fraction below which the eat hook/task fires (set in onStart)
 
     // Paint mirror, published by the engine via noteState() each loop.
     private rows: QueueRow[] = [];
@@ -82,8 +98,44 @@ export default class AIOQuester extends TaskBot {
             }
         });
 
+        this.eatAt = this.settings.num('eatAtHp', 50) / 100;
+        // Sustain hook: awaited by the walker's follow/ladder loops (Sustain.run),
+        // so the bot eats mid-walk past aggressive spawns. The EatFood task below
+        // covers standing combat between engine steps. Both call eatOnce().
+        Sustain.set(async () => { if (this.shouldEat()) { await this.eatOnce(); } });
+
         this.log(`AIOQuester — queue: ${[...this.picked].join(', ') || '(none)'}`);
-        this.add(new ContinueDialog(), new QuestEngine(this));
+        this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
+    }
+
+    override async onStop(): Promise<void> {
+        Sustain.set(null); // the runner does not clear the hook for us
+    }
+
+    /** The configured food display name, or null when blank — read by the engine
+     *  (food provisioning for quests that declare `food`) and the eat hook/task. */
+    foodItem(): string | null {
+        const f = this.settings.str('food', '').trim();
+        return f.length > 0 ? f : null;
+    }
+
+    /** HP below the eat threshold with the configured food in the pack. */
+    shouldEat(): boolean {
+        const f = this.foodItem();
+        return f !== null && Skills.hpFraction() < this.eatAt
+            && Inventory.items().some(i => i.name?.toLowerCase() === f.toLowerCase());
+    }
+
+    /** Eat one of the configured food, waiting for the heal to land. */
+    async eatOnce(): Promise<void> {
+        const f = this.foodItem();
+        if (!f) { return; }
+        const food = Inventory.items().find(i => i.name?.toLowerCase() === f.toLowerCase());
+        if (!food) { return; }
+        this.status = `eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`;
+        const before = Skills.effective('hitpoints');
+        if (!(await food.interact('Eat'))) { return; }
+        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
     }
 
     /** The running quest's declared grind quarry (e.g. Romeo & Juliet's imps),
@@ -178,4 +230,12 @@ export default class AIOQuester extends TaskBot {
         }
         p.end();
     }
+}
+
+/** Eat between engine steps (standing combat the walker's Sustain hook can't
+ *  reach). Gated on HP + food so it never starves the QuestEngine task below it. */
+class EatFood implements Task {
+    constructor(private bot: AIOQuester) {}
+    validate(): boolean { return this.bot.shouldEat(); }
+    async execute(): Promise<void> { await this.bot.eatOnce(); }
 }
