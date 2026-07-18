@@ -2,7 +2,6 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
-import Tile from '../api/Tile.js';
 import { Traversal } from '../api/Traversal.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -15,18 +14,9 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { buyoutPlan } from '../shops/BuyoutLogic.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import type { ShopRecord } from '../shops/types.js';
+import { SHOP_PRESETS, presetByLabel, presetBuyableNames } from './shopPresets.js';
 
-// Lundail's Mage Arena rune shop — the default target. Spawns are content-
-// verified (maps/m39_73.jm2 npc rows, pack ids 902/903): Gundai the banker at
-// (2534,4714), Lundail at (2534,4719), one safe underground room. There is no
-// bank booth loc in the room — banking goes through Gundai's Talk-to dialog
-// ("access my bank account" → @openbank). The bot never web-walks into the
-// wilderness; park it in the room yourself.
-const DEFAULT_SHOP = 'magearena_runeshop';
-const DEFAULT_BANK_STAND = new Tile(2533, 4714, 0);
-const DEFAULT_SHOP_STAND = new Tile(2535, 4719, 0);
-
-const DEFAULT_BUY_NAMES: string[] = (SHOP_DB[DEFAULT_SHOP]?.items ?? []).map(i => i.name).sort();
+const DEFAULT_PRESET = SHOP_PRESETS[0]; // Mage Arena — Gundai still web-walk-free; park it in the room
 
 /** minutes → h:mm:ss for the paint's runtime line. */
 function fmtDuration(mins: number): string {
@@ -35,16 +25,11 @@ function fmtDuration(mins: number): string {
 }
 
 export const SHOPBUYOUT_SETTINGS: SettingsSchema = {
+    shop: { type: 'string', default: DEFAULT_PRESET.label, options: SHOP_PRESETS.map(p => p.label), label: 'Shop', help: 'the shop to buy out — its trade tile and nearest bank are baked in (add more in shopPresets.ts)' },
     budgetGp: { type: 'number', default: 250_000, min: 100, label: 'Total gp to spend', help: 'the session budget — the bot stops cleanly once roughly this much has been spent' },
     perTripGp: { type: 'number', default: 100_000, min: 100, label: 'Gp per bank trip' },
     stopFloorGp: { type: 'number', default: 5000, min: 0, label: 'Stop below bank gp' },
-    buyItems: { type: 'string[]', default: DEFAULT_BUY_NAMES, options: DEFAULT_BUY_NAMES, label: 'Items to buy', help: 'multi-select, valuable-first under the coin budget; options list the default (Mage Arena) shop — if none match a re-pointed shop, the bot buys everything and warns' },
-    keeper: { type: 'string', default: 'Lundail', label: 'Shopkeeper NPC' },
-    banker: { type: 'string', default: 'Gundai', label: 'Banker NPC', help: 'banked via Talk-to dialog; blank = use a bank booth instead' },
-    shopStand: { type: 'tile', default: DEFAULT_SHOP_STAND, label: 'Shop stand tile (x,z)' },
-    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
-    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc (banker blank)' },
-    bankOp: { type: 'string', default: 'Use-quickly', label: 'Bank booth op' },
+    buyItems: { type: 'string[]', default: [], options: presetBuyableNames(), label: 'Items to buy (empty = all stock)', help: 'multi-select, valuable-first under the coin budget; leave empty to buy the whole shop out' },
     recheckSeconds: { type: 'number', default: 60, min: 5, max: 600, label: 'Restock recheck (s)', help: 'wait between buy passes once the stock is drained (elemental runes restock 1/30s, law/nature 1/3min)' }
 };
 
@@ -68,12 +53,12 @@ export default class ShopBuyout extends TaskBot {
     perTripGp = 100_000;
     stopFloorGp = 5000;
     chosen = new Set<string>();
-    keeper = 'Lundail';
-    banker = 'Gundai';
-    shopStand = DEFAULT_SHOP_STAND;
-    bankStand = DEFAULT_BANK_STAND;
-    boothName = 'Bank booth';
-    boothOp = 'Use-quickly';
+    keeper = DEFAULT_PRESET.keeper;
+    banker = DEFAULT_PRESET.banker ?? '';
+    shopStand = DEFAULT_PRESET.shopStand;
+    bankStand = DEFAULT_PRESET.bankStand;
+    boothName = DEFAULT_PRESET.boothName ?? 'Bank booth';
+    boothOp = DEFAULT_PRESET.boothOp ?? 'Use-quickly';
     recheckMs = 60_000;
     /** The shop's db record (pricing + name→obj); null for an unknown keeper. */
     rec: ShopRecord | null = null;
@@ -84,13 +69,14 @@ export default class ShopBuyout extends TaskBot {
         this.budgetGp = this.settings.num('budgetGp', 250_000);
         this.perTripGp = this.settings.num('perTripGp', 100_000);
         this.stopFloorGp = this.settings.num('stopFloorGp', 5000);
-        this.chosen = new Set(this.settings.list('buyItems', DEFAULT_BUY_NAMES).map(s => s.toLowerCase()));
-        this.keeper = this.settings.str('keeper', 'Lundail');
-        this.banker = this.settings.str('banker', 'Gundai').trim();
-        this.shopStand = this.settings.tile('shopStand', DEFAULT_SHOP_STAND);
-        this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
-        this.boothName = this.settings.str('bankBooth', 'Bank booth');
-        this.boothOp = this.settings.str('bankOp', 'Use-quickly');
+        const preset = presetByLabel(this.settings.str('shop', DEFAULT_PRESET.label)) ?? DEFAULT_PRESET;
+        this.chosen = new Set(this.settings.list('buyItems', []).map(s => s.toLowerCase()));
+        this.keeper = preset.keeper;
+        this.banker = preset.banker ?? '';
+        this.shopStand = preset.shopStand;
+        this.bankStand = preset.bankStand;
+        this.boothName = preset.boothName ?? 'Bank booth';
+        this.boothOp = preset.boothOp ?? 'Use-quickly';
         this.recheckMs = this.settings.num('recheckSeconds', 60) * 1000;
         this.rec = Object.values(SHOP_DB).find(r => r.keepers.includes(this.keeper)) ?? null;
         if (!this.rec) {
