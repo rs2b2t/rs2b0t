@@ -91,13 +91,7 @@ const LUMBY_SHOP = { npc: 'Shop keeper', anchor: new Tile(3209, 3247, 0) };
 // --- Ground/loc gather tiles (brief data block; research doc §6) ---
 const ONION_PATCH = new Tile(3188, 3267, 0);      // loc 3366 'Onion' op2=Pick, beside Fred's farm
 const CLAY_ROCKS = new Tile(2986, 3240, 0);       // reuse Doric's Rimmington clay anchor
-const BUCKET_SPAWN = new Tile(3225, 3294, 0);     // proven farmhouse tile (cook def)
-// Rimmington Well (loc 884 'Well', category=well) at (2956,3212) — 30 tiles from
-// the Rimmington clay rocks the soft-clay/paste chains mine at, so bucket-fill
-// and soft-clay-making happen in one place. Live 2026-07-16: the earlier
-// Lumbridge (3208,3221) tile has NO 'Well' loc (a Fountain + Sink), so the
-// fill useOn found no target and spun.
-const WELL = new Tile(2956, 3212, 0);
+// (water is now bought as a Jug of water from the Shantay Pass shop — see jugWater)
 // Logs ground spawn for burnForAshes: no static Logs OBJ exists in Draynor town,
 // but m48_51 (0 17 1)/(0 17 2) -> (3089,3265,0)/(3089,3266,0) sit ~6t N of Aggie
 // in a fenced Draynor yard (obj.pack Logs id 1511). Closest level-0 pair to the
@@ -184,13 +178,11 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
     return step;
 }
 
-/** Water sub-chain over a PURE snapshot: get an empty Bucket then fill it at the
- *  Well. Shared by the soft-clay (row 5) and paste (row 8) chains. */
-function bucketWaterChain(snap: QuestSnapshot): QuestStep {
-    if (!has(snap, 'bucket')) {
-        return { kind: 'grabGround', item: 'Bucket', anchor: BUCKET_SPAWN };
-    }
-    return { kind: 'useOn', item: 'Bucket', targetKind: 'loc', target: 'Well', anchor: WELL, product: 'Bucket of water' };
+/** Water for the soft-clay (row 5) and paste (row 8) chains: buy Jug(s) of water
+ *  from the Shantay Pass shop (Jug of water, 1gp, F2P) — simpler and more reliable
+ *  than grabbing a Bucket and filling it at the Rimmington well. */
+function jugWater(snap: QuestSnapshot, qty: number): QuestStep {
+    return buyOrWait(snap, { kind: 'buy', item: 'Jug of water', qty, shop: SHANTAY_SHOP, estGp: 5 * qty });
 }
 
 /** Soft-clay chain (brief row 5): mine clay, fill a bucket, then water-on-clay
@@ -204,11 +196,12 @@ function softClayChain(snap: QuestSnapshot): QuestStep {
         }
         return { kind: 'mineRock', rock: 'Clay', item: 'Clay', qty: 1, anchor: CLAY_ROCKS };
     }
-    if (!has(snap, 'bucket of water')) {
-        return bucketWaterChain(snap);
+    if (!has(snap, 'jug of water')) {
+        return jugWater(snap, 2); // one for the soft clay, one left for the paste
     }
-    // Bucket of water on Clay -> Soft clay (item-on-item; anchor unused).
-    return { kind: 'useOn', item: 'Bucket of water', targetKind: 'item', target: 'Clay', anchor: WELL, product: 'Soft clay' };
+    // Jug of water on Clay -> Soft clay (item-on-item; anchor unused). Leaves an
+    // empty jug + a second jug of water the paste chain reuses.
+    return { kind: 'useOn', item: 'Jug of water', targetKind: 'item', target: 'Clay', anchor: CLAY_ROCKS, product: 'Soft clay' };
 }
 
 /** Paste chain (brief row 8; research doc §3: redberries + pot_flour + ashes +
@@ -231,7 +224,7 @@ function pasteChain(snap: QuestSnapshot): QuestStep {
     }
     // Either water type satisfies Aggie (research doc §3: bucket_water OR jug_water).
     if (!has(snap, 'bucket of water') && !has(snap, 'jug of water')) {
-        return bucketWaterChain(snap);
+        return jugWater(snap, 1);
     }
     return { kind: 'talk', stop: AGGIE_PASTE };
 }
@@ -583,7 +576,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         // probe on noProgress alone re-probed Leela — a full Draynor round-trip —
         // between every clay step (review finding). Only probe Leela on a genuinely
         // empty pack.
-        const midClayBuild = has(snap, 'clay') || has(snap, 'bucket') || has(snap, 'bucket of water');
+        const midClayBuild = has(snap, 'clay') || has(snap, 'jug of water');
         // Empty-handed, one probe before building fresh clay (noProgress==0 = just
         // progressed or fresh). WHICH npc depends on where we are in the key flow —
         // the Bronze bar (provisioned up front, consumed by Osman's forge) tells us:

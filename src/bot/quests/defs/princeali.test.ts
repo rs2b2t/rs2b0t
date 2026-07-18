@@ -118,17 +118,15 @@ describe('princeali decide — rows 4/5/6 key acquisition', () => {
         const s = decide(snap('inProgress', [], 1, 0, ['iron pickaxe']));
         expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
     });
-    test('has clay, no bucket -> grab a Bucket', () => {
-        const s = decide(snap('inProgress', [['clay', 1]], 1));
-        expect(s.kind === 'grabGround' && s.item).toBe('Bucket');
+    test('has clay, no water, bank covers -> buy Jug of water at Shantay', () => {
+        const s = decide(snap('inProgress', [['clay', 1]], 1, 100));
+        expect(s.kind === 'buy' && s.item).toBe('Jug of water');
+        expect(s.kind === 'buy' && s.shop.npc).toBe('Shantay');
     });
-    test('has clay + bucket -> fill at the Well', () => {
-        const s = decide(snap('inProgress', [['clay', 1], ['bucket', 1]], 1));
-        expect(s.kind === 'useOn' && s.target).toBe('Well');
-    });
-    test('has clay + bucket of water -> make soft clay (item-on-item)', () => {
-        const s = decide(snap('inProgress', [['clay', 1], ['bucket of water', 1]], 1));
+    test('has clay + jug of water -> make soft clay (item-on-item)', () => {
+        const s = decide(snap('inProgress', [['clay', 1], ['jug of water', 1]], 1));
         expect(s.kind === 'useOn' && s.targetKind).toBe('item');
+        expect(s.kind === 'useOn' && s.item).toBe('Jug of water');
         expect(s.kind === 'useOn' && s.product).toBe('Soft clay');
     });
 });
@@ -169,9 +167,9 @@ describe('princeali decide — row 8 paste chain', () => {
         const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['tinderbox', 1], ['logs', 1]]));
         expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('ash');
     });
-    test('ashes but no water -> water chain (grab Bucket)', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['ashes', 1]]));
-        expect(s.kind === 'grabGround' && s.item).toBe('Bucket');
+    test('ashes but no water -> buy Jug of water', () => {
+        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['ashes', 1]], 0, 100));
+        expect(s.kind === 'buy' && s.item).toBe('Jug of water');
     });
     test('all paste ingredients + water -> talk Aggie', () => {
         const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['ashes', 1], ['jug of water', 1]]));
