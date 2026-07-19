@@ -7,6 +7,7 @@ import { Quests } from '../../api/hud/Quests.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Reach } from '../../api/Reach.js';
 import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import { gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
@@ -387,48 +388,28 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         if (Inventory.count('Bones') < BONES_NEEDED) {
             return grindBones(log);
         }
-        // Climb into the tower interior first (see WIZ_INSIDE_STAND note): a plain
-        // walk-to-L1 wedges at the bogus exterior stair-edge tile. Only do this
-        // while still on the ground floor; once on L1, gotoNpc walks the chamber.
+        // Climb to the tower's first floor. Post nav-fix this is ONE primitive:
+        // walkResilient routes the whole baked path (the regenerated stair edge
+        // now stands INSIDE the tower and the door-crossings are driven), and
+        // the Climb-up OPLOC server-walks the last tiles.
         const t0 = Game.tile();
         if (t0 && t0.level !== 1) {
-            if (Tile.from(t0).distanceTo(WIZ_INSIDE_STAND) > 1) {
-                // Pure-L0 interior target -> forced door route (not the exterior edge).
-                await Traversal.walkResilient(WIZ_INSIDE_STAND, { radius: 1, attempts: 3, timeoutMs: 90_000, log });
-                return false;
+            const climbed = await Reach.locOp({
+                name: 'Staircase',
+                op: 'Climb-up',
+                near: WIZ_INSIDE_STAND,
+                expect: () => (Game.tile()?.level ?? 0) >= 1,
+                log
+            });
+            if (climbed === 'unreachable') {
+                log('demon: tower staircase unreachable — re-entering to re-plan');
             }
-            // Inside now: OPLOC the staircase. From here the server CAN reach it and
-            // walks us up (it couldn't from the walled-off exterior snap tile).
-            const stair = Locs.query().name('Staircase').action('Climb-up').within(5).nearest();
-            if (stair) {
-                await stair.interact('Climb-up');
-                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 12_000);
-            } else {
-                log('demon: no Climb-up Staircase within reach of the interior stand — retrying');
-            }
-            return false;
+            return false; // re-enter: next pass talks Traiborn from L1
         }
-        // ON L1 now, in the stair-landing chamber; Traiborn is at (3113,3162,1),
-        // behind an interior door (3110,3162,1). The CLIENT walker crosses these
-        // tower doors unreliably ("did not cross in time") and then escalates into a
-        // climb-DOWN that undoes the whole climb (live 2026-07-19). So DON'T client-
-        // walk here: a Talk-to OPNPC is a SERVER opcode — the server paths to Traiborn
-        // THROUGH the door (opening/crossing it natively) and we just wait generously
-        // for the box. Re-entrant: a miss retries from L1 (never a climb-down), so it
-        // can't hard-block. (The bounded gotoNpc client-walk was the bug: its door-cross
-        // wedged, talkThrough fired across the door, then the walker climbed back down.)
-        if (!ChatDialog.isOpen()) {
-            const trai = Npcs.query().name('Traiborn').action('Talk-to').nearest();
-            if (!trai) { return false; }
-            // The Talk-to OPNPC server-walk stops AT the closed interior door — the
-            // server paths up to it but won't auto-open it (live: bot halts at
-            // (3109,3162)). So open the nearest door toward Traiborn ourselves first,
-            // then re-fire Talk-to and the server crosses. Two-pass by design: pass 1's
-            // OPNPC brings us to the door, pass 2 (door now in range) opens + crosses.
-            const door = Locs.query().name('Door').action('Open').within(4).nearest();
-            if (door) { await door.interact('Open'); await Execution.delayTicks(2); }
-            if (!(await trai.interact('Talk-to'))) { return false; }
-            if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 15_000))) { return false; }
+        // On L1 — get Traiborn's dialogue open (tracks his patrol; opens the
+        // interior door leaf when the way is shut), then drive it.
+        if ((await Reach.npcDialog({ name: 'Traiborn', near: TRAIBORN.anchor, log })) !== 'done') {
+            return false;
         }
         // First talk sets find_bones; second (still holding bones) hands all 25 and
         // yields key_1. talkThrough drives both. The handover is a ~25-TICK SERVER
