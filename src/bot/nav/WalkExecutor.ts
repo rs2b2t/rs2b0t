@@ -452,51 +452,65 @@ class WalkExecutorImpl {
                     stallRetries = 0;
                     clickIdx = -1;
                 } else {
-                    const opened = await this.tryNearbyDoor(log);
-                    if (opened) {
+                    // Stalled without ever advancing (clicks===0). Tell apart what is
+                    // stranding us one tile short of the path terminal:
+                    //
+                    //  (1) our OWN just-crossed door's OPEN leaf. A straight door opened
+                    //      to cross swings its leaf onto the LANDING tile (one past the
+                    //      door) and flags it WALK_SCENERY. The tile IS walkable, but
+                    //      canReach is conservative about the scenery flag, so the normal
+                    //      (canReach-gated) click path click-starves there — looking
+                    //      exactly like a live-blocked booth (clicks===0, chebyshev 1).
+                    //      SCENE-STEP onto it with a RAW client walk (DirectNavigator,
+                    //      not canReach-gated), exactly as crossMultiTileDoor does
+                    //      mid-cross (live-confirmed: from (3248,3411) the bot walks onto
+                    //      the leaf-flagged (3248,3412) in ~2s). We must NOT close the
+                    //      leaf: the door has to stay OPEN for the step, and closing it
+                    //      swings the panel back over the doorway, which tryNearbyDoor
+                    //      immediately re-opens — an endless open/close oscillation (the
+                    //      130s door-cross-test leg1 hang, live-confirmed). While the
+                    //      open leaf stands we keep retrying the step (never latch
+                    //      'blocked' on our own transient crossing leaf). Gated to a leaf
+                    //      within 2 tiles of the terminal so it only fires for a door
+                    //      genuinely on top of us, never one near an occupied booth.
+                    //  (2) a SHUT door/gate on the path — tryNearbyDoor opens it (the
+                    //      long-standing stall opener; also RE-opens a door that reverted
+                    //      shut, so the next iteration can scene-step through it).
+                    //
+                    // If NEITHER is present and the terminal is still unreachable, it's
+                    // an honest live block (an occupied stall-stand/booth — ArdyThiever
+                    // etc., not a door/gate): report 'blocked' NOW (walkResilient treats
+                    // it as arrival — the scene walk can't beat a live block) instead of
+                    // repathing the same short path 5× and timing out (the "0 clicks
+                    // stuck" loop). Bound: a leaf that never yields is still capped by
+                    // the walkTo deadline.
+                    const end = tiles[tiles.length - 1];
+                    const adjacentToEnd = clicks === 0 && me.level === end.level && chebyshev(me, end) <= 1;
+                    if (adjacentToEnd) {
+                        const openLeaf = Locs.query()
+                            .where(l => isOpenBarrierLeaf(l.name, l.actions()) && chebyshev(l.tile(), end) <= 2)
+                            .within(3)
+                            .nearest();
+                        if (openLeaf) {
+                            log(`(${end.x},${end.z}) leaf-flagged by open '${openLeaf.name}' — scene-stepping onto it`);
+                            DirectNavigator.walk(end);
+                            await Execution.delayUntil(() => {
+                                const cur = reader.worldTile();
+                                return cur !== null && cur.level === end.level && cur.x === end.x && cur.z === end.z;
+                            }, SCENE_STEP_MS);
+                            stallRetries = 0;
+                            clickIdx = -1;
+                            lastTile = null;
+                            continue;
+                        }
+                    }
+                    if (await this.tryNearbyDoor(log)) {
                         stallRetries = 0;
                         clickIdx = -1;
                         lastTile = null;
                         continue;
                     }
-                    // Stalled without ever advancing (clicks===0) and no door to
-                    // open: if we're adjacent to the path's terminal, that tile is
-                    // blocked LIVE — walkable in the baked pack but occupied (a
-                    // market-stall stand, a booth, a parked NPC). We are as close as
-                    // the live scene allows, so report 'blocked' NOW (walkResilient
-                    // treats it as arrival — the scene walk can't beat a live block)
-                    // instead of repathing the same short path 5× and timing out
-                    // (the "0 clicks stuck" loop). Repathing can't help: the baked
-                    // collision it plans against is unchanged. Distinct from 'closest'
-                    // (a snapped unwalkable terminal), which the scene walk CAN beat.
-                    const end = tiles[tiles.length - 1];
-                    if (clicks === 0 && me.level === end.level && chebyshev(me, end) <= 1) {
-                        // ...but a TRANSIENT obstruction must not latch here. When a
-                        // straight door opens for a 1-tile crossing its leaf swings
-                        // onto the landing tile and flags it WALK_SCENERY, so canReach
-                        // refuses that tile and we click-starve one step short
-                        // (clicks===0, chebyshev 1) — looking exactly like a live-
-                        // blocked booth. But the RS door AUTO-REVERTS (closes) within
-                        // a few ticks, which unflags the tile; latching 'blocked' now
-                        // loses that race (door-cross-test leg1: crossed the door in
-                        // 5.6s, then 'blocked' fired on the transiently-flagged
-                        // (3248,3412) landing a tick before the leaf closed; the old,
-                        // slower crossing masked it by outlasting the revert). So if
-                        // an OPEN door/gate leaf (name door/gate offering Close — the
-                        // isOpenableBarrier dual) sits within ~3 tiles, DON'T latch:
-                        // keep stalling. The leaf reverts within ticks, the stall loop
-                        // re-evaluates, and the normal click path finishes the walk
-                        // once the flag clears. Bound: a leaf that never reverts is
-                        // still capped by the walkTo deadline (the while-deadline ends
-                        // this walk with 'failed' — acceptable). The no-open-leaf path
-                        // below is unchanged and load-bearing for occupied stall-
-                        // stands/booths (ArdyThiever etc.), which are not door/gate.
-                        const openLeaf = Locs.query().where(l => isOpenBarrierLeaf(l.name, l.actions())).within(3).nearest();
-                        if (openLeaf) {
-                            log(`(${end.x},${end.z}) blocked by an open '${openLeaf.name}' leaf — waiting for it to revert`);
-                            await Execution.delayTicks(2);
-                            continue;
-                        }
+                    if (adjacentToEnd) {
                         log(`(${end.x},${end.z}) blocked live — as close as reachable`);
                         return 'blocked';
                     }
