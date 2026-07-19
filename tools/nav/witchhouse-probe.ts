@@ -46,3 +46,4 @@ trace({ x: 2900, z: 3474, level: 0 }, { x: 2906, z: 3476, level: 0 }, 'outside f
 trace({ x: 2900, z: 3474, level: 0 }, { x: 2907, z: 3477, level: 0 }, 'outside front door -> ladder N-adjacent');
 trace({ x: 2902, z: 3473, level: 0 }, { x: 2906, z: 3476, level: 0 }, 'inside front door -> ladder W-adjacent');
 trace({ x: 2900, z: 3474, level: 0 }, { x: 2908, z: 3478, level: 0 }, 'outside front door -> live wedge tile (2908,3478)');
+trace({ x: 2900, z: 3474, level: 0 }, { x: 2907, z: 3476, level: 0 }, 'outside -> LADDER TILE itself (goal selection)');

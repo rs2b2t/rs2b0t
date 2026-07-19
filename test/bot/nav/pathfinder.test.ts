@@ -120,10 +120,15 @@ describe('PathFinder goal selection for unwalkable targets', () => {
     });
 
     test('falls back to the ring when every cardinal-adjacent tile is sealed (enclave)', () => {
-        // Same room, NO door edge: the interior is a sealed island (the Varrock
-        // fountain shape). The ring keeps enclaves harmless — path must still
-        // succeed, terminating outside within 5 tiles of the target.
-        const finder = new PathFinder(buildPack(roomWalkable));
+        // A TRUE enclave (the Varrock-fountain shape): the target AND every tile
+        // cardinally adjacent to it are unwalkable, so no interact-legal stand
+        // exists and the wall-aware flood comes back empty. Only then does the
+        // ring fall back, keeping the enclave harmless — path must still succeed,
+        // terminating outside within 5 tiles of the target. (A sealed room whose
+        // interior stands ARE walkable but walled off from outside is now an
+        // honest unreachable instead — see the W4 tests in PathFinder.test.ts.)
+        const solidBlock = (x: number, z: number): boolean => !(x >= 3210 && x <= 3214 && z >= 3210 && z <= 3214);
+        const finder = new PathFinder(buildPack(solidBlock));
         finder.addEdges([], []);
         const r = finder.findPath(START, BOX);
         expect(r.ok).toBe(true);
@@ -132,7 +137,7 @@ describe('PathFinder goal selection for unwalkable targets', () => {
         }
         const last = r.waypoints[r.waypoints.length - 1];
         expect(Math.max(Math.abs(last.x - BOX.x), Math.abs(last.z - BOX.z))).toBeLessThanOrEqual(5);
-        expect(last.x).toBeGreaterThanOrEqual(3215); // outside the room
+        expect(last.x).toBeGreaterThanOrEqual(3215); // outside the block
     });
 
     test('walkable target still paths to the exact tile', () => {

@@ -313,11 +313,15 @@ export class PathFinder {
     }
 
     /**
-     * Goal candidates for an unwalkable target: every walkable tile within
-     * `radius`. Searching to the whole set (first one popped wins) is what
-     * makes enclaves harmless — e.g. (3213,3428) is inside the Varrock
-     * fountain and its nearest walkable tile is the fountain's enclosed
-     * centre, which no flood can reach; some other ring tile is.
+     * Goal candidates for an unwalkable target — WALL-AWARE. Prefer tiles
+     * CONNECTED to the target: a bounded flood seeded from its wall-open
+     * cardinal adjacents (cardinalGoals' exact rule), expanded over the same
+     * exit-mask steps A* uses, confined to the Chebyshev `radius` box. A tile
+     * the flood can't touch is wall-separated from the target (the witch-house
+     * exterior (2908,3478) vs its interior stand (2906,3476) — one cost-unit
+     * cheaper and useless) and must NOT be a goal. When the flood finds
+     * NOTHING (the target's component is sealed — the Varrock-fountain
+     * enclave), fall back to the plain ring so those stay harmless.
      */
     private goalCandidates(p: NavPoint, radius: number): Set<number> {
         const goals = new Set<number>();
@@ -325,6 +329,37 @@ export class PathFinder {
             goals.add(nodeId(p.x, p.z, p.level));
             return goals;
         }
+        const queue: NavPoint[] = [];
+        const seen = new Set<number>();
+        for (const id of this.cardinalGoals(p)) {
+            queue.push({ x: nodeX(id), z: nodeZ(id), level: nodeLevel(id) });
+            seen.add(id);
+        }
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            goals.add(nodeId(cur.x, cur.z, cur.level));
+            const mask = this.exitMask(cur.x, cur.z, cur.level);
+            for (let dir = 0; dir < 8; dir++) {
+                if ((mask & (1 << dir)) === 0) {
+                    continue;
+                }
+                const nx = cur.x + DX[dir];
+                const nz = cur.z + DZ[dir];
+                if (Math.max(Math.abs(nx - p.x), Math.abs(nz - p.z)) > radius) {
+                    continue;
+                }
+                const id = nodeId(nx, nz, cur.level);
+                if (seen.has(id) || !this.walkable(nx, nz, cur.level)) {
+                    continue;
+                }
+                seen.add(id);
+                queue.push({ x: nx, z: nz, level: cur.level });
+            }
+        }
+        if (goals.size > 0) {
+            return goals;
+        }
+        // Sealed target — the old wall-blind ring keeps enclaves harmless.
         for (let dx = -radius; dx <= radius; dx++) {
             for (let dz = -radius; dz <= radius; dz++) {
                 if (this.walkable(p.x + dx, p.z + dz, p.level)) {
