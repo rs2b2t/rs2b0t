@@ -219,15 +219,18 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
  *  notStarted branch of decide()). Both are harmless no-ops once past their stage.
  *  Best-effort per leg so a failed Lancelot climb doesn't abort Gawain. */
 async function talkKnights(log: (m: string) => void): Promise<void> {
-    if (await gotoNpc(GAWAIN, [], log)) {
-        await talkThrough('Sir Gawain', GAWAIN.prefer, log);
-    }
+    await gotoNpc(GAWAIN, [], log); // talk unconditionally (OPNPC reaches him even if he patrols off-anchor)
+    await talkThrough('Sir Gawain', GAWAIN.prefer, log);
     // Lancelot is upstairs (level 1) — needs the Camelot staircase in the nav graph
     // (same assumption as R&J's Juliet). If unreachable, stage sticks at 2 and the
     // crate stays a no-op — a top live risk.
-    if (await gotoNpc(LANCELOT, [], log)) {
-        await talkThrough('Sir Lancelot', LANCELOT.prefer, log);
-    }
+    // gotoNpc gets us onto L1 near Lancelot, but its npcNear RETURN is unreliable —
+    // Lancelot PATROLS off the anchor tile (live 2026-07-19: the bot stood on
+    // (2757,3511) yet gotoNpc returned false because he'd wandered > leash, so the
+    // guarded talkThrough was skipped and the stage stuck at spoken_gawain). Talk
+    // UNCONDITIONALLY: the Talk-to OPNPC server-walks to him wherever he is on L1.
+    await gotoNpc(LANCELOT, [], log);
+    await talkThrough('Sir Lancelot', LANCELOT.prefer, log);
 }
 
 /**
