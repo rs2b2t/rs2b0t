@@ -219,18 +219,53 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
  *  notStarted branch of decide()). Both are harmless no-ops once past their stage.
  *  Best-effort per leg so a failed Lancelot climb doesn't abort Gawain. */
 async function talkKnights(log: (m: string) => void): Promise<void> {
-    await gotoNpc(GAWAIN, [], log); // talk unconditionally (OPNPC reaches him even if he patrols off-anchor)
-    await talkThrough('Sir Gawain', GAWAIN.prefer, log);
-    // Lancelot is upstairs (level 1) — needs the Camelot staircase in the nav graph
-    // (same assumption as R&J's Juliet). If unreachable, stage sticks at 2 and the
-    // crate stays a no-op — a top live risk.
-    // gotoNpc gets us onto L1 near Lancelot, but its npcNear RETURN is unreliable —
-    // Lancelot PATROLS off the anchor tile (live 2026-07-19: the bot stood on
-    // (2757,3511) yet gotoNpc returned false because he'd wandered > leash, so the
-    // guarded talkThrough was skipped and the stage stuck at spoken_gawain). Talk
-    // UNCONDITIONALLY: the Talk-to OPNPC server-walks to him wherever he is on L1.
-    await gotoNpc(LANCELOT, [], log);
-    await talkThrough('Sir Lancelot', LANCELOT.prefer, log);
+    await talkKnight(GAWAIN, log);
+    await talkKnight(LANCELOT, log);
+}
+
+/** Talk to a PATROLLING Camelot knight. gotoNpc's npcNear gate is unreliable (the
+ *  knights wander off their anchor tiles — live 2026-07-19: bot stood on (2757,3511)
+ *  yet gotoNpc=false because Lancelot had roamed), and talkThrough's 8s open-wait is
+ *  too short for the Talk-to OPNPC to server-walk to a wandered knight, so both knights
+ *  intermittently "never open" and the stage sticks. So: approach the patrol area, then
+ *  fire Talk-to and wait GENEROUSLY (15s) for the box; talkThrough then drives the open
+ *  dialogue. A miss just retries on the next openingLeg pass (the leg is re-entrant). */
+async function talkKnight(stop: NpcStop, log: (m: string) => void): Promise<void> {
+    await gotoNpc(stop, [], log); // climb/approach the floor; npcNear return is ignored
+    if (!ChatDialog.isOpen()) {
+        const npc = Npcs.query().name(stop.npc).action('Talk-to').nearest();
+        if (!npc) {
+            log(`talkKnight: '${stop.npc}' not in scene yet — retry`);
+            return;
+        }
+        await npc.interact('Talk-to');
+        if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 15_000))) {
+            log(`talkKnight: '${stop.npc}' dialogue slow (patrolled far) — retry`);
+            return;
+        }
+    }
+    // Drive the dialogue, TOLERATING page-transition gaps. The stage-set line is buried
+    // mid-branch (sir_lancelot.rs2:34 is line 4 of a 6-line option-4 branch), and a
+    // plain `while (isOpen())` loop exits on the brief closed gap BETWEEN chat pages —
+    // stopping before the varp set, so the (correct) option pick never advances the
+    // stage (live 2026-07-19: picks confirmed right, yet the crate wouldn't teleport).
+    // Here a transient close waits ~1.5s for the next page before giving up.
+    for (let i = 0; i < 80; i++) {
+        if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
+            if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) {
+                break; // genuinely closed
+            }
+        }
+        if (ChatDialog.canContinue()) { await ChatDialog.continue(); await Execution.delayTicks(1); continue; }
+        const opts = ChatDialog.options();
+        if (opts.length > 0) {
+            const pick = pickPreferred(opts, stop.prefer);
+            await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
+            await Execution.delayTicks(2); // let the next page load before re-checking
+            continue;
+        }
+        await Execution.delayTicks(1);
+    }
 }
 
 /**
@@ -352,7 +387,18 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
  *  (merlincrate_empty2) back to Catherby (arthur.rs2:38-66). Best-effort in one call;
  *  a failure re-enters fortress, which retries. */
 async function leaveKeep(log: (m: string) => void): Promise<boolean> {
-    if ((Game.tile()?.level ?? 0) >= 2 && !(await climbAt(KEEP_STAIR_L2_DOWN, 'Climb-down', log))) {
+    if ((Game.tile()?.level ?? 0) >= 2) {
+        // Climb DOWN. climbAt's strict walkResilient(stand, radius 1) reads the down-
+        // stair stand (2769,3399) as "unreachable" from the post-fight spot (live
+        // 2026-07-19), so OPLOC the Staircase directly when it's in range and let the
+        // SERVER walk the last tiles + descend; only walk closer if it's not visible.
+        const down = Locs.query().name('Staircase').action('Climb-down').within(6).nearest();
+        if (down) {
+            await down.interact('Climb-down');
+            await Execution.delayUntil(() => (Game.tile()?.level ?? 2) < 2, 8000);
+            return false;
+        }
+        await Traversal.walkResilient(KEEP_STAIR_L2_DOWN, { radius: 2, attempts: 3, timeoutMs: 60_000, log });
         return false;
     }
     if (!(await Traversal.walkResilient(RETURN_CRATE_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
