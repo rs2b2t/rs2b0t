@@ -17,6 +17,7 @@ import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
+import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
@@ -116,6 +117,15 @@ ScriptRegistry.register({
     tags: ['ardougne', 'safespot', 'afk'],
     settingsSchema: MOSSGIANT_SETTINGS,
     create: () => new MossGiant()
+});
+
+ScriptRegistry.register({
+    name: 'GreenDragon',
+    description: 'Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides',
+    category: 'Combat',
+    tags: ['wilderness', 'dragons', 'hides'],
+    settingsSchema: GREENDRAGON_SETTINGS,
+    create: () => new GreenDragon()
 });
 
 ScriptRegistry.register({
