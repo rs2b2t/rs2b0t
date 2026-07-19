@@ -259,11 +259,20 @@ export async function talkThrough(npcName: string, prefer: string[], log: (m: st
             return false;
         }
     }
-    // The final Sedridor conversation is ~40 continue-pages; 120 iterations
-    // bounds a stuck dialogue without cutting a long legitimate one short.
-    for (let i = 0; i < 120 && ChatDialog.isOpen(); i++) {
+    // Drive the dialogue, TOLERATING page-transition gaps: a server-scripted
+    // branch closes the box for a beat BETWEEN pages, and a plain isOpen() loop
+    // exits there — BEFORE mid-branch varp-sets (sir_lancelot.rs2:34 is line 4
+    // of a 6-line branch), so a correct option pick silently failed to advance
+    // the stage (live 2026-07-19). A transient close now waits ~1.5s for the
+    // next page before concluding the dialogue is genuinely over.
+    for (let i = 0; i < 120; i++) {
         if (EventSignal.pending()) {
             return false; // let the runtime clear the random event
+        }
+        if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
+            if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) {
+                break; // genuinely closed
+            }
         }
         if (ChatDialog.canContinue()) {
             await ChatDialog.continue();
@@ -277,7 +286,7 @@ export async function talkThrough(npcName: string, prefer: string[], log: (m: st
                 log(`WARN: no preferred option in [${opts.join(' | ')}] — taking the last`);
             }
             await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
-            await Execution.delayTicks(1);
+            await Execution.delayTicks(2);
             continue;
         }
         await Execution.delayTicks(1);
