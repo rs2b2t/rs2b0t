@@ -143,6 +143,12 @@ class WalkExecutorImpl {
      *  THIS walkTo — excluded on repath. */
     private avoidDoors: { x: number; z: number }[] = [];
 
+    /** Per-walkTo crossing failure counts (key `locX|locZ`) — a crossing is only
+     *  poisoned into avoidDoors on its SECOND failed full attempt, so one
+     *  timing flake no longer diverts the route around the world (the
+     *  witch-house exterior detour). */
+    private doorStrikes = new Map<string, number>();
+
     /**
      * Web-walk to `dest`. Resolves true on arrival, false on failure/timeout.
      * Only call from script context (sleeps via Execution.*).
@@ -260,6 +266,7 @@ class WalkExecutorImpl {
      *  can't currently meet (e.g. the Al Kharid toll while broke). Shared by
      *  walkTo and probeDest so a probe sees what a fresh walk would plan. */
     private resetAvoids(): void {
+        this.doorStrikes.clear();
         this.avoidDoors = [];
         for (const sc of SPECIAL_CROSSINGS) {
             if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
@@ -474,7 +481,30 @@ class WalkExecutorImpl {
                     clicks++;
                     stallTicks = 0;
                 } else if (target === -1) {
-                    // nothing clickable ahead (scene edge / blocked) — a stall
+                    // Nothing clickable ahead. If the reason is a crossing we're
+                    // already beside (its approach canReach-refused through the
+                    // closed leaf), fire the crossing NOW — click-starvation next
+                    // to a crossing IS the door case, and waiting only burns the
+                    // stall counter into a repath (live: Camelot throne doors,
+                    // witch-house inner door — the "0 clicks" loops).
+                    if (nextCrossingIdx !== -1) {
+                        const appr = tiles[nextCrossingIdx - 1];
+                        if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
+                            const handled = await this.handleTransport(appr, tiles[nextCrossingIdx], log);
+                            if (handled) {
+                                tiles[nextCrossingIdx].transport = undefined;
+                                pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                                stallTicks = 0;
+                                stallRetries = 0;
+                                clickIdx = -1;
+                                lastTile = null;
+                                continue;
+                            }
+                            this.failedDoor(tiles[nextCrossingIdx]);
+                            return 'repath';
+                        }
+                    }
+                    // scene edge / genuinely blocked — a stall
                     stallTicks += 2;
                 }
             }
@@ -526,16 +556,19 @@ class WalkExecutorImpl {
 
     private failedDoor(step: PathStep): void {
         const t = step.transport;
-        if (t) {
-            // Any crossing that exhausted handleTransport's retries — a door OR a
-            // level-change staircase/ladder — is excluded on the next repath within
-            // this walkTo. Stairs used to be skipped here, so a failed synthesized
-            // stair edge (a descent-landing tile re-used as an UP operate tile;
-            // 2004 stairs forceapproach=south means the op never fires from there)
-            // re-pathed onto itself forever ("did not resolve, retrying"). Excluding
-            // it lets A* fall through to the proven curated operate tile nearby.
+        if (!t) {
+            return;
+        }
+        const key = `${t.locX}|${t.locZ}`;
+        const strikes = (this.doorStrikes.get(key) ?? 0) + 1;
+        this.doorStrikes.set(key, strikes);
+        if (strikes >= 2) {
+            // Two full crossing budgets failed this walk — poison it so the
+            // repath routes around (doors, stairs, ladders, teleports alike).
             this.avoidDoors.push({ x: t.locX, z: t.locZ });
         }
+        // strike 1: repath WITHOUT avoiding — the fresh path retries the same
+        // crossing with a full budget.
     }
 
     /**
