@@ -7,7 +7,8 @@ let walkCalls: { x: number; z: number; level: number }[];
 let walkResult: boolean;
 let walkLastOutcome: string;
 let canReachResult: boolean;
-let doorOpened: boolean;
+let locInteractCount: number;
+let npcInteractCount: number;
 let dialogOpen: boolean;
 let expectFlips: boolean; // locOp's expect() reads this
 
@@ -23,14 +24,14 @@ mock.module('./Execution.js', () => ({
 mock.module('./queries/Locs.js', () => ({
     Locs: {
         query: () => ({
-            name: () => ({ action: () => ({ within: () => ({ nearest: () => (sceneLoc ? { name: sceneLoc.name, tile: () => sceneLoc!.tile, actions: () => sceneLoc!.ops, interact: async () => sceneLoc!.interactResult } : null) }) }) })
+            name: () => ({ action: () => ({ within: () => ({ nearest: () => (sceneLoc ? { name: sceneLoc.name, tile: () => sceneLoc!.tile, actions: () => sceneLoc!.ops, interact: async () => { locInteractCount++; return sceneLoc!.interactResult; } } : null) }) }) })
         })
     }
 }));
 mock.module('./queries/Npcs.js', () => ({
     Npcs: {
         query: () => ({
-            name: () => ({ action: () => ({ nearest: () => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, interact: async () => sceneNpc!.interactResult } : null) }) })
+            name: () => ({ action: () => ({ nearest: () => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, interact: async () => { npcInteractCount++; return sceneNpc!.interactResult; } } : null) }) })
         })
     }
 }));
@@ -50,8 +51,7 @@ mock.module('./Traversal.js', () => ({
 }));
 mock.module('../nav/WalkExecutor.js', () => ({
     WalkExecutor: {
-        get lastOutcome() { return walkLastOutcome; },
-        tryNearbyDoor: async () => { doorOpened = true; return true; }
+        get lastOutcome() { return walkLastOutcome; }
     }
 }));
 
@@ -64,7 +64,8 @@ beforeEach(() => {
     walkResult = true;
     walkLastOutcome = 'failed';
     canReachResult = true;
-    doorOpened = false;
+    locInteractCount = 0;
+    npcInteractCount = 0;
     dialogOpen = false;
     expectFlips = true;
 });
@@ -87,12 +88,25 @@ describe('Reach.locOp', () => {
         expect(r).toBe('done');
         expect(walkCalls.length).toBe(0);
     });
-    test('loc present but canReach false → opens a door first, still fires the op', async () => {
+    test('loc present but canReach false → walks to the loc tile, then fires the op, done', async () => {
         sceneLoc = { name: 'Ladder', ops: ['Climb-down'], tile: { x: 6, z: 5, level: 0 }, interactResult: true };
         canReachResult = false;
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
-        expect(doorOpened).toBe(true);
+        // walked to the LOC tile (6,5) — not merely the hint (5,5) — then fired the op
+        expect(walkCalls.length).toBe(1);
+        expect(walkCalls[0]).toEqual({ x: 6, z: 5, level: 0 });
+        expect(locInteractCount).toBe(1);
         expect(r).toBe('done');
+    });
+    test('loc present + canReach false + walk proves unreachable → unreachable, op never fires', async () => {
+        sceneLoc = { name: 'Ladder', ops: ['Climb-down'], tile: { x: 6, z: 5, level: 0 }, interactResult: true };
+        canReachResult = false;
+        walkResult = false;
+        walkLastOutcome = 'unreachable';
+        const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
+        expect(r).toBe('unreachable');
+        expect(walkCalls[0]).toEqual({ x: 6, z: 5, level: 0 });
+        expect(locInteractCount).toBe(0);
     });
     test('op fired but expect never satisfied → retry', async () => {
         sceneLoc = { name: 'Ladder', ops: ['Climb-down'], tile: { x: 6, z: 5, level: 0 }, interactResult: true };
@@ -113,17 +127,27 @@ describe('Reach.npcDialog', () => {
         expect(r).toBe('retry');
         expect(walkCalls.length).toBe(1);
     });
-    test('npc present, blocked way → door opened, talk fired, done when dialog opens', async () => {
+    test('npc present but canReach false → walks to the npc tile, then Talk-to, done when dialog opens', async () => {
         sceneNpc = { name: 'Traiborn', tile: { x: 8, z: 5, level: 0 }, interactResult: true };
         canReachResult = false;
-        // delayUntil evaluates its condition once — make the dialog "open" as a
-        // side effect of interact for this scenario:
-        sceneNpc.interactResult = true;
         dialogOpen = false;
         const promise = Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
         dialogOpen = true; // opens before the wait's condition is polled
         const r = await promise;
-        expect(doorOpened).toBe(true);
+        // walked to the NPC tile (8,5) — not merely the hint (5,5) — then Talk-to fired
+        expect(walkCalls.length).toBe(1);
+        expect(walkCalls[0]).toEqual({ x: 8, z: 5, level: 0 });
+        expect(npcInteractCount).toBe(1);
         expect(r).toBe('done');
+    });
+    test('npc present + canReach false + walk unreachable → unreachable, Talk-to never fires', async () => {
+        sceneNpc = { name: 'Traiborn', tile: { x: 8, z: 5, level: 0 }, interactResult: true };
+        canReachResult = false;
+        walkResult = false;
+        walkLastOutcome = 'unreachable';
+        const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
+        expect(r).toBe('unreachable');
+        expect(walkCalls[0]).toEqual({ x: 8, z: 5, level: 0 });
+        expect(npcInteractCount).toBe(0);
     });
 });

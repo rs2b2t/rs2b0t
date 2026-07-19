@@ -1,9 +1,13 @@
 // The shared LAST-MILE primitive: get to a loc/NPC and act on it, using each
 // channel the way the real game does — client web-walk to get NEAR, the op's
 // own SERVER-walk for the final tiles (it crosses furniture-tight interiors
-// the client BFS refuses and tracks patrolling NPCs), with a door-open
-// pre-step because the server op-walk HALTS at closed doors (live-verified:
-// Traiborn). Replaces the per-quest interior-stand/OPLOC/open-the-leaf hacks.
+// the client BFS refuses and tracks patrolling NPCs), and a walk-THROUGH when
+// a closed door/wall blocks an in-scene target: the server op-walk HALTS at,
+// and races the auto-reshut of, a closed door, so we walkResilient to the
+// target and the hardened walker drives the baked door-edge open and steps
+// across (the earlier "open the nearest leaf" pre-step only opened it — the
+// racing op-walk lost to the reshut; live: the L1 Traiborn stall).
+// Replaces the per-quest interior-stand/OPLOC/open-the-leaf hacks.
 // Honest tri-state: 'done' | 'retry' (re-enter me) | 'unreachable' (the walk
 // PROVED the hint can't be reached — re-plan, don't loop).
 
@@ -57,9 +61,28 @@ export const Reach = {
             return closeIn(opts.near, 2, log);
         }
         if (!Reachability.canReach(loc.tile(), { maxSteps: REACH_BFS_STEPS, adjacentOk: true })) {
-            // a closed door likely separates us — the server op-walk halts at
-            // closed doors, so open the nearest leaf first
-            await WalkExecutor.tryNearbyDoor(log);
+            // In scene but blocked by a closed door/wall. WALK to the loc — the
+            // hardened walker drives baked door-edges open and steps THROUGH
+            // (the server op-walk halts at, and races the auto-reshut of, a
+            // closed door). Re-query after: our position changed, so canReach is
+            // now satisfiable and the OPLOC server-walks the final tiles.
+            const walked = await Traversal.walkResilient(loc.tile(), { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+            if (!walked && WalkExecutor.lastOutcome === 'unreachable') {
+                log(`reach: '${opts.name}' unreachable across the door`);
+                return 'unreachable';
+            }
+            const near = Locs.query().name(opts.name).action(opts.op).within(opts.within ?? 10).nearest();
+            if (!near) {
+                return 'retry';
+            }
+            if (!(await near.interact(opts.op))) {
+                return 'retry';
+            }
+            if (await Execution.delayUntil(opts.expect, opts.expectMs ?? 12_000)) {
+                return 'done';
+            }
+            log(`reach: '${opts.op}' on '${opts.name}' did not produce the expected outcome — retrying`);
+            return 'retry';
         }
         if (!(await loc.interact(opts.op))) {
             return 'retry';
@@ -83,10 +106,26 @@ export const Reach = {
         if (!npc) {
             return closeIn(opts.near, 3, log);
         }
+        let target = npc;
         if (!Reachability.canReach(npc.tile(), { maxSteps: REACH_BFS_STEPS, adjacentOk: true })) {
-            await WalkExecutor.tryNearbyDoor(log);
+            // In scene but blocked by a closed door/wall. WALK to the NPC — the
+            // hardened walker drives baked door-edges open and steps THROUGH;
+            // tryNearbyDoor opened the leaf but only the racing server Talk-to
+            // would cross it, and it loses to the door's auto-reshut (the L1
+            // Traiborn stall, live 2026-07-19). Re-query after — the NPC may have
+            // shifted and the pre-walk handle is stale.
+            const walked = await Traversal.walkResilient(npc.tile(), { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+            if (!walked && WalkExecutor.lastOutcome === 'unreachable') {
+                log(`reach: '${opts.name}' unreachable across the door`);
+                return 'unreachable';
+            }
+            const requery = Npcs.query().name(opts.name).action('Talk-to').nearest();
+            if (!requery) {
+                return 'retry';
+            }
+            target = requery;
         }
-        if (!(await npc.interact('Talk-to'))) {
+        if (!(await target.interact('Talk-to'))) {
             return 'retry';
         }
         if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), opts.openMs ?? 15_000)) {
