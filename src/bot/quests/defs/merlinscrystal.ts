@@ -73,15 +73,20 @@ const KING_ARTHUR: NpcStop = { npc: 'King Arthur', anchor: new Tile(2764, 3515, 
 // arthur_spoken_gawain (sir_gawain.rs2:40) BEFORE the follow-up menu, so "Thank you..."
 // safely closes.
 const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2766, 3508, 0), leash: 3, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
-// Sir Lancelot (2759,3515, LEVEL 1 — Camelot upstairs, like R&J's Juliet). Only at
-// %arthur=spoken_gawain does his menu offer "Any ideas on how to get into Morgan Le
-// Faye's stronghold?" (sir_lancelot.rs2:30-36 -> stage spoken_lancelot).
-// Lancelot stands at (2757,3511,1); the map anchor (2759,3515) is unreachable from
-// the L1 stair landing (gotoNpc returned false, so talkThrough never fired and the
-// stage stuck at spoken_gawain, looping the stairs). Anchor on his tile. prefer opt4
-// "Any ideas on how to get into Morgan Le Faye's stronghold?" sets arthur_spoken_lancelot
-// (sir_lancelot.rs2:15,34) — the gate the smuggling crate needs to teleport into the keep.
-const LANCELOT: NpcStop = { npc: 'Sir Lancelot', anchor: new Tile(2757, 3511, 1), leash: 3, prefer: ['Any ideas on how to get into Morgan Le Faye', "You're a little full of yourself"] };
+// Sir Lancelot (npc 239, LEVEL 1 — Camelot upstairs). Only at %arthur=spoken_gawain
+// does his menu offer "Any ideas on how to get into Morgan Le Faye's stronghold?"
+// (sir_lancelot.rs2:15,30-36 -> stage spoken_lancelot). LIVE GEOMETRY (probed
+// 2026-07-19): the ONLY staircase up to his floor lands at (2750,3511,1) on the WEST
+// side, but a brick wall (bluepaintedbrickwall at world x=2757, z 3508-3515) fences
+// off the throne room where Lancelot patrols (live tile ~2761,3512,1) to the EAST —
+// reachable only by the client walker routing around+through the south Large doors
+// (2761/2762,3505,1). The old anchor (2757,3511,1) sat ON that wall ("blocked live"),
+// stranding the bot one strip west, and the server Talk-to can't open closed doors, so
+// its 15s wait always timed out and the stage stuck at spoken_gawain, looping the
+// stairs. Anchor now on the reachable WEST landing; talkKnight then walks to his LIVE
+// tile (the door-opening client walker crosses the wall) before Talk-to. prefer opt4
+// sets arthur_spoken_lancelot — the gate the smuggling crate needs to enter the keep.
+const LANCELOT: NpcStop = { npc: 'Sir Lancelot', anchor: new Tile(2755, 3511, 1), leash: 4, prefer: ['Any ideas on how to get into Morgan Le Faye', "You're a little full of yourself"] };
 // The Lady of the Lake at Taverley (2924,3405,0). Her "I seek the sword Excalibur."
 // option appears ONLY at %arthur>=spoken_morgan_lefaye with no Excalibur held
 // (lady_of_the_lake.rs2:4); picking it sends us to the Port Sarim jeweller and sets
@@ -213,6 +218,29 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
     return Execution.delayUntil(() => (Game.tile()?.level ?? before) !== before, 6000);
 }
 
+/** Climb DOWN the Camelot NW tower (L2->L1->L0) after visiting the crystal. Its ladders
+ *  aren't in the baked nav graph (the ascent uses climbAt for the same reason), so a
+ *  plain walkResilient can't leave the upper floors — it would burn its whole budget
+ *  failing to path off L2. Descend the laddertops (name "Ladder", op Climb-down)
+ *  explicitly, one flight per pass. Best-effort; a failure re-enters and retries. */
+async function descendTower(log: (m: string) => void): Promise<boolean> {
+    for (let guard = 0; guard < 4 && (Game.tile()?.level ?? 0) > 0; guard++) {
+        const down = Locs.query().name('Ladder').action('Climb-down').within(6).nearest();
+        if (!down) {
+            log('descendTower: no Climb-down ladder in range — LIVE-VERIFY the tower descent');
+            return false;
+        }
+        const before = Game.tile()?.level ?? 0;
+        if (!(await down.interact('Climb-down'))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => (Game.tile()?.level ?? before) < before, 6000))) {
+            return false;
+        }
+    }
+    return (Game.tile()?.level ?? 0) === 0;
+}
+
 // --- Phase A: the varp-only opening (stages 1→4), one re-entrant custom ---------
 
 /** Talk Gawain then Lancelot to advance stage 1→3 (King Arthur's start is the
@@ -223,27 +251,46 @@ async function talkKnights(log: (m: string) => void): Promise<void> {
     await talkKnight(LANCELOT, log);
 }
 
-/** Talk to a PATROLLING Camelot knight. gotoNpc's npcNear gate is unreliable (the
- *  knights wander off their anchor tiles — live 2026-07-19: bot stood on (2757,3511)
- *  yet gotoNpc=false because Lancelot had roamed), and talkThrough's 8s open-wait is
- *  too short for the Talk-to OPNPC to server-walk to a wandered knight, so both knights
- *  intermittently "never open" and the stage sticks. So: approach the patrol area, then
- *  fire Talk-to and wait GENEROUSLY (15s) for the box; talkThrough then drives the open
- *  dialogue. A miss just retries on the next openingLeg pass (the leg is re-entrant). */
+/** Talk to a PATROLLING, wall-fenced Camelot knight. A fixed anchor + server Talk-to
+ *  was too fragile: Gawain roams the Round Table (out of Talk-range) and Lancelot sits
+ *  behind a brick wall in the upstairs throne room (the fixed anchor 2757,3511 lands ON
+ *  that wall, and the server Talk-to can't open the closed doors between) — so both
+ *  "never opened" and the stage stuck, looping the stairs (live 2026-07-19). Instead:
+ *  reach the floor, then walk to the knight's LIVE tile with the door-opening client
+ *  walker (which routes around the wall), and Talk-to from adjacent. A miss just retries
+ *  on the next openingLeg pass (the leg is re-entrant). */
 async function talkKnight(stop: NpcStop, log: (m: string) => void): Promise<void> {
-    await gotoNpc(stop, [], log); // climb/approach the floor; npcNear return is ignored
-    if (!ChatDialog.isOpen()) {
-        const npc = Npcs.query().name(stop.npc).action('Talk-to').nearest();
-        if (!npc) {
+    // Reach the knight's floor (gotoNpc climbs L0->L1 for Lancelot; its npcNear return
+    // is ignored — the knights patrol far off their anchors).
+    await gotoNpc(stop, [], log);
+    // Then approach the knight's LIVE tile — NOT a fixed anchor — before Talk-to. Two
+    // live failures this fixes (2026-07-19): (1) Lancelot sits behind a brick wall
+    // (world x=2757) in the Camelot throne room, reachable only by the client walker
+    // routing around + OPENING the south Large doors; a fixed anchor stranded the bot
+    // west of the wall and the server Talk-to (which can't open closed doors) timed out.
+    // (2) Gawain patrols the Round Table, so a fixed anchor left him out of Talk-range.
+    // Walking to his live tile with the door-opening walker delivers us adjacent, so
+    // Talk-to opens instantly; re-query + retry tracks the patrol.
+    for (let attempt = 0; attempt < 3 && !ChatDialog.isOpen() && !ChatDialog.canContinue(); attempt++) {
+        const live = Npcs.query().name(stop.npc).action('Talk-to').nearest();
+        if (!live) {
             log(`talkKnight: '${stop.npc}' not in scene yet — retry`);
             return;
         }
-        await npc.interact('Talk-to');
-        if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 15_000))) {
-            log(`talkKnight: '${stop.npc}' dialogue slow (patrolled far) — retry`);
-            return;
+        const here = Game.tile();
+        if (here && live.tile().distanceTo(here) > 1) {
+            await Traversal.walkResilient(live.tile(), { radius: 1, attempts: 2, timeoutMs: 45_000, log });
+        }
+        const npc = Npcs.query().name(stop.npc).action('Talk-to').nearest();
+        if (npc && (await npc.interact('Talk-to'))) {
+            await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 20_000);
         }
     }
+    if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
+        log(`talkKnight: '${stop.npc}' never opened after approach — retry`);
+        return;
+    }
+    log(`talkKnight: '${stop.npc}' dialogue open — driving`);
     // Drive the dialogue, TOLERATING page-transition gaps. The stage-set line is buried
     // mid-branch (sir_lancelot.rs2:34 is line 4 of a 6-line option-4 branch), and a
     // plain `while (isOpen())` loop exits on the brief closed gap BETWEEN chat pages —
@@ -260,12 +307,14 @@ async function talkKnight(stop: NpcStop, log: (m: string) => void): Promise<void
         const opts = ChatDialog.options();
         if (opts.length > 0) {
             const pick = pickPreferred(opts, stop.prefer);
+            log(`talkKnight: '${stop.npc}' [${opts.join(' | ')}] -> '${pick ?? '(last)' + opts[opts.length - 1]}'`);
             await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
             await Execution.delayTicks(2); // let the next page load before re-checking
             continue;
         }
         await Execution.delayTicks(1);
     }
+    log(`talkKnight: '${stop.npc}' dialogue closed`);
 }
 
 /**
@@ -345,8 +394,13 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
         if (!(await crate.interact('Hide-in'))) {
             return false;
         }
+        // Hide-in opens a mesbox then the "hide inside?" Yes/No, but interact() returns
+        // before it renders and driveDialogue no-ops on a not-yet-open dialogue — wait
+        // for it first (the Excalibur-door race, same class).
+        await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 6000);
         await driveDialogue(['Yes.'], log, 40); // ~20 voyage mesboxes + the climb-out choice
-        await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && insideKeep(g); }, 12_000);
+        const boarded = await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && insideKeep(g); }, 12_000);
+        log(`fortress: crate Hide-in -> insideKeep=${boarded} (needs stage>=spoken_lancelot to teleport)`);
         return false; // re-enter inside the keep (or still at Catherby if stage <3)
     }
     // A spare-son / Morgan dialogue open (killing blow) -> drive it, THEN leave in the
@@ -496,7 +550,10 @@ async function getWax(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(BEEHIVE_STAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
     }
-    const hive = Locs.query().name('Beehive').within(8).nearest();
+    // bees.loc defines TWO 'Beehive' locs: the interactive merlin_beehive (op1=
+    // Take-from, the quest one) and a decorative beehive with no op. Filter on the
+    // Take-from op so useOn never targets a dead decorative hive.
+    const hive = Locs.query().name('Beehive').action('Take-from').within(8).nearest();
     if (!hive) {
         log('getWax: no Beehive near the anchor');
         return false;
@@ -570,6 +627,14 @@ async function getExcalibur(log: (m: string) => void): Promise<boolean> {
         if (!(await door.interact('Open'))) {
             return false;
         }
+        // The open inline-runs @lake_beggar_dialogue, but interact() returns BEFORE the
+        // dialogue renders (like every talk here), and driveDialogue does zero passes if
+        // nothing is open yet — which silently wasted the whole Taverley<->Port Sarim
+        // round trip and re-entered forever. Wait for the beggar's box first.
+        if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
+            log('getExcalibur: jeweller door opened but the Beggar dialogue never appeared — retry');
+            return false;
+        }
         // The open inline-runs @lake_beggar_dialogue — drive the give-bread choices.
         await driveDialogue(['Yes certainly.', 'Yes, here you go.'], log);
     }
@@ -588,6 +653,13 @@ async function getExcalibur(log: (m: string) => void): Promise<boolean> {
  */
 async function summonAndBreak(log: (m: string) => void): Promise<boolean> {
     const outcome = await tryBreakCrystal(log);
+    if (outcome === 'fail') {
+        return false;
+    }
+    // tryBreakCrystal leaves us atop the L2 tower; its ladders aren't baked into the
+    // nav graph, so descend explicitly (same call) before walking off — else the next
+    // walkResilient/gotoNpc burns its whole budget failing to path off L2.
+    await descendTower(log);
     if (outcome === 'broke') {
         // king_arthur.rs2:42/48-51: at freed_merlin his opnpc1 auto-runs the reward +
         // queues arthur_quest_complete (no options).
@@ -597,10 +669,10 @@ async function summonAndBreak(log: (m: string) => void): Promise<boolean> {
         await talkThrough('King Arthur', KING_ARTHUR.prefer, log);
         return true;
     }
-    if (outcome === 'need-summon') {
-        await summonThrantax(log);
-    }
-    return false; // re-enter -> the break now succeeds at stage 5
+    // need-summon: learn the words + summon Thrantax (stage 4 -> excalibur_bound), then
+    // re-enter to climb the tower again and break the crystal for real at stage 5.
+    await summonThrantax(log);
+    return false;
 }
 
 /** Climb the Camelot tower to Merlin's crystal (level 2) and use Excalibur on it.
@@ -616,10 +688,16 @@ async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'nee
     if (!(await Traversal.walkResilient(CRYSTAL_STAND, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
         return 'fail';
     }
+    // We're at the crystal stand: no crystal here means it's already shattered (Merlin
+    // freed on an earlier pass whose walk to King Arthur was interrupted) — report in,
+    // don't loop re-breaking nothing.
     const crystal = Locs.query().name('Giant crystal').within(8).nearest();
+    if (!crystal) {
+        return 'broke';
+    }
     const excal = Inventory.first(EXCALIBUR);
-    if (!crystal || !excal) {
-        log('tryBreakCrystal: no Giant crystal or Excalibur');
+    if (!excal) {
+        log('tryBreakCrystal: no Excalibur to break the crystal');
         return 'fail';
     }
     await excal.useOn(crystal); // oplocu,merlins_crystal
