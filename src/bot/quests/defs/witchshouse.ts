@@ -5,6 +5,7 @@ import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
+import { DirectNavigator } from '../../nav/DirectNavigator.js';
 import Tile from '../../api/Tile.js';
 import { isUnderground, type NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -103,12 +104,14 @@ const BOY: NpcStop = { npc: 'Boy', anchor: new Tile(2928, 3456, 0), leash: 6, pr
 
 // --- Surface stands/locs (m45_54 LOC section; op names from all.loc) ---
 const POT_STAND = new Tile(2900, 3474, 0);        // witchpot "Potted plant" op1 Look-under -> Door key (:1-8)
-// The ladder loc is (2907,3476), but its adjacent tiles are canReach-BLOCKED from
-// the front-door approach (client "0-clicks" wedges at (2908,3478), live 2026-07-19),
-// and targeting the ladder tile makes walkResilient loop instead of arriving. So the
-// WALK target is the reachable tile (2908,3478) — within OPLOC range of the ladder —
-// and we OPLOC Climb-down from there (the loc query + server-walk do the last tiles).
+// Cellar Ladder loc @ (2907,3476). Its adjacent tiles are canReach-BLOCKED from the
+// front-door approach, so the client walker "0-clicks" wedges at (2908,3478) AND the
+// loc query excludes the (unreachable) ladder so an OPLOC can't even fire (live
+// 2026-07-19). LADDER_DOWN_STAND is the reachable approach we walk to first; then
+// DirectNavigator (NOT canReach-gated) steps the last tiles onto LADDER_TILE, after
+// which the ladder is reachable and Climb-down works.
 const LADDER_DOWN_STAND = new Tile(2908, 3478, 0);
+const LADDER_TILE = new Tile(2907, 3476, 0);
 const MOUSEHOLE_STAND = new Tile(2903, 3467, 0);  // witchmousehole "Mouse hole" @ (2903,3466); useOn Cheese to lure the Mouse
 const FOUNTAIN_STAND = new Tile(2909, 3471, 0);   // witchfountain "Fountain" @ (2909,3470); op2 Check -> shed Key (:162-169)
 const SHED_STAND = new Tile(2933, 3463, 0);       // W of witchsheddoor "Door" @ (2934,3463); useOn Key -> opens + spawns experiment (:134-160)
@@ -153,24 +156,33 @@ async function magnetLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     if (!isUnderground(t)) {
-        // Descend. Walking to the ladder passes the front Door, which auto-opens
-        // while the Door key is held (quest_ball.rs2:10-14). The ladder sits in a
-        // furniture-tight corner where a strict walk-to-stand "0-clicks" wedges
-        // (live 2026-07-19 @ 2908,3478), so OPLOC the ladder AS SOON AS it is in
-        // range and let the SERVER walk the last tiles + climb (the tower-staircase
-        // pattern); only walk closer when it isn't visible yet.
-        // OPLOC the ladder the MOMENT it's in range (within 6 = we're inside near it):
-        // the client walker "0-clicks" wedges on the furniture-tight final tiles at
-        // (2908,3478) (live 2026-07-19), but the SERVER OPLOC walks them + climbs.
-        // Only client-walk toward it when it's NOT in range yet — that leg crosses the
-        // front Door, which auto-opens while the Door key is held (quest_ball.rs2:10-14).
-        // (OPLOC-from-far fails: the server won't cross the quest-scripted front door.)
-        const ladder = Locs.query().name('Ladder').action('Climb-down').within(6).nearest();
-        if (ladder) {
-            await ladder.interact('Climb-down');
-            return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && isUnderground(g); }, 10_000);
+        // Descend the cellar Ladder (see LADDER_TILE note). Its approach is canReach-
+        // BLOCKED from inside, so the loc query even EXCLUDES the ladder until we're
+        // adjacent. Stage by live position:
+        //   (1) ladder reachable now (query finds it)  -> Climb-down;
+        //   (2) not yet at the approach                -> walk there (crosses the
+        //       front Door, which auto-opens while the Door key is held, :10-14);
+        //   (3) at the approach                        -> DirectNavigator (NOT
+        //       canReach-gated) steps onto the ladder tile; next pass sees it reachable.
+        const here = Tile.from(t);
+        // (2) Not yet at the reachable approach -> walk there.
+        if (here.distanceTo(LADDER_DOWN_STAND) > 1 && here.distanceTo(LADDER_TILE) > 1) {
+            await Traversal.walkResilient(LADDER_DOWN_STAND, { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+            return false;
         }
-        await Traversal.walkResilient(LADDER_DOWN_STAND, { radius: 3, attempts: 2, timeoutMs: 60_000, log });
+        // (1) ON the ladder tile -> Climb-down (a diagonal-adjacent OPLOC silently
+        //     no-ops on the canReach block, so we must actually stand on it first).
+        if (here.distanceTo(LADDER_TILE) === 0) {
+            const ladder = Locs.query().name('Ladder').action('Climb-down').within(2).nearest();
+            if (ladder) {
+                await ladder.interact('Climb-down');
+                return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && isUnderground(g); }, 10_000);
+            }
+        }
+        // (3) Not yet on the ladder -> DirectNavigator (NOT canReach-gated) steps
+        //     across the blocked gap toward it, one tile per pass, until we're on it.
+        log(`magnetLeg: DirectNav ${here.x},${here.z} -> ladder ${LADDER_TILE.x},${LADDER_TILE.z} (canReach gap)`);
+        await DirectNavigator.walkTo(LADDER_TILE, 0, 8000);
         return false;
     }
     // Underground. Cross the iron Gate WEST to the cupboard if we are still on
