@@ -40,9 +40,14 @@ export const QUESTS: QuestRecord[] = [
         name: 'Demon Slayer',
         questPoints: 3,
         requirements: {},
-        items: [
-            { name: 'Bucket of water', qty: 1, kind: 'acquirable' }
-        ]
+        // No provisioned items: the ONLY consumable is the Bucket of water for the
+        // drain key, which is quest-internal (drainLeg buys an empty Bucket at the
+        // Varrock general store, fills it at the palace Sink, pours it just-in-time)
+        // — exactly like the 25 Bones, which keyHunt grinds/banks on demand. Listing
+        // it as an `acquirable` sent the engine to pre-buy an empty bucket BEFORE the
+        // gypsy every run (a detour that wedged at the shop), for an item the quest
+        // already sources itself. Bones is likewise not provisioned.
+        items: []
     },
     {
         // source: runemysteries_journal.rs2 — no stat/qp/quest gate; talisman &

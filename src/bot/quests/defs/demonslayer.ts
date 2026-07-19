@@ -8,7 +8,6 @@ import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
-import { DirectNavigator } from '../../nav/DirectNavigator.js';
 import Tile from '../../api/Tile.js';
 import { gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
@@ -59,7 +58,14 @@ const DRAIN_KEY_ID = 2401;    // silverlight_key_3 — washed down the palace dr
 // don't believe in that stuff." (gypsy.rs2:79), so a fallback there declines and
 // never starts. The reward-branch options after it all advance to demon_talked_aris
 // (:238); "Okay, thanks..." ends the trailing info loop cleanly (:266).
-const GYPSY: NpcStop = { npc: 'Gypsy', anchor: new Tile(3203, 3424, 0), leash: 6, prefer: ['Ok, here you go.', "Okay, thanks. I'll do my best to stop the demon.", "Okay, where is he? I'll kill him for you!", "Who's Delrith?"] };
+const GYPSY: NpcStop = { npc: 'Gypsy', anchor: new Tile(3203, 3424, 0), leash: 6, prefer: [
+    'Ok, here you go.',                                    // pay the coin -> quest_start (gypsy.rs2:79,159)
+    'Very interesting. What does that Aaargh bit mean?',   // the vision menu — any option advances (:171)
+    "Who's Delrith?",                                      // :181
+    "Okay, where is he? I'll kill him for you!",           // who_is_delrith -> destroy_delrith sets talked_aris (:200,238)
+    'Where can I find Silverlight?',                       // more_info -> points at Sir Prysin (:243,270)
+    "Okay, thanks. I'll do my best to stop the demon."     // close (:258,274). Incantation is FLAVOUR, not a gate.
+] };
 // Sir Prysin — Varrock palace ground floor, m50_54 "0 4 17: 883" -> (3204,3473,0).
 // Two jobs: (a) at talked_aris his pre_silverlight dialogue sets key_hunt (stage 2)
 // — the gate Rovin/Traiborn's key options need (sir_prysin.rs2:119-123); pick
@@ -67,7 +73,15 @@ const GYPSY: NpcStop = { npc: 'Gypsy', anchor: new Tile(3203, 3424, 0), leash: 6
 // "I need to find Silverlight." / "So give me the keys!". (b) with ALL THREE keys
 // held, a plain Talk-to auto-assembles Silverlight (prysin_got_them, :64-76) — no
 // menu. "I'm still looking." exits the <3-keys key_search_progress branch (:54-61).
-const PRYSIN: NpcStop = { npc: 'Sir Prysin', anchor: new Tile(3205, 3473, 0), leash: 6, prefer: ['Gypsy Aris said I should come and talk to you.', 'I need to find Silverlight.', 'So give me the keys!', "I'm still looking.", 'Well I better go key hunting.'] };
+const PRYSIN: NpcStop = { npc: 'Sir Prysin', anchor: new Tile(3205, 3473, 0), leash: 6, prefer: [
+    'Gypsy Aris said I should come and talk to you.',          // pre_silverlight opt3 (sir_prysin.rs2:270)
+    'I need to find Silverlight.',                             // aris branch opt1 (:80)
+    "He's back and unfortunately I've got to deal with him.",  // silverlight branch — either advances (:96)
+    'So give me the keys!',                                    // -> keys label, which SETS demon_key_hunt (:108,123)
+    'Where does the wizard live?',                             // post-key_hunt info menu (:124)
+    "Well I'd better go key hunting.",                         // close (:152,166 — note the apostrophe)
+    "I'm still looking."                                       // key_search_progress revisit close (:54)
+] };
 // Captain Rovin — TOP of the palace NW tower, LEVEL 2, m50_54 "2 4 40: 884" ->
 // (3204,3496,2). Reached via the baked palace staircases (transports/stairEdges:
 // (3201,3497,0)->1->2 confirmed present). His key_2 comes from the "important"
@@ -84,15 +98,25 @@ const ROVIN: NpcStop = { npc: 'Captain Rovin', anchor: new Tile(3204, 3496, 2), 
 // holding bones and at stage>=find_bones, routes straight to the bones handover
 // (:4-8 -> :10-32), consuming ALL held bones (one stage per bone) — 25 bones takes
 // stage 3->28 -> the incantation gives key_1 (:191-209). LIVE-VERIFY the L0->L1 climb.
-const TRAIBORN: NpcStop = { npc: 'Traiborn', anchor: new Tile(3112, 3162, 1), leash: 6, prefer: ['I need to get a key given to you by Sir Prysin.', 'have you got any keys knocking around', "I'll get the bones for you"] };
-// Wizards' Tower L0->L1 staircase (probe 2026-07-19: Staircase @ 3103,3159,0
-// [Climb-up]); WIZ_STAIR_INSIDE is the interior tile beside it we scene-walk to.
-const WIZ_STAIR = new Tile(3103, 3159, 0);
-const WIZ_STAIR_INSIDE = new Tile(3104, 3159, 0);
-// Reachable open-ground tile beside the SOUTH tower door (probe 2026-07-19: Door
-// @ 3109,3166,0 at d2). Approach here, NOT the staircase — baked nav routes to the
-// nearest point to the staircase target, which is the doorless W wall (wedge).
-const WIZ_DOOR_APPROACH = new Tile(3109, 3168, 0);
+// Traiborn stands at (3113,3162,1), just EAST of an L1 door at (3110,3162,1); the
+// stair landing is WEST of it (probe 2026-07-19). leash MUST be small: at 6, gotoNpc's
+// npcNear fires while the bot is still west of the door (it "sees" Traiborn d4 across
+// it), so it stops there and talkThrough can't reach him — and the wedged door-cross
+// then lets the resilient walker escalate into a counterproductive climb-DOWN. leash 2
+// only satisfies at d<=2 of Traiborn (x>=3111 = EAST of the door), forcing the crossing.
+const TRAIBORN: NpcStop = { npc: 'Traiborn', anchor: new Tile(3112, 3162, 1), leash: 2, prefer: ['I need to get a key given to you by Sir Prysin.', 'have you got any keys knocking around', "I'll get the bones for you"] };
+// Wizards' Tower L0->L1 climb. The baked stair edge for this tower has a
+// WALL-BLIND snapped start tile — derive-stairs snapped the staircase (3103,3159)
+// operate tile to (3102,3159,0), which is walkable but sits OUTSIDE the tower's
+// west wall, so the live server rejects Climb-up from there ("can't reach
+// Staircase", live 2026-07-19). Worse, that exterior tile is a CHEAP shortcut the
+// A* prefers, so a plain walk-to-L1 loops forever at (3102,3159). Fix: baked-walk
+// to the INTERIOR stand (3105,3160,0) — a pure-L0 target, which forces the real
+// door route (offline trace: (3109,3166)[Open] -> ... -> (3106,3162)[Open] ->
+// inside) instead of the bogus edge — then OPLOC the staircase from INSIDE, where
+// the server can reach it. (Global follow-up: a curated transports.json edge with
+// the interior from-tile would fix this for every tower-climbing bot.)
+const WIZ_INSIDE_STAND = new Tile(3105, 3160, 0);
 
 // --- Drain / sewer geometry (the bespoke key_3 mechanic) ---
 // The Drain (questdrain, loc 2843) — palace kitchen, m50_54 "0 25 39: 2843" ->
@@ -363,42 +387,75 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         if (Inventory.count('Bones') < BONES_NEEDED) {
             return grindBones(log);
         }
-        // Wizards' Tower baked-nav gap (live 2026-07-19): the L0->L1 stair edge's
-        // near tile sits OUTSIDE the west wall, so the baked walk (and the server
-        // OPLOC) "can't reach" the interior staircase (3103,3159,0). Do it
-        // ourselves: get near via the baked walk, then DirectNavigator (LIVE scene
-        // collision — the open door the baked pack lacks) walks us in beside the
-        // staircase, and we Climb-up from there. gotoNpc then only scene-walks L1.
+        // Climb into the tower interior first (see WIZ_INSIDE_STAND note): a plain
+        // walk-to-L1 wedges at the bogus exterior stair-edge tile. Only do this
+        // while still on the ground floor; once on L1, gotoNpc walks the chamber.
         const t0 = Game.tile();
-        if (t0 && t0.level === 0) {
-            // 1. Baked-walk to the reachable tile beside the SOUTH door (not the
-            //    staircase — that wedges us at the doorless W wall).
-            if (Tile.from(t0).distanceTo(WIZ_DOOR_APPROACH) > 2) {
-                await Traversal.walkResilient(WIZ_DOOR_APPROACH, { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+        if (t0 && t0.level !== 1) {
+            if (Tile.from(t0).distanceTo(WIZ_INSIDE_STAND) > 1) {
+                // Pure-L0 interior target -> forced door route (not the exterior edge).
+                await Traversal.walkResilient(WIZ_INSIDE_STAND, { radius: 1, attempts: 3, timeoutMs: 90_000, log });
                 return false;
             }
-            // 2. Open the door, then DirectNavigator (LIVE scene collision) walks us
-            //    in beside the staircase through the now-open door, and we climb.
-            const door = Locs.query().name('Door').action('Open').within(3).nearest();
-            if (door) { await door.interact('Open'); await Execution.delayTicks(1); }
-            await DirectNavigator.walkTo(WIZ_STAIR_INSIDE, 0, 20_000);
-            const stair = Locs.query().name('Staircase').action('Climb-up').where(l => l.tile().distanceTo(WIZ_STAIR) <= 2).nearest();
+            // Inside now: OPLOC the staircase. From here the server CAN reach it and
+            // walks us up (it couldn't from the walled-off exterior snap tile).
+            const stair = Locs.query().name('Staircase').action('Climb-up').within(5).nearest();
             if (stair) {
                 await stair.interact('Climb-up');
-                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 10_000);
+                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 12_000);
             } else {
-                log('demon: no Climb-up Staircase visible at the tower yet — closing in');
+                log('demon: no Climb-up Staircase within reach of the interior stand — retrying');
             }
             return false;
         }
-        if (!(await gotoNpc(TRAIBORN, [], log))) { return false; }
+        // ON L1 now, in the stair-landing chamber; Traiborn is at (3113,3162,1),
+        // behind an interior door (3110,3162,1). The CLIENT walker crosses these
+        // tower doors unreliably ("did not cross in time") and then escalates into a
+        // climb-DOWN that undoes the whole climb (live 2026-07-19). So DON'T client-
+        // walk here: a Talk-to OPNPC is a SERVER opcode — the server paths to Traiborn
+        // THROUGH the door (opening/crossing it natively) and we just wait generously
+        // for the box. Re-entrant: a miss retries from L1 (never a climb-down), so it
+        // can't hard-block. (The bounded gotoNpc client-walk was the bug: its door-cross
+        // wedged, talkThrough fired across the door, then the walker climbed back down.)
+        if (!ChatDialog.isOpen()) {
+            const trai = Npcs.query().name('Traiborn').action('Talk-to').nearest();
+            if (!trai) { return false; }
+            // The Talk-to OPNPC server-walk stops AT the closed interior door — the
+            // server paths up to it but won't auto-open it (live: bot halts at
+            // (3109,3162)). So open the nearest door toward Traiborn ourselves first,
+            // then re-fire Talk-to and the server crosses. Two-pass by design: pass 1's
+            // OPNPC brings us to the door, pass 2 (door now in range) opens + crosses.
+            const door = Locs.query().name('Door').action('Open').within(4).nearest();
+            if (door) { await door.interact('Open'); await Execution.delayTicks(2); }
+            if (!(await trai.interact('Talk-to'))) { return false; }
+            if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 15_000))) { return false; }
+        }
         // First talk sets find_bones; second (still holding bones) hands all 25 and
-        // yields key_1. talkThrough drives both — the handover is a scripted
-        // mesbox/mes chain with no menu. WAIT for the key: re-talking in the ~2-tick
-        // window after the give (before key_1 registers) hits the lost_key branch
-        // (traiborn.rs2:2-3,77-80), which RESETS to find_bones and demands 25 MORE bones.
+        // yields key_1. talkThrough drives both. The handover is a ~25-TICK SERVER
+        // chain (traiborn.rs2:22-32: if_close + inv_del(bones,1) + p_delay(1), looped
+        // 25×), which OUTLASTS a short key-wait: a 6s timeout re-entered mid-chain with
+        // bones momentarily < 25 and mis-routed to grindBones — walking the bot off to
+        // the Lumbridge coop and climbing back DOWN the tower (live 2026-07-19). So once
+        // the handover has actually STARTED eating bones (only the 2nd talk does), sit
+        // tight and wait GENEROUSLY (30s) for key_1 so the chain finishes undisturbed.
+        // The 1st talk just sets find_bones (no bones eaten) -> re-enter fast to the 2nd.
         await talkThrough('Traiborn', TRAIBORN.prefer, log);
-        return Execution.delayUntil(() => heldId(TRAIBORN_KEY_ID), 6000);
+        await Execution.delayTicks(2); // let a started handover consume its first bone(s)
+        if (Inventory.count('Bones') < BONES_NEEDED) {
+            // Handover started (only the 2nd talk eats bones). It's a ~25-tick SERVER
+            // chain (if_close + inv_del(bones,1) + p_delay(1), looped 25×) that runs
+            // with the dialogue CLOSED, THEN reopens a Hurrah!/incantation dialogue
+            // (chatnpc + mesbox×3, traiborn.rs2:191-212) whose continue-prompts MUST be
+            // clicked to receive key_1. talkThrough returned at the first if_close, so a
+            // bare wait here leaves the incantation un-clicked and the key never comes
+            // (bot then re-enters with bones<25 and grinds chickens forever). Drive the
+            // continues to the end: loop while a box is open OR the key hasn't landed.
+            for (let i = 0; i < 60 && (ChatDialog.isOpen() || !heldId(TRAIBORN_KEY_ID)); i++) {
+                if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                await Execution.delayTicks(1);
+            }
+        }
+        return false;
     }
 
     // The drain/sewer key (key_3).
