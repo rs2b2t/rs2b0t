@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { crossingEligible, locateOnPath, selectClickTarget, type PathTileLike } from './followMath.js';
+import { chooseCrossClick, crossingEligible, locateOnPath, selectClickTarget, type PathTileLike } from './followMath.js';
 
 const t = (x: number, z: number, level = 0): PathTileLike => ({ x, z, level });
 
@@ -78,5 +78,18 @@ describe('crossingEligible', () => {
             })
         ).toBe(false);
         expect(probed).toBe(false);
+    });
+});
+
+describe('chooseCrossClick', () => {
+    test('open edge → walk onto the step tile itself', () => {
+        expect(chooseCrossClick(true, true)).toBe('step');
+        expect(chooseCrossClick(true, false)).toBe('step');
+    });
+    test('edge blocked by the swung leaf but landing routable → gated click', () => {
+        expect(chooseCrossClick(false, true)).toBe('landing-click');
+    });
+    test('edge blocked and no route to landing → raw scene-step', () => {
+        expect(chooseCrossClick(false, false)).toBe('landing-scene');
     });
 });

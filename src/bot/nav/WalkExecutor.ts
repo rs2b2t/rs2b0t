@@ -24,7 +24,7 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
-import { chebyshev, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
+import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 
@@ -60,12 +60,14 @@ const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000; // includes first-use worker boot + pack fetch
 const TRANSPORT_WAIT_MS = 8000;
-// Budget to open AND walk THROUGH a multi-tile door (the wizard-tower shape-9
-// diagonal Door: from/to are 2 tiles apart across the sealed 3107 tile). Must
-// cover several open→walk tries because the RS door auto-reverts after a few
-// ticks — enough headroom that a genuine cross always lands, small vs the 90s
-// walkTo attempt so a truly stuck one still repaths.
-const MULTI_DOOR_CROSS_MS = 20_000;
+// Budget to open AND walk THROUGH a door (1-tile or multi-tile). Raised from
+// 20s: each open-revert cycle costs open-wait + through-step, and the RS door
+// auto-reverts — 36s fits ≥3 full cycles so a flaky-timing door still crosses
+// within ONE attempt instead of burning the attempt and poisoning avoidDoors.
+const MULTI_DOOR_CROSS_MS = 36_000;
+// Per-open wait: the leaf state/edge usually flips within ~1s of the op landing;
+// capping the wait short keeps revert cycles cheap inside MULTI_DOOR_CROSS_MS.
+const OPEN_WAIT_MS = 4000;
 // One scene-walk hop budget when the swung-open leaf blocks canReach to the
 // landing (a 1-tile door in a solid wall — no bypass to route a click around).
 // Small vs MULTI_DOOR_CROSS_MS so a genuinely stuck door still falls through to
@@ -664,14 +666,19 @@ class WalkExecutorImpl {
             }
             const shut = this.findTransportLoc(transport);
             if (shut) {
-                // closed (first arrival) or reverted mid-cross — open it and let
-                // the open register before trying to step through
+                // Closed (first arrival) or reverted mid-cross — open it. The wait
+                // is on the RAW crossing edge (canStep approach→step) OR the closed
+                // leaf vanishing, whichever reads first; capped at OPEN_WAIT_MS so a
+                // revert cycle costs seconds, not the whole budget.
                 const mark = GameMessages.mark();
                 if (!shut.interact(transport.action)) {
                     log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
                     return false;
                 }
-                await Execution.delayUntil(() => this.findTransportLoc(transport) === null || GameMessages.sawSince(mark, CANT_REACH), TRANSPORT_WAIT_MS);
+                await Execution.delayUntil(
+                    () => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step) || GameMessages.sawSince(mark, CANT_REACH),
+                    OPEN_WAIT_MS
+                );
                 if (GameMessages.sawSince(mark, CANT_REACH)) {
                     // the door leaf itself is unreachable from this side — spinning
                     // the rest of the budget can't fix that; bail to the repath
@@ -680,29 +687,27 @@ class WalkExecutorImpl {
                 }
                 continue;
             }
-            // door open — get to the landing tile PAST the door.
-            const local = reader.toLocal(landing.x, landing.z);
-            if (local && Reachability.canReach(landing, { maxSteps: 128 })) {
-                // A walkable route around the swung-open loc exists (multi-tile
-                // doors) — click it. canReach mirrors that route, so a click only
-                // issues when one exists; we loop back to re-open if it reverts.
-                ActionRouter.driver.walk(local.lx, local.lz);
+            // Door reads open — pick the through-move by what the LIVE collision
+            // permits (see chooseCrossClick).
+            const canStepEdge = Reachability.canStep(approach, step);
+            const landingLocal = reader.toLocal(landing.x, landing.z);
+            const canReachLanding = landingLocal !== null && Reachability.canReach(landing, { maxSteps: 128 });
+            const choice = chooseCrossClick(canStepEdge, canReachLanding);
+            if (choice === 'step') {
+                // 1-tile door with the edge genuinely open: walk ONTO the far tile
+                // itself (landing may be furniture/wall in tight interiors). Being
+                // on `step` satisfies isOnFarSide (cheb 0 < cheb 1).
+                DirectNavigator.walk(step);
+                await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 3000);
+            } else if (choice === 'landing-click') {
+                // A walkable route around the swung-open leaf exists (multi-tile
+                // doors) — click it; loop back to re-open if the door reverts.
+                ActionRouter.driver.walk(landingLocal!.lx, landingLocal!.lz);
                 await Execution.delayTicks(2);
             } else {
-                // No canReach route to the landing: the swung leaf occupies the
-                // sole gap and there is no bypass to route a click around it — a
-                // straight 1-tile door in a solid wall, OR a turning-path door
-                // whose landing is straight-ahead wall (the >= 1 gate sends every
-                // doors.json edge through here). canReach gates out every click, so
-                // the baked walker click-starves (0 clicks) and wedges until the
-                // ladder escalates 30-90s later (live-confirmed). Issue the raw
-                // client walk-click toward the landing (DirectNavigator.walk is NOT
-                // canReach-gated) and return the INSTANT we're past the door plane.
-                // We wait on onFarSide, not on reaching `landing`: a radius-0
-                // walkTo to a still-unreachable landing would block the whole
-                // budget even after the player has already stepped onto `step`.
-                // Bounded by SCENE_STEP_MS, still inside MULTI_DOOR_CROSS_MS, so a
-                // genuinely stuck door times out and falls through to the repath.
+                // No canReach route: the swung leaf seals the sole gap. Raw scene
+                // click (NOT canReach-gated) and return the instant we're past the
+                // door plane.
                 log(`leaf blocks landing — scene-stepping through '${transport.locName}'`);
                 DirectNavigator.walk(landing);
                 await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), SCENE_STEP_MS);

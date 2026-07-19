@@ -75,3 +75,20 @@ export function crossingEligible(me: PathTileLike, approach: PathTileLike, far: 
     }
     return reachable(approach);
 }
+
+/**
+ * Which through-move a door crossing should make once the leaf reads open.
+ * `canStepEdge` is the RAW one-edge collision check approach→step (precise,
+ * cheap — the exact same rule the client's tryMove uses); when it is open, walk
+ * ONTO the far tile itself. The old flow aimed only at `landing` (one tile PAST
+ * the door), which in tight interiors can be furniture/wall — the witch-house
+ * inner door — so the cross timed out with the edge genuinely open. The two
+ * landing modes are the preserved shape-9 swung-leaf handling: a gated click
+ * when a bypass route exists, a raw scene-step when the leaf seals the gap.
+ */
+export function chooseCrossClick(canStepEdge: boolean, canReachLanding: boolean): 'step' | 'landing-click' | 'landing-scene' {
+    if (canStepEdge) {
+        return 'step';
+    }
+    return canReachLanding ? 'landing-click' : 'landing-scene';
+}
