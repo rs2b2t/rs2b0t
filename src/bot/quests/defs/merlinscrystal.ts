@@ -63,16 +63,17 @@ const TINDERBOX = 'Tinderbox';
 // King Arthur (2764,3515,0) — start at notStarted; at stage freed_merlin his
 // opnpc1 auto-runs @king_arthur_merlin_free (no options) -> queues complete.
 const KING_ARTHUR: NpcStop = { npc: 'King Arthur', anchor: new Tile(2764, 3515, 0), leash: 6, prefer: ['I want to become a Knight of the Round Table!'] };
-// Sir Gawain (2763,3506,0) — at %arthur=started his menu offers "Do you know how
-// Merlin got trapped?" (sir_gawain.rs2:36-40 -> stage spoken_gawain). The sub-menu
-// then has "Thank you for the information." to close cleanly.
-// Gawain stands at (2766,3508) — the map spawn (2763,3506) is across the Round Table,
-// so a leash-6 npcNear "sees" him through the table and talkThrough can't reach (live
-// 2026-07-19: "never opened a dialogue"). Anchor ON his tile + a tight leash forces
-// the bot to Gawain's side. prefer opt4 "Do you know how Merlin got trapped?" sets
-// arthur_spoken_gawain (sir_gawain.rs2:40) BEFORE the follow-up menu, so "Thank you..."
+// Sir Gawain (npc 240) — at %arthur=started his menu offers "Do you know how Merlin got
+// trapped?" (sir_gawain.rs2:36-40 -> stage spoken_gawain); the sub-menu then has "Thank
+// you for the information." to close cleanly. LIVE GEOMETRY (probed 2026-07-19): Gawain
+// patrols the Round Table, live at ~(2761,3508,0) — WEST-central of the main hall, which
+// is entered from the south Large door (2757,3503). The old anchor (2766,3508) sat
+// directly north of a side Door (2766,3504), so gotoNpc routed the bot THROUGH that door
+// and stalled ("giving up after 5 repaths"). Anchor now in his patrol area on the main-
+// entrance side; talkKnight then walks to his LIVE tile. prefer opt4 sets
+// arthur_spoken_gawain (sir_gawain.rs2:40) before the follow-up menu, so "Thank you..."
 // safely closes.
-const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2766, 3508, 0), leash: 3, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
+const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2761, 3508, 0), leash: 4, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
 // Sir Lancelot (npc 239, LEVEL 1 — Camelot upstairs). Only at %arthur=spoken_gawain
 // does his menu offer "Any ideas on how to get into Morgan Le Faye's stronghold?"
 // (sir_lancelot.rs2:15,30-36 -> stage spoken_lancelot). LIVE GEOMETRY (probed
