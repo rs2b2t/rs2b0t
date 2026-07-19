@@ -8,6 +8,7 @@ import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
+import { DirectNavigator } from '../../nav/DirectNavigator.js';
 import Tile from '../../api/Tile.js';
 import { gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
@@ -84,6 +85,10 @@ const ROVIN: NpcStop = { npc: 'Captain Rovin', anchor: new Tile(3204, 3496, 2), 
 // (:4-8 -> :10-32), consuming ALL held bones (one stage per bone) — 25 bones takes
 // stage 3->28 -> the incantation gives key_1 (:191-209). LIVE-VERIFY the L0->L1 climb.
 const TRAIBORN: NpcStop = { npc: 'Traiborn', anchor: new Tile(3112, 3162, 1), leash: 6, prefer: ['I need to get a key given to you by Sir Prysin.', 'have you got any keys knocking around', "I'll get the bones for you"] };
+// Wizards' Tower L0->L1 staircase (probe 2026-07-19: Staircase @ 3103,3159,0
+// [Climb-up]); WIZ_STAIR_INSIDE is the interior tile beside it we scene-walk to.
+const WIZ_STAIR = new Tile(3103, 3159, 0);
+const WIZ_STAIR_INSIDE = new Tile(3104, 3159, 0);
 
 // --- Drain / sewer geometry (the bespoke key_3 mechanic) ---
 // The Drain (questdrain, loc 2843) — palace kitchen, m50_54 "0 25 39: 2843" ->
@@ -353,6 +358,28 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
     if (!hasTraiborn) {
         if (Inventory.count('Bones') < BONES_NEEDED) {
             return grindBones(log);
+        }
+        // Wizards' Tower baked-nav gap (live 2026-07-19): the L0->L1 stair edge's
+        // near tile sits OUTSIDE the west wall, so the baked walk (and the server
+        // OPLOC) "can't reach" the interior staircase (3103,3159,0). Do it
+        // ourselves: get near via the baked walk, then DirectNavigator (LIVE scene
+        // collision — the open door the baked pack lacks) walks us in beside the
+        // staircase, and we Climb-up from there. gotoNpc then only scene-walks L1.
+        const t0 = Game.tile();
+        if (t0 && t0.level === 0) {
+            if (Tile.from(t0).distanceTo(WIZ_STAIR) > 10) {
+                await Traversal.walkResilient(WIZ_STAIR, { radius: 6, attempts: 2, timeoutMs: 90_000, log });
+                return false;
+            }
+            await DirectNavigator.walkTo(WIZ_STAIR_INSIDE, 0, 30_000);
+            const stair = Locs.query().name('Staircase').action('Climb-up').where(l => l.tile().distanceTo(WIZ_STAIR) <= 2).nearest();
+            if (stair) {
+                await stair.interact('Climb-up');
+                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 8000);
+            } else {
+                log('demon: no Climb-up Staircase in the Wizards Tower yet — closing in');
+            }
+            return false;
         }
         if (!(await gotoNpc(TRAIBORN, [], log))) { return false; }
         // First talk sets find_bones; second (still holding bones) hands all 25 and
