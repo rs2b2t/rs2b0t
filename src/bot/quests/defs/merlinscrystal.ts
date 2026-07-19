@@ -449,23 +449,39 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
     }
     // Level 2 — engage Mordred (op2 Attack; sir_mordred.rs2:1-5) until the spare
     // dialogue opens. Re-entrant: one engagement per call.
-    if (!(await Traversal.walkResilient(MORDRED_TILE, { radius: 3, attempts: 3, timeoutMs: 60_000, log }))) {
+    if (!(await Traversal.walkResilient(MORDRED_TILE, { radius: 5, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
     await wieldWeapon(log);
+    // Force the AGGRESSIVE style (com_mode 1). On a mace that's Pummel = CRUSH, hitting
+    // Mordred's crush-def 45; the default Controlled style is Spike = STAB, which slams
+    // into his stab-def 99 and misses almost everything (live 2026-07-19: adjacent + fed
+    // but still couldn't drop him). Re-asserted each pass (com_mode isn't persisted).
+    Game.setCombatStyle(1);
     // Re-issue Attack each pass (Mordred is aggressive, so inCombat() reads true off his
-    // hits even when we're idle — gating on it would stop us attacking back). The crush
-    // mace + a working food float (the AIOQuester `food` setting must be non-blank, else
-    // shouldEat() never fires) win in a couple of minutes.
+    // hits even when we're idle — gating on it would stop us attacking back).
     const mordred = Npcs.query().name('Sir Mordred').action('Attack').within(8).nearest();
     if (mordred) {
+        // Close to MELEE range first. The keep platform stalled the OPNPC Attack auto-walk
+        // ~2 tiles short (bot idled at z=3401 while Mordred stood at z=3403), so every swing
+        // was out of range — Mordred (38 HP) never fell and the bot tanked him to death
+        // (live 2026-07-19). Walk ADJACENT to his live tile, then attack.
+        const here = Game.tile();
+        if (here && mordred.tile().distanceTo(here) > 1) {
+            await Traversal.walkResilient(mordred.tile(), { radius: 1, attempts: 2, timeoutMs: 20_000, log });
+        }
         await mordred.interact('Attack');
-        await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 4000);
+        // HOLD the engagement — do NOT re-click Attack (that resets the swing timer and
+        // was crippling DPS). Let the sustained auto-attack run, eating between checks
+        // (the host EatFood/Sustain hook only fires during walks, never inside a
+        // delayUntil — a standing fight would never trigger it, so drive it here), until
+        // the spare dialogue opens or ~14s pass (then re-enter to re-approach if the
+        // knockback pushed us out of melee).
+        for (let i = 0; i < 8 && !ChatDialog.isOpen() && !ChatDialog.canContinue() && Game.inCombat(); i++) {
+            await Execution.delayTicks(3);
+            await Sustain.run();
+        }
     }
-    // Eat mid-fight: the host EatFood/Sustain hook only fires during WALKS (Traversal),
-    // NOT inside a delayUntil, so a STANDING fight never triggers it and the bot dies on
-    // its base HP with a full pack of food (live 2026-07-19). Drive the hook ourselves.
-    await Sustain.run();
     return false;
 }
 
@@ -545,6 +561,7 @@ async function killGiantBat(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await wieldWeapon(log);
+    Game.setCombatStyle(1); // aggressive/crush + max strength (see fortress)
     const bat = Npcs.query().name('Giant bat').action('Attack').within(10).nearest();
     if (!bat) {
         log('killGiantBat: no Giant bat near the anchor — LIVE-VERIFY the spawn is reachable');
