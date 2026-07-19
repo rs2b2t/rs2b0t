@@ -132,9 +132,10 @@ class WalkExecutorImpl {
     /** Live progress for overlays: remaining path tiles of the current walk. */
     remaining = 0;
 
-    /** How the last walkTo ended — 'interrupted' means a random event took
-     *  over and the caller should retry once the runtime clears it. */
-    lastOutcome: 'arrived' | 'closest' | 'blocked' | 'budget' | 'interrupted' | 'failed' | null = null;
+    /** How the last walkTo/walkResilient ended — 'interrupted' means a random
+     *  event took over; 'unreachable' means walkResilient PROVED the target
+     *  can't be reached from here (verification probe dead) and gave up. */
+    lastOutcome: 'arrived' | 'closest' | 'blocked' | 'budget' | 'interrupted' | 'failed' | 'unreachable' | null = null;
 
     /** Crossings (doors AND level-change staircases/ladders) that failed during
      *  THIS walkTo — excluded on repath. */
@@ -151,7 +152,6 @@ class WalkExecutorImpl {
         const maxExpansions = opts?.maxExpansions;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
-        this.avoidDoors = [];
         // Pre-avoid any special crossing we currently CAN'T satisfy (e.g. the Al
         // Kharid 10gp toll gate while broke) so A* routes AROUND it on the FIRST
         // path — instead of walking up to the gate, failing the toll, adding it to
@@ -159,11 +159,7 @@ class WalkExecutorImpl {
         // requirement IS met the gate stays in the graph and we cross it normally
         // (far cheaper than the detour). If avoiding it leaves no route, walkTo
         // fails cleanly rather than oscillating.
-        for (const sc of SPECIAL_CROSSINGS) {
-            if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
-                this.avoidDoors.push({ x: sc.x, z: sc.z });
-            }
-        }
+        this.resetAvoids();
 
         try {
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
@@ -256,6 +252,36 @@ class WalkExecutorImpl {
         );
         const settled = await Execution.delayUntil(() => result !== null, PATH_REQUEST_TIMEOUT_MS);
         return settled && result ? result : { ok: false, reason: 'path request timed out', expanded: 0 };
+    }
+
+    /** Fresh avoid set: empty except special crossings whose precondition we
+     *  can't currently meet (e.g. the Al Kharid toll while broke). Shared by
+     *  walkTo and probeDest so a probe sees what a fresh walk would plan. */
+    private resetAvoids(): void {
+        this.avoidDoors = [];
+        for (const sc of SPECIAL_CROSSINGS) {
+            if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
+                this.avoidDoors.push({ x: sc.x, z: sc.z });
+            }
+        }
+    }
+
+    /** One-shot verification probe for walkResilient's unreachable terminal: a
+     *  big-budget path request from the current position with a FRESH avoid
+     *  set. Returns the plan's terminal tile (the pathfinder's snapped goal),
+     *  or ok:false when no path exists at all. */
+    async probeDest(dest: WorldTile, maxExpansions: number): Promise<{ ok: boolean; terminal: WorldTile | null }> {
+        const me = reader.worldTile();
+        if (!me) {
+            return { ok: false, terminal: null };
+        }
+        this.resetAvoids();
+        const path = await this.requestPath(me, dest, maxExpansions);
+        if (!path.ok || path.waypoints.length === 0) {
+            return { ok: false, terminal: null };
+        }
+        const last = path.waypoints[path.waypoints.length - 1];
+        return { ok: true, terminal: { x: last.x, z: last.z, level: last.level } };
     }
 
     private async followPath(tiles: PathStep[], dest: WorldTile, radius: number, deadline: number, log: (msg: string) => void): Promise<FollowResult> {

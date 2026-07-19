@@ -3,7 +3,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import { Navigator } from '../nav/Navigator.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { WalkExecutor, type WalkOptions } from '../nav/WalkExecutor.js';
-import { advance, initialLadderState, pickUnstickStep, type LadderState, type LastOutcome } from '../nav/walkLadder.js';
+import { advance, initialLadderState, judgeProbe, pickUnstickStep, type LadderState, type LastOutcome } from '../nav/walkLadder.js';
 import { isArrived } from '../nav/arrival.js';
 import { chebyshev } from '../nav/followMath.js';
 import { Reachability } from './Reachability.js';
@@ -71,6 +71,7 @@ export const Traversal = {
         let state: LadderState = initialLadderState(dist());
         let lastOutcome: LastOutcome = null;
         let unstickDir = 0;
+        let lastProbeTerminal: WorldTile | null = null;
         let lastLoggedAt = performance.now();
 
         // Guard against the pathological empty-scene case where every observation
@@ -124,7 +125,10 @@ export const Traversal = {
                     // loop (ArdyThiever stall stand, Leela, the waterfall bookcase).
                     return true;
                 }
-                lastOutcome = outcome;
+                // 'unreachable' is walkResilient's own verify terminal (set below),
+                // never emitted by a baked walkTo — coerce the widened public field
+                // back into the state machine's LastOutcome input domain.
+                lastOutcome = outcome === 'unreachable' ? 'failed' : outcome;
             } else if (action.kind === 'scene') {
                 await DirectNavigator.walkTo(dest, sceneRadius, SCENE_TIMEOUT_MS);
                 lastOutcome = EventSignal.pending() ? 'interrupted' : 'failed'; // progress is read from the tile next iteration
@@ -142,6 +146,18 @@ export const Traversal = {
             } else if (action.kind === 'backoff') {
                 await Execution.delayTicks(action.ticks);
                 lastOutcome = null; // a new pass starts at baked
+            } else if (action.kind === 'verify') {
+                const probe = await WalkExecutor.probeDest(dest, maxBudget);
+                const outcome = judgeProbe(lastProbeTerminal, probe);
+                if (probe.ok && probe.terminal) {
+                    lastProbeTerminal = probe.terminal;
+                }
+                log(`walkResilient: verify probe ${outcome === 'probe-dead' ? 'dead' : `fresh (terminal ${probe.terminal!.x},${probe.terminal!.z})`}`);
+                lastOutcome = outcome;
+            } else if (action.kind === 'unreachable') {
+                log(`walkResilient: (${dest.x},${dest.z},${dest.level}) unreachable from here — stopping (best ${state.bestDist} tiles)`);
+                WalkExecutor.lastOutcome = 'unreachable';
+                return false;
             }
         }
         log('walkResilient: iteration cap hit (no player tile?) — yielding');
