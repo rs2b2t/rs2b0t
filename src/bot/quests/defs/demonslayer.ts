@@ -89,6 +89,10 @@ const TRAIBORN: NpcStop = { npc: 'Traiborn', anchor: new Tile(3112, 3162, 1), le
 // [Climb-up]); WIZ_STAIR_INSIDE is the interior tile beside it we scene-walk to.
 const WIZ_STAIR = new Tile(3103, 3159, 0);
 const WIZ_STAIR_INSIDE = new Tile(3104, 3159, 0);
+// Reachable open-ground tile beside the SOUTH tower door (probe 2026-07-19: Door
+// @ 3109,3166,0 at d2). Approach here, NOT the staircase — baked nav routes to the
+// nearest point to the staircase target, which is the doorless W wall (wedge).
+const WIZ_DOOR_APPROACH = new Tile(3109, 3168, 0);
 
 // --- Drain / sewer geometry (the bespoke key_3 mechanic) ---
 // The Drain (questdrain, loc 2843) — palace kitchen, m50_54 "0 25 39: 2843" ->
@@ -367,17 +371,23 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         // staircase, and we Climb-up from there. gotoNpc then only scene-walks L1.
         const t0 = Game.tile();
         if (t0 && t0.level === 0) {
-            if (Tile.from(t0).distanceTo(WIZ_STAIR) > 10) {
-                await Traversal.walkResilient(WIZ_STAIR, { radius: 6, attempts: 2, timeoutMs: 90_000, log });
+            // 1. Baked-walk to the reachable tile beside the SOUTH door (not the
+            //    staircase — that wedges us at the doorless W wall).
+            if (Tile.from(t0).distanceTo(WIZ_DOOR_APPROACH) > 2) {
+                await Traversal.walkResilient(WIZ_DOOR_APPROACH, { radius: 1, attempts: 3, timeoutMs: 90_000, log });
                 return false;
             }
-            await DirectNavigator.walkTo(WIZ_STAIR_INSIDE, 0, 30_000);
+            // 2. Open the door, then DirectNavigator (LIVE scene collision) walks us
+            //    in beside the staircase through the now-open door, and we climb.
+            const door = Locs.query().name('Door').action('Open').within(3).nearest();
+            if (door) { await door.interact('Open'); await Execution.delayTicks(1); }
+            await DirectNavigator.walkTo(WIZ_STAIR_INSIDE, 0, 20_000);
             const stair = Locs.query().name('Staircase').action('Climb-up').where(l => l.tile().distanceTo(WIZ_STAIR) <= 2).nearest();
             if (stair) {
                 await stair.interact('Climb-up');
-                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 8000);
+                await Execution.delayUntil(() => (Game.tile()?.level ?? 0) >= 1, 10_000);
             } else {
-                log('demon: no Climb-up Staircase in the Wizards Tower yet — closing in');
+                log('demon: no Climb-up Staircase visible at the tower yet — closing in');
             }
             return false;
         }
