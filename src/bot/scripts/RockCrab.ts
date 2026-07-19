@@ -16,6 +16,7 @@ import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRange
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
+import { BOWS, STAFFS } from '../api/combat/equipment.js';
 import { sweepPlan } from '../api/combat/AmmoLogic.js';
 import type { GroundItem } from '../api/queries/GroundItems.js';
 import { Paint } from '../api/hud/Paint.js';
@@ -82,7 +83,6 @@ const AMMO_OPTIONS = ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arro
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
-const SHOW_ARMED = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 
 /** Tunable parameters (panel + `?RockCrab.<key>=...`). The field/reset tiles
  *  let you point it at a different rock-crab spot entirely. Grouped for the
@@ -92,7 +92,8 @@ export const SETTINGS: SettingsSchema = {
 
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE, help: 'rapid trains Ranged fastest; longrange splits xp with Defence' },
-    weapon: { type: 'string', default: '', label: 'Weapon', group: 'Combat', showIf: SHOW_ARMED, help: 'wielded item, withdrawn from bank when missing — e.g. Staff of fire, Shortbow' },
+    staff: { type: 'string', default: 'Staff of air', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE, help: 'wielded staff, withdrawn from bank when missing' },
+    bow: { type: 'string', default: 'Maple shortbow', options: BOWS, label: 'Bow', group: 'Combat', showIf: SHOW_RANGE, help: 'wielded bow, withdrawn from bank when missing' },
     spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
     ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
@@ -223,7 +224,8 @@ export default class RockCrab extends TaskBot {
         STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
         MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
-        WEAPON = this.settings.str('weapon', '');
+        WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of air')
+            : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
         SPELL = this.settings.str('spell', 'Wind Strike');
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
         AMMO = this.settings.str('ammo', 'Bronze arrow');
@@ -250,10 +252,6 @@ export default class RockCrab extends TaskBot {
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
         }
-        if (STYLE !== 'melee' && WEAPON === '') {
-            this.log(`WARNING: no weapon configured for style '${STYLE}' — fighting with whatever is wielded`);
-        }
-
         this.startedAt = Date.now();
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
 

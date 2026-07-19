@@ -16,6 +16,7 @@ import GatheringBot from './GatheringBot.js';
 import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
+import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
@@ -106,6 +107,15 @@ ScriptRegistry.register({
     tags: ['rellekka', 'keys', 'afk'],
     settingsSchema: ROCKCRAB_SETTINGS,
     create: () => new RockCrab()
+});
+
+ScriptRegistry.register({
+    name: 'MossGiant',
+    description: 'Moss giants N of Ardougne: range/mage safespot or melee, banks all loot',
+    category: 'Combat',
+    tags: ['ardougne', 'safespot', 'afk'],
+    settingsSchema: MOSSGIANT_SETTINGS,
+    create: () => new MossGiant()
 });
 
 ScriptRegistry.register({

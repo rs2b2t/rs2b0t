@@ -81,6 +81,17 @@ export function depositMatcher(own: (name: string) => boolean, includeCommon: bo
     return (name: string) => own(name) || (includeCommon && matchesCommonBankLoot(name));
 }
 
+/**
+ * Keep-list deposit predicate: bank EVERYTHING except the named items (exact
+ * display-name match, case-insensitive). Combat bots keep only what they need
+ * to keep fighting — food (every bite form), the spell's runes, ammo, the
+ * wielded weapon — and bank all loot AND any random-event loot with this.
+ */
+export function depositAllExcept(keep: Iterable<string>): (name: string) => boolean {
+    const set = new Set([...keep].map(s => s.toLowerCase()));
+    return (name: string) => name.length > 0 && !set.has(name.toLowerCase());
+}
+
 function realBooth(boothName: string) {
     return Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
 }

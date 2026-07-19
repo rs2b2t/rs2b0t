@@ -16,7 +16,8 @@
         "b0t": "sh tools/b0t.sh",
         "smoke": "bun tools/run-all-smokes.ts",
         "gen:shopdb": "bun tools/shops/gen-shopdb.ts",
-        "gen:cluedb": "bun tools/clues/gen-cluedb.ts"
+        "gen:cluedb": "bun tools/clues/gen-cluedb.ts",
+        "gen:dropdb": "bun tools/combat/gen-dropdb.ts"
     },
     "dependencies": {
         "fflate": "^0.8.2"
