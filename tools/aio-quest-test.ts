@@ -50,6 +50,10 @@ const questsCsv = (process.argv[4] || 'runemysteries').trim();
 const budgetMin = Number(process.argv[5]) || 25;
 const giveCsv = (process.argv[6] || '').trim();
 const statsCsv = (process.argv[7] || '').trim();
+// Optional food-item display name to inject as the AIOQuester `food` setting. Without
+// it foodItem() reads blank, shouldEat() never fires, and combat quests (Merlin's
+// Crystal) die with a full pack of uneaten food. e.g. `Trout`.
+const foodSetting = (process.argv[8] || '').trim();
 const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -126,6 +130,10 @@ try {
     // the ShopRunner-smoke mechanism (tools/shoprun-test.ts). string[] settings
     // are comma-joined; Settings.parseValue splits on ',' so the CSV round-trips.
     await page.evaluate(csv => localStorage.setItem('rs2b0t:set:AIOQuester:quests', csv), questsCsv);
+    if (foodSetting) {
+        await page.evaluate(f => localStorage.setItem('rs2b0t:set:AIOQuester:food', f), foodSetting);
+        console.log(`food setting: ${foodSetting}`);
+    }
     console.log(`queued: ${queue.map(q => q.id).join(', ')}`);
 
     await startScript(page, 'AIOQuester');

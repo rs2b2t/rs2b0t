@@ -7,6 +7,7 @@ import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Sustain } from '../../api/Sustain.js';
 import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
 import { gotoNpc, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
@@ -452,11 +453,19 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await wieldWeapon(log);
+    // Re-issue Attack each pass (Mordred is aggressive, so inCombat() reads true off his
+    // hits even when we're idle — gating on it would stop us attacking back). The crush
+    // mace + a working food float (the AIOQuester `food` setting must be non-blank, else
+    // shouldEat() never fires) win in a couple of minutes.
     const mordred = Npcs.query().name('Sir Mordred').action('Attack').within(8).nearest();
     if (mordred) {
         await mordred.interact('Attack');
         await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 4000);
     }
+    // Eat mid-fight: the host EatFood/Sustain hook only fires during WALKS (Traversal),
+    // NOT inside a delayUntil, so a STANDING fight never triggers it and the bot dies on
+    // its base HP with a full pack of food (live 2026-07-19). Drive the hook ourselves.
+    await Sustain.run();
     return false;
 }
 
@@ -546,6 +555,7 @@ async function killGiantBat(log: (m: string) => void): Promise<boolean> {
         () => GroundItems.query().name(BAT_BONES).within(6).nearest() !== null || Npcs.query().name('Giant bat').within(2).nearest() === null,
         5000
     );
+    await Sustain.run(); // eat mid-fight — the host hook only fires during walks (see fortress)
     return false; // re-enter -> grab the bones or attack again
 }
 
