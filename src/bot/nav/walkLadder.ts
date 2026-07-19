@@ -8,17 +8,20 @@
  * ANY progress (distance-to-target dropped) restarts the pass at baked.
  */
 
-export type LastOutcome = 'arrived' | 'closest' | 'budget' | 'failed' | 'interrupted' | null;
+export type ProbeOutcome = 'probe-fresh' | 'probe-dead';
+export type LastOutcome = 'arrived' | 'closest' | 'budget' | 'failed' | 'interrupted' | ProbeOutcome | null;
 
 type LadderAction =
     | { kind: 'baked'; bigBudget: boolean }
     | { kind: 'scene' }
     | { kind: 'unstick' }
     | { kind: 'backoff'; ticks: number }
+    | { kind: 'verify' }
+    | { kind: 'unreachable' }
     | { kind: 'arrived' }
     | { kind: 'interrupted' };
 
-type StepPhase = 'baked' | 'scene' | 'unstick';
+type StepPhase = 'baked' | 'scene' | 'unstick' | 'verify';
 
 export interface LadderState {
     /** Best (smallest) Chebyshev distance to the target seen so far. */
@@ -44,6 +47,11 @@ export interface LadderObs {
 
 const BACKOFF_MIN = 2;
 const BACKOFF_MAX = 16;
+
+/** Consecutive fully-exhausted no-progress passes before the driver is asked to
+ *  run a verification probe (a big-budget path request). A dead/stale probe then
+ *  terminates the walk with an honest `unreachable` instead of retrying forever. */
+export const UNREACHABLE_PASSES = 3;
 
 export function initialLadderState(curDist: number): LadderState {
     return { bestDist: curDist, noProgressPasses: 0, phase: 'baked', triedBigBudget: false };
@@ -81,6 +89,18 @@ export function advance(state: LadderState, obs: LadderObs): { action: LadderAct
         return { action: { kind: 'baked', bigBudget: false }, state: { bestDist, noProgressPasses: state.noProgressPasses, phase: 'baked', triedBigBudget: false } };
     }
 
+    // A verification probe just ran (the driver fed its judgement back).
+    if (state.phase === 'verify') {
+        if (obs.lastOutcome === 'probe-dead') {
+            // No path, or the same plan that already failed to be followed —
+            // re-walking it provably gains nothing. Honest terminal.
+            return { action: { kind: 'unreachable' }, state };
+        }
+        // probe-fresh: the probe found a NEW plan — reset the exhaustion
+        // counter and go again from baked after a short backoff.
+        return { action: { kind: 'backoff', ticks: backoffTicks(1) }, state: { bestDist, noProgressPasses: 0, phase: 'baked', triedBigBudget: false } };
+    }
+
     // No progress — escalate within the pass by the phase of the action just run.
     if (state.phase === 'baked') {
         if (obs.lastOutcome === 'budget' && !state.triedBigBudget) {
@@ -91,8 +111,13 @@ export function advance(state: LadderState, obs: LadderObs): { action: LadderAct
     if (state.phase === 'scene') {
         return { action: { kind: 'unstick' }, state: { ...state, bestDist, phase: 'unstick' } };
     }
-    // phase === 'unstick' → pass exhausted: back off, then a new pass starts at baked.
+    // phase === 'unstick' → pass exhausted. After UNREACHABLE_PASSES of these,
+    // ask the driver to VERIFY before another blind retry; otherwise back off
+    // and start a new pass at baked.
     const passes = state.noProgressPasses + 1;
+    if (passes >= UNREACHABLE_PASSES) {
+        return { action: { kind: 'verify' }, state: { ...state, bestDist, noProgressPasses: passes, phase: 'verify' } };
+    }
     return { action: { kind: 'backoff', ticks: backoffTicks(passes) }, state: { bestDist, noProgressPasses: passes, phase: 'baked', triedBigBudget: false } };
 }
 
@@ -114,4 +139,22 @@ export function pickUnstickStep(canStep: (dx: number, dz: number) => boolean, st
         }
     }
     return null;
+}
+
+export interface ProbeResult {
+    ok: boolean;
+    terminal: { x: number; z: number; level: number } | null;
+}
+
+/** Judge a verification probe: dead when no path exists, or when the fresh
+ *  plan's terminal repeats the previous probe's terminal — that plan was
+ *  already tried and could not be followed, so re-walking it gains nothing. */
+export function judgeProbe(prev: { x: number; z: number; level: number } | null, probe: ProbeResult): ProbeOutcome {
+    if (!probe.ok || probe.terminal === null) {
+        return 'probe-dead';
+    }
+    if (prev && prev.x === probe.terminal.x && prev.z === probe.terminal.z && prev.level === probe.terminal.level) {
+        return 'probe-dead';
+    }
+    return 'probe-fresh';
 }
