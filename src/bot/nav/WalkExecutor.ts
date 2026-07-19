@@ -105,6 +105,17 @@ export function isOpenableBarrier(name: string | null, ops: readonly (string | n
     return /(door|gate)/i.test(name ?? '') && ops.some(op => op !== null && /^open/i.test(op));
 }
 
+/**
+ * An OPEN door/gate leaf: NAME reads as a door/gate AND it offers a Close-style
+ * op. The dual of `isOpenableBarrier` — a shut leaf offers Open, an open one
+ * offers Close — so this only ever matches leaves that are currently swung open.
+ * Used to spot a transiently-swung-open leaf sitting on the tile under the
+ * player (see the swung-leaf race in followPath's blocked-honesty branch).
+ */
+export function isOpenBarrierLeaf(name: string | null, ops: readonly (string | null)[]): boolean {
+    return /(door|gate)/i.test(name ?? '') && ops.some(op => op !== null && /^close/i.test(op));
+}
+
 /** Expand direction-change waypoints back into the full tile path. */
 function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
     const tiles: PathStep[] = [];
@@ -460,6 +471,32 @@ class WalkExecutorImpl {
                     // (a snapped unwalkable terminal), which the scene walk CAN beat.
                     const end = tiles[tiles.length - 1];
                     if (clicks === 0 && me.level === end.level && chebyshev(me, end) <= 1) {
+                        // ...but a TRANSIENT obstruction must not latch here. When a
+                        // straight door opens for a 1-tile crossing its leaf swings
+                        // onto the landing tile and flags it WALK_SCENERY, so canReach
+                        // refuses that tile and we click-starve one step short
+                        // (clicks===0, chebyshev 1) — looking exactly like a live-
+                        // blocked booth. But the RS door AUTO-REVERTS (closes) within
+                        // a few ticks, which unflags the tile; latching 'blocked' now
+                        // loses that race (door-cross-test leg1: crossed the door in
+                        // 5.6s, then 'blocked' fired on the transiently-flagged
+                        // (3248,3412) landing a tick before the leaf closed; the old,
+                        // slower crossing masked it by outlasting the revert). So if
+                        // an OPEN door/gate leaf (name door/gate offering Close — the
+                        // isOpenableBarrier dual) sits within ~3 tiles, DON'T latch:
+                        // keep stalling. The leaf reverts within ticks, the stall loop
+                        // re-evaluates, and the normal click path finishes the walk
+                        // once the flag clears. Bound: a leaf that never reverts is
+                        // still capped by the walkTo deadline (the while-deadline ends
+                        // this walk with 'failed' — acceptable). The no-open-leaf path
+                        // below is unchanged and load-bearing for occupied stall-
+                        // stands/booths (ArdyThiever etc.), which are not door/gate.
+                        const openLeaf = Locs.query().where(l => isOpenBarrierLeaf(l.name, l.actions())).within(3).nearest();
+                        if (openLeaf) {
+                            log(`(${end.x},${end.z}) blocked by an open '${openLeaf.name}' leaf — waiting for it to revert`);
+                            await Execution.delayTicks(2);
+                            continue;
+                        }
                         log(`(${end.x},${end.z}) blocked live — as close as reachable`);
                         return 'blocked';
                     }
