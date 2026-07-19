@@ -256,14 +256,20 @@ export const QUESTS: QuestRecord[] = [
         // source: arthur_journal.rs2:8-10 only advertises "defeat a level 39 enemy" (combat advisory, no skill/qp/prereq gate); quest.constant:70 QP. Excalibur/black candle/bat bones are acquired mid-quest.
         id: 'arthur', name: "Merlin's Crystal", questPoints: 6,
         requirements: {},
-        items: []
+        items: [
+            { name: 'Bread', qty: 1, kind: 'acquirable' },            // fed to the Beggar for Excalibur
+            { name: 'Insect repellent', qty: 1, kind: 'acquirable' }, // free the bees for wax
+            { name: 'Bucket', qty: 1, kind: 'acquirable' },           // collect the wax
+            { name: 'Tinderbox', qty: 1, kind: 'acquirable' }         // light the black candle
+        ]
     },
     {
         // source: ball_journal.rs2:5-7 only advertises "defeat a level 53 enemy" (combat advisory, no skill/qp/prereq gate); quest.constant:71 QP.
         id: 'ball', name: "Witch's House", questPoints: 4,
         requirements: {},
         items: [
-            { name: 'Cheese', qty: 1, kind: 'acquirable' } // ball_journal/quest_ball.rs2 inv_del(inv, cheese, 1): lure the mouse
+            { name: 'Cheese', qty: 1, kind: 'acquirable' }, // ball_journal/quest_ball.rs2 inv_del(inv, cheese, 1): lure the mouse
+            { name: 'Leather gloves', qty: 1, kind: 'acquirable' } // WORN: cross the shocking iron gate (quest_ball.rs2:33-38)
         ]
     },
     {
