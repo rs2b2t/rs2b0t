@@ -2,6 +2,7 @@ import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
+import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
@@ -58,6 +59,14 @@ const BUCKET = 'Bucket';                    // bucket_empty (water_sources.obj: 
 const REPELLENT = 'Insect repellent';
 const BREAD = 'Bread';
 const TINDERBOX = 'Tinderbox';
+// A CRUSH weapon for the two re-entrant fights. Sir Mordred is only 38 HP but his
+// defence is stab 99 / slash 82 / CRUSH 45 (keep_le_faye.npc) — so bare fists OR a slash
+// scimitar chip him for ~6 min, long enough that the bot's food runs out and it dies
+// (live 2026-07-19: fists, fists+trout, and a slash scimitar all died/stalled). A crush
+// weapon exploits his crush-def 45 and drops him in ~1 min. Provisioned as a plain combat
+// tool (NOT a Phase-B signal), wielded before each fight. Kept in `tools` so a mid-quest
+// restart re-carries it.
+const WEAPON = 'Rune mace';
 
 // --- NPC stops (jm2 NPC-section spawns; display names from the npc configs). ---
 // King Arthur (2764,3515,0) — start at notStarted; at stage freed_merlin his
@@ -159,6 +168,18 @@ const RIMMINGTON_SHOP = { npc: 'Shop keeper', anchor: new Tile(2947, 3216, 0) };
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
 
 // --- Shared helpers ----------------------------------------------------------
+
+/** Wield the provisioned weapon before a re-entrant fight — bare fists can't down Sir
+ *  Mordred (lvl 39) before the bot's food runs out. No-op once it's worn or absent (a
+ *  bankless restart may lack it; the fight then falls back to fists). */
+async function wieldWeapon(log: (m: string) => void): Promise<void> {
+    if (Equipment.contains(WEAPON) || !Inventory.contains(WEAPON)) {
+        return;
+    }
+    if (await Equipment.equip(WEAPON)) {
+        log(`wielded ${WEAPON}`);
+    }
+}
 
 /** Emit a buy, or a parked WAIT when pack+bank can't cover it (the princeali
  *  idiom — a bare buy on a broke account re-enters forever and loops silently). */
@@ -430,6 +451,7 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(MORDRED_TILE, { radius: 3, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
+    await wieldWeapon(log);
     const mordred = Npcs.query().name('Sir Mordred').action('Attack').within(8).nearest();
     if (mordred) {
         await mordred.interact('Attack');
@@ -513,6 +535,7 @@ async function killGiantBat(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(BAT_ANCHOR, { radius: 6, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
+    await wieldWeapon(log);
     const bat = Npcs.query().name('Giant bat').action('Attack').within(10).nearest();
     if (!bat) {
         log('killGiantBat: no Giant bat near the anchor — LIVE-VERIFY the spawn is reachable');
@@ -812,6 +835,6 @@ export const merlinscrystal: QuestModule = {
     // Keep across the between-quest deposit: every quest-internal item a mid-quest
     // restart may hold, plus the supplies. 'black candle' covers unlit; 'lit black
     // candle' the lit one; 'bucket' covers both empty and 'bucket of wax'.
-    tools: ['excalibur', 'black candle', 'lit black candle', 'bat bones', 'bucket of wax', 'bucket', 'insect repellent', 'bread', 'tinderbox', 'coins'],
+    tools: ['excalibur', 'black candle', 'lit black candle', 'bat bones', 'bucket of wax', 'bucket', 'insect repellent', 'bread', 'tinderbox', 'coins', 'rune mace'],
     decide
 };
