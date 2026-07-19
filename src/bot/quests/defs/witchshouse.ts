@@ -95,11 +95,20 @@ const EXPERIMENT_FORMS = [
 // (48,0) -> (2928,3456,0). prefer = the start + hand-back menu options
 // (boy.rs2:6,10). The hand-back at 'default' stage is auto (no option), so only
 // the start choices are listed.
-const BOY: NpcStop = { npc: 'Boy', anchor: new Tile(2928, 3456, 0), leash: 6, prefer: ["Ok, I'll see what I can do."] };
+// Start is a TWO-menu chain (boy.rs2:6,10): "What's the matter?" opens his plea,
+// then "Ok, I'll see what I can do." sets ball_started. Both must be in prefer or the
+// first menu falls to the "...I'll go." fallback and the quest never starts. The
+// mid-quest "Not yet" reply and the ball hand-back are auto (no options).
+const BOY: NpcStop = { npc: 'Boy', anchor: new Tile(2928, 3456, 0), leash: 6, prefer: ["What's the matter?", "Ok, I'll see what I can do."] };
 
 // --- Surface stands/locs (m45_54 LOC section; op names from all.loc) ---
 const POT_STAND = new Tile(2900, 3474, 0);        // witchpot "Potted plant" op1 Look-under -> Door key (:1-8)
-const LADDER_DOWN_STAND = new Tile(2907, 3476, 0);// ladder_cellar "Ladder" op1 Climb-down -> cellar (2907,9876,0)
+// The ladder loc is (2907,3476), but its adjacent tiles are canReach-BLOCKED from
+// the front-door approach (client "0-clicks" wedges at (2908,3478), live 2026-07-19),
+// and targeting the ladder tile makes walkResilient loop instead of arriving. So the
+// WALK target is the reachable tile (2908,3478) — within OPLOC range of the ladder —
+// and we OPLOC Climb-down from there (the loc query + server-walk do the last tiles).
+const LADDER_DOWN_STAND = new Tile(2908, 3478, 0);
 const MOUSEHOLE_STAND = new Tile(2903, 3467, 0);  // witchmousehole "Mouse hole" @ (2903,3466); useOn Cheese to lure the Mouse
 const FOUNTAIN_STAND = new Tile(2909, 3471, 0);   // witchfountain "Fountain" @ (2909,3470); op2 Check -> shed Key (:162-169)
 const SHED_STAND = new Tile(2933, 3463, 0);       // W of witchsheddoor "Door" @ (2934,3463); useOn Key -> opens + spawns experiment (:134-160)
@@ -145,19 +154,24 @@ async function magnetLeg(log: (m: string) => void): Promise<boolean> {
     }
     if (!isUnderground(t)) {
         // Descend. Walking to the ladder passes the front Door, which auto-opens
-        // while the Door key is held (quest_ball.rs2:10-14).
-        if (!(await Traversal.walkResilient(LADDER_DOWN_STAND, { radius: 1, attempts: 3, timeoutMs: 90_000, log }))) {
-            return false;
-        }
+        // while the Door key is held (quest_ball.rs2:10-14). The ladder sits in a
+        // furniture-tight corner where a strict walk-to-stand "0-clicks" wedges
+        // (live 2026-07-19 @ 2908,3478), so OPLOC the ladder AS SOON AS it is in
+        // range and let the SERVER walk the last tiles + climb (the tower-staircase
+        // pattern); only walk closer when it isn't visible yet.
+        // OPLOC the ladder the MOMENT it's in range (within 6 = we're inside near it):
+        // the client walker "0-clicks" wedges on the furniture-tight final tiles at
+        // (2908,3478) (live 2026-07-19), but the SERVER OPLOC walks them + climbs.
+        // Only client-walk toward it when it's NOT in range yet — that leg crosses the
+        // front Door, which auto-opens while the Door key is held (quest_ball.rs2:10-14).
+        // (OPLOC-from-far fails: the server won't cross the quest-scripted front door.)
         const ladder = Locs.query().name('Ladder').action('Climb-down').within(6).nearest();
-        if (!ladder) {
-            log('magnetLeg: no cellar Ladder to Climb-down (LIVE-VERIFY the cellar stairs @ 2907,3476)');
-            return false;
+        if (ladder) {
+            await ladder.interact('Climb-down');
+            return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && isUnderground(g); }, 10_000);
         }
-        if (!(await ladder.interact('Climb-down'))) {
-            return false;
-        }
-        return Execution.delayUntil(() => { const g = Game.tile(); return g !== null && isUnderground(g); }, 10_000);
+        await Traversal.walkResilient(LADDER_DOWN_STAND, { radius: 3, attempts: 2, timeoutMs: 60_000, log });
+        return false;
     }
     // Underground. Cross the iron Gate WEST to the cupboard if we are still on
     // its east side (the Ladder lands there).
@@ -221,14 +235,14 @@ async function gardenLeg(log: (m: string) => void): Promise<boolean> {
             }
             return false;
         }
-        if (!(await Traversal.walkResilient(CELLAR_UP_STAND, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
-            return false;
-        }
+        // Same pattern as the descent: OPLOC the up-ladder when in range, else walk in.
         const ladder = Locs.query().name('Ladder').action('Climb-up').within(6).nearest();
         if (ladder) {
             await ladder.interact('Climb-up');
             await Execution.delayUntil(() => { const g = Game.tile(); return g !== null && !isUnderground(g); }, 10_000);
+            return false;
         }
+        await Traversal.walkResilient(CELLAR_UP_STAND, { radius: 3, attempts: 2, timeoutMs: 60_000, log });
         return false;
     }
     // Surface. Lure the Mouse (Cheese on the Mouse hole) and attach the Magnet.
