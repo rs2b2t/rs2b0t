@@ -66,11 +66,22 @@ const KING_ARTHUR: NpcStop = { npc: 'King Arthur', anchor: new Tile(2764, 3515, 
 // Sir Gawain (2763,3506,0) — at %arthur=started his menu offers "Do you know how
 // Merlin got trapped?" (sir_gawain.rs2:36-40 -> stage spoken_gawain). The sub-menu
 // then has "Thank you for the information." to close cleanly.
-const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2763, 3506, 0), leash: 6, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
+// Gawain stands at (2766,3508) — the map spawn (2763,3506) is across the Round Table,
+// so a leash-6 npcNear "sees" him through the table and talkThrough can't reach (live
+// 2026-07-19: "never opened a dialogue"). Anchor ON his tile + a tight leash forces
+// the bot to Gawain's side. prefer opt4 "Do you know how Merlin got trapped?" sets
+// arthur_spoken_gawain (sir_gawain.rs2:40) BEFORE the follow-up menu, so "Thank you..."
+// safely closes.
+const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2766, 3508, 0), leash: 3, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
 // Sir Lancelot (2759,3515, LEVEL 1 — Camelot upstairs, like R&J's Juliet). Only at
 // %arthur=spoken_gawain does his menu offer "Any ideas on how to get into Morgan Le
 // Faye's stronghold?" (sir_lancelot.rs2:30-36 -> stage spoken_lancelot).
-const LANCELOT: NpcStop = { npc: 'Sir Lancelot', anchor: new Tile(2759, 3515, 1), leash: 6, prefer: ['Any ideas on how to get into Morgan Le Faye', "You're a little full of yourself"] };
+// Lancelot stands at (2757,3511,1); the map anchor (2759,3515) is unreachable from
+// the L1 stair landing (gotoNpc returned false, so talkThrough never fired and the
+// stage stuck at spoken_gawain, looping the stairs). Anchor on his tile. prefer opt4
+// "Any ideas on how to get into Morgan Le Faye's stronghold?" sets arthur_spoken_lancelot
+// (sir_lancelot.rs2:15,34) — the gate the smuggling crate needs to teleport into the keep.
+const LANCELOT: NpcStop = { npc: 'Sir Lancelot', anchor: new Tile(2757, 3511, 1), leash: 3, prefer: ['Any ideas on how to get into Morgan Le Faye', "You're a little full of yourself"] };
 // The Lady of the Lake at Taverley (2924,3405,0). Her "I seek the sword Excalibur."
 // option appears ONLY at %arthur>=spoken_morgan_lefaye with no Excalibur held
 // (lady_of_the_lake.rs2:4); picking it sends us to the Port Sarim jeweller and sets
