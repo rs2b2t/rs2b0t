@@ -57,6 +57,7 @@ import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
+import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
@@ -222,29 +223,42 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
 /**
  * Kill-for-key: get the riddle key into the pack so the caller can search the
  * container. Idempotent — returns true immediately when the key is already held
- * (a re-entry after a partial attempt skips straight to the search). Walks near
- * the container coord (the content spawns the NPC roaming there), Attacks the
- * nearest matching NPC, waits for it to die, then Takes the dropped key. Bounded
- * throughout; returns false — abandoning the riddle gracefully — when no matching
- * NPC is near the container (e.g. Black Heather lives in the wilderness, far from
- * the Varrock chapel container) or the fight/loot doesn't yield the key in time.
+ * (a re-entry after a partial attempt skips straight to the search).
+ *
+ * The key drops when the matching NPC dies ANYWHERE with the clue held
+ * (trail_clue_medium.rs2 `trail_checkmediumdrop` → obj_add at the NPC's death
+ * coord) — the killer is NOT co-located with the locked container it opens (e.g.
+ * riddle004's drawers sit ~58 tiles from the nearest Chicken; riddle005's Man is
+ * one floor below its upstairs container). So we walk to where the killer roams
+ * (`huntTile`, the killAnchors spawn), fight the nearest matching NPC IN SCENE,
+ * loot the key at its death coord, and only then does the caller walk on to the
+ * container to search. Bounded throughout; returns false — abandoning the riddle
+ * gracefully — when no matching NPC is found near the hunt tile or the fight/loot
+ * doesn't yield the key in time.
  */
-async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, coord: NavPoint, log: (m: string) => void): Promise<boolean> {
+async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: NavPoint, log: (m: string) => void): Promise<boolean> {
     const haveKey = (): boolean => Inventory.items().some(i => i.id === kf.keyId);
     if (haveKey()) {
         return true; // already looted on a prior attempt — go straight to the search
     }
-    // Position near the container, then fight the nearest matching NPC there. We
-    // don't gate on the walk outcome: even a partial arrival can leave the NPC in
-    // reach; if it genuinely lives elsewhere, the query below finds none → abandon.
-    await Traversal.walkResilient(coord, { radius: KEY_WALK_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
+    // Walk to the killer's spawn. We don't gate on the walk outcome: a partial
+    // arrival often still leaves the roamer in the loaded scene; if it genuinely
+    // isn't reachable the query below finds none → abandon.
+    await Traversal.walkResilient(huntTile, { radius: KEY_WALK_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
     // EntityQuery.name() is CASE-INSENSITIVE (see queries/Query.ts), so the
     // lowercase content token 'pirate' still matches the 'Pirate' display name;
     // generic tokens ('Chicken', 'Man') match those display names the same way.
-    const target = Npcs.query().name(kf.npc).action('Attack').within(NPC_LEASH).nearest();
+    // Scene-wide (no within-leash): the roamer can sit a few tiles off the anchor.
+    let target = Npcs.query().name(kf.npc).action('Attack').nearest();
     if (!target) {
-        log(`kill-for-key: no '${kf.npc}' near the container — abandoning riddle`);
+        log(`kill-for-key: no '${kf.npc}' near (${huntTile.x},${huntTile.z}) — abandoning riddle`);
         return false;
+    }
+    // Close the last tiles to the roamer before attacking (the interact server-walk
+    // won't cross a baked door to it), then re-find — it may have wandered.
+    if (target.distance() > 1) {
+        await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 2, timeoutMs: WALK_TIMEOUT_MS, log });
+        target = Npcs.query().name(kf.npc).action('Attack').nearest() ?? target;
     }
     await target.interact('Attack');
     // Match the dropped key by its exact obj id (kf.keyObj is a CONTENT obj name,
@@ -256,6 +270,11 @@ async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, coord: NavP
     await Execution.delayUntil(() => haveKey() || keyOnGround() !== null || (!target.valid() && !Game.inCombat()), KILL_WAIT_MS);
     const key = keyOnGround();
     if (key) {
+        // The key drops at the death coord, which can be a couple tiles off (the
+        // NPC wandered mid-fight) — close in before Take so it isn't a no-op.
+        if (key.distance() > 1) {
+            await Traversal.walkResilient(key.tile(), { radius: 1, attempts: 2, timeoutMs: WALK_TIMEOUT_MS, log });
+        }
         await key.interact('Take');
         await Execution.delayUntil(haveKey, LOOT_WAIT_MS);
     }
@@ -276,7 +295,11 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             // abandons after STEP_ATTEMPTS.
             const kf = (step as ClueRow).keyFrom;
             if (kf) {
-                if (!(await acquireRiddleKey(kf, step.coord, log))) {
+                // Hunt the killer at ITS spawn (killAnchors), not the container —
+                // the key drops wherever the NPC dies. Fall back to the container
+                // coord when no anchor is known (then it abandons if nothing's there).
+                const huntTile = KILL_ANCHORS[step.id] ?? step.coord;
+                if (!(await acquireRiddleKey(kf, huntTile, log))) {
                     return;
                 }
             }
