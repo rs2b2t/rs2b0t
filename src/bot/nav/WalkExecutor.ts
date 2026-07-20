@@ -73,6 +73,11 @@ const OPEN_WAIT_MS = 4000;
 // Small vs MULTI_DOOR_CROSS_MS so a genuinely stuck door still falls through to
 // repath after a hop or two.
 const SCENE_STEP_MS = 8000;
+// Budget to walk ONTO a door's approach tile before opening + stepping through.
+// One tile hop, so small; kept well under MULTI_DOOR_CROSS_MS so a door whose
+// approach is momentarily unreachable still times the whole crossing out to
+// repath rather than spinning here (see crossMultiTileDoor).
+const APPROACH_WALK_MS = 3000;
 const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing dialogue
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
@@ -744,9 +749,29 @@ class WalkExecutorImpl {
         const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
         const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
         while (performance.now() < deadline) {
-            if (isOnFarSide(reader.worldTile(), approach, step)) {
+            const here = reader.worldTile();
+            if (isOnFarSide(here, approach, step)) {
                 log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
                 return true;
+            }
+            // Stand ON the approach tile before opening + stepping through. Firing
+            // the open/through-step from an off-approach tile never satisfies
+            // isOnFarSide; worse, in an ADJACENT double-door (Witch's House front
+            // 2901,3473 + inner 2902,3474, one diagonal apart) the bot is parked on
+            // the PRIOR door's tile after crossing it, and that door's auto-close
+            // (door_close_move_player_out_of_way) SHOVES it back outside before the
+            // inner cross can land — so the inner door "did not cross" every pass
+            // (live 2026-07-19). Walking onto `approach` first both starts the cross
+            // from the right tile AND vacates the prior door's tile before it
+            // reverts. No-op when already on approach, so single-door crossings are
+            // unchanged. Bounded: the loop re-checks, all under MULTI_DOOR_CROSS_MS.
+            if (here && !(here.x === approach.x && here.z === approach.z && here.level === approach.level)) {
+                DirectNavigator.walk(approach);
+                await Execution.delayUntil(() => {
+                    const p = reader.worldTile();
+                    return p !== null && p.x === approach.x && p.z === approach.z && p.level === approach.level;
+                }, APPROACH_WALK_MS);
+                continue;
             }
             const shut = this.findTransportLoc(transport);
             if (shut) {
