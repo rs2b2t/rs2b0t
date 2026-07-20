@@ -399,7 +399,8 @@ if (CASES.length === 0) {
     process.exit(2);
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+// HEADED=1 opens a visible Chrome window (watch the bot live); default headless.
+const browser = await chromium.launch({ channel: 'chrome', headless: !process.env.HEADED, slowMo: process.env.HEADED ? 50 : 0 });
 const results: { name: string; ok: boolean; sec: number; detail?: string }[] = [];
 
 for (const c of CASES) {

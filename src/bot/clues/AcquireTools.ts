@@ -7,7 +7,7 @@ import { GroundItems } from '#/bot/api/queries/GroundItems.js';
 import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import {
-    KOJO, MURPHY, PROFESSOR, SPADE_NAME, SPADE_SPAWNS, TRIO,
+    KOJO, KOJO_EXIT, MURPHY, PROFESSOR, SPADE_NAME, SPADE_SPAWNS, TRIO,
     nextCoordTool, type HeldTrio
 } from '#/bot/clues/data/toolAcquire.js';
 
@@ -152,6 +152,15 @@ export async function ensureCoordTools(log: (m: string) => void): Promise<boolea
             }
         } else {
             log('coord-tools: back to the professor for the chart');
+            // Exit the Clock Tower EAST before pathing west to the professor —
+            // the direct path routes through a locked boarded door (see
+            // KOJO_EXIT). Gated on being near Kojo so a re-entry from elsewhere
+            // (chart lost far away) doesn't detour back east.
+            const here = Game.tile();
+            if (here && KOJO.anchor.distanceTo(here) <= 15) {
+                log(`coord-tools: exiting the Clock Tower via (${KOJO_EXIT.x},${KOJO_EXIT.z}) to dodge the locked door`);
+                await Traversal.walkResilient(KOJO_EXIT, { radius: 1, attempts: 3, timeoutMs: 60_000, log: m => log(`  ${m}`) });
+            }
             if (await travelToStop(PROFESSOR, log)) {
                 await talkThrough(PROFESSOR.npc, PROFESSOR.prefer, log);
             }

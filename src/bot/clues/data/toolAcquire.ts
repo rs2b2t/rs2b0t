@@ -72,3 +72,11 @@ export const KOJO: NpcStop = {
     leash: 10,
     prefer: ['watch', 'lost']
 };
+// Kojo stands inside the Clock Tower. The direct path WEST from him to the
+// professor routes through a LOCKED boarded door at (2566,3237) that never
+// opens (the baked pack treats the closet_door on that wall as passable, so
+// the pathfinder keeps choosing it — live 2026-07-20 the walker looped "Door
+// did not cross in time"). Exiting the tower EAST via this tile first makes the
+// professor path go around the locked door (offline-probe-verified: from here
+// the route no longer passes (2566,3237)).
+export const KOJO_EXIT = new Tile(2576, 3250, 0);
