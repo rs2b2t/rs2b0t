@@ -25,5 +25,19 @@
     {"from":{"x":3027,"z":3218,"level":0},"to":{"x":2956,"z":3143,"level":1},"locName":"Seaman Thresnor","action":"Pay-fare","kind":"ship"},
     {"from":{"x":2955,"z":3146,"level":0},"to":{"x":3032,"z":3217,"level":1},"locName":"Customs officer","action":"Pay-fare","kind":"ship"},
     {"from":{"x":2956,"z":3143,"level":1},"to":{"x":2956,"z":3147,"level":0},"locName":"Gangplank","action":"Cross","kind":"gangplank"},
-    {"from":{"x":3032,"z":3217,"level":1},"to":{"x":3028,"z":3217,"level":0},"locName":"Gangplank","action":"Cross","kind":"gangplank"}
+    {"from":{"x":3032,"z":3217,"level":1},"to":{"x":3028,"z":3217,"level":0},"locName":"Gangplank","action":"Cross","kind":"gangplank"},
+    {"from":{"x":2709,"z":3209,"level":0},"to":{"x":2704,"z":3209,"level":0},"locName":"Ropeswing","action":"Swing-on","kind":"shortcut"},
+    {"from":{"x":2705,"z":3205,"level":0},"to":{"x":2709,"z":3205,"level":0},"locName":"Ropeswing","action":"Swing-on","kind":"shortcut"},
+    {"from":{"x":2630,"z":2997,"level":0},"to":{"x":2647,"z":9379,"level":0},"locName":"Cave entrance","action":"Enter","kind":"dungeon"},
+    {"from":{"x":2647,"z":9379,"level":0},"to":{"x":2630,"z":2997,"level":0},"locName":"Cave exit","action":"Walk through","kind":"dungeon"},
+    {"from":{"x":2858,"z":3577,"level":0},"to":{"x":2269,"z":4752,"level":0},"locName":"Cave Entrance","action":"Enter","kind":"dungeon"},
+    {"from":{"x":2269,"z":4752,"level":0},"to":{"x":2858,"z":3577,"level":0},"locName":"Cave Exit","action":"Exit","kind":"dungeon"},
+    {"from":{"x":2407,"z":3419,"level":0},"to":{"x":2409,"z":9819,"level":0},"locName":"Hollowed rock","action":"Enter","kind":"dungeon"},
+    {"from":{"x":2409,"z":9819,"level":0},"to":{"x":2410,"z":3421,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
+    {"from":{"x":2515,"z":3160,"level":0},"to":{"x":2515,"z":3161,"level":0},"locName":"Loose Railing","action":"Squeeze-through","kind":"gate"},
+    {"from":{"x":2515,"z":3161,"level":0},"to":{"x":2515,"z":3160,"level":0},"locName":"Loose Railing","action":"Squeeze-through","kind":"gate"},
+    {"from":{"x":3405,"z":3506,"level":0},"to":{"x":3405,"z":9906,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"},
+    {"from":{"x":3405,"z":9906,"level":0},"to":{"x":3405,"z":3506,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
+    {"from":{"x":3440,"z":9887,"level":0},"to":{"x":3423,"z":3485,"level":0},"locName":"Holy barrier","action":"Pass-through","kind":"dungeon"},
+    {"from":{"x":3423,"z":3485,"level":0},"to":{"x":3440,"z":9887,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"}
 ]
