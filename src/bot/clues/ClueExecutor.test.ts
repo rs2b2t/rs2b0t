@@ -1,6 +1,7 @@
 import { expect, test, describe, mock, beforeEach } from 'bun:test';
 
 import Tile from '../api/Tile.js';
+import { CLUE_DB } from './data/cluedb.js';
 
 // Challenge-clue reply regression (live 2026-07-20): after answerCountDialog
 // the server p_delay(0)s then chatnpc's the "Well done!" reply — a PAUSEBUTTON
@@ -125,5 +126,30 @@ describe('challenge reply handling', () => {
         expect(continues).toBeGreaterThanOrEqual(2);
         // the whole exchange happens standing still — no walking back to the anchor
         expect(walks).toEqual([]);
+    });
+});
+
+describe('tool acquisition before abandon', () => {
+    beforeEach(() => {
+        countDialog = false;
+        pages = [];
+        answered = [];
+        continues = 0;
+        walks = [];
+    });
+
+    test('a spade-less dig walks to a spade spawn before abandoning', async () => {
+        // hold only a plain dig clue (no Spade, no needsSextant) from the real DB
+        const digId = Number(Object.keys(CLUE_DB).find(k => {
+            const r = CLUE_DB[Number(k)];
+            return r.type === 'dig' && r.needsSextant !== true;
+        }));
+        expect(Number.isNaN(digId)).toBe(false);
+        inv = [digId];
+        const result = await ClueExecutor.solveHeldClue(() => {});
+        // ensureSpade walked to the nearer spade spawn (Ardougne, from Game.tile 2394,3488)
+        expect(walks).toContain('walk 2574,3331');
+        // no ground spade in the mocked scene -> acquisition failed -> abandon
+        expect(result).toBe('abandon');
     });
 });

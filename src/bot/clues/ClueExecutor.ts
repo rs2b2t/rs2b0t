@@ -58,6 +58,7 @@ import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
+import { ensureSpade, ensureCoordTools } from '#/bot/clues/AcquireTools.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
@@ -131,6 +132,7 @@ const trace = new ClueTrace({
 // solve genuinely ends (done/abandon), not on a yield.
 let sessionActive = false;
 let sessionLegs = 0;
+let acquireTries = 0; // bounded tool-acquisition attempts this solve
 
 /** Held obj ids in the pack right now. */
 function heldIds(): number[] {
@@ -395,6 +397,22 @@ function blockReason(step: ClueStep): string | null {
     return null;
 }
 
+/** Attempt to acquire the tool a dig step is blocked on. Spade for any dig;
+ *  the sextant trio for a coordinate dig. Returns true only when the tool is
+ *  now held (ensure* verify), so the caller's re-identify clears blockReason. */
+async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boolean> {
+    if (step.type !== 'dig') {
+        return false;
+    }
+    if (!Inventory.first(SPADE)) {
+        return ensureSpade(log);
+    }
+    if ((step as ClueRow).needsSextant && COORD_ITEMS.some(n => !Inventory.first(n))) {
+        return ensureCoordTools(log);
+    }
+    return false;
+}
+
 /**
  * Solve one identified step: retry the client action up to STEP_ATTEMPTS times,
  * verifying after each that the held id set moved (the step consumed its clue /
@@ -464,6 +482,7 @@ export const ClueExecutor = {
             }
             sessionActive = false;
             sessionLegs = 0;
+            acquireTries = 0;
             ClueExecutor.current = null;
             return outcome;
         };
@@ -490,6 +509,7 @@ export const ClueExecutor = {
                 trace.begin(clueId, name);
                 sessionActive = true;
                 sessionLegs = 0;
+                acquireTries = 0;
             }
             ClueExecutor.current = { clueId, name, step: describeStep(step), leg: sessionLegs + 1, attempt: 0, startedAt: ClueExecutor.current?.startedAt ?? Date.now() };
 
@@ -501,6 +521,15 @@ export const ClueExecutor = {
 
             const blocked = blockReason(step);
             if (blocked) {
+                // Try to acquire the missing tool instead of abandoning. Keyed
+                // on the step (not the reason string). ensure* verify the item
+                // is HELD before returning true, so a success clears blockReason
+                // on the re-identify; a failure falls through to abandon. Bounded
+                // by acquireTries so a spawn/NPC that never yields can't spin.
+                if (acquireTries < 2 && (await tryAcquire(step, tlog))) {
+                    acquireTries++;
+                    continue; // re-identify; the block should be cleared now
+                }
                 tlog(`abandoning ${describeStep(step)}: ${blocked}`);
                 return end('abandon', blocked);
             }
