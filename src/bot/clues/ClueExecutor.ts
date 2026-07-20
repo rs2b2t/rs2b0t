@@ -56,6 +56,7 @@ import type { Loc } from '#/bot/api/entities/index.js';
 import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
@@ -191,6 +192,31 @@ async function drainChat(): Promise<void> {
     for (let i = 0; i < 10 && ChatDialog.canContinue(); i++) {
         await ChatDialog.continue();
     }
+}
+
+/**
+ * The six medium "challenge" anagram clues pose a maths question mid-talk: after
+ * the question chat closes, an integer-input count dialog opens (the same
+ * `p_countdialog` "Enter amount" shape as Bank.withdrawX). When one is open while
+ * solving one of those talk steps, enter its fixed answer via the same count
+ * path Bank.withdrawX uses (`reader.countDialogOpen()` + `actions.answerCountDialog`).
+ * The question text is gone by then (if_close precedes p_countdialog), so we key
+ * the answer on the held anagram clue's obj id (`step.id`), not the prompt.
+ * Returns true iff it answered. If the id has no known answer we leave the dialog
+ * untouched (the step then abandons cleanly) rather than enter a wrong number.
+ */
+async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): Promise<boolean> {
+    if (step.type !== 'talk' || !reader.countDialogOpen()) {
+        return false;
+    }
+    const n = challengeAnswer(step.id);
+    if (n === null) {
+        log(`challenge count dialog open but no answer for clue ${step.id} — leaving it (step will abandon)`);
+        return false;
+    }
+    actions.answerCountDialog(n);
+    log(`challenge answered: ${n}`);
+    return true;
 }
 
 /**
@@ -345,6 +371,11 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
         await Sustain.run(); // eat between interact attempts — steps can sit in aggro zones
         onAttempt(attempt + 1);
         await drainChat();
+        // A challenge talk step leaves a count dialog open once talkThrough has
+        // driven the question chat closed; answer it BEFORE re-dispatching, so
+        // this attempt's talkThrough then drives the NPC's correct-reply page and
+        // the trail advances (the clue is consumed → progressed()).
+        await answerChallengeIfOpen(step, log);
         await dispatch(step, log);
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
             return true;
