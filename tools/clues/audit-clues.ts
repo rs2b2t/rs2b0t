@@ -15,6 +15,13 @@
  *            within NPC_LEASH of the anchor at its level (content maps'
  *            `==== NPC ====` sections).
  *
+ * Reachability is probed at AUDIT_BUDGET (matching live walkResilient's big-
+ * budget escalation, below the 1.2M live cap) so a distant-but-reachable clue
+ * isn't failed by a low probe. The KNOWN_UNREACHABLE allowlist covers clues the
+ * solver abandons gracefully live (rope/quest-bridge islands); they are reported
+ * as expected-abandon, never counted as failures. Medium rows also assert their
+ * new fields (kill-for-key npc/keyId, sextant needsSextant flag).
+ *
  * Usage: bun tools/clues/audit-clues.ts [--engine <dir>] [--content <dir>]
  *                                       [--pack <file>]
  * Exit 1 when any clue fails. The pack-gated bun test
@@ -45,6 +52,30 @@ const STARTS: NavPoint[] = [
     { x: 3253, z: 3420, level: 0 }, // Varrock East bank
     { x: 2725, z: 3491, level: 0 } // Seers bank
 ];
+
+// Reachability probe budget. Live `walkResilient` (Traversal.ts) escalates its
+// baked findPath to a big budget on a 'budget' failure — Traversal's
+// DEFAULT_MAX_BUDGET is 1.2M (used for both the bigBudget baked retry and the
+// probeDest verify). The audit does a SINGLE findPath, so at the 300k default
+// it would fail a distant-but-reachable clue the live solver reaches after
+// escalating. 600k is the measured ceiling of what live actually needs (worst
+// real clue Fycie = 449546 expansions; King Bolren 369632, Hazelmere 300518)
+// and stays well under the 1.2M live cap, so the audit never claims reachable
+// beyond what the runtime would.
+const AUDIT_BUDGET = 600_000;
+
+// Clues the audit EXPECTS to be unreachable over the STATIC baked nav graph.
+// The solver abandons these gracefully live, so the audit reports them as
+// expected-abandon rather than counting them as failures. Do NOT add ids here
+// to paper over a real nav gap — an id belongs here only when the crossing is
+// fundamentally not a static edge.
+//   2811 trail_clue_medium_sextant006 — Baxtorian Falls / Waterfall-Quest
+//        island (2512,3467): reached by a held rope swing + a quest-spawned
+//        dynamic bridge, neither of which is a static baked edge.
+//   2815 trail_clue_medium_sextant008 — Crandor (2848,3296): gated behind
+//        Dragon Slayer and an unmodeled sea crossing; no static edge reaches
+//        the island.
+const KNOWN_UNREACHABLE = new Set<number>([2811, 2815]);
 
 export interface ClueAuditFinding {
     id: number;
@@ -217,7 +248,7 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
      *  loosens to plain Chebyshev for dig (held op, no interact reach). */
     const navProblem = (coord: NavPoint, slack: 'interact' | 'cheb1' | 'cheb2'): string | null => {
         for (const start of STARTS) {
-            const r = finder.findPath(start, coord);
+            const r = finder.findPath(start, coord, undefined, AUDIT_BUDGET);
             if (!r.ok) {
                 return `no path from (${start.x},${start.z}): ${r.reason}`;
             }
@@ -235,7 +266,7 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             // egress: the solver walks OUT afterwards (next leg / bank) from
             // where it stood — a one-way crossing (missing reverse edge) would
             // strand it there
-            const back = finder.findPath(last, start);
+            const back = finder.findPath(last, start, undefined, AUDIT_BUDGET);
             if (!back.ok) {
                 return `no return path from terminal (${last.x},${last.z},${last.level}): ${back.reason}`;
             }
@@ -249,7 +280,15 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
 
     for (const [idStr, clue] of Object.entries(CLUE_DB)) {
         const id = Number(idStr);
+        // Allowlisted clues (KNOWN_UNREACHABLE) still run every check, but their
+        // findings are reported as expected-abandon and NOT counted as failures —
+        // the live solver abandons them gracefully.
+        const expected = KNOWN_UNREACHABLE.has(id);
         const fail = (problem: string): void => {
+            if (expected) {
+                log(`EXPECTED-ABANDON ${clue.obj} [${id}] ${clue.type}: ${problem}`);
+                return;
+            }
             findings.push({ id, obj: clue.obj, type: clue.type, problem });
             log(`FAIL ${clue.obj} [${id}] ${clue.type}: ${problem}`);
         };
@@ -289,6 +328,17 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             }
         }
         // open-casket entries have no world state to audit
+
+        // medium: kill-for-key rows must carry a resolved npc + numeric key id
+        // (Task 2 gen-cluedb should have populated both from the riddle content).
+        if (clue.keyFrom && (!clue.keyFrom.npc || !Number.isFinite(clue.keyFrom.keyId))) {
+            fail(`keyFrom unresolved (${JSON.stringify(clue.keyFrom)})`);
+        }
+        // medium: sextant/coordinate digs must be flagged so the solver knows to
+        // carry sextant+watch+chart before digging.
+        if (clue.type === 'dig' && /_sextant\d+$/.test(clue.obj) && clue.needsSextant !== true) {
+            fail('sextant clue missing needsSextant flag');
+        }
     }
 
     return findings;
@@ -315,6 +365,9 @@ if (import.meta.main) {
     }
     const findings = runClueAudit(opts, m => console.log(m));
     const total = Object.keys(CLUE_DB).length;
-    console.log(`\naudited ${total} clues: ${total - new Set(findings.map(f => f.id)).size} clean, ${findings.length} problem(s) across ${new Set(findings.map(f => f.id)).size} clue(s)`);
+    const failedIds = new Set(findings.map(f => f.id));
+    const allowlisted = KNOWN_UNREACHABLE.size;
+    const clean = total - allowlisted - failedIds.size;
+    console.log(`\naudited ${total} clues: ${clean} clean, ${allowlisted} allowlisted (expected-abandon: ${[...KNOWN_UNREACHABLE].join(', ')}), ${findings.length} problem(s) across ${failedIds.size} clue(s)`);
     process.exit(findings.length > 0 ? 1 : 0);
 }
