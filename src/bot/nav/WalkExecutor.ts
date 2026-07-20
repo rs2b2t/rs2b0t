@@ -16,6 +16,7 @@ import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { Execution } from '../api/Execution.js';
 import { Sustain } from '../api/Sustain.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
+import { Npcs } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing } from './data/specialCrossings.js';
@@ -79,6 +80,10 @@ const SCENE_STEP_MS = 8000;
 // repath rather than spinning here (see crossMultiTileDoor).
 const APPROACH_WALK_MS = 3000;
 const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing dialogue
+// Ships need a higher cap than the toll gate: the Musa Customs-officer voyage is
+// a 3-choice flow (journey? -> search away -> Ok.) with several NPC lines between
+// menus, then the pay + telejump — 24 can run out before the deck arrival.
+const SHIP_DIALOGUE_STEPS = 40;
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
 export interface WalkOptions {
@@ -841,6 +846,40 @@ class WalkExecutorImpl {
         if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
             log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
             return false; // caller: failedDoor() + repath (avoids this gate)
+        }
+
+        // NPC-driven crossing (a ship): OPNPC the sailor/officer, pay the fare via
+        // the dialogue, and wait to land on the boat deck. Arrival is a telejump —
+        // the player materialises on a fresh L1 deck tile (sc.toTile) nowhere near
+        // the approach, so success is standing on that tile, NOT isOnFarSide. The
+        // gangplank that then disembarks to the L0 dock is a separate ordinary
+        // transport edge, driven by handleTransport after this returns.
+        if (sc.npc) {
+            const npc = Npcs.query().name(sc.npc).action('Talk-to').nearest();
+            if (!npc || !(await npc.interact('Talk-to'))) {
+                log(`${sc.label}: '${sc.npc}' not talkable`);
+                return false;
+            }
+            const arrived = (): boolean => {
+                const me = reader.worldTile();
+                return me !== null && sc.toTile !== undefined && me.level === sc.toTile.level && chebyshev(me, sc.toTile) <= 2;
+            };
+            for (let i = 0; i < SHIP_DIALOGUE_STEPS && !arrived(); i++) {
+                const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
+                if (pick) {
+                    await ChatDialog.chooseOption(pick);
+                } else if (ChatDialog.canContinue()) {
+                    await ChatDialog.continue();
+                } else {
+                    await Execution.delayTicks(1);
+                }
+            }
+            if (arrived()) {
+                log(`${sc.label}: sailed`);
+                return true;
+            }
+            log(`${sc.label}: voyage did not resolve — repathing`);
+            return false;
         }
 
         const loc = this.findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });

@@ -21,5 +21,9 @@
     {"from":{"x":3105,"z":3162,"level":0},"to":{"x":3104,"z":9576,"level":0},"locName":"Ladder","action":"Climb-down","kind":"dungeon"},
     {"from":{"x":3104,"z":9576,"level":0},"to":{"x":3105,"z":3162,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
     {"from":{"x":2533,"z":3156,"level":0},"to":{"x":2533,"z":9556,"level":0},"locName":"Ladder","action":"Climb-down","kind":"dungeon"},
-    {"from":{"x":2533,"z":9556,"level":0},"to":{"x":2533,"z":3156,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"}
+    {"from":{"x":2533,"z":9556,"level":0},"to":{"x":2533,"z":3156,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
+    {"from":{"x":3027,"z":3218,"level":0},"to":{"x":2956,"z":3143,"level":1},"locName":"Seaman Thresnor","action":"Pay-fare","kind":"ship"},
+    {"from":{"x":2955,"z":3146,"level":0},"to":{"x":3032,"z":3217,"level":1},"locName":"Customs officer","action":"Pay-fare","kind":"ship"},
+    {"from":{"x":2956,"z":3143,"level":1},"to":{"x":2956,"z":3147,"level":0},"locName":"Gangplank","action":"Cross","kind":"gangplank"},
+    {"from":{"x":3032,"z":3217,"level":1},"to":{"x":3028,"z":3217,"level":0},"locName":"Gangplank","action":"Cross","kind":"gangplank"}
 ]
