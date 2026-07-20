@@ -30,6 +30,7 @@ export interface ParsedClueObj {
     loc?: string;
     casket?: string;
     desc?: string;
+    sextant?: string; // medium `trail_sextant,yes` — the engine's coordinate-clue flag
 }
 
 /** A talk clue → the debugname of the opnpc block that completes it. */
@@ -44,7 +45,10 @@ export interface BuildInput {
     objIds: Map<string, number>; // objName → id (obj.pack), covers caskets too
     talk: TalkMapping[]; // parseTalkMappings result (obj → debugname)
     npcDisplay: Map<string, string>; // debugname → display name (npc configs)
-    specials?: Record<string, { type: ClueType; coord: NavPoint }>; // e.g. vague003
+    specials?: Record<string, { type: ClueType; coord: NavPoint }>; // e.g. vague003, medium key-chest riddles
+    /** riddleObj → { npcDisplay, keyObj, keyId } — the medium kill-for-key rows.
+     *  Enriches the (search-classified) riddle with the NPC to kill for its key. */
+    killForKey?: Record<string, { npc: string; keyObj: string; keyId: number }>;
 }
 
 export interface ClueDb {
@@ -100,7 +104,8 @@ export function parseClueObjs(text: string): Record<string, ParsedClueObj> {
             coord: param(b.lines, 'trail_coord'),
             loc: param(b.lines, 'trail_loc'),
             casket: param(b.lines, 'trail_casket'),
-            desc: param(b.lines, 'trail_desc')
+            desc: param(b.lines, 'trail_desc'),
+            sextant: param(b.lines, 'trail_sextant')
         };
     }
     return out;
@@ -110,16 +115,19 @@ export function parseClueObjs(text: string): Record<string, ParsedClueObj> {
 // (use-item handlers) are ignored; no trailing anchor, since some blocks put the
 // handler body on the same line (`[opnpc1,x] @label;`).
 const OPNPC_RE = /^\[opnpc\d+,([a-z0-9_]+)\]/;
-const PROGRESS_RE = /~progress_clue_easy\(\s*(trail_clue_easy_[a-z0-9]+)/;
+const progressRe = (tier: 'easy' | 'medium'): RegExp => new RegExp(`~progress_clue_${tier}\\(\\s*(trail_clue_${tier}_[a-z0-9]+)`);
 
 /**
- * Scan one .rs2 file for easy-clue completions. Each
- * `~progress_clue_easy(trail_clue_easy_<id>, ...)` call is attributed to the
+ * Scan one .rs2 file for tier-clue completions. Each
+ * `~progress_clue_<tier>(trail_clue_<tier>_<id>, ...)` call is attributed to the
  * nearest preceding `[opnpc<N>,<npc>]` block — the call itself usually lives in
  * a `[label,...]` reached from that handler. Calls with no preceding opnpc block
- * are skipped.
+ * are skipped (e.g. the medium riddle key-chest completions, whose progress
+ * calls sit in `trail_clue_medium.rs2` labels with no opnpc — those are search
+ * clues, not talk).
  */
-export function parseTalkMappings(scriptText: string): TalkMapping[] {
+export function parseTalkMappings(scriptText: string, tier: 'easy' | 'medium' = 'easy'): TalkMapping[] {
+    const re = progressRe(tier);
     const out: TalkMapping[] = [];
     let npc = '';
     for (const raw of scriptText.split('\n')) {
@@ -128,9 +136,63 @@ export function parseTalkMappings(scriptText: string): TalkMapping[] {
         if (h) {
             npc = h[1];
         }
-        const c = PROGRESS_RE.exec(line);
+        const c = re.exec(line);
         if (c && npc) {
             out.push({ obj: c[1], npc });
+        }
+    }
+    return out;
+}
+
+/**
+ * Parse trail_clue_medium.rs2's `trail_checkmediumdrop`: each branch ties a
+ * riddle obj to the NPC whose death drops its `_key`. Returns riddleObj →
+ * { npc, keyObj }. `npc` is the content token (npc_type/npc_category debugname)
+ * or the quoted npc_name (e.g. "Man"); the generator maps it to a display name.
+ */
+export function parseKillForKey(scriptText: string): Record<string, { npc: string; keyObj: string }> {
+    const out: Record<string, { npc: string; keyObj: string }> = {};
+    // e.g.  npc_type = black_heather ... inv_total(inv, trail_clue_medium_riddle001) ...
+    //  or   compare(npc_name, "Man") ... inv_total(inv, trail_clue_medium_riddle005) ...
+    const branch = /(?:npc_type|npc_category)\s*=\s*([a-z0-9_]+)[\s\S]*?(trail_clue_medium_riddle\d+)|compare\(npc_name,\s*"([^"]+)"\)[\s\S]*?(trail_clue_medium_riddle\d+)/g;
+    for (const m of scriptText.matchAll(branch)) {
+        const riddle = m[2] ?? m[4];
+        const npc = m[1] ?? m[3];
+        if (riddle && npc) {
+            out[riddle] = { npc, keyObj: `${riddle}_key` };
+        }
+    }
+    return out;
+}
+
+/**
+ * The 6 medium "challenge" anagrams (those with a paired `_challenge` scroll)
+ * complete via `trail_challengenpc_prompt(..., $clue, $challenge)` — the proc
+ * receives `$clue` as a variable, so the clue obj never appears in a literal
+ * `progress_clue_medium(<obj>, ...)` call and parseTalkMappings can't see them.
+ * Attribute each such clue to the opnpc that gates on holding it
+ * (`inv_total(inv, <clue>)`) — a signal present in every anagram handler and
+ * robust to the gnome-ball referee shape where the prompt label precedes the
+ * opnpc. Files with no `_challenge` scroll (the 14 direct-progress anagrams)
+ * return nothing here.
+ */
+export function parseChallengeTalk(scriptText: string): TalkMapping[] {
+    const challenge = new Set([...scriptText.matchAll(/(trail_clue_medium_anagram\d+)_challenge/g)].map(m => m[1]));
+    if (challenge.size === 0) {
+        return [];
+    }
+    const gate = /inv_total\(inv,\s*(trail_clue_medium_anagram\d+)\)/;
+    const out: TalkMapping[] = [];
+    let npc = '';
+    for (const raw of scriptText.split('\n')) {
+        const line = raw.trim();
+        const h = OPNPC_RE.exec(line);
+        if (h) {
+            npc = h[1];
+        }
+        const g = gate.exec(line);
+        if (g && npc && challenge.has(g[1])) {
+            out.push({ obj: g[1], npc });
         }
     }
     return out;
@@ -177,6 +239,11 @@ export function buildClueDb(input: BuildInput): ClueDb {
             if (parsed.coord) {
                 row.coord = decodeCoord(parsed.coord);
             }
+            // medium sextant clues (`trail_sextant,yes`) need sextant+watch+chart
+            // held before the dig yields the casket.
+            if (parsed.sextant === 'yes') {
+                row.needsSextant = true;
+            }
         } else if (parsed.loc === '^true') {
             row.type = 'search';
             if (parsed.coord) {
@@ -193,6 +260,14 @@ export function buildClueDb(input: BuildInput): ClueDb {
                 throw new Error(`no display name for npc debugname ${dbg} (clue ${obj})`);
             }
             row.npc = display;
+        }
+
+        // medium kill-for-key riddles are search rows (coord supplied via
+        // `specials`, since the config carries no trail_coord); tag the NPC whose
+        // death drops the chest key.
+        const kfk = input.killForKey?.[obj];
+        if (kfk) {
+            row.keyFrom = { npc: kfk.npc, keyObj: kfk.keyObj, keyId: kfk.keyId };
         }
 
         db[id] = row;

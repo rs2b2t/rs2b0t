@@ -18,17 +18,36 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import type { NavPoint } from '#/bot/nav/PathFinder.js';
+
 import { decodeCoord } from '../nav/stairsParse.js';
-import { buildClueDb, parseClueObjs, parseEnum, parseTalkMappings, type TalkMapping } from './cluesParse.js';
+import { buildClueDb, parseChallengeTalk, parseClueObjs, parseEnum, parseKillForKey, parseTalkMappings, type ClueType, type TalkMapping } from './cluesParse.js';
 
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-content');
 const OUT = 'src/bot/clues/data/cluedb.ts';
 const TRAIL = join(CONTENT, 'scripts', 'minigames', 'game_trail', 'configs');
+// trail_checkmediumdrop lives here (the kill-for-key riddle→npc/key map).
+const MEDIUM_SCRIPT = join(CONTENT, 'scripts', 'minigames', 'game_trail', 'scripts', 'medium', 'trail_clue_medium.rs2');
 
 // vague003 ("search the drawers upstairs") carries no trail_coord; drawers.rs2
 // handles it as a search-loc at this tile — decodes to (2574,3326,1), the Fishing
 // Guild area (matches the navTargets 'vague003 Fishing Guild' label).
 const VAGUE003_COORD = '1_40_51_14_62';
+
+// The 7 medium "kill-for-key" riddles carry no trail_coord in trail_medium.obj —
+// their locked chest/drawers live in the shared general_use handlers, matched by
+// loc_coord. These are those coords (from chests.rs2 / drawers.rs2), the exact
+// tile the trail script compares against; they feed a `specials` search override
+// (like vague003). Comments summarise the riddle_desc landmark for verification.
+const RIDDLE_KEY_COORDS: Record<string, string> = {
+    trail_clue_medium_riddle001: '0_50_54_56_31', // chapel chest, town w/ central fountain — chests.rs2 → (3256,3487,0)
+    trail_clue_medium_riddle002: '1_40_51_14_62', // East Ardougne pub-upstairs drawers — drawers.rs2 (= vague003 drawer) → (2574,3326,1)
+    trail_clue_medium_riddle003: '1_40_51_51_60', // drawers upstairs of a house near the bank — drawers.rs2 → (2611,3324,1)
+    trail_clue_medium_riddle004: '0_42_54_21_22', // drawers opposite a workshop — drawers.rs2 → (2709,3478,0)
+    trail_clue_medium_riddle005: '1_40_48_33_36', // large-house chest, wizards' town — chests.rs2 → (2593,3108,1)
+    trail_clue_medium_riddle007: '1_43_49_57_29', // pirate-village house drawers — drawers.rs2 → (2809,3165,1)
+    trail_clue_medium_riddle008: '0_45_55_41_57' // troll-attacked village drawers — drawers.rs2 → (2921,3577,0)
+};
 
 // _sailor is an abstract base npc with no config name; the sailor that hands over
 // vague012 is guarded by `npc_type = captain_tobias` in sailors.rs2.
@@ -84,22 +103,64 @@ function loadNpcDisplayNames(): Map<string, string> {
 }
 
 function generate(): string {
-    const enumText = readFileSync(join(TRAIL, 'trail_easy.enum'), 'utf8');
-    const objText = readFileSync(join(TRAIL, 'trail_easy.obj'), 'utf8');
-    const talk: TalkMapping[] = filesUnder(join(CONTENT, 'scripts'), '.rs2').flatMap(f => parseTalkMappings(readFileSync(f, 'utf8')));
+    const objIds = loadObjIds();
+    const npcDisplay = loadNpcDisplayNames();
+    const rs2Files = filesUnder(join(CONTENT, 'scripts'), '.rs2');
 
-    const { db, caskets } = buildClueDb({
-        clueNames: parseEnum(enumText),
-        objs: parseClueObjs(objText),
-        objIds: loadObjIds(),
-        talk,
-        npcDisplay: loadNpcDisplayNames(),
+    // --- easy (66 clues) ---
+    const easyTalk: TalkMapping[] = rs2Files.flatMap(f => parseTalkMappings(readFileSync(f, 'utf8'), 'easy'));
+    const easy = buildClueDb({
+        clueNames: parseEnum(readFileSync(join(TRAIL, 'trail_easy.enum'), 'utf8')),
+        objs: parseClueObjs(readFileSync(join(TRAIL, 'trail_easy.obj'), 'utf8')),
+        objIds,
+        talk: easyTalk,
+        npcDisplay,
         specials: { trail_clue_easy_vague003: { type: 'search', coord: decodeCoord(VAGUE003_COORD) } }
     });
 
+    // --- medium (56 clues) ---
+    // Talk = the 14 anagrams with a literal progress_clue_medium call + the 6
+    // "challenge" anagrams (progress via $clue variable, keyed off the inv_total
+    // holder-gate). The riddle progress calls in trail_clue_medium.rs2 sit in
+    // opnpc-less labels, so parseTalkMappings skips them (they're search clues).
+    const mediumTalk: TalkMapping[] = rs2Files.flatMap(f => {
+        const text = readFileSync(f, 'utf8');
+        return [...parseTalkMappings(text, 'medium'), ...parseChallengeTalk(text)];
+    });
+    const killForKey: Record<string, { npc: string; keyObj: string; keyId: number }> = {};
+    const riddleSpecials: Record<string, { type: ClueType; coord: NavPoint }> = {};
+    for (const [riddle, { npc, keyObj }] of Object.entries(parseKillForKey(readFileSync(MEDIUM_SCRIPT, 'utf8')))) {
+        const keyId = objIds.get(keyObj);
+        if (keyId === undefined) {
+            throw new Error(`no obj id for ${keyObj}`);
+        }
+        const coord = RIDDLE_KEY_COORDS[riddle];
+        if (coord === undefined) {
+            throw new Error(`no key-chest coord for ${riddle} (add to RIDDLE_KEY_COORDS)`);
+        }
+        // npc_type/npc_category debugnames resolve to a display name; a quoted
+        // npc_name ("Man") or a bare category token (pirate) passes through.
+        killForKey[riddle] = { npc: npcDisplay.get(npc) ?? npc, keyObj, keyId };
+        riddleSpecials[riddle] = { type: 'search', coord: decodeCoord(coord) };
+    }
+    const medium = buildClueDb({
+        clueNames: parseEnum(readFileSync(join(TRAIL, 'trail_medium.enum'), 'utf8')),
+        objs: parseClueObjs(readFileSync(join(TRAIL, 'trail_medium.obj'), 'utf8')),
+        objIds,
+        talk: mediumTalk,
+        npcDisplay,
+        specials: riddleSpecials,
+        killForKey
+    });
+
+    const db = { ...easy.db, ...medium.db };
+    const caskets = { ...easy.caskets, ...medium.caskets };
+
     const ids = Object.keys(db).map(Number).sort((a, b) => a - b);
     const talkCount = ids.filter(id => db[id].type === 'talk').length;
-    console.log(`clues=${ids.length} talk=${talkCount} caskets=${Object.keys(caskets).length}`);
+    const sextantCount = ids.filter(id => db[id].needsSextant).length;
+    const keyCount = ids.filter(id => db[id].keyFrom).length;
+    console.log(`clues=${ids.length} talk=${talkCount} caskets=${Object.keys(caskets).length} sextant=${sextantCount} keyfor=${keyCount}`);
 
     const clueLines = ids.map(id => `    ${id}: ${JSON.stringify(db[id])}`);
     const casketLines = Object.keys(caskets)
