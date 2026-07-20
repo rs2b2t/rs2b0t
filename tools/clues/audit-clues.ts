@@ -18,9 +18,13 @@
  * Reachability is probed at AUDIT_BUDGET (matching live walkResilient's big-
  * budget escalation, below the 1.2M live cap) so a distant-but-reachable clue
  * isn't failed by a low probe. The KNOWN_UNREACHABLE allowlist covers clues the
- * solver abandons gracefully live (rope/quest-bridge islands); they are reported
- * as expected-abandon, never counted as failures. Medium rows also assert their
- * new fields (kill-for-key npc/keyId, sextant needsSextant flag).
+ * solver abandons gracefully live (rope/quest-bridge islands): a NAV-UNREACHABLE
+ * finding for such a clue is reported as expected-abandon and not counted as a
+ * failure — but ANY other finding for it (missing sextant flag, wrong
+ * coord/level, malformed keyFrom) still fails normally, and an allowlisted id
+ * that stops being unreachable is itself surfaced as a failure, so the allowlist
+ * can neither mask a data bug nor silently go stale. Medium rows also assert
+ * their new fields (kill-for-key npc/keyId, sextant needsSextant flag).
  *
  * Usage: bun tools/clues/audit-clues.ts [--engine <dir>] [--content <dir>]
  *                                       [--pack <file>]
@@ -65,10 +69,12 @@ const STARTS: NavPoint[] = [
 const AUDIT_BUDGET = 600_000;
 
 // Clues the audit EXPECTS to be unreachable over the STATIC baked nav graph.
-// The solver abandons these gracefully live, so the audit reports them as
-// expected-abandon rather than counting them as failures. Do NOT add ids here
-// to paper over a real nav gap — an id belongs here only when the crossing is
-// fundamentally not a static edge.
+// The solver abandons these gracefully live, so the audit reports a nav-
+// unreachable finding for them as expected-abandon rather than a failure. Do NOT
+// add ids here to paper over a real nav gap — an id belongs here only when the
+// crossing is fundamentally not a static edge. The audit enforces this: an id
+// listed here that is NOT actually nav-unreachable (it became reachable, or its
+// only problem is a data bug) is surfaced as a real failure (see runClueAudit).
 //   2811 trail_clue_medium_sextant006 — Baxtorian Falls / Waterfall-Quest
 //        island (2512,3467): reached by a held rope swing + a quest-spawned
 //        dynamic bridge, neither of which is a static baked edge.
@@ -82,6 +88,19 @@ export interface ClueAuditFinding {
     obj: string;
     type: string;
     problem: string;
+}
+
+export interface ClueAuditResult {
+    /** total clue variants audited (all of CLUE_DB) */
+    total: number;
+    /** real failures — anything a live solver would trip on. Empty == green. */
+    findings: ClueAuditFinding[];
+    /** allowlisted ids that produced their EXPECTED nav-unreachable finding this
+     *  run (routed to expected-abandon), sorted. A KNOWN_UNREACHABLE id missing
+     *  here became reachable / audited clean and is surfaced as a finding. */
+    expectedAbandon: number[];
+    /** clues that passed every check outright (total − allowlisted − failed). */
+    clean: number;
 }
 
 export interface ClueAuditOptions {
@@ -216,12 +235,16 @@ function loadNpcSpawns(content: string): NpcSpawn[] {
 
 const cheb = (a: NavPoint, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 
-export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => void = () => {}): ClueAuditFinding[] {
+export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => void = () => {}): ClueAuditResult {
     const o = defaults(opts);
     const finder = loadPack(o.pack);
     const opLocs = loadOpLocs(o.engine);
     const spawns = loadNpcSpawns(o.content);
     const findings: ClueAuditFinding[] = [];
+    // Allowlisted ids that produced their expected nav-unreachable finding (see
+    // the fail() closure). Used to (a) count real allowlisted clues for the
+    // summary and (b) catch a stale entry that no longer earns its place.
+    const expectedAbandon = new Set<number>();
 
     /** pickSearchLoc semantics: nearest op-loc within 1 tile of coord offering
      *  a search-style op. */
@@ -245,34 +268,39 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
 
     /** A terminal the executor can actually act from: exact tile, or cardinal-
      *  adjacent with no wall on the terminal's edge facing the coord. `slack`
-     *  loosens to plain Chebyshev for dig (held op, no interact reach). */
-    const navProblem = (coord: NavPoint, slack: 'interact' | 'cheb1' | 'cheb2'): string | null => {
+     *  loosens to plain Chebyshev for dig (held op, no interact reach).
+     *  `unreachable` distinguishes a genuine NAV-UNREACHABILITY (the pathfinder
+     *  found no path at all — reason `unreachable`/budget/off-graph, either the
+     *  forward leg or the egress) from a reachable-but-wrong terminal (wrong
+     *  level, off-coord, egress that stops short). Only the former is an
+     *  expected graceful-abandon for an allowlisted island clue. */
+    const navProblem = (coord: NavPoint, slack: 'interact' | 'cheb1' | 'cheb2'): { msg: string; unreachable: boolean } | null => {
         for (const start of STARTS) {
             const r = finder.findPath(start, coord, undefined, AUDIT_BUDGET);
             if (!r.ok) {
-                return `no path from (${start.x},${start.z}): ${r.reason}`;
+                return { msg: `no path from (${start.x},${start.z}): ${r.reason}`, unreachable: true };
             }
             const last = r.waypoints[r.waypoints.length - 1];
             if (last.level !== coord.level) {
-                return `terminal (${last.x},${last.z},${last.level}) on wrong level (want ${coord.level})`;
+                return { msg: `terminal (${last.x},${last.z},${last.level}) on wrong level (want ${coord.level})`, unreachable: false };
             }
             const d = cheb(last, coord);
             const exact = last.x === coord.x && last.z === coord.z;
             const cardinal = Math.abs(last.x - coord.x) + Math.abs(last.z - coord.z) === 1;
             const near = slack === 'cheb2' ? d <= 2 : slack === 'cheb1' ? d <= 1 : exact || cardinal;
             if (!near && !exact) {
-                return `terminal (${last.x},${last.z}) not ${slack === 'interact' ? 'interact-legal' : `within ${slack}`} of coord (cheb ${d})`;
+                return { msg: `terminal (${last.x},${last.z}) not ${slack === 'interact' ? 'interact-legal' : `within ${slack}`} of coord (cheb ${d})`, unreachable: false };
             }
             // egress: the solver walks OUT afterwards (next leg / bank) from
             // where it stood — a one-way crossing (missing reverse edge) would
             // strand it there
             const back = finder.findPath(last, start, undefined, AUDIT_BUDGET);
             if (!back.ok) {
-                return `no return path from terminal (${last.x},${last.z},${last.level}): ${back.reason}`;
+                return { msg: `no return path from terminal (${last.x},${last.z},${last.level}): ${back.reason}`, unreachable: true };
             }
             const home = back.waypoints[back.waypoints.length - 1];
             if (home.level !== start.level || cheb(home, start) > 2) {
-                return `return path from (${last.x},${last.z},${last.level}) ends at (${home.x},${home.z},${home.level}), short of (${start.x},${start.z})`;
+                return { msg: `return path from (${last.x},${last.z},${last.level}) ends at (${home.x},${home.z},${home.level}), short of (${start.x},${start.z})`, unreachable: false };
             }
         }
         return null;
@@ -280,12 +308,16 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
 
     for (const [idStr, clue] of Object.entries(CLUE_DB)) {
         const id = Number(idStr);
-        // Allowlisted clues (KNOWN_UNREACHABLE) still run every check, but their
-        // findings are reported as expected-abandon and NOT counted as failures —
-        // the live solver abandons them gracefully.
+        // Allowlisted clues (KNOWN_UNREACHABLE) still run every check. Only a
+        // genuine nav-UNREACHABILITY finding (pathfinder found no path) is routed
+        // to expected-abandon — the live solver abandons THAT gracefully. Any
+        // OTHER problem for an allowlisted id (missing sextant flag, wrong
+        // coord/level, malformed keyFrom) is a real cluedb regression and fails
+        // normally, so an allowlist entry can never mask a data bug.
         const expected = KNOWN_UNREACHABLE.has(id);
-        const fail = (problem: string): void => {
-            if (expected) {
+        const fail = (problem: string, unreachable = false): void => {
+            if (expected && unreachable) {
+                expectedAbandon.add(id);
                 log(`EXPECTED-ABANDON ${clue.obj} [${id}] ${clue.type}: ${problem}`);
                 return;
             }
@@ -309,7 +341,7 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             }
             const nav = navProblem(clue.coord, clue.type === 'search' ? 'interact' : 'cheb1');
             if (nav) {
-                fail(nav);
+                fail(nav.msg, nav.unreachable);
             }
         } else if (clue.type === 'talk') {
             const anchor = TALK_ANCHORS[id];
@@ -320,7 +352,7 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             const coord = { x: anchor.x, z: anchor.z, level: anchor.level };
             const nav = navProblem(coord, 'cheb2');
             if (nav) {
-                fail(nav);
+                fail(nav.msg, nav.unreachable);
             }
             const near = spawns.filter(s => s.display === clue.npc && s.level === anchor.level && cheb(coord, s) <= NPC_LEASH);
             if (near.length === 0) {
@@ -341,7 +373,34 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
         }
     }
 
-    return findings;
+    // Stale-allowlist guard: every KNOWN_UNREACHABLE id must have earned its
+    // place THIS run by producing a nav-unreachable finding. One that didn't
+    // became reachable (a new edge/data made it solvable) or audited clean —
+    // surface it as a real failure so the allowlist can't silently rot, and so
+    // padding it to silence a genuine failure is caught.
+    for (const id of KNOWN_UNREACHABLE) {
+        if (expectedAbandon.has(id)) {
+            continue;
+        }
+        const clue = CLUE_DB[id];
+        findings.push({
+            id,
+            obj: clue?.obj ?? `clue_${id}`,
+            type: clue?.type ?? '?',
+            problem: `allowlisted ${id} produced no nav-unreachable finding — it is now reachable (or audited clean); remove it from KNOWN_UNREACHABLE`
+        });
+    }
+
+    const total = Object.keys(CLUE_DB).length;
+    // clean = clues touched by neither an expected-abandon nor a real finding
+    // (union guards the overlap when an allowlisted id ALSO trips a data check).
+    const touched = new Set<number>([...expectedAbandon, ...findings.map(f => f.id)]);
+    return {
+        total,
+        findings,
+        expectedAbandon: [...expectedAbandon].sort((a, b) => a - b),
+        clean: total - touched.size
+    };
 }
 
 if (import.meta.main) {
@@ -363,11 +422,8 @@ if (import.meta.main) {
         console.error('missing inputs (pack/engine/content) — see file header');
         process.exit(2);
     }
-    const findings = runClueAudit(opts, m => console.log(m));
-    const total = Object.keys(CLUE_DB).length;
+    const { total, findings, expectedAbandon, clean } = runClueAudit(opts, m => console.log(m));
     const failedIds = new Set(findings.map(f => f.id));
-    const allowlisted = KNOWN_UNREACHABLE.size;
-    const clean = total - allowlisted - failedIds.size;
-    console.log(`\naudited ${total} clues: ${clean} clean, ${allowlisted} allowlisted (expected-abandon: ${[...KNOWN_UNREACHABLE].join(', ')}), ${findings.length} problem(s) across ${failedIds.size} clue(s)`);
+    console.log(`\naudited ${total} clues: ${clean} clean, ${expectedAbandon.length} allowlisted (expected-abandon: ${expectedAbandon.join(', ') || 'none'}), ${findings.length} problem(s) across ${failedIds.size} clue(s)`);
     process.exit(findings.length > 0 ? 1 : 0);
 }
