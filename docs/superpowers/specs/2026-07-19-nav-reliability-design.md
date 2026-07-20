@@ -1,6 +1,6 @@
 # Navigation Reliability — design
 
-**Date:** 2026-07-19 · **Status:** approved direction, spec for review
+**Date:** 2026-07-19 · **Status:** implemented — see docs/superpowers/plans/2026-07-19-nav-reliability.md (all 12 tasks landed on feat/nav-reliability; W1–W4 + Reach live-verified: door-cross 4/4, Demon Slayer/Witch's-cellar/Merlin's-keep×2 gates, mossgiant fleet canary)
 **Goal (user's words):** "reliable, realistic navigation that doesn't get stuck." Scope clarified to **reliability only** — mechanism and human-likeness are non-goals; incremental hardening preferred over a rewrite.
 **Builds on:** `2026-07-13-resilient-world-walking-design.md` (walkResilient ladder), which this hardens rather than replaces.
 
