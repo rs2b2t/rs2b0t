@@ -735,14 +735,16 @@ class WalkExecutorImpl {
      * door re-close before the click-through, stranding the bot with no way to
      * re-fire the crossing (the ~5-min (3108,3162) freeze; see handleTransport).
      *
-     * We aim one tile PAST `step`, not at `step` itself: a live probe of the
-     * wizard-tower shape-9 Door showed that OPENING it swings the loc onto the
-     * far `step` tile and flags it WALK_SCENERY — 3107,3162 clears but 3106,3162
-     * becomes blocked. So `step` is unreachable while the door is open; clicking
-     * it is gated out by canReach and the bot never moves (the exact failure of
-     * the first fix attempt). The landing tile one step further along the
-     * crossing axis (3105,3162 here) is walkable, and the client routes around
-     * the swung door to reach it.
+     * When the open edge won't admit a direct step onto `step` (the multi-tile /
+     * `canStep`-false landing modes), we aim one tile PAST `step` rather than at it:
+     * a live probe of the wizard-tower shape-9 Door showed that OPENING it swings
+     * the loc onto the far `step` tile and flags it WALK_SCENERY — 3107,3162 clears
+     * but 3106,3162 becomes blocked. So `step` is unreachable while the door is
+     * open; clicking it is gated out by canReach and the bot never moves (the exact
+     * failure of the first fix attempt). The landing tile one step further along the
+     * crossing axis (3105,3162 here) is walkable, and the client routes around the
+     * swung door to reach it. (When the edge IS directly steppable, chooseCrossClick
+     * takes the step-first path below and walks onto `step` itself.)
      */
     private async crossMultiTileDoor(approach: PathStep, step: PathStep, transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
         const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
@@ -763,8 +765,8 @@ class WalkExecutorImpl {
             // inner cross can land — so the inner door "did not cross" every pass
             // (live 2026-07-19). Walking onto `approach` first both starts the cross
             // from the right tile AND vacates the prior door's tile before it
-            // reverts. No-op when already on approach, so single-door crossings are
-            // unchanged. Bounded: the loop re-checks, all under MULTI_DOOR_CROSS_MS.
+            // reverts. This walk-to-approach is a no-op ONLY when we're already ON
+            // the approach tile. Bounded: the loop re-checks, all under MULTI_DOOR_CROSS_MS.
             if (here && !(here.x === approach.x && here.z === approach.z && here.level === approach.level)) {
                 DirectNavigator.walk(approach);
                 await Execution.delayUntil(() => {

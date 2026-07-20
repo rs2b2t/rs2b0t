@@ -406,11 +406,13 @@ export class PathFinder {
         }
 
         // Interact-first: for an unwalkable target, search the cardinal-adjacent
-        // goals before the ring — the ring happily terminates within 5 tiles on
-        // the WRONG SIDE of a wall (the Varrock diagonal-door clue house), where
-        // no interact can ever succeed. Fall back to the ring when no cardinal
-        // tile exists or none is reachable (Varrock-fountain enclave: the ring
-        // is what keeps those harmless).
+        // goals before anything wider — the wall-blind ring happily terminates
+        // within 5 tiles on the WRONG SIDE of a wall (the Varrock diagonal-door
+        // clue house), where no interact can ever succeed. When no cardinal goal
+        // resolves, fall back to goalCandidates: the wall-aware connected flood out
+        // from the target's own component (goalCandidates itself drops to the plain
+        // ring only when that flood is empty — the sealed Varrock-fountain enclave,
+        // which the ring keeps harmless).
         const cardinal = this.cardinalGoals(toRaw);
         if (cardinal.size > 0) {
             const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions);

@@ -11,6 +11,14 @@ let locInteractCount: number;
 let npcInteractCount: number;
 let dialogOpen: boolean;
 let expectFlips: boolean; // locOp's expect() reads this
+let walkOpts: { radius?: number; attempts?: number; timeoutMs?: number }[]; // opts each walkResilient got (pins attempts:4)
+
+// Capture the REAL barrier predicates BEFORE mocking WalkExecutor. mock.module is
+// process-global, so a WalkExecutor mock that omitted them would clobber them for
+// every test loaded after this file (openableBarrier.test.ts would fail with
+// "Export named 'isOpenBarrierLeaf' not found"). The mock factory below re-exports
+// these captured real functions alongside the stubbed WalkExecutor.
+const { isOpenableBarrier, isOpenBarrierLeaf } = await import('../nav/WalkExecutor.js');
 
 mock.module('../adapter/ClientAdapter.js', () => ({
     reader: { worldTile: () => ({ x: 0, z: 0, level: 0 }) }
@@ -47,8 +55,9 @@ mock.module('./Reachability.js', () => ({
 }));
 mock.module('./Traversal.js', () => ({
     Traversal: {
-        walkResilient: async (dest: { x: number; z: number; level: number }) => {
+        walkResilient: async (dest: { x: number; z: number; level: number }, opts: { radius?: number; attempts?: number; timeoutMs?: number }) => {
             walkCalls.push(dest);
+            walkOpts.push(opts);
             return walkResult;
         }
     }
@@ -56,7 +65,11 @@ mock.module('./Traversal.js', () => ({
 mock.module('../nav/WalkExecutor.js', () => ({
     WalkExecutor: {
         get lastOutcome() { return walkLastOutcome; }
-    }
+    },
+    // Re-export the real barrier predicates so this process-global mock doesn't
+    // strip them from WalkExecutor for tests loaded after this file.
+    isOpenableBarrier,
+    isOpenBarrierLeaf
 }));
 
 const { Reach } = await import('./Reach.js');
@@ -72,6 +85,7 @@ beforeEach(() => {
     npcInteractCount = 0;
     dialogOpen = false;
     expectFlips = true;
+    walkOpts = [];
 });
 
 describe('Reach.locOp', () => {
@@ -79,6 +93,7 @@ describe('Reach.locOp', () => {
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('retry');
         expect(walkCalls.length).toBe(1);
+        expect(walkOpts[0].attempts).toBe(4); // W1's verify/unreachable terminal must run before the bound
     });
     test('hint walk proven unreachable → unreachable', async () => {
         walkResult = false;
@@ -99,6 +114,7 @@ describe('Reach.locOp', () => {
         // walked to the LOC tile (6,5) — not merely the hint (5,5) — then fired the op
         expect(walkCalls.length).toBe(1);
         expect(walkCalls[0]).toEqual({ x: 6, z: 5, level: 0 });
+        expect(walkOpts[0].attempts).toBe(4); // W1's verify/unreachable terminal must run before the bound
         expect(locInteractCount).toBe(1);
         expect(r).toBe('done');
     });
@@ -150,6 +166,19 @@ describe('Reach.npcDialog', () => {
         const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
         expect(r).toBe('retry');
         expect(walkCalls.length).toBe(1);
+        expect(walkOpts[0].attempts).toBe(4); // W1's verify/unreachable terminal must run before the bound
+    });
+    test('npc present + canReach true + dialog not open → Talk-to fires, no walking, done', async () => {
+        // mirrors locOp's "reachable ⇒ no walk": a reachable in-scene npc is talked to directly
+        sceneNpc = { name: 'Traiborn', tile: { x: 6, z: 5, level: 0 }, interactResult: true };
+        canReachResult = true;
+        dialogOpen = false;
+        const promise = Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
+        dialogOpen = true; // opens before the wait's condition is polled
+        const r = await promise;
+        expect(walkCalls.length).toBe(0);
+        expect(npcInteractCount).toBe(1);
+        expect(r).toBe('done');
     });
     test('npc present but canReach false → walks to the npc tile, then Talk-to, done when dialog opens', async () => {
         sceneNpc = { name: 'Traiborn', tile: { x: 8, z: 5, level: 0 }, interactResult: true };
@@ -161,6 +190,7 @@ describe('Reach.npcDialog', () => {
         // walked to the NPC tile (8,5) — not merely the hint (5,5) — then Talk-to fired
         expect(walkCalls.length).toBe(1);
         expect(walkCalls[0]).toEqual({ x: 8, z: 5, level: 0 });
+        expect(walkOpts[0].attempts).toBe(4); // W1's verify/unreachable terminal must run before the bound
         expect(npcInteractCount).toBe(1);
         expect(r).toBe('done');
     });

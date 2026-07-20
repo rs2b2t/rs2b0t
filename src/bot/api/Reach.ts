@@ -45,7 +45,8 @@ const REACH_BFS_STEPS = 400;
 /** Walk toward a hint tile; map a PROVEN-unreachable walk to the honest
  *  tri-state so callers re-plan instead of re-entering forever. */
 async function closeIn(near: WorldTile, radius: number, log: (m: string) => void): Promise<ReachStatus> {
-    const ok = await Traversal.walkResilient(near, { radius, attempts: 3, timeoutMs: 90_000, log });
+    // attempts:4 (not 3) so the W1 verify/unreachable terminal runs before the bound
+    const ok = await Traversal.walkResilient(near, { radius, attempts: 4, timeoutMs: 90_000, log });
     if (!ok && WalkExecutor.lastOutcome === 'unreachable') {
         log(`reach: hint (${near.x},${near.z},${near.level}) is unreachable`);
         return 'unreachable';
@@ -67,7 +68,8 @@ export const Reach = {
             // (the server op-walk halts at, and races the auto-reshut of, a
             // closed door). Re-query after: our position changed, so canReach is
             // now satisfiable and the OPLOC server-walks the final tiles.
-            const walked = await Traversal.walkResilient(loc.tile(), { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+            // attempts:4 (not 3) so the W1 verify/unreachable terminal runs before the bound
+            const walked = await Traversal.walkResilient(loc.tile(), { radius: 1, attempts: 4, timeoutMs: 90_000, log });
             if (!walked && WalkExecutor.lastOutcome === 'unreachable') {
                 log(`reach: '${opts.name}' unreachable across the door`);
                 return 'unreachable';
@@ -128,7 +130,8 @@ export const Reach = {
             // would cross it, and it loses to the door's auto-reshut (the L1
             // Traiborn stall, live 2026-07-19). Re-query after — the NPC may have
             // shifted and the pre-walk handle is stale.
-            const walked = await Traversal.walkResilient(npc.tile(), { radius: 1, attempts: 3, timeoutMs: 90_000, log });
+            // attempts:4 (not 3) so the W1 verify/unreachable terminal runs before the bound
+            const walked = await Traversal.walkResilient(npc.tile(), { radius: 1, attempts: 4, timeoutMs: 90_000, log });
             if (!walked && WalkExecutor.lastOutcome === 'unreachable') {
                 log(`reach: '${opts.name}' unreachable across the door`);
                 return 'unreachable';

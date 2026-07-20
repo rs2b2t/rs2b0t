@@ -81,7 +81,7 @@ const KING_ARTHUR: NpcStop = { npc: 'King Arthur', anchor: new Tile(2764, 3515, 
 // is entered from the south Large door (2757,3503). The old anchor (2766,3508) sat
 // directly north of a side Door (2766,3504), so gotoNpc routed the bot THROUGH that door
 // and stalled ("giving up after 5 repaths"). Anchor now in his patrol area on the main-
-// entrance side; talkKnight then walks to his LIVE tile. prefer opt4 sets
+// entrance side; Reach.npcDialog reaches his LIVE tile (talkThrough drives). prefer opt4 sets
 // arthur_spoken_gawain (sir_gawain.rs2:40) before the follow-up menu, so "Thank you..."
 // safely closes.
 const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2761, 3508, 0), leash: 4, prefer: ['Do you know how Merlin got trapped?', 'Thank you for the information.'] };
@@ -95,8 +95,8 @@ const GAWAIN: NpcStop = { npc: 'Sir Gawain', anchor: new Tile(2761, 3508, 0), le
 // (2761/2762,3505,1). The old anchor (2757,3511,1) sat ON that wall ("blocked live"),
 // stranding the bot one strip west, and the server Talk-to can't open closed doors, so
 // its 15s wait always timed out and the stage stuck at spoken_gawain, looping the
-// stairs. Anchor now on the reachable WEST landing; talkKnight then walks to his LIVE
-// tile (the door-opening client walker crosses the wall) before Talk-to. prefer opt4
+// stairs. Anchor now on the reachable WEST landing; Reach.npcDialog reaches his LIVE
+// tile (its door-opening client walker crosses the wall) before talkThrough. prefer opt4
 // sets arthur_spoken_lancelot — the gate the smuggling crate needs to enter the keep.
 const LANCELOT: NpcStop = { npc: 'Sir Lancelot', anchor: new Tile(2755, 3511, 1), leash: 4, prefer: ['Any ideas on how to get into Morgan Le Faye', "You're a little full of yourself"] };
 // The Lady of the Lake at Taverley (2924,3405,0). Her "I seek the sword Excalibur."
@@ -282,6 +282,9 @@ async function descendTower(log: (m: string) => void): Promise<boolean> {
  *  maker's sticky sell menu on a later pass) is never driven with a knight's prefer. */
 async function talkKnights(log: (m: string) => void): Promise<void> {
     for (const knight of [GAWAIN, LANCELOT]) {
+        // attempt < 4: a per-pass step budget — openingLeg re-enters talkKnights every
+        // pass, so each pass only needs a few re-entrant Reach nudges (walk/climb closer),
+        // not an exhaustive retry loop.
         for (let attempt = 0; attempt < 4; attempt++) {
             const status = await Reach.npcDialog({ name: knight.npc, near: knight.anchor, log });
             if (status === 'unreachable') {
@@ -293,6 +296,8 @@ async function talkKnights(log: (m: string) => void): Promise<void> {
             }
             const npc = Npcs.query().name(knight.npc).action('Talk-to').nearest();
             const here = Game.tile();
+            // > 3: patrol-drift tolerance — the knight can wander a tile or two from where
+            // Reach opened the box; beyond 3 the open dialogue is a foreign/stale one.
             if (!npc || !here || npc.tile().distanceTo(here) > 3) {
                 log(`talkKnights: open dialogue is not '${knight.npc}' (not adjacent) — skipping`);
                 break;
