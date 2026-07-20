@@ -49,7 +49,8 @@ export default class ClueSolver extends TaskBot {
             isFood: name => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat),
             foodName: () => food,
             foodWithdraw: () => this.settings.num('foodWithdraw', 8),
-            spadeName: () => this.settings.str('spade', 'Spade')
+            spadeName: () => this.settings.str('spade', 'Spade'),
+            weaponName: () => this.settings.str('weapon', '')
         });
 
         // eat mid-walk/mid-step: solves cross aggro zones and nothing else can

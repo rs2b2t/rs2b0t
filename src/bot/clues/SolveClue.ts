@@ -49,6 +49,8 @@ export interface SolveClueHost {
     foodName(): string;
     foodWithdraw(): number;
     spadeName(): string;
+    /** A held weapon name to keep + withdraw for kill-for-key riddles; '' = none. */
+    weaponName?(): string;
     /** Master switch (a settings gate); default on. */
     enabled?(): boolean;
 }
@@ -161,9 +163,12 @@ export class SolveClue implements Task {
             }
         }
         const spade = this.host.spadeName().toLowerCase();
+        const weapon = (this.host.weaponName?.() ?? '').toLowerCase();
+        const coordItems = new Set(['sextant', 'watch', 'chart']);
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
-            return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name) || n === spade || n === 'coins';
+            return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name)
+                || n === spade || n === 'coins' || coordItems.has(n) || (weapon !== '' && n === weapon);
         };
         await Bank.depositAllMatching(name => !isKeep(name));
 
@@ -173,6 +178,16 @@ export class SolveClue implements Task {
             if (!(await Execution.delayUntil(() => Inventory.first(this.host.spadeName()) !== null, 2500))) {
                 this.host.log(`[clue] no '${this.host.spadeName()}' in the bank — dig clues will be abandoned`);
             }
+        }
+
+        // Best-effort weapon withdraw for kill-for-key riddles. The coordinate
+        // items (sextant/watch/chart) are kept if present but NOT auto-withdrawn —
+        // they're player-supplied and only some clues need them; a weapon helps
+        // the combat riddles, so we pull one when the host names it and lacks it.
+        const weaponName = this.host.weaponName?.() ?? '';
+        if (weaponName !== '' && !Inventory.first(weaponName)) {
+            await Bank.withdraw(weaponName, 'Withdraw-1');
+            await Execution.delayUntil(() => Inventory.first(weaponName) !== null, 2500);
         }
 
         // Toll money rides along with the spade (best-effort: a coinless bank

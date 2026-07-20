@@ -244,6 +244,7 @@ export default class RockCrab extends TaskBot {
             foodName: () => FOOD_NAME,
             foodWithdraw: () => FOOD_WITHDRAW,
             spadeName: () => SPADE_NAME,
+            weaponName: () => WEAPON,
             enabled: () => SOLVE_CLUES
         });
 
