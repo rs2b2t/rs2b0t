@@ -55,14 +55,21 @@ export interface AttackerCandidate {
     inCombat: boolean;
     distance: number;
     actions: string[];
+    /** The npc's face/interaction target is a DIFFERENT player (someone else's
+     *  fight — Npc.targetsAnotherPlayer()). We must not attack these. */
+    targetsAnotherPlayer: boolean;
 }
 
-/** Is this NPC plausibly the one attacking us — a market hostile, currently in
- *  combat, close enough to be meleeing us, and actually attackable? */
+/** Is this NPC plausibly the one attacking US — a market hostile, currently in
+ *  combat, close enough to be meleeing us, actually attackable, and NOT already
+ *  locked onto another player. `inCombat` alone is true for ANY fight, so
+ *  without the target check FightBack steals a guard mid-fight with someone else
+ *  (live bug 2026-07-20). */
 export function isHostileAttacker(c: AttackerCandidate, maxDistance: number): boolean {
     return c.name !== null
         && HOSTILE_NAMES.includes(c.name)
         && c.inCombat
+        && !c.targetsAnotherPlayer
         && c.distance <= maxDistance
         && c.actions.includes('Attack');
 }

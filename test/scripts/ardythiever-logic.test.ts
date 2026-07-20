@@ -61,9 +61,14 @@ describe('requiredThieving', () => {
 });
 
 describe('isHostileAttacker', () => {
-    const guard = { name: 'Guard', inCombat: true, distance: 1, actions: ['Pickpocket', 'Attack'] };
+    const guard = { name: 'Guard', inCombat: true, distance: 1, actions: ['Pickpocket', 'Attack'], targetsAnotherPlayer: false };
     test('accepts an in-combat adjacent market hostile with an Attack op', () => {
         expect(isHostileAttacker(guard, 5)).toBe(true);
+    });
+    test('rejects a guard already fighting ANOTHER player (not us)', () => {
+        // faceEntity points at a different player's scene slot — attacking it
+        // would steal someone else's fight and pull aggro we never had
+        expect(isHostileAttacker({ ...guard, targetsAnotherPlayer: true }, 5)).toBe(false);
     });
     test('every fight-mode hostile is an Ardougne dropdown target and vice versa', () => {
         expect([...HOSTILE_NAMES].sort()).toEqual([...ARDOUGNE_PICKPOCKET_TARGETS].sort());

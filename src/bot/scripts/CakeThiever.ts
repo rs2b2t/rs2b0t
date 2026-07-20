@@ -196,7 +196,7 @@ class FightBack implements Task {
     constructor(private bot: CakeThiever) {}
     private findAttacker(): Npc | null {
         return Npcs.query()
-            .where(n => isHostileAttacker({ name: n.name, inCombat: n.inCombat, distance: n.distance(), actions: n.actions() }, ENGAGE_RADIUS))
+            .where(n => isHostileAttacker({ name: n.name, inCombat: n.inCombat, distance: n.distance(), actions: n.actions(), targetsAnotherPlayer: n.targetsAnotherPlayer() }, ENGAGE_RADIUS))
             .nearest();
     }
     private track(engaged: Npc): Npc | null {
