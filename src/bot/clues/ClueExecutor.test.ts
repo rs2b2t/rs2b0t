@@ -20,6 +20,7 @@ const CLUE_ID = 2853; // trail_clue_medium_anagram008 — Gnome ball referee
 const ANSWER = 5096; // 57 x 89 + 23
 
 let inv: number[];
+let invNames: string[] = []; // item NAMES held (drives the mocked Inventory.first)
 let countDialog: boolean;
 let pages: string[]; // open continue pages, head = current
 let answered: number[];
@@ -63,7 +64,9 @@ mock.module('#/bot/api/hud/ChatDialog.js', () => ({
 mock.module('#/bot/api/hud/Inventory.js', () => ({
     Inventory: {
         items: () => inv.map(id => ({ id, count: 1 })),
-        first: () => null
+        // name-aware: held names seeded per-test via invNames (default empty,
+        // so tests that predate it keep their "nothing held" behavior)
+        first: (name: string) => (invNames.some(n => n.toLowerCase() === name.toLowerCase()) ? { id: 0, count: 1, interact: async (): Promise<boolean> => true } : null)
     }
 }));
 mock.module('#/bot/api/Execution.js', () => ({
@@ -151,5 +154,33 @@ describe('tool acquisition before abandon', () => {
         expect(walks).toContain('walk 2574,3331');
         // no ground spade in the mocked scene -> acquisition failed -> abandon
         expect(result).toBe('abandon');
+    });
+});
+
+describe('per-clue required items (2811 Baxtorian Falls rope)', () => {
+    beforeEach(() => {
+        inv = [2811];
+        invNames = [];
+        countDialog = false;
+        pages = [];
+        answered = [];
+        continues = 0;
+        walks = [];
+    });
+
+    test('rope missing: the dig is blocked and abandoned, never walked', async () => {
+        invNames = ['Spade', 'Sextant', 'Watch', 'Chart']; // everything BUT the rope
+        const lines: string[] = [];
+        const result = await ClueExecutor.solveHeldClue(m => lines.push(m));
+        expect(result).toBe('abandon');
+        expect(lines.some(l => l.includes('Rope'))).toBe(true);
+        // blocked before any trail walk — never trekked to the falls
+        expect(walks).not.toContain('walk 2512,3467');
+    });
+
+    test('rope held: the dig proceeds to the falls ledge', async () => {
+        invNames = ['Spade', 'Sextant', 'Watch', 'Chart', 'Rope'];
+        await ClueExecutor.solveHeldClue(() => {});
+        expect(walks).toContain('walk 2512,3467');
     });
 });

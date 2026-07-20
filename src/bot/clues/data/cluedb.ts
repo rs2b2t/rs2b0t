@@ -48,7 +48,7 @@ export const CLUE_DB: Record<number, ClueRow> = {
     2805: {"obj":"trail_clue_medium_sextant003","id":2805,"type":"dig","casketObj":"trail_clue_medium_sextant003_casket","casketId":2806,"coord":{"x":2697,"z":3207,"level":0},"needsSextant":true},
     2807: {"obj":"trail_clue_medium_sextant004","id":2807,"type":"dig","casketObj":"trail_clue_medium_sextant004_casket","casketId":2808,"coord":{"x":2383,"z":3370,"level":0},"needsSextant":true},
     2809: {"obj":"trail_clue_medium_sextant005","id":2809,"type":"dig","casketObj":"trail_clue_medium_sextant005_casket","casketId":2810,"coord":{"x":2479,"z":3158,"level":0},"needsSextant":true},
-    2811: {"obj":"trail_clue_medium_sextant006","id":2811,"type":"dig","casketObj":"trail_clue_medium_sextant006_casket","casketId":2812,"coord":{"x":2512,"z":3467,"level":0},"needsSextant":true},
+    2811: {"obj":"trail_clue_medium_sextant006","id":2811,"type":"dig","casketObj":"trail_clue_medium_sextant006_casket","casketId":2812,"coord":{"x":2512,"z":3467,"level":0},"needsSextant":true,"items":["Rope"]},
     2813: {"obj":"trail_clue_medium_sextant007","id":2813,"type":"dig","casketObj":"trail_clue_medium_sextant007_casket","casketId":2814,"coord":{"x":2643,"z":3252,"level":0},"needsSextant":true},
     2815: {"obj":"trail_clue_medium_sextant008","id":2815,"type":"dig","casketObj":"trail_clue_medium_sextant008_casket","casketId":2816,"coord":{"x":2848,"z":3296,"level":0},"needsSextant":true},
     2817: {"obj":"trail_clue_medium_sextant009","id":2817,"type":"dig","casketObj":"trail_clue_medium_sextant009_casket","casketId":2818,"coord":{"x":2849,"z":3033,"level":0},"needsSextant":true},

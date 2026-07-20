@@ -24,6 +24,12 @@ export interface ClueRow {
     /** search only: a kill-for-key riddle. The locked container at `coord` needs
      *  a key that drops when the named NPC is killed while the clue is held. */
     keyFrom?: { npc: string; keyObj: string; keyId: number };
+    /** Extra inventory items this step's trail requires beyond the standard
+     *  tools (e.g. a Rope for the Baxtorian Falls ledge dig, 2811) — kept and
+     *  withdrawn by the bank-first prep, and the step is blocked (abandon flow)
+     *  when one is still missing at execution time. Display names, as
+     *  Inventory matches them. */
+    items?: string[];
 }
 
 /** One actionable step the solver hands the executor. Either a clue row

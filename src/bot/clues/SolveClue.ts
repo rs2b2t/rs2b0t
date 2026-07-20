@@ -167,10 +167,15 @@ export class SolveClue implements Task {
         const spade = this.host.spadeName().toLowerCase();
         const weapon = (this.host.weaponName?.() ?? '').toLowerCase();
         const coordItems = new Set(['sextant', 'watch', 'chart']);
+        // Per-clue extra items (ClueRow.items — e.g. the Rope for 2811's falls
+        // ledge): part of the keep-set and withdrawn below like the spade.
+        const scrollId = heldClueScrollId();
+        const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
+        const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name)
-                || n === spade || n === 'coins' || coordItems.has(n) || (weapon !== '' && n === weapon);
+                || n === spade || n === 'coins' || coordItems.has(n) || rowItemNames.has(n) || (weapon !== '' && n === weapon);
         };
         await Bank.depositAllMatching(name => !isKeep(name));
 
@@ -199,12 +204,23 @@ export class SolveClue implements Task {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
+        // Per-clue extra items: withdraw any the pack is missing. Best-effort —
+        // a bank without the item just means the step blocks and abandons
+        // honestly at execution (blockReason), same as a missing spade.
+        for (const item of rowItems) {
+            if (!Inventory.first(item)) {
+                await Bank.withdraw(item, 'Withdraw-1');
+                if (!(await Execution.delayUntil(() => Inventory.first(item) !== null, 2000))) {
+                    this.host.log(`[clue] no '${item}' in the bank — this clue will be abandoned at its ${CLUE_DB[scrollId!]?.type ?? 'step'}`);
+                }
+            }
+        }
+
         // Coordinate clues: the dig hard-requires Sextant+Watch+Chart held
         // (spade.rs2). They persist once acquired, so withdraw any owned copies
         // now (they're already in the keep-set, never re-deposited). The NPC
         // chain that fills any still-missing pieces runs AFTER the bank closes
         // (below) — it walks NPCs and needs the coord clue, not the bank.
-        const scrollId = heldClueScrollId();
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
         if (scrollIsCoord) {
             for (const tool of TRIO) {

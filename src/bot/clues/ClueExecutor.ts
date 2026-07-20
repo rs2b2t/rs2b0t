@@ -394,6 +394,13 @@ function blockReason(step: ClueStep): string | null {
             return `coordinate clue needs ${missing.join('+')} (not held)`;
         }
     }
+    // Per-clue extra items (ClueRow.items — e.g. the Rope for the Baxtorian
+    // Falls ledge dig). Bank-first withdraws them; a copy still missing here
+    // means the bank had none, so block rather than trek a trail we can't finish.
+    const extras = ((step as ClueRow).items ?? []).filter(n => !Inventory.first(n));
+    if (extras.length > 0) {
+        return `needs ${extras.join('+')} (not held)`;
+    }
     return null;
 }
 
