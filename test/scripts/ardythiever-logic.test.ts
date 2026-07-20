@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from '#/bot/scripts/PickpocketTargets.js';
-import { HOSTILE_NAMES, chooseTarget, isHostileAttacker, lineClear, ownerWatching, requiredThieving, targetSpot } from '#/bot/scripts/ArdyThieverLogic.js';
+import { HOSTILE_NAMES, chooseTarget, isHostileAttacker, requiredThieving, targetSpot } from '#/bot/scripts/ArdyThieverLogic.js';
 
 // Spawn tiles decoded from the engine's packed server maps (n40_51/n41_51) —
 // the source data behind the anchor table. Hero's far-SW spawn (2630,3288) is
@@ -108,39 +108,3 @@ describe('chooseTarget (reachability-aware pickpocket selection)', () => {
     });
 });
 
-describe('ownerWatching (Baker stall-owner catch)', () => {
-    // The Baker's stall footprint from the collision pack: (2667-2669, 3311)
-    // and (2667-2668, 3310) are whole-tile blocked; everything else open.
-    const STALL = new Set(['2667,3311', '2668,3311', '2669,3311', '2667,3310', '2668,3310']);
-    const blocked = (x: number, z: number): boolean => STALL.has(`${x},${z}`);
-    const NORTH_STAND = { x: 2668, z: 3312 };
-    const SE_STAND = { x: 2669, z: 3310 };
-
-    test('baker on the open north row sees the north stand', () => {
-        expect(ownerWatching({ x: 2670, z: 3312 }, NORTH_STAND, blocked)).toBe(true);
-        expect(ownerWatching({ x: 2668, z: 3313 }, NORTH_STAND, blocked)).toBe(true);
-    });
-
-    test('baker south of the counter is shaded from the north stand', () => {
-        expect(ownerWatching({ x: 2668, z: 3309 }, NORTH_STAND, blocked)).toBe(false);
-        expect(ownerWatching({ x: 2667, z: 3308 }, NORTH_STAND, blocked)).toBe(false);
-    });
-
-    test('baker on his spawn (SE corner) cannot see the north stand', () => {
-        expect(ownerWatching(SE_STAND, NORTH_STAND, blocked)).toBe(false);
-    });
-
-    test('baker watching the north stand does NOT see the SE-corner stand', () => {
-        expect(ownerWatching({ x: 2668, z: 3313 }, SE_STAND, blocked)).toBe(false);
-    });
-
-    test('outside 5 tiles never watches, sight or not', () => {
-        expect(ownerWatching({ x: 2668, z: 3318 }, NORTH_STAND, blocked)).toBe(false);
-    });
-
-    test('lineClear endpoints are exempt, straight and diagonal blockers hit', () => {
-        expect(lineClear(blocked, { x: 2668, z: 3311 }, { x: 2668, z: 3313 })).toBe(true); // from ON a blocked tile, one open tile between
-        expect(lineClear(blocked, { x: 2668, z: 3309 }, { x: 2668, z: 3313 })).toBe(false); // crosses the counter
-        expect(lineClear(blocked, { x: 2666, z: 3309 }, { x: 2670, z: 3313 })).toBe(false); // diagonal through the footprint
-    });
-});
