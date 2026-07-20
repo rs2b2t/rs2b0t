@@ -12,7 +12,6 @@ let tick: number;
 let cakeCount: number;
 let inCombat: boolean;
 let stallStocked: boolean;
-let bakerNear: boolean;
 let playerTile: Tile;
 let walks: string[]; // every walkTo dest
 let clicks: number; // stall interacts issued
@@ -21,6 +20,8 @@ let chatHandler: ((e: { text: string }) => void) | null;
 let onClick: () => void;
 // called on every stall Locs poll — lets a test script the respawn
 let pollHook: () => void;
+// fail this many walks (walkTo returns false without moving) before succeeding
+let walkFails: number;
 
 mock.module('../api/Execution.js', () => ({
     Execution: {
@@ -59,6 +60,10 @@ mock.module('../api/Traversal.js', () => ({
     Traversal: {
         walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {
             walks.push(`${dest.x},${dest.z}`);
+            if (walkFails > 0) {
+                walkFails--;
+                return false; // stayed put
+            }
             playerTile = new Tile(dest.x, dest.z, 0);
             return true;
         },
@@ -95,21 +100,6 @@ mock.module('../api/queries/Locs.js', () => ({
         }
     }
 }));
-mock.module('../api/queries/Npcs.js', () => ({
-    Npcs: {
-        query: () => {
-            const chain = {
-                name: () => chain,
-                action: () => chain,
-                where: () => chain,
-                results: () => [],
-                nearest: () => (bakerNear ? { tile: () => new Tile(2668, 3311, 0) } : null)
-            };
-            return chain;
-        },
-        all: () => []
-    }
-}));
 mock.module('../events/EventBus.js', () => ({
     bus: {
         on: (_event: string, cb: (e: { text: string }) => void): (() => void) => {
@@ -144,12 +134,12 @@ describe('stealCakes driver', () => {
         cakeCount = 0;
         inCombat = false;
         stallStocked = true;
-        bakerNear = false;
         playerTile = new Tile(2668, 3312, 0); // already on the stand
         walks = [];
         clicks = 0;
         chatHandler = null;
         pollHook = () => {};
+        walkFails = 0;
         onClick = () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             cakeCount++;
@@ -163,10 +153,19 @@ describe('stealCakes driver', () => {
         expect(walks).toEqual([]); // on the stand the whole time
     });
 
-    test('claims the stand once when off it, and still steals if the claim walk fails', async () => {
+    test('claims the stand when off it, then steals', async () => {
         playerTile = new Tile(2660, 3308, 0);
         expect(await stealCakes(opts())).toBe('stocked');
         expect(walks[0]).toBe('2668,3312'); // one claim walk, then stealing
+    });
+
+    test('a fallen-short claim far from the stall does NOT click — re-claims instead', async () => {
+        playerTile = new Tile(2655, 3298, 0); // back from the kite tile, 13 tiles out
+        walkFails = 1; // first claim walk times out mid-market
+        expect(await stealCakes(opts())).toBe('stocked');
+        // pass 1: claim fails -> no click; pass 2: claim lands -> steals begin
+        expect(walks.slice(0, 2)).toEqual(['2668,3312', '2668,3312']);
+        expect(clicks).toBe(5); // never clicked from the market side
     });
 
     test('a guard catch (combat, no cake) returns combat immediately', async () => {
@@ -178,23 +177,38 @@ describe('stealCakes driver', () => {
         expect(clicks).toBe(1); // no clicking into a fight
     });
 
-    test('three silent refusals walk to the reset tile, then stealing resumes', async () => {
+    test('three silent refusals swap to the SE stand, then stealing resumes there', async () => {
         let refused = 0;
         onClick = () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             if (refused < 3) {
                 refused++;
-                bakerNear = true;
-                return; // Baker watching: nothing gained
+                return; // watched at the north stand: nothing gained
             }
-            bakerNear = false;
-            cakeCount++;
+            cakeCount++; // the SE stand is shaded — steals land
         };
         const resets: number[] = [];
-        expect(await stealCakes(opts({ onReset: () => { resets.push(clicks); bakerNear = false; } }))).toBe('stocked');
-        expect(resets).toEqual([3]); // exactly one reset, after the 3rd refusal
-        expect(walks).toContain('2668,3320'); // walked off to the reset tile
-        expect(walks[walks.length - 1]).toBe('2668,3312'); // and re-claimed the stand after
+        expect(await stealCakes(opts({ onReset: () => resets.push(clicks) }))).toBe('stocked');
+        expect(resets).toEqual([3]); // exactly one swap, after the 3rd refusal
+        expect(walks).toContain('2669,3310'); // hopped to the SE-corner stand
+        expect(walks[walks.length - 1]).toBe('2669,3310'); // and stayed there stealing
+    });
+
+    test('a second watched streak swaps back to the north stand', async () => {
+        let refused = 0;
+        onClick = () => {
+            say('You attempt to steal a cake from the baker\'s stall.');
+            refused++;
+            if (refused <= 6) {
+                return; // watched at BOTH stands for a streak each
+            }
+            cakeCount++;
+        };
+        expect(await stealCakes(opts({ fillTo: 2 }))).toBe('stocked');
+        // north -> SE (after 3), SE -> north (after 6), then steals land
+        const swaps = walks.filter(w => w === '2669,3310' || w === '2668,3312');
+        expect(swaps[0]).toBe('2669,3310');
+        expect(swaps[1]).toBe('2668,3312');
     });
 
     test('the lockout message parks clicks until the 10-tick window passes', async () => {

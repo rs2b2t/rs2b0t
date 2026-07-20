@@ -25,9 +25,11 @@ export const STALL_TILE = new Tile(2667, 3310, 0);
 /** THE stand — highest live steal-success rate (user-verified). Market-side
  *  and behind-the-stall stands alert the guards/Baker far more often. */
 export const STAND = new Tile(2668, 3312, 0);
-/** Where a refusal streak resets to: ~8 tiles north, outside the Baker's
- *  5-tile catch radius and off the market side, until he drifts. */
-export const RESET_TILE = new Tile(2668, 3320, 0);
+/** The swap partner (user call, 2026-07-20): the stall's SE corner — the
+ *  Baker's own spawn tile. When thefts get refused at one stand, hop to the
+ *  other and keep stealing; the counter shades each stand from the other's
+ *  watcher geometry, so whoever was watching loses sight after the swap. */
+export const STAND_ALT = new Tile(2669, 3310, 0);
 export const STALL_NAME = 'Baker\'s stall';
 export const STALL_OP = 'Steal from';
 /** What the stall yields (content stealing.dbrow) — contains-matched, so the
@@ -70,7 +72,7 @@ export function classifySteal(s: StealSignals): StealOutcome {
     return 'timeout';
 }
 
-/** Walk off and let the Baker drift once refusals stack this high. */
+/** Swap to the other stand once refusals stack this high. */
 export function shouldReset(consecutiveRefusals: number): boolean {
     return consecutiveRefusals >= RESET_AFTER_REFUSALS;
 }

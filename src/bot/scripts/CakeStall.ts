@@ -3,11 +3,10 @@ import { Game } from '../api/Game.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Traversal } from '../api/Traversal.js';
 import { Locs } from '../api/queries/Locs.js';
-import { Npcs } from '../api/queries/Npcs.js';
 import { bus } from '../events/EventBus.js';
 import { countMatching } from './ArdyFighterLogic.js';
 import {
-    CAKE_ITEMS, LOCKOUT_TICKS, RESET_TILE, STALL_NAME, STALL_OP, STALL_TILE, STAND,
+    CAKE_ITEMS, LOCKOUT_TICKS, STALL_NAME, STALL_OP, STALL_TILE, STAND, STAND_ALT,
     classifySteal, shouldReset
 } from './CakeStallLogic.js';
 
@@ -15,15 +14,20 @@ import {
  * The shared Baker's-stall steal driver (2026-07-20 design) — the base
  * implementation CakeThiever proves live and ArdyThiever/ArdyFighter reuse.
  *
- * Shape: do our best to stand on THE stand (one bounded claim walk — never
- * loop on exact-tile arrival, that was the old wedge), click Steal-from, and
- * classify what actually happened (CakeStallLogic.classifySteal) instead of
- * predicting the Baker's line of sight:
+ * Shape: do our best to stand on the current stand (one bounded claim walk —
+ * never loop on exact-tile arrival, that was the old wedge), click
+ * Steal-from, and classify what actually happened
+ * (CakeStallLogic.classifySteal) instead of predicting line of sight:
  *  - success  -> keep going
  *  - caught   -> return 'combat'; the caller's Flee/Fight task owns it
  *  - lockout  -> wait out the engine's 10-tick post-combat window
- *  - refused  -> free (no damage); after RESET_AFTER_REFUSALS in a row, walk
- *               to RESET_TILE until the Baker drifts off the stand, come back
+ *  - refused  -> free (no damage); after RESET_AFTER_REFUSALS in a row, SWAP
+ *               between the two stands (STAND <-> STAND_ALT) — the counter
+ *               shades each from the other's watchers — and keep stealing
+ *
+ * There is deliberately NO guard-proximity gating (user call, 2026-07-20):
+ * the bot just thieves, and a guard that catches it is answered by the
+ * caller's Fight/Flee task.
  *
  * Callers may feed `lockedOutUntil` (last combat end + LOCKOUT_TICKS) to skip
  * the first refused click after a fight; without it the driver self-heals off
@@ -31,12 +35,16 @@ import {
  */
 
 const DEADLINE_MS = 90_000; // one execute()'s worth of stealing; caller re-enters
-const CLAIM_TIMEOUT_MS = 5_000;
+// Long enough to WALK back from the kite/reset tiles (~14 tiles ≈ 8.4s
+// unrunning) — the first live smoke's 5s timed out mid-market and the bot
+// then stole from the market side, where every click is caught.
+const CLAIM_TIMEOUT_MS = 15_000;
+// Don't click the stall from beyond this (cheb of STALL_TILE): a far click
+// server-walks to whatever adjacent tile the engine picks — usually the
+// market side. The stand itself is cheb 2 of the stall loc.
+const NEAR_STALL = 2;
 const RESOLVE_MS = 2_400; // attempt-mes -> p_arrivedelay -> p_delay(0) -> loot, ~4 ticks
 const RESTOCK_WAIT_MS = 8_000; // stall respawn is 8 ticks base, playercount-scaled
-const RESET_WAIT_MS = 10_000; // Baker wander-out bound while parked on RESET_TILE
-const OWNER = 'Baker';
-const OWNER_RANGE = 5; // the engine's catch radius
 
 const ATTEMPT_RE = /you attempt to steal/i;
 const LOCKOUT_RE = /can't steal from the market stall during combat/i;
@@ -72,13 +80,8 @@ function stockedStall() {
         .nearest();
 }
 
-/** Baker inside the engine's catch radius of the stand (position only — no
- *  LOS modelling; the reset wait just outlasts him). */
-function bakerNearStand(): boolean {
-    return Npcs.query().name(OWNER).where(n => n.tile().distanceTo(STAND) <= OWNER_RANGE).nearest() !== null;
-}
-
 export async function stealCakes(opts: StealCakesOptions): Promise<StealCakesResult> {
+    let stand = STAND; // current stand; refusal streaks swap STAND <-> STAND_ALT
     let refusals = 0;
     let selfLockout = 0; // learned from the lockout chat line when the caller has no tracking
     let attemptSeen = false;
@@ -113,17 +116,27 @@ export async function stealCakes(opts: StealCakesOptions): Promise<StealCakesRes
                 continue;
             }
 
-            // Best-effort claim of THE stand: one bounded walk per pass. On a
-            // walk hiccup we still steal from here — the click's server-walk
-            // covers the last step — and re-try the claim next pass.
+            // Best-effort claim of the current stand: one bounded walk per
+            // pass — never an arrival-or-bust loop (the old wedge). If we're
+            // still not even beside the stall afterwards, do NOT click from
+            // afar (the click's server-walk would land us market-side, where
+            // every theft is caught); re-claim next pass instead. Adjacent-
+            // but-off-stand is fine — the click walks the last tile in.
             const here = Game.tile();
-            if (here && STAND.distanceTo(here) > 0) {
-                await Traversal.walkTo(STAND, { radius: 0, timeoutMs: CLAIM_TIMEOUT_MS, log: m => opts.log(`  ${m}`) });
+            if (here && stand.distanceTo(here) > 0) {
+                await Traversal.walkTo(stand, { radius: 0, timeoutMs: CLAIM_TIMEOUT_MS, log: m => opts.log(`  ${m}`) });
+                const now = Game.tile();
+                if (!now || STALL_TILE.distanceTo(now) > NEAR_STALL) {
+                    opts.log(`claim fell short${now ? ` at (${now.x},${now.z})` : ''} — not stealing from the market side`);
+                    await Execution.delayTicks(1);
+                    continue;
+                }
             }
 
             const stall = stockedStall();
             if (!stall) {
                 // Emptied by our own steal — condition-wait for the respawn.
+                opts.log('stall emptied — waiting for the restock');
                 await Execution.delayUntil(() => stockedStall() !== null || opts.abort(), RESTOCK_WAIT_MS);
                 continue;
             }
@@ -154,11 +167,12 @@ export async function stealCakes(opts: StealCakesOptions): Promise<StealCakesRes
             }
 
             if (shouldReset(refusals)) {
-                opts.setStatus('watched — resetting off the stall');
-                opts.log(`${refusals} refused steals — resetting at ${RESET_TILE.x},${RESET_TILE.z} until the Baker drifts`);
+                // Whoever is watching this stand can't see the other one —
+                // hop across and keep stealing (next pass's claim walks us).
+                stand = stand.equals(STAND_ALT) ? STAND : STAND_ALT;
+                opts.setStatus('watched — swapping stands');
+                opts.log(`${refusals} refused steals — swapping to the stand at (${stand.x},${stand.z})`);
                 opts.onReset?.();
-                await Traversal.walkTo(RESET_TILE, { radius: 1, timeoutMs: 15_000, log: m => opts.log(`  ${m}`) });
-                await Execution.delayUntil(() => !bakerNearStand() || opts.abort(), RESET_WAIT_MS);
                 refusals = 0;
             }
         }
