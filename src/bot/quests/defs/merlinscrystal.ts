@@ -7,6 +7,7 @@ import { Inventory } from '../../api/hud/Inventory.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Reach } from '../../api/Reach.js';
 import { Sustain } from '../../api/Sustain.js';
 import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
@@ -266,78 +267,41 @@ async function descendTower(log: (m: string) => void): Promise<boolean> {
 
 // --- Phase A: the varp-only opening (stages 1→4), one re-entrant custom ---------
 
-/** Talk Gawain then Lancelot to advance stage 1→3 (King Arthur's start is the
- *  notStarted branch of decide()). Both are harmless no-ops once past their stage.
- *  Best-effort per leg so a failed Lancelot climb doesn't abort Gawain. */
+/** Talk Gawain then Lancelot to advance stage 1→3. Reach opens each dialogue —
+ *  tracking the patrol via the live NPC query and climbing to Lancelot's floor /
+ *  opening the throne-room leaf when the way is shut — and the shared talkThrough
+ *  (transient-close tolerant) drives it through the mid-branch varp-sets.
+ *
+ *  Reach.npcDialog is RE-ENTRANT: a single call from off-scene or the wrong level
+ *  only walks/climbs CLOSER and returns 'retry' — so Lancelot (upstairs, wall-
+ *  fenced) never opened on the one call the bot made before openingLeg dragged it
+ *  back to the crate, and the stage stuck below spoken_lancelot (live 2026-07-19).
+ *  Loop the re-entrant Reach until the dialogue is actually open, then drive it.
+ *  And because Reach short-circuits 'done' on ANY open box, confirm the knight is
+ *  the NPC we're facing before talkThrough, so a stale/foreign dialogue (the candle
+ *  maker's sticky sell menu on a later pass) is never driven with a knight's prefer. */
 async function talkKnights(log: (m: string) => void): Promise<void> {
-    await talkKnight(GAWAIN, log);
-    await talkKnight(LANCELOT, log);
-}
-
-/** Talk to a PATROLLING, wall-fenced Camelot knight. A fixed anchor + server Talk-to
- *  was too fragile: Gawain roams the Round Table (out of Talk-range) and Lancelot sits
- *  behind a brick wall in the upstairs throne room (the fixed anchor 2757,3511 lands ON
- *  that wall, and the server Talk-to can't open the closed doors between) — so both
- *  "never opened" and the stage stuck, looping the stairs (live 2026-07-19). Instead:
- *  reach the floor, then walk to the knight's LIVE tile with the door-opening client
- *  walker (which routes around the wall), and Talk-to from adjacent. A miss just retries
- *  on the next openingLeg pass (the leg is re-entrant). */
-async function talkKnight(stop: NpcStop, log: (m: string) => void): Promise<void> {
-    // Reach the knight's floor (gotoNpc climbs L0->L1 for Lancelot; its npcNear return
-    // is ignored — the knights patrol far off their anchors).
-    await gotoNpc(stop, [], log);
-    // Then approach the knight's LIVE tile — NOT a fixed anchor — before Talk-to. Two
-    // live failures this fixes (2026-07-19): (1) Lancelot sits behind a brick wall
-    // (world x=2757) in the Camelot throne room, reachable only by the client walker
-    // routing around + OPENING the south Large doors; a fixed anchor stranded the bot
-    // west of the wall and the server Talk-to (which can't open closed doors) timed out.
-    // (2) Gawain patrols the Round Table, so a fixed anchor left him out of Talk-range.
-    // Walking to his live tile with the door-opening walker delivers us adjacent, so
-    // Talk-to opens instantly; re-query + retry tracks the patrol.
-    for (let attempt = 0; attempt < 3 && !ChatDialog.isOpen() && !ChatDialog.canContinue(); attempt++) {
-        const live = Npcs.query().name(stop.npc).action('Talk-to').nearest();
-        if (!live) {
-            log(`talkKnight: '${stop.npc}' not in scene yet — retry`);
-            return;
-        }
-        const here = Game.tile();
-        if (here && live.tile().distanceTo(here) > 1) {
-            await Traversal.walkResilient(live.tile(), { radius: 1, attempts: 2, timeoutMs: 45_000, log });
-        }
-        const npc = Npcs.query().name(stop.npc).action('Talk-to').nearest();
-        if (npc && (await npc.interact('Talk-to'))) {
-            await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 20_000);
-        }
-    }
-    if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
-        log(`talkKnight: '${stop.npc}' never opened after approach — retry`);
-        return;
-    }
-    log(`talkKnight: '${stop.npc}' dialogue open — driving`);
-    // Drive the dialogue, TOLERATING page-transition gaps. The stage-set line is buried
-    // mid-branch (sir_lancelot.rs2:34 is line 4 of a 6-line option-4 branch), and a
-    // plain `while (isOpen())` loop exits on the brief closed gap BETWEEN chat pages —
-    // stopping before the varp set, so the (correct) option pick never advances the
-    // stage (live 2026-07-19: picks confirmed right, yet the crate wouldn't teleport).
-    // Here a transient close waits ~1.5s for the next page before giving up.
-    for (let i = 0; i < 80; i++) {
-        if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
-            if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) {
-                break; // genuinely closed
+    for (const knight of [GAWAIN, LANCELOT]) {
+        for (let attempt = 0; attempt < 4; attempt++) {
+            const status = await Reach.npcDialog({ name: knight.npc, near: knight.anchor, log });
+            if (status === 'unreachable') {
+                log(`talkKnights: '${knight.npc}' unreachable this pass`);
+                break;
             }
+            if (status !== 'done') {
+                continue; // 'retry' — re-enter Reach (it stepped us closer / up the stairs)
+            }
+            const npc = Npcs.query().name(knight.npc).action('Talk-to').nearest();
+            const here = Game.tile();
+            if (!npc || !here || npc.tile().distanceTo(here) > 3) {
+                log(`talkKnights: open dialogue is not '${knight.npc}' (not adjacent) — skipping`);
+                break;
+            }
+            log(`talkKnights: '${knight.npc}' dialogue open — driving`);
+            await talkThrough(knight.npc, knight.prefer, log);
+            break;
         }
-        if (ChatDialog.canContinue()) { await ChatDialog.continue(); await Execution.delayTicks(1); continue; }
-        const opts = ChatDialog.options();
-        if (opts.length > 0) {
-            const pick = pickPreferred(opts, stop.prefer);
-            log(`talkKnight: '${stop.npc}' [${opts.join(' | ')}] -> '${pick ?? '(last)' + opts[opts.length - 1]}'`);
-            await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
-            await Execution.delayTicks(2); // let the next page load before re-checking
-            continue;
-        }
-        await Execution.delayTicks(1);
     }
-    log(`talkKnight: '${stop.npc}' dialogue closed`);
 }
 
 /**
