@@ -56,6 +56,31 @@ export function selectClickTarget(tiles: PathTileLike[], pathIdx: number, steps:
 }
 
 /**
+ * Last-mile rescue for a starved click selection. locateOnPath snaps pathIdx
+ * to the TERMINAL index from `corridor` tiles out, and selectClickTarget's
+ * strict `i > pathIdx` then has nothing left to select — so a short hop
+ * (any path whose terminal is within the corridor of the player) never
+ * clicks at all: 0 clicks, then a bogus "blocked live" at cheb 1 or a
+ * repath-to-timeout loop at cheb 2-3. When the ordinary selection starves
+ * and no crossing is pending (the caller checks — crossing starvation
+ * belongs to the transport fallback), the terminal itself is the click:
+ * returns its index when it's on the player's level, not under the player
+ * (standing on it is arrival), and clickable; -1 otherwise so a genuinely
+ * blocked terminal still earns the honest 'blocked' verdict.
+ */
+export function starvedTerminalIndex(tiles: PathTileLike[], me: PathTileLike, isClickable: (t: PathTileLike) => boolean): number {
+    const last = tiles.length - 1;
+    if (last < 0) {
+        return -1;
+    }
+    const end = tiles[last];
+    if (end.level !== me.level || (end.x === me.x && end.z === me.z)) {
+        return -1;
+    }
+    return isClickable(end) ? last : -1;
+}
+
+/**
  * Should followPath hand this crossing to handleTransport yet? Proximity alone
  * (the old rule) is wall-blind: a baked stair edge whose operate tile sits just
  * INSIDE a house wall came within trigger range of a bot walking past OUTSIDE,

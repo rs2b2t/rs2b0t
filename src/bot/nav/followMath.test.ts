@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { chooseCrossClick, crossingEligible, locateOnPath, selectClickTarget, type PathTileLike } from './followMath.js';
+import { chooseCrossClick, crossingEligible, locateOnPath, selectClickTarget, starvedTerminalIndex, type PathTileLike } from './followMath.js';
 
 const t = (x: number, z: number, level = 0): PathTileLike => ({ x, z, level });
 
@@ -46,6 +46,54 @@ describe('selectClickTarget', () => {
     });
     test('skips tiles on another level', () => {
         expect(selectClickTarget(tiles, 15, 20, tiles.length - 1, 3, () => true)).toBe(-1);
+    });
+});
+
+describe('starvedTerminalIndex', () => {
+    // The corridor-snap starvation (live-reproduced at the Ardougne cake
+    // stand): any path whose terminal is within CORRIDOR(3) of the player
+    // snaps pathIdx to the LAST index, and selectClickTarget's strict
+    // `i > pathIdx` then returns -1 forever — 0 clicks, bogus "blocked live".
+    const CORRIDOR = 3;
+    const WINDOW = 26;
+
+    test('cheb-1 claim: starved selection falls back to the terminal', () => {
+        // me beside the stand, fresh path [me, stand] — the 15:19:49 shape
+        const tiles = [t(2667, 3312), t(2668, 3312)];
+        const me = t(2667, 3312);
+        const pathIdx = locateOnPath(tiles, me, 0, WINDOW, CORRIDOR);
+        expect(pathIdx).toBe(1); // snapped to the terminal
+        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1); // starved
+        expect(starvedTerminalIndex(tiles, me, () => true)).toBe(1);
+    });
+
+    test('cheb-2 stand swap: starved from the very first iteration, rescued', () => {
+        // alt stand -> stand around the Boxes at (2669,3311)
+        const tiles = [t(2669, 3310), t(2670, 3310), t(2670, 3311), t(2670, 3312), t(2669, 3312), t(2668, 3312)];
+        const me = t(2669, 3310);
+        const pathIdx = locateOnPath(tiles, me, 0, WINDOW, CORRIDOR);
+        expect(pathIdx).toBe(5); // terminal is cheb 2 away — snapped past everything
+        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1); // starved
+        expect(starvedTerminalIndex(tiles, me, () => true)).toBe(5);
+    });
+
+    test('standing ON the terminal is arrival, not a click', () => {
+        const tiles = [t(2667, 3312), t(2668, 3312)];
+        expect(starvedTerminalIndex(tiles, t(2668, 3312), () => true)).toBe(-1);
+    });
+
+    test('unclickable terminal (genuinely blocked booth) keeps the honest blocked verdict', () => {
+        const tiles = [t(2667, 3312), t(2668, 3312)];
+        expect(starvedTerminalIndex(tiles, t(2667, 3312), () => false)).toBe(-1);
+    });
+
+    test('terminal on another level is never clicked', () => {
+        const tiles = [t(2667, 3312), t(2668, 3312, 1)];
+        expect(starvedTerminalIndex(tiles, t(2667, 3312), () => true)).toBe(-1);
+    });
+
+    test('empty path is a no-op', () => {
+        expect(starvedTerminalIndex([], t(2667, 3312), () => true)).toBe(-1);
     });
 });
 

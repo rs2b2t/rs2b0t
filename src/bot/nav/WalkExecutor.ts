@@ -25,7 +25,7 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
-import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget } from './followMath.js';
+import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget, starvedTerminalIndex } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 
@@ -540,10 +540,22 @@ class WalkExecutorImpl {
                 const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
                 const target = selectClickTarget(tiles, pathIdx, steps, limit, me.level, clickable);
-                if (target !== -1 && !(tiles[target].x === me.x && tiles[target].z === me.z)) {
-                    const local = reader.toLocal(tiles[target].x, tiles[target].z)!;
+                // Corridor-snap starvation rescue: locateOnPath snaps pathIdx to
+                // the TERMINAL from CORRIDOR tiles out, and the strict i > pathIdx
+                // selection then starves on EVERY hop that short — 0 clicks, then
+                // a bogus 'blocked live' at cheb 1 or a repath-to-timeout loop at
+                // cheb 2-3 (live: the cake-stand claim/swap). With no crossing
+                // pending, the terminal itself is the click. One commit per stall
+                // cycle (retries re-arm via clickIdx = -1 in the stall machinery);
+                // an unclickable terminal stays -1 so a genuinely blocked booth
+                // still earns the honest 'blocked' verdict below.
+                const chosen = target !== -1 || nextCrossingIdx !== -1 || clickIdx === tiles.length - 1
+                    ? target
+                    : starvedTerminalIndex(tiles, me, clickable);
+                if (chosen !== -1 && !(tiles[chosen].x === me.x && tiles[chosen].z === me.z)) {
+                    const local = reader.toLocal(tiles[chosen].x, tiles[chosen].z)!;
                     ActionRouter.driver.walk(local.lx, local.lz);
-                    clickIdx = target;
+                    clickIdx = chosen;
                     clicks++;
                     stallTicks = 0;
                 } else if (target === -1) {
