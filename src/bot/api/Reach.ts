@@ -12,6 +12,7 @@
 // PROVED the hint can't be reached — re-plan, don't loop).
 
 import type { WorldTile } from '../adapter/ClientAdapter.js';
+import { reader } from '../adapter/ClientAdapter.js';
 import { Execution } from './Execution.js';
 import { ChatDialog } from './hud/ChatDialog.js';
 import { Locs } from './queries/Locs.js';
@@ -100,7 +101,20 @@ export const Reach = {
     async npcDialog(opts: ReachNpcOpts): Promise<ReachStatus> {
         const log = opts.log ?? ((): void => {});
         if (ChatDialog.isOpen()) {
-            return 'done';
+            // Only treat an already-open box as THIS npc's dialogue when we're
+            // standing next to the target — a foreign box (a random-event dialogue,
+            // or another NPC's sticky menu; live: Merlin's candle maker) must NOT
+            // read as success, or the caller's talkThrough mis-drives it with the
+            // wrong prefer. Foreign box → retry (the runtime clears random events; a
+            // re-enter finds it gone). Keeps npcDialog re-entrant for an interrupted
+            // TARGET dialogue while ignoring foreign ones.
+            const cur = Npcs.query().name(opts.name).nearest();
+            const me = reader.worldTile();
+            if (cur && me && cur.tile().level === me.level &&
+                Math.max(Math.abs(cur.tile().x - me.x), Math.abs(cur.tile().z - me.z)) <= 1) {
+                return 'done';
+            }
+            return 'retry';
         }
         const npc = Npcs.query().name(opts.name).action('Talk-to').nearest();
         if (!npc) {

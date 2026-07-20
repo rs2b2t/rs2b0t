@@ -28,13 +28,17 @@ mock.module('./queries/Locs.js', () => ({
         })
     }
 }));
-mock.module('./queries/Npcs.js', () => ({
-    Npcs: {
-        query: () => ({
-            name: () => ({ action: () => ({ nearest: () => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, interact: async () => { npcInteractCount++; return sceneNpc!.interactResult; } } : null) }) })
-        })
-    }
-}));
+mock.module('./queries/Npcs.js', () => {
+    const npcHandle = (): unknown => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, interact: async () => { npcInteractCount++; return sceneNpc!.interactResult; } } : null);
+    // name() now offers BOTH .nearest() (the adjacency probe) and .action().nearest() (the Talk-to lookup)
+    return {
+        Npcs: {
+            query: () => ({
+                name: () => ({ nearest: npcHandle, action: () => ({ nearest: npcHandle }) })
+            })
+        }
+    };
+});
 mock.module('./hud/ChatDialog.js', () => ({
     ChatDialog: { isOpen: () => dialogOpen, canContinue: () => false }
 }));
@@ -117,10 +121,30 @@ describe('Reach.locOp', () => {
 });
 
 describe('Reach.npcDialog', () => {
-    test('dialog already open → done immediately', async () => {
+    test('dialog already open + target adjacent → done (re-entrant, no walk/interact)', async () => {
+        // bot at (0,0,0); target npc at (0,1,0) — Chebyshev 1, so the open box IS this npc's
+        sceneNpc = { name: 'Traiborn', tile: { x: 0, z: 1, level: 0 }, interactResult: true };
         dialogOpen = true;
         const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
         expect(r).toBe('done');
+        expect(walkCalls.length).toBe(0);
+        expect(npcInteractCount).toBe(0);
+    });
+    test('dialog open but target NOT adjacent → retry (foreign box, op never fires)', async () => {
+        // an open box that is NOT this npc's — a random event, or another NPC's sticky menu (bot at (0,0,0), npc far)
+        sceneNpc = { name: 'Traiborn', tile: { x: 10, z: 10, level: 0 }, interactResult: true };
+        dialogOpen = true;
+        const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
+        expect(r).toBe('retry');
+        expect(walkCalls.length).toBe(0);
+        expect(npcInteractCount).toBe(0);
+    });
+    test('dialog open but target absent from scene → retry (foreign box)', async () => {
+        // sceneNpc stays null: the open box can't be this npc's when it isn't here at all
+        dialogOpen = true;
+        const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
+        expect(r).toBe('retry');
+        expect(npcInteractCount).toBe(0);
     });
     test('npc absent → walks the hint, retry', async () => {
         const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
