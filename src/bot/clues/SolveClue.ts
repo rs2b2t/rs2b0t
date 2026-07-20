@@ -19,6 +19,8 @@ import { Bank } from '#/bot/api/hud/Bank.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { ClueExecutor } from '#/bot/clues/ClueExecutor.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { ensureCoordTools, hasAllTrio, hasCoordClueHeld } from '#/bot/clues/AcquireTools.js';
+import { TRIO } from '#/bot/clues/data/toolAcquire.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
@@ -197,6 +199,22 @@ export class SolveClue implements Task {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
+        // Coordinate clues: the dig hard-requires Sextant+Watch+Chart held
+        // (spade.rs2). They persist once acquired, so withdraw any owned copies
+        // now (they're already in the keep-set, never re-deposited). The NPC
+        // chain that fills any still-missing pieces runs AFTER the bank closes
+        // (below) — it walks NPCs and needs the coord clue, not the bank.
+        const scrollId = heldClueScrollId();
+        const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
+        if (scrollIsCoord) {
+            for (const tool of TRIO) {
+                if (!Inventory.first(tool)) {
+                    await Bank.withdraw(tool, 'Withdraw-1');
+                    await Execution.delayUntil(() => Inventory.first(tool) !== null, 2000);
+                }
+            }
+        }
+
         // Top up food (skipped when the bot runs foodless) so the trail is sustainable.
         const food = this.host.foodName();
         if (food !== '') {
@@ -210,6 +228,16 @@ export class SolveClue implements Task {
                     break;
                 }
             }
+        }
+
+        // Pre-provision the coord trio (user's bank-first choice). Runs the
+        // 4-NPC chain once ever — the tools persist — and only when a coordinate
+        // clue is held (has_sextant_clue). Runs AFTER the bank interaction so
+        // the walk away doesn't fight the open bank; best-effort, so a failure
+        // here never fails bankFirst — the dig-step safety net covers any gap.
+        if (scrollIsCoord && !hasAllTrio() && hasCoordClueHeld()) {
+            this.host.setStatus('clue — acquiring coordinate tools');
+            await ensureCoordTools(m => this.host.log(`[clue] ${m}`));
         }
 
         return true;
