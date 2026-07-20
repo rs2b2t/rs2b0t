@@ -16,12 +16,11 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore } from '../runtime/Settings.js';
 import { Traversal } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
-import { Locs } from '../api/queries/Locs.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
-import { dodgeStallOwner, ownerNearStall } from './StallOwner.js';
+import { stealCakes } from './CakeStall.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -35,16 +34,10 @@ import { dodgeStallOwner, ownerNearStall } from './StallOwner.js';
 // - guard.rs2 drops: bones + 1/128 medium clue tertiary; notable mains: iron
 //   dagger, body talisman, steel arrows, blood/chaos/nature runes, iron ore.
 const DEFAULT_ANCHOR = new Tile(2661, 3306, 0);
-const DEFAULT_STALL = new Tile(2667, 3310, 0);
-// The stall sits behind a counter (like a bank booth), so we can't stand on it —
-// walk ONTO this reachable tile beside it and steal from there.
-const DEFAULT_STALL_STAND = new Tile(2668, 3312, 0);
-// The stall owner (Baker) catches thefts within range → guards attack. Step to
-// this tile until they wander off, then resume restocking.
-const DEFAULT_OWNER_DODGE = new Tile(2669, 3310, 0);
+// The Baker's-stall layout + stealing mechanics live in the shared CakeStall
+// driver (2026-07-20 design) — no stall settings here anymore.
 const DEFAULT_BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-const STALL_OP = 'Steal from';
 const DEFAULT_FOOD = 'cake, bread, chocolate slice';
 const DEFAULT_LOOT = 'clue scroll, blood rune, nature rune, chaos rune, body talisman, steel arrow, iron ore';
 
@@ -63,12 +56,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 12, min: 5, max: 25, label: 'Leash radius (tiles)' },
     target: { type: 'string', default: 'Guard', label: 'NPC to fight (name)' },
     combatStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Combat style', help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
-    stallTile: { type: 'tile', default: DEFAULT_STALL, label: 'Baker\'s stall (x,z)', help: 'second stall sits at 2655,3311' },
-    stallStand: { type: 'tile', default: DEFAULT_STALL_STAND, label: 'Stall stand tile (x,z)', help: 'reachable tile beside the stall to steal from (the stall itself is behind a counter)' },
-    stallName: { type: 'string', default: 'Baker\'s stall', label: 'Stall loc name' },
-    stallOwner: { type: 'string', default: 'Baker', label: 'Stall owner NPC (dodge)', help: 'if this NPC is near the stall it catches your theft — step aside until they move off' },
-    ownerDodgeTile: { type: 'tile', default: DEFAULT_OWNER_DODGE, label: 'Owner-dodge tile (x,z)' },
-    ownerRange: { type: 'number', default: 5, min: 1, max: 12, label: 'Owner catch range (tiles)' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     food: { type: 'string[]', default: DEFAULT_FOOD.split(',').map(s => s.trim()), label: 'Food names (contains)' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
@@ -86,12 +73,6 @@ export const SETTINGS: SettingsSchema = {
 let ANCHOR = DEFAULT_ANCHOR;
 let LEASH = 12;
 let TARGET = 'Guard';
-let STALL_TILE = DEFAULT_STALL;
-let STALL_STAND = DEFAULT_STALL_STAND;
-let STALL_NAME = 'Baker\'s stall';
-let STALL_OWNER = 'Baker';
-let OWNER_DODGE = DEFAULT_OWNER_DODGE;
-let OWNER_RANGE = 5;
 let BANK_STAND = DEFAULT_BANK_STAND;
 let FOOD = DEFAULT_FOOD.split(',').map(s => s.trim().toLowerCase());
 let LOOT = DEFAULT_LOOT.split(',').map(s => s.trim().toLowerCase());
@@ -148,12 +129,6 @@ export default class ArdyFighter extends TaskBot {
         ANCHOR = this.settings.tile('anchor', DEFAULT_ANCHOR);
         LEASH = this.settings.num('leashRadius', 12);
         TARGET = this.settings.str('target', 'Guard');
-        STALL_TILE = this.settings.tile('stallTile', DEFAULT_STALL);
-        STALL_STAND = this.settings.tile('stallStand', DEFAULT_STALL_STAND);
-        STALL_NAME = this.settings.str('stallName', 'Baker\'s stall');
-        STALL_OWNER = this.settings.str('stallOwner', 'Baker');
-        OWNER_DODGE = this.settings.tile('ownerDodgeTile', DEFAULT_OWNER_DODGE);
-        OWNER_RANGE = this.settings.num('ownerRange', 5);
         BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         FOOD = this.settings.list('food', FOOD).map(s => s.toLowerCase());
         LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
@@ -176,7 +151,7 @@ export default class ArdyFighter extends TaskBot {
         this.startedAt = Date.now();
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
 
-        this.log(`ArdyFighter starting — anchor ${ANCHOR} r${LEASH}, target '${TARGET}', stall ${STALL_TILE}, bank ${BANK_STAND}`);
+        this.log(`ArdyFighter starting — anchor ${ANCHOR} r${LEASH}, target '${TARGET}', stall via shared driver, bank ${BANK_STAND}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -356,14 +331,15 @@ class EatFood implements Task {
 }
 
 /**
- * Steal food from the Baker's stall until stocked. The engine blocks stall
- * theft for 10 ticks after combat, and a guard with line-of-sight within 5
- * tiles blocks the attempt and attacks ("Hey! Get your hands off there!") —
- * that pull is welcome: combat invalidates this task, and server-side
- * auto-retaliate finishes the guard (Fight.validate requires !Game.inCombat(),
- * so it never initiates against an already-attacking guard). The 60 s respawn
- * window then steals free. Owner-blocked attempts and the
- * looted-bare stall (8-tick respawn) just retry.
+ * Steal food from the Baker's stall until stocked, via the shared CakeStall
+ * driver (golden stand, outcome classification, refusal-streak stand swap —
+ * 2026-07-20 design). A guard with line of sight catches the theft and
+ * attacks — that pull is WELCOME here: the driver returns 'combat', this
+ * task ends, and server-side auto-retaliate + the Fight task finish the
+ * guard (Fight.validate requires !Game.inCombat(), so it never initiates
+ * against an already-attacking guard). The 60 s respawn window then steals
+ * free. The engine's 10-tick post-combat lockout is handled inside the
+ * driver.
  */
 class RestockCakes implements Task {
     constructor(private bot: ArdyFighter) {}
@@ -374,52 +350,16 @@ class RestockCakes implements Task {
 
     async execute(): Promise<void> {
         this.bot.setStatus('restocking at the Baker\'s stall');
-        // If the Baker is in catch range, stealing gets us caught — dodge aside
-        // and wait him out, then re-eval (steal on the next run once he's gone).
-        if (await dodgeStallOwner({ ownerName: STALL_OWNER, stallStand: STALL_STAND, dodgeTile: OWNER_DODGE, range: OWNER_RANGE, log: m => this.bot.log(m), abort: () => Game.inCombat() || this.bot.died || EventSignal.pending() })) {
-            return;
-        }
-        const here = Game.tile();
-        if (!here || STALL_STAND.distanceTo(here) > 0) {
-            await Traversal.walkTo(STALL_STAND, { radius: 0, timeoutMs: 60000, log: m => this.bot.log(`  ${m}`) });
-        }
-
-        const deadline = performance.now() + 60000;
-        while (performance.now() < deadline) {
-            if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || Game.inCombat()) {
-                return; // higher-priority tasks take over next loop
-            }
-            if (ownerNearStall(STALL_OWNER, STALL_STAND, OWNER_RANGE)) { return; } // Baker wandered back — bail, dodge next run
-            if (Inventory.isFull() || foodCount() >= FOOD_TARGET) {
-                this.bot.log(`stocked ${foodCount()} food`);
-                return;
-            }
-            if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount())) {
-                return; // EatFood outranks us next loop
-            }
-
-            // the looted stall swaps to an op-less variant while it respawns,
-            // so requiring the op naturally waits out the 8-tick gap
-            const stall = Locs.query()
-                .name(STALL_NAME)
-                .action(STALL_OP)
-                .where(l => l.tile().distanceTo(STALL_TILE) <= 3)
-                .nearest();
-            if (!stall) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-
-            const before = foodCount();
-            if (!(await stall.interact(STALL_OP))) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            const got = await Execution.delayUntil(() => foodCount() > before || Game.inCombat(), 4000);
-            if (got && foodCount() > before) {
-                this.bot.countSteal();
-            }
-        }
+        // abort deliberately omits Game.inCombat() — the driver's own combat
+        // check turns a catch into its 'combat' return (the guard-pull path).
+        await stealCakes({
+            fillTo: FOOD_TARGET,
+            abort: () => EventSignal.pending() || this.bot.died || ChatDialog.canContinue(),
+            shouldEat: () => shouldEat(Skills.hpFraction(), EAT_AT, foodCount()),
+            setStatus: s => this.bot.setStatus(s),
+            log: m => this.bot.log(m),
+            onSteal: () => this.bot.countSteal()
+        });
     }
 }
 
