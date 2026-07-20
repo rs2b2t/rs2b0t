@@ -18,6 +18,12 @@ export interface ClueRow {
     casketObj?: string; // dig only: casket obj name
     casketId?: number; // dig only: casket obj id
     npc?: string; // talk only: NPC display name, e.g. 'Ned'
+    /** dig only: true for coordinate/sextant clues — require sextant+watch+chart
+     *  held (in addition to a Spade) before the dig will yield the casket. */
+    needsSextant?: boolean;
+    /** search only: a kill-for-key riddle. The locked container at `coord` needs
+     *  a key that drops when the named NPC is killed while the clue is held. */
+    keyFrom?: { npc: string; keyObj: string; keyId: number };
 }
 
 /** One actionable step the solver hands the executor. Either a clue row
