@@ -85,6 +85,9 @@ const MAX_STEPS = 20; // trail steps solved before giving up (trails are 2-4)
 const OUTER_GUARD = 1000; // total loop iterations incl. random-event yields
 const REWARD_WAIT_MS = 2000; // let the trail_reward main modal open after the last step
 const REWARD_CLOSE_TRIES = 5;
+// The challenge reply chatnpc opens ~2 ticks after answerCountDialog (the
+// script p_delay(0)s before it) — generous bound on that round trip.
+const CHALLENGE_REPLY_MS = 3000;
 
 // Kill-for-key riddles: a locked container needs a key that drops when a named
 // NPC is killed with the clue held. Bounded so a not-co-located NPC (e.g. a
@@ -205,6 +208,14 @@ async function drainChat(): Promise<void> {
  * the answer on the held anagram clue's obj id (`step.id`), not the prompt.
  * Returns true iff it answered. If the id has no known answer we leave the dialog
  * untouched (the step then abandons cleanly) rather than enter a wrong number.
+ *
+ * The answer alone does NOT advance the trail: the script then chatnpc's the
+ * "Well done!" reply (a PAUSEBUTTON page) and only runs inv_del + the progress
+ * label AFTER that page's continue is clicked. So after answering we wait for
+ * the reply (it opens a couple ticks later — p_delay(0) precedes the chatnpc)
+ * and drive its continue pages right here. The caller must not re-dispatch on
+ * this attempt: gotoNpc would pathfind back to the anchor under the open page,
+ * leaving the dialogue unfinished (the live 2026-07-20 stuck-pathfinding bug).
  */
 async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): Promise<boolean> {
     if (step.type !== 'talk' || !reader.countDialogOpen()) {
@@ -217,6 +228,11 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
     }
     actions.answerCountDialog(n);
     log(`challenge answered: ${n}`);
+    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), CHALLENGE_REPLY_MS))) {
+        log('challenge reply page never opened — leaving it to the next attempt');
+        return true; // answered regardless — the caller must still not re-dispatch
+    }
+    await drainChat(); // "Well done!" continue (consumes the clue) + the next-clue objbox
     return true;
 }
 
@@ -339,6 +355,13 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (!anchor || !step.npc) {
                 return;
             }
+            // A dialogue already up (e.g. a challenge reply that opened after
+            // this attempt's drain) must be driven, never walked away from —
+            // pathfinding with the page open leaves the paused script hanging.
+            if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+                await talkThrough(step.npc, [], log);
+                return;
+            }
             const stop: NpcStop = { npc: step.npc, anchor, leash: NPC_LEASH, prefer: [] };
             if (await gotoNpc(stop, [], log)) {
                 await talkThrough(step.npc, [], log);
@@ -395,11 +418,13 @@ async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n
         onAttempt(attempt + 1);
         await drainChat();
         // A challenge talk step leaves a count dialog open once talkThrough has
-        // driven the question chat closed; answer it BEFORE re-dispatching, so
-        // this attempt's talkThrough then drives the NPC's correct-reply page and
-        // the trail advances (the clue is consumed → progressed()).
-        await answerChallengeIfOpen(step, log);
-        await dispatch(step, log);
+        // driven the question chat closed; answerChallengeIfOpen answers it and
+        // drives the reply's continue pages itself — the trail advances on that
+        // continue, so when it answered we must NOT dispatch (gotoNpc would
+        // pathfind under the reply page); just check for progress.
+        if (!(await answerChallengeIfOpen(step, log))) {
+            await dispatch(step, log);
+        }
         if (await Execution.delayUntil(progressed, PROGRESS_MS)) {
             return true;
         }
