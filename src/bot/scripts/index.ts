@@ -8,6 +8,7 @@ import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
 import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
+import CakeThiever, { SETTINGS as CAKETHIEVER_SETTINGS } from './CakeThiever.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
@@ -154,6 +155,15 @@ ScriptRegistry.register({
     tags: ['ardougne', 'thieving', 'banking', 'afk'],
     settingsSchema: ARDYTHIEVER_SETTINGS,
     create: () => new ArdyThiever()
+});
+
+ScriptRegistry.register({
+    name: 'CakeThiever',
+    description: 'Baker\'s-stall cake thiever — steals on the golden stand, resets nearby when watched, banks full packs, flees (kites) or fights a catching guard per guardResponse',
+    category: 'Thieving',
+    tags: ['ardougne', 'thieving', 'banking', 'afk'],
+    settingsSchema: CAKETHIEVER_SETTINGS,
+    create: () => new CakeThiever()
 });
 
 // --- woodcutting ---
