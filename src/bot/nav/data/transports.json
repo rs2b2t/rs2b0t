@@ -36,6 +36,8 @@
     {"from":{"x":2409,"z":9819,"level":0},"to":{"x":2410,"z":3421,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
     {"from":{"x":2515,"z":3160,"level":0},"to":{"x":2515,"z":3161,"level":0},"locName":"Loose Railing","action":"Squeeze-through","kind":"gate"},
     {"from":{"x":2515,"z":3161,"level":0},"to":{"x":2515,"z":3160,"level":0},"locName":"Loose Railing","action":"Squeeze-through","kind":"gate"},
+    {"from":{"x":2461,"z":3382,"level":0},"to":{"x":2461,"z":3385,"level":0},"locName":"Gate","action":"Open","kind":"gate"},
+    {"from":{"x":2461,"z":3385,"level":0},"to":{"x":2461,"z":3382,"level":0},"locName":"Gate","action":"Open","kind":"gate"},
     {"from":{"x":3405,"z":3506,"level":0},"to":{"x":3405,"z":9906,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"},
     {"from":{"x":3405,"z":9906,"level":0},"to":{"x":3405,"z":3506,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
     {"from":{"x":3440,"z":9887,"level":0},"to":{"x":3423,"z":3485,"level":0},"locName":"Holy barrier","action":"Pass-through","kind":"dungeon"},

@@ -84,6 +84,11 @@ const DIALOGUE_STEPS = 24; // max continue/choose iterations to drive a crossing
 // a 3-choice flow (journey? -> search away -> Ok.) with several NPC lines between
 // menus, then the pay + telejump — 24 can run out before the deck arrival.
 const SHIP_DIALOGUE_STEPS = 40;
+// A reopenAfterDialogue gate (Gnome Stronghold / Femi boxes) needs at most two
+// Opens: the first runs the one-time boxes dialogue (no crossing), the second
+// force-moves you through. An already-primed account crosses on the first Open
+// (the crossed() guard exits the loop before a wasted second).
+const GATE_REOPENS = 2;
 const REACH_CHECK_STEPS = 1200; // BFS budget for validating a click target
 
 export interface WalkOptions {
@@ -882,25 +887,39 @@ class WalkExecutorImpl {
             return false;
         }
 
-        const loc = this.findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });
-        if (!loc) {
-            log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
-            return false;
-        }
-        if (!loc.interact(sc.action)) {
-            log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
-            return false;
-        }
-
         const crossed = (): boolean => isOnFarSide(reader.worldTile(), approach, step);
-        for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
-            const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
-            if (pick) {
-                await ChatDialog.chooseOption(pick);
-            } else if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
-            } else {
-                await Execution.delayTicks(1);
+        // Most special gates cross in a single Open — the toll gate teleports you
+        // across once the fare dialogue is paid. A reopenAfterDialogue gate needs a
+        // second: the first Open runs a one-time prerequisite dialogue that does NOT
+        // move you (the Gnome Stronghold gate diverts to Femi's boxes —
+        // @grandtree_femi_boxes is a goto, so the gate-open code never runs that
+        // click), and only a fresh Open, now that the dialogue has set its flag,
+        // force-moves you through. Each Open drives whatever dialogue it surfaced to
+        // the end (the boxes sequence closes then re-opens for a final "Thanks again"
+        // line, so we exhaust DIALOGUE_STEPS rather than break on the first close),
+        // then the outer loop re-Opens while we still have not crossed. An already-
+        // primed account never sees the dialogue and crosses on the first Open, so
+        // the crossed() guard exits before a wasted second.
+        const maxOpens = sc.reopenAfterDialogue ? GATE_REOPENS : 1;
+        for (let open = 0; open < maxOpens && !crossed(); open++) {
+            const loc = this.findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });
+            if (!loc) {
+                log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
+                return false;
+            }
+            if (!loc.interact(sc.action)) {
+                log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
+                return false;
+            }
+            for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
+                const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
+                if (pick) {
+                    await ChatDialog.chooseOption(pick);
+                } else if (ChatDialog.canContinue()) {
+                    await ChatDialog.continue();
+                } else {
+                    await Execution.delayTicks(1);
+                }
             }
         }
         if (crossed()) {
