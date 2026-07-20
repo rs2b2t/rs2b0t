@@ -53,11 +53,16 @@ import type { Loc } from '#/bot/api/entities/index.js';
 import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
-import type { ClueStep } from '#/bot/clues/types.js';
+import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
 
 const SPADE = 'Spade';
+
+/** Coordinate (sextant) clues assume the Observatory Quest is done and these
+ *  three items exist; without all three held the dig can never yield the casket,
+ *  so blockReason abandons the clue cleanly rather than digging fruitlessly. */
+const COORD_ITEMS = ['Sextant', 'Watch', 'Chart'];
 
 /** Search-style loc ops that trigger the trail interaction, in priority order.
  *  'Search' covers crates/boxes/open containers; 'Open' covers closed chests and
@@ -209,6 +214,8 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (!(await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log }))) {
                 return;
             }
+            // Coordinate (needsSextant) digs are item-gated in blockReason above,
+            // so by the time we get here the required items are held.
             const spade = Inventory.first(SPADE);
             if (spade) {
                 await spade.interact('Dig');
@@ -243,6 +250,12 @@ function blockReason(step: ClueStep): string | null {
     }
     if (step.type === 'talk' && (!step.npc || !TALK_ANCHORS[step.id])) {
         return `no anchor for NPC '${step.npc ?? '?'}'`;
+    }
+    if (step.type === 'dig' && (step as ClueRow).needsSextant) {
+        const missing = COORD_ITEMS.filter(n => !Inventory.first(n));
+        if (missing.length > 0) {
+            return `coordinate clue needs ${missing.join('+')} (not held)`;
+        }
     }
     return null;
 }
