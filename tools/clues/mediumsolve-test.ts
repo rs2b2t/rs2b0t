@@ -105,6 +105,8 @@ interface Seed {
     packItems?: [string, number][];
     /** Extra `::setstat <skill> <level>` boosts (combat for kill-for-key). */
     stats?: [string, number][];
+    /** Skip the bank spade seed — force the bot to acquire one from a spawn. */
+    noBankSpade?: boolean;
 }
 
 /** Seed bank (spade + food) + a held clue scroll, boost HP (+ optional combat /
@@ -113,8 +115,10 @@ interface Seed {
 async function seedAndStart(clueObj: string, clueId: number, start: [number, number, number], seed: Seed): Promise<void> {
     // Bank-seed the spade + food (bankFirst WITHDRAWS them). Uniform across cases:
     // talk clues just carry a harmless spade; it avoids the "no Spade in the bank"
-    // abandon-log noise on dig cases.
-    await cheat(page, '~bankitem spade 1');
+    // abandon-log noise on dig cases. `noBankSpade` cases test spade acquisition.
+    if (!seed.noBankSpade) {
+        await cheat(page, '~bankitem spade 1');
+    }
     await cheat(page, '~bankitem lobster 30');
     await cheat(page, `~item ${clueObj} 1`);
     // Pack-seed coordinate items / coins (bankFirst keeps but never withdraws these).
@@ -301,6 +305,33 @@ const ALL_CASES: Case[] = [
                 packItems: [['trail_sextant', 1], ['trail_watch', 1], ['trail_chart', 1]]
             });
             await driveSolve('coord', [solving('trail_clue_medium_sextant001'), coordItemsHeld, spadeInPack, advance(2801)], 480_000);
+        }
+    },
+    {
+        // ACQUIRE SPADE: map dig medium_map001 (id 2827) at (3093,3227,0), but the
+        // bank is seeded with NO spade — the bot must fetch one from the nearer
+        // ground spawn (Falador 2981,3369 from Draynor). Proves ensureSpade end
+        // to end: the dig would otherwise abandon on "no Spade held".
+        name: 'acquire-spade',
+        run: async () => {
+            await mainlandAccount(page, base, `mASp${Date.now() % 100000}`);
+            await seedAndStart('trail_clue_medium_map001', 2827, [3093, 3243, 0], { noBankSpade: true });
+            await driveSolve('acquire-spade', [solving('trail_clue_medium_map001'), spadeInPack, advance(2827)], 600_000);
+        }
+    },
+    {
+        // ACQUIRE COORD TOOLS: coordinate dig medium_sextant002 (id 2803) at
+        // (2679,3110,0), near Port Khazard. NO trio pack-seed — the bot must run
+        // the professor->Murphy->Kojo->professor chain at bank-first (has_sextant_clue
+        // is true because the coord clue is held). Start at Ardougne market, near
+        // the chain. `coord-items` proves the trio was acquired live; `advance`
+        // proves the dig then produced the casket. Spade IS bank-seeded (isolate
+        // the trio chain from spade acquisition, which acquire-spade covers).
+        name: 'acquire-coord',
+        run: async () => {
+            await mainlandAccount(page, base, `mACd${Date.now() % 100000}`);
+            await seedAndStart('trail_clue_medium_sextant002', 2803, [2662, 3305, 0], {});
+            await driveSolve('acquire-coord', [solving('trail_clue_medium_sextant002'), coordItemsHeld, advance(2803)], 1_200_000);
         }
     },
     {

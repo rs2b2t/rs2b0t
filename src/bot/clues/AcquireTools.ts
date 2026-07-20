@@ -4,7 +4,7 @@ import { Game } from '#/bot/api/Game.js';
 import { Traversal } from '#/bot/api/Traversal.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { GroundItems } from '#/bot/api/queries/GroundItems.js';
-import { gotoNpc, talkThrough } from '#/bot/quests/exec/primitives.js';
+import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import {
     KOJO, MURPHY, PROFESSOR, SPADE_NAME, SPADE_SPAWNS, TRIO,
@@ -26,6 +26,18 @@ const WALK_TIMEOUT_MS = 120_000;
 const TAKE_WAIT_MS = 3000;
 const TOOL_WAIT_MS = 3000; // for a talk-given tool to land in the pack
 const CHAIN_GUARD = 8; // bounded loop — the chain is 3 acquisitions
+// The four chain NPCs sit ~100-280 tiles apart across members' Kandarin, often
+// behind a door. gotoNpc alone (its bounded radius-1/attempts-2/45s approach) is
+// for SHORT final hops, so do a long-haul walkResilient to the anchor FIRST,
+// then gotoNpc for the last-tile precision. Budget is MODEST and the whole
+// chain is wall-clock-capped (CHAIN_DEADLINE_MS): the Kojo->professor westward
+// leg hits a Clock Tower door that live-loops "did not cross in time" (a known
+// door-nav reliability class, 2026-07-20) — a bigger retry budget just grinds
+// there, so we fail FAST to the caller's graceful-abandon floor instead.
+const HOP_ATTEMPTS = 4;
+const HOP_TIMEOUT_MS = 90_000;
+const HOP_ARRIVE_RADIUS = 4; // near enough for gotoNpc to finish the approach
+const CHAIN_DEADLINE_MS = 480_000; // whole-chain wall-clock cap -> abandon, don't hang
 
 /** Which of the trio are held right now. */
 export function heldTrio(): HeldTrio {
@@ -43,6 +55,14 @@ export function hasAllTrio(): boolean {
 /** A held clue that needs the sextant trio (gates the NPC chain server-side). */
 export function hasCoordClueHeld(): boolean {
     return Inventory.items().some(i => CLUE_DB[i.id]?.needsSextant === true);
+}
+
+/** Travel to a chain NPC: long-haul walkResilient to the anchor (generous door
+ *  budget), then gotoNpc for the precise final approach. Returns gotoNpc's
+ *  arrival result. */
+async function travelToStop(stop: NpcStop, log: (m: string) => void): Promise<boolean> {
+    await Traversal.walkResilient(stop.anchor, { radius: HOP_ARRIVE_RADIUS, attempts: HOP_ATTEMPTS, timeoutMs: HOP_TIMEOUT_MS, log: m => log(`  ${m}`) });
+    return gotoNpc(stop, [], log);
 }
 
 /** Get a Spade into the pack via the nearer of the two ground spawns. */
@@ -88,9 +108,14 @@ export async function ensureCoordTools(log: (m: string) => void): Promise<boolea
         log('coord-tool chain needs a coordinate clue held — skipping');
         return false;
     }
+    const deadline = performance.now() + CHAIN_DEADLINE_MS;
     for (let guard = 0; guard < CHAIN_GUARD && !hasAllTrio(); guard++) {
         if (EventSignal.pending()) {
             return false; // yield; caller re-enters at the same held-item state
+        }
+        if (performance.now() > deadline) {
+            log('coord-tools: chain exceeded its time budget — abandoning (likely a stuck door en route)');
+            return false;
         }
         const need = nextCoordTool(heldTrio());
         if (need === null) {
@@ -101,13 +126,13 @@ export async function ensureCoordTools(log: (m: string) => void): Promise<boolea
         // verify the expected item landed before advancing.
         if (need === 'sextant') {
             log('coord-tools: learning from the professor, then Murphy for the sextant');
-            if (await gotoNpc(PROFESSOR, [], log)) {
+            if (await travelToStop(PROFESSOR, log)) {
                 await talkThrough(PROFESSOR.npc, PROFESSOR.prefer, log);
             }
             if (EventSignal.pending()) {
                 return false;
             }
-            if (await gotoNpc(MURPHY, [], log)) {
+            if (await travelToStop(MURPHY, log)) {
                 await talkThrough(MURPHY.npc, MURPHY.prefer, log);
             }
             await Execution.delayUntil(() => Inventory.first('Sextant') !== null, TOOL_WAIT_MS);
@@ -117,7 +142,7 @@ export async function ensureCoordTools(log: (m: string) => void): Promise<boolea
             }
         } else if (need === 'watch') {
             log('coord-tools: Brother Kojo for the watch');
-            if (await gotoNpc(KOJO, [], log)) {
+            if (await travelToStop(KOJO, log)) {
                 await talkThrough(KOJO.npc, KOJO.prefer, log);
             }
             await Execution.delayUntil(() => Inventory.first('Watch') !== null, TOOL_WAIT_MS);
@@ -127,7 +152,7 @@ export async function ensureCoordTools(log: (m: string) => void): Promise<boolea
             }
         } else {
             log('coord-tools: back to the professor for the chart');
-            if (await gotoNpc(PROFESSOR, [], log)) {
+            if (await travelToStop(PROFESSOR, log)) {
                 await talkThrough(PROFESSOR.npc, PROFESSOR.prefer, log);
             }
             await Execution.delayUntil(() => Inventory.first('Chart') !== null, TOOL_WAIT_MS);
