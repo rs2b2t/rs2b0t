@@ -88,6 +88,10 @@ const AUDIT_BUDGET = 600_000;
 //   2815 trail_clue_medium_sextant008 — Crandor (2848,3296): gated behind
 //        Dragon Slayer and an unmodeled sea crossing; no static edge reaches
 //        the island.
+// Both are DIG-TILE unreachability, NOT the sextant-tool requirement — the
+// 2026-07-20 tool-acquisition feature (AcquireTools) obtains the trio, so these
+// no longer abandon for lack of tools; they abandon only because the dig tile
+// itself is off the static graph. Acquisition does not (and cannot) rescue them.
 const KNOWN_UNREACHABLE = new Set<number>([2811, 2815]);
 
 export interface ClueAuditFinding {
