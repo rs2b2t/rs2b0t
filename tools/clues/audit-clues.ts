@@ -24,7 +24,13 @@
  * coord/level, malformed keyFrom) still fails normally, and an allowlisted id
  * that stops being unreachable is itself surfaced as a failure, so the allowlist
  * can neither mask a data bug nor silently go stale. Medium rows also assert
- * their new fields (kill-for-key npc/keyId, sextant needsSextant flag).
+ * their new fields (kill-for-key npc/keyId, sextant needsSextant flag). Each
+ * kill-for-key riddle must additionally carry a KILL_ANCHORS hunt spawn that is
+ * present, a well-formed Tile, and nav-reachable at AUDIT_BUDGET (the killer is
+ * NOT at the container — the executor walks to the anchor to fight it, so a
+ * missing anchor is the pre-fix broken hunt and a real finding; a genuinely
+ * UNREACHABLE killer routes to expected-abandon like an island clue). A
+ * KILL_ANCHORS key that is not a kill-for-key clue id is a stale entry and fails.
  *
  * Usage: bun tools/clues/audit-clues.ts [--engine <dir>] [--content <dir>]
  *                                       [--pack <file>]
@@ -43,6 +49,7 @@ import transportsJson from '#/bot/nav/data/transports.json';
 import stairsJson from '#/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData, type NavPoint, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from '../nav/lib.js';
@@ -362,9 +369,32 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
         // open-casket entries have no world state to audit
 
         // medium: kill-for-key rows must carry a resolved npc + numeric key id
-        // (Task 2 gen-cluedb should have populated both from the riddle content).
-        if (clue.keyFrom && (!clue.keyFrom.npc || !Number.isFinite(clue.keyFrom.keyId))) {
-            fail(`keyFrom unresolved (${JSON.stringify(clue.keyFrom)})`);
+        // (Task 2 gen-cluedb should have populated both from the riddle content)
+        // AND a reachable KILL_ANCHORS hunt spawn. The key drops wherever the NPC
+        // dies, so the killer is NOT at the container — the executor walks to
+        // KILL_ANCHORS[id] to hunt it (huntTile, radius 5) then finds the roamer
+        // in-scene, exactly like a talk anchor. A MISSING anchor falls the
+        // executor back to the container coord (the pre-617e5a0 behaviour that
+        // hunts the wrong place and abandons the riddle), so it's a real finding.
+        // A present anchor must be a well-formed Tile and nav-reachable from the
+        // solver's banks at the same budget/edges as every other anchor; a
+        // genuinely UNREACHABLE killer is an unsolvable riddle → routed to
+        // expected-abandon via the same reason-gate as an island clue.
+        if (clue.keyFrom) {
+            if (!clue.keyFrom.npc || !Number.isFinite(clue.keyFrom.keyId)) {
+                fail(`keyFrom unresolved (${JSON.stringify(clue.keyFrom)})`);
+            }
+            const anchor = KILL_ANCHORS[id];
+            if (!anchor) {
+                fail(`kill-for-key has no KILL_ANCHORS entry (killer '${clue.keyFrom.npc}')`);
+            } else if (!Number.isInteger(anchor.x) || !Number.isInteger(anchor.z) || !Number.isInteger(anchor.level) || anchor.level < 0 || anchor.level > 3) {
+                fail(`kill anchor malformed: (${anchor.x},${anchor.z},${anchor.level})`);
+            } else {
+                const nav = navProblem({ x: anchor.x, z: anchor.z, level: anchor.level }, 'cheb2');
+                if (nav) {
+                    fail(`kill anchor ${nav.msg}`, nav.unreachable);
+                }
+            }
         }
         // medium: sextant/coordinate digs must be flagged so the solver knows to
         // carry sextant+watch+chart before digging.
@@ -389,6 +419,24 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             type: clue?.type ?? '?',
             problem: `allowlisted ${id} produced no nav-unreachable finding — it is now reachable (or audited clean); remove it from KNOWN_UNREACHABLE`
         });
+    }
+
+    // Stale kill-anchor guard (mirrors the KNOWN_UNREACHABLE guard above): every
+    // KILL_ANCHORS key must belong to a kill-for-key (keyFrom) clue. A key that
+    // doesn't — a renumbered/typo'd id, or an anchor left behind after a riddle
+    // changed shape — points the executor's hunt at the wrong (or a non-)clue, so
+    // surface it as a real finding rather than let it rot silently.
+    for (const idStr of Object.keys(KILL_ANCHORS)) {
+        const id = Number(idStr);
+        const clue = CLUE_DB[id];
+        if (!clue?.keyFrom) {
+            findings.push({
+                id,
+                obj: clue?.obj ?? `clue_${id}`,
+                type: clue?.type ?? '?',
+                problem: `KILL_ANCHORS[${id}] is not a kill-for-key (keyFrom) clue — stale/misplaced anchor`
+            });
+        }
     }
 
     const total = Object.keys(CLUE_DB).length;
