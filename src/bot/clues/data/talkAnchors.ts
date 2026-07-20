@@ -26,5 +26,28 @@ export const TALK_ANCHORS: Record<number, Tile> = {
     2702: new Tile(2761, 3497, 0), // Sir Kay — Camelot Castle
     3496: new Tile(3028, 3216, 0), // Captain Tobias — Port Sarim docks
     3513: new Tile(2734, 3581, 0), // Louisa — Sinclair Mansion (Seers' area)
-    3514: new Tile(3361, 3242, 0) // Jeed — Duel Arena, east of Al Kharid
+    3514: new Tile(3361, 3242, 0), // Jeed — Duel Arena, east of Al Kharid
+
+    // Medium anagram / speak-to clues (Task 3). Tiles = the NPC's exact spawn
+    // from the content maps' `==== NPC ====` sections (rs2b2t-content/maps).
+    2841: new Tile(2678, 3086, 1), // Hazelmere — green-spider island E of Yanille (upstairs)
+    2843: new Tile(3209, 3215, 0), // Cook — Lumbridge Castle kitchen
+    2845: new Tile(2611, 3269, 0), // Zoo keeper — Ardougne zoo (E of river)
+    2847: new Tile(3232, 3423, 0), // Lowe — Varrock archery store, by the east bank
+    2848: new Tile(2779, 3211, 0), // Hajedy — Brimhaven cart, north dock
+    2849: new Tile(3272, 3182, 0), // Kebab seller — Al Kharid kebab shop
+    2851: new Tile(3015, 3504, 0), // Oracle — Ice Mountain, west of Edgeville
+    2853: new Tile(2384, 3488, 0), // Gnome ball referee — Gnome Stronghold ball course
+    2855: new Tile(2745, 3576, 1), // Donovan the Family Handyman — Sinclair Mansion, upstairs
+    2856: new Tile(2733, 3472, 0), // Party Pete — party room, south of Seers' bank
+    2857: new Tile(2542, 3169, 0), // King Bolren — Tree Gnome Village centre, by the spirit tree
+    2858: new Tile(2939, 3154, 0), // Luthas — Karamja banana plantation, Musa Point
+    3611: new Tile(2459, 3382, 0), // Femi — Gnome Stronghold entrance gate
+    3612: new Tile(2390, 9810, 0), // Brimstail — SW Gnome Stronghold, hollowed-out rock cave
+    3613: new Tile(2270, 4759, 0), // Saba — Death Plateau cave, Burthorpe
+    3614: new Tile(3444, 3459, 0), // Ulizius — Mort Myre swamp gate, Morytania
+    3615: new Tile(3493, 3471, 0), // Roavar — Hair of the Dog tavern, Canifis
+    3616: new Tile(3358, 3276, 0), // Jaraah — Duel Arena hospital, east of Al Kharid
+    3617: new Tile(2791, 3182, 0), // Kangai Mau — Brimhaven food store
+    3618: new Tile(2650, 9393, 0) // Fycie — Feldip Hills cave, S of Yanille (Rantz area)
 };
