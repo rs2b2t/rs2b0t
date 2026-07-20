@@ -46,9 +46,12 @@ import { Execution } from '#/bot/api/Execution.js';
 import { EventSignal } from '#/bot/api/EventSignal.js';
 import { Sustain } from '#/bot/api/Sustain.js';
 import { Traversal } from '#/bot/api/Traversal.js';
+import { Game } from '#/bot/api/Game.js';
 import { ChatDialog } from '#/bot/api/hud/ChatDialog.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
+import { GroundItems } from '#/bot/api/queries/GroundItems.js';
 import { Locs } from '#/bot/api/queries/Locs.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
 import type { Loc } from '#/bot/api/entities/index.js';
 import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
@@ -80,6 +83,13 @@ const MAX_STEPS = 20; // trail steps solved before giving up (trails are 2-4)
 const OUTER_GUARD = 1000; // total loop iterations incl. random-event yields
 const REWARD_WAIT_MS = 2000; // let the trail_reward main modal open after the last step
 const REWARD_CLOSE_TRIES = 5;
+
+// Kill-for-key riddles: a locked container needs a key that drops when a named
+// NPC is killed with the clue held. Bounded so a not-co-located NPC (e.g. a
+// wilderness spawn far from the container) abandons the riddle gracefully.
+const KEY_WALK_RADIUS = 5; // get within this of the container, then find the NPC there
+const KILL_WAIT_MS = 20_000; // per fight: Attack → NPC dead / key on the ground
+const LOOT_WAIT_MS = 3000; // key ground-item Taken into the pack
 
 export { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
@@ -183,6 +193,49 @@ async function drainChat(): Promise<void> {
     }
 }
 
+/**
+ * Kill-for-key: get the riddle key into the pack so the caller can search the
+ * container. Idempotent — returns true immediately when the key is already held
+ * (a re-entry after a partial attempt skips straight to the search). Walks near
+ * the container coord (the content spawns the NPC roaming there), Attacks the
+ * nearest matching NPC, waits for it to die, then Takes the dropped key. Bounded
+ * throughout; returns false — abandoning the riddle gracefully — when no matching
+ * NPC is near the container (e.g. Black Heather lives in the wilderness, far from
+ * the Varrock chapel container) or the fight/loot doesn't yield the key in time.
+ */
+async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, coord: NavPoint, log: (m: string) => void): Promise<boolean> {
+    const haveKey = (): boolean => Inventory.items().some(i => i.id === kf.keyId);
+    if (haveKey()) {
+        return true; // already looted on a prior attempt — go straight to the search
+    }
+    // Position near the container, then fight the nearest matching NPC there. We
+    // don't gate on the walk outcome: even a partial arrival can leave the NPC in
+    // reach; if it genuinely lives elsewhere, the query below finds none → abandon.
+    await Traversal.walkResilient(coord, { radius: KEY_WALK_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
+    // EntityQuery.name() is CASE-INSENSITIVE (see queries/Query.ts), so the
+    // lowercase content token 'pirate' still matches the 'Pirate' display name;
+    // generic tokens ('Chicken', 'Man') match those display names the same way.
+    const target = Npcs.query().name(kf.npc).action('Attack').within(NPC_LEASH).nearest();
+    if (!target) {
+        log(`kill-for-key: no '${kf.npc}' near the container — abandoning riddle`);
+        return false;
+    }
+    await target.interact('Attack');
+    // Match the dropped key by its exact obj id (kf.keyObj is a CONTENT obj name,
+    // not the display name a GroundItem carries, so a name match is unreliable and
+    // could grab a stray key; the id is the same discriminator the pack uses).
+    const keyOnGround = () => GroundItems.query().where(g => g.id === kf.keyId).nearest();
+    // Dead = the key is in the pack, OR on the ground, OR the target is gone and
+    // the fight is over (a faster exit than waiting out KILL_WAIT_MS on a miss).
+    await Execution.delayUntil(() => haveKey() || keyOnGround() !== null || (!target.valid() && !Game.inCombat()), KILL_WAIT_MS);
+    const key = keyOnGround();
+    if (key) {
+        await key.interact('Take');
+        await Execution.delayUntil(haveKey, LOOT_WAIT_MS);
+    }
+    return haveKey();
+}
+
 /** Dispatch the one client action for `step`. Positioning + interaction only —
  *  progress is verified by the caller. */
 async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void> {
@@ -190,6 +243,16 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
         case 'search': {
             if (!step.coord) {
                 return;
+            }
+            // Kill-for-key riddles fight the NPC + loot the key BEFORE searching
+            // the locked container. Idempotent across attempts (the key persists
+            // in the pack); if the key can't be had, bail so solveStep retries or
+            // abandons after STEP_ATTEMPTS.
+            const kf = (step as ClueRow).keyFrom;
+            if (kf) {
+                if (!(await acquireRiddleKey(kf, step.coord, log))) {
+                    return;
+                }
             }
             // On a failed/interrupted walk, don't interact from wherever we
             // stopped — bail and let the next attempt re-walk (or the outer loop
