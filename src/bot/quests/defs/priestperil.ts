@@ -150,8 +150,14 @@ async function walkTo(dest: Tile, radius: number, log: (m: string) => void): Pro
  * so walkResilient alone would wedge on the live closed leaf.
  */
 async function tryOpen(name: string, near: Tile, log: (m: string) => void): Promise<boolean> {
+    // Match the closed leaf by name + Open + 2D proximity ONLY. Do NOT filter on
+    // l.tile().level: Tile.distanceTo is x/z-only, and the temple/Salve locs can
+    // report a BRIDGED level ≠ the stand's — a strict level filter then dropped
+    // the still-closed front door, tryOpen wrongly reported "open", and the spine
+    // walked into the server-locked door forever (live 2026-07-20, aqpip2). The
+    // x/z window is unique per door here (no same-tile door on another floor).
     const closed = () => Locs.query().name(name).action('Open')
-        .where(l => l.tile().level === near.level && l.tile().distanceTo(near) <= 2).nearest();
+        .where(l => l.tile().distanceTo(near) <= 2).nearest();
     const here = Game.tile();
     if (here && here.level === near.level && near.distanceTo(here) <= 10 && closed() === null) {
         return true; // in view and no closed leaf — already open
@@ -166,6 +172,8 @@ async function tryOpen(name: string, near: Tile, log: (m: string) => void): Prom
     if (!(await leaf.interact('Open'))) {
         return false;
     }
+    // Locked leaves (temple door / gates before their stage) keep offering Open
+    // and never change — the delayUntil times out and we honestly report FALSE.
     return Execution.delayUntil(() => closed() === null, 4000);
 }
 
@@ -193,6 +201,7 @@ async function killTarget(npc: { index: number; interact(op: string): boolean | 
  * encourages), so a restart anywhere in 1..3 self-heals.
  */
 async function earlyLeg(log: (m: string) => void): Promise<boolean> {
+    log('priestperil: early phase — knock, dog, Roald');
     // 1. Knock-at + drive the agree chain (loc-initiated dialog -> driveDialog).
     if (!(await walkTo(TEMPLE_DOOR_OUT, 2, log))) {
         return false;
@@ -200,6 +209,7 @@ async function earlyLeg(log: (m: string) => void): Promise<boolean> {
     const door = Locs.query().name('Large door').action('Knock-at').within(6).nearest();
     if (door && (await door.interact('Knock-at'))) {
         if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 5000)) {
+            log('priestperil: knock dialogue open — driving agree chain');
             await driveDialog(KNOCK_PREFER, log);
         }
     }
@@ -210,12 +220,14 @@ async function earlyLeg(log: (m: string) => void): Promise<boolean> {
     }
     const dog = Npcs.query().name('Temple guardian').action('Attack').within(12).nearest();
     if (dog) {
+        log('priestperil: attacking Temple guardian');
         await killTarget(dog, /temple guardian/i);
     }
     // 3. Roald: at stage 3 his tirade SETS 4 (king_roald.rs2:76-88); harmless at 2.
     if (!(await gotoNpc(ROALD, HOPS, log))) {
         return false;
     }
+    log('priestperil: reporting to King Roald');
     await talkThrough('King Roald', ROALD.prefer, log);
     return false; // re-probe the temple door next pass
 }
@@ -315,8 +327,10 @@ async function spineLeg(log: (m: string) => void): Promise<boolean> {
 
     // Surface. Temple front door opening = stage >= 4 (temple_doors.rs2:9-16).
     if (!(await tryOpen('Large door', TEMPLE_DOOR, log))) {
+        log('priestperil: temple door locked (stage < 4) — early phase');
         return earlyLeg(log);
     }
+    log('priestperil: temple door open (stage >= 4)');
     // Stage >= 4. Cell door opening = stage >= 6 -> water chain / essence.
     if (await tryOpen('Cell door', CELL_DOOR, log)) {
         return waterLeg(log);
