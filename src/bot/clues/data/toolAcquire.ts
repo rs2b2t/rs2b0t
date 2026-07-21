@@ -1,4 +1,5 @@
 import Tile from '#/bot/api/Tile.js';
+import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import type { NpcStop } from '#/bot/quests/exec/primitives.js';
 
 /**
@@ -15,6 +16,21 @@ import type { NpcStop } from '#/bot/quests/exec/primitives.js';
 
 export const SPADE_NAME = 'Spade';
 export const TRIO = ['Sextant', 'Watch', 'Chart'] as const;
+
+/**
+ * The standard trail kit bank-first withdraws TOGETHER for every solve:
+ * spade + the coordinate trio + any per-clue row items (ClueRow.items).
+ * The trio is NOT gated on the held scroll being a coordinate clue — bank-
+ * first runs once per solve and a multi-leg trail can turn coordinate at any
+ * later leg (user call 2026-07-20). Coins are withdrawn separately (amount
+ * top-up, not presence). Null scroll (casket-only hold) needs nothing.
+ */
+export function trailKit(scrollId: number | null, spade: string = SPADE_NAME): string[] {
+    if (scrollId === null) {
+        return [];
+    }
+    return [spade, ...TRIO, ...(CLUE_DB[scrollId]?.items ?? [])];
+}
 
 /** Ground spawns of obj 952 (Spade). Nearer one is chosen at runtime. */
 export const SPADE_SPAWNS: Tile[] = [

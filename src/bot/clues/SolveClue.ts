@@ -20,7 +20,7 @@ import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { ClueExecutor } from '#/bot/clues/ClueExecutor.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { ensureCoordTools, hasAllTrio, hasCoordClueHeld } from '#/bot/clues/AcquireTools.js';
-import { TRIO } from '#/bot/clues/data/toolAcquire.js';
+import { trailKit } from '#/bot/clues/data/toolAcquire.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
@@ -180,11 +180,19 @@ export class SolveClue implements Task {
         };
         await Bank.depositAllMatching(name => !isKeep(name));
 
-        // Withdraw a spade for dig clues if we don't already hold one.
-        if (!Inventory.first(this.host.spadeName())) {
-            await Bank.withdraw(this.host.spadeName(), 'Withdraw-1');
-            if (!(await Execution.delayUntil(() => Inventory.first(this.host.spadeName()) !== null, 2500))) {
-                this.host.log(`[clue] no '${this.host.spadeName()}' in the bank — dig clues will be abandoned`);
+        // The standard trail kit — spade + sextant/watch/chart + any per-clue
+        // row items — is withdrawn TOGETHER for every solve (user call
+        // 2026-07-20). The trio is NOT gated on the current scroll being a
+        // coordinate clue: bank-first runs once per trail and a later leg can
+        // turn coordinate. Best-effort — a piece the bank lacks means that
+        // step blocks/abandons honestly (blockReason), or the coord NPC chain
+        // below fills the trio.
+        for (const item of trailKit(scrollId, this.host.spadeName())) {
+            if (!Inventory.first(item)) {
+                await Bank.withdraw(item, 'Withdraw-1');
+                if (!(await Execution.delayUntil(() => Inventory.first(item) !== null, 2500))) {
+                    this.host.log(`[clue] no '${item}' in the bank`);
+                }
             }
         }
 
@@ -205,32 +213,11 @@ export class SolveClue implements Task {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
         }
 
-        // Per-clue extra items: withdraw any the pack is missing. Best-effort —
-        // a bank without the item just means the step blocks and abandons
-        // honestly at execution (blockReason), same as a missing spade.
-        for (const item of rowItems) {
-            if (!Inventory.first(item)) {
-                await Bank.withdraw(item, 'Withdraw-1');
-                if (!(await Execution.delayUntil(() => Inventory.first(item) !== null, 2000))) {
-                    this.host.log(`[clue] no '${item}' in the bank — this clue will be abandoned at its ${CLUE_DB[scrollId!]?.type ?? 'step'}`);
-                }
-            }
-        }
-
-        // Coordinate clues: the dig hard-requires Sextant+Watch+Chart held
-        // (spade.rs2). They persist once acquired, so withdraw any owned copies
-        // now (they're already in the keep-set, never re-deposited). The NPC
-        // chain that fills any still-missing pieces runs AFTER the bank closes
-        // (below) — it walks NPCs and needs the coord clue, not the bank.
+        // Coordinate-clue detection for the NPC chain below: the trio itself is
+        // already withdrawn with the kit above; the 4-NPC acquisition chain
+        // that fills BANKLESS pieces still only runs when a coordinate clue is
+        // held (the chain's dialogues are engine-gated on has_sextant_clue).
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
-        if (scrollIsCoord) {
-            for (const tool of TRIO) {
-                if (!Inventory.first(tool)) {
-                    await Bank.withdraw(tool, 'Withdraw-1');
-                    await Execution.delayUntil(() => Inventory.first(tool) !== null, 2000);
-                }
-            }
-        }
 
         // Top up food (skipped when the bot runs foodless) so the trail is sustainable.
         const food = this.host.foodName();
