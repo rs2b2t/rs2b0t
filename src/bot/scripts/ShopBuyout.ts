@@ -119,19 +119,7 @@ export default class ShopBuyout extends TaskBot {
         p.gap();
         // Pause/Stop only — a single-shop buyout has no safe mid-run switch (the
         // shop/keeper/budget are baked into the funded trip).
-        const clicked = p.buttons([
-            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
-            { id: 'stop', label: 'Stop' }
-        ]);
-        if (clicked === 'pause') {
-            if (ScriptRunner.state === 'paused') {
-                ScriptRunner.resume();
-            } else {
-                ScriptRunner.pause();
-            }
-        } else if (clicked === 'stop') {
-            ScriptRunner.stop();
-        }
+        ScriptRunner.paintControls(p);
         p.end();
     }
 }

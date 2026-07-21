@@ -1,6 +1,7 @@
 import type { AbstractBot } from '../api/Bot.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Sustain } from '../api/Sustain.js';
+import type { PaintFrame } from '../api/hud/Paint.js';
 import { paintState } from '../api/hud/paintLogic.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { RecoveryHints } from './RecoveryHints.js';
@@ -27,6 +28,25 @@ class ScriptRunnerImpl {
 
     constructor() {
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
+    }
+
+    /** The standard pause/stop controls every bot's paint renders: the pause
+     *  label toggles with the runner state; clicks pause/resume or stop the
+     *  script. Bots with extra buttons (AIOQuester's Skip) keep their own. */
+    paintControls(p: PaintFrame): void {
+        const clicked = p.buttons([
+            { id: 'pause', label: this.state === 'paused' ? 'Resume' : 'Pause' },
+            { id: 'stop', label: 'Stop' }
+        ]);
+        if (clicked === 'pause') {
+            if (this.state === 'paused') {
+                this.resume();
+            } else {
+                this.pause();
+            }
+        } else if (clicked === 'stop') {
+            this.stop();
+        }
     }
 
     get state(): string {

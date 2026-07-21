@@ -95,19 +95,7 @@ export default class SmelterBot extends TaskBot {
         p.gap();
         // processing bot — switching bar mid-pack strands a half-smelted ore mix,
         // so Pause/Stop only (no live selector)
-        const clicked = p.buttons([
-            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
-            { id: 'stop', label: 'Stop' }
-        ]);
-        if (clicked === 'pause') {
-            if (ScriptRunner.state === 'paused') {
-                ScriptRunner.resume();
-            } else {
-                ScriptRunner.pause();
-            }
-        } else if (clicked === 'stop') {
-            ScriptRunner.stop();
-        }
+        ScriptRunner.paintControls(p);
         p.end();
     }
 

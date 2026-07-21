@@ -82,19 +82,7 @@ export default class CookBot extends TaskBot {
         p.gap();
         // processing bot — switching food mid-pack would strand a half-cooked
         // batch, so Pause/Stop only (no live selector)
-        const clicked = p.buttons([
-            { id: 'pause', label: ScriptRunner.state === 'paused' ? 'Resume' : 'Pause' },
-            { id: 'stop', label: 'Stop' }
-        ]);
-        if (clicked === 'pause') {
-            if (ScriptRunner.state === 'paused') {
-                ScriptRunner.resume();
-            } else {
-                ScriptRunner.pause();
-            }
-        } else if (clicked === 'stop') {
-            ScriptRunner.stop();
-        }
+        ScriptRunner.paintControls(p);
         p.end();
     }
 
