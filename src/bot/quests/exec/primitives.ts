@@ -50,6 +50,12 @@ export interface LadderHop {
     locName: string;
     op: string;
     arrive: Tile;
+    /** Opener for closed trapdoor-style locs: when no `locName` loc offers `op`
+     *  at the stand (a closed Trapdoor has only 'Open'), interact this op on the
+     *  same-named loc first, then re-query for `op` — trapdoors.rs2:2-12 swaps
+     *  trapdoor -> trapdoor_open (Climb-down) via loc_change, and the open state
+     *  reverts after ~500 ticks, so most arrivals find it closed again. */
+    open?: string;
 }
 
 /** Where a quest NPC lives and how to talk to it. `prefer` are the dialogue
@@ -80,7 +86,20 @@ export interface NpcStop {
  * directions.
  */
 async function hopLadder(hop: LadderHop, log: (m: string) => void): Promise<boolean> {
-    const ladder = Locs.query().name(hop.locName).action(hop.op).where(l => l.tile().distanceTo(hop.stand) <= 3).nearest();
+    const find = (op: string) => Locs.query().name(hop.locName).action(op).where(l => l.tile().distanceTo(hop.stand) <= 3).nearest();
+    let ladder = find(hop.op);
+    if (!ladder && hop.open !== undefined) {
+        const closed = find(hop.open);
+        if (closed && (await closed.interact(hop.open))) {
+            // loc_change lands a tick or two later — re-query with one retry
+            await Execution.delayTicks(2);
+            ladder = find(hop.op);
+            if (!ladder) {
+                await Execution.delayTicks(2);
+                ladder = find(hop.op);
+            }
+        }
+    }
     if (!ladder) {
         log(`no '${hop.locName}' offering '${hop.op}' near (${hop.stand.x},${hop.stand.z})`);
         return false;
@@ -245,33 +264,20 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
 }
 
 /**
- * Talk-to `npcName` and drive the whole conversation: continue through
- * pages, pick preferred options (fallback = LAST option + a warning — the
- * last option is the safe decline everywhere in this era's dialogues).
- * If a dialogue is already open (relog mid-talk, stray page), drives it
- * without re-interacting. Returns true once the dialog is closed.
+ * Drive an ALREADY-OPEN dialogue to completion: continue through pages, pick
+ * preferred options (fallback = LAST option + a warning — the last option is
+ * the safe decline everywhere in this era's dialogues). Exported for
+ * loc-initiated dialogues (e.g. Priest in Peril's temple-door Knock-at), which
+ * open a chat without any NPC Talk-to.
+ *
+ * Tolerates page-transition gaps: a server-scripted branch closes the box for
+ * a beat BETWEEN pages, and a plain isOpen() loop exits there — BEFORE
+ * mid-branch varp-sets (sir_lancelot.rs2:34 is line 4 of a 6-line branch), so
+ * a correct option pick silently failed to advance the stage (live
+ * 2026-07-19). A transient close now waits ~1.5s for the next page before
+ * concluding the dialogue is genuinely over.
  */
-export async function talkThrough(npcName: string, prefer: string[], log: (m: string) => void): Promise<boolean> {
-    if (!ChatDialog.isOpen()) {
-        const npc = Npcs.query().name(npcName).action('Talk-to').nearest();
-        if (!npc) {
-            log(`no '${npcName}' nearby to talk to`);
-            return false;
-        }
-        if (!(await npc.interact('Talk-to'))) {
-            return false;
-        }
-        if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 8000))) {
-            log(`'${npcName}' never opened a dialogue`);
-            return false;
-        }
-    }
-    // Drive the dialogue, TOLERATING page-transition gaps: a server-scripted
-    // branch closes the box for a beat BETWEEN pages, and a plain isOpen() loop
-    // exits there — BEFORE mid-branch varp-sets (sir_lancelot.rs2:34 is line 4
-    // of a 6-line branch), so a correct option pick silently failed to advance
-    // the stage (live 2026-07-19). A transient close now waits ~1.5s for the
-    // next page before concluding the dialogue is genuinely over.
+export async function driveDialog(prefer: string[], log: (m: string) => void): Promise<boolean> {
     for (let i = 0; i < 120; i++) {
         if (EventSignal.pending()) {
             return false; // let the runtime clear the random event
@@ -299,4 +305,29 @@ export async function talkThrough(npcName: string, prefer: string[], log: (m: st
         await Execution.delayTicks(1);
     }
     return !ChatDialog.isOpen();
+}
+
+/**
+ * Talk-to `npcName` and drive the whole conversation: continue through
+ * pages, pick preferred options (fallback = LAST option + a warning — the
+ * last option is the safe decline everywhere in this era's dialogues).
+ * If a dialogue is already open (relog mid-talk, stray page), drives it
+ * without re-interacting. Returns true once the dialog is closed.
+ */
+export async function talkThrough(npcName: string, prefer: string[], log: (m: string) => void): Promise<boolean> {
+    if (!ChatDialog.isOpen()) {
+        const npc = Npcs.query().name(npcName).action('Talk-to').nearest();
+        if (!npc) {
+            log(`no '${npcName}' nearby to talk to`);
+            return false;
+        }
+        if (!(await npc.interact('Talk-to'))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 8000))) {
+            log(`'${npcName}' never opened a dialogue`);
+            return false;
+        }
+    }
+    return driveDialog(prefer, log);
 }
