@@ -667,30 +667,38 @@ async function mineEssence(log: (m: string) => void): Promise<boolean> {
             return false;
         }
     }
-    if (freeSlots() > 0) {
+    // In the mine: mine until the pack is full, THEN Portal out — all inside this
+    // invocation. Returning false mid-mine would route decide() -> spineLeg, which
+    // treats the mine's z-band as surface and tries to walk out of the SEALED
+    // region (the only exit is the Portal) — a hard wedge (live pspip6c). The
+    // crystal query is RETRIED because the scene can still be loading right after
+    // the telejump (a single miss must not bail — same live wedge).
+    for (let i = 0; i < 40 && freeSlots() > 0; i++) {
         const rock = Locs.query().name('Rune Essence').action('Mine').nearest();
         if (!rock) {
-            log('priestperil: no Rune Essence crystal visible in the mine');
-            return false;
+            await Execution.delayTicks(3); // scene still loading post-telejump — retry
+            continue;
         }
         if (!(await rock.interact('Mine'))) {
-            return false;
+            await Execution.delayTicks(2);
+            continue;
         }
-        // One click auto-repeats server-side; wait for a full pack, tolerating
-        // a stall (re-enter re-clicks — EssMiner's STALL_MS idiom).
-        await Execution.delayUntil(() => freeSlots() === 0, 180_000);
-        return false;
+        // One click auto-repeats server-side until the pack fills; wait for that,
+        // else the loop re-clicks (EssMiner's STALL_MS idiom).
+        await Execution.delayUntil(() => freeSlots() === 0, 30_000);
     }
+    // Full (or exhausted the retries) -> Portal out (lands at Aubury's, surface).
     const portal = Locs.query().name('Portal').action('Use').nearest();
-    if (!portal) {
-        return false;
+    if (portal) {
+        await portal.interact('Use');
+        await Execution.delayUntil(() => {
+            const t = Game.tile();
+            return t !== null && !inEssMine(t.x, t.z);
+        }, 12_000);
+    } else {
+        log('priestperil: essence — no Portal to leave the mine; retrying');
     }
-    await portal.interact('Use');
-    await Execution.delayUntil(() => {
-        const t = Game.tile();
-        return t !== null && !inEssMine(t.x, t.z);
-    }, 12_000);
-    return false; // pack full of essence — next pass delivers
+    return false; // back on the surface -> next pass delivers
 }
 
 // --- Provisioning gather (bank-first; called when the bank lacks the Bucket) ---
