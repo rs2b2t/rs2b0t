@@ -3,7 +3,6 @@ import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from './FishingMethods.js';
 import { ROCK_OPTIONS } from './MiningRocks.js';
-import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
@@ -15,7 +14,6 @@ import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js'
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import GatheringBot from './GatheringBot.js';
-import ProcessingBot from './ProcessingBot.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
@@ -247,17 +245,6 @@ ScriptRegistry.register({
     create: () => new GatheringBot()
 });
 
-// --- processing presets (all ProcessingBot, varied by settings defaults) ---
-
-/** Build a processing preset: PROCESSING_SETTINGS with overridden defaults. */
-function processing(overrides: Record<string, unknown>): SettingsSchema {
-    const schema: SettingsSchema = {};
-    for (const [key, def] of Object.entries(PROCESSING_SETTINGS)) {
-        schema[key] = key in overrides ? { ...def, default: overrides[key] } : def;
-    }
-    return schema;
-}
-
 ScriptRegistry.register({
     name: 'CookBot',
     description: 'Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at a time, bank everything, repeat',
@@ -265,15 +252,6 @@ ScriptRegistry.register({
     tags: ['catherby', 'cooking', 'banking', 'afk'],
     settingsSchema: COOKBOT_SETTINGS,
     create: () => new CookBot()
-});
-
-ScriptRegistry.register({
-    name: 'Fletcher',
-    description: 'Knife-fletches logs into the chosen product (needs a knife + logs)',
-    category: 'Fletching',
-    tags: ['processing', 'make-x'],
-    settingsSchema: processing({ material: 'Logs', targetType: 'item', target: 'Knife', product: 'arrow shaft', leashRadius: 4 }),
-    create: () => new ProcessingBot()
 });
 
 ScriptRegistry.register({
@@ -307,24 +285,6 @@ ScriptRegistry.register({
 // NOTE: bar-on-anvil SMITHING is still not registered — it opens the dedicated
 // `smithing` interface (inv-transmit item columns), not the skill-multi chat
 // menu, and needs a bespoke handler. (SmelterBot above is smelting, not smithing.)
-
-ScriptRegistry.register({
-    name: 'Herbalist',
-    description: 'Identifies unidentified herbs in the inventory (Herblore, no tools)',
-    category: 'Herblore',
-    tags: ['processing', 'identify'],
-    settingsSchema: processing({ material: 'Herb', targetType: 'self', target: 'Identify', product: '', leashRadius: 4 }),
-    create: () => new ProcessingBot()
-});
-
-ScriptRegistry.register({
-    name: 'Runecrafter',
-    description: 'Crafts runes from essence at an altar (needs rune essence + the altar)',
-    category: 'Runecrafting',
-    tags: ['processing'],
-    settingsSchema: processing({ material: 'essence', targetType: 'loc', target: 'Altar', product: '', leashRadius: 8 }),
-    create: () => new ProcessingBot()
-});
 
 // --- crafting ---
 ScriptRegistry.register({
