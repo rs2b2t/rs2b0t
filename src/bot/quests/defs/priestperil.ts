@@ -143,6 +143,20 @@ async function walkTo(dest: Tile, radius: number, log: (m: string) => void): Pro
     return walkWithHops(dest, radius, HOPS, log);
 }
 
+/** Reach an NPC stop with walkTo(radius 2) + talkThrough, NOT gotoNpc. Both
+ *  Drezels stand in tight pockets (the cell is a 1-tile cell; the mausoleum
+ *  Drezel sits in a walled alcove) where an NPC standing ON the anchor makes
+ *  gotoNpc's radius-1 approach loop forever ('deviated ... repathing', live
+ *  2026-07-20). walkTo within 2 + talkThrough lets the server auto-walk the
+ *  final step onto him — the same reach the murky-bless useOn already relies on.
+ *  (gotoNpc stays for FAR stops like Roald, which need its staged approach.) */
+async function reachAndTalk(stop: NpcStop, log: (m: string) => void): Promise<boolean> {
+    if (!(await walkTo(stop.anchor, 2, log))) {
+        return false;
+    }
+    return talkThrough(stop.npc, stop.prefer, log);
+}
+
 /**
  * Probe-and-open a stage-gated leaf near `near` (level-aware): walk up, and if a
  * closed leaf (one still offering 'Open') is there, open it and wait for the
@@ -473,10 +487,8 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await tryOpen('Cell door', CELL_DOOR, log))) {
             return false;
         }
-        if (await gotoNpc(DREZEL_CELL, HOPS, log)) {
-            log('priestperil: water — telling Drezel the coffin is done (stage -> 8)');
-            await talkThrough('Drezel', [], log); // 7 -> 8
-        }
+        log('priestperil: water — telling Drezel the coffin is done (stage -> 8)');
+        await reachAndTalk(DREZEL_CELL, log); // 7 -> 8
         return false;
     }
 
@@ -514,10 +526,8 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
     if (!(await tryOpen('Cell door', CELL_DOOR, log))) {
         return false;
     }
-    if (await gotoNpc(DREZEL_CELL, HOPS, log)) {
-        log('priestperil: water — talking Drezel (hint at 6, advances 7 -> 8)');
-        await talkThrough('Drezel', [], log);
-    }
+    log('priestperil: water — talking Drezel (hint at 6, advances 7 -> 8)');
+    await reachAndTalk(DREZEL_CELL, log);
     // Stage >= 8? Both gates open -> essence phase (Gate 1 first — see spine).
     if ((await tryOpen('Gate', GATE1, log)) && (await tryOpen('Gate', GATE2, log))) {
         log('priestperil: water done — both gates open, handing to essence');
@@ -564,8 +574,8 @@ async function essenceLeg(log: (m: string) => void): Promise<boolean> {
         // Final flourish: one more talk with Wolfbane held sets stage 61 —
         // holy-barrier access (drezel.rs2:137-152). decide() returns done on
         // the next loop, so this MUST happen before we report success.
-        if (Inventory.contains('Wolfbane') && (await gotoNpc(DREZEL_MAUS, HOPS, log))) {
-            await talkThrough('Drezel', [], log);
+        if (Inventory.contains('Wolfbane')) {
+            await reachAndTalk(DREZEL_MAUS, log);
         }
         return true;
     }
@@ -583,17 +593,17 @@ async function essenceLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await tryOpen('Gate', GATE2, log))) {
             return false;
         }
-        if (!(await gotoNpc(DREZEL_MAUS, HOPS, log))) {
+        if (!(await walkTo(DREZEL_MAUS.anchor, 2, log))) {
             return false;
         }
         const before = Inventory.count('Rune essence');
         log(`priestperil: essence — handing ${before} to Drezel`);
-        await talkThrough('Drezel', [], log);
+        await talkThrough('Drezel', DREZEL_MAUS.prefer, log);
         await Execution.delayUntil(() => Inventory.count('Rune essence') < before || journalComplete(), 10_000);
         if (journalComplete()) {
             await Execution.delayTicks(2); // let the Wolfbane inv_add land
-            if (Inventory.contains('Wolfbane') && (await gotoNpc(DREZEL_MAUS, HOPS, log))) {
-                await talkThrough('Drezel', [], log); // stage 61
+            if (Inventory.contains('Wolfbane')) {
+                await reachAndTalk(DREZEL_MAUS, log); // stage 61
             }
             return true;
         }
