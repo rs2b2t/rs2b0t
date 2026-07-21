@@ -110,8 +110,15 @@ async function crossHops(here: WorldTile, dest: { z: number }, hops: LadderHop[]
     const near = hops.filter(h => isUnderground(h.stand) === isUnderground(here));
     const hop = near.sort((a, b) => a.stand.distanceTo(here) - b.stand.distanceTo(here))[0];
     if (!hop) {
-        log(`no hop from (${here.x},${here.z}) toward z ${dest.z}`);
-        return null;
+        // No usable hop supplied — clue talk steps pass none, and a quest list
+        // can be one-sided. The baked graph carries stair/dungeon edges of its
+        // own (handleTransport crosses them), so proceed and let the caller's
+        // walkResilient route the boundary; if the graph has no edge either,
+        // that walk fails honestly. Hard-failing here starved graph-reachable
+        // underground anchors (live: Brimstail's cave, the "no hop from ...
+        // toward z 9810" loop).
+        log(`no hop from (${here.x},${here.z}) toward z ${dest.z} — trying the baked graph`);
+        return here;
     }
     if (hop.stand.distanceTo(here) > 2 && !(await Traversal.walkResilient(hop.stand, { radius: 2, attempts: 3, log }))) {
         return null;

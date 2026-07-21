@@ -84,6 +84,20 @@ beforeEach(() => {
     interactOps = [];
 });
 
+describe('empty-hop cross-plane fallback (clue talk anchors)', () => {
+    test('no supplied hop toward an underground anchor falls back to the baked walk', async () => {
+        // Live 2026-07-20 loop: ClueExecutor talk steps pass hops=[] and Brimstail's
+        // anchor is in the gnome cave — crossHops failed "no hop" forever even
+        // though the baked graph carries the Hollowed-rock edge (cost 91).
+        current = new Tile(2387, 3435, 0); // surface tile the live bot looped on
+        walkScript = dest => new Tile(dest.x, dest.z, dest.level); // baked walk succeeds
+        const stop = { npc: 'Brimstail', anchor: new Tile(2390, 9810, 0), leash: 8, prefer: [] };
+        await gotoNpc(stop, [], () => {});
+        // must TRY the anchor via the baked graph, not fail hop-less without walking
+        expect(walkTargets.some(t => t.x === 2390 && t.z === 9810)).toBe(true);
+    });
+});
+
 describe('gotoNpc trapped-landing recovery', () => {
     test('approach-leg failure in the basement climbs back up to re-roll the landing', async () => {
         current = new Tile(3107, 9575, 0); // the live pocket tile
