@@ -28,7 +28,9 @@ type Rs2b0t = {
 };
 
 const electronApp = await electron.launch({
-    args: ['desktop/main.cjs', `--server=${server}`],
+    // main.cjs defaults a bare origin to the WALL (/multibox.html); this smoke
+    // drives one raw client, so ask for /bot.html explicitly (like rendergate).
+    args: ['desktop/main.cjs', `--server=${server.replace(/\/+$/, '')}/bot.html`],
     executablePath: 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 });
 

@@ -10,7 +10,7 @@ import fs from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `ext${Date.now().toString(36).slice(-7)}`;
-const engineDir = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/lostcity-dev/engine`;
+const engineDir = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine`; // same default as deploy-local.sh
 
 const TELE = '::tele 0,50,50,20,20';
 
