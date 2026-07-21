@@ -72,7 +72,8 @@ shape without RockCrab's crab mechanics or ArdyFighter's cake-stall coupling.
    bank food name/withdraw, spade 'Spade', enabled = solveClues toggle.
 7. `BankRun` — validates on `justSolved` flag (set by the SolveClue host's
    setStatus intercept when it reports 'clue solved') OR loot slots >=
-   bankAtLootSlots OR carried food exhausted. Nearest known bank
+   bankAtLootSlots OR carried food exhausted (disarmed once the bank proves foodless,
+   re-armed when food is seen again). Nearest known bank
    (api/BankLocations), deposit everything EXCEPT food + kit
    (spade/sextant/watch/chart) + coins, top food up, walk back to the spot.
 8. `Fight` — nearest NPC named `target` within leash of the anchor,

@@ -91,6 +91,10 @@ export default class AutoFighter extends TaskBot {
     /** Set when a solve completes; BankRun consumes it (the user loop:
      *  clue done -> bank the loot -> back to killing). */
     bankAfterSolve = false;
+    /** The bank had no food last trip — disarms the foodless safety bank so
+     *  an empty bank can't hot-loop bank<->spot (live smoke find); re-arms
+     *  the moment food is seen in the pack again. */
+    bankFoodEmpty = false;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -323,7 +327,11 @@ class BankRun implements Task {
         if (Game.inCombat()) {
             return false;
         }
-        return this.bot.bankAfterSolve || lootSlots() >= BANK_AT || (foodCount() === 0 && FOOD_WITHDRAW > 0);
+        if (foodCount() > 0) {
+            this.bot.bankFoodEmpty = false; // food came from somewhere — re-arm the safety
+        }
+        return this.bot.bankAfterSolve || lootSlots() >= BANK_AT
+            || (foodCount() === 0 && FOOD_WITHDRAW > 0 && !this.bot.bankFoodEmpty);
     }
     async execute(): Promise<void> {
         const here = Game.tile();
@@ -348,12 +356,15 @@ class BankRun implements Task {
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();
             if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
-                this.bot.log(`no '${FOOD}' in the bank — fighting on without food`);
                 break;
             }
             if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) {
                 break;
             }
+        }
+        if (foodCount() === 0 && FOOD_WITHDRAW > 0) {
+            this.bot.bankFoodEmpty = true;
+            this.bot.log(`no '${FOOD}' in the bank — fighting on without food (foodless safety disarmed)`);
         }
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
