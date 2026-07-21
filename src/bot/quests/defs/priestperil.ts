@@ -784,8 +784,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
 export const priestperil: QuestModule = {
     record: QUESTS.find(r => r.id === 'priestperil')!,
     // Two lvl-30 fights (dog 45 HP, monk 25 HP) + aggressive lvl-17/22/30 monks
-    // in the temple lobby — carried food + the AIOQuester eat hook cover it.
-    food: 12,
+    // in the temple lobby — carried food + the AIOQuester eat hook cover it. Kept
+    // modest (8): the fights are light (dog ~5/hit, monks ~8), and every food item
+    // is a pack slot the fresh-account essence phase can't mine into, so a big
+    // ration doubled the mining trips (13 vs ~19 essence/trip; live aqpipfin3).
+    food: 8,
     grind: ['temple guardian', 'monk of zamorak'],
     // Between-quest deposit KEEP list: quest-internal items a mid-quest restart
     // may hold. 'bucket' substring-covers empty/murky/blessed; 'pickaxe' keeps
