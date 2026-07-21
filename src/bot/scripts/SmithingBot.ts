@@ -209,7 +209,7 @@ class BankTrip implements Task {
             }
             const hammerName = hammerBank.name;
             const hOps = hammerBank.ops.filter((o): o is string => o !== null);
-            const oneOp = hOps.find(o => /withdraw[\s-]*1\b/i.test(o)) ?? hOps.find(o => /^withdraw/i.test(o)) ?? 'Withdraw-1';
+            const oneOp = withdrawOp(hOps, '1') ?? withdrawOp(hOps, 'any') ?? 'Withdraw-1';
             await Bank.withdraw(hammerName, oneOp);
             await Execution.delayUntil(() => this.bot.hammerItem() !== null, 3000);
         }
