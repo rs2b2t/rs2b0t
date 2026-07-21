@@ -82,7 +82,11 @@ const TEMPLE_LOBBY = new Tile(3412, 3487, 0);     // ground floor, monk-3 spawns
 const DOG_TILE = new Tile(3405, 9902, 0);         // Temple guardian spawn, m53_154 "0 13 46: 1047"
 const GATE1 = new Tile(3405, 9895, 0);            // pip_underground_door1, opens at stage >= 5
 const GATE2 = new Tile(3431, 9897, 0);            // pip_underground_door2, opens at stage >= 8
-const WELL = new Tile(3423, 9890, 0);             // priestperil_well, monument-room centre (no ops — use-item only)
+// The Well (priestperil_well, 3423,9890, no ops — use-item only) is a blocked
+// CENTREPIECE ringed by priestperil_well_coloumn locs, so walking AT it aims at
+// an unreachable tile. Stand on this free, pathable neighbour (directly south,
+// baked cost 47 from the crypt) and use-item the Bucket across (found within 6).
+const WELL_STAND = new Tile(3423, 9889, 0);
 const CELL_DOOR = new Tile(3415, 3489, 2);        // pip_prisondoor, temple L2
 const CELL_DOOR_STAND = new Tile(3414, 3489, 2);  // outside-the-cell stand beside the door
 const COFFIN = new Tile(3413, 3486, 2);           // priestperil_coffin_noanim, L2
@@ -461,6 +465,7 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
         if (!coffin || !water) {
             return false;
         }
+        log('priestperil: water — pouring blessed water on the coffin (stage -> 7)');
         if (!(await water.useOn(coffin))) {
             return false;
         }
@@ -469,6 +474,7 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         if (await gotoNpc(DREZEL_CELL, HOPS, log)) {
+            log('priestperil: water — telling Drezel the coffin is done (stage -> 8)');
             await talkThrough('Drezel', [], log); // 7 -> 8
         }
         return false;
@@ -491,6 +497,7 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
         if (!drezel || !water) {
             return false;
         }
+        log('priestperil: water — using murky water on Drezel to bless it');
         if (!(await water.useOn(drezel))) {
             return false;
         }
@@ -508,10 +515,12 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     if (await gotoNpc(DREZEL_CELL, HOPS, log)) {
+        log('priestperil: water — talking Drezel (hint at 6, advances 7 -> 8)');
         await talkThrough('Drezel', [], log);
     }
     // Stage >= 8? Both gates open -> essence phase (Gate 1 first — see spine).
     if ((await tryOpen('Gate', GATE1, log)) && (await tryOpen('Gate', GATE2, log))) {
+        log('priestperil: water done — both gates open, handing to essence');
         return essenceLeg(log);
     }
     // Still stage 6 -> we need murky water: fill the Bucket at the Well.
@@ -519,12 +528,14 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await tryOpen('Gate', GATE1, log))) {
             return false;
         }
-        if (!(await walkTo(WELL, 2, log))) {
+        log('priestperil: water — filling the Bucket at the Well');
+        if (!(await walkTo(WELL_STAND, 1, log))) {
             return false;
         }
         const well = Locs.query().name('Well').within(6).nearest();
         const bucket = Inventory.first('Bucket');
         if (!well || !bucket) {
+            log('priestperil: water — no Well/Bucket in reach at the stand');
             return false;
         }
         if (!(await bucket.useOn(well))) {
@@ -576,6 +587,7 @@ async function essenceLeg(log: (m: string) => void): Promise<boolean> {
             return false;
         }
         const before = Inventory.count('Rune essence');
+        log(`priestperil: essence — handing ${before} to Drezel`);
         await talkThrough('Drezel', [], log);
         await Execution.delayUntil(() => Inventory.count('Rune essence') < before || journalComplete(), 10_000);
         if (journalComplete()) {
@@ -593,11 +605,13 @@ async function essenceLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     const want = Math.min(Math.max(freeSlots() - 1, 1), ESSENCE_NEEDED); // keep a slot free for the Wolfbane hand-in
+    log(`priestperil: essence — pack empty, withdrawing ${want} from Varrock East bank`);
     if (await executeStep({ kind: 'withdraw', items: [{ name: 'Rune essence', qty: want }], bank: VARROCK_EAST_BANK }, HOPS, log)) {
         if (Inventory.count('Rune essence') > 0) {
             return false; // loaded — next pass delivers
         }
     }
+    log('priestperil: essence — bank dry, mining the shortfall via Aubury');
     return mineEssence(log);
 }
 
