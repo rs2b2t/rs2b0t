@@ -17,6 +17,8 @@
     {"from":{"x":3019,"z":3449,"level":0},"to":{"x":3019,"z":9849,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"},
     {"from":{"x":3019,"z":9849,"level":0},"to":{"x":3019,"z":3449,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
     {"from":{"x":3160,"z":3441,"level":0},"to":{"x":3160,"z":3439,"level":0},"locName":"Door","action":"Open","kind":"door"},
+    {"from":{"x":2669,"z":3315,"level":0},"to":{"x":2669,"z":3317,"level":0},"locName":"Door","action":"Open","kind":"door"},
+    {"from":{"x":2669,"z":3317,"level":0},"to":{"x":2669,"z":3315,"level":0},"locName":"Door","action":"Open","kind":"door"},
     {"from":{"x":3160,"z":3439,"level":0},"to":{"x":3160,"z":3441,"level":0},"locName":"Door","action":"Open","kind":"door"},
     {"from":{"x":3105,"z":3162,"level":0},"to":{"x":3104,"z":9576,"level":0},"locName":"Ladder","action":"Climb-down","kind":"dungeon"},
     {"from":{"x":3104,"z":9576,"level":0},"to":{"x":3105,"z":3162,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
