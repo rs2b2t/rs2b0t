@@ -485,7 +485,7 @@ async function fightDelrith(log: (m: string) => void): Promise<boolean> {
 /** Poll the dialog for ~a fight's worth of time: answer the incantation p_choice4
  *  with option 4, continue any pages, re-attack Delrith if he restored (wrong answer
  *  or still alive). Returns true once the journal is complete; false to re-enter. */
-async function driveIncantation(log: (m: string) => void): Promise<boolean> {
+async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
     const deadline = performance.now() + 60_000;
     while (performance.now() < deadline) {
         if (Quests.status('Demon Slayer') === 'complete') {

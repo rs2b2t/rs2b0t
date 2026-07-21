@@ -298,7 +298,7 @@ try {
     const badAbandon = by('abandon').filter(r => !r.expected);
     console.log(`\n${by('pass').length} PASS · ${by('slow').length} SLOW (long walk, likely-pass) · ${badAbandon.length} ABANDON · ${badStuck.length} STUCK${(by('abandon').length - badAbandon.length) + (by('stuck').length - badStuck.length) > 0 ? ` · ${(by('abandon').length - badAbandon.length) + (by('stuck').length - badStuck.length)} expected-abandon` : ''}`);
     console.log(`Regression suspects (STUCK, unexpected): ${badStuck.length ? badStuck.map(r => r.id).join(', ') : 'none'}`);
-    console.log(`Details: out/clue-sweep.json`);
+    console.log('Details: out/clue-sweep.json');
 } finally {
     await browser.close();
 }

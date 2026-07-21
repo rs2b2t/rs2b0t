@@ -86,13 +86,13 @@ mock.module('../api/queries/Locs.js', () => ({
                     pollHook();
                     return stallStocked
                         ? {
-                              tile: () => new Tile(2667, 3310, 0),
-                              interact: async (): Promise<boolean> => {
-                                  clicks++;
-                                  onClick();
-                                  return true;
-                              }
-                          }
+                            tile: () => new Tile(2667, 3310, 0),
+                            interact: async (): Promise<boolean> => {
+                                clicks++;
+                                onClick();
+                                return true;
+                            }
+                        }
                         : null;
                 }
             };

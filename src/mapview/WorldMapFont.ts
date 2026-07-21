@@ -194,8 +194,8 @@ export default class WorldMapFont extends Pix2D {
     private drawChar(c: number, x: number, y: number, rgb: number) {
         const info = this.fontCharInfo;
 
-        let dx = x + info[c + 5];
-        let dy = y - info[c + 6];
+        const dx = x + info[c + 5];
+        const dy = y - info[c + 6];
 
         let w = info[c + 3];
         let h = info[c + 4];

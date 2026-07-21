@@ -248,6 +248,7 @@ export class MapView extends GameShell {
             this.freePos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
             this.loadFree(free);
         } catch (_e) {
+            /* optional custom layer missing — fine */
         }
 
         try {
@@ -271,6 +272,7 @@ export class MapView extends GameShell {
             this.mapdot0 = Pix32.depack(worldmap, 'mapdots', 0);
             this.mapdot1 = Pix32.depack(worldmap, 'mapdots', 1);
         } catch (_e) {
+            /* optional custom layer missing — fine */
         }
 
         this.b12 = PixFont.depack(worldmap, 'b12_full', false);
@@ -1055,8 +1057,8 @@ export class MapView extends GameShell {
 
         let visibleMapFunctionCount: number = 0;
         for (let x: number = 0; x < visibleX; x++) {
-            let startX: number = (widthRatio * x) >> 16;
-            let endX: number = (widthRatio * (x + 1)) >> 16;
+            const startX: number = (widthRatio * x) >> 16;
+            const endX: number = (widthRatio * (x + 1)) >> 16;
             const lengthX: number = endX - startX;
             if (lengthX <= 0) {
                 continue;
@@ -1067,8 +1069,8 @@ export class MapView extends GameShell {
             const mapfunctions = this.locMapfunction[x + left];
 
             for (let y: number = 0; y < visibleY; y++) {
-                let startY: number = (heightRatio * y) >> 16;
-                let endY: number = (heightRatio * (y + 1)) >> 16;
+                const startY: number = (heightRatio * y) >> 16;
+                const endY: number = (heightRatio * (y + 1)) >> 16;
                 const lengthY: number = endY - startY;
                 if (lengthY <= 0) {
                     continue;
@@ -1163,7 +1165,7 @@ export class MapView extends GameShell {
             for (let x = 0; x < visibleX; x++) {
                 let startX = widthRatio * x >> 16;
                 let endX = widthRatio * (x + 1) >> 16;
-                let lengthX = endX - startX;
+                const lengthX = endX - startX;
                 if (lengthX <= 0) {
                     continue;
                 }
@@ -1171,11 +1173,11 @@ export class MapView extends GameShell {
                 startX += widthOffset;
                 endX += widthOffset;
 
-                let multi = this.freePos[x + left];
+                const multi = this.freePos[x + left];
                 for (let y = 0; y < visibleY; y++) {
                     let startY = heightRatio * y >> 16;
                     let endY = heightRatio * (y + 1) >> 16;
-                    let lengthY = endY - startY;
+                    const lengthY = endY - startY;
                     if (lengthY <= 0) {
                         continue;
                     }
@@ -1194,7 +1196,7 @@ export class MapView extends GameShell {
             for (let x = 0; x < visibleX; x++) {
                 let startX = widthRatio * x >> 16;
                 let endX = widthRatio * (x + 1) >> 16;
-                let lengthX = endX - startX;
+                const lengthX = endX - startX;
                 if (lengthX <= 0) {
                     continue;
                 }
@@ -1202,11 +1204,11 @@ export class MapView extends GameShell {
                 startX += widthOffset;
                 endX += widthOffset;
 
-                let multi = this.multiPos[x + left];
+                const multi = this.multiPos[x + left];
                 for (let y = 0; y < visibleY; y++) {
                     let startY = heightRatio * y >> 16;
                     let endY = heightRatio * (y + 1) >> 16;
-                    let lengthY = endY - startY;
+                    const lengthY = endY - startY;
                     if (lengthY <= 0) {
                         continue;
                     }
@@ -1881,7 +1883,7 @@ export class MapView extends GameShell {
         // e.preventDefault();
     }
 
-    override mouseUp(_x: number, _y: number, e: MouseEvent) {
+    override mouseUp(_x: number, _y: number, _e: MouseEvent) {
         this.dragging = false;
         canvas.style.cursor = 'grab';
 
@@ -1895,7 +1897,7 @@ export class MapView extends GameShell {
         // e.preventDefault();
     }
 
-    override pointerDown(x: number, y: number, e: PointerEvent) {
+    override pointerDown(x: number, y: number, _e: PointerEvent) {
         this.idleTimer = performance.now();
         this.mouseX = x;
         this.mouseY = y;
@@ -1905,7 +1907,7 @@ export class MapView extends GameShell {
         this.nextMouseClickButton = 1;
     }
 
-    override pointerUp(_x: number, _y: number, e: PointerEvent) {
+    override pointerUp(_x: number, _y: number, _e: PointerEvent) {
         this.mouseX = -1;
         this.mouseY = -1;
         this.mouseButton = 0;
@@ -1927,7 +1929,7 @@ export class MapView extends GameShell {
         }
     }
 
-    override windowMouseUp(e: MouseEvent) {
+    override windowMouseUp(_e: MouseEvent) {
         this.dragging = false;
         canvas.style.cursor = 'grab';
 

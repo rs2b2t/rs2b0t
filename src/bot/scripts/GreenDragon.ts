@@ -173,7 +173,7 @@ async function lootOnce(bot: GreenDragon): Promise<boolean> {
 }
 
 /** Open the magic tab and cast Varrock teleport (com 1164); true once we jump. */
-async function castVarrockTele(bot: GreenDragon): Promise<boolean> {
+async function castVarrockTele(_bot: GreenDragon): Promise<boolean> {
     const before = Game.tile();
     if (!(await Game.openSideTab(MAGIC_TAB))) {
         return false;

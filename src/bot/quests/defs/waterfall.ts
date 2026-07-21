@@ -190,7 +190,7 @@ function totalRunes(): number {
 
 /** Read the held book (idempotent — re-reading is a harmless status line; the
  *  book is kept). Reading needs stage 2 (spoken to Hudon), set by the raft ride. */
-async function readBook(log: (m: string) => void): Promise<boolean> {
+async function readBook(_log: (m: string) => void): Promise<boolean> {
     const book = Inventory.first(BOOK);
     if (!book) {
         return false;
@@ -591,7 +591,7 @@ async function fallsLeg(log: (m: string) => void): Promise<boolean> {
  * single sweep sets all 18 bits; a silently dropped useOn is re-attempted on the
  * caller's next re-entry (the rune is still held).
  */
-async function placeRunes(log: (m: string) => void): Promise<void> {
+async function placeRunes(_log: (m: string) => void): Promise<void> {
     // Iterate the six 'Pillar' locs and let useOn's NATIVE game-walk reach each — the
     // server walks the player adjacent before applying the rune (oplocu). walkResilient
     // pre-positioning was abandoned: in this cramped room it repaths endlessly ("stuck

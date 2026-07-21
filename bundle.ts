@@ -31,7 +31,7 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
     });
 
     if (!build.success) {
-        build.logs.forEach((x: any) => console.log(x));
+        build.logs.forEach(x => console.log(x));
         process.exit(1);
     }
 

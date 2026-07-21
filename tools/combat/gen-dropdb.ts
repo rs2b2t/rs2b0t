@@ -169,5 +169,5 @@ if (process.argv.includes('--check')) {
     console.log(`${OUT} is up to date`);
 } else {
     writeFileSync(OUT, text);
-    console.log(`wrote ${OUT} (${(text.match(/^    "/gm) ?? []).length} monsters)`);
+    console.log(`wrote ${OUT} (${(text.match(/^ {4}"/gm) ?? []).length} monsters)`);
 }

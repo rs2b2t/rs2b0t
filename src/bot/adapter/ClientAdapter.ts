@@ -6,7 +6,6 @@ import LocType from '#/config/LocType.js';
 import ObjType from '#/config/ObjType.js';
 import CollisionMap from '#/dash3d/CollisionMap.js';
 import { ClientProt } from '#/io/ClientProt.js';
-import WordPack from '#/wordfilter/WordPack.js';
 
 import { SELF_TEST, type RawClient } from './RawClient.js';
 

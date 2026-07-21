@@ -30,7 +30,7 @@ const SKULL_TILE = new Tile(3120, 9565, 0);   // basement altar room (quest_prie
 /** Open the coffin when its shut variant (op Open) is present; already-open
  *  (op Close) is left alone. Opening/searching also SPAWNS the ghost
  *  (check_restlessghost_spawn — there is no static ghost spawn). */
-async function ensureCoffinOpen(log: (m: string) => void): Promise<void> {
+async function ensureCoffinOpen(_log: (m: string) => void): Promise<void> {
     const shut = Locs.query().name('Coffin').action('Open').within(6).nearest();
     if (shut) {
         await shut.interact('Open');
