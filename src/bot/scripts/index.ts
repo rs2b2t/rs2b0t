@@ -7,6 +7,7 @@ import { PROCESSING_SETTINGS } from './ProcessingBot.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
+import AutoFighter, { SETTINGS as AUTOFIGHTER_SETTINGS } from './AutoFighter.js';
 import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
 import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
@@ -146,6 +147,15 @@ ScriptRegistry.register({
     tags: ['pickpocket', 'coins'],
     settingsSchema: THIEVING_SETTINGS,
     create: () => new ThievingBot()
+});
+
+ScriptRegistry.register({
+    name: 'AutoFighter',
+    description: 'Anchor-based clue farmer — kills the chosen target at a chosen guard spot, loots ONLY gem-table items + clue scrolls, solves clues on pickup (shared SolveClue), banks after each solve, returns to killing',
+    category: 'Combat',
+    tags: ['combat', 'clues', 'banking', 'afk'],
+    settingsSchema: AUTOFIGHTER_SETTINGS,
+    create: () => new AutoFighter()
 });
 
 ScriptRegistry.register({
