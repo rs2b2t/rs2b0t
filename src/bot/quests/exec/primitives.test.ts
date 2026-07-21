@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { pickPreferred, isUnderground, needsHop } from './primitives.js';
+import { pickPreferred, isUnderground, needsHop, talkOp } from './primitives.js';
 
 describe('pickPreferred', () => {
     // exact option strings from the quest .rs2 sources
@@ -33,5 +33,17 @@ describe('isUnderground / needsHop', () => {
         expect(needsHop({ z: 9576 }, { z: 3402 })).toBe(true);
         expect(needsHop({ z: 3218 }, { z: 3402 })).toBe(false);
         expect(needsHop({ z: 9571 }, { z: 9576 })).toBe(false);
+    });
+});
+
+describe('talkOp', () => {
+    test("resolves the standard 'Talk-to'", () => {
+        expect(talkOp(['Talk-to', 'Trade'])).toBe('Talk-to');
+    });
+    test("resolves a bare 'Talk' (Fycie — the ICY FE abandon)", () => {
+        expect(talkOp(['Talk'])).toBe('Talk');
+    });
+    test('null when the NPC has no talk-style op', () => {
+        expect(talkOp(['Attack', 'Pickpocket'])).toBeNull();
     });
 });

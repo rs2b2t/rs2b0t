@@ -29,6 +29,14 @@ export function pickPreferred(options: string[], prefer: string[]): string | nul
     return null;
 }
 
+/** First "Talk"-style op on an NPC — 'Talk-to' everywhere, but a few quest
+ *  NPCs carry a bare 'Talk' (live: Fycie stood ON her spawn invisible to the
+ *  exact 'Talk-to' filter and the ICY FE anagram abandoned). walkOpening's
+ *  openOp /^open/i idiom applied to talking. Pure. */
+export function talkOp(actions: string[]): string | null {
+    return actions.find(a => /^talk/i.test(a)) ?? null;
+}
+
 /** Underground mapsquares are the surface z + 6400 (wizard basement 3162 →
  *  9562-region). Surface z tops out ~4100, so 5000 splits cleanly. Pure. */
 export function isUnderground(t: { z: number }): boolean {
@@ -323,12 +331,12 @@ export async function driveDialog(prefer: string[], log: (m: string) => void): P
  */
 export async function talkThrough(npcName: string, prefer: string[], log: (m: string) => void): Promise<boolean> {
     if (!ChatDialog.isOpen()) {
-        const npc = Npcs.query().name(npcName).action('Talk-to').nearest();
+        const npc = Npcs.query().name(npcName).where(n => talkOp(n.actions()) !== null).nearest();
         if (!npc) {
             log(`no '${npcName}' nearby to talk to`);
             return false;
         }
-        if (!(await npc.interact('Talk-to'))) {
+        if (!(await npc.interact(talkOp(npc.actions())!))) {
             return false;
         }
         if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 8000))) {

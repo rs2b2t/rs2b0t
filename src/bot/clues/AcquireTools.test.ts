@@ -95,7 +95,7 @@ mock.module('#/bot/api/queries/Npcs.js', () => ({
                 nearest: () => {
                     const s = npcByName[name];
                     return s
-                        ? { name, tile: () => new Tile(s.x, s.z, 0), distance: () => new Tile(s.x, s.z, 0).distanceTo(playerTile), interact: async () => true }
+                        ? { name, tile: () => new Tile(s.x, s.z, 0), distance: () => new Tile(s.x, s.z, 0).distanceTo(playerTile), actions: () => ['Talk-to'], interact: async () => true }
                         : null;
                 }
             };

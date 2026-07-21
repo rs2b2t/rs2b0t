@@ -37,12 +37,17 @@ mock.module('./queries/Locs.js', () => ({
     }
 }));
 mock.module('./queries/Npcs.js', () => {
-    const npcHandle = (): unknown => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, interact: async () => { npcInteractCount++; return sceneNpc!.interactResult; } } : null);
-    // name() now offers BOTH .nearest() (the adjacency probe) and .action().nearest() (the Talk-to lookup)
+    const npcHandle = (): unknown => (sceneNpc ? { name: sceneNpc.name, tile: () => sceneNpc!.tile, actions: () => ['Talk-to'], interact: async () => { npcInteractCount++; return sceneNpc!.interactResult; } } : null);
+    // name() offers .nearest() (the adjacency probe), .action().nearest(), and the
+    // talkOp-based .where(pred).nearest() lookup (predicate run against the handle).
     return {
         Npcs: {
             query: () => ({
-                name: () => ({ nearest: npcHandle, action: () => ({ nearest: npcHandle }) })
+                name: () => ({
+                    nearest: npcHandle,
+                    action: () => ({ nearest: npcHandle }),
+                    where: (pred: (n: unknown) => boolean) => ({ nearest: () => { const h = npcHandle(); return h && pred(h) ? h : null; } })
+                })
             })
         }
     };

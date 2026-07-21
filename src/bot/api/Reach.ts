@@ -20,6 +20,7 @@ import { Npcs } from './queries/Npcs.js';
 import { Reachability } from './Reachability.js';
 import { Traversal } from './Traversal.js';
 import { WalkExecutor } from '../nav/WalkExecutor.js';
+import { talkOp } from '../quests/exec/primitives.js';
 
 export type ReachStatus = 'done' | 'retry' | 'unreachable';
 
@@ -118,7 +119,7 @@ export const Reach = {
             }
             return 'retry';
         }
-        const npc = Npcs.query().name(opts.name).action('Talk-to').nearest();
+        const npc = Npcs.query().name(opts.name).where(n => talkOp(n.actions()) !== null).nearest();
         if (!npc) {
             return closeIn(opts.near, 3, log);
         }
@@ -136,13 +137,13 @@ export const Reach = {
                 log(`reach: '${opts.name}' unreachable across the door`);
                 return 'unreachable';
             }
-            const requery = Npcs.query().name(opts.name).action('Talk-to').nearest();
+            const requery = Npcs.query().name(opts.name).where(n => talkOp(n.actions()) !== null).nearest();
             if (!requery) {
                 return 'retry';
             }
             target = requery;
         }
-        if (!(await target.interact('Talk-to'))) {
+        if (!(await target.interact(talkOp(target.actions()) ?? 'Talk-to'))) {
             return 'retry';
         }
         if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), opts.openMs ?? 15_000)) {
