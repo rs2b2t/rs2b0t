@@ -26,6 +26,23 @@ const BANK_OP = 'Use-quickly';
 
 /** Walk within `radius` of anchor unless already there (walkResilient — the
  *  clue-solver leg pattern, SolveClue.bankFirst). */
+/** Shared bank-leg prologue (SolveClue.bankFirst pattern): resolve the target
+ *  bank — explicit `override` where the geometric nearest is gated/unreachable,
+ *  else nearest known — walk there resiliently, open the booth. False fails
+ *  the caller's step, which re-enters next loop. */
+async function openBankLeg(noBankMsg: string, override: Tile | undefined, log: (m: string) => void): Promise<boolean> {
+    const here = Game.tile();
+    const bankTile = override ?? (here ? nearestBank(here)?.tile : undefined);
+    if (!bankTile) {
+        log(noBankMsg);
+        return false;
+    }
+    if (!(await Traversal.walkResilient(bankTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
+        return false;
+    }
+    return Bank.openNearest(BANK_NAME, BANK_OP, log);
+}
+
 async function ensureAt(anchor: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here && anchor.distanceTo(here) <= radius) {
@@ -142,18 +159,7 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
         case 'equip':
             return Equipment.equip(step.item);
         case 'withdraw': {
-            // SolveClue.bankFirst pattern: nearest known bank -> openNearest -> withdrawX.
-            // `step.bank` overrides the geometric nearest where it is gated/unreachable.
-            const here = Game.tile();
-            const bankTile = step.bank ?? (here ? nearestBank(here)?.tile : undefined);
-            if (!bankTile) {
-                log('withdraw: no known bank');
-                return false;
-            }
-            if (!(await Traversal.walkResilient(bankTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
-                return false;
-            }
-            if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
+            if (!(await openBankLeg('withdraw: no known bank', step.bank, log))) {
                 return false;
             }
             let ok = true;
@@ -171,19 +177,10 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return ok;
         }
         case 'deposit': {
-            // Same bank leg as withdraw; deposit everything whose LOWERCASED name
-            // matches none of the keep substrings (SolveClue.bankFirst's keep-set
-            // idiom). Worn equipment is not in the backpack, so it is untouched.
-            const here = Game.tile();
-            const bankTile = step.bank ?? (here ? nearestBank(here)?.tile : undefined);
-            if (!bankTile) {
-                log('deposit: no known bank');
-                return false;
-            }
-            if (!(await Traversal.walkResilient(bankTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
-                return false;
-            }
-            if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
+            // Deposit everything whose LOWERCASED name matches none of the keep
+            // substrings (SolveClue.bankFirst's keep-set idiom). Worn equipment
+            // is not in the backpack, so it is untouched.
+            if (!(await openBankLeg('deposit: no known bank', step.bank, log))) {
                 return false;
             }
             const kept = (name: string): boolean => {
@@ -201,16 +198,7 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             // case; estGp deliberately overshoots so price climb mid-purchase
             // doesn't strand us — ShopRunner's est×1.25 lesson).
             if (Inventory.count('Coins') < step.estGp) {
-                const here = Game.tile();
-                const bank = here ? nearestBank(here) : null;
-                if (!bank) {
-                    log('buy: no known bank for coins');
-                    return false;
-                }
-                if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log }))) {
-                    return false;
-                }
-                if (!(await Bank.openNearest(BANK_NAME, BANK_OP, log))) {
+                if (!(await openBankLeg('buy: no known bank for coins', undefined, log))) {
                     return false;
                 }
                 await Bank.withdrawX('Coins', step.estGp);
