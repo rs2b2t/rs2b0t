@@ -1,3 +1,8 @@
+/**
+ * Shared banking helpers: nearest-bank deposit runs, the common junk
+ * deposit matcher, and the PERIODIC_BANK settings block the combat bots
+ * splice into their schemas.
+ */
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { nearestBank } from './BankLocations.js';

@@ -938,9 +938,8 @@ export const actions = {
     },
 
     /**
-     * Click a dialog option / interface button by component id (IF_BUTTON).
-     * Dispatched directly in both input modes — chat-option clicks are rare
-     * event-recovery UI, not labeled grinding telemetry.
+     * Click a dialog option / interface button by component id (IF_BUTTON) —
+     * dispatched through the client's own doAction like every direct action.
      */
     ifButton(comId: number): boolean {
         return actions.menuAction(MiniMenuAction.IF_BUTTON, 0, 0, comId);
@@ -1010,7 +1009,7 @@ export const actions = {
      * for real server-driven modals -- closing a shop without it leaves the
      * server still transmitting stock updates to a client that thinks it
      * moved on. Returns false if no main modal is open or it has no close
-     * button. Dispatched directly in both input modes, like `ifButton()`.
+     * button.
      */
     closeModal(): boolean {
         if (!raw || raw.mainModalId === -1) {

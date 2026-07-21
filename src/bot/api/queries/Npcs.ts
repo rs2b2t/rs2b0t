@@ -1,3 +1,4 @@
+/** Query facade over npc snapshots (builder: where/name/action/within/nearest). */
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Npc } from '../entities/index.js';
 import EntityQuery from './Query.js';

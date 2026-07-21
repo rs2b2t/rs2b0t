@@ -1,5 +1,6 @@
 /**
- * ClueExecutor — the reactive easy-clue solve loop.
+ * ClueExecutor — the reactive clue solve loop (easy + medium trails:
+ * sextant digs, kill-for-key riddles, challenge talks).
  *
  * Drives a held clue trail to completion by RE-IDENTIFYING the next step from
  * the pack every iteration (identifyStep is pure) and dispatching the
@@ -38,8 +39,9 @@
  *
  * Progress is verified by watching the HELD id set change — a step consumed its
  * own object (the tracked id leaves the pack) or the inventory signature moved
- * at all. No unit tests: behaviour is proven by the Task 7 live smoke; the
- * decision logic it leans on (identifyStep) is already tested.
+ * at all. Proven by the live clue sweep + smokes; unit coverage in
+ * test/clues/ClueExecutor.test.ts, and the decision logic it leans on
+ * (identifyStep) is tested on its own.
  */
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/Execution.js';

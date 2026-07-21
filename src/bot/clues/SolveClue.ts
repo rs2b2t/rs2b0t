@@ -1,5 +1,5 @@
 /**
- * The bank-first easy-clue solve flow — one Task shared by RockCrab (a clue
+ * The bank-first clue solve flow (easy + medium) — one Task shared by RockCrab (a clue
  * preempts crabbing) and the standalone ClueSolver bot. Banks at the NEAREST
  * known bank (api/BankLocations) rather than any hardcoded tile, dumps
  * everything except the clue/casket + food + spade, ensures a spade for dig
@@ -30,13 +30,13 @@ const BANK_OP = 'Use-quickly';
 // pay — 1000 covers a multi-ship trail with headroom (user call 2026-07-20).
 const CLUE_COINS = 1_000;
 
-/** The held easy-clue SCROLL or reward CASKET obj id (what SolveClue works on), or null. */
+/** The held clue SCROLL or reward CASKET obj id (what SolveClue works on), or null. */
 export function heldClueLikeId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
     return it ? it.id : null;
 }
 
-/** The held easy-clue SCROLL id (not a reward casket) — bank-first only preps a scroll trail. */
+/** The held clue SCROLL id (not a reward casket) — bank-first only preps a scroll trail. */
 function heldClueScrollId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined);
     return it ? it.id : null;

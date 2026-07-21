@@ -43,7 +43,8 @@ export const Game = {
         return reader.inCombat();
     },
 
-    /** Local player is playing a primary animation (mining/chopping/fishing/…). */
+    /** Local player is playing ANY primary animation — skilling loops
+     *  (mining/chopping/fishing/…) keep this set while they work. */
     animating(): boolean {
         return reader.selfAnim() !== -1;
     },

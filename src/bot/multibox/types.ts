@@ -1,3 +1,4 @@
+/** Shared types for the MultiBox wall (roster accounts + per-slot status). */
 import type { RenderMode } from '../runtime/RenderGate.js';
 
 export type { RenderMode };

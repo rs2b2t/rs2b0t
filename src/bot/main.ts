@@ -1,3 +1,8 @@
+/**
+ * Standalone bot-client entry point (bot.html): boots BotClient, attaches the
+ * adapter, exposes the __rs2b0t script ABI + window.rs2b0t debug handle, and
+ * mounts the panel/overlay UI.
+ */
 import { actions, reader } from './adapter/ClientAdapter.js';
 import BotClient from './BotClient.js';
 import { BotHost } from './BotHost.js';

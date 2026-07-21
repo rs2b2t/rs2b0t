@@ -1,3 +1,8 @@
+/**
+ * The walking facade scripts use: walkTo/walkResilient wrap the nav
+ * Navigator (A* over the baked collision pack + live scene) with the
+ * retry/escalation ladder; honest false on unreachable.
+ */
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { Navigator } from '../nav/Navigator.js';

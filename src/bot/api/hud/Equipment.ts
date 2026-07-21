@@ -1,3 +1,8 @@
+/**
+ * Worn-equipment reader + equip/unequip. Equipment slots are a component
+ * container (INV_BUTTON ops), distinct from backpack held-ops — see
+ * reader.equipment() for why the two aren't interchangeable.
+ */
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';

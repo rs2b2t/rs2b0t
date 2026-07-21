@@ -10,9 +10,8 @@ const HELD_OPS = [MiniMenuAction.OP_HELD1, MiniMenuAction.OP_HELD2, MiniMenuActi
 const INV_BUTTONS = [MiniMenuAction.INV_BUTTON1, MiniMenuAction.INV_BUTTON2, MiniMenuAction.INV_BUTTON3, MiniMenuAction.INV_BUTTON4, MiniMenuAction.INV_BUTTON5];
 
 /**
- * DIRECT mode: byte-identical OP packets via the client's own doAction, no
- * mouse/click telemetry. The deliberate "machine" class for the labeled
- * dataset, and the future headless path.
+ * The direct input driver: byte-identical OP packets via the client's own
+ * doAction, no mouse/click telemetry (ADR-0003 — rs2b0t is direct-only).
  */
 export default class DirectInputDriver implements InputDriver {
     readonly mode = 'direct';

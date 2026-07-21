@@ -1,3 +1,8 @@
+/**
+ * Chat-dialog reader/driver: detect open dialogs, press continue, pick
+ * options by text, and drive make-X skill menus. All waits verify against
+ * the dialog state, never timing alone.
+ */
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
@@ -169,7 +174,6 @@ export const ChatDialog = {
     /** Press continue and wait for the dialog page to change. */
     async continue(): Promise<boolean> {
         const before = reader.modals().chat;
-        // direct resolves synchronously; synthetic spans the mouse gesture
         if (!(await ActionRouter.driver.continueDialog())) {
             return false;
         }

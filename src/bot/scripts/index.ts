@@ -1,3 +1,9 @@
+/**
+ * The script registry barrel: importing this module registers every built-in
+ * bot with ScriptRegistry (name string -> create()), grouped by category
+ * section below. The UI library, settings keys (`rs2b0t:set:<Name>:<key>`)
+ * and smokes all reference scripts by these registered names.
+ */
 import { AGILITY_SETTINGS } from './AgilityBot.js';
 import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';

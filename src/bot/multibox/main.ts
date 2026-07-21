@@ -1,3 +1,8 @@
+/**
+ * MultiBox wall entry point (multibox.html): boots N embedded bot.html slots,
+ * hands each a roster account, and renders the tab strip (window.multibox is
+ * the operator console).
+ */
 import { AccountRoster } from './AccountRoster.js';
 import { DomSlotOps } from './DomSlotOps.js';
 import { MultiBoxController } from './MultiBoxController.js';

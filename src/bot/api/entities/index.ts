@@ -12,10 +12,9 @@ import Tile from '../Tile.js';
 export interface Interactable {
     actions(): string[];
     /**
-     * Dispatch an action by name. DIRECT resolves synchronously (boolean);
-     * SYNTHETIC returns a promise for the whole mouse gesture. Scripts that
-     * ignore the promise still work — outcome checks (delayUntil on game
-     * state) are the source of truth either way.
+     * Dispatch an action by name. The direct driver resolves synchronously;
+     * the promise form stays in the signature for ABI compat — always await.
+     * Outcome checks (delayUntil on game state) are the source of truth.
      */
     interact(action: string): boolean | Promise<boolean>;
 }

@@ -13,9 +13,9 @@ import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
 /**
- * Live state panel + script controls. Plain DOM, no framework. The only
- * DOM-dependent code outside bot.html/main.ts, by design — keeps a headless
- * build viable later.
+ * Live state panel + script controls. Plain DOM, no framework — DOM use
+ * stays inside src/bot/ui/ + the multibox wall, keeping a headless build
+ * viable later.
  */
 export default class BotPanel {
     private host: BotHostImpl;

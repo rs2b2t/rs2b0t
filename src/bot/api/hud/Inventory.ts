@@ -1,3 +1,8 @@
+/**
+ * Backpack reader: InvItem wraps a slot snapshot (held ops -> OPHELD*,
+ * use-on -> item-on-item/loc/npc); Inventory is the query surface
+ * (items/count/first/isFull/used).
+ */
 import type { InvItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
