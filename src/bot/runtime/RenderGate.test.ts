@@ -5,7 +5,6 @@ describe('RenderGate', () => {
     beforeEach(() => {
         RenderGate.setMode('background');
         RenderGate.backgroundIntervalMs = 300;
-        while (RenderGate.boosted) RenderGate.endBoost();
         RenderGate.markDrawn(0);
         RenderGate.drawn = 0;
     });
@@ -27,23 +26,6 @@ describe('RenderGate', () => {
         RenderGate.markDrawn(1000);
         expect(RenderGate.shouldDraw(1100)).toBe(false); // 100ms < 300ms
         expect(RenderGate.shouldDraw(1300)).toBe(true);  // 300ms elapsed
-    });
-
-    test('boost overrides hidden', () => {
-        RenderGate.setMode('hidden');
-        RenderGate.beginBoost();
-        expect(RenderGate.shouldDraw(1)).toBe(true);
-        RenderGate.endBoost();
-        expect(RenderGate.shouldDraw(1)).toBe(false);
-    });
-
-    test('boost is ref-counted', () => {
-        RenderGate.beginBoost();
-        RenderGate.beginBoost();
-        RenderGate.endBoost();
-        expect(RenderGate.boosted).toBe(true);
-        RenderGate.endBoost();
-        expect(RenderGate.boosted).toBe(false);
     });
 
     test('markDrawn advances the counter', () => {

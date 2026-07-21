@@ -212,8 +212,7 @@ class ScriptRunnerImpl {
         // swallowing canvas input after stop
         paintState.reset();
 
-        // cancel in-flight synthetic gestures (releases held buttons/keys)
-        // and restore the default input mode
+        // input-driver teardown hook (no-op for direct input)
         ActionRouter.endRun();
 
         this.bot?.disposeSubscriptions();

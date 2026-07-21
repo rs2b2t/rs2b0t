@@ -72,12 +72,6 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
     pitLadderName: { type: 'string', default: '', label: 'Pit ladder loc name', help: 'failing the ropeswing/log balance drops you in the pit below; blank = climb the nearest loc with a Climb/ladder op, or name it (e.g. Ladder)' },
     pitLadderOp: { type: 'string', default: 'Climb-up', label: 'Pit ladder op' },
     bankTile: { type: 'tile', default: EDGEVILLE, label: 'Bank tile (x,z)', help: 'nearest bank for the food-only restock (default Edgeville)' },
-    menuSelect: {
-        type: 'boolean',
-        default: true,
-        label: 'Right-click + menu select',
-        help: 'interact via the right-click menu — steadier on thin course models (the ropeswing and log balance)'
-    }
 };
 
 // Active run config — module state is safe because exactly one script runs at
@@ -96,7 +90,6 @@ let RIDGE_OP = 'Open';
 let PIT_LADDER_NAME = '';
 let PIT_LADDER_OP = 'Climb-up';
 let BANK_TILE: WorldTile = EDGEVILLE;
-let VIA_MENU = true;
 
 /** Split an obstacle CSV into trimmed, lowercased, non-empty step names. */
 export function parseObstacles(csv: string): string[] {
@@ -216,7 +209,6 @@ export default class WildyAgility extends TaskBot {
         PIT_LADDER_NAME = this.settings.str('pitLadderName', '');
         PIT_LADDER_OP = this.settings.str('pitLadderOp', 'Climb-up');
         BANK_TILE = this.settings.tile('bankTile', EDGEVILLE);
-        VIA_MENU = this.settings.bool('menuSelect', true);
         this.course = parseObstacles(this.settings.str('obstacles', DEFAULT_OBSTACLES));
 
         // The ridge (loc_2309) refuses below Agility 52, and the op is a no-op
@@ -376,9 +368,6 @@ export default class WildyAgility extends TaskBot {
     searchRadius(): number {
         return SEARCH_RADIUS;
     }
-    menuSelect(): boolean {
-        return VIA_MENU;
-    }
     currentName(): string {
         return this.course[this.step];
     }
@@ -492,7 +481,7 @@ class PitEscape implements Task {
 
         this.bot.setStatus(`climbing out of the pit (${op} ${ladder.name})`);
         this.bot.log(`fell into the pit — ${op} ${ladder.name} back up to the course`);
-        if (!(await ladder.interact(op, this.bot.menuSelect()))) {
+        if (!(await ladder.interact(op))) {
             await Execution.delayTicks(2);
             return;
         }
@@ -566,7 +555,7 @@ class EnterCourse implements Task {
 
         this.bot.setStatus(`crossing the ridge (${RIDGE_OP} ${ridge.name})`);
         const before = Skills.xp('agility');
-        const clicked = await ridge.interact(RIDGE_OP, this.bot.menuSelect());
+        const clicked = await ridge.interact(RIDGE_OP);
         if (!clicked) {
             await Execution.delayTicks(2);
             return;
@@ -645,7 +634,7 @@ class RunLap implements Task {
         const before = Skills.xp('agility');
         const hpBefore = Skills.effective('hitpoints');
         this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
-        const clicked = await obstacle.interact(op, this.bot.menuSelect());
+        const clicked = await obstacle.interact(op);
 
         // Resolve the attempt fast: success is the agility xp every obstacle
         // awards on completion; a FAILURE never awards xp but always deals damage

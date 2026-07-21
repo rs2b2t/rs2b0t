@@ -27,13 +27,7 @@ export const AGILITY_SETTINGS: SettingsSchema = {
         label: 'Obstacles (lap order)',
         help: 'comma-separated obstacle loc names in lap order, repeats allowed; each step uses the nearest loc with that name and advances when agility xp is awarded'
     },
-    searchRadius: { type: 'number', default: 20, min: 4, max: 64, label: 'Obstacle search radius (tiles)' },
-    menuSelect: {
-        type: 'boolean',
-        default: true,
-        label: 'Right-click + menu select',
-        help: 'interact via the right-click menu instead of a single left click — steadier on thin course models (ropes, logs)'
-    }
+    searchRadius: { type: 'number', default: 20, min: 4, max: 64, label: 'Obstacle search radius (tiles)' }
 };
 
 /**
@@ -55,7 +49,6 @@ export default class AgilityBot extends TaskBot {
     private course: string[] = [];
     private step = 0;
     private radius = 20;
-    private viaMenu = true;
     private laps = 0;
     private obstaclesCleared = 0;
     private status = 'starting';
@@ -71,7 +64,6 @@ export default class AgilityBot extends TaskBot {
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
         this.radius = this.settings.num('searchRadius', 20);
-        this.viaMenu = this.settings.bool('menuSelect', true);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('agility');
         this.log(`running agility course: [${this.course.join(' -> ')}] within ${this.radius} tiles`);
@@ -110,9 +102,6 @@ export default class AgilityBot extends TaskBot {
     }
     searchRadius(): number {
         return this.radius;
-    }
-    menuSelect(): boolean {
-        return this.viaMenu;
     }
     currentName(): string {
         return this.course[this.step];
@@ -194,7 +183,7 @@ class DoObstacle implements Task {
 
         const before = Skills.xp('agility');
         this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
-        const clicked = await obstacle.interact(op, this.bot.menuSelect());
+        const clicked = await obstacle.interact(op);
 
         // every course obstacle awards agility xp when the traversal script
         // finishes — that's the completion signal. Generous timeout: the pipe

@@ -20,7 +20,7 @@ interface SupervisorIteration {
  * ScriptRunner.launchIteration before EVERY loop() launch. When a random
  * event is live, the event handler runs AS the iteration — the script is
  * visibly paused (ctx.activeEvent + log lines) and receives no loop() calls
- * until the guard reports clear. Task 12 adds the progress watchdog here.
+ * until the guard reports clear. The progress watchdog lives here too.
  */
 class SupervisorImpl {
     private lastProgressAt = performance.now();

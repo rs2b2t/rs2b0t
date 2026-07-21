@@ -40,7 +40,7 @@ const HOP_ARRIVE_RADIUS = 4; // near enough for gotoNpc to finish the approach
 const CHAIN_DEADLINE_MS = 480_000; // whole-chain wall-clock cap -> abandon, don't hang
 
 /** Which of the trio are held right now. */
-export function heldTrio(): HeldTrio {
+function heldTrio(): HeldTrio {
     return {
         sextant: Inventory.first('Sextant') !== null,
         watch: Inventory.first('Watch') !== null,

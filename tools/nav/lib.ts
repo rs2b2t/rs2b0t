@@ -84,7 +84,7 @@ export class Reader {
 // Needed only to pull loc.dat out of the client config archive; per-file
 // streams are headerless bzip2 (decompressed with the client's own bunzip2).
 
-export class JagArchive {
+class JagArchive {
     private readonly data: Uint8Array;
     private readonly compressWhole: boolean;
     private readonly fileHash: number[] = [];
@@ -276,13 +276,13 @@ export function loadLocTypes(engineDir: string): { configs: LocDef[]; names: Map
 
 export const OPEN = 0x0;
 export const BLOCK_MAP_SQUARE = 0x1;
-export const LINK_BELOW = 0x2;
+const LINK_BELOW = 0x2;
 export const REMOVE_ROOFS = 0x4;
 
 export const LEVELS = 4;
 export const MAP_X = 64;
 export const MAP_Z = 64;
-export const MAPSQUARE = MAP_X * LEVELS * MAP_Z;
+const MAPSQUARE = MAP_X * LEVELS * MAP_Z;
 
 // ZoneMap.zoneIndex (src/engine/zone/ZoneMap.ts)
 export function zoneIndex(x: number, z: number, level: number): number {
@@ -293,7 +293,7 @@ export function packCoord(x: number, z: number, level: number): number {
     return (z & 0x3f) | ((x & 0x3f) << 6) | ((level & 0x3) << 12);
 }
 
-export function unpackCoord(packed: number): { x: number; z: number; level: number } {
+function unpackCoord(packed: number): { x: number; z: number; level: number } {
     const z: number = packed & 0x3f;
     const x: number = (packed >> 6) & 0x3f;
     const level: number = (packed >> 12) & 0x3;

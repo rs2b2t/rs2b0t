@@ -33,7 +33,8 @@ class GameMessagesImpl {
         return this.lastSeq;
     }
 
-    /** Messages recorded strictly after `mark`, oldest first. */
+    /** Messages recorded strictly after `mark`, oldest first (diagnostic/test
+     *  accessor — production paths watch via sawSince). */
     since(mark: number): GameMessage[] {
         return this.ring.filter(m => m.seq > mark);
     }

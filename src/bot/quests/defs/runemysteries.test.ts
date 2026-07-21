@@ -26,7 +26,7 @@ describe('runemysteries decide', () => {
         expect(npcOf(decide(snap('inProgress', ['research notes'])))).toBe('Aubury');
     });
     test('inProgress empty-handed rotates the RECOVER probe Aubury -> Sedridor -> Duke via noProgress', () => {
-        // Same probe order as the old bot's recoverOrder (RuneMysteries.ts:134-136);
+        // Same probe order as the retired standalone bot's recoverOrder;
         // rotation now comes from the engine watchdog count instead of module state.
         expect(npcOf(decide(snap('inProgress', [], 0)))).toBe('Aubury');
         expect(npcOf(decide(snap('inProgress', [], 1)))).toBe('Sedridor');

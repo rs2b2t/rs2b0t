@@ -20,7 +20,7 @@ import { WelcomeScreen } from './tutorial/WelcomeScreen.js';
  * is server-only (`scope=perm`, no `transmit=yes`), so the client's local varp
  * mirror never receives it and `reader.varp(281)` can't see it advance
  * (confirmed Task 3). Rationale + the rejected "patch content to transmit it"
- * alternative: ADR-0007 (`docs/adr/0007-state-driven-tutorial-progress.md`).
+ * alternative: ADR-0007 (state-driven tutorial progress).
  *
  * Each stage is a `StageTask` (`tutorial/StageTask.ts`) gated on what's on
  * screen. As a `TaskBot`, TutorialBot runs the first stage whose `validate()`

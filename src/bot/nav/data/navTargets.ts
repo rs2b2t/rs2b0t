@@ -50,7 +50,7 @@ export const NAV_TARGETS: NavTarget[] = [
     // ClueSolver: the 16 upstairs (L1/L2) easy-clue answers. Each is reachable
     // ONLY via a baked stair/ladder edge (src/bot/nav/data/stairEdges.json, wired
     // through PathFinder.addEdges' third param) — this block is the acceptance
-    // gate for the upstairs-nav fix (docs/superpowers/plans/2026-07-14-clue-solver.md).
+    // gate for the upstairs-nav fix (clue-solver plan, in git history).
     // Tiles are the walkable STAND next to each clue object (the object tile
     // itself — chest/drawers/table — is non-walkable), ≤1 tile off the pinned
     // survey answer, on the answer's level; picked by verified connectivity.

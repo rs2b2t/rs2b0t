@@ -14,8 +14,8 @@ import type { BankInventorySnapshot, PlayerState, QuestEligibility } from './typ
 /**
  * Reads live state (skills, quest journal, quest points, bank+inventory) and
  * reports DONE/READY/BLOCKED for all 63 quests on the overlay + log. The
- * decision half of the quest system — no execution. Later becomes the executor
- * orchestrator (hand each READY quest to its solver).
+ * decision half of the quest system — no execution; running quests is
+ * QuestEngine's job (driven by AIOQuester).
  */
 export default class QuestDashboard extends LoopingBot {
     override loopDelay = 5000;

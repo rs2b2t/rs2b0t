@@ -9,7 +9,7 @@
  *   p.title('RockCrab');
  *   const tab = p.tabs('main', ['Overview', 'Loot']);
  *   if (tab === 'Overview') { p.row('Kills: 4', 'XP/hr: 31k'); p.bar('HP', 0.82); }
- *   if (p.button('pause', 'Pause')) this.pause();
+ *   if (p.buttons([{ id: 'pause', label: 'Pause' }]) === 'pause') this.pause();
  *   p.end();
  *
  * Widget ids are stable strings — the cross-frame state (active tab, queued
@@ -174,19 +174,6 @@ export class PaintFrame {
         this.ctx.fillStyle = FG_DIM;
         this.ctx.fillText(`${Math.round(f * 100)}%`, barX + barW + 6, this.cursorY + LINE / 2 + 1);
         this.cursorY += LINE;
-    }
-
-    /** Push-button; true exactly on the frame after it was clicked. */
-    button(id: string, label: string): boolean {
-        if (this.collapsed) {
-            return false;
-        }
-        const w = this.ctx.measureText(label).width + 18;
-        const r = { x: this.panel.x + PAD, y: this.cursorY + 2, w, h: BUTTON_H };
-        this.drawButton(r, label);
-        this.regions.push({ id: `btn:${id}`, ...r, kind: 'widget' });
-        this.cursorY += BUTTON_H + 4;
-        return paintState.consumeClick(`btn:${id}`);
     }
 
     /** A row of buttons; returns the id of the one clicked, or null. */

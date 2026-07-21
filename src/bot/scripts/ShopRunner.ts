@@ -1,6 +1,6 @@
 /**
- * ShopRunner — world shop-run supply loop (spec:
- * docs/superpowers/specs/2026-07-13-shop-runner-design.md). Cycles shop
+ * ShopRunner — world shop-run supply loop (spec in git history:
+ * 2026-07-13-shop-runner-design). Cycles shop
  * clusters buying feathers/runes/arrows, banking between clusters with
  * capped withdrawals; a pure Planner (decide()) picks every next action, so
  * the bot recovers from any position by re-planning.

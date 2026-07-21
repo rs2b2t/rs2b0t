@@ -50,7 +50,7 @@ const MINE_OP = 'Mine';
 const PORTAL_LOC = 'Portal';
 const PORTAL_OP = 'Use';
 // Interact with Aubury from up to this far — the OPNPC server-walks the last
-// step onto him (RuneMysteries uses the same leash to reach him).
+// step onto him (the runemysteries quest def uses the same leash).
 const AUBURY_LEASH = 8;
 // One Mine click auto-repeats server-side until the pack is full; re-click
 // only if the essence count stalls this long (a dialog ate the action).
@@ -62,7 +62,7 @@ const MAX_TELEPORT_FAILS = 3;
 const MAX_BANK_FAILS = 6;
 // The journal entry's EXACT name (content quest.enum val 13) — Quests.status()
 // matches by exact name, so 'Rune Mysteries' alone reads 'unknown'. Same
-// constant the RuneMysteries bot uses.
+// name the quests table (quests/data/quests.ts) uses.
 const RUNE_MYSTERIES = 'Rune Mysteries Quest';
 
 export const SETTINGS: SettingsSchema = {
@@ -203,8 +203,8 @@ export default class EssMiner extends TaskBot {
      *  Varrock's rune shop has no openable door loc (walls with a gap), so
      *  walkOpening's door-hunt can't help here and its single-shot walker
      *  reports the counter-blocked NPC tile "unreachable" then wanders off —
-     *  walkResilient is the primitive RuneMysteries uses to reach this exact
-     *  area. Reaching the precise stand tile is not required: the bank open
+     *  walkResilient is the primitive proven against this exact area (by the
+     *  retired RuneMysteries bot). Reaching the precise stand tile is not required: the bank open
      *  (OPLOC) and Aubury's teleport (OPNPC) each server-walk the final step. */
     async walkTo(dest: Tile, radius = 2): Promise<void> {
         const here = Game.tile();

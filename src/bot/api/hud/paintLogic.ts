@@ -11,8 +11,8 @@
  */
 
 /** Logical client canvas size (the game's fixed 765×503 space). */
-export const CANVAS_W = 765;
-export const CANVAS_H = 503;
+const CANVAS_W = 765;
+const CANVAS_H = 503;
 
 export interface Rect {
     x: number;

@@ -88,7 +88,7 @@ export async function type(page: Page, text: string, waitMs?: number): Promise<v
 }
 
 /** Generic off-Tutorial-Island teleport tile, used to unlock the sidebar tabs. */
-export const OFF_ISLAND_TELE = '::tele 0,50,50,20,20';
+const OFF_ISLAND_TELE = '::tele 0,50,50,20,20';
 
 /**
  * Unlock a fresh (tutorial-locked) account: tele off Tutorial Island, reload,

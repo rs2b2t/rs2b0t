@@ -10,7 +10,7 @@ import type TutorialBot from '../TutorialBot.js';
  * `transmit=yes`), so the client's local varp mirror never receives it and
  * `reader.varp(281)` can't observe real advancement (confirmed empirically,
  * Task 3). The whole tutorial arc is therefore driven off what's on screen —
- * see ADR-0007 (`docs/adr/0007-state-driven-tutorial-progress.md`).
+ * see ADR-0007 (state-driven tutorial progress).
  *
  * Concrete stages implement `validate()` (does this stage apply right now?)
  * and `execute()` (the interaction that advances it). `TutorialBot` (a

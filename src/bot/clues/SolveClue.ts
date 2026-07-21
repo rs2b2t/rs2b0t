@@ -37,7 +37,7 @@ export function heldClueLikeId(): number | null {
 }
 
 /** The held easy-clue SCROLL id (not a reward casket) — bank-first only preps a scroll trail. */
-export function heldClueScrollId(): number | null {
+function heldClueScrollId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined);
     return it ? it.id : null;
 }

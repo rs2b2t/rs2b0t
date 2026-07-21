@@ -901,28 +901,6 @@ export const actions = {
     },
 
     /**
-     * Say something in public chat (MESSAGE_PUBLIC) — byte-identical to typing
-     * in the chat box: colour + effect + WordPack-huffman'd text (capped at 80
-     * chars). Lets bots talk to each other and the world. Returns false if not
-     * ingame.
-     */
-    sendChat(text: string, colour = 0, effect = 0): boolean {
-        if (!raw || !raw.ingame || !raw.out) {
-            return false;
-        }
-
-        const msg = text.slice(0, 80);
-        raw.out.p1Enc(ClientProt.MESSAGE_PUBLIC);
-        raw.out.p1(0);
-        const start = raw.out.pos;
-        raw.out.p1(colour & 0xff);
-        raw.out.p1(effect & 0xff);
-        WordPack.pack(raw.out, msg);
-        raw.out.psize1(raw.out.pos - start);
-        return true;
-    },
-
-    /**
      * Answer an open "Enter amount" count dialog (Withdraw-X / Buy-X / make-X)
      * by writing the same RESUME_P_COUNTDIALOG the client sends when a human
      * types the number and presses Enter (Client.ts:3047 — byte-identical).

@@ -3,8 +3,8 @@ import type { NpcStop, LadderHop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 
-// Tiles/dialogue verbatim from scripts/RuneMysteries.ts (probe-verified;
-// dialogue from the quest .rs2 sources — see that file's header).
+// Tiles/dialogue verbatim from the retired standalone RuneMysteries bot
+// (deleted; in git history) — probe-verified, dialogue from the quest .rs2 sources.
 const DUKE: NpcStop = { npc: 'Duke Horacio', anchor: new Tile(3212, 3220, 1), leash: 6, prefer: ['Have you any quests for me?', 'Sure, no problem.'] };
 const SEDRIDOR: NpcStop = { npc: 'Sedridor', anchor: new Tile(3103, 9572, 0), leash: 8, prefer: ["I'm looking for the head wizard.", 'Ok, here you are.', 'Yes, certainly.'], approach: [new Tile(3108, 9572, 0)] };
 const AUBURY: NpcStop = { npc: 'Aubury', anchor: new Tile(3253, 3402, 0), leash: 8, prefer: ['I have been sent here with a package for you.'] };
@@ -16,14 +16,14 @@ export const WIZARD_HOPS: LadderHop[] = [
 
 const TALK = (stop: NpcStop): QuestStep => ({ kind: 'talk', stop });
 
-// Empty-handed mid-quest probes, same fixed order as the old recoverOrder
-// (RuneMysteries.ts:134-136): Aubury first is also the quest's REQUIRED second
+// Empty-handed mid-quest probes, same fixed order as the retired bot's
+// recoverOrder: Aubury first is also the quest's REQUIRED second
 // talk after handing him the package; each NPC's dialogue re-gives its own
 // lost item.
 const RECOVER_PROBES: NpcStop[] = [AUBURY, SEDRIDOR, DUKE];
 
-/** Port of nextStep(journal, held) — held-item logic inlined over snap.inv
- *  (exact CI full-name equality, most-advanced wins; RuneMysteries.ts:26-38).
+/** Port of the retired bot's nextStep(journal, held) — held-item logic inlined
+ *  over snap.inv (exact CI full-name equality, most-advanced wins).
  *  The old bot's rotating recoverIdx becomes snap.noProgress % probes: the
  *  engine watchdog count IS the rotation, so decide stays pure. */
 export function decide(snap: QuestSnapshot): QuestStep {

@@ -78,23 +78,9 @@ export const Game = {
         return btn !== -1 && actions.ifButton(btn);
     },
 
-    /** Say something in public chat — lets bots talk to each other / the world. */
-    say(text: string): boolean {
-        return actions.sendChat(text);
-    },
-
     /** The local player's display name, or null before login. */
     myName(): string | null {
         return reader.localPlayerName();
-    },
-
-    /** Recent public chat from OTHER nearby players, newest first: {name, text}. */
-    recentChat(n = 8): { name: string; text: string }[] {
-        const me = reader.localPlayerName();
-        return reader
-            .chat(n)
-            .filter(c => c.username && c.username !== me && c.text)
-            .map(c => ({ name: c.username as string, text: c.text as string }));
     },
 
     /**

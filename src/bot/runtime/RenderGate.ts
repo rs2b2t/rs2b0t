@@ -1,8 +1,7 @@
 /**
  * Per-instance draw throttle (MultiBox). Gates ONLY the pixel draw
- * (mainredraw); mainloop/onFrame (logic, events, scheduler) are never gated.
- * A ref-counted `boost` forces full-rate drawing regardless of mode, because
- * an acting bot must render even when backgrounded.
+ * (mainredraw); mainloop/onFrame (logic, events, scheduler) are never gated —
+ * a backgrounded bot keeps acting at full logic rate, just drawn at ~3 fps.
  */
 export type RenderMode = 'focused' | 'background' | 'hidden';
 
@@ -17,11 +16,9 @@ class RenderGateImpl {
     /** Minimum gap between background draws, ms (~3 fps default). */
     backgroundIntervalMs = 300;
 
-    private boost = 0;
     private lastDrawAt = 0;
 
     shouldDraw(now: number): boolean {
-        if (this.boost > 0) return true;
         if (this.mode === 'focused') return true;
         if (this.mode === 'hidden') return false;
         return now - this.lastDrawAt >= this.backgroundIntervalMs;
@@ -34,18 +31,6 @@ class RenderGateImpl {
 
     setMode(mode: RenderMode): void {
         this.mode = mode;
-    }
-
-    beginBoost(): void {
-        this.boost++;
-    }
-
-    endBoost(): void {
-        if (this.boost > 0) this.boost--;
-    }
-
-    get boosted(): boolean {
-        return this.boost > 0;
     }
 }
 

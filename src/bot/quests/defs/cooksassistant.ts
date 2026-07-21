@@ -9,7 +9,8 @@ import { QUESTS } from '../data/quests.js';
 
 // Facts: quest_cook.rs2 (start :2,29,32; all-three hand-in gate :45,:81-84),
 // windmills.rs2 (fill :77-94, operate :96-118, bin :58-75). Tiles: egg/bucket/
-// cow/wheat verbatim from the retired scripts/CooksAssistant.ts (live-proven);
+// cow/wheat verbatim from the retired standalone CooksAssistant bot (deleted;
+// in git history — live-proven);
 // mill (3166,3307) — the (3165,3307) 0<->1<->2 ladders are already in
 // stairEdges.json, so plain walkResilient handles the climb.
 const COOK: NpcStop = { npc: 'Cook', anchor: new Tile(3209, 3215, 0), leash: 6, prefer: ["What's wrong?", "Yes, I'll help you."] };

@@ -47,11 +47,10 @@ import { MINE_Z, walkToward } from './helpers.js';
  *    `~mesbox("This rock contains copper.")` (tut_mining.rs2) opens
  *    `modals().chat` just like every other tutorial mesbox (confirmed live:
  *    `ChatDialog.isOpen()` flips true ~3-4s after the Prospect click, via
- *    the content's own `p_delay(3)`) — `Game.recentChat()` never sees it
- *    (that reader filters to OTHER players' public chat; a server "mes"/
- *    "mesbox" line has no username and isn't public chat at all). So
- *    `ChatDialog.isOpen()` is the correct latch for both Prospect stages,
- *    not the brief's `Game.recentChat(/copper|tin/i)`.
+ *    the content's own `p_delay(3)`) — a public-chat reader never sees it
+ *    (a server "mes"/"mesbox" line has no username and isn't public chat
+ *    at all). So `ChatDialog.isOpen()` is the correct latch for both
+ *    Prospect stages, not the brief's read-recent-chat approach.
  * 4. MINING OUTCOME is `inv_add` BEFORE its own `~mesbox(...)`
  *    (tut_mining.rs2), so `Inventory.contains('Copper ore'/'Tin ore')` is a
  *    faithful, low-latency completion signal (the trailing mesbox is just

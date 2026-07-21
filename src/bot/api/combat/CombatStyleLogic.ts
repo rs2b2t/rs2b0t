@@ -8,7 +8,7 @@
 import { SPELL_DB, STAFF_RUNES, type SpellRow } from '#/bot/api/combat/data/spelldb.js';
 
 /** staff_spells:ssb0 component id — spell N's button is STAFF_SPELLS_COM0 + ssb. */
-export const STAFF_SPELLS_COM0 = 1830;
+const STAFF_SPELLS_COM0 = 1830;
 /** combat_staff_2:auto_choose — opens the staff_spells panel. */
 export const AUTO_CHOOSE_COM = 353;
 /** combat_staff_2:auto_toggle — arms autocast once a spell is chosen. */
@@ -54,11 +54,6 @@ export function runesPerCast(spellName: string, wielded: string[]): { rune: stri
 export function spellButtonCom(spellName: string): number {
     const row = spellRow(spellName);
     return row ? STAFF_SPELLS_COM0 + row.ssb : -1;
-}
-
-/** Magic level required, or null for an unknown spell. */
-export function spellLevel(spellName: string): number | null {
-    return spellRow(spellName)?.level ?? null;
 }
 
 /** Full casts affordable with the held rune counts (`held` = count by

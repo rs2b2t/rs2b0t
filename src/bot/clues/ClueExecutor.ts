@@ -97,7 +97,6 @@ const KEY_WALK_RADIUS = 5; // get within this of the container, then find the NP
 const KILL_WAIT_MS = 20_000; // per fight: Attack → NPC dead / key on the ground
 const LOOT_WAIT_MS = 3000; // key ground-item Taken into the pack
 
-export { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
 export const TRACE_STORAGE_KEY = 'rs2b0t:cluetrace';

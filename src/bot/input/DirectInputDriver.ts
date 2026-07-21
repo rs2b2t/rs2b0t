@@ -22,9 +22,8 @@ export default class DirectInputDriver implements InputDriver {
         return actions.menuAction(NPC_OPS[op - 1], index, 0, 0);
     }
 
-    interactLoc(lx: number, lz: number, typecode: number, op: number, _viaMenu = false): boolean {
-        // OPLOC*: a = typecode, b/c = scene-local tile (viaMenu is a
-        // synthetic-gesture concern; the packet is identical)
+    interactLoc(lx: number, lz: number, typecode: number, op: number): boolean {
+        // OPLOC*: a = typecode, b/c = scene-local tile
         return actions.menuAction(LOC_OPS[op - 1], typecode, lx, lz);
     }
 

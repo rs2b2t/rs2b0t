@@ -1,8 +1,7 @@
 // Validates the RenderGate on a single client (bot.html): (1) focused draws
 // fast / background draws slow while LOGIC (loopCycle) keeps full speed in
-// both, and (2) the constraint-#5 boost — a backgrounded bot running a
-// synthetic walking script still renders at full rate during gestures and
-// never logs synthetic-fail.
+// both, and (2) a backgrounded bot running a walking script keeps acting at
+// full logic rate — draws stay throttled, the script never crashes.
 //
 // Part 2's script picker: BotPanel.ts no longer exposes the old script-select
 // dropdown the original desktop-test.ts copies from — script choice now goes
@@ -20,7 +19,7 @@ function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(
 type Rs2b0t = { rs2b0t: {
     client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; constructor: { loopCycle: number }; login(u: string, p: string, r: boolean): Promise<void> };
     runner: { state: string; ctx: { log: { msg: string }[] } | null };
-    renderGate: { drawn: number; mode: string; boosted: boolean };
+    renderGate: { drawn: number; mode: string };
     setRenderMode(m: string): void;
 } };
 
@@ -33,7 +32,7 @@ try {
     const page = await app.firstWindow();
     const probe = () => page.evaluate(() => {
         const l = (globalThis as never as Rs2b0t).rs2b0t;
-        return { loop: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, mode: l.renderGate.mode, boosted: l.renderGate.boosted };
+        return { loop: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, mode: l.renderGate.mode };
     });
     const setMode = (m: string) => page.evaluate(mm => (globalThis as never as Rs2b0t).rs2b0t.setRenderMode(mm), m);
     const login = async () => {
@@ -69,35 +68,31 @@ try {
     if (foc.loopFps < 25 || bg.loopFps < 25) fail(`logic starved (focused ${foc.loopFps.toFixed(1)}, bg ${bg.loopFps.toFixed(1)})`);
     console.log('PASS: draw rate follows mode, logic stays full speed');
 
-    // ---- (2) constraint #5: backgrounded synthetic gestures still render ----
+    // ---- (2) a backgrounded bot keeps acting: full logic rate, throttled draws ----
     await setMode('background');
     // Bot panel script picker: Browse… -> category chip -> script card -> Start
     // (the old script-select dropdown this test's original brief was drafted
     // against has been replaced by the ScriptLibrary modal; pattern matches
     // tools/chicken-test.ts / tools/library-test.ts). WalkTo web-walks from
     // Lumbridge to Falador (set via the ?WalkTo.destination override above),
-    // so it issues plenty of synthetic walk() gestures via minimap clicks.
+    // so the backgrounded script keeps issuing walk actions the whole window.
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Navigation/ }).click();
     await page.locator('.rs2b0t-library-card', { hasText: 'WalkTo' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'Start' }).click();
-    let sawBoost = false;
     const gStart = await probe();
     const t0 = Date.now();
-    while (Date.now() - t0 < 8000) {
-        const p = await probe();
-        if (p.boosted) sawBoost = true;
-        await page.waitForTimeout(120);
-    }
+    await page.waitForTimeout(8000);
     const gEnd = await probe();
-    const logHasFail = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('synthetic-fail')));
     const state = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
-    const gestureDrawFps = (gEnd.drawn - gStart.drawn) / ((Date.now() - t0) / 1000);
-    console.log(`backgrounded WalkTo: boosted seen=${sawBoost}, draw during run ${gestureDrawFps.toFixed(1)}fps, state=${state}, synthetic-fail=${logHasFail}`);
-    if (!sawBoost) fail('boost never engaged during synthetic gestures while backgrounded');
-    if (logHasFail) fail('synthetic-fail logged while backgrounded (constraint #5 violated)');
+    const runSecs = (Date.now() - t0) / 1000;
+    const runDrawFps = (gEnd.drawn - gStart.drawn) / runSecs;
+    const runLoopFps = (gEnd.loop - gStart.loop) / runSecs;
+    console.log(`backgrounded WalkTo: loop ${runLoopFps.toFixed(1)}fps, draw ${runDrawFps.toFixed(1)}fps, state=${state}`);
+    if (runLoopFps < 25) fail(`backgrounded script logic starved (${runLoopFps.toFixed(1)}fps)`);
+    if (runDrawFps > 15) fail(`backgrounded draws not throttled while acting (${runDrawFps.toFixed(1)}fps)`);
     if (state === 'crashed') fail('script crashed');
     await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});
     console.log('\nPASS');

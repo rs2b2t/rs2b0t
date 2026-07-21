@@ -32,9 +32,11 @@ import { join } from 'node:path';
 // the multibox wall / a different port + Chrome channel) — not part of the
 // local-engine bot sweep. Run these by hand when relevant. rendergate-test is
 // Electron-based (npx tsx, not bun) like desktop-test, so it belongs here too.
-// merlin-tail-test drives the UNVERIFIED Merlin's Crystal draft — a dev
-// harness, not a regression smoke, until that quest is live-verified.
-const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test', 'rendergate-test', 'merlin-tail-test'];
+// merlin-tail-test drives the UNVERIFIED Merlin's Crystal draft and
+// pip-solo-test is the PiP fast-iteration harness (30-min default budget,
+// "NOT the acceptance run" per its own header) — dev harnesses, not
+// regression smokes; the PiP acceptance path is aio-quest-test.
+const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test', 'rendergate-test', 'merlin-tail-test', 'pip-solo-test'];
 
 // Default per-smoke kill timeout (s). Smokes that legitimately run far longer
 // than this (e.g. a full quest walk) get a bigger budget via LONG — keyed by

@@ -156,9 +156,7 @@ export class Loc implements Interactable, Locatable {
         return presentOps(this.snap.ops);
     }
 
-    /** `viaMenu`: synthetic mode right-clicks and picks the op from the menu
-     *  instead of trusting the left-click default (see InputDriver). */
-    interact(action: string, viaMenu = false): boolean | Promise<boolean> {
+    interact(action: string): boolean | Promise<boolean> {
         const op = opIndex(this.snap.ops, action);
         if (op === -1) {
             return false;
@@ -169,7 +167,7 @@ export class Loc implements Interactable, Locatable {
             return false;
         }
 
-        return ActionRouter.driver.interactLoc(local.lx, local.lz, this.snap.typecode, op, viaMenu);
+        return ActionRouter.driver.interactLoc(local.lx, local.lz, this.snap.typecode, op);
     }
 }
 

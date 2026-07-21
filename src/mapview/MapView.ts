@@ -196,14 +196,6 @@ export class MapView extends GameShell {
 
         await this.drawProgress('Please wait... Rendering Map', 100);
 
-        // const size: Packet = new Packet(worldmap.read('size.dat'));
-        // this.mapOriginX = size.g2();
-        // this.mapOriginZ = size.g2();
-        // this.mapWidth = size.g2();
-        // this.mapHeight = size.g2();
-        // this.focusX = this.mapStartX - this.mapOriginX;
-        // this.focusZ = this.mapOriginZ + this.mapHeight - this.mapStartZ;
-
         const labels: Packet = new Packet(worldmap.read('labels.dat'));
         this.mapLabelCount = labels.g2();
         for (let i: number = 0; i < this.mapLabelCount; i++) {
