@@ -57,6 +57,17 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 3027, z: 3218, level: 1, npc: 'Seaman Thresnor', locName: 'Seaman Thresnor', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2956, z: 3143, level: 1 }, label: 'Port Sarim->Musa ship' },
     { x: 2955, z: 3146, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 3032, z: 3217, level: 1 }, label: 'Musa->Port Sarim ship' },
 
+    // East Ardougne <-> Brimhaven ship (Captain Barnaby at the Ardougne dock;
+    // the Brimhaven-side NPC is another 'Customs officer' running the same
+    // search dialogue as Musa's). Same two-edge model + deck-level keying as
+    // the Port Sarim ship; with both ships in the graph A* picks whichever
+    // dock is cheaper from the current position. Live-ridden 2026-07-20:
+    // Barnaby wanders the dock (Talk-to only — the crossing handler always
+    // drives Talk-to; 'Pay-fare' is just the edge label), decks/gangplanks
+    // recorded from the ride.
+    { x: 2683, z: 3272, level: 1, npc: 'Captain Barnaby', locName: 'Captain Barnaby', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2775, z: 3234, level: 1 }, label: 'Ardougne->Brimhaven ship' },
+    { x: 2772, z: 3234, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 2683, z: 3268, level: 1 }, label: 'Brimhaven->Ardougne ship' },
+
     // Gnome Stronghold entrance gate (gnome_areagate, name "Gate", a 5x2 blocking
     // centrepiece). The middle passage is x=2461; entering is south (2461,3382) ->
     // north (2461,3385). The FIRST Open from the south with %femi_help=0 and Femi

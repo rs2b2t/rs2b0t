@@ -24,10 +24,11 @@ import { TRIO } from '#/bot/clues/data/toolAcquire.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
-// Pocket money withdrawn with the spade: toll crossings on trail routes cost
-// coins (Al Kharid gate = 10/pass, specialCrossings.ts) and the walker takes
-// a detour when it can't pay — 100 covers a whole trail's worth of passes.
-const CLUE_COINS = 100;
+// Pocket money withdrawn with the spade: toll crossings and ship fares on
+// trail routes cost coins (Al Kharid gate 10/pass, Karamja ships 30/voyage,
+// specialCrossings.ts) and the walker detours or skips a crossing it can't
+// pay — 1000 covers a multi-ship trail with headroom (user call 2026-07-20).
+const CLUE_COINS = 1_000;
 
 /** The held easy-clue SCROLL or reward CASKET obj id (what SolveClue works on), or null. */
 export function heldClueLikeId(): number | null {
