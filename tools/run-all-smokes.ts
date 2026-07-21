@@ -43,7 +43,7 @@ const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e
 // filename substring → kill timeout (s). Both are only consulted when the user
 // hasn't passed an explicit --timeout, which overrides everything.
 const DEFAULT_TIMEOUT = 360;
-const LONG: Record<string, number> = { 'aio-quest-test': 1600, 'ardythiever-kite-test': 900, 'ardythiever-fight-test': 900, 'essminer-test': 900, 'shoprun-test': 900, 'cluesolve-test': 900, 'door-cross-test': 600, 'ardyfighter-clue-test': 900, 'autofighter-test': 900, 'cow-test': 600, 'greendragon-style-test': 600, 'mossgiant-style-test': 600, 'maze-test': 600, 'rockcrab-style-test': 600, 'rockcrab-multibot-test': 900, 'rockcrab-test': 900 };
+const LONG: Record<string, number> = { 'aio-quest-test': 1600, 'ardythiever-kite-test': 900, 'ardythiever-fight-test': 900, 'essminer-test': 900, 'shoprun-test': 900, 'cluesolve-test': 900, 'door-cross-test': 600, 'ardyfighter-clue-test': 900, 'autofighter-test': 900, 'cow-test': 600, 'greendragon-style-test': 600, 'mossgiant-style-test': 600, 'maze-test': 600, 'rockcrab-style-test': 600, 'rockcrab-multibot-test': 900, 'rockcrab-test': 900, 'fisher-banking-test': 900 };
 
 const args = process.argv.slice(2);
 const optVal = (name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };

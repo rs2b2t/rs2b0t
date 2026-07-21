@@ -86,8 +86,17 @@ try {
     // ---- A: the fighter ----
     const A = await bootClient('A', `af${ts}`, true);
     await A.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyFighter')); });
-    console.log('started ArdyFighter — letting the fight/steal loop run');
-    await A.waitForTimeout(15000);
+    console.log('started ArdyFighter — waiting for fight evidence before staging the drop');
+    // Gate the drop on the fighter actually grinding (a loot line = a kill
+    // landed). A flat 15s raced the food provisioning: after other Ardy smokes
+    // empty the cake stall, restock can take minutes and the fighter never
+    // reaches the fight loop inside the watch (2026-07-21 sweep flake).
+    let fighting = false;
+    for (let i = 0; i < 150 && !fighting; i++) {
+        await A.waitForTimeout(2000);
+        fighting = (await logLines(A)).some(l => /^\s*looted /.test(l));
+    }
+    if (!fighting) { fail('fighter never reached the fight/loot loop (stall/food provisioning stalled?) — cannot stage the preemption test'); }
 
     // ---- B: the dropper ----
     const B = await bootClient('B', `bf${ts}`, false);

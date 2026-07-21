@@ -60,11 +60,22 @@ try {
         await setup(page, `set${Date.now().toString(36).slice(-6)}`);
 
         await startFromLibrary(page, 'Combat', 'ChickenKiller');
-        // the param form should show the feather checkbox
-        // the grouped-params rework (18f0957) renders rows as .rs2b0t-param-row
-        // with an .rs2b0t-param-cb checkbox — the old .rs2b0t-setting-bool is gone
+        // Post-rework params UI (18f0957): the panel shows a read-only summary +
+        // an "Edit parameters" button; the editable form is the ParamsModal
+        // (.rs2b0t-param-row rows, .rs2b0t-param-cb checkboxes). Open it to
+        // reach the checkbox, close (✕) to return — edits persist on change.
+        const openParams = async () => {
+            await page.getByRole('button', { name: /Edit parameters/ }).click();
+            await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
+        };
+        const closeParams = async () => {
+            await page.getByRole('button', { name: '✕' }).click();
+            await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+        };
         const checkbox = page.locator('.rs2b0t-param-row', { hasText: 'Gather feathers?' }).locator('input.rs2b0t-param-cb');
+        await openParams();
         if ((await checkbox.count()) === 0) fail('parameter form has no "Gather feathers?" checkbox');
+        await closeParams();
 
         // default off: start, expect NO "gathering feathers"
         await page.getByRole('button', { name: 'Start' }).click();
@@ -74,8 +85,10 @@ try {
         await page.getByRole('button', { name: 'Stop' }).click();
         await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
 
-        // tick the checkbox, start again, expect "gathering feathers" + a pickup
+        // tick the checkbox (in the modal), start again, expect "gathering feathers" + a pickup
+        await openParams();
         await checkbox.check();
+        await closeParams();
         await page.getByRole('button', { name: 'Start' }).click();
         const gathering = await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.includes('gathering feathers')), undefined, { timeout: 20000 }).then(() => true).catch(() => false);
         if (!gathering) fail('panel toggle did not enable feather gathering');

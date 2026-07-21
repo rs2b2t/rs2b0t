@@ -33,11 +33,11 @@ try {
     }
     console.log('library: all expected category chips present');
 
-    // filter by Mining -> only the Miner card
+    // filter by Mining -> exactly the Mining-category scripts (Miner + EssMiner)
     await page.getByRole('button', { name: /^Mining/ }).click();
     let cards = await page.$$eval('.rs2b0t-card-name', els => els.map(e => e.textContent ?? ''));
-    if (cards.length !== 1 || !cards[0].includes('Miner')) fail(`Mining filter showed ${JSON.stringify(cards)} (expected just Miner)`);
-    console.log('library: Mining filter -> Miner');
+    if (cards.sort().join(',') !== 'EssMiner,Miner') fail(`Mining filter showed ${JSON.stringify(cards)} (expected Miner + EssMiner)`);
+    console.log('library: Mining filter -> Miner + EssMiner');
 
     // back to All, search "crab" -> only RockCrab
     await page.getByRole('button', { name: /^All/ }).click();

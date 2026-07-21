@@ -20,7 +20,10 @@ try {
 
     const hasOre = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('ore')));
 
-    await page.goto(`${base}/bot.html`);
+    // Miner's `rocks` multi-select defaults to Iron; the SE swamp mine is
+    // mithril/adamant, so select Mithril via the URL override — an Iron-only
+    // Miner here matches zero rock ids and idles forever (2026-07-21 sweep).
+    await page.goto(`${base}/bot.html?Miner.rocks=Mithril`);
     await boot(page);
     if (!(await login(page, username))) fail('login failed');
     await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
@@ -28,9 +31,14 @@ try {
     await type(page, '::advancestat mining 99', 1400); // the SE swamp mine is mithril (lvl 55+)
     await type(page, MINE_TELE, 1400);
 
-    const rocks = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().filter(l => l.name === 'Rocks' && l.ops.some(o => o === 'Mine')).length);
-    console.log(`minable rocks in scene: ${rocks}`);
-    if (rocks === 0) fail('no minable Rocks at the tele spot');
+    // Poll: post-tele loc streaming can lag a few seconds (same flake class
+    // as chaosdruid-test's NPC probe).
+    const rocksSeen = await page
+        .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().some(l => l.name === 'Rocks' && l.ops.some(o => o === 'Mine')), undefined, { timeout: 15000 })
+        .then(() => true)
+        .catch(() => false);
+    console.log(`minable rocks seen: ${rocksSeen}`);
+    if (!rocksSeen) fail('no minable Rocks at the tele spot');
 
     // pick Miner from the library
     await page.getByRole('button', { name: 'Browse…' }).click();
@@ -63,6 +71,11 @@ try {
             return `tile ${t ? `${t.x},${t.z}` : '?'} mining ${m.base}(${m.xp}xp) rock ${nearRock ? `${nearRock.tile.x},${nearRock.tile.z} ops[${slots}]` : 'none'} | chat: ${chat}`;
         });
         console.log(`  [diag] ${diag}`);
+        const runnerDiag = await page.evaluate(() => {
+            const r = (globalThis as never as Rs2b0t).rs2b0t.runner;
+            return `state=${r.state} | ${(r.ctx?.log ?? []).slice(-3).map(l => l.msg).join(' || ')}`;
+        });
+        console.log(`  [runner] ${runnerDiag}`);
         if (await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'crashed')) fail('Miner crashed');
         mined = await hasOre();
     }

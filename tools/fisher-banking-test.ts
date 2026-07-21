@@ -98,6 +98,10 @@ try {
         for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
         if (!backIn) fail('relogin failed');
         await type('::give net');
+        // Fishing 40: a LEVEL-1 net cycle (fill 27 slots) runs 10-15+ min and
+        // can't fit a fleet budget; the cycle contract (fill -> bank -> resume)
+        // is level-independent, so seed a faster catch rate.
+        await type('::advancestat fishing 40');
         await type(tele);
     };
 
