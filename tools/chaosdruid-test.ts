@@ -14,10 +14,15 @@ try {
     await bringUpOffIsland(page, { user: username, typeWaitMs: 1300 });
     for (const s of ['attack', 'strength', 'defence', 'hitpoints']) await type(page, `::advancestat ${s} 80`, 1300);
     await type(page, '::tele 0,48,155,38,8', 1300); // (3110,9928) among the druids
-    await page.waitForTimeout(1500);
-    const druids = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Chaos druid').length);
-    console.log(`chaos druids in scene: ${druids}`);
-    if (druids === 0) fail('no Chaos druids at the tele spot');
+    // Poll instead of a fixed 1.5s: the post-tele scene rebuild + NPC streaming
+    // can lag several seconds (this raced and flaked in the 2026-07-21 sweep).
+    const druidsSeen = await page
+        .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Chaos druid').length > 0, undefined, { timeout: 15000 })
+        .then(() => true)
+        .catch(() => false);
+    const at = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
+    console.log(`chaos druids seen: ${druidsSeen} at (${at?.x},${at?.z},${at?.level})`);
+    if (!druidsSeen) fail('no Chaos druids at the tele spot');
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();

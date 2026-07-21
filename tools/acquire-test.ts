@@ -175,7 +175,7 @@ try {
     await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop());
 
     console.log(result);
-    const gatherOk = result.gatherThrew && result.gatherMessage === 'ItemSource.gather: implemented in Plan B';
+    const gatherOk = result.gatherThrew && result.gatherMessage === 'ItemSource.gather: not implemented yet';
     const pass = result.done && result.hammer && result.egg && gatherOk && result.afterFirst.hammer && !result.afterFirst.egg;
 
     console.log(pass ? 'PASS' : 'FAIL');

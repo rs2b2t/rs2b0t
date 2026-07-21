@@ -11,9 +11,9 @@ import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } f
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 8 });
-const style = rest[0];
+const style = rest[0] ?? 'mage'; // default (fleet passes no style; melee is rockcrab-test's job)
 if (style !== 'mage' && style !== 'range') {
-    fail('usage: bun tools/rockcrab-style-test.ts <mage|range> [minutes] [base-url] [username]');
+    fail('usage: bun tools/rockcrab-style-test.ts [mage|range] [minutes] [base-url] [username]');
 }
 // 12-char username cap: 'm'/'r' + crab + 6 base36 chars = 11
 const username = rest[1] ?? `${style === 'mage' ? 'm' : 'r'}crab${Date.now().toString(36).slice(-6)}`;

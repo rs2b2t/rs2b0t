@@ -26,7 +26,9 @@ try {
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     const chips = await page.$$eval('.rs2b0t-chip', els => els.map(e => e.textContent ?? ''));
     console.log(`categories: ${chips.join('  ')}`);
-    for (const want of ['Combat', 'Woodcutting', 'Mining', 'Fishing', 'Navigation', 'Develop']) {
+    // 'Develop' died with the retired dev/demo scripts (83203fe) — assert
+    // durable categories only.
+    for (const want of ['Combat', 'Woodcutting', 'Mining', 'Fishing', 'Navigation', 'Quest']) {
         if (!chips.some(c => c.startsWith(want))) fail(`category chip "${want}" missing`);
     }
     console.log('library: all expected category chips present');

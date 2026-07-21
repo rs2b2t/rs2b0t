@@ -9,14 +9,15 @@
 //            the booth -> deposit raw fish only -> walk back -> resume
 //
 // Usage: bun tools/fisher-banking-test.ts [mode] [minutes] [base-url]
+// (order-independent: URLs -> base, numbers -> minutes, bare word -> mode —
+// the fleet spawns `bun tools/<name> <base>`, which used to land in `mode`.)
 
-import { launchBrowser } from './lib/harness.js';
+import { launchBrowser, parseArgs } from './lib/harness.js';
 
 import { FISHING_LOCATIONS } from '../src/bot/scripts/FishingLocations.js';
 
-const mode = process.argv[2] ?? 'cycle';
-const minutes = parseFloat(process.argv[3] ?? '25');
-const base = process.argv[4] ?? 'http://localhost:8888';
+const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 25 });
+const mode = rest[0] ?? 'cycle';
 const username = `fb${Date.now().toString(36).slice(-8)}`;
 
 const TELE_LUMBRIDGE = '::tele 0,50,50,20,20'; // (3220,3220)

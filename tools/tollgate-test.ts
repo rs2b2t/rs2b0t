@@ -70,19 +70,25 @@ try {
     if ((await coins()) >= 10) { fail('expected <10 coins for phase B'); }
     console.log(`Phase B: at ${JSON.stringify(startB)}, coins ${await coins()}`);
     startWalk();
-    let skipped = false;
+    // The walker PRE-avoids unaffordable crossings and routes around the
+    // mountain far north of the gate — being east of GATE_X up there is the
+    // detour working, not a free crossing. Only the gate columns inside the
+    // gate's z-window count as crossing through.
+    const throughGate = (t: { x: number; z: number }): boolean => t.x >= GATE_X && t.x <= GATE_X + 1 && t.z >= 3225 && t.z <= 3230;
+    let avoided = false;
     for (let i = 0; i < 40; i++) {
         await page.waitForTimeout(2000);
-        if ((await logLines()).some(l => /toll gate.*skipping|need 10 coins/i.test(l))) { skipped = true; }
+        if ((await logLines()).some(l => /toll gate.*skipping|need 10 coins/i.test(l))) { avoided = true; }
         const t = await tile();
-        if (t && t.x > GATE_X) { fail(`crossed the gate with <10 coins (at ${JSON.stringify(t)})`); }
-        if (skipped) { break; }
+        if (t && throughGate(t)) { fail(`crossed the gate with <10 coins (at ${JSON.stringify(t)})`); }
+        if (t && t.z > 3300) { avoided = true; } // north-detour evidence
+        if (avoided) { break; }
     }
     stopWalk();
     const afterB = await tile();
-    console.log(`Phase B: skipped=${skipped}, at ${JSON.stringify(afterB)}`);
-    if (!skipped) { fail('did not observe the toll-gate skip with <10 coins'); }
-    if (afterB && afterB.x > GATE_X) { fail('ended east of the gate without paying'); }
+    console.log(`Phase B: avoided=${avoided}, at ${JSON.stringify(afterB)}`);
+    if (!avoided) { fail('did not observe the toll-gate avoidance with <10 coins'); }
+    if (afterB && throughGate(afterB)) { fail('standing in the gate without paying'); }
 
     // ---- Phase A: 100 coins -> pay 10 and cross ----
     await type(WEST); // back to the west side

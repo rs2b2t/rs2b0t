@@ -11,9 +11,9 @@ import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } f
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 6 });
-const style = rest[0];
+const style = rest[0] ?? 'range'; // default = the canonical safespot mode (fleet passes no style)
 if (style !== 'mage' && style !== 'range' && style !== 'melee') {
-    fail('usage: bun tools/mossgiant-style-test.ts <mage|range|melee> [minutes] [base-url] [username]');
+    fail('usage: bun tools/mossgiant-style-test.ts [mage|range|melee] [minutes] [base-url] [username]');
 }
 const username = rest[1] ?? `mg${style[0]}${Date.now().toString(36).slice(-6)}`;
 

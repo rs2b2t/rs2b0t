@@ -61,7 +61,9 @@ try {
 
         await startFromLibrary(page, 'Combat', 'ChickenKiller');
         // the param form should show the feather checkbox
-        const checkbox = page.locator('.rs2b0t-setting-bool', { hasText: 'Gather feathers?' }).locator('input[type=checkbox]');
+        // the grouped-params rework (18f0957) renders rows as .rs2b0t-param-row
+        // with an .rs2b0t-param-cb checkbox — the old .rs2b0t-setting-bool is gone
+        const checkbox = page.locator('.rs2b0t-param-row', { hasText: 'Gather feathers?' }).locator('input.rs2b0t-param-cb');
         if ((await checkbox.count()) === 0) fail('parameter form has no "Gather feathers?" checkbox');
 
         // default off: start, expect NO "gathering feathers"
