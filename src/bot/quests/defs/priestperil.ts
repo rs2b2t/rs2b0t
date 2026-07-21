@@ -712,6 +712,16 @@ async function mineEssence(log: (m: string) => void): Promise<boolean> {
     // crystal query is RETRIED because the scene can still be loading right after
     // the telejump (a single miss must not bail — same live wedge).
     for (let i = 0; i < 40 && freeSlots() > 0; i++) {
+        // Bail the instant we're no longer in the mine — a random event (genie,
+        // etc.) can telejump us out mid-mining; without this the crystal-retry
+        // loop spins ~72s blocking the AIOQuester's random-event handler (live
+        // aqpipfin4, stuck at the Lumbridge event room). Returning lets decide()
+        // yield so the event task clears it, then re-enter re-teleports.
+        const at = Game.tile();
+        if (at === null || !inEssMine(at.x, at.z)) {
+            log('priestperil: essence — left the mine mid-dig (random event?); yielding');
+            return false;
+        }
         const rock = Locs.query().name('Rune Essence').action('Mine').nearest();
         if (!rock) {
             await Execution.delayTicks(3); // scene still loading post-telejump — retry
@@ -722,8 +732,13 @@ async function mineEssence(log: (m: string) => void): Promise<boolean> {
             continue;
         }
         // One click auto-repeats server-side until the pack fills; wait for that,
-        // else the loop re-clicks (EssMiner's STALL_MS idiom).
-        await Execution.delayUntil(() => freeSlots() === 0, 30_000);
+        // else the loop re-clicks (EssMiner's STALL_MS idiom). Break the wait early
+        // if a random event telejumps us out, so the guard above fires promptly.
+        await Execution.delayUntil(() => {
+            if (freeSlots() === 0) { return true; }
+            const t = Game.tile();
+            return t === null || !inEssMine(t.x, t.z);
+        }, 30_000);
     }
     // Full (or exhausted the retries) -> Portal out (lands at Aubury's, surface).
     const portal = Locs.query().name('Portal').action('Use').nearest();
