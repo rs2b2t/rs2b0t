@@ -13,10 +13,9 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { QuestFood } from '../food.js';
 
-// Waterfall Quest — content facts from
-// docs/superpowers/research/2026-07-16-waterfall-content-facts.md and the nav
-// audit docs/superpowers/research/2026-07-16-waterfall-nav-audit.md (cited inline
-// as "content §…" / "audit §…"; line cites are into ~/code/content
+// Waterfall Quest — content facts from the 2026-07-16 waterfall research +
+// nav-audit docs (pruned from docs/, live in git history; cited inline as
+// "content §…" / "audit §…"; line cites are into ~/code/content
 // scripts/quests/quest_waterfall). Verified against those sources for every
 // coord/loc-name/op below.
 //

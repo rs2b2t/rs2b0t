@@ -29,9 +29,9 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 import { gatherBalls } from './sheepshearer.js';
 
-// Prince Ali Rescue — the fleet's most mechanical def. Content facts from
-// docs/superpowers/research/2026-07-16-prince-ali-content-facts.md (cited inline
-// as "research doc §N"). Three disguise pipelines (wig+dye, skin paste, bronze
+// Prince Ali Rescue — the fleet's most mechanical def. Content facts from the
+// 2026-07-16 prince-ali research doc (pruned from docs/, lives in git history;
+// cited inline as "research doc §N"). Three disguise pipelines (wig+dye, skin paste, bronze
 // key) converge, then a bespoke jailbreak (§5). decide()/gather fns are PURE;
 // every live read is inside a custom thunk (jailbreak/imprintAtKeli/wigPipeline/
 // burnForAshes) per the engine's snapshot discipline.
