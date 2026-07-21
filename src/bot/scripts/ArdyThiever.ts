@@ -25,6 +25,8 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 import { CAKE_ITEMS } from './CakeStallLogic.js';
 import { stealCakes } from './CakeStall.js';
+import { SolveClue } from '../clues/SolveClue.js';
+import { Sustain } from '../api/Sustain.js';
 
 // East Ardougne market layout — baked in, not settings. Per-target anchors
 // come from the packed spawn data (see ArdyThieverLogic + the 2026-07-12
@@ -83,6 +85,7 @@ export const SETTINGS: SettingsSchema = {
     foodTarget: { type: 'number', default: 22, min: 1, max: 27, label: 'Fill food to (count)' },
     restockAtFood: { type: 'number', default: 3, min: 0, max: 26, label: 'Restock when food drops to' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots' },
+    solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     ...PERIODIC_BANK_SETTINGS
 };
 
@@ -99,6 +102,7 @@ let FOOD_TARGET = 22;
 let RESTOCK_AT = 3;
 let BANK_AT = 12;
 let BANK_COMMON = true;
+let SOLVE_CLUES = true;
 
 function foodCount(): number {
     return countMatching(Inventory.items(), FOOD);
@@ -134,6 +138,8 @@ export default class ArdyThiever extends TaskBot {
     private trips = 0;
     private flees = 0;
     private kills = 0;
+    private cluesSolved = 0;
+    private solveClue: SolveClue | undefined;
     private status = 'starting';
     private stunnedUntilTick = 0;
     private startedAt = Date.now();
@@ -157,6 +163,34 @@ export default class ArdyThiever extends TaskBot {
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+        SOLVE_CLUES = this.settings.bool('solveClues', true);
+        this.solveClue = new SolveClue({
+            log: m => this.log(m),
+            setStatus: s => {
+                if (s === 'clue solved') {
+                    this.cluesSolved++;
+                }
+                this.setStatus(s);
+            },
+            isFood: n => matchesAny(n, FOOD),
+            foodName: () => 'Cake',
+            foodWithdraw: () => FOOD_TARGET,
+            spadeName: () => 'Spade',
+            enabled: () => SOLVE_CLUES
+        });
+        // Eat mid-walk (clue trails leave the market): the EatFood task can't
+        // run while a walk or solve holds the task loop — RockCrab's proven shape.
+        Sustain.set(async () => {
+            if (Skills.hpFraction() < EAT_AT && foodCount() > 0) {
+                const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
+                if (food) {
+                    const before = Skills.effective('hitpoints');
+                    if (await food.interact('Eat')) {
+                        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+                    }
+                }
+            }
+        });
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('thieving');
@@ -188,7 +222,7 @@ export default class ArdyThiever extends TaskBot {
             new DeathRecovery(this, {
                 anchor: ANCHOR,
                 radius: 6,
-                onDeath: () => { this.setStatus('died — recovering'); this.log('died! recovering'); },
+                onDeath: () => { this.setStatus('died — recovering'); this.solveClue?.noteDeath(); this.log('died! recovering'); },
                 onRecovered: () => { this.died = false; }
             }),
             ...(RESPONSE === 'Fight' ? [] : [new Flee(this)]),
@@ -196,6 +230,7 @@ export default class ArdyThiever extends TaskBot {
             new EatFood(this),
             new PanicRetreat(this),
             ...(RESPONSE === 'Fight' ? [new FightBack(this)] : []),
+            this.solveClue!, // a looted clue preempts banking/pickpocketing (RockCrab shape)
             new PeriodicBank({
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
@@ -232,6 +267,7 @@ export default class ArdyThiever extends TaskBot {
             const sph = mins > 0.5 ? `${Math.round((this.steals / mins) * 60)}` : '—';
             p.row(`Runtime: ${fmtDuration(mins)}`, `Steals: ${this.steals}`, `Steals/hr: ${sph}`);
             p.row(`XP/hr: ${xph}`, `Food: ${foodCount()}`, `Loot slots: ${lootSlots()}`);
+            p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
             p.bar('HP', Skills.hpFraction());
         } else if (tab === 'Loot') {
             p.row(`Looted: ${this.looted}`, `Bank trips: ${this.trips}`);

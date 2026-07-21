@@ -12,7 +12,7 @@ import {
 
 /**
  * The shared Baker's-stall steal driver (2026-07-20 design) — the base
- * implementation CakeThiever proves live and ArdyThiever/ArdyFighter reuse.
+ * implementation ArdyCakes (né CakeThiever) proves live and ArdyThiever/ArdyFighter reuse.
  *
  * Shape: do our best to stand on the current stand (one bounded claim walk —
  * never loop on exact-tile arrival, that was the old wedge), click

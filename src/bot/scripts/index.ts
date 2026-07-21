@@ -8,7 +8,7 @@ import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
 import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
-import CakeThiever, { SETTINGS as CAKETHIEVER_SETTINGS } from './CakeThiever.js';
+import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes.js';
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
@@ -131,9 +131,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ArdyFighter',
-    description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank (needs melee stats that beat the 60s guard respawn — ~str 80 unarmed)',
+    description: 'Fights East Ardougne market guards, feeds itself from the Baker\'s stall, loots rares, banks them at the south bank, solves clue drops (needs melee stats that beat the 60s guard respawn — ~str 80 unarmed)',
     category: 'Combat',
-    tags: ['ardougne', 'thieving', 'banking', 'afk'],
+    tags: ['ardougne', 'thieving', 'banking', 'clues', 'afk'],
     settingsSchema: ARDY_SETTINGS,
     create: () => new ArdyFighter()
 });
@@ -150,20 +150,20 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ArdyThiever',
-    description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Paladin/Hero, flees (kites) or fights the guard per the guardResponse setting, banks loot + junk, grabs ground coins',
+    description: 'Low-level East Ardougne pickpocket bot — steals cake for food, pickpockets Guard/Knight/Paladin/Hero, flees (kites) or fights the guard per the guardResponse setting, banks loot + junk, grabs ground coins, solves clue drops',
     category: 'Thieving',
-    tags: ['ardougne', 'thieving', 'banking', 'afk'],
+    tags: ['ardougne', 'thieving', 'banking', 'clues', 'afk'],
     settingsSchema: ARDYTHIEVER_SETTINGS,
     create: () => new ArdyThiever()
 });
 
 ScriptRegistry.register({
-    name: 'CakeThiever',
-    description: 'Baker\'s-stall cake thiever — steals on the golden stand, resets nearby when watched, banks full packs, flees (kites) or fights a catching guard per guardResponse',
+    name: 'ArdyCakes',
+    description: 'Baker\'s-stall cake thiever — steals on the golden stand, resets nearby when watched, banks full packs, flees (kites) or fights a catching guard per guardResponse, solves clue drops',
     category: 'Thieving',
-    tags: ['ardougne', 'thieving', 'banking', 'afk'],
-    settingsSchema: CAKETHIEVER_SETTINGS,
-    create: () => new CakeThiever()
+    tags: ['ardougne', 'thieving', 'banking', 'clues', 'afk'],
+    settingsSchema: ARDYCAKES_SETTINGS,
+    create: () => new ArdyCakes()
 });
 
 // --- woodcutting ---

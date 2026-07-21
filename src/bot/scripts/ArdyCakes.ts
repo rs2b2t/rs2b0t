@@ -20,6 +20,8 @@ import { matchesAny, shouldEat } from './ArdyFighterLogic.js';
 import { HOSTILE_NAMES, isHostileAttacker } from './ArdyThieverLogic.js';
 import { CAKE_ITEMS, LOCKOUT_TICKS, STAND } from './CakeStallLogic.js';
 import { carriedCakes, stealCakes } from './CakeStall.js';
+import { SolveClue } from '../clues/SolveClue.js';
+import { Sustain } from '../api/Sustain.js';
 
 // East Ardougne layout — baked in (see the 2026-07-20 cakethiever design).
 // The bot lives on the golden stand; everything else is a short fixed walk.
@@ -44,7 +46,8 @@ export const SETTINGS: SettingsSchema = {
     guardResponse: { type: 'string', default: 'Flee', options: ['Flee', 'Fight'], label: 'Guard response', help: 'caught at the stall: Flee kites the guard off the market; Fight kills it (bring combat stats)' },
     eatAtHp: { type: 'number', default: 40, min: 0, max: 100, label: 'Eat below HP%', help: 'eats the stolen cakes — they are free' },
     eatToHp: { type: 'number', default: 90, min: 1, max: 100, label: 'Eat up to HP%' },
-    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank common junk too' }
+    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank common junk too' },
+    solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'Fight mode kills guards, which drop medium clues — solve them on the spot' }
 };
 
 // Active run config (ADR-0006 single-script module state).
@@ -52,6 +55,7 @@ let RESPONSE = 'Flee';
 let EAT_AT = 0.4;
 let EAT_TO = 0.9;
 let BANK_COMMON = true;
+let SOLVE_CLUES = true;
 
 function nearMarket(): boolean {
     const here = Game.tile();
@@ -65,7 +69,7 @@ function nearMarket(): boolean {
  * banks full packs at the south bank, and answers a guard catch with Flee
  * (kite) or Fight per the guardResponse setting. Thieving 5 required.
  */
-export default class CakeThiever extends TaskBot {
+export default class ArdyCakes extends TaskBot {
     override loopDelay = 600;
 
     private steals = 0;
@@ -75,6 +79,8 @@ export default class CakeThiever extends TaskBot {
     private trips = 0;
     private flees = 0;
     private kills = 0;
+    private cluesSolved = 0;
+    private solveClue: SolveClue | undefined;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -88,16 +94,45 @@ export default class CakeThiever extends TaskBot {
         EAT_AT = this.settings.num('eatAtHp', 40) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+        SOLVE_CLUES = this.settings.bool('solveClues', true);
+        this.solveClue = new SolveClue({
+            log: m => this.log(m),
+            setStatus: s => {
+                if (s === 'clue solved') {
+                    this.cluesSolved++;
+                }
+                this.setStatus(s);
+            },
+            isFood: n => matchesAny(n, CAKE_ITEMS),
+            // BankRun banks every stolen cake, so trails top up from the bank.
+            foodName: () => 'Cake',
+            foodWithdraw: () => 10,
+            spadeName: () => 'Spade',
+            enabled: () => SOLVE_CLUES
+        });
+        // Eat mid-walk (clue trails leave the market): EatCake can't run while
+        // a walk or solve holds the task loop — RockCrab's proven shape.
+        Sustain.set(async () => {
+            if (Skills.hpFraction() < EAT_AT && carriedCakes() > 0) {
+                const food = Inventory.items().find(i => matchesAny(i.name, CAKE_ITEMS));
+                if (food) {
+                    const before = Skills.effective('hitpoints');
+                    if (await food.interact('Eat')) {
+                        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+                    }
+                }
+            }
+        });
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('thieving');
 
         if (Skills.level('thieving') < 5) {
-            this.log(`CakeThiever needs Thieving 5 for the Baker's stall (have ${Skills.level('thieving')}) — stopping.`);
-            throw new Error('CakeThiever: Thieving 5 required');
+            this.log(`ArdyCakes needs Thieving 5 for the Baker's stall (have ${Skills.level('thieving')}) — stopping.`);
+            throw new Error('ArdyCakes: Thieving 5 required');
         }
 
-        this.log(`CakeThiever starting — stand ${STAND}, bank ${BANK_STAND}, ${RESPONSE.toLowerCase()} mode`);
+        this.log(`ArdyCakes starting — stand ${STAND}, bank ${BANK_STAND}, ${RESPONSE.toLowerCase()} mode`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -110,11 +145,12 @@ export default class CakeThiever extends TaskBot {
             new DeathRecovery(this, {
                 anchor: STAND,
                 radius: 6,
-                onDeath: () => { this.setStatus('died — recovering'); this.log('died! recovering'); },
+                onDeath: () => { this.setStatus('died — recovering'); this.solveClue?.noteDeath(); this.log('died! recovering'); },
                 onRecovered: () => { this.died = false; }
             }),
             ...(RESPONSE === 'Fight' ? [new FightBack(this)] : [new Flee(this)]),
             new EatCake(this),
+            this.solveClue!, // a clue from a killed guard preempts banking/stealing (RockCrab shape)
             new BankRun(this),
             new StealCakes(this),
             new ReturnToStall(this)
@@ -132,13 +168,14 @@ export default class CakeThiever extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#f2a6c9' });
-        p.title(`CakeThiever — ${this.status}`);
+        p.title(`ArdyCakes — ${this.status}`);
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
         const sph = mins > 0.5 ? `${Math.round((this.steals / mins) * 60)}` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `Steals: ${this.steals}`, `Steals/hr: ${sph}`);
         p.row(`XP/hr: ${xph}`, `Carried: ${carriedCakes()}`, `Banked: ${this.banked}`);
         p.row(`Resets: ${this.resets}`, RESPONSE === 'Fight' ? `Fought: ${this.kills}` : `Fled: ${this.flees}`, `Trips: ${this.trips}`);
+        p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
         p.bar('HP', Skills.hpFraction());
         p.gap();
         const clicked = p.buttons([
@@ -174,9 +211,9 @@ export default class CakeThiever extends TaskBot {
 /** Flee mode: on any combat, kite the guard to the fixed SW tile (drags it off
  *  the stall + breaks melee), wait out combat, record the end tick for the
  *  driver's lockout. ArdyThiever's proven shape, minus its pickpocket-stun
- *  ambiguity — CakeThiever never pickpockets, so combat is always real. */
+ *  ambiguity — ArdyCakes never pickpockets, so combat is always real. */
 class Flee implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     validate(): boolean { return Game.inCombat(); }
     async execute(): Promise<void> {
         this.bot.setStatus(`kiting the guard to ${FLEE_TILE.x},${FLEE_TILE.z}`);
@@ -193,7 +230,7 @@ class Flee implements Task {
 /** Fight mode: kill the market hostile that caught us (auto-retaliate-proof —
  *  attacks explicitly). ArdyThiever's FightBack shape with cake-eating gates. */
 class FightBack implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     private findAttacker(): Npc | null {
         return Npcs.query()
             .where(n => isHostileAttacker({ name: n.name, inCombat: n.inCombat, distance: n.distance(), actions: n.actions(), targetsAnotherPlayer: n.targetsAnotherPlayer() }, ENGAGE_RADIUS))
@@ -242,7 +279,7 @@ class FightBack implements Task {
 
 /** Eat stolen cakes below the gate up to the eat-to target — they're free. */
 class EatCake implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     validate(): boolean { return shouldEat(Skills.hpFraction(), EAT_AT, carriedCakes()); }
     async execute(): Promise<void> {
         for (let bite = 0; bite < 28; bite++) {
@@ -261,7 +298,7 @@ class EatCake implements Task {
 
 /** Full pack -> south bank: deposit the cakes (+ common junk), walk back. */
 class BankRun implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     validate(): boolean { return nearMarket() && !Game.inCombat() && Inventory.isFull(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking the cakes');
@@ -284,7 +321,7 @@ class BankRun implements Task {
 
 /** The main loop: run the shared steal driver until the pack fills. */
 class StealCakes implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     validate(): boolean {
         return nearMarket() && !Game.inCombat() && !Inventory.isFull() && !this.bot.died;
     }
@@ -309,7 +346,7 @@ class StealCakes implements Task {
 
 /** Start-anywhere travel + displacement recovery (ArdyThiever shape). */
 class ReturnToStall implements Task {
-    constructor(private bot: CakeThiever) {}
+    constructor(private bot: ArdyCakes) {}
     validate(): boolean {
         const here = Game.tile();
         return here !== null && STAND.distanceTo(here) > MARKET_RADIUS;

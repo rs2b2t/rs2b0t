@@ -21,6 +21,8 @@ import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRestock, slotsMatching } from './ArdyFighterLogic.js';
 import { stealCakes } from './CakeStall.js';
+import { SolveClue } from '../clues/SolveClue.js';
+import { Sustain } from '../api/Sustain.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -65,6 +67,7 @@ export const SETTINGS: SettingsSchema = {
     foodTarget: { type: 'number', default: 8, min: 1, max: 27, label: 'Keep food stocked to (count)', help: 'after eating to full, restock the Baker\'s stall back up to this many' },
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Bank at loot slots' },
     loot: { type: 'string[]', default: DEFAULT_LOOT.split(',').map(s => s.trim()), label: 'Loot item names (contains)' },
+    solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     ...PERIODIC_BANK_SETTINGS
 };
 
@@ -84,6 +87,7 @@ let FOOD_TARGET = 8;
 let BANK_AT = 12;
 let BANK_COMMON = true;
 let COMBAT_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
+let SOLVE_CLUES = true;
 
 /** Total carried food (sums the cake bite-stages too — they all contain 'cake'). */
 function foodCount(): number {
@@ -118,6 +122,8 @@ export default class ArdyFighter extends TaskBot {
     private looted = 0;
     private trips = 0;
     private deaths = 0;
+    private cluesSolved = 0;
+    private solveClue: SolveClue | undefined;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -140,6 +146,35 @@ export default class ArdyFighter extends TaskBot {
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         COMBAT_MODE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        SOLVE_CLUES = this.settings.bool('solveClues', true);
+        this.solveClue = new SolveClue({
+            log: m => this.log(m),
+            setStatus: s => {
+                if (s === 'clue solved') {
+                    this.cluesSolved++;
+                }
+                this.setStatus(s);
+            },
+            isFood: n => matchesAny(n, FOOD),
+            // The guards' cakes bank up over time; a trail tops up from them.
+            foodName: () => 'Cake',
+            foodWithdraw: () => FOOD_TARGET,
+            spadeName: () => 'Spade',
+            enabled: () => SOLVE_CLUES
+        });
+        // Eat mid-walk (clue trails leave the market): the Eat task can't run
+        // while a walk or solve holds the task loop — RockCrab's proven shape.
+        Sustain.set(async () => {
+            if (Skills.hpFraction() < EAT_AT && foodCount() > 0) {
+                const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
+                if (food) {
+                    const before = Skills.effective('hitpoints');
+                    if (await food.interact('Eat')) {
+                        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+                    }
+                }
+            }
+        });
 
         // The Baker's stall needs Thieving 5 — without it this bot cannot feed
         // itself, so refuse to run rather than starve mid-fight.
@@ -167,6 +202,7 @@ export default class ArdyFighter extends TaskBot {
                 onDeath: () => {
                     this.setStatus('died — recovering');
                     this.countDeath();
+                    this.solveClue?.noteDeath(); // died mid-solve: force a food re-bank before resuming a retained clue
                     this.log('died! waiting for respawn, then walking back to the market');
                 },
                 onRecovered: () => {
@@ -176,6 +212,7 @@ export default class ArdyFighter extends TaskBot {
             new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
+            this.solveClue!, // a looted clue preempts banking/fighting (RockCrab shape)
             new PeriodicBank({
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
@@ -214,6 +251,7 @@ export default class ArdyFighter extends TaskBot {
             const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
             p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
             p.row(`Food: ${foodCount()}`, `Steals: ${this.steals}`, this.deaths ? `Deaths: ${this.deaths}` : `Ate: ${this.eats}`);
+            p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
             p.bar('HP', Skills.hpFraction());
         } else {
             p.row(`Looted: ${this.looted}`, `Loot slots: ${lootSlots()}`);

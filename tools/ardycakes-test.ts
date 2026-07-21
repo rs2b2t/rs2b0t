@@ -1,4 +1,4 @@
-// Headless live smoke for CakeThiever. Boots the WebGL client (SwiftShader),
+// Headless live smoke for ArdyCakes. Boots the WebGL client (SwiftShader),
 // logs in (auto-creates), teleports off Tutorial Island, maxes stats, teleports
 // to the East Ardougne market, starts the bot, and watches the steal -> bank
 // cycle. Refusal resets and guard responses are stochastic (the Baker/guards
@@ -8,7 +8,7 @@
 //   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
 //   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
 //
-// Usage: bun tools/cakethiever-test.ts [base-url] [username] [Fight|Flee]
+// Usage: bun tools/ardycakes-test.ts [base-url] [username] [Fight|Flee]
 
 import { chromium } from 'playwright-core';
 
@@ -53,7 +53,7 @@ try {
     };
     const logLines = () => page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 
-    await page.goto(`${base}/bot.html${mode === 'Fight' ? '?CakeThiever.guardResponse=Fight' : ''}`);
+    await page.goto(`${base}/bot.html${mode === 'Fight' ? '?ArdyCakes.guardResponse=Fight' : ''}`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
     await type('::tele 0,50,50,20,20'); // off Tutorial Island
@@ -87,8 +87,8 @@ try {
     if (!at || Math.abs(at.x - 2661) > 8 || Math.abs(at.z - 3306) > 8) { fail(`market tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
     await clearDialogs();
 
-    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('CakeThiever')); });
-    console.log(`started CakeThiever (${mode}) — watching for a full steal->bank cycle`);
+    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyCakes')); });
+    console.log(`started ArdyCakes (${mode}) — watching for a full steal->bank cycle`);
 
     const before = (await logLines()).length;
     const seen = { stocked: false, banked: false, reset: false, combat: false };
@@ -112,14 +112,14 @@ try {
     for (const l of tail) { console.log(`  ${l}`); }
     console.log(`seen: ${JSON.stringify(seen)}`);
     if (!seen.stocked && !seen.banked) {
-        await page.screenshot({ path: 'out/cakethiever-test.png' });
+        await page.screenshot({ path: 'out/ardycakes-test.png' });
         fail('never stocked or banked — steal loop is not landing cakes');
     }
     if (!seen.banked) {
-        await page.screenshot({ path: 'out/cakethiever-test.png' });
+        await page.screenshot({ path: 'out/ardycakes-test.png' });
         fail('no successful bank trip within the watch window');
     }
-    console.log(`PASS: CakeThiever ${mode} — full pack stolen and banked${seen.reset ? ' (incl. a refusal reset)' : ''}${seen.combat ? ' (incl. a guard response)' : ''}`);
+    console.log(`PASS: ArdyCakes ${mode} — full pack stolen and banked${seen.reset ? ' (incl. a refusal reset)' : ''}${seen.combat ? ' (incl. a guard response)' : ''}`);
 } finally {
     await browser.close();
 }
