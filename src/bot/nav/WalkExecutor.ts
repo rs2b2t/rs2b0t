@@ -544,12 +544,19 @@ class WalkExecutorImpl {
                 // the TERMINAL from CORRIDOR tiles out, and the strict i > pathIdx
                 // selection then starves on EVERY hop that short — 0 clicks, then
                 // a bogus 'blocked live' at cheb 1 or a repath-to-timeout loop at
-                // cheb 2-3 (live: the cake-stand claim/swap). With no crossing
-                // pending, the terminal itself is the click. One commit per stall
-                // cycle (retries re-arm via clickIdx = -1 in the stall machinery);
-                // an unclickable terminal stays -1 so a genuinely blocked booth
-                // still earns the honest 'blocked' verdict below.
-                const chosen = target !== -1 || nextCrossingIdx !== -1 || clickIdx === tiles.length - 1
+                // cheb 2-3 (live: the cake-stand claim/swap). The terminal itself
+                // is the click. GATED to pathIdx === last — the snap's signature —
+                // because a MID-PATH starve is the door case: a swung leaf or a
+                // closed door the corridor snap stepped PAST (nextCrossingIdx only
+                // scans forward, so it reads -1 there) starves selection too, and
+                // rescuing then blind-clicks across the door — the client paths
+                // around/away and the bot dances in and out of the doorway (live
+                // regression, 2026-07-21). Mid-path starves fall through to the
+                // crossing-fire/stall/repath machinery that owns doors. One commit
+                // per stall cycle (retries re-arm via clickIdx = -1); an
+                // unclickable terminal stays -1 so a genuinely blocked booth still
+                // earns the honest 'blocked' verdict below.
+                const chosen = target !== -1 || nextCrossingIdx !== -1 || pathIdx !== tiles.length - 1 || clickIdx === tiles.length - 1
                     ? target
                     : starvedTerminalIndex(tiles, me, clickable);
                 if (chosen !== -1 && !(tiles[chosen].x === me.x && tiles[chosen].z === me.z)) {
