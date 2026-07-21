@@ -143,7 +143,7 @@ async function resetPack(page: Page): Promise<void> {
         g.__probeResult = res;
         class ProbeReset extends abi.LoopingBot {
             private ran = false;
-            async loop(): Promise<number> {
+            override async loop(): Promise<number> {
                 if (this.ran) { return 5000; }
                 this.ran = true;
                 try {
@@ -174,7 +174,7 @@ async function resetPack(page: Page): Promise<void> {
     await page.waitForTimeout(600);
 }
 
-async function testClue(page: Page, id: number): Promise<{ ok: boolean; ms: number; reason?: string; tail?: string[] }> {
+async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict: Verdict; ms: number; reason?: string; tail?: string[] }> {
     const row = CLUE_DB[id];
     const started = Date.now();
     await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { /* stopped */ } });
@@ -186,7 +186,7 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; ms: numb
         return Inventory.items().some(i => i.id === cid);
     }, id);
     if (!(await giveVerified(page, row.obj, holds))) {
-        return { ok: false, ms: Date.now() - started, reason: 'give failed after retries' };
+        return { ok: false, verdict: 'stuck', ms: Date.now() - started, reason: 'give failed after retries' };
     }
     // Exclusivity: exactly the given clue-like item, or the PASS detector
     // (given id leaves the pack) can watch the wrong trail. A stray from a
@@ -198,7 +198,7 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; ms: numb
     if ((await clueLikeCount()) > 0) {
         await resetPack(page);
         if (!(await giveVerified(page, row.obj, holds)) || (await clueLikeCount()) > 0) {
-            return { ok: false, ms: Date.now() - started, reason: 'pack not exclusive after reset' };
+            return { ok: false, verdict: 'stuck', ms: Date.now() - started, reason: 'pack not exclusive after reset' };
         }
     }
     const logsBefore = await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).length);
