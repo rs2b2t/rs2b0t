@@ -5,8 +5,8 @@
 //
 // Usage: bun tools/settings-test.ts [base-url]
 
-import { chromium, type Page } from 'playwright-core';
-import { startFromLibrary } from './lib/harness.js';
+import { type Page } from 'playwright-core';
+import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 
@@ -49,7 +49,7 @@ async function setup(page: Page, user: string): Promise<void> {
     await type(page, '::tele 0,50,51,32,34'); // chicken pen
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     // ---- Phase 1: default OFF, then turn ON via the panel checkbox ----
     {

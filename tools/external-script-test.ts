@@ -4,9 +4,9 @@
 //
 // Usage: bun tools/external-script-test.ts [base-url] [username]
 
+import { launchBrowser } from './lib/harness.js';
 import fs from 'node:fs';
 
-import { chromium } from 'playwright-core';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `ext${Date.now().toString(36).slice(-7)}`;
@@ -32,7 +32,7 @@ type Rs2b0t = {
     };
 };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();

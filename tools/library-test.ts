@@ -3,7 +3,7 @@
 //
 // Usage: bun tools/library-test.ts [base-url]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 
@@ -14,7 +14,7 @@ function fail(msg: string): never {
 
 type Rs2b0t = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string } } };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

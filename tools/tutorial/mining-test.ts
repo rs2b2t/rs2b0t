@@ -39,7 +39,7 @@
 //
 // Usage: bun tools/tutorial/mining-test.ts [base-url]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from '../lib/harness.js';
 import { bootAndLogin, cheatQuiet, getServerVarQuiet, relog, startScript } from './harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
@@ -70,7 +70,7 @@ function ts(): string {
     return new Date().toISOString();
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

@@ -21,7 +21,7 @@
 // build deployed (deploy-local.sh).
 // Usage: bun tools/lost-pickaxe-test.ts [base-url]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { cheat, cheatQuiet, mainlandAccount } from './tutorial/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -51,11 +51,7 @@ type G = {
     __wielded?: boolean;
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

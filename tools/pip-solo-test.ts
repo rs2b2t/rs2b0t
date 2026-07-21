@@ -13,7 +13,7 @@
 //     mid/late-game leg can be exercised without replaying the ~15-min early game.
 //     Use the give-csv to hand the pack items that stage implies (e.g. bucket_empty:1).
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, getServerVarQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -36,11 +36,7 @@ type Snapshot = {
     logs: { time: number; level: string; msg: string }[];
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();

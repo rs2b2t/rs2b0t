@@ -25,7 +25,7 @@
 // Usage: bun tools/death-test.ts [base-url] [username] [script]
 //        script = ChickenKiller (default) | ChaosDruidKiller
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 // max 12 chars: the login screen caps typed usernames at 12 (Client.ts ~1457)
@@ -102,7 +102,7 @@ type Rs2b0t = {
     };
 };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();

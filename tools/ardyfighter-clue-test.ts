@@ -8,7 +8,8 @@
 // Requires the local engine running + the local build deployed (same as smokes).
 // Usage: bun tools/ardyfighter-clue-test.ts [base-url]
 
-import { chromium, type Page } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
+import { type Page } from 'playwright-core';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const ts = Date.now().toString(36).slice(-6);
@@ -30,11 +31,7 @@ type R = {
     __probeResult?: { done: boolean; err?: string; log: string[] };
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 
 async function bootClient(label: string, username: string, maxme: boolean): Promise<Page> {
     const page = await browser.newPage();

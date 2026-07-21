@@ -31,7 +31,7 @@
  * Requires: engine on :8890 + the local build deployed (deploy-local.sh).
  * Usage: bun tools/door-cross-test.ts [base-url]
  */
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { mainlandAccount } from './tutorial/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -79,11 +79,7 @@ type G = {
     __doorResult: LegResult | null;
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

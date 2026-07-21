@@ -4,7 +4,7 @@
 //
 // Usage: bun tools/scout-npcs.ts "0,42,58,22,8" "0,42,58,40,20" ...
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 
 const base = 'http://localhost:8888';
 const username = `scout${Date.now().toString(36).slice(-7)}`;
@@ -20,7 +20,7 @@ type Rs2b0t = {
     };
 };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     await page.goto(`${base}/bot.html`);

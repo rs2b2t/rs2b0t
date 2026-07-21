@@ -20,7 +20,8 @@
 //
 // Usage: bun tools/tutorial/design-test.ts [base-url]
 
-import { chromium, type Page } from 'playwright-core';
+import { launchBrowser } from '../lib/harness.js';
+import { type Page } from 'playwright-core';
 import { bootAndLogin, getServerVar, getServerVarQuiet, startScript } from './harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
@@ -34,7 +35,7 @@ function fail(msg: string): never {
 type Rs2b0t = { rs2b0t: { reader: { modals(): { main: number; side: number; chat: number } } } };
 const mainModal = (page: Page) => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals().main);
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

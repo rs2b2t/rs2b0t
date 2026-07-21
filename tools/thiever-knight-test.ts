@@ -11,7 +11,7 @@
 //
 // Usage: bun tools/thiever-knight-test.ts [base-url] [username]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const username = process.argv[3] || `tk${Date.now().toString(36).slice(-7)}`;
@@ -38,11 +38,7 @@ type R = {
     };
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

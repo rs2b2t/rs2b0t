@@ -20,7 +20,7 @@
 // Usage: bun tools/merlin-tail-test.ts [base-url] [username] [budget-min]
 // Sequential with the other smokes (single-instance engine + bundle). DEBUG harness —
 // a real PASS still needs the full aio-quest-test.ts run.
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -42,11 +42,7 @@ type Snapshot = {
     logs: { time: number; level: string; msg: string }[];
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();

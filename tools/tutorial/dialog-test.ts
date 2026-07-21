@@ -31,7 +31,7 @@
 //
 // Usage: bun tools/tutorial/dialog-test.ts [base-url]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from '../lib/harness.js';
 import { bootAndLogin, cheat, getServerVar, getServerVarQuiet, relog, startScript } from './harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
@@ -63,7 +63,7 @@ type Rs2b0t = {
 
 const modals = (page: import('playwright-core').Page) => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.modals());
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

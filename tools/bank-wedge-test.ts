@@ -3,14 +3,14 @@
 // user's stuck log) — with an EMPTY pack so its first act is a bank open. The
 // OPLOC-first openBooth should walk us to a booth and open it; assert ore is
 // withdrawn (bank opened) and the log never hits the old infinite repath loop.
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 const base = 'http://localhost:8890';
 const username = `bw${Date.now().toString(36).slice(-7)}`;
 function fail(m: string): never { console.error(`FAIL: ${m}`); process.exit(1); }
 type Inv = { name: string | null; count: number };
 type R = { rs2b0t: { client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> }; runner: { state: string; start(s: unknown): void; ctx: { log: { msg: string }[] } | null }; registry: { get(n: string): unknown }; reader: { worldTile(): { x: number; z: number; level: number } | null; inventory(): Inv[] }; actions?: { continueDialog?: () => boolean } } };
 const sub = (inv: Inv[], s: string) => inv.filter(i => (i.name ?? '').toLowerCase().includes(s)).reduce((n, i) => n + Math.max(1, i.count), 0);
-const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

@@ -37,7 +37,7 @@
 //   mainland account skips the tutorial AND some gather fallbacks are level-gated
 //   (iron ore = Mining 15) — a fresh level-1 account can't mine it. Account prep.
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 import { QUESTS } from '../src/bot/quests/data/quests.js';
 
@@ -81,11 +81,7 @@ type Snapshot = {
     logs: { time: number; level: string; msg: string }[]; // runner log ring tail
 };
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
-});
+const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();

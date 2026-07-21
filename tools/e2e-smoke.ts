@@ -7,8 +7,7 @@
 //
 // Usage: bun tools/e2e-smoke.ts [base-url] [username] [password]
 
-import { chromium } from 'playwright-core';
-import { startFromLibrary } from './lib/harness.js';
+import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 // default to a per-run name: fresh save, and immune to a lingering
@@ -21,7 +20,7 @@ function fail(msg: string): never {
     process.exit(1);
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();

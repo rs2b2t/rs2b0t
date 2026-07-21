@@ -7,7 +7,8 @@
  * Route: SMOKE_ROUTE (Aubury only) via the `route` setting.
  * Run: bun tools/shoprun-test.ts [http://localhost:8890]
  */
-import { chromium, type Page } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
+import { type Page } from 'playwright-core';
 import { cheat, mainlandAccount } from './tutorial/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
@@ -29,7 +30,7 @@ async function fail(msg: string): Promise<never> {
     process.exit(1);
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 const page: Page = await browser.newPage();
 page.on('pageerror', e => console.error('pageerror:', e.message));
 

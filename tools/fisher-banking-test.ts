@@ -10,7 +10,7 @@
 //
 // Usage: bun tools/fisher-banking-test.ts [mode] [minutes] [base-url]
 
-import { chromium } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 
 import { FISHING_LOCATIONS } from '../src/bot/scripts/FishingLocations.js';
 
@@ -36,7 +36,7 @@ type Rs2b0t = {
     };
 };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));

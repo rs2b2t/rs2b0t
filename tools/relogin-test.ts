@@ -3,8 +3,7 @@
 //
 // Usage: bun tools/relogin-test.ts [base-url] [username]
 
-import { chromium } from 'playwright-core';
-import { startFromLibrary } from './lib/harness.js';
+import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 const username = process.argv[3] ?? `relog${Date.now().toString(36).slice(-7)}`;
@@ -21,7 +20,7 @@ type Rs2b0t = {
     };
 };
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await launchBrowser();
 
 try {
     const page = await browser.newPage();
