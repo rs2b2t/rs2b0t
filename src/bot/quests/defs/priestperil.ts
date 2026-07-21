@@ -10,7 +10,6 @@ import Tile from '../../api/Tile.js';
 import { inEssMine } from '../../scripts/EssMinerLogic.js';
 import { driveDialog, gotoNpc, isUnderground, talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
-import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 
@@ -649,12 +648,14 @@ async function mineEssence(log: (m: string) => void): Promise<boolean> {
 
 // --- Provisioning gather (bank-first; called when the bank lacks the Bucket) ---
 
-/** Buy the Bucket at the Varrock general store, or park with a named wait when
- *  even the bank can't cover ~15 gp (the Prince Ali buyOrWait invariant). */
-function gatherBucket(snap: QuestSnapshot): QuestStep {
-    if (gpShort(snap, 15) > 0) {
-        return { kind: 'wait', reason: 'need ~15 gp for a Bucket' };
-    }
+/** Buy the Bucket at the Varrock general store. Deliberately NO gp wait-guard:
+ *  at provisioning time lastBankCounts can be pre-deposit STALE (live
+ *  2026-07-20: the smoke's 1000 given coins were deposited moments earlier,
+ *  snap.bankCoins still read 0, and a 'need ~15 gp' wait parked the quest 3x
+ *  before it started). The buy executor self-provisions coins with a REAL bank
+ *  trip — which finds the banked coins regardless of the stale snapshot — and
+ *  a genuinely broke account surfaces as the buy step's own honest failure. */
+function gatherBucket(): QuestStep {
     return { kind: 'buy', item: 'Bucket', qty: 1, shop: VARROCK_GENERAL, estGp: 15 };
 }
 
