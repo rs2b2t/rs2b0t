@@ -164,7 +164,14 @@ export async function walkWithHops(dest: Tile, radius: number, hops: LadderHop[]
     if (!here) {
         return false;
     }
-    if (dest.distanceTo(here) > radius) {
+    // Level-AWARE early-out: Tile.distanceTo is x/z-only, so a bot stacked
+    // directly above/below the dest (e.g. in a temple's L2 cell, one floor over
+    // the L0 target) is "within radius" horizontally while a whole floor away.
+    // Returning true there skips the descent and strands the leg on the wrong
+    // level (live 2026-07-20: PiP's monk hunt froze at L2, the monks on L0).
+    // walkResilient's own arrival (isArrived) IS level-aware, so deferring to it
+    // when levels differ routes the stair/ladder crossing correctly.
+    if (here.level !== dest.level || dest.distanceTo(here) > radius) {
         return Traversal.walkResilient(dest, { radius, attempts: 3, log });
     }
     return true;

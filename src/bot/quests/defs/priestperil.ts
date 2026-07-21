@@ -262,6 +262,14 @@ async function cellStoryLeg(log: (m: string) => void): Promise<boolean> {
  * key we already earned.
  */
 async function monkHuntLeg(log: (m: string) => void): Promise<boolean> {
+    // Descend to the L0 lobby FIRST: the monks (ids at L0/L1) and the dropped key
+    // all live on L0, and both the ground-item and NPC queries are level-aware,
+    // so a check from the L2 cell (where the spine's cell-door probe leaves us)
+    // finds nothing. walkTo is now level-aware (walkWithHops fix, 2026-07-20).
+    if (!(await walkTo(TEMPLE_LOBBY, 3, log))) {
+        return false;
+    }
+    // Loot a dropped Golden key before re-engaging (it lasts ~3 min on the floor).
     const drop = GroundItems.query().name('Golden key').within(16).nearest();
     if (drop) {
         if (!(await drop.interact('Take'))) {
@@ -270,15 +278,13 @@ async function monkHuntLeg(log: (m: string) => void): Promise<boolean> {
         await Execution.delayUntil(() => heldId(GOLDEN_KEY_ID), 6000);
         return false; // decide() re-routes to the monument swap
     }
-    if (!(await walkTo(TEMPLE_LOBBY, 3, log))) {
-        return false;
-    }
     const monk = Npcs.query().where(n => n.id === MONK3_NPC_ID).action('Attack').within(14).nearest();
     if (!monk) {
         log('priestperil: no key-dropping Monk of Zamorak (id 1046) in the temple — waiting on respawn');
         await Execution.delayTicks(4);
         return false;
     }
+    log('priestperil: attacking Monk of Zamorak (id 1046) for the golden key');
     await killTarget(monk, /monk of zamorak/i);
     return false; // next pass loots the drop
 }
@@ -335,8 +341,11 @@ async function spineLeg(log: (m: string) => void): Promise<boolean> {
     if (await tryOpen('Cell door', CELL_DOOR, log)) {
         return waterLeg(log);
     }
-    // Stage 4..5: the story sets 5; then hunt the key monk.
-    await cellStoryLeg(log);
+    // Stage 4..5: hunt the key monk at L0 (the golden key drops at stage < 6,
+    // evil_monks.rs2:45). We do NOT drive the cell story here: holding the golden
+    // key routes decide() -> monumentLeg, which opens Gate 1 and, when it's still
+    // locked (stage 4 -> needs 5), drives the cell story itself. That keeps this
+    // pass on L0 (no wasteful L2 climb just to re-tell the story every loop).
     return monkHuntLeg(log);
 }
 
