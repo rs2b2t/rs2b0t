@@ -57,3 +57,7 @@ target resolves same-origin and logs in with no proxy.
 - Headless harness ABI: `globalThis.rs2b0t` (`.client`, `.runner`, `.reader`, `.registry`,
   `.actions`). Boot when `rs2b0t.client.constructor.loopCycle > 10`; login auto-creates a
   local account. See `tools/*-test.ts` for the pattern.
+- `bun run smoke` — the full live smoke fleet against the local engine (deploys once,
+  then every `tools/*-test.ts` sequentially, hours; per-smoke logs in `out/smoke-logs/`).
+  `--list` / `--only <substr>` / `--skip <substr>` subset it; SPECIAL-environment smokes
+  (desktop/hosted/multibox/e2e/rendergate + dev harnesses) are excluded automatically.

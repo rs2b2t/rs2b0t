@@ -8,9 +8,8 @@ surface (`apiVersion 1`) over the game client. This is the complete reference.
 - Scripts run *inside* the client. `interact()`-style methods drive real input;
   **verify outcomes against game state** with
   [`Execution.delayUntil`](#execution) rather than assuming an action landed.
-- `interact()` returns `boolean | Promise<boolean>`: direct input resolves
-  synchronously; synthetic input returns a promise for the whole gesture. Always
-  `await` it.
+- `interact()` returns `boolean | Promise<boolean>` (the promise form is ABI
+  headroom; the direct driver resolves synchronously). Always `await` it.
 
 ## Contents
 
@@ -69,7 +68,6 @@ All bots extend `AbstractBot` (usually via `LoopingBot`, `TaskBot`, or
 ```ts
 abstract class AbstractBot {
     loopDelay: number;                 // wall-clock ms between loop() iterations
-    inputMode: 'direct' | 'synthetic'; // default 'direct'
     readonly settings: SettingsBag;    // resolved run parameters
 
     onStart?(): void | Promise<void>;  // before the first loop
@@ -419,7 +417,7 @@ Higher-level helpers for "make sure I have these items":
 ```ts
 type ItemNeed = { name: string; count: number; source: ItemSource };
 
-held(name: string): number          // count of an item across inventory + equipment
+held(name: string): number          // count of an item across backpack slots (worn gear NOT included)
 hasAll(needs: ItemNeed[]): boolean  // every need satisfied by current holdings
 class AcquireTask implements Task { constructor(bot, needs: ItemNeed[]); } // obtains items
 ```

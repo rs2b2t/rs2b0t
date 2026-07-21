@@ -90,9 +90,11 @@ See the **[API reference](docs/API.md)** for the complete surface.
 ## Bundled scripts
 
 `src/bot/scripts/` ships example bots across combat (ChickenKiller, RockCrab,
-ChaosDruidKiller, ArdyFighter), thieving (ArdyThiever, stall/pickpocket),
-skilling (gathering + processing presets for mining, fishing, woodcutting,
-cooking, fletching, herblore, agility), and quests (Cook's Assistant, tutorial),
+MossGiant, GreenDragon, ArdyFighter, AutoFighter), thieving (ArdyThiever,
+ArdyCakes, stall/pickpocket), skilling (gathering presets for mining, fishing,
+woodcutting; cooking, smelting, smithing, bank-standing fletching, flax,
+rune-essence mining, agility), shop running, clue solving (easy + medium
+trails), and quests (the AIOQuester quest engine + QuestDashboard, tutorial),
 plus navigation and banking utilities. They double as worked examples of the
 API.
 

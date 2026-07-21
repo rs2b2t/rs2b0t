@@ -1,8 +1,8 @@
 // Type declarations for the rs2b0t script ABI (apiVersion 1). Mirrors the
 // client's src/bot/api surface. interact()-style methods return
-// boolean | Promise<boolean>: DIRECT input resolves synchronously, SYNTHETIC
-// returns a promise for the whole mouse gesture — either way, verify
-// outcomes with Execution.delayUntil on game state.
+// boolean | Promise<boolean> (the promise form is ABI headroom; the direct
+// driver resolves synchronously) — always await, and verify outcomes with
+// Execution.delayUntil on game state.
 
 export const apiVersion: number;
 
@@ -342,8 +342,6 @@ export const events: {
 
 // ---- bot base classes ----
 
-export type InputMode = 'direct' | 'synthetic';
-
 /** Typed accessor for the run's parameters (from the manifest settingsSchema,
  *  overlaid with panel edits and ?Script.key=… URL overrides). */
 export interface SettingsBag {
@@ -358,8 +356,6 @@ export interface SettingsBag {
 export abstract class AbstractBot {
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
-    /** Input mode for this run: 'direct' (default) or 'synthetic'. */
-    inputMode: InputMode;
     /** Resolved parameters for this run; read e.g. this.settings.bool('x'). */
     readonly settings: SettingsBag;
     onStart?(): void | Promise<void>;
