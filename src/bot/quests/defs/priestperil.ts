@@ -76,8 +76,9 @@ const DREZEL_CELL: NpcStop = { npc: 'Drezel', anchor: new Tile(3416, 3489, 2), l
 const DREZEL_MAUS: NpcStop = { npc: 'Drezel', anchor: new Tile(3439, 9895, 0), leash: 4, prefer: [] };
 
 // --- Tiles (map-derived) ---------------------------------------------------------
-const TEMPLE_DOOR = new Tile(3408, 3488, 0);      // Large door leaves (3408,3488)+(3408,3489), west face
-const TEMPLE_DOOR_OUT = new Tile(3406, 3488, 0);  // exterior stand west of the doors
+// Large door leaves sit at (3408,3488)+(3408,3489), west face; the bot must open
+// them from this EXTERIOR stand so the double-door's entering-cross fires (see enterTemple).
+const TEMPLE_DOOR_OUT = new Tile(3406, 3488, 0);
 const TEMPLE_LOBBY = new Tile(3412, 3487, 0);     // ground floor, monk-3 spawns (3411,3489)/(3415,3485)
 const DOG_TILE = new Tile(3405, 9902, 0);         // Temple guardian spawn, m53_154 "0 13 46: 1047"
 const GATE1 = new Tile(3405, 9895, 0);            // pip_underground_door1, opens at stage >= 5
@@ -193,6 +194,52 @@ async function tryOpen(name: string, near: Tile, log: (m: string) => void): Prom
     // Locked leaves (temple door / gates before their stage) keep offering Open
     // and never change — the delayUntil times out and we honestly report FALSE.
     return Execution.delayUntil(() => closed() === null, 4000);
+}
+
+/** On the temple's interior side: any upper level (must have crossed to be there)
+ *  or the L0 lobby east of the front door. Used to skip re-crossing when already in. */
+function insideTemple(t: { x: number; z: number; level: number }): boolean {
+    if (t.level >= 1) {
+        return true;
+    }
+    return t.x >= 3409 && t.x <= 3418 && t.z >= 3483 && t.z <= 3493;
+}
+
+/**
+ * Cross the temple's front DOUBLE door into the L0 lobby — the ONLY entrance to
+ * the interior (the trapdoor leads to the crypt, not the temple). Doubles as the
+ * stage-4 oracle: entering only opens at stage >= 4 (temple_doors.rs2:9-16).
+ *
+ * The door MUST be opened from the EXTERIOR stand, never from on top of a leaf:
+ * open_and_close_double_doors.rs2:96-106 p_teleports the player through ONLY when
+ * check_axis reads "entering", which needs the player on the west (outside) tile.
+ * tryOpen('Large door') landing the bot ON the leaf made check_axis misread and
+ * the p_teleport never carried it through — crossMultiTileDoor then bounced
+ * between the two leaf tiles for minutes (live 2026-07-20 aqpipfin2). Standing at
+ * TEMPLE_DOOR_OUT first and letting the OPLOC server-walk the last step fixes it.
+ *
+ * TRUE = inside (already, or Open teleported us through = stage >= 4). FALSE =
+ * still outside after the wait = door locked (stage < 4) or a missed cross.
+ */
+async function enterTemple(log: (m: string) => void): Promise<boolean> {
+    const here = Game.tile();
+    if (here && insideTemple(here)) {
+        return true;
+    }
+    if (!(await walkTo(TEMPLE_DOOR_OUT, 1, log))) {
+        return false;
+    }
+    const leaf = Locs.query().name('Large door').action('Open').within(4).nearest();
+    if (!leaf) {
+        return false;
+    }
+    if (!(await leaf.interact('Open'))) {
+        return false;
+    }
+    return Execution.delayUntil(() => {
+        const t = Game.tile();
+        return t !== null && insideTemple(t);
+    }, 6000);
 }
 
 /** Attack a target npc and wait for its death (scene-slot despawn), the
@@ -349,12 +396,13 @@ async function spineLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
 
-    // Surface. Temple front door opening = stage >= 4 (temple_doors.rs2:9-16).
-    if (!(await tryOpen('Large door', TEMPLE_DOOR, log))) {
+    // Surface. Entering the temple only works at stage >= 4 (temple_doors.rs2:9-16),
+    // so a failed entry IS the "still in the early phase" signal.
+    if (!(await enterTemple(log))) {
         log('priestperil: temple door locked (stage < 4) — early phase');
         return earlyLeg(log);
     }
-    log('priestperil: temple door open (stage >= 4)');
+    log('priestperil: inside the temple (stage >= 4)');
     // Stage >= 4. Cell door opening = stage >= 6 -> water chain / essence.
     if (await tryOpen('Cell door', CELL_DOOR, log)) {
         return waterLeg(log);
@@ -375,7 +423,7 @@ async function spineLeg(log: (m: string) => void): Promise<boolean> {
  */
 async function monumentLeg(log: (m: string) => void): Promise<boolean> {
     if (!(await tryOpen('Gate', GATE1, log))) {
-        if (!(await tryOpen('Large door', TEMPLE_DOOR, log))) {
+        if (!(await enterTemple(log))) {
             return false;
         }
         await cellStoryLeg(log);
@@ -419,13 +467,11 @@ async function monumentLeg(log: (m: string) => void): Promise<boolean> {
 /** Iron key held: unlock the cell (stage -> 6, key consumed,
  *  trapped_drezel.rs2:47-58). The golden key does NOT fit (:59-62). */
 async function unlockLeg(log: (m: string) => void): Promise<boolean> {
-    const here = Game.tile();
-    if (here !== null && !isUnderground(here)) {
-        // Entering the temple crosses the front door — open the leaf first
-        // (baked-walkable, live-locked).
-        if (!(await tryOpen('Large door', TEMPLE_DOOR, log))) {
-            return false;
-        }
+    // Reach the L2 cell: cross the front door into the lobby (enterTemple also
+    // climbs out of the crypt via the hop when we come straight from the monument),
+    // then walk up to the cell door.
+    if (!(await enterTemple(log))) {
+        return false;
     }
     if (!(await walkTo(CELL_DOOR_STAND, 2, log))) {
         return false;
@@ -455,19 +501,11 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
     if (here === null) {
         return false;
     }
-    const enterTemple = async (): Promise<boolean> => {
-        if (!isUnderground(here)) {
-            if (!(await tryOpen('Large door', TEMPLE_DOOR, log))) {
-                return false;
-            }
-        }
-        return true;
-    };
 
     // 1. Blessed -> pour on the Coffin (stage -> 7, vampire_coffin.rs2:10-19),
     //    then talk Drezel in the same pass (7 -> 8, trapped_drezel.rs2:22-27).
     if (heldId(BLESSED_ID)) {
-        if (!(await enterTemple())) {
+        if (!(await enterTemple(log))) {
             return false;
         }
         if (!(await walkTo(COFFIN, 3, log))) {
@@ -495,7 +533,7 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
     // 2. Murky -> blessed: use it on the cell Drezel (opnpcu,
     //    trapped_drezel.rs2:56-58 -> drezel_bless_water :145-152).
     if (heldId(MURKY_ID)) {
-        if (!(await enterTemple())) {
+        if (!(await enterTemple(log))) {
             return false;
         }
         if (!(await tryOpen('Cell door', CELL_DOOR, log))) {
@@ -520,7 +558,7 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
     // 3. No water held. Talk the cell Drezel FIRST: at 6 it's a hint, at 7 it
     //    SETS 8, at >=8 it's harmless — this is what disambiguates "empty
     //    Bucket because not filled yet" from "empty Bucket because poured".
-    if (!(await enterTemple())) {
+    if (!(await enterTemple(log))) {
         return false;
     }
     if (!(await tryOpen('Cell door', CELL_DOOR, log))) {
