@@ -47,7 +47,7 @@ export interface SolveClueHost {
     log(m: string): void;
     setStatus(s: string): void;
     /** An item name counts as food for the bank keep-set. */
-    isFood(name: string | null | undefined): boolean;
+    isFood(name: string): boolean;
     /** Food to top up before the trail; '' skips the top-up. */
     foodName(): string;
     foodWithdraw(): number;

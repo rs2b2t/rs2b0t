@@ -1,7 +1,10 @@
 import { TaskBot } from '../api/Bot.js';
+import type { Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
+import { nearestBank } from '../api/BankLocations.js';
 import { Sustain } from '../api/Sustain.js';
+import { Traversal } from '../api/Traversal.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -22,9 +25,10 @@ export const SETTINGS: SettingsSchema = {
  * Standalone easy-clue solver. Watches the pack for a clue scroll or reward
  * casket and runs the shared bank-first solve flow: dump everything except
  * the clue + food + spade at the NEAREST known bank, walk the trail, open the
- * casket. Between clues it idles wherever it stands — hand it a clue (or
- * start it holding one) and it goes. Abandoned clues (missing tool,
- * unreachable step) stay in the pack and are skipped until they change.
+ * casket. After a completed solve it walks to the nearest known bank and
+ * idles there — hand it a clue (or start it holding one) and it goes.
+ * Abandoned clues (missing tool, unreachable step) stay in the pack and are
+ * skipped until they change.
  */
 export default class ClueSolver extends TaskBot {
     override loopDelay = 600;
@@ -32,6 +36,7 @@ export default class ClueSolver extends TaskBot {
     private status = 'waiting for a clue';
     private solved = 0;
     private solveClue: SolveClue | undefined;
+    private returnToBank = false;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -43,6 +48,7 @@ export default class ClueSolver extends TaskBot {
             setStatus: s => {
                 if (s === 'clue solved') {
                     this.solved++;
+                    this.returnToBank = true;
                 }
                 this.setStatus(s);
             },
@@ -71,8 +77,30 @@ export default class ClueSolver extends TaskBot {
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
         });
 
+        // Post-solve bank return. Registered AFTER solveClue so a fresh clue
+        // (dropped in mid-walk, or straight out of the casket) preempts the
+        // walk; the flag survives that solve and the return fires after it.
+        const bankReturn: Task = {
+            validate: () => this.returnToBank && heldClueLikeId() === null && Game.tile() !== null,
+            execute: async () => {
+                const here = Game.tile()!;
+                const bank = nearestBank(here);
+                if (!bank) {
+                    this.log('[clue] no known bank on this level to return to — idling here');
+                } else if (Math.max(Math.abs(bank.tile.x - here.x), Math.abs(bank.tile.z - here.z)) > 3) {
+                    this.setStatus(`returning to the ${bank.name} bank`);
+                    this.log(`[clue] trail done — returning to the ${bank.name} bank (${bank.tile})`);
+                    if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.log(`  ${m}`) }))) {
+                        this.log('[clue] walk to the bank failed — idling here');
+                    }
+                }
+                this.returnToBank = false;
+                this.setStatus('waiting for a clue');
+            }
+        };
+
         this.log(`ClueSolver — watching the pack for easy clue scrolls/caskets${food ? `, food '${food}'` : ', foodless'}`);
-        this.add(new ContinueDialog(), this.solveClue);
+        this.add(new ContinueDialog(), this.solveClue, bankReturn);
     }
 
     setStatus(s: string): void {
@@ -83,7 +111,7 @@ export default class ClueSolver extends TaskBot {
         const cur = ClueExecutor.current;
         const held = heldClueLikeId();
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#e8c35b' });
-        p.title(`ClueSolver — ${held === null ? 'waiting for a clue' : this.status}`);
+        p.title(`ClueSolver — ${held === null && !this.returnToBank ? 'waiting for a clue' : this.status}`);
 
         const tab = p.tabs('cs', ['Overview', 'Clue']);
         if (tab === 'Overview') {
