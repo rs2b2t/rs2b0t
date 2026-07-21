@@ -21,6 +21,7 @@ import { BUDGET_BUFFER, cheapestUnmetGate, clusterEligible, decide, filterRouteB
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import { ROUTE, SMOKE_ROUTE } from '../shops/data/route.js';
 import type { AccountView, BuyPolicy, NavPointLike, Route, SeenMap } from '../shops/types.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 /** Every distinct display name the live route can buy — the buyItems options. */
 const BUYABLE_NAMES: string[] = [...new Set(
@@ -36,12 +37,6 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
     stopFloorGp: { type: 'number', default: 5000, min: 0, label: 'Stop below bank gp', help: 'clean stop when the bank runs dry' },
     route: { type: 'string', default: 'live', options: ['live', 'smoke-varrock'], label: 'Route', help: 'smoke-varrock is the Aubury-only test route' }
 };
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 const STATE_KEY_PREFIX = 'rs2b0t:shoprun:state:';
 const hasStorage = typeof localStorage !== 'undefined';

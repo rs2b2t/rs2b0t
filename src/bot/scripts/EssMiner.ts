@@ -19,12 +19,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore } from '../runtime/Settings.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, inEssMine, requiredMiningLevel, resolvePick, withdrawOneOp } from './EssMinerLogic.js';
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Varrock East bank + Aubury's rune shop + the essence mine — decoded from the
 // packed server maps and content (2026-07-12 ess-miner spec). Booths line

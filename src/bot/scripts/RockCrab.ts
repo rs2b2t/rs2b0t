@@ -31,6 +31,7 @@ import { DEFAULT_SPOTS } from './RockCrabSpots.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // The rock crab field east of Rellekka, on the northern shoreline (verified
 // live: dormant "Rocks" NPCs at x 2694-2719, z 3714-3729; walking adjacent
@@ -71,12 +72,6 @@ const FOOD_OPTIONS = [
 
 // XP/hr tracks every stat this bot can train, whatever the style.
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const s = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
 
 const AMMO_OPTIONS = ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Ogre arrow', 'Bolts', 'Barbed bolts'];
 
@@ -155,7 +150,6 @@ let AMMO = 'Bronze arrow';
 let AMMO_WITHDRAW = 200;
 let MIN_STACK = 1;
 let COLLECT_RANGE = 12;
-
 
 /**
  * Rock crab trainer for the Rellekka shoreline. Walks among the dormant

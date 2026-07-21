@@ -14,12 +14,7 @@ import { EventSignal } from '../api/EventSignal.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Waypoints for the Seers loop (user-supplied, live). The bank run is a chain of
 // short, reliable hops — field centre → gate (the opening in the field boundary)

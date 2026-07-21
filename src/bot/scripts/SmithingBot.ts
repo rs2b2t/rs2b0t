@@ -12,6 +12,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Varrock West anvil + bank — sane defaults; the exact anvil tile is verified live.
 const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
@@ -19,11 +20,6 @@ const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 // Keywords matched (substring, case-insensitive) against the anvil panel's
 // tier-specific item names — e.g. the Bronze panel offers "Bronze arrowtips",
 // "Bronze dart tip", "Bronze kiteshield" (NOT "arrowheads"/"dart tips"/"kite

@@ -134,3 +134,10 @@ export class PaintState {
 
 /** The client-wide paint state singleton (Paint API + input layer share it). */
 export const paintState = new PaintState();
+
+/** `h:mm:ss` from a minutes count — the standard runtime readout every bot's
+ *  paint uses. */
+export function fmtDuration(mins: number): string {
+    const t = Math.max(0, Math.floor(mins * 60));
+    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}

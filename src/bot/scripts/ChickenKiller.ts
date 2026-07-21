@@ -17,15 +17,10 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Traversal } from '../api/Traversal.js';
 import { RecoveryHints } from '../runtime/RecoveryHints.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // XP/hr sums every melee stat this bot can train (whichever com_mode is set).
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 /** Tunable parameters (shown in the panel; also `?ChickenKiller.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -45,7 +40,6 @@ export const SETTINGS: SettingsSchema = {
     },
     ...PERIODIC_BANK_SETTINGS
 };
-
 
 /**
  * Kills a configurable target NPC (settings:

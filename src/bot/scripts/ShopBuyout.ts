@@ -15,14 +15,9 @@ import { buyoutPlan } from '../shops/BuyoutLogic.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import type { ShopRecord } from '../shops/types.js';
 import { SHOP_PRESETS, presetByLabel, presetBuyableNames } from './shopPresets.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const DEFAULT_PRESET = SHOP_PRESETS[0]; // Mage Arena — Gundai still web-walk-free; park it in the room
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SHOPBUYOUT_SETTINGS: SettingsSchema = {
     shop: { type: 'string', default: DEFAULT_PRESET.label, options: SHOP_PRESETS.map(p => p.label), label: 'Shop', help: 'the shop to buy out — its trade tile and nearest bank are baked in (add more in shopPresets.ts)' },

@@ -23,6 +23,7 @@ import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRe
 import { stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Grounded from the 274 content tree (~/code/rs2b2t-content, 2026-07-07):
 // - [ardougne_guard] name=Guard, vislevel 20, 22 hp, respawn 100 ticks; seven
@@ -45,12 +46,6 @@ const DEFAULT_LOOT = 'clue scroll, blood rune, nature rune, chaos rune, body tal
 
 // XP/hr sums every melee stat this bot can train (whichever com_mode is set).
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 /** Tunable parameters (panel + `?ArdyFighter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {

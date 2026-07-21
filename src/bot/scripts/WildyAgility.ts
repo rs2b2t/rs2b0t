@@ -15,6 +15,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Grounded from ~/code/rs2b2t-content (2026-07-08):
 // skill_agility/scripts/wilderness_course.rs2 + configs/wilderness_course.loc.
@@ -150,12 +151,6 @@ export function classifyAttempt(xpGained: boolean, tookDamage: boolean): 'cleare
 /** Carried food slots (contains-match on the food name; food is non-stacking). */
 function foodCount(): number {
     return Inventory.items().filter(i => i.name?.toLowerCase().includes(FOOD)).length;
-}
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
 /**

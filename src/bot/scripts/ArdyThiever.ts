@@ -27,6 +27,7 @@ import { CAKE_ITEMS } from './CakeStallLogic.js';
 import { stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // East Ardougne market layout — baked in, not settings. Per-target anchors
 // come from the packed spawn data (see ArdyThieverLogic + the 2026-07-12
@@ -68,12 +69,6 @@ const FOOD = CAKE_ITEMS;
 // iron ore). Gems bank via the shared common-junk list.
 const LOOT = ['coins', 'chaos rune', 'death rune', 'blood rune', 'nature rune', 'jug of wine', 'fire orb', 'gold ore', 'clue scroll', 'body talisman', 'steel arrow', 'iron ore'];
 const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     thieveTarget: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Pickpocket target', help: 'the bot knows each target\'s market spot — no anchor to place' },

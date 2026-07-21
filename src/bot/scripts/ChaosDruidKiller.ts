@@ -17,6 +17,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 /** Tunable parameters (panel + `?ChaosDruidKiller.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
@@ -41,12 +42,6 @@ const BANK = { name: 'Bank booth', op: 'Use-quickly', stand: new Tile(3094, 3491
 
 // XP/hr sums every melee stat this bot can train.
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 /**
  * Kills Chaos druids in the Edgeville (wilderness) dungeon, loots the herb /

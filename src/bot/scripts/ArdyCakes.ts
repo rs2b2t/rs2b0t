@@ -22,6 +22,7 @@ import { CAKE_ITEMS, LOCKOUT_TICKS, STAND } from './CakeStallLogic.js';
 import { carriedCakes, stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // East Ardougne layout — baked in (see the 2026-07-20 cakethiever design).
 // The bot lives on the golden stand; everything else is a short fixed walk.
@@ -35,12 +36,6 @@ const FLEE_TILE = new Tile(2655, 3298, 0);
 const MARKET_RADIUS = 40;
 const OBSTACLE = ['door', 'gate'];
 const ENGAGE_RADIUS = 5;
-
-/** minutes -> h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     guardResponse: { type: 'string', default: 'Flee', options: ['Flee', 'Fight'], label: 'Guard response', help: 'caught at the stall: Flee kites the guard off the market; Fight kills it (bring combat stats)' },

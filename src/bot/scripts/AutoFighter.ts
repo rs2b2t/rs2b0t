@@ -21,17 +21,12 @@ import type Tile from '../api/Tile.js';
 import { countMatching, matchesAny, shouldEat, shouldPanic, slotsMatching } from './ArdyFighterLogic.js';
 import { DEFAULT_LOOT, SPOTS, SPOT_OPTIONS, TARGET_OPTIONS } from './AutoFighterData.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 /** Bank keep-set beyond food/coins: the trail kit stays for future clues. */
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Guard', options: TARGET_OPTIONS, label: 'Target to kill' },

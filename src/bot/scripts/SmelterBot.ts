@@ -20,18 +20,13 @@ import {
     countPrimary,
     type Recipe
 } from './SmelterBotLogic.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(3269, 3167, 0);
 // Stand tile for the Al Kharid furnace (the furnace is a large loc ~(3272,3185);
 // you stand adjacent to its EAST footprint edge and use ore on it from here).
 const DEFAULT_FURNACE_STAND = new Tile(3275, 3185, 0);
 const BOOTH = { op: 'Use-quickly' };
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: [...BAR_OPTIONS], label: 'Bar to smelt', help: 'withdraw plan + coal ratio are derived from this' },

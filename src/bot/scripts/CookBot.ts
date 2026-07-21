@@ -13,16 +13,11 @@ import { Locs } from '../api/queries/Locs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { countRaw, lastRawIndex } from './CookBotLogic.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(2809, 3441, 0);
 const DEFAULT_RANGE_STAND = new Tile(2817, 3443, 0);
 const BOOTH = { op: 'Use-quickly' };
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     fish: { type: 'string', default: 'Raw salmon', label: 'Raw fish to cook (contains)', help: 'e.g. Raw salmon / Raw shark / Raw lobster' },

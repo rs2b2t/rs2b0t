@@ -19,6 +19,7 @@ import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, bestPickaxe, resolveRockIds } from './MiningRocks.js';
 import { FISHING_METHOD_OPTIONS, WHIRLPOOL_IDS, resolveFishMethod } from './FishingMethods.js';
 import { Banking } from '../api/Banking.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 /** Shared parameter schema for any gathering preset (mining, fishing, etc.). */
 export const GATHERING_SETTINGS: SettingsSchema = {
@@ -28,12 +29,6 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
     leashRadius: { type: 'number', default: 10, min: 2, max: 30, label: 'Leash radius (tiles)' }
 };
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 /**
  * One bot for all gathering: find a target (scenery LOC or NPC) by name +

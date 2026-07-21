@@ -11,17 +11,12 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { matchProduct } from './BankFletcherLogic.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Varrock West bank — a sane default; the exact stand tile is verified in the smoke.
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
 const PRODUCT_OPTIONS = ['Arrow shafts', 'Short bow', 'Long bow'];
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     material: { type: 'string', default: 'Logs', label: 'Logs to fletch (contains)', help: 'bank item to withdraw — substring, resolved to the exact name (e.g. Logs / Oak logs / Willow logs)' },

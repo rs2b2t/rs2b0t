@@ -13,6 +13,7 @@ import { walkOpening } from '../api/walkOpening.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Spinning is a weakqueue (spinning.rs2): it drains the pack ~1 fibre / 2 ticks,
 // replaying the anim each item — so Game.animating() FLICKERS false between items
@@ -38,12 +39,6 @@ const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
 const DEFAULT_LADDER_TILE = new Tile(2714, 3471, 0);
 const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
 const BOOTH = { op: 'Use-quickly' };
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
 
 export const SETTINGS: SettingsSchema = {
     product: { type: 'string', default: 'Flax', options: ['Flax', 'Wool'], label: 'Fibre to spin', help: 'matched against the "What would you like to spin?" menu' },

@@ -15,12 +15,7 @@ import { Npcs } from '../api/queries/Npcs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-
-/** minutes → h:mm:ss for the paint's runtime line. */
-function fmtDuration(mins: number): string {
-    const t = Math.max(0, Math.floor(mins * 60));
-    return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-}
+import { fmtDuration } from '../api/hud/paintLogic.js';
 
 /** Tunable parameters (panel + `?ThievingBot.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
