@@ -11,9 +11,10 @@ import { goblindiplomacy } from './goblindiplomacy.js';
 import { demonslayer } from './demonslayer.js';
 import { witchshouse } from './witchshouse.js';
 import { merlinscrystal } from './merlinscrystal.js';
+import { priestperil } from './priestperil.js';
 
 /** Implemented quests, in RUN ORDER (cheapest/most-certain first). */
-export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, romeojuliet, princeali, waterfall, goblindiplomacy, demonslayer, witchshouse, merlinscrystal];
+export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, romeojuliet, princeali, waterfall, goblindiplomacy, demonslayer, witchshouse, merlinscrystal, priestperil];
 
 export function defById(id: string): QuestModule | undefined {
     return QUEST_DEFS.find(d => d.record.id === id);

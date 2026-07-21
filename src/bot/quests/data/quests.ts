@@ -550,13 +550,16 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         // source: priestperil_journal.rs2:6-7 no skill/qp gate (only "defeat a level 30 enemy" combat note);
-        // :91 quest advertises bringing 50 rune essence to Drezel (obj "Rune essence", ores.obj); quest.constant:109 QP.
+        // NO quest gate server-side (king_roald.rs2:38-40 — F2P can even start it), but essence mining
+        // rides Aubury's Rune Mysteries-gated teleport, satisfied by AIO run order. quest.constant:109 QP.
+        // 50 Rune essence is deliberately NOT a record item: unstackable, it can never fit the 28-slot
+        // pack at provisioning time — the def's essence phase banks/mines it in ~25-per-trip legs.
         id: 'priestperil',
         name: 'Priest in Peril',
         questPoints: 1,
         requirements: {},
         items: [
-            { name: 'Rune essence', qty: 50, kind: 'mustHave' }
+            { name: 'Bucket', qty: 1, kind: 'acquirable' }
         ]
     },
     {
