@@ -85,18 +85,39 @@ const logLines = (page: Page) => page.evaluate(() => ((globalThis as never as R)
 try {
     // ---- A: the fighter ----
     const A = await bootClient('A', `af${ts}`, true);
+    // Seed the fighter's 8-cake food target directly: the shared cake stall's
+    // restock is world-shared and slow after other Ardy smokes drain it, and
+    // waiting on it starved two sweeps' watch windows. The smoke tests clue
+    // preemption, not stall provisioning.
+    const typeA = async (t: string) => {
+        await A.locator('#canvas').click({ position: { x: 380, y: 250 } });
+        await A.waitForTimeout(400);
+        await A.keyboard.type(t, { delay: 30 });
+        await A.keyboard.press('Enter');
+        await A.waitForTimeout(1500);
+    };
+    await typeA('::give cake 8');
     await A.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyFighter')); });
-    console.log('started ArdyFighter — waiting for fight evidence before staging the drop');
-    // Gate the drop on the fighter actually grinding (a loot line = a kill
-    // landed). A flat 15s raced the food provisioning: after other Ardy smokes
-    // empty the cake stall, restock can take minutes and the fighter never
-    // reaches the fight loop inside the watch (2026-07-21 sweep flake).
+    console.log('started ArdyFighter — waiting for kill evidence before staging the drop');
+    // Gate the drop on combat xp rising (ArdyFighter logs nothing per kill —
+    // xp is the only cheap kill evidence, same detector as autofighter-test).
+    // A flat 15s raced the food provisioning: after other Ardy smokes empty
+    // the cake stall, restock can take minutes (2026-07-21 sweep flake).
+    const combatXpA = () => A.evaluate(() => {
+        const { Skills } = (globalThis as never as R & { __rs2b0t: { Skills: { xp(s: string): number } } }).__rs2b0t;
+        return ['attack', 'strength', 'defence', 'hitpoints'].reduce((n, s) => n + Skills.xp(s), 0);
+    });
+    const xp0 = await combatXpA();
     let fighting = false;
     for (let i = 0; i < 150 && !fighting; i++) {
         await A.waitForTimeout(2000);
-        fighting = (await logLines(A)).some(l => /^\s*looted /.test(l));
+        fighting = (await combatXpA()) - xp0 >= 80;
     }
-    if (!fighting) { fail('fighter never reached the fight/loot loop (stall/food provisioning stalled?) — cannot stage the preemption test'); }
+    if (!fighting) {
+        console.log('--- fighter log tail (gate failure) ---');
+        for (const l of (await logLines(A)).slice(-20)) { console.log(`  ${l}`); }
+        fail('fighter never gained combat xp (stall/food or target contention?) — cannot stage the preemption test');
+    }
 
     // ---- B: the dropper ----
     const B = await bootClient('B', `bf${ts}`, false);

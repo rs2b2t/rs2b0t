@@ -54,7 +54,10 @@ try {
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'ChickenKiller') fail(`panel shows "${current}" after selecting ChickenKiller`);
-    const hasFeatherParam = (await page.locator('.rs2b0t-setting', { hasText: 'Gather feathers?' }).count()) > 0;
+    // The panel renders a read-only key:value summary (.rs2b0t-param-skey =
+    // schema KEY, not the label) + an Edit button; the editable form is the
+    // ParamsModal (see settings-test).
+    const hasFeatherParam = (await page.locator('.rs2b0t-param-skey', { hasText: 'gatherFeathers' }).count()) > 0;
     if (!hasFeatherParam) fail('selecting ChickenKiller did not load its parameters');
     console.log('library: selected ChickenKiller -> panel + params updated');
 

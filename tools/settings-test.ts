@@ -64,13 +64,17 @@ try {
         // an "Edit parameters" button; the editable form is the ParamsModal
         // (.rs2b0t-param-row rows, .rs2b0t-param-cb checkboxes). Open it to
         // reach the checkbox, close (✕) to return — edits persist on change.
+        // Two .rs2b0t-modal-backdrop nodes exist (library + params modals), so
+        // wait on .rs2b0t-params-body — unique to the params modal — and scope
+        // the ✕ to that modal.
+        const paramsModal = page.locator('.rs2b0t-modal', { has: page.locator('.rs2b0t-params-body') });
         const openParams = async () => {
             await page.getByRole('button', { name: /Edit parameters/ }).click();
-            await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
+            await page.waitForSelector('.rs2b0t-params-body', { state: 'visible', timeout: 5000 });
         };
         const closeParams = async () => {
-            await page.getByRole('button', { name: '✕' }).click();
-            await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
+            await paramsModal.getByRole('button', { name: '✕' }).click();
+            await page.waitForSelector('.rs2b0t-params-body', { state: 'hidden', timeout: 5000 });
         };
         const checkbox = page.locator('.rs2b0t-param-row', { hasText: 'Gather feathers?' }).locator('input.rs2b0t-param-cb');
         await openParams();
