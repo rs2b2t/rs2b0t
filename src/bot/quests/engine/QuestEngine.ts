@@ -315,8 +315,17 @@ export class QuestEngine implements Task {
             // item, withdrawn from the bank once here (rides the same bank trip).
             // Best-effort: no food configured or a dry bank simply carries none.
             const foodItem = this.host.foodItem();
+            // Before ANY bank has been opened this session lastBankCounts is
+            // empty, which floatWithdraw reads as "bank has none" — on a clean
+            // pack that skipped food forever (provisioning runs once). Unseen
+            // bank -> withdraw optimistically: the trip itself refreshes the
+            // counts, and a genuinely dry bank terminates on the next pass
+            // (the same partial-drain model as the coin float).
+            const packFood = foodItem ? (snap.inv.get(foodItem.toLowerCase()) ?? 0) : 0;
             const foodFloat = (module.food && foodItem)
-                ? floatWithdraw(snap.inv, this.lastBankCounts, foodItem, module.food)
+                ? (this.lastBankCounts.size > 0
+                    ? floatWithdraw(snap.inv, this.lastBankCounts, foodItem, module.food)
+                    : (module.food - packFood > 0 ? { name: foodItem, qty: module.food - packFood } : null))
                 : null;
             const extras = [coinFloat, foodFloat].filter((w): w is { name: string; qty: number } => w !== null);
             if (plan.blocked.length > 0 && plan.withdraw.length === 0) {
@@ -542,6 +551,14 @@ export class QuestEngine implements Task {
         // quest-record item — track them unconditionally or snap.bankCoins would
         // stay 0 forever (no record declares Coins; review catch, PAW Task 1).
         next.set('coins', Bank.count('Coins'));
+        // Same class of bug for the configured food: it is never a record item,
+        // so without tracking it here floatWithdraw always reads banked=0 and
+        // every module's `food: N` declaration silently withdraws nothing
+        // (live: Waterfall ran foodless end to end).
+        const food = this.host.foodItem();
+        if (food) {
+            next.set(food.toLowerCase(), Bank.count(food));
+        }
         for (const r of this.records) {
             for (const it of r.items) {
                 const key = it.name.toLowerCase();

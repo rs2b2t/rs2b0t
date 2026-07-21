@@ -806,7 +806,7 @@ export const waterfall: QuestModule = {
     // Carry food for the dungeon/combat legs — the engine withdraws this many of
     // the AIOQuester's configured food item at provisioning time and the eat hook
     // consumes it when HP dips (the tomb/Golrie legs run past aggressive spawns).
-    food: 10,
+    food: 8,
     // Rope is the only player-supplied record item; a death drops it, so it needs a
     // gather fn or the engine hard-blocks re-provisioning (deliberate-death finding).
     gather: { rope: gatherRope },
