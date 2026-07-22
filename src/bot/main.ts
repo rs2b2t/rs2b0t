@@ -29,11 +29,13 @@ export { BotClient, BotHost };
 
 // Self-boot when loaded in a page that provides the game canvas (bot.html).
 // Connection args mirror /rs2.cgi defaults; override via query string, e.g.
-// bot.html?nodeid=10&members=0&lowmem=1
+// bot.html?nodeid=10&members=0&lowmem=0
 if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const params = new URLSearchParams(window.location.search);
     const nodeid = parseInt(params.get('nodeid') ?? '10', 10);
-    const lowmem = params.get('lowmem') === '1';
+    // Low detail by DEFAULT — a wall of bots at high detail melts weaker machines
+    // (issue #11). Opt back into high detail with ?lowmem=0.
+    const lowmem = params.get('lowmem') !== '0';
     const members = params.get('members') !== '0';
 
     const client = new BotClient(nodeid, lowmem, members);

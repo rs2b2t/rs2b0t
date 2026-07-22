@@ -12,6 +12,10 @@ import ParamsModal from './ParamsModal.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
+// Per-tab (sessionStorage) so each tab remembers its OWN script across reloads
+// without syncing to sibling tabs (issue #7).
+const SELECTED_SCRIPT_KEY = 'rs2b0t:selectedScript';
+
 /**
  * Live state panel + script controls. Plain DOM, no framework — DOM use
  * stays inside src/bot/ui/ + the multibox wall, keeping a headless build
@@ -66,7 +70,10 @@ export default class BotPanel {
 
         // the library modal is the picker; the panel shows the current choice
         this.library = new ScriptLibrary(name => this.selectScript(name));
-        this.selectedScript = ScriptRegistry.list()[0]?.name ?? '';
+        // Restore this tab's last pick across a reload; fall back to the first
+        // registered script if none saved or it no longer exists.
+        const remembered = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SELECTED_SCRIPT_KEY) : null;
+        this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
 
         const pick = el('div', 'rs2b0t-buttons');
         this.scriptName = el('span', 'rs2b0t-current-script');
@@ -226,6 +233,9 @@ export default class BotPanel {
             return;
         }
         this.selectedScript = name;
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem(SELECTED_SCRIPT_KEY, name);
+        }
         this.scriptName.textContent = name;
         this.renderSettings();
         this.renderScriptControls();

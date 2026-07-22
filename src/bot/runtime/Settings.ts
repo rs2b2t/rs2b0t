@@ -151,7 +151,11 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' }
 };
 
-const hasStorage = typeof localStorage !== 'undefined';
+// Per-tab (sessionStorage) so sibling tabs each running a different bot don't
+// clobber each other's params; localStorage stays a read fallback for legacy
+// values and the smoke harness (which seeds `rs2b0t:set:*` there). Issue #7.
+const hasSession = typeof sessionStorage !== 'undefined';
+const hasLocal = typeof localStorage !== 'undefined';
 
 function storageKey(name: string, key: string): string {
     return `rs2b0t:set:${name}:${key}`;
@@ -174,23 +178,37 @@ class SettingsStoreImpl {
         return null;
     }
 
-    /** Saved panel edit for one key, or undefined. */
+    /** Saved panel edit for one key, or undefined. Per-tab value wins; falls
+     *  back to a legacy/shared localStorage value (also the smoke seed path). */
     saved(name: string, key: string): string | undefined {
-        if (!hasStorage) {
-            return undefined;
+        if (hasSession) {
+            const v = sessionStorage.getItem(storageKey(name, key));
+            if (v !== null) {
+                return v;
+            }
         }
-        const v = localStorage.getItem(storageKey(name, key));
-        return v === null ? undefined : v;
+        if (hasLocal) {
+            const v = localStorage.getItem(storageKey(name, key));
+            if (v !== null) {
+                return v;
+            }
+        }
+        return undefined;
     }
 
     save(name: string, key: string, rawString: string): void {
-        if (hasStorage) {
-            localStorage.setItem(storageKey(name, key), rawString);
+        if (hasSession) {
+            sessionStorage.setItem(storageKey(name, key), rawString);
         }
     }
 
     clear(name: string, key: string): void {
-        if (hasStorage) {
+        // Drop the per-tab value AND any legacy/shared one, so a reset actually
+        // returns the key to its default instead of the localStorage fallback.
+        if (hasSession) {
+            sessionStorage.removeItem(storageKey(name, key));
+        }
+        if (hasLocal) {
             localStorage.removeItem(storageKey(name, key));
         }
     }
