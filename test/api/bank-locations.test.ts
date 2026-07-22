@@ -12,7 +12,7 @@ test('every bank centre is a plausible level-0 world tile', () => {
     for (const b of BANK_LOCATIONS) {
         expect(b.tile.level, b.name).toBe(0);
         expect(b.tile.x, b.name).toBeGreaterThan(2500);
-        expect(b.tile.x, b.name).toBeLessThan(3500);
+        expect(b.tile.x, b.name).toBeLessThan(3600); // Morytania (Canifis) sits east of the 3500 mainland
         expect(b.tile.z, b.name).toBeGreaterThan(2900);
         expect(b.tile.z, b.name).toBeLessThan(3600);
     }
@@ -58,9 +58,14 @@ describe('bank entry gates', () => {
         expect(shilo.requires?.quest).toBe('Shilo Village');
     });
 
+    test('Canifis carries its Priest in Peril gate', () => {
+        const canifis = BANK_LOCATIONS.find(b => b.name === 'Canifis')!;
+        expect(canifis.requires?.quest).toBe('Priest in Peril');
+    });
+
     test('every other bank is ungated', () => {
         const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined).map(b => b.name).sort();
-        expect(gated).toEqual(['Fishing Guild', 'Shilo Village']);
+        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Shilo Village']);
     });
 });
 
@@ -78,6 +83,11 @@ describe('nearestUsableBank', () => {
     test('near Shilo without the quest, routes to Yanille instead', () => {
         const picked = nearestUsableBank({ x: 2850, z: 2950, level: 0 }, openOnly);
         expect(picked?.name).toBe('Yanille');
+    });
+
+    test('in Canifis, a Priest-in-Peril character banks at Canifis', () => {
+        const picked = nearestUsableBank({ x: 3510, z: 3481, level: 0 }, all);
+        expect(picked?.name).toBe('Canifis');
     });
 
     test('level filter still applies', () => {

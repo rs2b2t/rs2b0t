@@ -17,7 +17,7 @@ export interface BankLocation {
 }
 
 /**
- * Known bank centres (level 0), world coords, derived from the content's
+ * Known bank centres (level 0), world coords, mostly derived from the content's
  * `bank_zones.dbrow` (skill_firemaking) — midpoint of each named zone. Used to
  * web-walk to the NEAREST bank when a gathering bot fills up and no booth is
  * loaded in the current scene (the resource is more than a screen from a bank).
@@ -27,7 +27,9 @@ export interface BankLocation {
  * Gated areas carry `requires` and are SKIPPED for characters that can't
  * enter — pure geometry stranded sub-68 fishers at the guild door (live
  * 2026-07-17, re-hit 2026-07-21). Shantay Pass is ungated: its bank sits on
- * the free north side of the gate.
+ * the free north side of the gate. Canifis is NOT in bank_zones.dbrow (that's
+ * the firemaking list) — its centre is the walkable tile west of the Canifis
+ * booth column (3513,3479-3482); it's Morytania, gated behind Priest in Peril.
  */
 export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Varrock East', tile: new Tile(3253, 3420, 0) },
@@ -42,6 +44,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Yanille', tile: new Tile(2612, 3092, 0) },
     { name: 'Ardougne West', tile: new Tile(2616, 3332, 0) },
     { name: 'Ardougne East', tile: new Tile(2655, 3283, 0) },
+    { name: 'Canifis', tile: new Tile(3512, 3480, 0), requires: { quest: 'Priest in Peril' } },
     { name: 'Shilo Village', tile: new Tile(2852, 2954, 0), requires: { quest: 'Shilo Village' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
     { name: 'Shantay Pass', tile: new Tile(3309, 3120, 0) },
