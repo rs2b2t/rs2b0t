@@ -28,13 +28,20 @@ let answered: number[];
 let continues: number;
 let walks: string[]; // every walkResilient dest — pathfinding evidence
 
+// Spread the REAL adapter so sibling suites still see every reader/actions
+// method (bun module mocks are process-global; the real methods null-guard
+// safely when unattached).
+const RealAdapter = await import('#/bot/adapter/ClientAdapter.js');
 mock.module('#/bot/adapter/ClientAdapter.js', () => ({
+    ...RealAdapter,
     reader: {
+        ...RealAdapter.reader,
         countDialogOpen: () => countDialog,
         modals: () => ({ main: -1, chat: pages.length > 0 ? 5 : -1, side: -1 }),
         worldTile: () => ({ x: 2394, z: 3488, level: 0 })
     },
     actions: {
+        ...RealAdapter.actions,
         answerCountDialog: (n: number): boolean => {
             answered.push(n);
             countDialog = false;

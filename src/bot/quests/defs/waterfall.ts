@@ -68,10 +68,10 @@ function tombKeep(): string[] {
     return ['glarial', 'rope', 'coins', 'book', ...(f ? [f.toLowerCase()] : [])];
 }
 // Waterfall's geometric-nearest bank is the Fishing Guild (2586,3420), gated behind
-// level-68 Fishing — a quester can't enter it (the offline pathfinder can't see the
-// skill gate, so nearestBank() picks it and the bot strands at the guild door, live
-// 2026-07-17). Ardougne West (2616,3332) is accessible at ~the same distance; route
-// every Waterfall deposit/withdraw there explicitly.
+// level-68 Fishing — a quester can't enter it (stranded at the guild door, live
+// 2026-07-17; nearestBank() now skips entry-gated banks, fixed 2026-07-21).
+// Ardougne West (2616,3332) is at ~the same distance; keep routing every
+// Waterfall deposit/withdraw there explicitly — deterministic and live-proven.
 const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 // Aemad's Adventuring Supplies (Ardougne East market general store — Aemad @
 // 2613,3291 / Kortan @ 2615,3292, both Trade; stocks rope 20/100), the accessible

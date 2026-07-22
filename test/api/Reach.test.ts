@@ -20,8 +20,13 @@ let walkOpts: { radius?: number; attempts?: number; timeoutMs?: number }[]; // o
 // these captured real functions alongside the stubbed WalkExecutor.
 const { isOpenableBarrier, isOpenBarrierLeaf } = await import('#/bot/nav/WalkExecutor.js');
 
+// Same global-mock rule as WalkExecutor above: spread the REAL adapter so
+// sibling suites loaded later still see every reader method (the real ones
+// null-guard safely when unattached).
+const RealAdapter = await import('#/bot/adapter/ClientAdapter.js');
 mock.module('#/bot/adapter/ClientAdapter.js', () => ({
-    reader: { worldTile: () => ({ x: 0, z: 0, level: 0 }) }
+    ...RealAdapter,
+    reader: { ...RealAdapter.reader, worldTile: () => ({ x: 0, z: 0, level: 0 }) }
 }));
 mock.module('#/bot/api/Execution.js', () => ({
     Execution: {
