@@ -39,10 +39,11 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 // scene, so the whole spot is reachable with scene-local walking. The stand
 // spots the bot rotates between (loc1-5, defaults in RockCrabSpots.ts) are
 // tiles whose 3x3 square touches 2-3 dormant spawns.
-// Inland reset tile, ~21 tiles south of the field — far enough that the crabs
+// Inland reset tile, ~31 tiles south of the field — far enough that the crabs
 // de-aggro and revert, so walking back in wakes them again (the "run out and
-// back" reset).
-const DEFAULT_RESET = new Tile(2712, 3699, 0);
+// back" reset). Pushed further out (was z=3699) after the shorter run left the
+// crabs still aggro'd so the reset never re-woke them (issue #8).
+const DEFAULT_RESET = new Tile(2712, 3688, 0);
 // Seers' Village bank — the nearest bank to the Rellekka shoreline (the game
 // says so: quest_viking/viking_peer.rs2). Coords are the verified Seers bank
 // zone (firemaking bank_zones: mapsquare 42,54 -> x 2721-2730, z 3487-3497).
@@ -1140,17 +1141,20 @@ class ResetAggro implements Task {
         this.bot.setStatus(low ? 'low HP, no food — retreating to regen' : 'running out to reset aggression');
         this.bot.countReset();
 
-        await DirectNavigator.walkTo(RESET_TILE, 1, 60000);
+        // Resilient web-walk (not the scene-local DirectNavigator) so the full
+        // ~31-tile run actually LANDS on the reset tile — a scene-clamped walk
+        // stopped short, leaving the crabs in leash range so they never reverted.
+        await Traversal.walkResilient(RESET_TILE, { radius: 1, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
 
         if (low) {
             this.bot.log(`resting at the reset tile (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
             await Execution.delayUntil(() => Skills.hpFraction() >= REST_HP, 120000);
         } else {
-            // brief pause so the crabs fully revert before we walk back in
-            await Execution.delayTicks(3);
+            // pause so the crabs walk back to spawn and revert to dormant Rocks
+            await Execution.delayTicks(5);
         }
 
-        await DirectNavigator.walkTo(currentSpot(), 3, 60000);
+        await Traversal.walkResilient(currentSpot(), { radius: 3, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
         this.bot.log('back in the field');
     }
