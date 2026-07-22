@@ -67,7 +67,7 @@ describe('attachPlanFor', () => {
         const levels: Record<string, number> = { Bronze: 1, Iron: 15, Steel: 30, Mithril: 45, Adamant: 60, Rune: 75 };
         for (const [metal, level] of Object.entries(levels)) {
             const plan = attachPlanFor(`${metal} arrows`)!;
-            expect(plan.inputs, metal).toEqual([`${metal} arrowheads`, 'Headless arrow']);
+            expect(plan.inputs, metal).toEqual([`${metal} arrowtips`, 'Headless arrow']); // display name is 'arrowtips', not 'arrowheads' (arrows.obj)
             expect(plan.product, metal).toBe(`${metal} arrow`);
             expect(plan.level, metal).toBe(level);
         }

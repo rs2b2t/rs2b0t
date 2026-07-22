@@ -3,8 +3,10 @@
 // + a knife (::~bankitem), maxes stats (Fletching), teleports to the Varrock West
 // bank, starts the bot, and validates a full withdraw→fletch→deposit cycle by
 // asserting the chosen PRODUCT appears in the pack. Two phases:
-//   phase 1  ?BankFletcher.product=Arrow shafts  → assert "Arrow shaft" in the pack
-//   phase 2  ?BankFletcher.product=Short bow      → assert an unstrung shortbow
+//   phase 1  ?BankFletcher.product=Arrow shafts   → assert "Arrow shaft" in the pack
+//   phase 2  ?BankFletcher.product=Short bow       → assert an unstrung shortbow
+//   phase 3  ?BankFletcher.product=Headless arrows → attach mode: feathers onto shafts
+//   phase 4  ?BankFletcher.product=Bronze arrows   → attach mode: heads onto headless
 //
 // Requires the local engine running + the local build deployed:
 //   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
@@ -132,6 +134,8 @@ try {
     if (!at || Math.abs(at.x - 3185) > 8 || Math.abs(at.z - 3440) > 8) { fail(`phase 2 Varrock West tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
     await clearDialogs();
 
+    await clearDialogs(); // phase 1's abrupt goto can leave a make-menu/level-up open
+    console.log(`phase 2 starting pack: ${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`);
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('BankFletcher')); });
     console.log('started BankFletcher (product=Short bow) — watching for an unstrung shortbow');
 
@@ -143,9 +147,70 @@ try {
     tail = (await logLines()).slice(-15);
     console.log('--- recent bot log ---');
     for (const l of tail) { console.log(`  ${l}`); }
-    console.log(`phase2: sawBow=${sawBow} counters=${JSON.stringify(await counters())}`);
+    const p2state = await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state);
+    console.log(`phase2: sawBow=${sawBow} runner=${p2state} counters=${JSON.stringify(await counters())}`);
     if (!sawBow) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('BankFletcher did not produce an unstrung shortbow within the window'); }
-    console.log('PHASE 2 PASS (unstrung shortbow produced) — PASS');
+    console.log('PHASE 2 PASS (unstrung shortbow produced)');
+
+    // EXACT-name count: countSub('bronze arrow') would also match the
+    // 'Bronze arrowheads' input stack (same trap the bot dodges).
+    const countExact = (items: Inv[], name: string) => items.filter(i => (i.name ?? '').toLowerCase() === name).reduce((sum, i) => sum + Math.max(1, i.count), 0);
+
+    // --- phase 3: Headless arrows (attach mode — feathers onto shafts) --------
+    await page.goto(`${base}/bot.html?BankFletcher.product=Headless arrows`);
+    await boot();
+    backIn = false;
+    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(3000); backIn = await login(); }
+    if (!backIn) { fail('phase 3 relogin failed'); }
+    await type('::~bankitem feather 300');
+    await type('::~bankitem arrow_shaft 300');
+    at = await teleToBank();
+    if (!at || Math.abs(at.x - 3185) > 8 || Math.abs(at.z - 3440) > 8) { fail(`phase 3 Varrock West tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
+    await clearDialogs();
+
+    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('BankFletcher')); });
+    console.log('started BankFletcher (product=Headless arrows) — watching the attach loop');
+
+    let sawHeadless = false;
+    for (let i = 0; i < 60; i++) { // ~120s
+        await page.waitForTimeout(2000);
+        if (i % 5 === 0) { console.log(`  t=${i * 2}s inv=${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`); }
+        if (countExact(await inv(), 'headless arrow') >= 15) { sawHeadless = true; break; }
+    }
+    tail = (await logLines()).slice(-15);
+    console.log('--- recent bot log ---');
+    for (const l of tail) { console.log(`  ${l}`); }
+    console.log(`phase3: sawHeadless=${sawHeadless} counters=${JSON.stringify(await counters())}`);
+    if (!sawHeadless) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('phase 3: no headless arrows attached within the window'); }
+    console.log('PHASE 3 PASS (feathers attached onto shafts through a bank cycle)');
+
+    // --- phase 4: Bronze arrows (attach mode — heads onto headless) -----------
+    await page.goto(`${base}/bot.html?BankFletcher.product=Bronze arrows`);
+    await boot();
+    backIn = false;
+    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(3000); backIn = await login(); }
+    if (!backIn) { fail('phase 4 relogin failed'); }
+    // seed heads + top-up headless so phase 4 doesn't depend on phase 3's yield
+    await type('::~bankitem bronze_arrowheads 300');
+    await type('::~bankitem headless_arrow 300');
+    at = await teleToBank();
+    if (!at || Math.abs(at.x - 3185) > 8 || Math.abs(at.z - 3440) > 8) { fail(`phase 4 Varrock West tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
+    await clearDialogs();
+
+    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('BankFletcher')); });
+    console.log('started BankFletcher (product=Bronze arrows) — watching the attach loop');
+
+    let sawBronze = false;
+    for (let i = 0; i < 60; i++) { // ~120s
+        await page.waitForTimeout(2000);
+        if (countExact(await inv(), 'bronze arrow') >= 15) { sawBronze = true; break; }
+    }
+    tail = (await logLines()).slice(-15);
+    console.log('--- recent bot log ---');
+    for (const l of tail) { console.log(`  ${l}`); }
+    console.log(`phase4: sawBronze=${sawBronze} counters=${JSON.stringify(await counters())}`);
+    if (!sawBronze) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('phase 4: no bronze arrows tipped within the window'); }
+    console.log('PHASE 4 PASS (bronze heads tipped onto headless arrows) — PASS');
 } finally {
     await browser.close();
 }
