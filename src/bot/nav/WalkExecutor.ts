@@ -707,6 +707,17 @@ class WalkExecutorImpl {
                     log(`transport loc '${transport.locName}' not found but the way is blocked`);
                     return false;
                 }
+                // A trapdoor/hatch descends in TWO steps: the SHUT leaf offers
+                // 'Open' (not the crossing op), and opening it loc_changes it to
+                // the open variant that offers the descend op + telejumps
+                // (trapdoors.rs2). So an absent annotated loc on a dungeon
+                // (toTile) crossing means the leaf is still shut — open the
+                // same-named Open-style leaf here and retry; the next pass finds
+                // the open variant and clicks the crossing op. (Paterdomus temple
+                // + Morytania-side trapdoors on the route to Canifis.)
+                if (transport.toTile !== undefined && await this.openShutTrapdoor(transport, log)) {
+                    continue;
+                }
                 log(`transport loc '${transport.locName}' not found near (${transport.locX},${transport.locZ})`);
                 return false;
             }
@@ -958,6 +969,31 @@ class WalkExecutorImpl {
                 return Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
             })
             .nearest();
+    }
+
+    /**
+     * A shut trapdoor/hatch offers 'Open' (never the crossing op); opening it
+     * loc_changes it to the open variant that carries the descend op. Interacts
+     * with the same-named Open-style leaf at the transport coord; resolves true
+     * once the open variant (offering `transport.action`) has appeared, so the
+     * caller's next pass drives the actual descent. The `Open`-prefix filter (not
+     * a literal 'Open') mirrors openStuckDoor and admits 'Open-quietly' etc.
+     */
+    private async openShutTrapdoor(transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
+        const shut = Locs.query()
+            .name(transport.locName)
+            .where(loc => Math.max(Math.abs(loc.tile().x - transport.locX), Math.abs(loc.tile().z - transport.locZ)) <= 3
+                && loc.actions().some(a => a !== null && /^open/i.test(a)))
+            .nearest();
+        if (!shut) {
+            return false;
+        }
+        const op = shut.actions().find(a => a !== null && /^open/i.test(a));
+        if (!op || !(await shut.interact(op))) {
+            return false;
+        }
+        log(`opened the shut '${transport.locName}' at (${shut.tile().x},${shut.tile().z}) before descending`);
+        return Execution.delayUntil(() => this.findTransportLoc(transport) !== null, 4000);
     }
 }
 
