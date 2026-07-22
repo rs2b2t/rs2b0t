@@ -139,10 +139,17 @@ const SEWER_KEY = new Tile(3225, 9897, 0);  // where the washed-down key spawns
 // (3229,3369,0), ringed by Dark wizards (ids 172/174). demon.npc: Delrith 7 HP,
 // death_drop=ashes; delrith_weakened has no Attack op.
 const DELRITH_TILE = new Tile(3229, 3369, 0);
-// Lumbridge chicken farm for the Bones grind — m50_51 chicken (id 41) cluster
-// local (25-35, 33-36) -> ~(3225-3235, 3297-3300, 0). Level-1, 3 HP, always drops
-// Bones (bones.obj, npc death). Anchor the cluster centroid.
-const CHICKEN_ANCHOR = new Tile(3230, 3298, 0);
+// The Bones grind: kill the plain "Wizard" NPCs on the Wizards' Tower GROUND
+// floor (all.npc [wizard]: vislevel 9, op2 Attack, casts magic at range 8; the
+// non-combat Wizard Mizgog/Grayzag have no Attack op, so the action('Attack')
+// query skips them). Their default death drop is Bones (drop tables/wizard.rs2:
+// `obj_add(npc_param(death_drop))` = bones, every kill) — same guaranteed drop
+// as chickens, but AT the tower (Traiborn is up the stairs), so no Lumbridge
+// round-trip. They fight back, unlike the risk-free chickens: melee + the
+// AIOQuester eat hook (food:10 is provisioned) covers it, and a death is
+// recoverable. LIVE-VERIFY the exact wizard spawn tiles + interior melee pathing.
+const WIZARD_ANCHOR = new Tile(3107, 3159, 0); // tower ground-floor room centre
+const WIZ_L1_STAND = new Tile(3105, 3160, 1);  // L1 landing beside the staircase (Climb-down stand)
 // Varrock general store (generalshop2, varrock.inv:32 stock4=bucket_empty) — keeper
 // generalshopkeeper2 (npc 522) at ~(3218,3414,0); op3 Trade. Display "Shop keeper"
 // (the fleet's general-store convention, cf. Prince Ali's Lumbridge LUMBY_SHOP).
@@ -185,35 +192,34 @@ function fillBucket(snap: QuestSnapshot): QuestStep {
 
 // --- Custom legs (all live reads; each returns false to re-enter) ---------------
 
-/** Grind Lumbridge chickens for Bones (one kill/loot cycle per call; false until
- *  BONES_NEEDED held). Chickens are level 1 / 3 HP and never meaningfully hurt back,
- *  so this is safe unattended; the AIOQuester eat hook covers any stray damage.
- *  Shared by the `bones` gather (bank-first fallback) AND keyHunt's Traiborn branch
- *  (just-in-time, so the quest still works even if Bones isn't a provisioned record
- *  item — Prince Ali's "gather slow raws in the sub-chain" lesson). */
-async function grindBones(log: (m: string) => void): Promise<boolean> {
+/** Grind the Wizards' Tower ground-floor Wizards for Bones (one kill/loot cycle
+ *  per call; true once BONES_NEEDED held — for the `bones` gather). Loots only
+ *  Bones off the ground (never the wizard's rune/coin drops), so the pack fills
+ *  with bones. Melee; the AIOQuester eat hook (food:10) heals stray magic damage
+ *  between cycles. Shared by the `bones` gather AND keyHunt's Traiborn branch. */
+async function grindWizards(log: (m: string) => void): Promise<boolean> {
     if (Inventory.count('Bones') >= BONES_NEEDED) {
         return true;
     }
-    // Loot any bones already on the ground first.
-    const drop = GroundItems.query().name('Bones').within(14).nearest();
+    // Loot our dropped bones first (tight radius — right where we're killing).
+    const drop = GroundItems.query().name('Bones').within(6).nearest();
     if (drop) {
         const before = Inventory.count('Bones');
         if (!(await drop.interact('Take'))) { return false; }
         await Execution.delayUntil(() => Inventory.count('Bones') > before, 6000);
         return false;
     }
-    // Attack the nearest idle chicken at the coop; walk there if none is in range.
-    const chicken = Npcs.query().name('Chicken').action('Attack').where(n => !n.inCombat).within(12).nearest();
-    if (!chicken) {
-        await Traversal.walkResilient(CHICKEN_ANCHOR, { radius: 3, attempts: 3, timeoutMs: 90_000, log });
+    // Attack the nearest idle Wizard on the tower floor; walk to the anchor if none.
+    const wiz = Npcs.query().name('Wizard').action('Attack').where(n => !n.inCombat).within(10).nearest();
+    if (!wiz) {
+        await Traversal.walkResilient(WIZARD_ANCHOR, { radius: 3, attempts: 3, timeoutMs: 90_000, log });
         return false;
     }
-    const idx = chicken.index;
-    if (!(await chicken.interact('Attack'))) { return false; }
+    const idx = wiz.index;
+    if (!(await wiz.interact('Attack'))) { return false; }
     await Execution.delayUntil(() => Game.inCombat(), 5000);
     // Kill = the target NPC leaving the scene (death despawn), tracked by scene slot.
-    await Execution.delayUntil(() => !Npcs.all().some(n => n.index === idx && /chicken/i.test(n.name ?? '')), 30_000);
+    await Execution.delayUntil(() => !Npcs.all().some(n => n.index === idx && /wizard/i.test(n.name ?? '')), 30_000);
     return false;
 }
 
@@ -384,16 +390,33 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
     }
 
     // Wizard Traiborn's key (Wizards' Tower, L1) — needs 25 Bones handed over.
+    // Traiborn consumes ALL held bones per hand-in, advancing the stage one per
+    // bone toward got_traiborn_key (28), so partial batches accumulate: 25 bones
+    // + food:10 don't fit in 28 slots, so we FILL the pack with bones on the
+    // ground floor, climb up and hand over whatever we hold, climb back down and
+    // grind more — repeating until key_1 lands (e.g. 15 then 10). Kill the tower
+    // Wizards for the bones (grindWizards), not the far Lumbridge chickens.
     if (!hasTraiborn) {
-        if (Inventory.count('Bones') < BONES_NEEDED) {
-            return grindBones(log);
+        const level = Game.tile()?.level ?? 0;
+        const bones = Inventory.count('Bones');
+
+        // Not a full pack yet → grind more. Descend to the ground-floor Wizards
+        // if we're up on L1 from a prior hand-in (Reach handles the Climb-down).
+        if (!(bones > 0 && Inventory.isFull())) {
+            if (level === 1) {
+                await Reach.locOp({
+                    name: 'Staircase', op: 'Climb-down', near: WIZ_L1_STAND,
+                    expect: () => (Game.tile()?.level ?? 0) === 0, log
+                });
+                return false;
+            }
+            return grindWizards(log);
         }
-        // Climb to the tower's first floor. Post nav-fix this is ONE primitive:
-        // walkResilient routes the whole baked path (the regenerated stair edge
-        // now stands INSIDE the tower and the door-crossings are driven), and
-        // the Climb-up OPLOC server-walks the last tiles.
-        const t0 = Game.tile();
-        if (t0 && t0.level !== 1) {
+
+        // Full pack of bones → hand-in trip. Climb to the first floor (Reach
+        // walks to the interior stand, then the Climb-up OPLOC server-walks the
+        // last tiles and opens any blocking door).
+        if (level !== 1) {
             const climbed = await Reach.locOp({
                 name: 'Staircase',
                 op: 'Climb-up',
@@ -411,29 +434,30 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         if ((await Reach.npcDialog({ name: 'Traiborn', near: TRAIBORN.anchor, log })) !== 'done') {
             return false;
         }
-        // First talk sets find_bones; second (still holding bones) hands all 25 and
-        // yields key_1. talkThrough drives both. The handover is a ~25-TICK SERVER
-        // chain (traiborn.rs2:22-32: if_close + inv_del(bones,1) + p_delay(1), looped
-        // 25×), which OUTLASTS a short key-wait: a 6s timeout re-entered mid-chain with
-        // bones momentarily < 25 and mis-routed to grindBones — walking the bot off to
-        // the Lumbridge coop and climbing back DOWN the tower (live 2026-07-19). So once
-        // the handover has actually STARTED eating bones (only the 2nd talk does), sit
-        // tight and wait GENEROUSLY (30s) for key_1 so the chain finishes undisturbed.
-        // The 1st talk just sets find_bones (no bones eaten) -> re-enter fast to the 2nd.
+        // First talk sets find_bones; the second (holding bones) hands over ALL
+        // held, one stage per bone toward got_traiborn_key (28). talkThrough drives
+        // both. The handover is a per-bone SERVER chain (traiborn.rs2:22-32:
+        // if_close + inv_del(bones,1) + p_delay(1)) that runs with the dialogue
+        // CLOSED; the FINAL batch (reaching 28) then reopens a Hurrah!/incantation
+        // dialogue (chatnpc + mesbox×3, :191-212) whose continues MUST be clicked
+        // to receive key_1. A PARTIAL batch just consumes its bones and settles
+        // with no key. So: drive continues until the key lands OR the handover has
+        // clearly settled (no open box + bones stopped changing for several ticks
+        // — never mid-chain, where bones tick down each server tick). A settled
+        // partial returns false; the grind trip above then descends and refills.
+        const beforeHand = Inventory.count('Bones');
         await talkThrough('Traiborn', TRAIBORN.prefer, log);
         await Execution.delayTicks(2); // let a started handover consume its first bone(s)
-        if (Inventory.count('Bones') < BONES_NEEDED) {
-            // Handover started (only the 2nd talk eats bones). It's a ~25-tick SERVER
-            // chain (if_close + inv_del(bones,1) + p_delay(1), looped 25×) that runs
-            // with the dialogue CLOSED, THEN reopens a Hurrah!/incantation dialogue
-            // (chatnpc + mesbox×3, traiborn.rs2:191-212) whose continue-prompts MUST be
-            // clicked to receive key_1. talkThrough returned at the first if_close, so a
-            // bare wait here leaves the incantation un-clicked and the key never comes
-            // (bot then re-enters with bones<25 and grinds chickens forever). Drive the
-            // continues to the end: loop while a box is open OR the key hasn't landed.
-            for (let i = 0; i < 60 && (ChatDialog.isOpen() || !heldId(TRAIBORN_KEY_ID)); i++) {
+        if (Inventory.count('Bones') < beforeHand || ChatDialog.isOpen()) {
+            let lastBones = Inventory.count('Bones');
+            let settled = 0; // consecutive ticks with the chain quiescent (no box, no consumption)
+            for (let i = 0; i < 60 && !heldId(TRAIBORN_KEY_ID); i++) {
                 if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
                 await Execution.delayTicks(1);
+                const now = Inventory.count('Bones');
+                settled = (!ChatDialog.isOpen() && now === lastBones) ? settled + 1 : 0;
+                lastBones = now;
+                if (settled >= 8) { break; } // partial batch fully consumed, no incantation coming
             }
         }
         return false;
@@ -543,15 +567,15 @@ export const demonslayer: QuestModule = {
     food: 10,
     // NPCs the quest legitimately fights, so the random-event guard never flags them:
     // Delrith (+ its weakened form) and the Dark wizards at the circle, plus the
-    // Chickens the Bones grind kills.
-    grind: ['delrith', 'weakened delrith', 'dark wizard', 'chicken'],
+    // tower Wizards the Bones grind kills. ('wizard' also covers 'dark wizard'.)
+    grind: ['delrith', 'weakened delrith', 'dark wizard', 'wizard'],
     // Bank-first gathers for the DECLARED record raws. Bucket of water fills at the
-    // palace Sink (buying the empty Bucket if needed); Bones grinds Lumbridge chickens.
+    // palace Sink (buying the empty Bucket if needed); Bones grinds the tower Wizards.
     // Both are also re-derivable mid-quest (keyHunt grinds Bones just-in-time;
     // drainLeg re-fills the Bucket), so a mid-run loss can't hard-block.
     gather: {
         'bucket of water': fillBucket,
-        'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindBones })
+        'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindWizards })
     },
     // Between-quest deposit KEEP list: the quest-internal items a mid-quest restart
     // may hold. 'key' covers all three silverlight keys (name-collided); 'bucket'
