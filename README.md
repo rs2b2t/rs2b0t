@@ -5,6 +5,9 @@ A scriptable, direct-input bot client for **[rs2b2t](https://rs2b2t.com)** — a
 browser and drives it through a typed scripting API, so bots see and act on
 exactly what a player would.
 
+Project site: **[2004bot.com](https://2004bot.com)** — overview, screenshots, and
+rendered [API](https://2004bot.com/docs/api) / [dev](https://2004bot.com/docs/dev) docs.
+
 A single-instance build is hosted at **https://w1.rs2b2t.com/rs2b0t** — open it,
 log in with an rs2b2t account, pick a script, and run.
 
