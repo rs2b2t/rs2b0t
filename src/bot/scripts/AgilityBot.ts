@@ -7,6 +7,8 @@ import { Paint } from '../api/hud/Paint.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
+import { Reachability } from '../api/Reachability.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
@@ -143,6 +145,38 @@ class DoObstacle implements Task {
         return true;
     }
 
+    /**
+     * An xp-less attempt usually means we're SIDE-ON to a directional obstacle:
+     * course obstacles axis-check the stand ("You can not do that from here."),
+     * and both gnome nets have open corridors around their west ends where the
+     * op-walk can park us side-on — every re-click from there fails and the
+     * old skip-after-4 cascaded into restarting the course from the log
+     * (issue #10). Between retries, step onto a DIFFERENT face of the obstacle
+     * (south first — the pre-pipe net climbs from the south — then north, then
+     * the flanks) so the next click comes from a valid side.
+     */
+    private async repositionForRetry(obstacle: Loc): Promise<void> {
+        const t = obstacle.tile();
+        const me = Game.tile();
+        const faces = [
+            { x: t.x, z: t.z - 1 }, // south face
+            { x: t.x, z: t.z + 1 }, // north face
+            { x: t.x - 1, z: t.z }, // west flank
+            { x: t.x + 1, z: t.z }  // east flank
+        ];
+        const usable = faces
+            .map(f => ({ x: f.x, z: f.z, level: t.level }))
+            .filter(f => !(me && me.x === f.x && me.z === f.z)) // must actually MOVE
+            .filter(f => Reachability.walkable(f) && Reachability.canReach(f));
+        const dest = usable[(this.stuck - 1) % Math.max(1, usable.length)];
+        if (!dest) {
+            return; // nothing reachable to try — fall through to the retry/skip path
+        }
+        this.bot.log(`no xp from '${obstacle.name}' — repositioning to its (${dest.x},${dest.z}) face and retrying`);
+        this.bot.setStatus('repositioning at the obstacle');
+        await DirectNavigator.walkTo(dest, 0, 10000);
+    }
+
     async execute(): Promise<void> {
         let obstacle = this.find(this.bot.currentName());
         if (!obstacle) {
@@ -203,10 +237,14 @@ class DoObstacle implements Task {
             this.stuck = 0;
             this.bot.cleared();
             this.bot.advance();
-        } else if (++this.stuck >= 4) {
+        } else if (++this.stuck >= 6) {
+            // six tries = the original stand plus every face repositionForRetry
+            // offers — genuinely past this step, not just side-on
             this.bot.log(`step '${this.bot.currentName()}' gave no xp after ${this.stuck} attempts — skipping`);
             this.stuck = 0;
             this.bot.advance();
+        } else {
+            await this.repositionForRetry(obstacle);
         }
     }
 }
