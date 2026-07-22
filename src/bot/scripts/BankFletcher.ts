@@ -10,18 +10,21 @@ import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
-import { matchProduct } from './BankFletcherLogic.js';
+import { attachPlanFor, matchProduct } from './BankFletcherLogic.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 // Varrock West bank — a sane default; the exact stand tile is verified in the smoke.
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
-const PRODUCT_OPTIONS = ['Arrow shafts', 'Short bow', 'Long bow'];
+const PRODUCT_OPTIONS = [
+    'Arrow shafts', 'Short bow', 'Long bow',
+    'Headless arrows', 'Bronze arrows', 'Iron arrows', 'Steel arrows', 'Mithril arrows', 'Adamant arrows', 'Rune arrows'
+];
 
 export const SETTINGS: SettingsSchema = {
-    material: { type: 'string', default: 'Logs', label: 'Logs to fletch (contains)', help: 'bank item to withdraw — substring, resolved to the exact name (e.g. Logs / Oak logs / Willow logs)' },
-    product: { type: 'string', default: 'Arrow shafts', options: PRODUCT_OPTIONS, label: 'Fletch product', help: 'which make-menu option to pick (matched by keyword, so item-name or label form both work)' },
-    knife: { type: 'string', default: 'Knife', label: 'Fletching tool (contains)', help: 'the tool used on the logs; lives in the bank between cycles' },
+    material: { type: 'string', default: 'Logs', label: 'Logs to fletch (contains)', help: 'bank item to withdraw — substring, resolved to the exact name (e.g. Logs / Oak logs / Willow logs); ignored for the arrow attach products' },
+    product: { type: 'string', default: 'Arrow shafts', options: PRODUCT_OPTIONS, label: 'Fletch product', help: 'which product to make — knife products open the make-menu; arrow products attach item-on-item (material/knife ignored)' },
+    knife: { type: 'string', default: 'Knife', label: 'Fletching tool (contains)', help: 'the tool used on the logs; lives in the bank between cycles; ignored for the arrow attach products' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'stand adjacent to a bank booth — start the bot here' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Booth search radius (tiles)' }
@@ -63,11 +66,21 @@ export default class BankFletcher extends TaskBot {
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
         this.leash = this.settings.num('leashRadius', 6);
 
+        const plan = attachPlanFor(this.product);
+        if (plan && Skills.level('fletching') < plan.level) {
+            this.log(`BankFletcher: Fletching ${plan.level} required for ${this.product} (have ${Skills.level('fletching')}) — stopping.`);
+            throw new Error('BankFletcher: fletching level too low for the chosen product');
+        }
+
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('fletching');
 
-        this.log(`BankFletcher fletching '${this.material}' → ${this.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
-        this.add(new ContinueDialog(), new FletchDialog(this), new BankTrip(this), new Fletch(this));
+        if (plan) {
+            this.log(`BankFletcher attaching '${plan.inputs[0]}' onto '${plan.inputs[1]}' → ${plan.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+        } else {
+            this.log(`BankFletcher fletching '${this.material}' → ${this.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+        }
+        this.add(new ContinueDialog(), new FletchDialog(this), new Attach(this), new BankTrip(this), new Fletch(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -78,7 +91,12 @@ export default class BankFletcher extends TaskBot {
         const xph = mins > 0.5 ? `${(((Skills.xp('fletching') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `XP/hr: ${xph}`);
         p.row(`${this.product}: ${this.made}`, `Bank trips: ${this.trips}`);
-        p.row(`Logs left: ${this.logCount()}`);
+        const paintPlan = this.attachPlan();
+        if (paintPlan) {
+            p.row(`${paintPlan.inputs[0]}: ${this.packCount(paintPlan.inputs[0])}`, `${paintPlan.inputs[1]}: ${this.packCount(paintPlan.inputs[1])}`);
+        } else {
+            p.row(`Logs left: ${this.logCount()}`);
+        }
 
         p.gap();
         // live product switch — FletchDialog re-reads productName() each make-menu
@@ -110,6 +128,24 @@ export default class BankFletcher extends TaskBot {
     boothLocName(): string { return this.boothName; }
     leashRadius(): number { return this.leash; }
 
+    /** Live attach plan for the current product (null = knife mode). Live so
+     *  the paint's product switch flips mode on the next task validate. */
+    attachPlan(): ReturnType<typeof attachPlanFor> {
+        return attachPlanFor(this.product);
+    }
+
+    /** Pack count of an attach input/product by substring (stacks counted). */
+    packCount(name: string): number {
+        const pat = name.toLowerCase();
+        return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
+    }
+
+    /** The pack item matching `name` (substring), or null. */
+    packItem(name: string): InvItem | null {
+        const pat = name.toLowerCase();
+        return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
+    }
+
     /** Total logs in the pack (logs don't stack, but count defensively). */
     logCount(): number {
         const pat = this.material.toLowerCase();
@@ -140,7 +176,7 @@ export default class BankFletcher extends TaskBot {
  *  in-progress batch by re-interacting too early). */
 class FletchDialog implements Task {
     constructor(private bot: BankFletcher) {}
-    validate(): boolean { return ChatDialog.isMakeMenu(); }
+    validate(): boolean { return this.bot.attachPlan() === null && ChatDialog.isMakeMenu(); }
     async execute(): Promise<void> {
         this.bot.setStatus('choosing product');
         const products = ChatDialog.makeProducts();
@@ -174,7 +210,13 @@ class FletchDialog implements Task {
  *  no keep-item logic is needed. */
 class BankTrip implements Task {
     constructor(private bot: BankFletcher) {}
-    validate(): boolean { return this.bot.logCount() === 0; }
+    validate(): boolean {
+        const plan = this.bot.attachPlan();
+        if (plan) {
+            return this.bot.packCount(plan.inputs[0]) === 0 || this.bot.packCount(plan.inputs[1]) === 0;
+        }
+        return this.bot.logCount() === 0;
+    }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         const opened = (await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))
@@ -186,6 +228,27 @@ class BankTrip implements Task {
         await Bank.depositInventory(); // products + leftovers — the whole pack
         await Execution.delayTicks(1);
         this.bot.countTrip();
+
+        // Attach mode: withdraw BOTH stackable inputs (Withdraw-All = two
+        // slots); a bank dry of either input is the clean stop condition.
+        const plan = this.bot.attachPlan();
+        if (plan) {
+            for (const input of plan.inputs) {
+                const pat = input.toLowerCase();
+                const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat));
+                if (!bankItem || bankItem.name === null) {
+                    this.bot.log(`no '${input}' in the bank — idling`);
+                    await Execution.delayTicks(5);
+                    return;
+                }
+                const bankName = bankItem.name;
+                const allOp = withdrawOp(bankItem.ops, 'all') ?? withdrawOp(bankItem.ops, 'any') ?? 'Withdraw-All';
+                this.bot.log(`withdrawing all ${bankName} ('${allOp}')`);
+                await Bank.withdraw(bankName, allOp);
+                await Execution.delayUntil(() => this.bot.packCount(input) > 0 || Bank.count(bankName) === 0, 4000);
+            }
+            return;
+        }
 
         // Withdraw the knife FIRST (before logs fill the pack). Resolve the exact
         // bank name by substring — Bank.withdraw/count match EXACTLY.
@@ -239,7 +302,7 @@ class BankTrip implements Task {
  *  per interaction until no logs remain. */
 class Fletch implements Task {
     constructor(private bot: BankFletcher) {}
-    validate(): boolean { return this.bot.logCount() > 0 && !ChatDialog.isOpen(); }
+    validate(): boolean { return this.bot.attachPlan() === null && this.bot.logCount() > 0 && !ChatDialog.isOpen(); }
     async execute(): Promise<void> {
         for (let n = 0; n < 30 && this.bot.logCount() > 0; n++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) { return; }
@@ -252,6 +315,45 @@ class Fletch implements Task {
             // wait for the make menu, a log to be consumed, or a blocking dialog
             await Execution.delayUntil(() => ChatDialog.isMakeMenu() || this.bot.logCount() < before || ChatDialog.canContinue(), 8000);
             if (ChatDialog.isMakeMenu()) { return; } // FletchDialog selects + rides the batch
+        }
+    }
+}
+
+/** Attach mode: both inputs held and no dialog → use input A on input B. The
+ *  engine attaches min(a, b, 15) INSTANTLY per click (no menu, no count
+ *  dialog — content arrows.rs2), so this is a click-loop verified by the
+ *  product count rising; level-up interruptions are cleared by ContinueDialog. */
+class Attach implements Task {
+    constructor(private bot: BankFletcher) {}
+    validate(): boolean {
+        const plan = this.bot.attachPlan();
+        return plan !== null && this.bot.packCount(plan.inputs[0]) > 0 && this.bot.packCount(plan.inputs[1]) > 0 && !ChatDialog.isOpen();
+    }
+    async execute(): Promise<void> {
+        const plan = this.bot.attachPlan();
+        if (!plan) { return; }
+        this.bot.setStatus(`attaching ${plan.product}s`);
+        for (let n = 0; n < 80; n++) {
+            if (ChatDialog.isOpen()) { return; } // level-up etc. — ContinueDialog clears it
+            const a = this.bot.packItem(plan.inputs[0]);
+            const b = this.bot.packItem(plan.inputs[1]);
+            if (!a || !b) { return; } // an input ran out — BankTrip takes over
+            // EXACT-name product count: a substring count of 'Bronze arrow'
+            // would also match the 'Bronze arrowheads' input stack, and the
+            // heads consumed cancel the arrows gained (sum unchanged -> a
+            // false no-progress read). Inventory.count matches exactly.
+            const before = Inventory.count(plan.product);
+            if (!(await a.useOn(b))) { await Execution.delayTicks(2); continue; }
+            const progressed = await Execution.delayUntil(
+                () => Inventory.count(plan.product) > before || ChatDialog.isOpen(),
+                4000
+            );
+            const now = Inventory.count(plan.product);
+            if (now > before) {
+                this.bot.recordMade(now - before);
+            } else if (!progressed) {
+                return; // no attach and no dialog — let the loop re-validate
+            }
         }
     }
 }
