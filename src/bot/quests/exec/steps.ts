@@ -29,8 +29,9 @@ const BANK_OP = 'Use-quickly';
 /** Shared bank-leg prologue (SolveClue.bankFirst pattern): resolve the target
  *  bank — explicit `override` where the geometric nearest is gated/unreachable,
  *  else nearest known — walk there resiliently, open the booth. False fails
- *  the caller's step, which re-enters next loop. */
-async function openBankLeg(noBankMsg: string, override: Tile | undefined, log: (m: string) => void): Promise<boolean> {
+ *  the caller's step, which re-enters next loop. Exported for quest legs that
+ *  need a bank op the step kinds don't cover (a targeted single-item deposit). */
+export async function openBankLeg(noBankMsg: string, override: Tile | undefined, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     const bankTile = override ?? (here ? nearestBank(here)?.tile : undefined);
     if (!bankTile) {

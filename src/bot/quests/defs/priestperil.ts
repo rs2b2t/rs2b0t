@@ -8,8 +8,9 @@ import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import Tile from '../../api/Tile.js';
 import { inEssMine } from '../../scripts/EssMinerLogic.js';
+import { Bank } from '../../api/hud/Bank.js';
 import { driveDialog, gotoNpc, isUnderground, talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
-import { executeStep } from '../exec/steps.js';
+import { executeStep, openBankLeg } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 
@@ -601,6 +602,31 @@ async function waterLeg(log: (m: string) => void): Promise<boolean> {
 }
 
 /**
+ * A stage-gated Gate refused while Rune essence sits in the pack. decide()'s
+ * held-essence routing assumes essence only enters the pack DURING the essence
+ * phase (stage >= 8) — but guides say "bring 50 unnoted essence", and both the
+ * provisioning keep-list and a user's manual start can put essence in the pack
+ * at ANY stage. Holding it then pins every decide() pass to essenceLeg, which
+ * walks to a server-locked gate and clicks Open forever (live 2026-07-22: at
+ * stage 6 the bot shuttled Gate 1 <-> Gate 2 instead of filling the Bucket at
+ * the Well). The refused gate IS the "not the essence phase yet" oracle: bank
+ * the essence so the pack stops mis-signalling — decide() then re-routes to
+ * the spine, and the essence phase's own restock withdraws it right back.
+ */
+async function bankEarlyEssence(log: (m: string) => void): Promise<boolean> {
+    log('priestperil: essence held but a gate is stage-locked — banking it until the essence phase');
+    if (!(await walkTo(TEMPLE_DOOR_OUT, 3, log))) { // surface first — the bank walk has no hops
+        return false;
+    }
+    if (!(await openBankLeg('priestperil: essence-bank — no known bank', VARROCK_EAST_BANK, log))) {
+        return false;
+    }
+    await Bank.depositAllMatching(name => name.toLowerCase() === 'rune essence', log);
+    await Execution.delayUntil(() => Inventory.count('Rune essence') === 0, 6000);
+    return false; // pack is honest again — decide() re-locates the real phase
+}
+
+/**
  * Stages 8-60 (+61): deliver 50 unnoted Rune essence to the mausoleum Drezel.
  * Unstackable — two ~25-slot trips; "how many are left" is server-side only,
  * so the loop just repeats withdraw -> deliver until the journal flips. Bank
@@ -625,11 +651,12 @@ async function essenceLeg(log: (m: string) => void): Promise<boolean> {
         // (:60-77 -> :96-118). Two talks on a stage-8 entry — the re-entry loop
         // covers it.
         if (!(await tryOpen('Gate', GATE1, log))) {
-            log('priestperil: Gate 1 refused during essence phase — mis-signalled essence in pack?');
-            return false;
+            log('priestperil: Gate 1 refused during essence phase — mis-signalled essence in pack');
+            return bankEarlyEssence(log);
         }
         if (!(await tryOpen('Gate', GATE2, log))) {
-            return false;
+            log('priestperil: Gate 2 refused during essence phase — mis-signalled essence in pack');
+            return bankEarlyEssence(log);
         }
         if (!(await walkTo(DREZEL_MAUS.anchor, 2, log))) {
             return false;
@@ -781,6 +808,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
     // Held-item routing (exact lowercased full-name keys). Keys outrank water
     // outrank essence: each earlier item is consumed producing the later state.
+    // Essence is the one item a user can carry in from stage 0 (guides say
+    // "bring 50 unnoted") — essenceLeg's gate oracle banks it when the essence
+    // phase hasn't actually begun, so this routing can't wedge on a locked gate.
     if (has(snap, 'golden key')) {
         return { kind: 'custom', name: 'monument key swap', run: monumentLeg };
     }
