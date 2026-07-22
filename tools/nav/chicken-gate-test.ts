@@ -1,0 +1,94 @@
+// Live verify for issue #5: the REAL ChickenKiller, started OUTSIDE the shut
+// chicken-pen gate. The Fight can't-reach recovery must walk it through the
+// gate and kill inside. Usage: bun tools/nav/chicken-gate-test.ts [base-url]
+import { launchBrowser } from '../lib/harness.js';
+
+const base = process.argv[2] || 'http://localhost:8890';
+const username = `ckg${Date.now().toString(36).slice(-7)}`;
+function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
+
+type R = {
+    rs2b0t: {
+        client: { ingame: boolean; sceneState: number; loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> };
+        runner: { state: string; start(s: unknown): void; ctx: { log: { msg: string }[] } | null };
+        reader: { worldTile(): { x: number; z: number; level: number } | null };
+        registry: { get(n: string): unknown };
+        actions?: { continueDialog?: () => boolean };
+    };
+};
+
+const browser = await launchBrowser({ swiftshader: true });
+try {
+    const page = await browser.newPage();
+    page.on('pageerror', e => console.log(`pageerror: ${e}`));
+    const boot = () => page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    const login = async () => {
+        await page.evaluate(([u, p]) => { const c = (globalThis as never as R).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
+        return page.waitForFunction(() => (globalThis as never as R).rs2b0t.client.ingame && (globalThis as never as R).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+    };
+    const type = async (t: string) => {
+        await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
+        await page.waitForTimeout(400);
+        await page.keyboard.type(t, { delay: 30 });
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1500);
+    };
+    const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
+    const clearDialogs = () => page.evaluate(async () => { const a = (globalThis as never as R).rs2b0t.actions; for (let i = 0; i < 20; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 200)); } });
+
+    await page.goto(`${base}/bot.html`);
+    await boot();
+    for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
+    await type('::tele 0,50,50,20,20');
+    await page.reload();
+    await boot();
+    let backIn = false;
+    for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
+    if (!backIn) { fail('relogin failed'); }
+    await type('::~maxme');
+    await clearDialogs();
+
+    let at = null as { x: number; z: number; level: number } | null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+        await type('::tele 0,50,51,40,31'); // (3240,3295) just east of the chicken gate
+        await page.waitForTimeout(2000);
+        at = await tile();
+        if (at && at.level === 0 && Math.abs(at.x - 3240) <= 4 && Math.abs(at.z - 3295) <= 4) { break; }
+        await clearDialogs();
+    }
+    if (!at) { fail('pen tele failed'); }
+    console.log(`outside the chicken gate: (${at.x},${at.z},${at.level})\n`);
+
+    // Force the pen gate SHUT via the script ABI (Close the open leaf if any).
+    const shut = await page.evaluate(async () => {
+        const abi = (globalThis as never as { __rs2b0t: { Locs: { query(): { name(n: string): { action(a: string): { where(f: (l: { tile(): { x: number; z: number } }) => boolean): { nearest(): { interact(op: string): Promise<boolean> } | null } } } } } } }).__rs2b0t;
+        const near = (l: { tile(): { x: number; z: number } }) => Math.max(Math.abs(l.tile().x - 3236), Math.abs(l.tile().z - 3295)) <= 5;
+        const open = abi.Locs.query().name('Gate').action('Close').where(near).nearest();
+        if (open) { await open.interact('Close'); await new Promise(r => setTimeout(r, 2500)); return 'closed it'; }
+        return 'already shut (no Close leaf)';
+    });
+    console.log(`gate: ${shut}\n`);
+
+    const logsBefore = await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).length);
+    await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ChickenKiller')); });
+    console.log('started ChickenKiller outside the shut gate\n');
+
+    const deadline = Date.now() + 240_000;
+    let seen = 0, done = false;
+    while (Date.now() < deadline && !done) {
+        await page.waitForTimeout(2500);
+        const all: string[] = await page.evaluate(n => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).slice(n).map(l => l.msg), logsBefore);
+        for (const l of all.slice(seen)) { console.log(`  ${l}`); }
+        seen = all.length;
+        const lines = (await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg)));
+        if (lines.some(l => l.includes('killed'))) { done = true; }
+        if ((await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state)) !== 'running') { done = true; }
+    }
+    const lines = (await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg)));
+    const recovered = lines.some(l => l.includes('walking through it'));
+    const killed = lines.some(l => l.includes('killed'));
+    const fin = await tile();
+    console.log(`\nrecovery-line=${recovered} killed=${killed} final=(${fin?.x},${fin?.z}) => ${killed ? 'PASS' : 'FAIL'}`);
+} finally {
+    await browser.close();
+}

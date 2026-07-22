@@ -1,4 +1,5 @@
 import { TaskBot, type Task } from '../api/Bot.js';
+import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
@@ -177,6 +178,11 @@ class CookTrip implements Task {
         // cook the last raw fish repeatedly until none remain (bounded)
         for (let n = 0; n < 30 && this.bot.rawCount() > 0; n++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) { return; }
+            // Yield out of this multi-minute cook loop the instant a random event
+            // fires, so the runtime Supervisor can resolve it (talk to the Genie,
+            // etc.) — otherwise it's ignored until the whole pack finishes and the
+            // event teleports the bot away mid-cook (issue #4).
+            if (EventSignal.pending()) { return; }
             const raw = this.bot.lastRaw();
             const oven = range();
             if (!raw || !oven) { await Execution.delayTicks(2); return; }

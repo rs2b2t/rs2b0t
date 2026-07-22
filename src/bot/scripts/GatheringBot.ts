@@ -246,6 +246,13 @@ export default class GatheringBot extends TaskBot {
     products() {
         return Inventory.items().filter(i => this.isProduct(i.name));
     }
+    /** Any pack item a bank trip would offload (product OR, for a fisher, any
+     *  non-gear item). A full pack with only random-event junk and no product
+     *  still needs a bank run — else it stalls, unable to gather (full) or bank
+     *  (the old `products > 0` guard). See issue #9. */
+    hasDepositable(): boolean {
+        return Inventory.items().some(i => this.shouldDeposit(i.name ?? ''));
+    }
     getLocation(): FishingLocation | null {
         return this.location;
     }
@@ -313,7 +320,7 @@ class BankCatch implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        return Inventory.isFull() && this.bot.products().length > 0;
+        return Inventory.isFull() && this.bot.hasDepositable();
     }
 
     async execute(): Promise<void> {
@@ -455,6 +462,15 @@ class Gather implements Task {
             .nearest() !== null;
     }
 
+    /** The fishing spot we clicked has relocated: the nearest matching spot is
+     *  now on a DIFFERENT tile. Break out and re-find the new one instead of
+     *  waiting out the full timeout on the vacated tile (issue #2). Only
+     *  meaningful for NPC spots — a rock/tree never moves. */
+    private activeSpotMoved(from: Tile): boolean {
+        const s = this.find();
+        return s !== null && !s.tile().equals(from);
+    }
+
     /** Step off the smoking rock: one raw walk click toward the anchor cancels
      *  the engine's auto-continued mining, and the tile cools down past the
      *  gas duration so find() won't come back until it reverts. */
@@ -491,7 +507,7 @@ class Gather implements Task {
             // (slow rocks swing before the first ore), the target moves/depletes,
             // the bag fills, a dialog interrupts us, or the rock starts smoking
             await Execution.delayUntil(
-                () => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue() || this.gasAt(target.tile()),
+                () => Inventory.used() > before || Game.animating() || this.find() === null || Inventory.isFull() || ChatDialog.canContinue() || this.gasAt(target.tile()) || (npc && this.activeSpotMoved(target.tile())),
                 12000
             );
             if (this.gasAt(target.tile())) {

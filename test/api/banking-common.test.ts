@@ -1,6 +1,6 @@
 // test/api/banking-common.test.ts
 import { describe, expect, test } from 'bun:test';
-import { COMMON_BANK_LOOT, matchesCommonBankLoot, depositMatcher, PERIODIC_BANK_SETTINGS } from '#/bot/api/Banking.js';
+import { COMMON_BANK_LOOT, matchesCommonBankLoot, depositMatcher, depositAllExcept, PERIODIC_BANK_SETTINGS } from '#/bot/api/Banking.js';
 
 describe('matchesCommonBankLoot', () => {
     test('matches each junk category (case-insensitive contains)', () => {
@@ -39,5 +39,28 @@ describe('PERIODIC_BANK_SETTINGS', () => {
         expect(PERIODIC_BANK_SETTINGS.bankCommonJunk).toBeDefined();
         expect(PERIODIC_BANK_SETTINGS.bankCommonJunk.type).toBe('boolean');
         expect(PERIODIC_BANK_SETTINGS.bankCommonJunk.default).toBe(true);
+    });
+});
+
+// The cow-killer banks EVERYTHING except what it still needs (issue #9): loot,
+// feathers, AND random-event junk the loot filter never knew about all deposit.
+describe('depositAllExcept', () => {
+    test('deposits loot and random-event junk alike', () => {
+        const d = depositAllExcept(['Bones']);
+        for (const junk of ['Casket', 'Strange fruit', 'Beer', 'Kebab', 'Uncut sapphire', 'Cow hide']) {
+            expect(d(junk), junk).toBe(true);
+        }
+    });
+    test('keeps the keep-list (case-insensitive), never the empty name', () => {
+        const d = depositAllExcept(['Bones', 'Lobster']);
+        expect(d('Bones')).toBe(false);
+        expect(d('bones')).toBe(false);
+        expect(d('LOBSTER')).toBe(false);
+        expect(d('')).toBe(false);
+    });
+    test('empty keep-list (cow killer, not burying) deposits the whole pack', () => {
+        const d = depositAllExcept([]);
+        expect(d('Bones')).toBe(true);
+        expect(d('Casket')).toBe(true);
     });
 });

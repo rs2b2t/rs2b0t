@@ -5,7 +5,7 @@ import Tile from '../api/Tile.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
-import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
+import { PERIODIC_BANK_SETTINGS, depositAllExcept, parseBankStrategy } from '../api/Banking.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
@@ -15,6 +15,7 @@ import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Traversal } from '../api/Traversal.js';
+import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { RecoveryHints } from '../runtime/RecoveryHints.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
@@ -130,8 +131,13 @@ export default class ChickenKiller extends TaskBot {
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
                 minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
-                countLoot: () => this.carriedLoot(),
-                deposit: (name) => this.wantsLoot(name),
+                // Count + deposit EVERY pack item (loot AND random-event junk),
+                // keeping only what the bot still needs — bones when burying. So
+                // 'bank at N items' counts the whole pack the way the UX reads it
+                // (issue #3) and a bank trip clears event junk too (issue #9),
+                // instead of leaving the pack to silently fill and stall Fight.
+                countLoot: () => this.depositables(),
+                deposit: depositAllExcept(this.keepList()),
                 returnTo: () => this.getAnchor(),
                 setStatus: (s) => this.setStatus(s),
                 log: (m) => this.log(m)
@@ -178,6 +184,18 @@ export default class ChickenKiller extends TaskBot {
     }
     carriedLoot(): number {
         return Inventory.items().filter(i => this.wantsLoot(i.name)).length;
+    }
+    /** Items the bank trip must NOT deposit: bones when we're burying them for
+     *  XP (else they'd bank before BuryBones runs). Everything else — loot,
+     *  feathers, random-event junk — is banked. */
+    keepList(): string[] {
+        return this.shouldBury() ? ['Bones'] : [];
+    }
+    /** Pack items a bank trip WOULD deposit (loot + junk, minus the keep-list):
+     *  the count the periodic-bank threshold reads, so a junk-filled pack banks. */
+    depositables(): number {
+        const keep = new Set(this.keepList().map(s => s.toLowerCase()));
+        return Inventory.items().filter(i => (i.name ?? '').length > 0 && !keep.has((i.name ?? '').toLowerCase())).length;
     }
     shouldBury(): boolean {
         return this.buryEnabled;
@@ -369,6 +387,11 @@ class Rest implements Task {
 }
 
 class Fight implements Task {
+    // consecutive attack clicks that never engaged: an npc attack blocked by a
+    // shut pen gate is SILENT (the server keeps pursuing, no "can't reach"
+    // message), so repeated no-engage is the only reliable oracle
+    private misses = 0;
+
     constructor(private bot: ChickenKiller) {}
 
     validate(): boolean {
@@ -383,6 +406,7 @@ class Fight implements Task {
 
         const name = this.bot.targetName();
         this.bot.setStatus(`attacking ${name} at ${mob.tile()}`);
+        const mark = GameMessages.mark();
         if (!mob.interact('Attack')) {
             this.bot.log(`no Attack op on ${name}? ops=[${mob.actions().join(', ')}]`);
             await Execution.delayTicks(2);
@@ -391,8 +415,23 @@ class Fight implements Task {
 
         const engaged = await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
         if (!engaged || ChatDialog.canContinue()) {
+            // The attack never engaged: a shut pen gate/fence between us and the
+            // flock (issue #5). We're inside the leash so ReturnToAnchor never
+            // fires, and re-clicking through the fence repeats forever — the
+            // server just keeps silently pursuing an unreachable npc (a loc gets
+            // "I can't reach that!", an npc does NOT, live 2026-07-22). So after
+            // a can't-reach OR two silent misses, walk to the target instead:
+            // the resilient walker opens the gate on the way, and the next pass
+            // attacks from inside the pen.
+            if (!engaged && (GameMessages.sawSince(mark, CANT_REACH) || ++this.misses >= 2)) {
+                this.bot.log(`can't engage ${name} — a shut gate/fence in the way; walking through it`);
+                this.bot.setStatus('crossing the pen gate');
+                await Traversal.walkResilient(mob.tile(), { radius: 1, attempts: 3, timeoutMs: 45_000, log: m => this.bot.log(`  ${m}`) });
+                this.misses = 0;
+            }
             return;
         }
+        this.misses = 0;
 
         // fight THIS mob until it dies — our own health bar clearing
         // mid-fight does not end the kill
