@@ -47,5 +47,10 @@
     {"from":{"x":3405,"z":3506,"level":0},"to":{"x":3405,"z":9906,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"},
     {"from":{"x":3405,"z":9906,"level":0},"to":{"x":3405,"z":3506,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
     {"from":{"x":3440,"z":9887,"level":0},"to":{"x":3423,"z":3485,"level":0},"locName":"Holy barrier","action":"Pass-through","kind":"dungeon"},
-    {"from":{"x":3423,"z":3485,"level":0},"to":{"x":3440,"z":9887,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"}
+    {"from":{"x":3423,"z":3485,"level":0},"to":{"x":3440,"z":9887,"level":0},"locName":"Trapdoor","action":"Climb-down","kind":"dungeon"},
+    {"from":{"x":3016,"z":3516,"level":0},"to":{"x":3016,"z":3517,"level":0},"locName":"Wall","action":"Push","kind":"door"},
+    {"from":{"x":3016,"z":3517,"level":0},"to":{"x":3016,"z":3516,"level":0},"locName":"Wall","action":"Push","kind":"door"},
+    {"from":{"x":3030,"z":3510,"level":1},"to":{"x":3030,"z":3509,"level":1},"locName":"Wall","action":"Push","kind":"door"},
+    {"from":{"x":3030,"z":3509,"level":1},"to":{"x":3030,"z":3510,"level":1},"locName":"Wall","action":"Push","kind":"door"},
+    {"from":{"x":3210,"z":9616,"level":0},"to":{"x":3210,"z":3216,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"}
 ]
