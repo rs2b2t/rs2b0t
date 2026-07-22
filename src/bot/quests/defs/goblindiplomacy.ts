@@ -238,6 +238,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const goblindiplomacy: QuestModule = {
     record: QUESTS.find(r => r.id === 'gobdip')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — Bartender start + Aggie's dyes
     // Keep every quest-internal item the between-quest deposit must not bank.
     // 'goblin mail' (substring) covers plain + "Orange goblin mail" + "Blue
     // goblin mail"; 'dye' covers orange/blue/red/yellow dyes; the rest are the

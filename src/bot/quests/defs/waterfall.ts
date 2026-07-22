@@ -802,6 +802,7 @@ function gatherRope(snap: QuestSnapshot, need: number): QuestStep {
 
 export const waterfall: QuestModule = {
     record: QUESTS.find(r => r.id === 'waterfall')!,
+    bank: ARDOUGNE_BANK, // Ardougne West — the Fishing Guild is Fishing-68 gated (2026-07-17)
     // Carry food for the dungeon/combat legs — the engine withdraws this many of
     // the AIOQuester's configured food item at provisioning time and the eat hook
     // consumes it when HP dips (the tomb/Golrie legs run past aggressive spawns).

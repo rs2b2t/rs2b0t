@@ -47,6 +47,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const runemysteries: QuestModule = {
     record: QUESTS.find(r => r.id === 'runemysteries')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — toll-free from the Lumbridge start
     // quest-internal deliverables a restart may hold ('notes' is generic but a
     // conservative keep is harmless)
     tools: ['air talisman', 'research package', 'notes'],

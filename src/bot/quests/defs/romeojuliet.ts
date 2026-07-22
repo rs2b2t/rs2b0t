@@ -67,6 +67,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const romeojuliet: QuestModule = {
     record: QUESTS.find(r => r.id === 'romeojuliet')!,
+    bank: new Tile(3185, 3440, 0), // Varrock West — Varrock square
     // 'cadava' keeps both the berries (record item) and the potion; 'message'
     // is Juliet's letter
     tools: ['cadava', 'message'],

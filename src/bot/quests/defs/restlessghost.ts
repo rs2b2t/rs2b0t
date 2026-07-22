@@ -138,6 +138,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const restlessghost: QuestModule = {
     record: QUESTS.find(r => r.id === 'priest')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — Lumbridge church
     // quest-internal items a restart may hold in the PACK (worn amulet is safe
     // either way — deposits never touch equipment)
     tools: ['ghostspeak amulet', 'skull'],

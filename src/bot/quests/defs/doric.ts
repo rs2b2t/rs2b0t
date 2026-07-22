@@ -63,6 +63,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const doric: QuestModule = {
     record: QUESTS.find(r => r.id === 'doric')!,
+    bank: new Tile(2946, 3369, 0), // Falador West — Doric's hut, N of Falador
     // any pickaxe tier is the mining tool the gather fallback checks for
     tools: ['pickaxe'],
     gather: {

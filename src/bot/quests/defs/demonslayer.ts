@@ -537,6 +537,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const demonslayer: QuestModule = {
     record: QUESTS.find(r => r.id === 'demon')!,
+    bank: new Tile(3185, 3440, 0), // Varrock West — Gypsy, Varrock square
     // Carry food for the Delrith fight — the stone circle is ringed by Dark wizards
     // that cast earth/water strike (dark_wizard.rs2). Best-effort via the eat hook.
     food: 10,

@@ -8,6 +8,7 @@ import { Skills } from '../api/hud/Skills.js';
 import { Sustain } from '../api/Sustain.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { COIN_FLOAT, PROVISION_BANK, QuestEngine } from '../quests/engine/QuestEngine.js';
+import type Tile from '../api/Tile.js';
 import { executeStep } from '../quests/exec/steps.js';
 import { QUEST_DEFS, defById } from '../quests/defs/index.js';
 import { QuestFood } from '../quests/food.js';
@@ -151,6 +152,13 @@ export default class AIOQuester extends TaskBot {
         return this.runningId ? defById(this.runningId)?.grind ?? [] : [];
     }
 
+    /** Bank for the STARTUP coin float: the first queued quest's bank so the
+     *  run's opening trip is already where the first quest provisions (no
+     *  Draynor-then-elsewhere double trip). Draynor default if none set. */
+    firstQuestBank(): Tile {
+        return QUEST_DEFS.find(d => this.picked.has(d.record.id))?.bank ?? PROVISION_BANK;
+    }
+
     // --- host accessors used by QuestEngine ---------------------------------
 
     pickedIds(): Set<string> {
@@ -265,7 +273,7 @@ class StartupWithdraw implements Task {
         }
         this.bot.log(`withdrawing ${COIN_FLOAT} starting coins`);
         const ok = await executeStep(
-            { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }], bank: PROVISION_BANK },
+            { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_FLOAT }], bank: this.bot.firstQuestBank() },
             [],
             m => this.bot.log(`  ${m}`)
         );

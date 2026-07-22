@@ -85,6 +85,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const cooksassistant: QuestModule = {
     record: QUESTS.find(r => r.id === 'cook')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — Lumbridge Castle
     // mid-quest intermediates ('pot' also matches 'pot of flour', 'bucket' also
     // matches 'bucket of milk') — a restart must not bank them
     tools: ['pot', 'grain', 'bucket', 'egg'],

@@ -798,6 +798,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const priestperil: QuestModule = {
     record: QUESTS.find(r => r.id === 'priestperil')!,
+    bank: new Tile(3253, 3420, 0), // Varrock East — Roald + the essence-mine/Paterdomus east leg
     // Two lvl-30 fights (dog 45 HP, monk 25 HP) + aggressive lvl-17/22/30 monks
     // in the temple lobby — carried food + the AIOQuester eat hook cover it. Kept
     // modest (8): the fights are light (dog ~5/hit, monks ~8), and every food item

@@ -622,6 +622,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const princeali: QuestModule = {
     record: QUESTS.find(r => r.id === 'prince')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — the jail quest; toll-free (avoids the Al Kharid 0-coin gate deadlock)
     // Every pipeline intermediate the deposit must keep (broad on purpose;
     // deposit only bites on spillover from OTHER quests). 'wig' covers both wigs.
     // 'pickaxe' is load-bearing: the soft-clay chain MINES clay, so the

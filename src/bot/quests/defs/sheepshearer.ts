@@ -121,6 +121,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const sheepshearer: QuestModule = {
     record: QUESTS.find(r => r.id === 'sheep')!,
+    bank: new Tile(3093, 3243, 0), // Draynor — Fred's farm, Lumbridge NW
     // shears = the gather tool; 'wool' also matches 'ball of wool' (record item)
     // so a mid-quest restart never banks half-gathered fleece
     tools: ['shears', 'wool'],

@@ -295,7 +295,7 @@ export class QuestEngine implements Task {
                 this.deposited.add(id); // clean pack: no bank trip earned
             } else {
                 this.host.noteState(rows, id, 'banking spillover', this.noProgressCount, this.parked.size);
-                const banked = await executeStep({ kind: 'deposit', keep, bank: PROVISION_BANK }, module.hops ?? [], m => this.host.log(`  ${m}`));
+                const banked = await executeStep({ kind: 'deposit', keep, bank: module.bank ?? PROVISION_BANK }, module.hops ?? [], m => this.host.log(`  ${m}`));
                 if (banked) {
                     this.deposited.add(id);
                 }
@@ -346,7 +346,7 @@ export class QuestEngine implements Task {
             } else if (plan.withdraw.length > 0 || extras.length > 0) {
                 // Withdraw record items and/or the coin/food floats first (one bank
                 // trip); re-planning next loop picks up any pending gather.
-                step = { kind: 'withdraw', items: [...plan.withdraw, ...extras], bank: PROVISION_BANK };
+                step = { kind: 'withdraw', items: [...plan.withdraw, ...extras], bank: module.bank ?? PROVISION_BANK };
             } else if (plan.satisfied) {
                 this.provisioned.add(id);
                 step = module.decide(snap);

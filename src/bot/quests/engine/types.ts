@@ -63,6 +63,12 @@ export type QuestStep =
 export interface QuestModule {
     record: QuestRecord;               // the existing quests/data record (one source of truth)
     hops?: LadderHop[];                // scripted level crossings the nav graph lacks
+    /** Bank this quest provisions at (deposit spillover + withdraw items/coins/
+     *  food) — near the quest's START, so a fresh account banks once on the way
+     *  in instead of detouring to the global default. Toll-free from the
+     *  Lumbridge spawn (never Al Kharid on a 0-coin account). Defaults to
+     *  QuestEngine.PROVISION_BANK (Draynor) when unset. */
+    bank?: Tile;
     /** NPC names this quest legitimately fights, surfaced through
      *  AIOQuester.grindTargets() so the random-event guard never mistakes the
      *  quarry for a hostile event (the ArdyFighter mechanism). */

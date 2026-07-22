@@ -816,6 +816,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const merlinscrystal: QuestModule = {
     record: QUESTS.find(r => r.id === 'arthur')!,
+    bank: new Tile(2725, 3491, 0), // Seers — Camelot
     // Mordred (lvl 39) + the Giant bat (lvl 27) are fought re-entrantly; the host
     // EatFood task heals between engine steps when HP dips (needs `food` set on the
     // AIOQuester + a real weapon; Excalibur is only obtained AFTER Mordred).

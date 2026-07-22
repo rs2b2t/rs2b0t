@@ -371,6 +371,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const witchshouse: QuestModule = {
     record: QUESTS.find(r => r.id === 'ball')!,
+    bank: new Tile(2946, 3369, 0), // Falador West — Taverley side
     // Carry food for the experiment fight (lvl 19->30->42->53); the AIOQuester
     // sustain hook / EatFood task eats it when HP dips.
     food: 20,
