@@ -41,3 +41,29 @@ export function matchProduct(options: readonly string[], product: string): strin
     }
     return null;
 }
+
+/** One attach product: use `inputs[0]` ON `inputs[1]`; the engine attaches
+ *  min(count(a), count(b), 15) per click (content: skill_fletching/arrows.rs2)
+ *  and refuses below `level` (fletching_table). Display names, exact. */
+export interface AttachPlan {
+    inputs: [string, string];
+    product: string;
+    level: number;
+}
+
+/** Attach products by lowercase option name — the engine's fletching_table
+ *  (bronze 1 / iron 15 / steel 30 / mithril 45 / adamant 60 / rune 75). */
+export const ATTACH_PRODUCTS: Record<string, AttachPlan> = {
+    'headless arrows': { inputs: ['Feather', 'Arrow shaft'], product: 'Headless arrow', level: 1 },
+    'bronze arrows': { inputs: ['Bronze arrowheads', 'Headless arrow'], product: 'Bronze arrow', level: 1 },
+    'iron arrows': { inputs: ['Iron arrowheads', 'Headless arrow'], product: 'Iron arrow', level: 15 },
+    'steel arrows': { inputs: ['Steel arrowheads', 'Headless arrow'], product: 'Steel arrow', level: 30 },
+    'mithril arrows': { inputs: ['Mithril arrowheads', 'Headless arrow'], product: 'Mithril arrow', level: 45 },
+    'adamant arrows': { inputs: ['Adamant arrowheads', 'Headless arrow'], product: 'Adamant arrow', level: 60 },
+    'rune arrows': { inputs: ['Rune arrowheads', 'Headless arrow'], product: 'Rune arrow', level: 75 }
+};
+
+/** The attach plan for a product option, or null for knife products. */
+export function attachPlanFor(product: string): AttachPlan | null {
+    return ATTACH_PRODUCTS[product.trim().toLowerCase()] ?? null;
+}

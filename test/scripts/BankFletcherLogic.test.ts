@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { matchProduct, productKeywords } from '#/bot/scripts/BankFletcherLogic.js';
+import { attachPlanFor, matchProduct, productKeywords } from '#/bot/scripts/BankFletcherLogic.js';
 
 describe('productKeywords', () => {
     test('known presets map to distinguishing keywords (case-insensitive)', () => {
@@ -55,5 +55,27 @@ describe('matchProduct — edge cases', () => {
     test('returns the first matching option when several qualify', () => {
         // both contain "short"; the first wins so the largest-qty button is stable
         expect(matchProduct(['Short bow', 'Shortbow (u)'], 'Short bow')).toBe('Short bow');
+    });
+});
+
+describe('attachPlanFor', () => {
+    test('headless arrows: feather onto shaft, level 1', () => {
+        expect(attachPlanFor('Headless arrows')).toEqual({ inputs: ['Feather', 'Arrow shaft'], product: 'Headless arrow', level: 1 });
+    });
+
+    test('every tier resolves with the engine table levels', () => {
+        const levels: Record<string, number> = { Bronze: 1, Iron: 15, Steel: 30, Mithril: 45, Adamant: 60, Rune: 75 };
+        for (const [metal, level] of Object.entries(levels)) {
+            const plan = attachPlanFor(`${metal} arrows`)!;
+            expect(plan.inputs, metal).toEqual([`${metal} arrowheads`, 'Headless arrow']);
+            expect(plan.product, metal).toBe(`${metal} arrow`);
+            expect(plan.level, metal).toBe(level);
+        }
+    });
+
+    test('knife products and unknowns resolve to null', () => {
+        for (const p of ['Arrow shafts', 'Short bow', 'Long bow', 'Ogre arrows', '']) {
+            expect(attachPlanFor(p), p).toBeNull();
+        }
     });
 });
