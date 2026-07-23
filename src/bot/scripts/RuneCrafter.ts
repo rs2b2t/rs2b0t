@@ -5,6 +5,7 @@ import Tile from '../api/Tile.js';
 import { depositAllExcept } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { withdrawOp } from '../api/hud/bankOps.js';
+import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Paint } from '../api/hud/Paint.js';
 import { Skills } from '../api/hud/Skills.js';
@@ -35,7 +36,7 @@ interface RuneType {
 // Air only for now. Adding a rune = one row (talisman/rune/level from
 // runecraft.dbrow) + its Mysterious-ruins tile (exit_coord) + nearest bank.
 const RUNES: Record<string, RuneType> = {
-    'Air runes': { talisman: 'Air talisman', rune: 'Air rune', level: 1, ruins: new Tile(2983, 3288, 0), bank: new Tile(3013, 3355, 0) }
+    'Air runes': { talisman: 'Air talisman', rune: 'Air rune', level: 1, ruins: new Tile(2988, 3294, 0), bank: new Tile(3013, 3355, 0) }
 };
 const RUNE_OPTIONS = Object.keys(RUNES);
 
@@ -138,7 +139,15 @@ class Craft implements Task {
         const made = before - essCount();
         this.bot.countCraft(made);
         this.bot.log(`crafted ${made} ${this.bot.runeName()}s`);
+        // Crafting levels the skill — drive the level-up + craft dialogs closed now
+        // so the portal click isn't stuck behind them one loop at a time.
+        for (let i = 0; i < 8; i++) {
+            if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+            else if (i < 2) { await Execution.delayTicks(1); }
+            else { break; }
+        }
     }
+
 }
 
 class Exit implements Task {
@@ -219,7 +228,7 @@ class Enter implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('heading to the ruins');
         this.bot.log('heading to the mysterious ruins with a pack of essence');
-        await this.bot.walkTo(this.bot.ruinsTile(), 2);
+        await this.bot.walkTo(this.bot.ruinsTile(), 1);
         const ruins = Locs.query().name(RUINS).nearest();
         const talisman = Inventory.first(this.bot.talismanName());
         if (!ruins || !talisman) { await Execution.delayTicks(2); return; }
