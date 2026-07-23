@@ -64,23 +64,26 @@ try {
     const deadline = Date.now() + BUDGET_MS;
     let seenLog = 0;
     let last = await snap();
+    let enteredTemple = false, craftedRunes = false, exited = false;
     while (Date.now() < deadline) {
         last = await snap();
         const t = Math.round((BUDGET_MS - (deadline - Date.now())) / 1000);
         console.log(`  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'} rc=${last.rcLvl}(+${last.rcXp - xp0}xp) airRunes=${last.airRunes} ess=${last.essence} tal=${last.talisman} runner=${last.runner}`);
         for (let i = seenLog; i < last.logs.length; i++) { console.log(`      · ${last.logs[i]}`); }
         seenLog = last.logs.length;
-        if (last.airRunes > 0 && last.rcXp > xp0) { break; } // crafted
+        if (last.pos && last.pos.z > 4000) { enteredTemple = true; }               // in a temple
+        if (last.rcXp > xp0 && last.airRunes > 0) { craftedRunes = true; }
+        if (enteredTemple && craftedRunes && last.pos && last.pos.z < 4000) { exited = true; break; } // portalled back out
         if (last.runner !== 'running') { break; }
-        await page.waitForTimeout(10_000);
+        await page.waitForTimeout(5_000);
     }
 
-    if (last.airRunes > 0 && last.rcXp > xp0) {
-        console.log(`PASS: crafted ${last.airRunes} Air runes (runecraft +${last.rcXp - xp0} xp), talisman kept=${last.talisman}`);
+    if (craftedRunes && exited) {
+        console.log(`PASS: crafted ${last.airRunes} Air runes (runecraft +${last.rcXp - xp0} xp) and portalled back out to z=${last.pos?.z}, talisman kept=${last.talisman}`);
         await browser.close();
         process.exit(0);
     }
-    fail(`no Air runes crafted within ${budgetMin}min [airRunes=${last.airRunes} rcXp+${last.rcXp - xp0} runner=${last.runner}]`);
+    fail(`did not craft + exit within ${budgetMin}min [entered=${enteredTemple} crafted=${craftedRunes} exited=${exited} airRunes=${last.airRunes} rcXp+${last.rcXp - xp0} z=${last.pos?.z} runner=${last.runner}]`);
 } catch (e) {
     console.error(e);
     fail(String(e));

@@ -139,13 +139,18 @@ class Craft implements Task {
         const made = before - essCount();
         this.bot.countCraft(made);
         this.bot.log(`crafted ${made} ${this.bot.runeName()}s`);
-        // Crafting levels the skill — drive the level-up + craft dialogs closed now
-        // so the portal click isn't stuck behind them one loop at a time.
-        for (let i = 0; i < 8; i++) {
-            if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
-            else if (i < 2) { await Execution.delayTicks(1); }
-            else { break; }
+        // The craft locks the player (p_delay 3) and pops a level-up. Leave straight
+        // away: in a tight loop, close any dialog and re-click the portal every tick
+        // so the Use fires the instant the lock clears, instead of standing there.
+        this.bot.setStatus('taking the portal out');
+        this.bot.log('taking the portal back to the ruins');
+        for (let i = 0; i < 15 && inTemple(); i++) {
+            if (ChatDialog.canContinue()) { await ChatDialog.continue(); continue; }
+            const portal = Locs.query().name(PORTAL.name).action(PORTAL.op).nearest();
+            if (portal) { await portal.interact(PORTAL.op); }
+            await Execution.delayTicks(1);
         }
+        if (!inTemple()) { this.bot.log('back at the mysterious ruins'); }
     }
 
 }
