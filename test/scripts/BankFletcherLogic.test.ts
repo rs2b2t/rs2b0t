@@ -1,5 +1,49 @@
 import { describe, expect, test } from 'bun:test';
-import { attachPlanFor, matchProduct, productKeywords } from '#/bot/scripts/BankFletcherLogic.js';
+import { attachPlanFor, LOG_OPTIONS, logNameMatches, matchProduct, productKeywords, productNeedsDifferentLog } from '#/bot/scripts/BankFletcherLogic.js';
+
+describe('logNameMatches — exact, never substring (the maple-shortbow bug)', () => {
+    test('"Logs" matches only regular Logs, NOT Maple/Yew/Oak logs', () => {
+        expect(logNameMatches('Logs', 'Logs')).toBe(true);
+        expect(logNameMatches('Maple logs', 'Logs')).toBe(false);
+        expect(logNameMatches('Oak logs', 'Logs')).toBe(false);
+        expect(logNameMatches('Yew logs', 'Logs')).toBe(false);
+    });
+    test('a qualified log matches only itself', () => {
+        expect(logNameMatches('Maple logs', 'Maple logs')).toBe(true);
+        expect(logNameMatches('Logs', 'Maple logs')).toBe(false);
+        expect(logNameMatches('Yew logs', 'Maple logs')).toBe(false);
+    });
+    test('case- and whitespace-insensitive', () => {
+        expect(logNameMatches('maple logs', 'Maple logs')).toBe(true);
+        expect(logNameMatches('  Willow logs ', 'Willow logs')).toBe(true);
+    });
+    test('null/undefined names never match', () => {
+        expect(logNameMatches(null, 'Logs')).toBe(false);
+        expect(logNameMatches(undefined, 'Logs')).toBe(false);
+    });
+});
+
+describe('productNeedsDifferentLog — arrow shafts need regular Logs', () => {
+    test('arrow shafts + a non-regular log is refused', () => {
+        expect(productNeedsDifferentLog('Arrow shafts', 'Maple logs')).toBe(true);
+        expect(productNeedsDifferentLog('Arrow shafts', 'Oak logs')).toBe(true);
+    });
+    test('arrow shafts + regular Logs is fine', () => {
+        expect(productNeedsDifferentLog('Arrow shafts', 'Logs')).toBe(false);
+    });
+    test('bows fletch from any log', () => {
+        expect(productNeedsDifferentLog('Short bow', 'Maple logs')).toBe(false);
+        expect(productNeedsDifferentLog('Long bow', 'Yew logs')).toBe(false);
+    });
+});
+
+describe('LOG_OPTIONS', () => {
+    test('regular Logs is the first (default) option and the qualified logs are present', () => {
+        expect(LOG_OPTIONS[0]).toBe('Logs');
+        expect(LOG_OPTIONS).toContain('Maple logs');
+        expect(LOG_OPTIONS).toContain('Yew logs');
+    });
+});
 
 describe('productKeywords', () => {
     test('known presets map to distinguishing keywords (case-insensitive)', () => {
@@ -53,7 +97,6 @@ describe('matchProduct — edge cases', () => {
         expect(matchProduct([], 'Arrow shafts')).toBeNull();
     });
     test('returns the first matching option when several qualify', () => {
-        // both contain "short"; the first wins so the largest-qty button is stable
         expect(matchProduct(['Short bow', 'Shortbow (u)'], 'Short bow')).toBe('Short bow');
     });
 });
@@ -67,7 +110,7 @@ describe('attachPlanFor', () => {
         const levels: Record<string, number> = { Bronze: 1, Iron: 15, Steel: 30, Mithril: 45, Adamant: 60, Rune: 75 };
         for (const [metal, level] of Object.entries(levels)) {
             const plan = attachPlanFor(`${metal} arrows`)!;
-            expect(plan.inputs, metal).toEqual([`${metal} arrowtips`, 'Headless arrow']); // display name is 'arrowtips', not 'arrowheads' (arrows.obj)
+            expect(plan.inputs, metal).toEqual([`${metal} arrowtips`, 'Headless arrow']);
             expect(plan.product, metal).toBe(`${metal} arrow`);
             expect(plan.level, metal).toBe(level);
         }
