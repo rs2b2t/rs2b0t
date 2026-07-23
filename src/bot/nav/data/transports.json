@@ -52,5 +52,14 @@
     {"from":{"x":3016,"z":3517,"level":0},"to":{"x":3016,"z":3516,"level":0},"locName":"Wall","action":"Push","kind":"door"},
     {"from":{"x":3030,"z":3510,"level":1},"to":{"x":3030,"z":3509,"level":1},"locName":"Wall","action":"Push","kind":"door"},
     {"from":{"x":3030,"z":3509,"level":1},"to":{"x":3030,"z":3510,"level":1},"locName":"Wall","action":"Push","kind":"door"},
-    {"from":{"x":3210,"z":9616,"level":0},"to":{"x":3210,"z":3216,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"}
+    {"from":{"x":3210,"z":9616,"level":0},"to":{"x":3210,"z":3216,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"},
+    {"from":{"x":3109,"z":3352,"level":0},"to":{"x":3109,"z":3354,"level":0},"locName":"Large door","action":"Open","kind":"door"},
+    {"from":{"x":2657,"z":3439,"level":0},"to":{"x":2659,"z":3437,"level":0},"locName":"Guild door","action":"Open","kind":"door"},
+    {"from":{"x":2659,"z":3437,"level":0},"to":{"x":2657,"z":3439,"level":0},"locName":"Guild door","action":"Open","kind":"door"},
+    {"from":{"x":3096,"z":3957,"level":0},"to":{"x":3094,"z":3957,"level":0},"locName":"Web","action":"Slash","kind":"door"},
+    {"from":{"x":3094,"z":3957,"level":0},"to":{"x":3096,"z":3957,"level":0},"locName":"Web","action":"Slash","kind":"door"},
+    {"from":{"x":3094,"z":3957,"level":0},"to":{"x":3092,"z":3957,"level":0},"locName":"Web","action":"Slash","kind":"door"},
+    {"from":{"x":3092,"z":3957,"level":0},"to":{"x":3094,"z":3957,"level":0},"locName":"Web","action":"Slash","kind":"door"},
+    {"from":{"x":3092,"z":3957,"level":0},"to":{"x":2543,"z":4713,"level":0},"locName":"Ladder","action":"Climb-down","kind":"dungeon"},
+    {"from":{"x":2543,"z":4713,"level":0},"to":{"x":3092,"z":3957,"level":0},"locName":"Ladder","action":"Climb-up","kind":"dungeon"}
 ]

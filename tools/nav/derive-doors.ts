@@ -72,20 +72,34 @@ function main(): void {
             continue;
         }
         // skip content a walker can never legitimately use: names that say
-        // 'locked', and random-event instance locs (macro_* — e.g. the 1373
-        // 'Open'-able macro_maze_wallhigh maze walls)
+        // 'locked', random-event instance locs (macro_* — e.g. the 1373
+        // 'Open'-able macro_maze_wallhigh maze walls), and quest-gated doors
+        // whose Open is scripted to refuse (Draynor Manor: the key-locked
+        // closet_door "The door is locked." and the Ernest basement
+        // lever-puzzle haunted_door category "This door is locked." — baking
+        // them lured exit paths into dead-end corners, live 2026-07-22)
+        const QUEST_LOCKED = new Set(['closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8']);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
-        if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_')) {
+        if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || QUEST_LOCKED.has(type.debugname ?? '')) {
             lockedSkipped++;
             continue;
         }
         openable.add(id);
     }
 
+    // ONE-WAY doors, excluded from the (always bidirectional) baked edges and
+    // modeled instead as single-direction curated edges in transports.json.
+    // Draynor Manor's front pair (haunteddoorl/r) scripts "The doors won't
+    // open." from the inside — baking it two-way routed exits into a live
+    // refusal and wedged every bot that entered (the manor clue, live
+    // 2026-07-22); the real exit is the two-way back door (3123,3360).
+    const ONE_WAY_EXCLUDED = new Set(['3108,3353,0', '3109,3353,0']);
+
     const edges: DoorEdge[] = [];
     const skippedShapes = new Map<string, number>();
     const nameCounts = new Map<string, number>();
     let mapsquares = 0;
+    let oneWaySkipped = 0;
 
     for (const { mx, mz, land, loc } of loadMapsquares(opts.engine)) {
         mapsquares++;
@@ -110,6 +124,10 @@ function main(): void {
                 return;
             }
 
+            if (ONE_WAY_EXCLUDED.has(`${baseX + instance.x},${baseZ + instance.z},${level}`)) {
+                oneWaySkipped++;
+                return;
+            }
             const locName = type.name ?? type.debugname ?? `loc_${instance.locId}`;
             edges.push({
                 x: baseX + instance.x,
@@ -130,7 +148,7 @@ function main(): void {
     fs.mkdirSync(path.dirname(opts.out), { recursive: true });
     fs.writeFileSync(opts.out, json);
 
-    console.log(`openable wall loc types: ${openable.size} (skipped ${lockedSkipped} locked/macro types)`);
+    console.log(`openable wall loc types: ${openable.size} (skipped ${lockedSkipped} locked/macro types, ${oneWaySkipped} one-way instances -> curated transports)`);
     console.log(`mapsquares scanned: ${mapsquares}`);
     console.log(`door edges derived: ${edges.length} -> ${opts.out}`);
     console.log('by name:');

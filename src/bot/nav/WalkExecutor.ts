@@ -753,6 +753,15 @@ class WalkExecutorImpl {
                 crossed = (await Execution.delayUntil(() => open() || cantReach(), TRANSPORT_WAIT_MS)) && open();
             }
             if (crossed) {
+                if (transport.toLevel !== undefined) {
+                    // The loc snapshot lags a level flip by a tick (probed live at
+                    // the Camelot tower: every query is empty at tick+0, populated
+                    // at tick+1). Settle before returning so the very next
+                    // findTransportLoc / path step reads the NEW floor — the stale
+                    // blank made back-to-back ladder flights "not found" and sent
+                    // walks on whole-building detours.
+                    await Execution.delayTicks(2);
+                }
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
                 return true;
             }
