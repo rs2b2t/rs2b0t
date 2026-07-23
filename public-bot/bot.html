@@ -23,11 +23,40 @@
         }
 
         /* full-viewport row: game fills the left, panel fixed on the right */
+        /* Top nav bar (rs2b2t links). Opens in new tabs so a click never kills a
+           running bot session. Matches the main /client nav; single-instance, so no
+           World Select. */
+        #rs2b0t-nav {
+            height: 34px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 0 8px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow-x: auto;
+        }
+
+        #rs2b0t-nav a {
+            color: #90c040;
+            text-decoration: none;
+            padding: 4px 10px;
+            border-radius: 3px;
+        }
+
+        #rs2b0t-nav a:hover {
+            text-decoration: underline;
+            background: #262626;
+        }
+
         #rs2b0t-root {
             display: flex;
             align-items: stretch;
             gap: 8px;
-            height: 100vh;
+            height: calc(100vh - 34px);
             box-sizing: border-box;
         }
 
@@ -455,6 +484,14 @@
 </head>
 
 <body>
+    <nav id="rs2b0t-nav">
+        <a href="https://rs2b2t.com/" target="_blank" rel="noopener">Main Menu</a>
+        <a href="https://2004.lostcity.rs/worldmap" target="_blank" rel="noopener">World Map</a>
+        <a href="https://rs2b2t.com/rules" target="_blank" rel="noopener">Rules</a>
+        <a href="https://rs2b2t.com/discord" target="_blank" rel="noopener">Discord</a>
+        <a href="https://rs2b2t.com/hiscores" target="_blank" rel="noopener">Hiscores</a>
+        <a href="https://rs2b2t.com/market" target="_blank" rel="noopener">Markets</a>
+    </nav>
     <div id="rs2b0t-root">
         <div id="game-wrap">
             <div id="game-stage">
