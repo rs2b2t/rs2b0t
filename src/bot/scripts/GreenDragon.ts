@@ -28,33 +28,28 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { actions } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
-// Green dragons in the deep wilderness N of Edgeville (cluster ~3081-3122,
-// 3810-3824, wildy level ~37). Fought in proximity — the anti-dragon shield
-// blocks the fire and their melee is weak. Bank south at Edgeville. Escape when a
-// PKer shows or HP craters: flee to bank, or run to <=lvl20 and Varrock-teleport.
 const TARGET = 'Green dragon';
 const DEFAULT_ANCHOR = new Tile(3096, 3814, 0);
-const DEFAULT_BANK = new Tile(3094, 3493, 0); // Edgeville
+const DEFAULT_BANK = new Tile(3094, 3493, 0);
 const FIELD_RADIUS = 22;
 const LOCAL_PLAYER_SLOT = 2047;
-const THREAT_RADIUS = 6; // any non-local player this close in the deep wildy = flee
+const THREAT_RADIUS = 6;
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 
-// Varrock teleport (magic tab): needs <= wildy level 20 (z <~ 3672) to fire.
 const MAGIC_TAB = 6;
 const VARROCK_TELE_COM = 1164;
-const TELE_SAFE_Z = 3665; // comfortably level <=19
+const TELE_SAFE_Z = 3665;
 const VARROCK_TELE_RUNES: { rune: string; count: number }[] = [
     { rune: 'Law rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Fire rune', count: 1 }
 ];
-const TELE_STOCK = 20; // casts of Varrock-tele runes to withdraw per bank trip
+const TELE_STOCK = 2;
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 
 const DROPS: string[] = DROP_DB[TARGET] ?? [];
-const DEFAULT_LOOT = DROPS.filter(n => n.toLowerCase() !== 'bass'); // everything but the low-value food
+const DEFAULT_LOOT = DROPS.filter(n => n.toLowerCase() !== 'bass');
 
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage'], label: 'Combat style', help: 'range is unavailable — a bow blocks the anti-dragon shield slot' },
@@ -77,7 +72,6 @@ export const SETTINGS: SettingsSchema = {
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Edgeville)', group: 'Location' }
 };
 
-// --- settings mirror ---
 let STYLE: 'melee' | 'mage' = 'melee';
 let MELEE_MODE = 1;
 let WEAPON = '';
@@ -94,7 +88,6 @@ let TELE_ESCAPE = false;
 let ANCHOR = DEFAULT_ANCHOR;
 let BANK_TILE = DEFAULT_BANK;
 
-// --- helpers ---
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
 }
@@ -116,11 +109,9 @@ function needStyleSupplies(): boolean {
 function inField(tile: Tile): boolean {
     return ANCHOR.distanceTo(tile) <= FIELD_RADIUS;
 }
-/** Alive, attackable dragons in the field not locked onto another player. */
 function fieldDragons(): Npc[] {
     return Npcs.query().name(TARGET).where(n => inField(n.tile()) && !n.targetsAnotherPlayer()).results();
 }
-/** Any non-local player close enough to be a PKer threat. */
 function nearbyThreat(): boolean {
     return Players.query().where(p => p.index !== LOCAL_PLAYER_SLOT && p.distance() <= THREAT_RADIUS).results().length > 0;
 }
@@ -136,9 +127,8 @@ function findLoot() {
         .within(FIELD_RADIUS)
         .nearest();
 }
-/** Items to KEEP on a bank run — everything else (all loot + random loot) banks. */
 function keepNames(): string[] {
-    const extra = ['Coins', SHIELD];
+    const extra = [SHIELD];
     if (TELE_ESCAPE) {
         extra.push(...VARROCK_TELE_RUNES.map(r => r.rune));
     }
@@ -172,7 +162,6 @@ async function lootOnce(bot: GreenDragon): Promise<boolean> {
     return false;
 }
 
-/** Open the magic tab and cast Varrock teleport (com 1164); true once we jump. */
 async function castVarrockTele(_bot: GreenDragon): Promise<boolean> {
     const before = Game.tile();
     if (!(await Game.openSideTab(MAGIC_TAB))) {
@@ -185,8 +174,6 @@ async function castVarrockTele(_bot: GreenDragon): Promise<boolean> {
     }, 4000);
 }
 
-// ============================ tasks ============================
-
 class Eat implements Task {
     constructor(private bot: GreenDragon) {}
     validate(): boolean {
@@ -197,7 +184,6 @@ class Eat implements Task {
     }
 }
 
-/** Wield the weapon/staff AND equip the anti-dragon shield when loose in the pack. */
 class GearEquip implements Task {
     private fails = 0;
     constructor(private bot: GreenDragon) {}
@@ -248,7 +234,7 @@ class ArmAutocast implements Task {
             return false;
         }
         if (castsLeft() < 1) {
-            return false; // no runes yet — BankRun stocks them first
+            return false;
         }
         return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
     }
@@ -265,8 +251,6 @@ class ArmAutocast implements Task {
     }
 }
 
-/** Wilderness escape: a nearby player (PKer) or critical HP with no food. Flee
- *  south to the bank, or (tele mode) run to <=lvl20 and Varrock-teleport. */
 class Escape implements Task {
     constructor(private bot: GreenDragon) {}
     validate(): boolean {
@@ -279,7 +263,7 @@ class Escape implements Task {
                 this.bot.setStatus('escaping — running south to teleport range');
                 this.bot.log(`escaping (${nearbyThreat() ? 'player near' : 'low hp'}) — running to <=lvl20`);
                 await Traversal.walkResilient(new Tile(ANCHOR.x, TELE_SAFE_Z - 5, 0), { radius: 4, attempts: 3, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
-                return; // loop re-checks; keep running until safe, then cast
+                return;
             }
             this.bot.setStatus('escaping — Varrock teleport');
             if (await castVarrockTele(this.bot)) {
@@ -294,12 +278,11 @@ class Escape implements Task {
     }
 }
 
-/** Bank at Edgeville: deposit all loot, restock food + supplies, walk back. */
 class BankRun implements Task {
     constructor(private bot: GreenDragon) {}
     validate(): boolean {
         if (nearbyThreat()) {
-            return false; // Escape owns danger
+            return false;
         }
         if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
             return true;
@@ -351,7 +334,6 @@ async function bankRoutine(bot: GreenDragon): Promise<void> {
 }
 
 async function withdrawStyleSupplies(bot: GreenDragon): Promise<void> {
-    // shield first — dragonfire protection is non-negotiable
     if (SHIELD !== '' && !Equipment.contains(SHIELD) && Inventory.first(SHIELD) === null) {
         if ((await withdrawTo(SHIELD, 1)) > 0) {
             await Equipment.equip(SHIELD);
@@ -418,7 +400,6 @@ class LootCorpse implements Task {
     }
 }
 
-/** Attack green dragons in proximity (the shield tanks the fire). */
 class Fight implements Task {
     private targetIdx: number | null = null;
     constructor(private bot: GreenDragon) {}
@@ -464,8 +445,6 @@ class Fight implements Task {
     }
 }
 
-// ============================ bot ============================
-
 export default class GreenDragon extends TaskBot {
     override loopDelay = 600;
 
@@ -504,7 +483,7 @@ export default class GreenDragon extends TaskBot {
         this.add(
             new ContinueDialog(),
             new DeathRecovery(this, {
-                anchor: BANK_TILE, // recover at the bank (safe, out of the wildy)
+                anchor: BANK_TILE,
                 radius: 6,
                 onDeath: () => { this.setStatus('died — recovering'); this.log('died! recovering'); },
                 onRecovered: () => { this.died = false; }
