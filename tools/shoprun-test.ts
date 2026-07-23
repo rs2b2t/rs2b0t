@@ -1,9 +1,9 @@
 /**
- * ShopRunner smoke vs the local engine. Proves one full cluster leg:
- * seeded bank coins → withdraw (capped) → buy runes at Aubury under a 90%
- * floor → deposit haul+coins → immediate re-plan SKIPS the cluster (stock
- * model). Floor 90 keeps the haul to ~1000 runes (~100 Buy-10 clicks ≈ 2
- * min) so the leg fits the smoke timeout; floor 50 would buy ~5000.
+ * ShopRunner smoke vs the local engine (the DUMB ring). Proves one full
+ * cluster lap: seeded bank coins → deposit-all + capped withdrawal (estimate
+ * + buffer) → buy out Aubury's runes valuable-first from live stock → the
+ * ring advances (cluster done) and immediately re-banks for the next lap.
+ * maxGpPerLeg 30000 keeps the haul small enough for the smoke timeout.
  * Route: SMOKE_ROUTE (Aubury only) via the `route` setting.
  * Run: bun tools/shoprun-test.ts [http://localhost:8890]
  */
@@ -40,11 +40,9 @@ await cheat(page, '~bankitem coins 100000');
 // stand near Varrock East bank: (3251,3420) → msq 50_53, local (51,28)
 await cheat(page, 'tele 0,50,53,51,28');
 
-// settings BEFORE start: smoke route, floor 90%, small cap (raw-string form of Settings.save)
+// settings BEFORE start: smoke route + a small cap (raw-string form of Settings.save)
 await page.evaluate(() => {
     localStorage.setItem('rs2b0t:set:ShopRunner:route', 'smoke-varrock');
-    localStorage.setItem('rs2b0t:set:ShopRunner:strategy', 'Floor %');
-    localStorage.setItem('rs2b0t:set:ShopRunner:floorPct', '90');
     localStorage.setItem('rs2b0t:set:ShopRunner:maxGpPerLeg', '30000');
 });
 
@@ -69,18 +67,18 @@ async function waitForLog(re: RegExp, timeoutMs: number): Promise<string> {
 }
 
 // 1. withdrawal happens, is capped, and names the cluster
-const withdraw = await waitForLog(/\[shoprun\] withdraw (\d+)gp cluster=varrock/, 120_000);
-const amount = Number(/withdraw (\d+)gp/.exec(withdraw)![1]);
+const withdraw = await waitForLog(/\[shoprun\] varrock: withdrew (\d+)gp/, 120_000);
+const amount = Number(/withdrew (\d+)gp/.exec(withdraw)![1]);
 if (amount > 30_000) {
     await fail(`withdrawal ${amount} exceeds maxGpPerLeg 30000`);
 }
-// 2. real purchases at Aubury (floor 90% leaves stock behind)
+// 2. real purchases at Aubury (buyout from live stock, valuable-first)
 await waitForLog(/\[shoprun\] buy shop=runeshop item=\w+ n=\d+ spent=\d+/, 180_000);
-// 3. haul + coins banked back
-await waitForLog(/\[shoprun\] banked cluster=varrock/, 180_000);
-// 4. the stock model now skips the cluster (skip log or idle — either proves it)
-await waitForLog(/\[shoprun\] (skip cluster=varrock haul=\d+%|idle until ~)/, 60_000);
+// 3. the ring advances — cluster done
+await waitForLog(/\[shoprun\] cluster varrock done — advancing the ring/, 180_000);
+// 4. the dumb ring immediately laps back to the bank (deposit-all next pass)
+await waitForLog(/\[shoprun\] varrock: withdrew \d+gp|\[shoprun\] buy shop=runeshop/, 120_000);
 
-console.log('PASS: withdraw → buy → bank → model-driven skip');
+console.log('PASS: fund → buy out → ring advance → next lap');
 await browser.close();
 process.exit(0);

@@ -43,9 +43,26 @@ interface RouteShop {
 
 export interface RouteCluster {
     id: string;
-    bank: { stand: NavPointLike; boothName: string; boothOp: string };
+    /** `banker` set -> an NPC Talk-to bank (the Mage Arena's Gundai); else booth. */
+    bank: { stand: NavPointLike; boothName: string; boothOp: string; banker?: string };
     shops: RouteShop[];
     gates: GateSpec[];  // ALL must pass
+    /** Items the bank leg must NOT deposit and must ensure are HELD before the
+     *  cluster (the wilderness leg's Knife — the web slasher). */
+    keep?: string[];
+    /** keep-list items to WIELD before the shop leg — the ruin webs' Slash op
+     *  reads slash_checker (the WORN right-hand slot only), so an inventory
+     *  knife never cuts; it must be equipped. */
+    wield?: string[];
+    /** Staged walk waypoints for the shop leg (the deep-wilderness run is
+     *  budget-hostile as one A* query — legs between waypoints stay cheap). */
+    waypoints?: NavPointLike[];
+    /** Boolean setting key that must be ON for this cluster (the mageArena toggle). */
+    setting?: string;
+    /** Where the HAUL banks when that differs from the funding bank — the Mage
+     *  Arena deposits with Gundai INSIDE the cellar so the wilderness walk home
+     *  carries nothing (`banker` = NPC Talk-to bank). */
+    haulBank?: { stand: NavPointLike; banker: string };
 }
 
 export interface Route {

@@ -28,7 +28,7 @@ function checkRoute(route: Route): void {
 describe('route data integrity vs generated shopdb', () => {
     test('live route resolves entirely against SHOP_DB', () => {
         checkRoute(ROUTE);
-        expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild']);
+        expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild', 'magicguild', 'magearena']);
     });
     test('skill gates sit on the guild clusters', () => {
         const byId = new Map(ROUTE.clusters.map(c => [c.id, c]));
@@ -37,6 +37,17 @@ describe('route data integrity vs generated shopdb', () => {
         expect(byId.get('catherby')!.gates).toEqual([]);
         expect(byId.get('fishingguild')!.gates).toEqual([{ skill: { name: 'fishing', level: 68 } }]);
         expect(byId.get('rangingguild')!.gates).toEqual([{ skill: { name: 'ranged', level: 40 } }]);
+        expect(byId.get('magicguild')!.gates).toEqual([{ skill: { name: 'magic', level: 66 } }]);
+        expect(byId.get('magearena')!.gates).toEqual([]);
+    });
+    test('the Mage Arena cluster carries the full wilderness protocol', () => {
+        const ma = ROUTE.clusters.find(c => c.id === 'magearena')!;
+        expect(ma.setting).toBe('mageArena');                    // operator toggle
+        expect(ma.keep).toEqual(['Rune scimitar']);              // the ONLY carried item — a slash weapon
+        expect(ma.wield).toEqual(['Rune scimitar']);             // worn: op1 Slash reads slash_checker
+        expect(ma.haulBank).toEqual({ stand: { x: 2533, z: 4714, level: 0 }, banker: 'Gundai' }); // haul never walks the wild
+        expect(ma.waypoints?.length ?? 0).toBeGreaterThan(0);    // staged deep-wildy walk
+        expect(ma.bank.banker).toBeUndefined();                  // funding = Edgeville BOOTH
     });
     test('smoke route is the Aubury-only varrock cluster', () => {
         checkRoute(SMOKE_ROUTE);
