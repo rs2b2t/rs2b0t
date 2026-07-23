@@ -4,6 +4,9 @@ import { Game } from '../../api/Game.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
+import { Skills } from '../../api/hud/Skills.js';
+import { stealCakes } from '../../scripts/CakeStall.js';
+import { FLEE_TILE, LOCKOUT_TICKS, STAND as BAKER_STALL_STAND } from '../../scripts/CakeStallLogic.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
@@ -192,6 +195,66 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
     return step;
 }
 
+// --- Bread: bank -> steal -> buy ---------------------------------------------
+// Acquisition priority (user-directed): the bank withdraw is priority 1 and
+// already structural — planProvisioning goes pack -> BANK -> gather, so this
+// gather fn only runs when the bank had no Bread. Fallback order here: steal
+// from the Ardougne Baker's stall (Thieving 5; bread is 5/20 of the stall
+// loot, so a handful of steals lands one), and only then BUY from Wydin.
+const BAKER_STALL_THIEVING = 5;
+// Driver passes before conceding to the buy (each pass is one ~90s stealCakes
+// call; at 5/20 a single pass almost always yields bread — 3 passes is bad-luck
+// insurance, not a grind).
+const BREAD_STEAL_PASSES = 3;
+let breadStealPasses = 0;
+
+// Last guard-combat end (game tick) — feeds the driver's engine-lockout gate
+// (steals are server-refused for LOCKOUT_TICKS after combat).
+let breadCombatEndTick = 0;
+
+/** Steal one Bread from the Baker's stall (re-entrant; true once held). Rides
+ *  the shared outcome-classified stall driver (ArdyCakes'), aborting the pass
+ *  the moment Bread lands — the cakes it picks up en route are incidental (not
+ *  in `tools`, so the between-quest deposit clears them). A guard catching us
+ *  returns 'combat': kite it to the shared SW flee tile (the proven ArdyCakes
+ *  response), wait combat out, and DON'T count the pass — only a pass that got
+ *  real stealing time burns budget toward the buy fallback. */
+async function stealBread(log: (m: string) => void): Promise<boolean> {
+    if (Inventory.contains(BREAD)) { return true; }
+    if (Game.inCombat()) {
+        log('stealBread: guard combat — kiting to the flee tile');
+        await Traversal.walkResilient(FLEE_TILE, { radius: 1, attempts: 3, timeoutMs: 60_000, log });
+        await Execution.delayUntil(() => !Game.inCombat(), 15_000);
+        if (!Game.inCombat()) { breadCombatEndTick = Game.tick(); }
+        return false; // re-enter: next pass walks back and steals
+    }
+    if (!(await Traversal.walkResilient(BAKER_STALL_STAND, { radius: 2, attempts: 4, timeoutMs: 240_000, log }))) {
+        return false;
+    }
+    const res = await stealCakes({
+        fillTo: 27, // never the stop condition — holding Bread is (the abort below)
+        abort: () => Inventory.contains(BREAD),
+        lockedOutUntil: () => breadCombatEndTick + LOCKOUT_TICKS,
+        setStatus: () => {},
+        log
+    });
+    if (res !== 'combat') {
+        breadStealPasses++; // combat passes don't burn steal budget
+    }
+    log(`stealBread: pass ${breadStealPasses}/${BREAD_STEAL_PASSES} -> ${res}, bread=${Inventory.contains(BREAD)}`);
+    return Inventory.contains(BREAD);
+}
+
+/** The bread gather decision, PURE (thieving level + passes injected) so the
+ *  priority order is unit-testable: steal while eligible, else buy (which
+ *  itself parks broke accounts via buyOrWait). Exported for tests. */
+export function breadPlan(snap: QuestSnapshot, thievingLevel: number, passesUsed: number): QuestStep {
+    if (thievingLevel >= BAKER_STALL_THIEVING && passesUsed < BREAD_STEAL_PASSES) {
+        return { kind: 'custom', name: "steal Bread from the Baker's stall", run: stealBread };
+    }
+    return buyOrWait(snap, { kind: 'buy', item: 'Bread', qty: 1, shop: WYDIN_SHOP, estGp: 20 });
+}
+
 /** Drive an ALREADY-OPEN dialogue to close: continue through pages, pick the first
  *  matching `prefer` option (fallback = last = the safe decline). Used for dialogues
  *  opened by a non-talk action (dropping bones -> Thrantax; a killing blow ->
@@ -239,7 +302,16 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
     if (!(await stair.interact(op))) {
         return false;
     }
-    return Execution.delayUntil(() => (Game.tile()?.level ?? before) !== before, 6000);
+    if (!(await Execution.delayUntil(() => (Game.tile()?.level ?? before) !== before, 6000))) {
+        return false;
+    }
+    // The loc snapshot lags the level flip by a tick (probed live at this exact
+    // tower: every query is EMPTY at tick+0, populated at tick+1) — settle so
+    // the caller's first query on the new floor sees real locs, not a false
+    // blank (the blank read as "crystal already broken" and skipped the whole
+    // Thrantax summoning).
+    await Execution.delayTicks(2);
+    return true;
 }
 
 /** Climb DOWN the Camelot NW tower (L2->L1->L0) after visiting the crystal. Its ladders
@@ -249,9 +321,14 @@ async function climbAt(stand: Tile, op: string, log: (m: string) => void): Promi
  *  explicitly, one flight per pass. Best-effort; a failure re-enters and retries. */
 async function descendTower(log: (m: string) => void): Promise<boolean> {
     for (let guard = 0; guard < 4 && (Game.tile()?.level ?? 0) > 0; guard++) {
-        const down = Locs.query().name('Ladder').action('Climb-down').within(6).nearest();
+        // The snapshot lags a level flip by a tick — poll briefly before
+        // declaring the ladder absent (the instant-fail left the bot parked on
+        // L2 and the follow-up walk detouring the whole castle).
+        const find = () => Locs.query().name('Ladder').action('Climb-down').within(6).nearest();
+        await Execution.delayUntil(() => find() !== null, 2000);
+        const down = find();
         if (!down) {
-            log('descendTower: no Climb-down ladder in range — LIVE-VERIFY the tower descent');
+            log('descendTower: no Climb-down ladder in range');
             return false;
         }
         const before = Game.tile()?.level ?? 0;
@@ -261,6 +338,7 @@ async function descendTower(log: (m: string) => void): Promise<boolean> {
         if (!(await Execution.delayUntil(() => (Game.tile()?.level ?? before) < before, 6000))) {
             return false;
         }
+        await Execution.delayTicks(2); // let the lower floor's locs land before the next flight's query
     }
     return (Game.tile()?.level ?? 0) === 0;
 }
@@ -710,9 +788,20 @@ async function tryBreakCrystal(log: (m: string) => void): Promise<'broke' | 'nee
     }
     // We're at the crystal stand: no crystal here means it's already shattered (Merlin
     // freed on an earlier pass whose walk to King Arthur was interrupted) — report in,
-    // don't loop re-breaking nothing.
-    const crystal = Locs.query().name('Giant crystal').within(8).nearest();
+    // don't loop re-breaking nothing. BUT a blank read is NOT evidence: the loc
+    // snapshot is empty for a tick after a level flip (probed live), and that blank
+    // once read as 'broke', skipping the Thrantax summon and looping the castle. Only
+    // trust absence once the scene is provably synced — the L2 down-laddertop
+    // (2767,3491) sits beside this stand and MUST be visible.
+    const crystalQ = () => Locs.query().name('Giant crystal').within(8).nearest();
+    const sceneSynced = () => Locs.query().name('Ladder').action('Climb-down').within(8).nearest() !== null;
+    await Execution.delayUntil(() => crystalQ() !== null || sceneSynced(), 3000);
+    const crystal = crystalQ();
     if (!crystal) {
+        if (!sceneSynced()) {
+            log('tryBreakCrystal: scene not synced on L2 — retrying');
+            return 'fail';
+        }
         return 'broke';
     }
     const excal = Inventory.first(EXCALIBUR);
@@ -776,7 +865,7 @@ async function summonThrantax(log: (m: string) => void): Promise<boolean> {
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
     if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: KING_ARTHUR }; }
+    if (snap.journal === 'notStarted') { breadStealPasses = 0; breadCombatEndTick = 0; return { kind: 'talk', stop: KING_ARTHUR }; }
 
     const hasExcalibur = has(snap, EXCALIBUR);
     const hasUnlit = has(snap, UNLIT_CANDLE);
@@ -825,7 +914,7 @@ export const merlinscrystal: QuestModule = {
     // model); gather fns keep a bankless start from hard-parking.
     gather: {
         'insect repellent': () => ({ kind: 'grabGround', item: 'Insect repellent', anchor: REPELLENT_SPAWN }),
-        'bread': s => buyOrWait(s, { kind: 'buy', item: 'Bread', qty: 1, shop: WYDIN_SHOP, estGp: 20 }),
+        'bread': s => breadPlan(s, Skills.level('thieving'), breadStealPasses), // bank (structural) -> steal the Baker's stall -> buy from Wydin
         'tinderbox': s => buyOrWait(s, { kind: 'buy', item: 'Tinderbox', qty: 1, shop: RIMMINGTON_SHOP, estGp: 15 }),
         'bucket': s => buyOrWait(s, { kind: 'buy', item: 'Bucket', qty: 1, shop: RIMMINGTON_SHOP, estGp: 15 })
     },

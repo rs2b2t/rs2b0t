@@ -18,7 +18,7 @@ import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { matchesAny, shouldEat } from './ArdyFighterLogic.js';
 import { HOSTILE_NAMES, isHostileAttacker } from './ArdyThieverLogic.js';
-import { CAKE_ITEMS, LOCKOUT_TICKS, STAND } from './CakeStallLogic.js';
+import { CAKE_ITEMS, FLEE_TILE, LOCKOUT_TICKS, STAND } from './CakeStallLogic.js';
 import { carriedCakes, stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
@@ -28,9 +28,8 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 // The bot lives on the golden stand; everything else is a short fixed walk.
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-// Kite tile SW of the market — far enough to drag a guard off the stall and
-// break its melee (proven by ArdyThiever's Flee).
-const FLEE_TILE = new Tile(2655, 3298, 0);
+// FLEE_TILE (the SW kite tile) now lives in CakeStallLogic — shared with the
+// Merlin's-Crystal bread steal leg.
 // Market-local boundary: covers the stand AND the south bank (cheb 26 apart),
 // so bank trips never fight ReturnToStall for control.
 const MARKET_RADIUS = 40;

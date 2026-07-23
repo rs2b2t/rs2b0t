@@ -30,6 +30,9 @@ export const STAND = new Tile(2668, 3312, 0);
  *  other and keep stealing; the counter shades each stand from the other's
  *  watcher geometry, so whoever was watching loses sight after the swap. */
 export const STAND_ALT = new Tile(2669, 3310, 0);
+// Kite tile SW of the market — far enough to drag a caught-you guard off the
+// stall and break its melee (proven by ArdyThiever's/ArdyCakes' Flee).
+export const FLEE_TILE = new Tile(2655, 3298, 0);
 export const STALL_NAME = 'Baker\'s stall';
 export const STALL_OP = 'Steal from';
 /** What the stall yields (content stealing.dbrow) — contains-matched, so the
