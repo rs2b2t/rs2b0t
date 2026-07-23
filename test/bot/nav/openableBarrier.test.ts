@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { isOpenableBarrier, isOpenBarrierLeaf } from '#/bot/nav/WalkExecutor.js';
 
-// The pure loc filter behind the stall opener. A barrier is a loc whose NAME
-// reads as a door/gate AND that offers an Open-style op — i.e. a shut passage we
-// can walk through. The name gate is load-bearing: the live wardrobe incident
-// had the opener click a 'Wardrobe' (also op 'Open') next to a stalled bot.
 describe('isOpenableBarrier', () => {
     test("a shut Door offering 'Open' is a barrier", () => {
         expect(isOpenableBarrier('Door', ['Open'])).toBe(true);
@@ -26,14 +22,11 @@ describe('isOpenableBarrier', () => {
         expect(isOpenableBarrier(null, ['Open'])).toBe(false);
     });
 
-    // Case-insensitive name match — loc names arrive in varying case.
     test('name match is case-insensitive', () => {
         expect(isOpenableBarrier('Large door', ['Open'])).toBe(true);
         expect(isOpenableBarrier('WOODEN GATE', ['Open'])).toBe(true);
     });
 
-    // LocSnapshot.ops is (string | null)[]; nulls (empty op slots) must not throw
-    // and must not count as an Open op.
     test('tolerates null op slots in the ops array', () => {
         expect(isOpenableBarrier('Door', [null, 'Open'])).toBe(true);
         expect(isOpenableBarrier('Door', [null, 'Close'])).toBe(false);
@@ -41,10 +34,6 @@ describe('isOpenableBarrier', () => {
     });
 });
 
-// The dual of isOpenableBarrier: an OPEN door/gate leaf offers a Close-style op.
-// Used to spot a transiently-swung-open leaf flagging the tile under the player,
-// so the walker doesn't latch 'blocked' on a leaf that auto-reverts within ticks
-// (the door-cross-test leg1 race).
 describe('isOpenBarrierLeaf', () => {
     test("an open Door offering 'Close' is an open leaf", () => {
         expect(isOpenBarrierLeaf('Door', ['Close'])).toBe(true);
@@ -77,8 +66,6 @@ describe('isOpenBarrierLeaf', () => {
         expect(isOpenBarrierLeaf('Door', [])).toBe(false);
     });
 
-    // isOpenableBarrier and isOpenBarrierLeaf are mutually exclusive on a given
-    // leaf: a leaf is either shut (Open) or open (Close), never both.
     test('is mutually exclusive with isOpenableBarrier', () => {
         expect(isOpenableBarrier('Door', ['Open'])).toBe(true);
         expect(isOpenBarrierLeaf('Door', ['Open'])).toBe(false);

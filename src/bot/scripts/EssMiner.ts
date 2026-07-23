@@ -21,20 +21,6 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, inEssMine, requiredMiningLevel, resolvePick, withdrawOneOp } from './EssMinerLogic.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// Varrock East bank + Aubury's rune shop + the essence mine — decoded from the
-// packed server maps and content (2026-07-12 ess-miner spec). Booths line
-// (3252-3256,3419); Aubury (op4 = Teleport, quest-gated server-side) is 16
-// tiles due south inside a walled rune shop (a wall gap, no openable door loc).
-// The teleport lands on one of 22
-// random spots in mapsquare 45_75, where four 5x5 "Rune Essence" crystals and
-// four "Portal" exits live — ALL in-mine movement rides OPLOC interacts (the
-// server walks us); the web-walker has no data for the region and is never
-// used inside it. The portal returns to Aubury's shop (3253,3401).
-// (3253,3418) — directly south of the booths — is a sealed collision nook
-// (booths wall it north, building walls south), unreachable by walking (nav
-// coverage harness). (3251,3420) is the nearest connected tile; banking is
-// OPLOC-first (openBooth), so the walk only needs a reachable approach and the
-// server-walk finishes onto the booth.
 const BANK_STAND = new Tile(3251, 3420, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const AUBURY_TILE = new Tile(3253, 3402, 0);
@@ -44,33 +30,21 @@ const ESS_LOC = 'Rune Essence';
 const MINE_OP = 'Mine';
 const PORTAL_LOC = 'Portal';
 const PORTAL_OP = 'Use';
-// Interact with Aubury from up to this far — the OPNPC server-walks the last
-// step onto him (the runemysteries quest def uses the same leash).
 const AUBURY_LEASH = 8;
-// One Mine click auto-repeats server-side until the pack is full; re-click
-// only if the essence count stalls this long (a dialog ate the action).
 const STALL_MS = 20_000;
-// Consecutive teleport attempts that changed nothing before we stop — the
-// server refuses silently (a plain game message) when the quest gate fails.
 const MAX_TELEPORT_FAILS = 3;
-// Consecutive bank-open failures before we stop (can't reach the bank — e.g. cold-started far from Varrock with the pick only in the bank).
 const MAX_BANK_FAILS = 6;
-// The journal entry's EXACT name (content quest.enum val 13) — Quests.status()
-// matches by exact name, so 'Rune Mysteries' alone reads 'unknown'. Same
-// name the quests table (quests/data/quests.ts) uses.
 const RUNE_MYSTERIES = 'Rune Mysteries Quest';
 
 export const SETTINGS: SettingsSchema = {
     pickaxe: { type: 'string', default: BEST_AVAILABLE, options: PICK_OPTIONS, label: 'Pickaxe', help: 'Best available walks Rune→Bronze against your Mining level (worn → inventory → bank withdraw); a specific tier stops if you can\'t use or don\'t own it' }
 };
 
-// Active run config (ADR-0006 single-script module state).
 let PICK_CHOICE: string = BEST_AVAILABLE;
 
 function essCount(): number {
     return Inventory.count(ESS_ITEM);
 }
-/** Everything held: worn equipment + pack (the engine checks both). */
 function heldNames(): string[] {
     return [...Equipment.items(), ...Inventory.items()].map(i => i.name ?? '').filter(n => n.length > 0);
 }
@@ -78,20 +52,10 @@ function inMine(): boolean {
     const t = Game.tile();
     return t !== null && inEssMine(t.x, t.z);
 }
-/** Deposit filter: the essence + the shared junk list. A pickaxe matches
- *  neither, so it stays with us whether worn or carried. */
 function essDeposit(): (name: string) => boolean {
-    // includeCommon=true is a harmless no-op here — the pack only holds rune essence + the pickaxe (never gems/junk); the pickaxe matches neither, so it always survives.
     return depositMatcher(name => name.toLowerCase() === ESS_ITEM.toLowerCase(), true);
 }
 
-/**
- * Rune essence miner: start anywhere; bank at Varrock East, teleport in with
- * Aubury (needs Rune Mysteries complete), one-click mine the essence crystal
- * until the pack fills, portal back, deposit, repeat. One setting: which
- * pickaxe to use (default: best available, resolved worn → pack → bank
- * exactly like the engine's pickaxe_checker).
- */
 export default class EssMiner extends TaskBot {
     override loopDelay = 600;
 
@@ -121,8 +85,6 @@ export default class EssMiner extends TaskBot {
             throw new Error('EssMiner: unusable pickaxe selection');
         }
 
-        // The teleport gate refuses with a plain game message (no dialog) —
-        // catch it so a stale journal can't leave TeleportIn retrying forever.
         this.on('chat.message', e => {
             if (/need to have completed the rune mysteries/i.test(e.text)) {
                 this.questRefused = true;
@@ -152,8 +114,6 @@ export default class EssMiner extends TaskBot {
         p.text(`Essence mined this run: ${this.mined}`, '#8a919a');
 
         p.gap();
-        // live pickaxe switch — GetPick converges on the new selection (walks to
-        // the bank to withdraw it when the held pick no longer satisfies).
         const picked = p.select('pick', 'pickaxe', PICK_OPTIONS, PICK_CHOICE);
         if (picked && picked !== PICK_CHOICE) {
             this.switchPickaxe(picked);
@@ -162,8 +122,6 @@ export default class EssMiner extends TaskBot {
         p.end();
     }
 
-    /** Live pickaxe switch from the paint — level-gated (mirrors onStart's
-     *  usable-pickaxe check); the GetPick task withdraws/equips the new pick. */
     private switchPickaxe(pick: string): void {
         const gate = requiredMiningLevel(pick);
         if (gate !== null && Skills.level('mining') < gate) {
@@ -182,13 +140,6 @@ export default class EssMiner extends TaskBot {
     countBankFail(): number { return ++this.bankFails; }
     resetBankFail(): void { this.bankFails = 0; }
 
-    /** Shared outside-travel: web-walk to within `radius` of dest and stop.
-     *  Varrock's rune shop has no openable door loc (walls with a gap), so
-     *  walkOpening's door-hunt can't help here and its single-shot walker
-     *  reports the counter-blocked NPC tile "unreachable" then wanders off —
-     *  walkResilient is the primitive proven against this exact area (by the
-     *  retired RuneMysteries bot). Reaching the precise stand tile is not required: the bank open
-     *  (OPLOC) and Aubury's teleport (OPNPC) each server-walk the final step. */
     async walkTo(dest: Tile, radius = 2): Promise<void> {
         const here = Game.tile();
         if (here && dest.distanceTo(here) <= radius) { return; }
@@ -196,8 +147,6 @@ export default class EssMiner extends TaskBot {
     }
 }
 
-/** In the mine with space: one Mine click on the nearest crystal auto-repeats
- *  server-side; babysit the count and only re-click on a genuine stall. */
 class MineEss implements Task {
     constructor(private bot: EssMiner) {}
     validate(): boolean { return inMine() && !Inventory.isFull(); }
@@ -217,14 +166,13 @@ class MineEss implements Task {
                 count = now;
                 lastGain = performance.now();
             }
-            if (performance.now() - lastGain > STALL_MS) { return; } // revalidate → re-click
+            if (performance.now() - lastGain > STALL_MS) { return; }
             await Execution.delayTicks(2);
         }
         this.bot.log(`pack full (${essCount()} rune essence)`);
     }
 }
 
-/** Full pack in the mine: step through the nearest Portal (lands at Aubury's). */
 class UsePortal implements Task {
     constructor(private bot: EssMiner) {}
     validate(): boolean { return inMine() && Inventory.isFull(); }
@@ -238,8 +186,6 @@ class UsePortal implements Task {
     }
 }
 
-/** Outside with essence: bank it. The deposit filter never matches a pickaxe,
- *  so the pick survives every trip, worn or carried. */
 class BankEss implements Task {
     constructor(private bot: EssMiner) {}
     validate(): boolean { return !inMine() && essCount() > 0; }
@@ -265,8 +211,6 @@ class BankEss implements Task {
     }
 }
 
-/** No usable pick held: withdraw one per the setting; stop cleanly when the
- *  selection can't be satisfied anywhere (FlaxSpinner's out-of-stock shape). */
 class GetPick implements Task {
     constructor(private bot: EssMiner) {}
     validate(): boolean {
@@ -287,7 +231,6 @@ class GetPick implements Task {
         }
         this.bot.resetBankFail();
         if (Inventory.isFull()) {
-            // make room for the withdraw (ess + junk only — never the pick)
             await Bank.depositAllMatching(essDeposit());
             await Execution.delayTicks(1);
         }
@@ -300,10 +243,6 @@ class GetPick implements Task {
             return;
         }
         if (res.kind === 'withdraw') {
-            // Read the withdraw-1 op off the bank item itself (withdrawOneOp) —
-            // the real label is "Withdraw 1" (a SPACE, per bank_main.if), not
-            // Bank.withdraw's hyphenated "Withdraw-1" default, which matches
-            // nothing (same trap CookBot/BankFletcher hit).
             const item = Bank.items().find(i => i.name?.toLowerCase() === res.item.toLowerCase());
             const withdrawOp = item ? withdrawOneOp(item.ops) : null;
             if (!withdrawOp) {
@@ -321,10 +260,6 @@ class GetPick implements Task {
     }
 }
 
-/** Ready (pick held, no essence carried): get within leash of Aubury and take
- *  his direct Teleport op — the OPNPC server-walks the final step onto him and
- *  runs the teleport, so we never need to reach his counter tile. Arrival =
- *  mapsquare 45_75. */
 class TeleportIn implements Task {
     private fails = 0;
     constructor(private bot: EssMiner) {}

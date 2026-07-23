@@ -1,17 +1,3 @@
-// Headless live smoke for CookBot. Boots the WebGL client (SwiftShader), logs in
-// (auto-creates), teleports off Tutorial Island, maxes stats (Cooking), teleports
-// to the Catherby bank, starts the bot, and validates the BANK HALF: reach the
-// bank stand, open the booth, deposit + Withdraw-All the fish, graceful idle when
-// the bank has no fish. The cook half (cross the door + useOn the range) needs
-// raw fish seeded in the bank — no item-give cheat exists, so it's validated
-// live by the owner.
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/cookbot-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -53,7 +39,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -61,18 +47,14 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Max stats on the clean post-relogin state (Thieving 99 — Guard needs 40).
-    // Clear any blocking dialog programmatically (more reliable than keypresses)
-    // — ::~maxme spews level-up dialogs that otherwise swallow the next command.
     const clearDialogs = () => page.evaluate(async () => {
         const a = (globalThis as never as { rs2b0t: { actions?: { continueDialog?: () => boolean } } }).rs2b0t.actions;
         for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); }
     });
     const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
 
-    await type('::~maxme');                 // Cooking 99 + everything
+    await type('::~maxme');
     await clearDialogs();
-    // Catherby bank stand (2809,3441) — mapsquare 43_53, local (57,49).
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
         await type('::tele 0,43,53,57,49');
@@ -90,12 +72,12 @@ try {
 
     const before = (await logLines()).length;
     let started = false, bankReached = false, boothFail = false, cooked = false;
-    for (let i = 0; i < 45; i++) { // ~90s
+    for (let i = 0; i < 45; i++) {
         await page.waitForTimeout(2000);
         const lines = (await logLines()).slice(before);
         for (const l of lines) {
             if (/CookBot cooking/i.test(l)) { started = true; }
-            if (/in the bank — idling/i.test(l)) { bankReached = true; } // reached+opened+withdraw-attempted
+            if (/in the bank — idling/i.test(l)) { bankReached = true; }
             if (/could not open the bank/i.test(l)) { boothFail = true; }
             if (/cooking (raw|salmon)/i.test(l)) { cooked = true; }
         }

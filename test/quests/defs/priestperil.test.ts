@@ -23,8 +23,6 @@ describe('priestperil decide', () => {
     test('held items route the mid-quest legs (exact full-name keys)', () => {
         expect(routed(decide(snap('inProgress', ['golden key'])))).toBe('custom:monument key swap');
         expect(routed(decide(snap('inProgress', ['iron key'])))).toBe('custom:unlock the cell');
-        // murky AND blessed water both display "Bucket of water" (priestperil.obj) —
-        // the water leg disambiguates by obj id 2953/2954 at runtime
         expect(routed(decide(snap('inProgress', ['bucket of water'])))).toBe('custom:water chain');
         expect(routed(decide(snap('inProgress', ['rune essence'])))).toBe('custom:essence delivery');
     });

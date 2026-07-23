@@ -1,13 +1,3 @@
-// Random-event handling test. Spawns event NPCs next to a running bot (via
-// ::npcadd, which fires the same opnpc dialog/pick handlers the real event
-// uses) and asserts the shared RandomEventTask detects and clears them.
-//
-// Covers the two non-trivial non-combat paths live: DIALOG (genie) and PICK
-// (triffid). Combat events reuse the bot's own kill loop (verified by the
-// chicken/rockcrab combat tests); box/mime/maze are detect-and-log in v1.
-//
-// Usage: bun tools/event-test.ts [base-url] [username]
-
 import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
@@ -49,7 +39,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     if (!(await login())) fail('login failed');
-    await type('::tele 0,50,50,20,20'); // off tutorial island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -60,10 +50,6 @@ try {
     if (!backIn) fail('relogin failed');
     console.log('logged in at Lumbridge');
 
-    // Use ChickenKiller as the host bot (it idles in place when there are no
-    // chickens, so the event handler — first task — gets the loop quickly).
-    // Each event runs at a distinct location so a prior phase's spawned NPC
-    // isn't in the new scene.
     const runEvent = async (npc: string, displayName: string, detectMsg: string, tele: string) => {
         await type(tele);
         await type(`::npcadd ${npc}`);
@@ -81,7 +67,6 @@ try {
         console.log(`${displayName}: detected + handled`);
         for (const l of tail.filter(l => l.includes('random event'))) console.log(`  ${l}`);
 
-        // give the handler time to clear it, then confirm it's gone or handled
         await page.waitForTimeout(8000);
         const gone = !(await npcPresent(displayName));
         console.log(`  ${displayName} ${gone ? 'cleared from scene' : 'still present (handler attempted; some events teleport/expire)'}`);

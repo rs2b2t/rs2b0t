@@ -1,28 +1,3 @@
-// Task 3 integration test: Equipment.equip/unequip, the untested worn-item
-// op path every armed quest fight and the tutorial's combat leg depend on.
-//
-// Exercises the full round-trip on a Bronze dagger:
-//   equip   -> backpack item's held Wield op (OPHELD2, content/scripts/
-//              skill_combat/configs/melee/daggers.obj `iop2=Wield`)
-//   unequip -> worn tab's component-level Remove button (INV_BUTTON1,
-//              content/scripts/player/scripts/equip.rs2
-//              `[inv_button1,wornitems:wear] ~unequip(last_slot)`)
-// and asserts the item crosses between backpack and worn tab each time
-// (verified against Inventory.items()/Equipment.contains(), not assumed).
-//
-// Equipment.equip/unequip both settle via Execution.delayUntil, which (like
-// every Execution.* call) rejects with "Execution.* called with no script
-// running" unless a script is actually active (Scheduler.enqueue,
-// src/bot/runtime/Scheduler.ts) — confirmed empirically running this test
-// against a bare `page.evaluate` first. So this registers and starts a tiny
-// throwaway LoopingBot through the same public ABI/runtime handles a real
-// script would use (registerScript + rs2b0t.runner), rather than calling
-// Equipment.equip/unequip from an unstarted context — the same reason
-// tools/chaosdruid-bank-test.ts exercises Bank.deposit via a real running
-// script instead of a bare evaluate call.
-//
-// Usage: bun tools/equip-test.ts [base-url]
-
 import { launchBrowser } from './lib/harness.js';
 import { type Page } from 'playwright-core';
 import { cheat, mainlandAccount } from './tutorial/harness.js';
@@ -30,8 +5,6 @@ import { cheat, mainlandAccount } from './tutorial/harness.js';
 const base = process.argv[2] ?? 'http://localhost:8888';
 const user = 'eq' + Date.now().toString(36).slice(-6);
 
-// debugname verified live against content/scripts/skill_combat/configs/melee/daggers.obj
-// ([bronze_dagger] name=Bronze dagger, iop2=Wield) -- no display-name surprise this time.
 const ITEM_DEBUGNAME = 'bronze_dagger';
 const ITEM_NAME = 'Bronze dagger';
 
@@ -43,7 +16,6 @@ function fail(msg: string): never {
 type EquipCheck = { worn: boolean; inv: boolean };
 type EquipResult = { before: EquipCheck; equipped: boolean; mid: EquipCheck; unequipped: boolean; after: EquipCheck };
 
-/** Minimal structural shape of a LoopingBot instance — just enough to drive onStart/loop. */
 type BotInstance = { onStart?(): void | Promise<void>; loop?(): void | Promise<void> };
 type BotCtor = new () => BotInstance;
 type ScriptMetaLike = { name: string; create(): BotInstance };
@@ -80,8 +52,6 @@ try {
         fail(`expected '${ITEM_NAME}' in inventory after '::give ${ITEM_DEBUGNAME}', got ${JSON.stringify(invNames)}`);
     }
 
-    // Register + start a throwaway bot whose onStart() drives the equip/unequip
-    // round-trip and stashes the result on a page-global for Playwright to read.
     await page.evaluate(itemName => {
         const abi = (globalThis as never as Abi).__rs2b0t;
         const host = (globalThis as never as Abi).rs2b0t;

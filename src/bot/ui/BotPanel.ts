@@ -12,15 +12,8 @@ import ParamsModal from './ParamsModal.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
-// Per-tab (sessionStorage) so each tab remembers its OWN script across reloads
-// without syncing to sibling tabs (issue #7).
 const SELECTED_SCRIPT_KEY = 'rs2b0t:selectedScript';
 
-/**
- * Live state panel + script controls. Plain DOM, no framework — DOM use
- * stays inside src/bot/ui/ + the multibox wall, keeping a headless build
- * viable later.
- */
 export default class BotPanel {
     private host: BotHostImpl;
 
@@ -68,10 +61,7 @@ export default class BotPanel {
         const script = el('div', 'rs2b0t-section');
         script.appendChild(sectionTitle('script'));
 
-        // the library modal is the picker; the panel shows the current choice
         this.library = new ScriptLibrary(name => this.selectScript(name));
-        // Restore this tab's last pick across a reload; fall back to the first
-        // registered script if none saved or it no longer exists.
         const remembered = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SELECTED_SCRIPT_KEY) : null;
         this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
 
@@ -89,8 +79,6 @@ export default class BotPanel {
 
         this.scriptStatus = row(script, 'status');
 
-        // load external scripts (URL with cache-busting reload, or
-        // a local file). Trusted code, no sandbox.
         const loadRow = el('div', 'rs2b0t-buttons');
         this.loadUrlInput = document.createElement('input');
         this.loadUrlInput.className = 'rs2b0t-input';
@@ -120,14 +108,11 @@ export default class BotPanel {
         script.appendChild(this.loadStatus);
         root.appendChild(script);
 
-        // settings: the selected script's tunable parameters
         const settings = el('div', 'rs2b0t-section');
         settings.appendChild(sectionTitle('parameters'));
         this.settingsBox = el('div', 'rs2b0t-settings');
         settings.appendChild(this.settingsBox);
 
-        // shared-across-scripts settings; built once so it's always present
-        // regardless of the selected script (unlike the per-script Edit button)
         const globalBtn = document.createElement('button');
         globalBtn.className = 'rs2b0t-button rs2b0t-param-edit';
         globalBtn.textContent = 'Global settings';
@@ -147,7 +132,6 @@ export default class BotPanel {
             this.renderSettings();
         });
 
-        // credentials: saved locally so the bot can (re)log in itself
         root.appendChild(this.buildCredentials());
 
         const status = el('div', 'rs2b0t-section');
@@ -182,11 +166,9 @@ export default class BotPanel {
         ScriptRunner.onChange(() => {
             this.renderScriptControls();
             this.renderLog();
-            // re-render the parameters section so the Edit button reflects active state
             this.renderSettings();
         });
 
-        // stat cells are created once (sparse over unused skill ids), updated in place
         for (let i = 0; i < reader.skillCount(); i++) {
             if (!reader.skillUsed(i)) {
                 continue;
@@ -227,7 +209,6 @@ export default class BotPanel {
         }
     }
 
-    /** Set the active script choice (from the library or a load) and refresh. */
     private selectScript(name: string): void {
         if (!ScriptRegistry.get(name)) {
             return;
@@ -241,7 +222,6 @@ export default class BotPanel {
         this.renderScriptControls();
     }
 
-    /** Keep the selection valid as the registry changes (loads/hot-reload). */
     private ensureSelection(): void {
         if (!ScriptRegistry.get(this.selectedScript)) {
             this.selectScript(ScriptRegistry.list()[0]?.name ?? '');
@@ -250,7 +230,6 @@ export default class BotPanel {
         }
     }
 
-    /** Render the selected script's parameters as a read-only summary + Edit button. */
     private renderSettings(): void {
         this.settingsBox.replaceChildren();
         const meta = ScriptRegistry.get(this.selectedScript);
@@ -268,7 +247,7 @@ export default class BotPanel {
         const valueOf = (key: string): string => (schema[key] ? SettingsStore.displayString(meta.name, key, schema[key]) : '');
         for (const [key, def] of Object.entries(schema)) {
             if (!isVisible(def, valueOf)) {
-                continue; // mirrors the modal: irrelevant params stay out of the summary
+                continue;
             }
             const item = el('span', 'rs2b0t-param-sitem');
             const k = el('span', 'rs2b0t-param-skey');
@@ -358,7 +337,6 @@ export default class BotPanel {
             return;
         }
 
-        // follow the new run's log
         this.unsubLog?.();
         this.unsubLog = ScriptRunner.ctx?.onLog(() => this.renderLog()) ?? null;
         this.renderLog();
@@ -390,8 +368,6 @@ export default class BotPanel {
             const extra = state === 'crashed' && ctx.crashError ? ` — ${ctx.crashError.message}` : ` — ${ctx.loopCount} loops`;
             const mode = state === 'running' || state === 'paused' ? ` [${ActionRouter.driver.mode}]` : '';
             const text = `${name}: ${state}${extra}${mode}`;
-            // while the runtime Supervisor is handling a random event the script
-            // is paused — surface the event in place of the loop status
             this.scriptStatus.textContent = ctx.activeEvent ? `⚡ ${ctx.activeEvent}` : text;
         }
         this.scriptStatus.className = `rs2b0t-value rs2b0t-state-${state}`;
@@ -419,7 +395,6 @@ export default class BotPanel {
         }
     }
 
-    /** Throttle DOM updates to ~5Hz; the draw hook fires at up to 50Hz. */
     private maybeRender(): void {
         const now = performance.now();
         if (now - this.lastRender < 200) {
@@ -441,7 +416,6 @@ export default class BotPanel {
             this.banner.className = 'rs2b0t-banner rs2b0t-banner-error';
             this.banner.textContent = `adapter self-test FAILED — missing: ${missing.join(', ')}`;
         } else {
-            // healthy: no banner — only surface the adapter when something's wrong
             this.banner.hidden = true;
             this.banner.textContent = '';
         }
@@ -487,9 +461,6 @@ export default class BotPanel {
             this.chatList.appendChild(div);
         }
 
-        // ctx.activeEvent flips mid-run without a state transition (the
-        // Supervisor doesn't fire onChange), so refresh the script-status line
-        // on this ~5Hz render tick to show/clear the ⚡ event banner promptly
         this.renderScriptControls();
     }
 }

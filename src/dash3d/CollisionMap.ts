@@ -3,7 +3,6 @@ import { DirectionFlag } from '#/dash3d/DirectionFlag.js';
 import { LocAngle } from '#/dash3d/LocAngle.js';
 import { LocShape } from '#/dash3d/LocShape.js';
 
-// a standard build area is 4x13x13 zones, or 4x104x104 tiles
 export const enum BuildArea {
     LEVELS = 4,
     SIZE = 13 << 3
@@ -56,7 +55,6 @@ export default class CollisionMap {
         const z: number = tileZ - this.startZ;
 
         if (angle === LocAngle.NORTH || angle === LocAngle.SOUTH) {
-            // north or south
             const tmp: number = sizeX;
             sizeX = sizeZ;
             sizeZ = tmp;

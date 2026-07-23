@@ -246,8 +246,6 @@ export default class Pix2D extends Linkable2 {
         }
     }
 
-    // mapview applet:
-
     static fillCircle(xCenter: number, yCenter: number, yRadius: number, rgb: number, alpha: number): void {
         const invAlpha: number = 256 - alpha;
         const r0: number = ((rgb >> 16) & 0xff) * alpha;

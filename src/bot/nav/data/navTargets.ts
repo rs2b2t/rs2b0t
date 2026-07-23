@@ -1,13 +1,5 @@
 import type { NavPoint } from '../PathFinder.js';
 
-/**
- * Tiles bots web-walk to (bank stands, skill-station stands, quest stands).
- * The coverage harness (tools/nav/coverage.ts) checks each is walkable AND
- * connected to the main graph, so a sealed-nook config (a tile a bot can't
- * actually reach by walking) is caught. Hand-maintained: when a bot adds a
- * nav-target constant, add it here. `expected:'island'` marks a KNOWN,
- * runtime-handled island so the gate fails only on NEW offenders.
- */
 export interface NavTarget {
     bot: string;
     label: string;
@@ -34,10 +26,6 @@ export const NAV_TARGETS: NavTarget[] = [
     { bot: 'RockCrab', label: 'crab reset tile', tile: { x: 2712, z: 3699, level: 0 } },
     { bot: 'RockCrab', label: 'Seers bank stand', tile: { x: 2725, z: 3491, level: 0 } },
     { bot: 'AIOQuester', label: 'wizard-tower surface ladder stand', tile: { x: 3105, z: 3162, level: 0 } },
-    // KNOWN island: the wizard-tower BASEMENT ladder landing is a separate
-    // underground region reached via the ladder transport; the quest exec
-    // (quests/exec/gotoNpc) handles the trapped-landing at runtime (climb-up
-    // re-roll). Expected, not a defect.
     { bot: 'AIOQuester', label: 'wizard-tower basement ladder landing', tile: { x: 3104, z: 9576, level: 0 }, expected: 'island' },
     { bot: 'ShopRunner', label: 'Aubury shop stand', tile: { x: 3253, z: 3401, level: 0 } },
     { bot: 'ShopRunner', label: "Lowe's archery stand", tile: { x: 3231, z: 3421, level: 0 } },
@@ -47,13 +35,6 @@ export const NAV_TARGETS: NavTarget[] = [
     { bot: 'ShopRunner', label: "Hickton's archery stand", tile: { x: 2821, z: 3442, level: 0 } },
     { bot: 'ShopRunner', label: 'Fishing Guild shop stand', tile: { x: 2596, z: 3399, level: 0 } },
     { bot: 'ShopRunner', label: "Dargaud's bow shop stand", tile: { x: 2678, z: 3440, level: 0 } },
-    // ClueSolver: the 16 upstairs (L1/L2) easy-clue answers. Each is reachable
-    // ONLY via a baked stair/ladder edge (src/bot/nav/data/stairEdges.json, wired
-    // through PathFinder.addEdges' third param) — this block is the acceptance
-    // gate for the upstairs-nav fix (clue-solver plan, in git history).
-    // Tiles are the walkable STAND next to each clue object (the object tile
-    // itself — chest/drawers/table — is non-walkable), ≤1 tile off the pinned
-    // survey answer, on the answer's level; picked by verified connectivity.
     { bot: 'ClueSolver', label: 'simple001 Lumbridge Castle Duke bedroom', tile: { x: 3209, z: 3219, level: 1 } },
     { bot: 'ClueSolver', label: 'simple002 Lumbridge Castle tower', tile: { x: 3229, z: 3216, level: 1 } },
     { bot: 'ClueSolver', label: 'simple004 Al Kharid Palace', tile: { x: 3301, z: 3168, level: 1 } },

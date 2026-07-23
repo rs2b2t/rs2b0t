@@ -111,7 +111,6 @@ describe('pickUnstickStep', () => {
         expect(pickUnstickStep(OPEN, 2)).toEqual({ dx: 1, dz: 0 });
     });
     test('skips blocked neighbours to the first reachable one', () => {
-        // only West (dx:-1,dz:0) is open
         const onlyWest = (dx: number, dz: number): boolean => dx === -1 && dz === 0;
         expect(pickUnstickStep(onlyWest, 0)).toEqual({ dx: -1, dz: 0 });
     });

@@ -14,16 +14,11 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// Varrock West anvil + bank — sane defaults; the exact anvil tile is verified live.
 const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
-// Keywords matched (substring, case-insensitive) against the anvil panel's
-// tier-specific item names — e.g. the Bronze panel offers "Bronze arrowtips",
-// "Bronze dart tip", "Bronze kiteshield" (NOT "arrowheads"/"dart tips"/"kite
-// shield"). Order mirrors the panel; not every item exists at every tier.
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 
 export const SETTINGS: SettingsSchema = {
@@ -38,14 +33,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Anvil search radius (tiles)' }
 };
 
-/**
- * Varrock anvil smithing. Withdraw a full pack of bars + a hammer, walk to the
- * Anvil, use a bar on it to open the smithing panel, make the chosen item at the
- * largest quantity, ride the batch until the bars run low, then bank the products
- * and repeat. The hammer stays in the pack between cycles (deposit everything
- * except the hammer); a replacement is only withdrawn if it's ever missing.
- * Start it at the Varrock West bank.
- */
 export default class SmithingBot extends TaskBot {
     override loopDelay = 600;
 
@@ -95,8 +82,6 @@ export default class SmithingBot extends TaskBot {
         p.row(`${this.bar} ${this.product}`, `Bars left: ${this.barCount()}`, `Bank trips: ${this.trips}`);
 
         p.gap();
-        // processing bot — switching bar/product mid-batch strands the open anvil
-        // batch, so Pause/Stop only (no live selector)
         ScriptRunner.paintControls(p);
         p.end();
     }
@@ -106,7 +91,6 @@ export default class SmithingBot extends TaskBot {
     countTrip(): void { this.trips++; }
     productName(): string { return this.product; }
     hammerName(): string { return this.hammer; }
-    /** The bank/inventory name of the bar (e.g. "Bronze bar"). */
     barItemName(): string { return `${this.bar} bar`; }
     anvilLocName(): string { return this.anvilName; }
     anvilTile(): Tile { return this.anvilStand; }
@@ -115,13 +99,11 @@ export default class SmithingBot extends TaskBot {
     obstacleList(): string[] { return this.obstacle; }
     leashRadius(): number { return this.leash; }
 
-    /** Bars in the pack (bars don't stack). */
     barCount(): number {
         const pat = this.barItemName().toLowerCase();
         return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
     }
 
-    /** The LAST bar in the pack (the smith target), or null. */
     lastBar(): InvItem | null {
         const pat = this.barItemName().toLowerCase();
         const items = Inventory.items();
@@ -133,15 +115,12 @@ export default class SmithingBot extends TaskBot {
         return null;
     }
 
-    /** The carried hammer, or null. */
     hammerItem(): InvItem | null {
         const pat = this.hammer.toLowerCase();
         return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
     }
 }
 
-/** The smithing panel is open → make the chosen item at the largest quantity and
- *  ride the batch until the bars stop dropping. */
 class SmithPanel implements Task {
     constructor(private bot: SmithingBot) {}
     validate(): boolean { return ChatDialog.isMainMakePanel(); }
@@ -149,10 +128,6 @@ class SmithPanel implements Task {
         this.bot.setStatus('choosing item');
         const start = this.bot.barCount();
         if (!(await ChatDialog.makeFromPanelMax(this.bot.productName()))) {
-            // The panel is open but the chosen product isn't on it. If names
-            // haven't populated yet it's a transient — retry; otherwise the
-            // product is genuinely unavailable at this tier, so stop cleanly
-            // instead of spinning on the open panel forever.
             const products = ChatDialog.mainMakeProducts().filter(Boolean);
             if (products.length === 0) { await Execution.delayTicks(1); return; }
             this.bot.log(`'${this.bot.productName()}' isn't on the ${this.bot.barItemName()} anvil panel — available: [${products.join(', ')}]. Stopping (pick a listed item).`);
@@ -160,7 +135,6 @@ class SmithPanel implements Task {
             ScriptRunner.stop();
             return;
         }
-        // let the smith batch start, then ride it (bars fall as items are forged)
         await Execution.delayUntil(() => Game.animating() || this.bot.barCount() < start || ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 3000);
         let mark = this.bot.barCount();
         for (let guard = 0; guard < 200; guard++) {
@@ -177,9 +151,6 @@ class SmithPanel implements Task {
     }
 }
 
-/** No bars in the pack → walk to the bank, KEEP the hammer and deposit everything
- *  else (products + stray bars), ensure a hammer is carried (withdraw one only if
- *  missing), Withdraw-All bars, then head back toward the anvil. */
 class BankTrip implements Task {
     constructor(private bot: SmithingBot) {}
     validate(): boolean { return this.bot.barCount() === 0; }
@@ -190,16 +161,11 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        // Keep the hammer in the pack; deposit everything else (products + any
-        // stray bars). No need to shuffle the hammer in and out each trip.
         const hammerPat = this.bot.hammerName().toLowerCase();
         await Bank.depositAllMatching(name => !name.toLowerCase().includes(hammerPat));
         await Execution.delayTicks(1);
         this.bot.countTrip();
 
-        // Only fetch a hammer if we're not already carrying one (first cycle, or
-        // it was lost). Reading the real Withdraw-1 op off the item — the label
-        // varies by build, and a hardcoded one withdraws nothing.
         if (!this.bot.hammerItem()) {
             const hammerBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(hammerPat));
             if (!hammerBank || hammerBank.name === null) {
@@ -214,7 +180,6 @@ class BankTrip implements Task {
             await Execution.delayUntil(() => this.bot.hammerItem() !== null, 3000);
         }
 
-        // Withdraw-All bars (read the real op off the item, like CookBot).
         const barBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(this.bot.barItemName().toLowerCase()));
         if (!barBank || barBank.name === null) {
             this.bot.log(`no '${this.bot.barItemName()}' in the bank — idling`);
@@ -235,12 +200,9 @@ class BankTrip implements Task {
                 if (!(await Execution.delayUntil(() => this.bot.barCount() > before || Inventory.isFull(), 3000))) { break; }
             }
         }
-        // walking closes the bank; Smith crosses to the anvil next tick
     }
 }
 
-/** Bars in the pack and no dialog/panel open → walk to the anvil and use the last
- *  bar on it, opening the smithing panel (SmithPanel makes + rides the batch). */
 class Smith implements Task {
     constructor(private bot: SmithingBot) {}
     validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }

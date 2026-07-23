@@ -1,13 +1,3 @@
-// Offline nav-target coverage check (sibling of bench-path.ts). Verifies every
-// tile a bot web-walks to (src/bot/nav/data/navTargets.ts) is walkable AND
-// connected to the main graph in the baked collision pack, so a sealed-nook
-// config is caught. Prints each bad tile + the nearest connected replacement.
-// Exits non-zero on any UNEXPECTED non-ok target (expected:'island' entries are
-// documented known cases and do not fail the gate).
-//
-// Prereq: bun run build:bot (produces out/collision.lcnav.gz).
-// Usage: bun tools/nav/coverage.ts [--pack out/collision.lcnav.gz] [--anchor 3221,3218]
-
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
 import doorsJson from '../../src/bot/nav/data/doors.json';
@@ -54,11 +44,6 @@ for (const t of NAV_TARGETS) {
     console.log(`FAIL      ${t.bot} — ${t.label} (${t.tile.x},${t.tile.z},${t.tile.level}): ${kind}; nearest connected = ${near ? `(${near.x},${near.z},${near.level})` : 'none within ' + MAX_RING}`);
     failures++;
 }
-// Level discipline: long ground routes must stay on level 0. Un-floored upper
-// planes read OPEN in engine collision (walls + reachability contain real
-// players), so before the pack gated walkability on drawn ground, the baked
-// stair edges let A* fly the empty level-1 sky (Seers→Varrock detoured up a
-// Catherby ladder, live-observed). These pin that class of regression.
 const GROUND_ROUTES: [string, NavPoint, NavPoint][] = [
     ['Seers bank → Varrock centre', { x: 2722, z: 3493, level: 0 }, { x: 3213, z: 3424, level: 0 }],
     ['Lumbridge → Rellekka crab field', { x: 3222, z: 3218, level: 0 }, { x: 2710, z: 3720, level: 0 }]

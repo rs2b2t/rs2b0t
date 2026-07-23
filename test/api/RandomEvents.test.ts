@@ -52,8 +52,8 @@ describe('GearLossTracker', () => {
     test('bank/shop suppression covers the open AND the following update (deposits are noticed after the bank closes)', () => {
         const t = new GearLossTracker(90_000);
         t.update(['Lobster pot'], false, 0);
-        t.update(['Lobster pot'], true, 1000); // bank open
-        t.update([], false, 2000); // gear gone, bank just closed — still a deposit
+        t.update(['Lobster pot'], true, 1000);
+        t.update([], false, 2000);
         expect(t.recentlyLost('lobster pot', 2500)).toBe(false);
     });
 

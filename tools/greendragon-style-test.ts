@@ -1,10 +1,3 @@
-// Live test for GreenDragon (melee) at the wilderness green dragons. Gives a
-// rune scimitar + anti-dragon shield + food, teleports to the field, starts the
-// bot, and asserts: the shield gets equipped, kills are logged, bones/hide are
-// looted, and HP never craters (the shield absorbs the dragonfire).
-//
-// Usage: bun tools/greendragon-style-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
@@ -12,7 +5,7 @@ const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 6 })
 const username = rest[0] ?? `gd${Date.now().toString(36).slice(-6)}`;
 
 const ANCHOR = { x: 3096, z: 3814 };
-const TELE = '::tele 0,48,59,24,38'; // 3096,3814 — the dragon field
+const TELE = '::tele 0,48,59,24,38';
 const ITEMS = ['::~item rune_scimitar 1', '::~item antidragonbreathshield 1', '::~item lobster 15'];
 
 const browser = await launchBrowser();
@@ -82,7 +75,6 @@ try {
         if (snap.state === 'crashed') { await page.screenshot({ path: 'out/greendragon.png' }); fail('script crashed'); }
     }
 
-    // shield equipped + sustained kills + no death = the dragonfire is being absorbed.
     console.log(`--- result --- kills=${kills} bones/hide looted=${looted} shieldOn=${shieldOn} deaths=${deaths}`);
     if (!shieldOn) fail('anti-dragon shield never equipped');
     if (kills === 0) fail('no kills observed');

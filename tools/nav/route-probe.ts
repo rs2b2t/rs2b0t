@@ -1,10 +1,3 @@
-// One-shot offline path probe (Task 13): can the Lumbridge -> Rellekka
-// rock-crab route be found with today's baked pack + door/transport edges?
-// Runs the exact PathFinder module NavWorker ships, under Bun — no browser.
-// Pack-loading cribbed from tools/nav/bench-path.ts.
-//
-// Usage: bun tools/nav/route-probe.ts [--pack out/collision.lcnav.gz]
-
 import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
@@ -31,10 +24,8 @@ const finder = new PathFinder(bytes);
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson, stairsJson);
 console.log(`pack: ${finder.mapsquares} mapsquares, ${finder.doorEdges} door edges, ${finder.transportEdges} transport edges (members=${finder.members})`);
 
-// bun tools/nav/route-probe.ts — is the Lumbridge → Rellekka crab route
-// pathable with today's doors/transports?
-const from = { x: 3222, z: 3218, level: 0 }; // Lumbridge spawn
-const to = { x: 2710, z: 3720, level: 0 }; // RockCrab DEFAULT_FIELD
+const from = { x: 3222, z: 3218, level: 0 };
+const to = { x: 2710, z: 3720, level: 0 };
 const outcome = finder.findPath(from, to);
 if (!outcome.ok) {
     console.error(`NO PATH: ${outcome.reason} (expanded ${outcome.expanded})`);

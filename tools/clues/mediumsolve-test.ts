@@ -1,43 +1,3 @@
-/**
- * Medium-clue solver live smoke vs the local engine. Proves the full medium
- * trail executor end-to-end over ONE representative of each mechanic, plus the
- * new Karamja SHIP crossing (RT1). Like the easy smoke (tools/cluesolve-test.ts)
- * it asserts ADVANCE (the held clue id is consumed / a "step done"/"trail
- * complete" fires) rather than a fixed trail length, and mirrors its
- * seed-tele-start-poll shape — but each case declares its own MILESTONES so the
- * mechanic under test is proven, not just "something moved".
- *
- * The six sub-cases (each: give the scroll + prereqs, run SolveClue, assert the
- * milestones inside a budget):
- *   1. map dig        — medium_map001 (Asgarnia). Give Spade (bank-seeded).
- *   2. coordinate dig — medium_sextant001 (Misthalin, mainland). Give Sextant +
- *      Watch + Chart (pack) + Spade. ASSERT it does NOT abandon on the engine's
- *      sextant-item require-check (spade.rs2 aborts the dig without all three)
- *      and digs up the casket.
- *   3. kill-for-key   — medium_riddle004 (Chicken — the easiest co-located
- *      fight). Give combat stats; ASSERT the key is looted and the trail advances.
- *   4. anagram talk   — medium_anagram004 (Lowe, Varrock — a plain talk).
- *   5. challenge      — medium_anagram002 (Cook, Lumbridge — a count-dialog
- *      challenge, fixed answer 9). ASSERT the challenge is answered + advance.
- *   6. KARAMJA SHIP   — medium_anagram019 (Kangai Mau, Brimhaven). Give 100 Coins
- *      (fare 30 each way). ASSERT the bot sails Port Sarim->Musa (talk Seaman
- *      Thresnor -> pay -> L1 deck), CROSSES the Gangplank down to the L0 dock
- *      (the RT1 live-watch: if Cross fails the bot strands on L1), walks into
- *      Brimhaven, and reaches/solves the clue.
- *
- * Each case teles the bot beside a mainland bank near its start so SolveClue's
- * bank-first leg stays short (SolveClue always banks at the NEAREST known bank,
- * api/BankLocations — the RockCrab.bankTile override is for crab-banking only).
- * The ship case starts at Draynor bank so the trail walk from there to Brimhaven
- * routes through the ship. Spade + food are BANK-seeded (bankFirst withdraws
- * them); the coordinate items + coins are PACK-seeded (bankFirst keeps but never
- * withdraws Sextant/Watch/Chart, and pack coins guarantee the ship fare).
- *
- * Run one case:  bun tools/clues/mediumsolve-test.ts <case> [base]
- * Run all:       bun tools/clues/mediumsolve-test.ts all  [base]
- *   <case> ∈ map | coord | kill | anagram | challenge | ship | all
- *   base defaults to http://localhost:8890
- */
 import { chromium, type Page } from 'playwright-core';
 import { cheat, mainlandAccount } from '../tutorial/harness.js';
 
@@ -56,8 +16,6 @@ interface R {
     };
 }
 
-// The active case's page — reassigned per case so the readers/fail dump target
-// whichever client is live. Only one client runs at a time (closed between cases).
 let page: Page;
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
@@ -74,13 +32,10 @@ const worldTile = (): Promise<{ x: number; z: number; level: number } | null> =>
 const runnerState = (): Promise<string> =>
     page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state);
 
-/** world (x,z,level) → the engine's `::tele level,mapX,mapZ,localX,localZ`. */
 function teleCmd(x: number, z: number, level: number): string {
     return `tele ${level},${Math.floor(x / 64)},${Math.floor(z / 64)},${x % 64},${z % 64}`;
 }
 
-/** Dump the runner log tail + persisted clue traces so a live failure is
- *  diagnosable from the smoke log alone (same recipe as the easy smoke). */
 async function dumpTail(label: string): Promise<void> {
     try {
         const tail = (await logLines()).slice(-40);
@@ -101,31 +56,20 @@ async function dumpTail(label: string): Promise<void> {
 }
 
 interface Seed {
-    /** Extra `::~item <obj> <count>` pack-seeds (coordinate items, coins). */
     packItems?: [string, number][];
-    /** Extra `::setstat <skill> <level>` boosts (combat for kill-for-key). */
     stats?: [string, number][];
-    /** Skip the bank spade seed — force the bot to acquire one from a spawn. */
     noBankSpade?: boolean;
 }
 
-/** Seed bank (spade + food) + a held clue scroll, boost HP (+ optional combat /
- *  extra pack items), point RockCrab at a nearby bank + enable clue solving,
- *  tele to `start`, verify the seeds landed, and start RockCrab. */
 async function seedAndStart(clueObj: string, clueId: number, start: [number, number, number], seed: Seed): Promise<void> {
-    // Bank-seed the spade + food (bankFirst WITHDRAWS them). Uniform across cases:
-    // talk clues just carry a harmless spade; it avoids the "no Spade in the bank"
-    // abandon-log noise on dig cases. `noBankSpade` cases test spade acquisition.
     if (!seed.noBankSpade) {
         await cheat(page, '~bankitem spade 1');
     }
     await cheat(page, '~bankitem lobster 30');
     await cheat(page, `~item ${clueObj} 1`);
-    // Pack-seed coordinate items / coins (bankFirst keeps but never withdraws these).
     for (const [obj, n] of seed.packItems ?? []) {
         await cheat(page, `~item ${obj} ${n}`);
     }
-    // Survive stray random-event attackers on the trek; extra combat for the fight.
     await cheat(page, 'setstat hitpoints 30');
     for (const [sk, lvl] of seed.stats ?? []) {
         await cheat(page, `setstat ${sk} ${lvl}`);
@@ -136,8 +80,6 @@ async function seedAndStart(clueObj: string, clueId: number, start: [number, num
         localStorage.setItem('rs2b0t:set:RockCrab:bankTile', bt);
     }, `${start[0]},${start[1]},${start[2]}`);
 
-    // Tele LAST so every cheat's canvas-focus click lands in an empty area, not
-    // on a bank booth / NPC (a real click there can eat later typed input).
     await cheat(page, teleCmd(start[0], start[1], start[2]));
 
     const inv = await invItems();
@@ -145,7 +87,6 @@ async function seedAndStart(clueObj: string, clueId: number, start: [number, num
         throw new Error(`clue ${clueObj} (id ${clueId}) not in the pack after ~item — bad obj name?`);
     }
     for (const [obj] of seed.packItems ?? []) {
-        // coins/coordinate items: assert the display item is present (obj name -> item).
         const want = obj.replace(/^trail_/, '').toLowerCase();
         if (!inv.some(i => (i.name ?? '').toLowerCase() === want || (i.name ?? '').toLowerCase().includes(want))) {
             throw new Error(`pack-seed '${obj}' did not land in the pack — bad obj name? (inv: ${inv.map(i => i.name).join(', ')})`);
@@ -165,22 +106,16 @@ interface MsCtx {
 }
 interface Milestone {
     name: string;
-    /** Sticky: evaluated each poll; once true it stays achieved. `done` = the
-     *  set of already-achieved milestone names (so `advance` can gate on `solving`). */
     test: (c: MsCtx, done: Set<string>) => boolean;
 }
 
 const cheb = (a: { x: number; z: number }, x: number, z: number): number => Math.max(Math.abs(a.x - x), Math.abs(a.z - z));
 
-/** The solver logged "solving <clueObj>" — bank-first done, next step identified. */
 const solving = (clueObj: string): Milestone => ({
     name: 'solving',
     test: c => c.log.some(l => l.includes('solving') && l.includes(clueObj))
 });
 
-/** The trail advanced: the tracked scroll id left the pack, or a step-done /
- *  trail-complete fired. Gated on `solving` so a pre-solve inventory glitch
- *  (the clue is name-protected through banking anyway) can't count as progress. */
 const advance = (clueId: number): Milestone => ({
     name: 'advance',
     test: (c, done) => done.has('solving') && (!c.inv.some(i => i.id === clueId) || c.log.some(l => /\[clue\].*(step done|trail complete)/.test(l)))
@@ -191,8 +126,6 @@ const spadeInPack: Milestone = {
     test: c => c.inv.some(i => (i.name ?? '').toLowerCase() === 'spade')
 };
 
-/** All three coordinate items held — proves case 2 did NOT abandon on the
- *  Sextant/Watch/Chart require-check (blockReason / spade.rs2). */
 const coordItemsHeld: Milestone = {
     name: 'coord-items',
     test: c => ['sextant', 'watch', 'chart'].every(n => c.inv.some(i => (i.name ?? '').toLowerCase() === n))
@@ -208,32 +141,21 @@ const challengeAnswered: Milestone = {
     test: c => c.log.some(l => /challenge answered/i.test(l))
 };
 
-/** Fare paid + landed on the deck (handleSpecialCrossing logs "<label>: sailed"). */
 const sailed: Milestone = {
     name: 'sailed',
     test: c => c.log.some(l => /sailed/i.test(l))
 };
 
-/** The RT1 live-watch: the Gangplank Cross from the L1 deck to the L0 dock
- *  resolved (handleTransport logs "Cross Gangplank at (..) ok"; crossMultiTileDoor
- *  logs "crossed 'Gangplank'"). A strand on L1 never produces this line. */
 const gangplankCrossed: Milestone = {
     name: 'gangplank',
     test: c => c.log.some(l => /gangplank.*\bok\b/i.test(l) || /crossed .*gangplank/i.test(l))
 };
 
-/** Stood within `r` of (x,z) at level 0 — the far-region walk arrived. */
 const reachedTile = (x: number, z: number, r: number): Milestone => ({
     name: 'reached-target',
     test: c => c.tile !== null && c.tile.level === 0 && cheb(c.tile, x, z) <= r
 });
 
-/**
- * Poll the live client until every milestone is achieved (PASS) or the budget
- * runs out / the solve abandons / the runner crashes (FAIL). Milestones are
- * sticky and logged as they land; on FAIL the first unmet one is reported and
- * dumpTail() prints the abandon trace.
- */
 async function driveSolve(tag: string, milestones: Milestone[], timeoutMs: number): Promise<void> {
     const done = new Set<string>();
     let lastLevel: number | null = -99;
@@ -245,7 +167,6 @@ async function driveSolve(tag: string, milestones: Milestone[], timeoutMs: numbe
         if (state === 'crashed') {
             throw new Error(`${tag}: RockCrab crashed mid-solve`);
         }
-        // The executor dumps a marked trace block on abandon — fail fast + loud.
         const abandon = log.find(l => /==== clue trace \(abandon/.test(l));
         if (abandon) {
             throw new Error(`${tag}: solve ABANDONED — ${abandon.replace(/^.*abandon: /, '').replace(/\).*$/, '')}`);
@@ -284,8 +205,6 @@ interface Case {
 
 const ALL_CASES: Case[] = [
     {
-        // map dig: medium_map001 (id 2827) digs a casket at (3093,3227,0), just
-        // south of Draynor bank — bank-first is trivial, then a short dig walk.
         name: 'map',
         run: async () => {
             await mainlandAccount(page, base, `mMap${Date.now() % 100000}`);
@@ -294,10 +213,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // coordinate dig: medium_sextant001 (id 2801) at (3160,3251,0), Misthalin
-        // (mainland). Give Sextant+Watch+Chart (pack) + Spade (bank). The engine
-        // aborts the dig without all three (spade.rs2), so `coord-items` +
-        // `advance` proves the require-check passed and the casket was dug.
         name: 'coord',
         run: async () => {
             await mainlandAccount(page, base, `mCrd${Date.now() % 100000}`);
@@ -308,10 +223,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // ACQUIRE SPADE: map dig medium_map001 (id 2827) at (3093,3227,0), but the
-        // bank is seeded with NO spade — the bot must fetch one from the nearer
-        // ground spawn (Falador 2981,3369 from Draynor). Proves ensureSpade end
-        // to end: the dig would otherwise abandon on "no Spade held".
         name: 'acquire-spade',
         run: async () => {
             await mainlandAccount(page, base, `mASp${Date.now() % 100000}`);
@@ -320,13 +231,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // ACQUIRE COORD TOOLS: coordinate dig medium_sextant002 (id 2803) at
-        // (2679,3110,0), near Port Khazard. NO trio pack-seed — the bot must run
-        // the professor->Murphy->Kojo->professor chain at bank-first (has_sextant_clue
-        // is true because the coord clue is held). Start at Ardougne market, near
-        // the chain. `coord-items` proves the trio was acquired live; `advance`
-        // proves the dig then produced the casket. Spade IS bank-seeded (isolate
-        // the trio chain from spade acquisition, which acquire-spade covers).
         name: 'acquire-coord',
         run: async () => {
             await mainlandAccount(page, base, `mACd${Date.now() % 100000}`);
@@ -335,9 +239,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // kill-for-key: medium_riddle004 (id 2837) — kill a Chicken (co-located at
-        // the container 2709,3478,0, near Seers bank), loot key 2838, search. Give
-        // combat stats so the barehanded fight is quick.
         name: 'kill',
         run: async () => {
             await mainlandAccount(page, base, `mKil${Date.now() % 100000}`);
@@ -348,8 +249,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // anagram talk: medium_anagram004 (id 2847) — Lowe, Varrock archery store
-        // by the east bank (anchor 3232,3423,0). A plain talk (not a challenge).
         name: 'anagram',
         run: async () => {
             await mainlandAccount(page, base, `mAna${Date.now() % 100000}`);
@@ -358,10 +257,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // challenge: medium_anagram002 (id 2843) — Cook, Lumbridge kitchen (anchor
-        // 3209,3215,0). Talking poses a count-dialog maths question (fixed answer
-        // 9); the executor must answer it. Start at Al Kharid bank (nearest) —
-        // one toll-gate crossing west into Lumbridge (bankFirst withdraws coins).
         name: 'challenge',
         run: async () => {
             await mainlandAccount(page, base, `mCha${Date.now() % 100000}`);
@@ -370,12 +265,6 @@ const ALL_CASES: Case[] = [
         }
     },
     {
-        // KARAMJA SHIP (the new-mechanism test): medium_anagram019 (id 3617) —
-        // Kangai Mau, Brimhaven food store (anchor 2791,3182,0). Start at Draynor
-        // bank; the trail walk to Brimhaven routes through the Port Sarim->Musa
-        // ship. Pack-seed 100 Coins (fare 30) so the fare never depends on a
-        // bank withdraw. Milestones prove: sailed (fare paid + on deck), gangplank
-        // crossed to L0 (RT1 live-watch), reached Brimhaven, and the clue advanced.
         name: 'ship',
         run: async () => {
             await mainlandAccount(page, base, `mShp${Date.now() % 100000}`);
@@ -399,7 +288,6 @@ if (CASES.length === 0) {
     process.exit(2);
 }
 
-// HEADED=1 opens a visible Chrome window (watch the bot live); default headless.
 const browser = await chromium.launch({ channel: 'chrome', headless: !process.env.HEADED, slowMo: process.env.HEADED ? 50 : 0 });
 const results: { name: string; ok: boolean; sec: number; detail?: string }[] = [];
 

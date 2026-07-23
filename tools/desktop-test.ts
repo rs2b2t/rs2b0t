@@ -1,13 +1,3 @@
-// Validates the desktop client: launches the Electron app, logs in, runs a
-// bot, then HIDES the window and proves the 50fps loop keeps running (no
-// background throttling, no catch-up burst) — the whole point of leaving the
-// browser. Also forces a main-thread stall to prove the Scheduler's
-// frame-gap insurance shifts deadlines instead of falsely timing out.
-//
-// Run with NODE (tsx), not Bun: Playwright's Electron launcher attaches over
-// Node's inspector WebSocket, which Bun's runtime breaks.
-//   PATH="/opt/homebrew/opt/node@24/bin:$PATH" npx tsx tools/desktop-test.ts [server-url]
-
 import { _electron as electron } from 'playwright-core';
 import { startFromLibrary } from './lib/harness.js';
 
@@ -28,8 +18,6 @@ type Rs2b0t = {
 };
 
 const electronApp = await electron.launch({
-    // main.cjs defaults a bare origin to the WALL (/multibox.html); this smoke
-    // drives one raw client, so ask for /bot.html explicitly (like rendergate).
     args: ['desktop/main.cjs', `--server=${server.replace(/\/+$/, '')}/bot.html`],
     executablePath: 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
 });
@@ -55,7 +43,6 @@ try {
     console.log('electron app booted, client running');
     if (!(await login())) fail('first login failed');
     await type('::tele 0,50,50,20,20');
-    // re-login off tutorial island
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) {
         await page.waitForTimeout(4000);
@@ -68,7 +55,6 @@ try {
     await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForTimeout(2000);
 
-    // ---- the core test: hide the window, measure loop rate while hidden ----
     const before = await loopCycle();
     await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].hide());
     console.log('window hidden — measuring loop rate over 6s...');
@@ -80,15 +66,11 @@ try {
 
     const fps = (afterHidden - before) / elapsed;
     console.log(`loop while hidden: ${afterHidden - before} cycles in ${elapsed.toFixed(1)}s = ${fps.toFixed(1)} fps`);
-    // a throttled browser tab would be ~1 fps; full speed is ~50. Pass well above throttle.
     if (fps < 25) fail(`loop throttled while hidden (${fps.toFixed(1)} fps) — backgroundThrottling not effective`);
     console.log('PASS: loop kept full speed while hidden (no background throttle)');
 
-    // ---- bonus: frame-gap insurance still protects against a hard stall ----
-    // block the main thread ~2.5s (simulates a system sleep the flag can't
-    // prevent); the Scheduler should shift deadlines, not falsely time out.
     const gapsBefore = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.scheduler.gapShifts);
-    await page.evaluate(() => { const end = performance.now() + 2500; while (performance.now() < end) { /* spin */ } });
+    await page.evaluate(() => { const end = performance.now() + 2500; while (performance.now() < end) { } });
     await page.waitForTimeout(1500);
     const gapsAfter = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.scheduler.gapShifts);
     if (gapsAfter <= gapsBefore) {

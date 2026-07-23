@@ -1,41 +1,14 @@
-// Task 11 section test: jump-start a fresh account to the combat section
-// (the 360 -> 500 ladder) and assert TutorialBot's
-// eleven Combat.ts stages carry it to the ladder-out surface crossing
-// unattended.
-//
-// Same jump-start shape as `mining-test.ts` (Task 10): two-step setvar (a
-// bare `setvar tutorial N` from a fresh spawn silently reverts --
-// the "Stage-jump recipe corrections") + the FAITHFUL-
-// ACCOUNT KIT (axe/net/bread + firemaking/cooking xp) so Survival/Chef stay
-// permanently quiet, then a `::tele` into the mine + relog so every earlier
-// tab is attached.
-//
-// KNOWN ADJACENCY (task brief, stated up front so a fresh reader isn't
-// surprised by the log): landing INSIDE the mine with a fresh script
-// instance re-arms Mining.ts's ten stages -- this test deliberately does
-// NOT also grant a bronze dagger/pickaxe/bars/hammer, so those stages
-// re-run FROM SCRATCH (talk -> prospect x2 -> talk -> mine x2 -> smelt ->
-// talk -> smith -> open gate) before TutorialBot ever reaches Combat.ts's
-// stages -- Dezzick re-grants the pickaxe/hammer, the rocks/furnace/anvil
-// are always available, so this is self-healing noise, not a bug (~1-2 min
-// per the task brief's option (a)). The deadline below is budgeted for it.
-//
-// Usage: bun tools/tutorial/combat-test.ts [base-url]
-
 import { launchBrowser } from '../lib/harness.js';
 import { bootAndLogin, cheatQuiet, getServerVarQuiet, relog, startScript } from './harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const TARGET = 500;
-const DEADLINE_MS = 16 * 60_000; // mining re-run (~1-2 min) + the combat section itself (two kill waits, up to 60s/90s each) + travel
+const DEADLINE_MS = 16 * 60_000;
 const POLL_MS = 3000;
 
-/** Live-probed mine-arrival tile (QuestGuide.ts's `ClimbToMine` / mining-test.ts's `ARRIVAL`). */
 const ARRIVAL = { x: 3081, z: 9519 };
-/** `tele level,mx,mz,lx,lz` for ARRIVAL: mapsquare 48,148 (world >> 6), local (9,47). */
 const TELE_CMD = 'tele 0,48,148,9,47';
 
-/** `MINE_Z` from `src/bot/scripts/tutorial/stages/helpers.ts` -- underground/surface boundary. */
 const MINE_Z = 9000;
 
 type Rs2b0t = {
@@ -67,7 +40,6 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (the "Stage-jump recipe corrections").
     await cheatQuiet(page, 'setvar tutorial 1');
     await cheatQuiet(page, 'setvar tutorial 360');
     const jumped = await getServerVarQuiet(page, 'tutorial');
@@ -76,10 +48,6 @@ try {
         fail(`setvar jump to 360 did not stick (got ${jumped})`);
     }
 
-    // Faithful-account kit (file header) -- closes Survival/Chef's permanent
-    // observables. Deliberately NOT granting a dagger/pickaxe/ores/bars/
-    // hammer: Mining.ts's stages self-heal that whole chain from scratch
-    // (file-header note), which this test's deadline budgets for.
     await cheatQuiet(page, 'give bronze_axe 1');
     await cheatQuiet(page, 'give net 1');
     await cheatQuiet(page, 'give bread 1');
@@ -87,12 +55,9 @@ try {
     await cheatQuiet(page, 'advancestat cooking 2');
     console.log(`[${ts()}] faithful kit granted (axe/net/bread + firemaking/cooking xp)`);
 
-    // Relog so the login script re-evaluates at 360: attaches the backpack
-    // + every earlier tab.
     await relog(page, user);
     console.log(`[${ts()}] relog complete`);
 
-    // Land at the mine-arrival tile (Mining.ts's stages take it from there).
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
     const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
@@ -127,7 +92,6 @@ try {
         fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
-    // Surface observable: confirm the client tile agrees (ClimbOutLadder's terminal outcome).
     const surfaceTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-ladder tile: ${JSON.stringify(surfaceTile)}`);
     if (!surfaceTile || surfaceTile.z >= MINE_Z) {

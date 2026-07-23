@@ -127,7 +127,7 @@ export default class ClientPlayer extends ClientEntity {
 
     // prettier-ignore
     static readonly recol1d: number[][] = [
-        [ // hair
+        [
             HairColour.HAIR_DARK_BROWN,
             HairColour.HAIR_WHITE,
             HairColour.HAIR_LIGHT_GREY,
@@ -141,7 +141,7 @@ export default class ClientPlayer extends ClientEntity {
             HairColour.HAIR_GINGER,
             HairColour.HAIR_MAGENTA
         ],
-        [ // torso
+        [
             BodyColourSource.BODY_KHAKI,
             BodyColourSource.BODY_CHARCOAL,
             BodyColourSource.BODY_CRIMSON,
@@ -159,7 +159,7 @@ export default class ClientPlayer extends ClientEntity {
             BodyColourSource.BODY_CYAN,
             BodyColourSource.BODY_EMERALD
         ],
-        [ // legs
+        [
             BodyColourSource.BODY_EMERALD - 1,
             BodyColourSource.BODY_KHAKI + 1,
             BodyColourSource.BODY_CHARCOAL,
@@ -177,7 +177,7 @@ export default class ClientPlayer extends ClientEntity {
             BodyColourSource.BODY_LIME,
             BodyColourSource.BODY_CYAN
         ],
-        [ // feet
+        [
             FeetColour.FEET_BROWN,
             FeetColour.FEET_KHAKI,
             FeetColour.FEET_ASHEN,
@@ -185,7 +185,7 @@ export default class ClientPlayer extends ClientEntity {
             FeetColour.FEET_TERRACOTTA,
             FeetColour.FEET_GREY
         ],
-        [ // skin
+        [
             SkinColour.SKIN_DARKER,
             SkinColour.SKIN_DARKER_DARKER,
             SkinColour.SKIN_DARKER_DARKER_DARKER,

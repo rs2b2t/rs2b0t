@@ -1,16 +1,3 @@
-// Headless live smoke for the generic Thiever (ThievingBot) targeting the
-// "Knight of Ardougne" dropdown option — the target that was "not handling"
-// under the old free-text field. Boots the WebGL client (SwiftShader), logs in
-// (auto-creates), teleports off Tutorial Island, maxes stats (Thieving 99 >= 55),
-// forces the target setting to "Knight of Ardougne", spawns a Knight (::npc),
-// starts the bot, and asserts thieving XP rises (the pickpocket landed).
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/thiever-knight-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -68,12 +55,11 @@ try {
         for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); }
     });
 
-    // Force the strict-dropdown target via localStorage (survives the reload).
     await page.goto(`${base}/bot.html`);
     await page.evaluate((t: string) => localStorage.setItem('rs2b0t:set:Thiever:target', t), TARGET);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -81,9 +67,6 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Spawn a Knight of Ardougne next to us FIRST, on the clean post-relogin
-    // state — ::~maxme's level-up dialogs swallow the next typed command, so the
-    // spawn (and maxme) order matters. npc_add lasts 500 ticks (~5 min).
     let knights = 0;
     for (let attempt = 0; attempt < 4 && knights === 0; attempt++) {
         await type('::~npc knight_of_ardougne');
@@ -93,14 +76,13 @@ try {
     console.log(`knights on scene: ${knights} at ${JSON.stringify(await tile())}`);
     if (knights === 0) { fail('could not spawn a Knight of Ardougne'); }
 
-    await type('::~maxme'); // Thieving 99 (Knight needs 55)
-    await clearDialogs();    // dismiss the level-up dialogs before starting the bot
+    await type('::~maxme');
+    await clearDialogs();
 
     const xpBefore = await thieveXp();
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('Thiever')); });
     console.log(`started Thiever (target forced to '${TARGET}', thieving xp ${xpBefore}) — watching ~90s`);
 
-    // Confirm the dropdown value actually resolved in the bot's own startup log.
     await page.waitForTimeout(1500);
     const startLog = (await logLines()).find(l => /^thieving '/i.test(l)) ?? '';
     console.log(`  startup: ${startLog}`);

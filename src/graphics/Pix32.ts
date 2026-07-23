@@ -7,12 +7,12 @@ import Packet from '#/io/Packet.js';
 
 export default class Pix32 extends Pix2D {
     data: Int32Array;
-    wi: number; // width
-    hi: number; // height
-    xof: number; // x offset
-    yof: number; // y offset
-    owi: number; // original width
-    ohi: number; // original height
+    wi: number;
+    hi: number;
+    xof: number;
+    yof: number;
+    owi: number;
+    ohi: number;
 
     constructor(width: number, height: number) {
         super();
@@ -458,7 +458,6 @@ export default class Pix32 extends Pix2D {
                 leftOff += Pix2D.width;
             }
         } catch (_e) {
-            // empty
         }
     }
 
@@ -503,7 +502,6 @@ export default class Pix32 extends Pix2D {
                 leftOff += Pix2D.width;
             }
         } catch (_e) {
-            // empty
         }
     }
 

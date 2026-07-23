@@ -2,43 +2,23 @@ import { bus, type EventMap } from '../events/EventBus.js';
 import { SettingsBag } from '../runtime/Settings.js';
 import type Tile from './Tile.js';
 
-/**
- * Script-facing base classes (RuneMate shape). Scripts subclass one of
- * LoopingBot / TaskBot / TreeBot and only sleep via Execution.*.
- */
 export abstract class AbstractBot {
-    /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay = 600;
 
-    /**
-     * Resolved parameters for this run (from the manifest's settingsSchema,
-     * overlaid with panel edits and URL overrides). Empty until the runner
-     * injects it just before onStart. Read with this.settings.bool('x') etc.
-     */
     settings: SettingsBag = new SettingsBag({});
 
     private logSink: ((msg: string) => void) | null = null;
     private subscriptions: (() => void)[] = [];
 
-    /** Optional lifecycle hooks. onStop also runs after a crash or stop(). */
     onStart?(): void | Promise<void>;
     onStop?(): void;
     onPause?(): void;
     onResume?(): void;
 
-    /** Draw on the overlay canvas; called every client redraw while running. */
     onPaint?(ctx: CanvasRenderingContext2D): void;
 
-    /**
-     * Where recovery flows (watchdog, guarded restarts) should walk the bot
-     * back to. Scripts with a working anchor implement this.
-     */
     recoveryAnchor?(): Tile | null;
 
-    /**
-     * NPC names this bot legitimately fights — the runtime event guard never
-     * treats them as hostile random events. Override in combat scripts.
-     */
     grindTargets(): string[] {
         return [];
     }
@@ -51,23 +31,14 @@ export abstract class AbstractBot {
         }
     }
 
-    /**
-     * Subscribe to a game event for the lifetime of this run (auto-removed on
-     * stop/crash). Callbacks run synchronously during the frame — keep them
-     * light; do real work in loop(). Public (not just for subclasses) so a
-     * shared Task installed by a script — e.g. DeathRecovery — can arm its
-     * own listener without the script wiring anything extra.
-     */
     on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void {
         this.subscriptions.push(bus.on(event, cb));
     }
 
-    /** @internal runner wiring */
     bindLog(sink: (msg: string) => void): void {
         this.logSink = sink;
     }
 
-    /** @internal runner teardown */
     disposeSubscriptions(): void {
         for (const unsub of this.subscriptions) {
             unsub();
@@ -77,10 +48,6 @@ export abstract class AbstractBot {
 }
 
 export abstract class LoopingBot extends AbstractBot {
-    /**
-     * One iteration. Return a number to override loopDelay for the next
-     * iteration. Launched only by the scheduler, never re-entered.
-     */
     abstract loop(): number | void | Promise<number | void>;
 }
 
@@ -89,7 +56,6 @@ export interface Task {
     execute(): void | Promise<void>;
 }
 
-/** Runs the first task whose validate() returns true, once per loop. */
 export abstract class TaskBot extends LoopingBot {
     private readonly tasks: Task[] = [];
 
@@ -119,7 +85,6 @@ export abstract class LeafTask {
 
 export type TreeNode = BranchTask | LeafTask;
 
-/** Walks branches by validate() until a leaf, executes it, once per loop. */
 export abstract class TreeBot extends LoopingBot {
     abstract root(): TreeNode;
 

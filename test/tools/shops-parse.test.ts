@@ -125,7 +125,6 @@ describe('joinShopDb', () => {
         const death = db['runeshop'].items.find(i => i.obj === 'deathrune');
         expect(death).toEqual({ obj: 'deathrune', name: 'Death rune', baseline: 1000, restockTicks: 150, cost: 30, stackable: true, members: false });
         expect(db['adventurershop'].keepers).toEqual(['Aemad', 'Kortan']);
-        // unknown obj (firerune/mindrune/chaosrune not in OBJ_FIXTURE) falls back to id-as-name, cost 1
         const fire = db['runeshop'].items.find(i => i.obj === 'firerune');
         expect(fire?.name).toBe('firerune');
         expect(fire?.cost).toBe(1);

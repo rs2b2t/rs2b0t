@@ -19,7 +19,6 @@ describe('nextQuest', () => {
     test('parked quests defer to unparked, then retry', () => {
         const elig = new Map([e('doric', 'READY'), e('sheep', 'READY')]);
         expect(nextQuest(ORDER, new Set(['doric', 'sheep']), elig, new Set(['doric']))).toBe('sheep');
-        // everything runnable is parked -> retry the parked one
         expect(nextQuest(ORDER, new Set(['doric']), elig, new Set(['doric']))).toBe('doric');
     });
     test('nothing runnable -> null', () => {

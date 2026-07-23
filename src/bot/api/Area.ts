@@ -1,20 +1,14 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from './Tile.js';
 
-/**
- * Tile regions for scripts (RuneMate shape): leashes, wander zones, walk
- * targets. Build with Area.rectangular(a, b) / Area.circular(center, r).
- */
 export abstract class Area {
     abstract contains(tile: WorldTile): boolean;
     abstract getRandomTile(): Tile;
 
-    /** Axis-aligned rectangle spanning the two corner tiles (inclusive). */
     static rectangular(a: WorldTile, b: WorldTile): Area {
         return new RectangularArea(a, b);
     }
 
-    /** Euclidean disc of `radius` tiles around `center` (inclusive). */
     static circular(center: WorldTile, radius: number): Area {
         return new CircularArea(center, radius);
     }
@@ -62,7 +56,6 @@ class CircularArea extends Area {
     }
 
     getRandomTile(): Tile {
-        // rejection-sample the bounding box; disc fills ~78% of it
         for (let attempt = 0; attempt < 64; attempt++) {
             const x = this.center.x + Math.floor(Math.random() * (2 * this.radius + 1)) - this.radius;
             const z = this.center.z + Math.floor(Math.random() * (2 * this.radius + 1)) - this.radius;

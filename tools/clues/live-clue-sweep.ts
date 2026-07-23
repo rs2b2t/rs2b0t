@@ -1,19 +1,3 @@
-// LIVE sweep of every clue in CLUE_DB through the real ClueSolver pipeline.
-// N parallel headless clients (real GPU — SwiftShader crashes long sessions);
-// each worker loops: stop solver -> tele to Varrock East bank -> drop clue/
-// casket leftovers (deposit-all when the pack runs low) -> ::give the clue ->
-// start ClueSolver -> PASS when the GIVEN id leaves the pack (its own step
-// consumed it; trail chains are stopped right there), FAIL on an 'abandoning'
-// log for it or the per-clue deadline. Results: table + out/clue-sweep.json.
-//
-// The per-clue unit is deliberately ONE STEP: each id's own walk+action. The
-// chain a consumed clue yields is some OTHER id already covered by the sweep.
-// Kit (spade + sextant/watch/chart + coins) is pre-given so the shared
-// acquisition chain (tested by its own live smoke) isn't re-run 122 times.
-//
-// Requires the local engine running + local build deployed.
-// Usage: bun tools/clues/live-clue-sweep.ts [--workers 5] [--mins 8] [--ids 2713,2811]
-
 import fs from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
@@ -27,17 +11,13 @@ const arg = (name: string): string | null => {
 const WORKERS = Number(arg('workers') ?? 5);
 const CLUE_DEADLINE_MS = Number(arg('mins') ?? 8) * 60_000;
 const only = arg('ids')?.split(',').map(Number);
-const EXPECTED_ABANDON = new Set([2811, 2815]); // audit KNOWN_UNREACHABLE allowlist
+const EXPECTED_ABANDON = new Set([2811, 2815]);
 
 const ids = (only ?? Object.keys(CLUE_DB).map(Number)).sort((a, b) => a - b);
 const queue = [...ids];
 type Verdict = 'pass' | 'abandon' | 'stuck' | 'slow';
 const results: { id: number; obj: string; type: string; ok: boolean; verdict: Verdict; expected?: boolean; ms: number; reason?: string; tail?: string[] }[] = [];
 
-// Lines that mean the walk/solve advanced (not just spinning). Used to tell a
-// legitimate long cross-map walk (SLOW, likely-pass) from a genuine wedge
-// (STUCK — the door-dance/0-click regression signature). 'best N tiles'
-// decreasing is progress too, tracked separately below.
 const PROGRESS_RE = /step done|arrived|leg \d+ —|crossed '|Climb-(up|down)|Enter .* at|acquiring|Swim to|sailed|got a spade|banking loot/;
 const STALL_LOG_RE = /blocked live — as close as reachable|stuck at .* — repathing|giving up after/;
 
@@ -102,8 +82,6 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
     return page;
 }
 
-// Direct CLIENT_CHEAT packet (opcode 224, io/ClientProt.ts) — canvas typing is
-// focus-dependent and concurrent worker pages drop keystrokes (shakedown find).
 const cheat = async (page: Page, text: string) => {
     await page.evaluate(t => {
         const c = (globalThis as never as R).rs2b0t.client as never as { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } };
@@ -113,10 +91,8 @@ const cheat = async (page: Page, text: string) => {
     }, text);
     await page.waitForTimeout(900);
 };
-const typeOn = cheat; // cheat text WITHOUT the :: prefix
+const typeOn = cheat;
 
-/** ::give with verification — typing right after a tele/reset is flaky, so
- *  retry until the id (or name probe) confirms the item landed. */
 async function giveVerified(page: Page, objName: string, heldProbe: () => Promise<boolean>): Promise<boolean> {
     for (let attempt = 0; attempt < 4; attempt++) {
         if (await heldProbe()) {
@@ -128,7 +104,6 @@ async function giveVerified(page: Page, objName: string, heldProbe: () => Promis
     return heldProbe();
 }
 
-/** Drop clue/casket leftovers; deposit-all junk when the pack runs low. */
 async function resetPack(page: Page): Promise<void> {
     await page.evaluate(() => {
         const g = globalThis as never as R & Record<string, unknown>;
@@ -170,16 +145,16 @@ async function resetPack(page: Page): Promise<void> {
         g.rs2b0t.runner.start(g.rs2b0t.registry.get('ProbeReset'));
     });
     await page.waitForFunction(() => (globalThis as never as R).__probeResult?.done === true, undefined, { timeout: 45000 }).catch(() => undefined);
-    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { /* stopped */ } });
+    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { } });
     await page.waitForTimeout(600);
 }
 
 async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict: Verdict; ms: number; reason?: string; tail?: string[] }> {
     const row = CLUE_DB[id];
     const started = Date.now();
-    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { /* stopped */ } });
+    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { } });
     await page.waitForTimeout(400);
-    await typeOn(page, 'tele 0,50,53,53,28'); // Varrock East bank
+    await typeOn(page, 'tele 0,50,53,53,28');
     await resetPack(page);
     const holds = () => page.evaluate(cid => {
         const { Inventory } = (globalThis as never as { __rs2b0t: { Inventory: { items(): { id: number }[] } } }).__rs2b0t;
@@ -188,9 +163,6 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict:
     if (!(await giveVerified(page, row.obj, holds))) {
         return { ok: false, verdict: 'stuck', ms: Date.now() - started, reason: 'give failed after retries' };
     }
-    // Exclusivity: exactly the given clue-like item, or the PASS detector
-    // (given id leaves the pack) can watch the wrong trail. A stray from a
-    // late-landing give gets one more reset, then re-verify.
     const clueLikeCount = () => page.evaluate(cid => {
         const { Inventory } = (globalThis as never as { __rs2b0t: { Inventory: { items(): { id: number; name: string | null }[] } } }).__rs2b0t;
         return Inventory.items().filter(i => /clue|casket/i.test(i.name ?? '') && i.id !== cid).length;
@@ -208,7 +180,7 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict:
     let lastProgressAt = Date.now();
     let bestSeen = Infinity;
     let seenLines = 0;
-    let stallStreak = 0; // consecutive stall-log lines with no offsetting progress
+    let stallStreak = 0;
     while (Date.now() < deadline) {
         await page.waitForTimeout(2500);
         const all: string[] = await page.evaluate(n => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).slice(n).map(l => l.msg), logsBefore);
@@ -221,7 +193,6 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict:
         if (!(await holds())) {
             return { ok: true, verdict: 'pass', ms: Date.now() - started };
         }
-        // progress accounting
         let progressed = false;
         for (const l of fresh) {
             if (PROGRESS_RE.test(l)) { progressed = true; }
@@ -233,8 +204,6 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict:
             if (STALL_LOG_RE.test(l)) { stallStreak++; } else if (PROGRESS_RE.test(l)) { stallStreak = 0; }
         }
         if (progressed) { lastProgressAt = Date.now(); }
-        // Early STUCK exit: a long run of stall-logs with no progress is the
-        // regression signature — fail fast instead of burning the full deadline.
         if (stallStreak >= 40 && Date.now() - lastProgressAt > 90_000) {
             const at0 = await page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
             return { ok: false, verdict: 'stuck', ms: Date.now() - started, reason: `wedged at (${at0?.x},${at0?.z},${at0?.level}) — ${stallStreak} stall-logs, no progress`, tail: all.slice(-16) };
@@ -242,8 +211,6 @@ async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict:
     }
     const tail: string[] = await page.evaluate(n => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).slice(n).map(l => l.msg), logsBefore);
     const at = await page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
-    // Deadline hit. Progress within the last 2 min => SLOW (long walk, not a
-    // product failure); otherwise STUCK.
     const recentlyProgressed = Date.now() - lastProgressAt < 120_000;
     return {
         ok: false,
@@ -273,10 +240,10 @@ try {
                 log(`w${w} ${r.verdict.toUpperCase()} [${id}] ${row.obj} (${Math.round(r.ms / 1000)}s)${r.reason ? ` — ${r.reason}` : ''}`);
             } catch (e) {
                 log(`w${w} worker error on [${id}]: ${e}`);
-                try { await page?.close(); } catch { /* gone */ }
+                try { await page?.close(); } catch { }
                 page = null;
                 if (reboots++ < 4) {
-                    queue.unshift(id); // retry this clue on a fresh client
+                    queue.unshift(id);
                 } else {
                     results.push({ id, obj: row.obj, type: row.type, ok: false, verdict: 'stuck', ms: 0, reason: `worker crash: ${e}` });
                 }

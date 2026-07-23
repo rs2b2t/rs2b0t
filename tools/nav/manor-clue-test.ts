@@ -1,7 +1,3 @@
-// Live verify: the Draynor Manor clue (id 3502, search @3106,3369,2) with the
-// ONE-WAY front door modeled — the bot must enter via the front Large door,
-// solve on L2, and EXIT via the back door (3123,3360) instead of wedging on
-// the enter-only front pair. Usage: bun tools/nav/manor-clue-test.ts [base-url]
 import { launchBrowser } from '../lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -51,7 +47,7 @@ try {
 
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,48,50,21,43'); // (3093,3243) — Draynor bank
+        await type('::tele 0,48,50,21,43');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && at.level === 0 && Math.abs(at.x - 3093) <= 5 && Math.abs(at.z - 3243) <= 5) { break; }
@@ -60,8 +56,6 @@ try {
     if (!at) { fail('draynor tele failed'); }
     console.log(`at Draynor bank: (${at.x},${at.z},${at.level})\n`);
 
-    // Verified ::give (the live-clue-sweep pattern — typing after a tele is
-    // flaky, so retry until the held probe confirms).
     const held = (id: number) => page.evaluate(n => {
         const abi = (globalThis as never as { __rs2b0t: { Inventory: { items(): { id: number }[] } } }).__rs2b0t;
         return abi.Inventory.items().some(i => i.id === n);
@@ -90,7 +84,6 @@ try {
         const me = await tile();
         const inManor = !!me && me.x >= 3097 && me.x <= 3126 && me.z >= 3344 && me.z <= 3373;
         console.log(`    [bot] (${me?.x},${me?.z},${me?.level}) ${inManor ? 'IN manor' : 'outside'} clueHeld=${await held(3502)}`);
-        // done only when the clue is CONSUMED and the bot is back OUTSIDE the manor
         if (!(await held(3502)) && !inManor) { done = true; }
         if (lines.some(l => l.includes('abandon'))) { done = true; }
         if ((await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state)) !== 'running') { done = true; }

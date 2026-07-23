@@ -29,8 +29,6 @@ describe('MultiBoxController', () => {
         const c = new MultiBoxController(ops, roster('alice'));
         const snap = c.add();
         expect(snap?.username).toBe('alice');
-        // order matters: creds must precede autoLogin (credential isolation).
-        // a lone bot auto-focuses (single bot = focused 1-cell wall).
         expect(ops.handles[0].calls).toEqual(['creds:alice', 'mode:focused', 'autoLogin:true']);
     });
 
@@ -40,7 +38,6 @@ describe('MultiBoxController', () => {
         const a = c.add()!;
         expect(c.focusedId).toBe(a.id);
         expect(ops.handles[0].mode).toBe('focused');
-        // a second bot joins without stealing focus (stays hidden behind it)
         c.add();
         expect(ops.handles[1].mode).toBe('hidden');
     });
@@ -52,7 +49,7 @@ describe('MultiBoxController', () => {
         const b = c.add()!;
         c.showWall();
         expect(c.focusedId).toBeNull();
-        c.remove(a.id); // one bot left → it becomes the focused solo view
+        c.remove(a.id);
         expect(c.focusedId).toBe(b.id);
         expect(ops.handles[1].mode).toBe('focused');
     });
@@ -68,7 +65,7 @@ describe('MultiBoxController', () => {
         const c = new MultiBoxController(ops, roster('alice', 'bob'));
         const a = c.add()!;
         c.focus(a.id);
-        c.add(); // bob, added while focused
+        c.add();
         expect(ops.handles[1].mode).toBe('hidden');
     });
 
@@ -119,7 +116,6 @@ describe('MultiBoxController', () => {
         expect(ops.handles[0].destroyed).toBe(true);
         expect(c.focusedId).toBeNull();
         expect(c.snapshot()).toEqual([]);
-        // account released → claimable again
         expect(c.add()?.username).toBe('alice');
     });
 });

@@ -1,8 +1,3 @@
-// Live verify for issue #10: the REAL GnomeCourse bot started SIDE-ON at the
-// west end of the pre-pipe net (2482,3426) with the course pinned to just
-// 'Obstacle net' — the axis-check rejects every click from there, and the new
-// repositionForRetry must step to the south face and climb.
-// Usage: bun tools/nav/gnome-net-test.ts [base-url]
 import { launchBrowser } from '../lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -52,7 +47,7 @@ try {
 
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,38,53,50,34'); // (2482,3426) side-on, west end of net3
+        await type('::tele 0,38,53,50,34');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && at.level === 0 && Math.abs(at.x - 2482) <= 3 && Math.abs(at.z - 3426) <= 3) { break; }
@@ -76,7 +71,7 @@ try {
             const b = (globalThis as never as { rs2b0t: { runner: { bot: { obstaclesCleared?: number } | null } } }).rs2b0t.runner.bot;
             return b ? (b.obstaclesCleared ?? 0) : 0;
         });
-        if (bt >= 2) { done = true; } // climbed at least twice — recovery + lap both proven
+        if (bt >= 2) { done = true; }
         if ((await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state)) !== 'running') { done = true; }
     }
     const lines = (await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg)));

@@ -23,8 +23,6 @@ import {
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(3269, 3167, 0);
-// Stand tile for the Al Kharid furnace (the furnace is a large loc ~(3272,3185);
-// you stand adjacent to its EAST footprint edge and use ore on it from here).
 const DEFAULT_FURNACE_STAND = new Tile(3275, 3185, 0);
 const BOOTH = { op: 'Use-quickly' };
 
@@ -38,14 +36,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Furnace search radius (tiles)' }
 };
 
-/**
- * Al Kharid smelt-and-bank loop. Withdraw a pack of ore per the chosen bar's
- * recipe, cross to the Furnace (opening the bank-building door), open its Smelt
- * panel and smelt the whole pack in one Smelt-X, then return and
- * bank the whole pack (bars + any leftover), and repeat. Runs off bank-fed ore;
- * stops cleanly when the bank can no longer supply a full set. Start it at the
- * Al Kharid bank.
- */
 export default class SmelterBot extends TaskBot {
     override loopDelay = 600;
 
@@ -93,8 +83,6 @@ export default class SmelterBot extends TaskBot {
         p.row(`Bar: ${this.recipe.bar}`, `Ore left: ${this.primaryCount()}`, `Bank trips: ${this.trips}`);
 
         p.gap();
-        // processing bot — switching bar mid-pack strands a half-smelted ore mix,
-        // so Pause/Stop only (no live selector)
         ScriptRunner.paintControls(p);
         p.end();
     }
@@ -112,9 +100,6 @@ export default class SmelterBot extends TaskBot {
     primaryCount(): number { return countPrimary(Inventory.items(), this.recipe); }
 }
 
-/** No primary ore in the pack → cross to the bank, deposit EVERYTHING, withdraw a
- *  full ore mix per the recipe's withdraw plan. If the bank can't supply a full
- *  set of any ingredient, log the shortage and stop cleanly. */
 class BankTrip implements Task {
     constructor(private bot: SmelterBot) {}
     validate(): boolean { return this.bot.primaryCount() === 0; }
@@ -125,16 +110,13 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositInventory(); // bars + any leftover ore/junk — the whole pack
+        await Bank.depositInventory();
         await Execution.delayTicks(1);
         this.bot.countTrip();
 
         const recipe = this.bot.activeRecipe();
         const plan = withdrawPlan(recipe);
 
-        // Pre-flight: confirm the bank can supply a FULL set of every ingredient.
-        // If any is short, this trip can't produce whole bars — stop cleanly
-        // (as StallGuard does) rather than idle-spin or half-fill a pack.
         for (const step of plan) {
             const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(step.ore.toLowerCase()));
             const have = bankItem?.name ? Bank.count(bankItem.name) : 0;
@@ -146,10 +128,6 @@ class BankTrip implements Task {
             }
         }
 
-        // Withdraw the EXACT count of each ingredient via Withdraw-X. Batching
-        // Withdraw-10 over-withdraws the first ore (e.g. 20 copper for a 14 goal),
-        // filling the pack and starving the second ore — the pack must hold the
-        // precise recipe mix (14 copper + 14 tin for bronze).
         for (const step of plan) {
             const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(step.ore.toLowerCase()));
             if (!bankItem || bankItem.name === null) {
@@ -164,32 +142,19 @@ class BankTrip implements Task {
                 return;
             }
         }
-        // walking closes the bank; SmeltTrip crosses to the furnace next tick
     }
 }
 
-/** Primary ore in the pack → cross to the furnace, open its Smelt panel and smelt
- *  the whole pack of the chosen bar in one Smelt-X (exact count), until no primary
- *  ore remains. */
 class SmeltTrip implements Task {
     constructor(private bot: SmelterBot) {}
-    // The make menu IS a chat modal, so don't gate on isOpen() (that would block
-    // us the moment the panel opens). Only a "click to continue" dialog defers to
-    // ContinueDialog; otherwise run and drive the panel ourselves.
     validate(): boolean { return this.bot.primaryCount() > 0 && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
-        // The Al Kharid furnace loc spans two adjacent tiles; only one carries the
-        // "Smelt" op — filter to it so we never target the op-less tile.
         const furnace = () => Locs.query().name(this.bot.furnaceLocName()).action('Smelt').where(l => l.tile().distanceTo(this.bot.furnaceTile()) <= this.bot.leashRadius()).nearest();
         const here = Game.tile();
         if (!here || this.bot.furnaceTile().distanceTo(here) > 1 || !furnace()) {
             this.bot.setStatus('crossing to the furnace');
             await walkOpening(this.bot.furnaceTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
         }
-        // The baked web-walker parks ~1 tile short of the furnace stand (the
-        // furnace building isn't fully routable in the baked collision pack), so
-        // close the last step with a LIVE scene walk onto the exact stand tile —
-        // the same trick RandomEvents uses in the maze.
         const stand = this.bot.furnaceTile();
         for (let w = 0; w < 5; w++) {
             const now = Game.tile();
@@ -204,9 +169,6 @@ class SmeltTrip implements Task {
             }, 3000);
         }
 
-        // Open the Smelt panel via the furnace's "Smelt" op (an OPLOC loc-op, so it
-        // needs us adjacent — the stand tile above). One panel handles the whole
-        // pack; don't ore-on-furnace bar-by-bar.
         if (!ChatDialog.isMakeMenu()) {
             const oven = furnace();
             if (!oven) { await Execution.delayTicks(2); return; }
@@ -216,12 +178,8 @@ class SmeltTrip implements Task {
                 return;
             }
         }
-        if (!ChatDialog.isMakeMenu()) { return; } // a message dialog opened — ContinueDialog clears it
+        if (!ChatDialog.isMakeMenu()) { return; }
 
-        // Smelt the whole pack in one Smelt-X. The panel's product name is the bar
-        // obj name, which differs from the tier keyword for two metals
-        // (Adamant→"Adamantite bar", Rune→"Runite bar"). Count = primary-ore count,
-        // which equals the number of bars (one primary ore per bar).
         const recipe = this.bot.activeRecipe();
         const barKeyword = ({ Adamant: 'Adamantite', Rune: 'Runite' } as Record<string, string>)[recipe.bar] ?? recipe.bar;
         const before = this.bot.primaryCount();

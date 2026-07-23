@@ -13,7 +13,7 @@ const defShapeP: Int8Array[] = [
     Int8Array.of(1, 3, 5, 7, 11, 12),
     Int8Array.of(1, 3, 5, 7, 11, 12),
     Int8Array.of(1, 3, 5, 7, 13, 14)
-]; // shape points
+];
 
 // prettier-ignore
 const defShapeF: Int8Array[] = [
@@ -30,7 +30,7 @@ const defShapeF: Int8Array[] = [
     Int8Array.of(0, 0, 1, 5, 0, 1, 4, 5, 0, 1, 2, 4, 1, 0, 5, 3, 1, 5, 4, 3, 1, 4, 2, 3),
     Int8Array.of(1, 0, 1, 5, 1, 1, 4, 5, 1, 1, 2, 4, 0, 0, 5, 3, 0, 5, 4, 3, 0, 4, 2, 3),
     Int8Array.of(1, 0, 5, 4, 1, 0, 1, 5, 0, 0, 4, 3, 0, 4, 5, 3, 0, 5, 2, 3, 0, 1, 2, 5)
-]; // shape faces
+];
 
 const FULL_SQUARE: number = 128;
 const HALF_SQUARE: number = (FULL_SQUARE / 2) | 0;
@@ -43,8 +43,6 @@ export default class Ground {
     static readonly drawTextureVertexX: Int32Array = new Int32Array(6);
     static readonly drawTextureVertexY: Int32Array = new Int32Array(6);
     static readonly drawTextureVertexZ: Int32Array = new Int32Array(6);
-
-    // ----
 
     readonly vertexX: Int32Array;
     readonly vertexY: Int32Array;

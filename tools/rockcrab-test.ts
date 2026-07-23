@@ -1,16 +1,9 @@
-// Live test for the RockCrab bot at the Rellekka shoreline field. Logs in,
-// teleports to the field, runs the bot, and asserts it aggros rocks, kills
-// crabs, and performs at least one aggression reset within the window.
-//
-// Usage: bun tools/rockcrab-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 8 });
 const username = rest[0] ?? `crab${Date.now().toString(36).slice(-7)}`;
 
-// drop the bot right in the field (jagex coords for ~2710,3720)
 const TELE = '::tele 0,42,58,22,8';
 
 const browser = await launchBrowser();
@@ -23,7 +16,6 @@ try {
     await boot(page);
     if (!(await login(page, username))) fail('first login failed');
 
-    // unlock tabs (fresh account spawns tutorial-locked): tele off-island + relog
     await type(page, '::tele 0,50,50,20,20', 1500);
     await page.reload();
     await boot(page);
@@ -34,7 +26,6 @@ try {
     }
     if (!backIn) fail('re-login failed');
 
-    // give it survivable combat stats so it can actually clear stacks
     for (const s of ['attack', 'strength', 'defence', 'hitpoints']) {
         await type(page, `::setstat ${s} 40`, 1500);
     }

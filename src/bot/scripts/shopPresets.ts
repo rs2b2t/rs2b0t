@@ -1,24 +1,14 @@
 import Tile from '../api/Tile.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 
-/**
- * A selectable shop for ShopBuyout: the shopkeeper to buy from and its NEAREST
- * bank, both baked in so the operator only picks a shop (no tile/banker fiddling).
- *
- * TO ADD A SHOP: append one row. `keeper` must match a shopkeeper name in
- * shops/data/shopdb.ts (opens the shop + prices the buyout). `shopStand` is the
- * tile to trade from; `bankStand` is its nearest bank. For a bank BOOTH leave
- * `banker` unset (defaults 'Bank booth' / 'Use-quickly'); for an NPC-dialog bank
- * (e.g. the Mage Arena's Gundai) set `banker` to that NPC.
- */
 export interface ShopPreset {
-    label: string;        // dropdown option — unique, human-readable
-    keeper: string;       // shopkeeper NPC (shopdb keeper)
-    shopStand: Tile;      // tile to trade from
-    bankStand: Tile;      // its nearest bank
-    banker?: string;      // NPC Talk-to bank; omit -> a bank booth
-    boothName?: string;   // default 'Bank booth'
-    boothOp?: string;     // default 'Use-quickly'
+    label: string;
+    keeper: string;
+    shopStand: Tile;
+    bankStand: Tile;
+    banker?: string;
+    boothName?: string;
+    boothOp?: string;
 }
 
 export const SHOP_PRESETS: ShopPreset[] = [
@@ -35,8 +25,6 @@ export function presetByLabel(label: string): ShopPreset | undefined {
     return SHOP_PRESETS.find(p => p.label === label);
 }
 
-/** Union of every buyable item's display name across the preset shops — the
- *  buyItems multi-select options (leave the selection empty to buy all stock). */
 export function presetBuyableNames(): string[] {
     const names = new Set<string>();
     for (const p of SHOP_PRESETS) {

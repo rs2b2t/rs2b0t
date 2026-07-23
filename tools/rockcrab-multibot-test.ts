@@ -1,13 +1,3 @@
-// Two-bot live test for RockCrab's crab-ownership etiquette: bot A establishes
-// a pile at the field, bot B teleports into the SAME spot and starts crabbing
-// beside it. Every sample we cross-check what each bot is ENGAGING (its
-// localPlayer.faceEntity → an npc scene slot) against who that crab is locked
-// onto (npc faceEntity → player slot + 32768): a crab that faces the OTHER
-// bot while we fight it is a stolen-stack violation. Pass = zero persistent
-// violations AND both bots still get kills (the filter must share, not starve).
-//
-// Usage: bun tools/rockcrab-multibot-test.ts [minutes] [base-url]
-
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
@@ -15,11 +5,11 @@ import type { Rs2b0t } from './lib/harness.js';
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 7 });
 const stamp = Date.now().toString(36).slice(-6);
 const USERS = [`craba${stamp}`, `crabb${stamp}`];
-const TELE = '::tele 0,42,58,22,8'; // ~(2710,3720), inside the crab field
+const TELE = '::tele 0,42,58,22,8';
 
 interface Sample {
     slot: number;
-    engaging: number; // npc scene slot the local player faces, -1/none
+    engaging: number;
     crabs: { index: number; face: number; hp: number }[];
     kills: number;
     state: string;
@@ -81,8 +71,6 @@ try {
 
     console.log(`observing both bots for ${minutes}min...`);
     const deadline = Date.now() + minutes * 60_000;
-    // violation must persist 2 consecutive samples to count (a crab's face
-    // lock takes a tick to register on fresh wakes)
     const pending = new Map<string, number>();
     const confirmed: string[] = [];
     let healthyA = 0;

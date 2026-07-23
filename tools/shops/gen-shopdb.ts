@@ -1,9 +1,3 @@
-/**
- * Regenerates src/bot/shops/data/shopdb.ts from the content pack.
- *   bun tools/shops/gen-shopdb.ts            # rewrite the file
- *   bun tools/shops/gen-shopdb.ts --check    # exit 1 if the committed file is stale
- * Content root: $CONTENT_DIR or ~/code/rs2b2t-content.
- */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -49,7 +43,6 @@ if (process.argv.includes('--check')) {
     try {
         current = readFileSync(OUT, 'utf8');
     } catch {
-        // missing file = drift
     }
     if (current !== fresh) {
         console.error(`STALE: ${OUT} does not match the content pack — run: bun tools/shops/gen-shopdb.ts`);

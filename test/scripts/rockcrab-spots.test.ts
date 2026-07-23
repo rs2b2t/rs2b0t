@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SPOTS, ROCKS_SPAWNS, spawnsWithin } from '#/bot/scripts/RockCrabSpots.js';
 
-// The preset-spot contract: each default loc is a stand tile whose 3x3 square
-// touches 2-3 dormant Rocks spawns (spawn within Chebyshev 2), spots sit on
-// distinct clusters, and none stands on a spawn tile (the rock occupies it).
-
 describe('DEFAULT_SPOTS', () => {
     test('provides 3-5 preset spots, loc1 = the user-verified (2704,3726)', () => {
         expect(DEFAULT_SPOTS.length).toBeGreaterThanOrEqual(3);

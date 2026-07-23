@@ -1,48 +1,14 @@
-// Task 12 section test: jump-start a fresh account to the bank & chapel
-// section (the 500 -> 610 ladder) and assert TutorialBot's
-// thirteen BankChapel.ts stages carry it through the bank, the Financial
-// Advisor and Brother Brace to the chapel-exit crossing unattended.
-//
-// Same jump-start shape as `combat-test.ts` (Task 11): two-step setvar (a
-// bare `setvar tutorial N` from a fresh spawn silently reverts --
-// the "Stage-jump recipe corrections") + the faithful-
-// account kit + relog + a `::tele` to the real 470 -> 500 ladder-out landing
-// (3111,3125).
-//
-// KIT (every piece closes a specific gate -- Task 9 addendum's law):
-//   - bronze_axe / net / bread + firemaking/cooking xp: the established base
-//     kit -- closes Survival's OpenInventoryTab/ChopTree/NetShrimp/CookShrimp
-//     and Chef's OpenChefDoor permanently.
-//   - mining xp (NEW, Task 12): closes Chef's OpenQuestGuideDoor and the
-//     whole QuestGuide chain via their `Skills.xp('mining') === 0` era gates
-//     -- without it the re-armed chain walks a 500 account back down the
-//     mine and strands it (QuestGuide.ts file-header note 8).
-//   - ranged xp (NEW, Task 12): opens BankChapel.ts's own `pastCombat()`
-//     era gate (ranged xp is the combat section's permanent milestone).
-//   Deliberately NOT granted: smithing/attack xp (no validator reads them
-//   today) and the combat items (every combat stage is position-gated
-//   underground; none fire at the bank).
-//
-// Expected one-shot noise before the section engages (each fires once,
-// harmless): OpenStatsTab / OpenMusicTab / OpenControlsTab (plain tab
-// switches) and ToggleRunOn (run on -- actually useful for the walks).
-//
-// Usage: bun tools/tutorial/bankchapel-test.ts [base-url]
-
 import { launchBrowser } from '../lib/harness.js';
 import { bootAndLogin, cheatQuiet, getServerVarQuiet, relog, startScript } from './harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const TARGET = 610;
-const DEADLINE_MS = 10 * 60_000; // ~25 dialogue pages + 3 tab clicks + ~45 tiles of walking; observed runs are minutes, not seconds
+const DEADLINE_MS = 10 * 60_000;
 const POLL_MS = 3000;
 
-/** Live-confirmed 470 -> 500 ladder-out landing (Combat.ts's ClimbOutLadder). */
 const LANDING = { x: 3111, z: 3125 };
-/** `tele level,mx,mz,lx,lz` for LANDING: mapsquare 48,48, local (39,53). */
 const TELE_CMD = 'tele 0,48,48,39,53';
 
-/** `newbie_door8`'s wall line (BankChapel.ts CHAPEL_EXIT_DOOR): the 600 -> 610 crossing leaves z <= 3102. */
 const EXIT_Z = 3102;
 
 type Rs2b0t = {
@@ -74,7 +40,6 @@ try {
         fail(`fresh account did not start at tutorial=0 (got ${fresh}) -- tutorial-varp assumption broken`);
     }
 
-    // Two-step setvar (the "Stage-jump recipe corrections").
     await cheatQuiet(page, 'setvar tutorial 1');
     await cheatQuiet(page, 'setvar tutorial 500');
     const jumped = await getServerVarQuiet(page, 'tutorial');
@@ -83,7 +48,6 @@ try {
         fail(`setvar jump to 500 did not stick (got ${jumped})`);
     }
 
-    // Faithful-account kit (file header -- each piece closes a named gate).
     await cheatQuiet(page, 'give bronze_axe 1');
     await cheatQuiet(page, 'give net 1');
     await cheatQuiet(page, 'give bread 1');
@@ -93,13 +57,9 @@ try {
     await cheatQuiet(page, 'advancestat ranged 2');
     console.log(`[${ts()}] faithful kit granted (axe/net/bread + firemaking/cooking/mining/ranged xp)`);
 
-    // Relog so the login script re-evaluates at 500: attaches the backpack +
-    // every tab through combat-options (prayer/friends/ignore stay detached
-    // -- their attaches are the section's own talk outcomes).
     await relog(page, user);
     console.log(`[${ts()}] relog complete`);
 
-    // Land where the real 470 -> 500 ladder climb-out surfaces.
     await cheatQuiet(page, TELE_CMD);
     await page.waitForTimeout(1000);
     const tile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
@@ -134,7 +94,6 @@ try {
         fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
-    // Terminal observable: the chapel-exit crossing (ExitChapel's latch).
     const exitTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-exit tile: ${JSON.stringify(exitTile)}`);
     if (!exitTile || exitTile.z > EXIT_Z) {

@@ -1,7 +1,3 @@
-// Live verify: the Hans talk clue (id 2681) with a PATROLLING Hans. Seeds the
-// clue + spade at Draynor, runs the real ClueSolver (bank-first -> trail ->
-// Reach.npcDialog chases Hans wherever his castle lap has him). PASS = the
-// talk leg solves (no abandon). Usage: bun tools/nav/hans-clue-test.ts [base-url]
 import { launchBrowser } from '../lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -51,7 +47,7 @@ try {
 
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,48,50,21,43'); // (3093,3243) — Draynor bank
+        await type('::tele 0,48,50,21,43');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && at.level === 0 && Math.abs(at.x - 3093) <= 5 && Math.abs(at.z - 3243) <= 5) { break; }
@@ -60,8 +56,6 @@ try {
     if (!at) { fail('draynor tele failed'); }
     console.log(`at Draynor bank: (${at.x},${at.z},${at.level})\n`);
 
-    // Verified ::give (the live-clue-sweep pattern — typing after a tele is
-    // flaky, so retry until the held probe confirms).
     const held = (id: number) => page.evaluate(n => {
         const abi = (globalThis as never as { __rs2b0t: { Inventory: { items(): { id: number }[] } } }).__rs2b0t;
         return abi.Inventory.items().some(i => i.id === n);
@@ -87,15 +81,13 @@ try {
         for (const l of all.slice(seen)) { console.log(`  ${l}`); }
         seen = all.length;
         const lines = (await page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg)));
-        // watch Hans's live distance from the anchor while the trail runs (the old
-        // leash was 10 — >10 here is exactly the case that used to abandon)
         const hans = await page.evaluate(() => {
             const abi = (globalThis as never as { __rs2b0t: { Npcs: { query(): { name(n: string): { nearest(): { tile(): { x: number; z: number } } | null } } } } }).__rs2b0t;
             const h = abi.Npcs.query().name('Hans').nearest();
             return h ? h.tile() : null;
         }).catch(() => null);
         if (hans) { console.log(`    [hans] at (${hans.x},${hans.z}) — d${Math.max(Math.abs(hans.x - 3207), Math.abs(hans.z - 3233))} from the anchor`); }
-        if (!(await held(2681))) { done = true; } // the talk consumed the clue
+        if (!(await held(2681))) { done = true; }
         if (lines.some(l => l.includes('abandon'))) { done = true; }
         if ((await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state)) !== 'running') { done = true; }
     }

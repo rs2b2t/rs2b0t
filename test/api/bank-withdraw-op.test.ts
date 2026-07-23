@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { withdrawOp } from '#/bot/api/hud/bankOps.js';
 
-// The live label set varies by content build: space form ('Withdraw 1') per
-// bank_main.if, hyphen form ('Withdraw-1') in the panel defaults.
 describe('withdrawOp', () => {
     const spaceOps = ['Withdraw 1', 'Withdraw 5', 'Withdraw 10', 'Withdraw All', null];
     const hyphenOps = ['Withdraw-1', 'Withdraw-5', 'Withdraw-10', 'Withdraw-All'];

@@ -1,22 +1,8 @@
-// Headless live smoke for the Al Kharid toll-gate conditional crossing.
-// Phase B (0 coins): walk toward Al Kharid from the Lumbridge side; assert the
-// walker SKIPS the toll gate (logs the skip) and does NOT end up east of it.
-// Phase A (100 coins): walk again; assert coins drop by 10 and we cross east.
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/tollgate-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const username = process.argv[3] || `tg${Date.now().toString(36).slice(-7)}`;
 const GATE_X = 3268;
-// (3264,3227) — Lumbridge side, 4 tiles west of the gate. Must be >=3 tiles
-// out: starting 0-2 tiles from the approach puts the start within the walker's
-// on-path CORRIDOR of the post-gate tiles (the Al Kharid wall forces the route
-// straight south along x=3268 right after the gate), which snaps the follow
-// index past the crossing before it fires. 4 tiles out is still an immediate,
-// unavoidable gate crossing but leaves the crossing handler room to trigger.
 const WEST = '::tele 0,51,50,0,27';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -52,28 +38,22 @@ try {
     const startWalk = () => page.evaluate(() => { const p = (globalThis as never as { rs2b0t: { runner: { start(s: unknown): void }; registry: { get(n: string): unknown } } }).rs2b0t; p.runner.start(p.registry.get('WalkTo')); });
     const stopWalk = () => page.evaluate(() => (globalThis as never as { rs2b0t: { runner: { stop(): void } } }).rs2b0t.runner.stop());
 
-    // WalkTo destination = Al Kharid (bank 3269,3167), east of the gate.
     await page.goto(`${base}/bot.html?WalkTo.destination=Al Kharid`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) { fail('relogin failed'); }
 
-    // ---- Phase B: 0 coins -> must skip the gate ----
     await type(WEST);
     const startB = await tile();
     if (!startB || Math.abs(startB.x - 3267) > 3) { fail(`west tele failed (at ${JSON.stringify(startB)})`); }
     if ((await coins()) >= 10) { fail('expected <10 coins for phase B'); }
     console.log(`Phase B: at ${JSON.stringify(startB)}, coins ${await coins()}`);
     startWalk();
-    // The walker PRE-avoids unaffordable crossings and routes around the
-    // mountain far north of the gate — being east of GATE_X up there is the
-    // detour working, not a free crossing. Only the gate columns inside the
-    // gate's z-window count as crossing through.
     const throughGate = (t: { x: number; z: number }): boolean => t.x >= GATE_X && t.x <= GATE_X + 1 && t.z >= 3225 && t.z <= 3230;
     let avoided = false;
     for (let i = 0; i < 40; i++) {
@@ -81,7 +61,7 @@ try {
         if ((await logLines()).some(l => /toll gate.*skipping|need 10 coins/i.test(l))) { avoided = true; }
         const t = await tile();
         if (t && throughGate(t)) { fail(`crossed the gate with <10 coins (at ${JSON.stringify(t)})`); }
-        if (t && t.z > 3300) { avoided = true; } // north-detour evidence
+        if (t && t.z > 3300) { avoided = true; }
         if (avoided) { break; }
     }
     stopWalk();
@@ -90,8 +70,7 @@ try {
     if (!avoided) { fail('did not observe the toll-gate avoidance with <10 coins'); }
     if (afterB && throughGate(afterB)) { fail('standing in the gate without paying'); }
 
-    // ---- Phase A: 100 coins -> pay 10 and cross ----
-    await type(WEST); // back to the west side
+    await type(WEST);
     await type('::~item coins 100');
     const coinsBefore = await coins();
     if (coinsBefore < 10) { fail(`coin seed failed (have ${coinsBefore})`); }

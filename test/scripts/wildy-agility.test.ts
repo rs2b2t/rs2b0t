@@ -21,31 +21,23 @@ test('the default lap is the five wilderness obstacles in order', () => {
 
 test('inRegion is Chebyshev distance on the same level', () => {
     const centre = new Tile(2998, 3945, 0);
-    expect(inRegion(new Tile(2998, 3945, 0), centre, 25)).toBe(true); // dead centre
-    expect(inRegion(new Tile(3023, 3970, 0), centre, 25)).toBe(true); // exactly r on both axes (corner)
-    expect(inRegion(new Tile(3024, 3945, 0), centre, 25)).toBe(false); // one tile past r in x
-    expect(inRegion(new Tile(2998, 3971, 0), centre, 25)).toBe(false); // one tile past r in z
-    expect(inRegion(new Tile(2998, 3945, 1), centre, 25)).toBe(false); // wrong level
+    expect(inRegion(new Tile(2998, 3945, 0), centre, 25)).toBe(true);
+    expect(inRegion(new Tile(3023, 3970, 0), centre, 25)).toBe(true);
+    expect(inRegion(new Tile(3024, 3945, 0), centre, 25)).toBe(false);
+    expect(inRegion(new Tile(2998, 3971, 0), centre, 25)).toBe(false);
+    expect(inRegion(new Tile(2998, 3945, 1), centre, 25)).toBe(false);
 });
 
-// Locks the fragile ridge geometry: the entrance (z3924) and the course south
-// edge sit ~1 tile apart, so a single centre-radius can't separate them. Instead
-// EnterCourse uses an entrance region and RunLap a centre region; the ~13-tile
-// ridge hop must land us OUT of the entrance region but INSIDE the course region
-// so control passes cleanly from EnterCourse to RunLap.
 test('the ridge hop crosses from the entrance region into the course region', () => {
     const centre = new Tile(2998, 3945, 0);
     const entrance = new Tile(2998, 3924, 0);
-    const postRidge = new Tile(2998, 3937, 0); // ~13 tiles north of the entrance
+    const postRidge = new Tile(2998, 3937, 0);
     const ENTRY_RADIUS = 10;
     const COURSE_RADIUS = 25;
 
-    // at the entrance: EnterCourse fires, RunLap's region also covers it (overlap
-    // resolved by EnterCourse's higher task priority)
     expect(inRegion(entrance, entrance, ENTRY_RADIUS)).toBe(true);
     expect(inRegion(entrance, centre, COURSE_RADIUS)).toBe(true);
 
-    // after the hop: clear of the entrance region, inside the course region
     expect(inRegion(postRidge, entrance, ENTRY_RADIUS)).toBe(false);
     expect(inRegion(postRidge, centre, COURSE_RADIUS)).toBe(true);
 });
@@ -54,40 +46,32 @@ test('awayFromCourse: travel only when outside BOTH the course and entrance regi
     const centre = new Tile(2998, 3945, 0);
     const entrance = new Tile(2998, 3924, 0);
 
-    // inside the course region -> already there, do not travel
     expect(awayFromCourse(new Tile(2998, 3950, 0), centre, 25, entrance, 10)).toBe(false);
-    // near the entrance but outside a (deliberately tiny) course region -> the
-    // entrance clause still says "not away", so EnterCourse handles it
     expect(awayFromCourse(new Tile(2998, 3924, 0), centre, 5, entrance, 10)).toBe(false);
-    // far away (Edgeville) -> travel
     expect(awayFromCourse(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(true);
-    // right level matters: same x/z on another plane is away
     expect(awayFromCourse(new Tile(2998, 3945, 1), centre, 25, entrance, 10)).toBe(true);
 });
 
 test('insideCourseProper: in the course but past the entrance region (the lap zone)', () => {
     const centre = new Tile(2998, 3945, 0);
     const entrance = new Tile(2998, 3924, 0);
-    // pipe approach after the ridge hop: in course region, clear of the entrance -> lapping
     expect(insideCourseProper(new Tile(2998, 3937, 0), centre, 25, entrance, 10)).toBe(true);
-    // at the ridge entrance: in the entrance region -> NOT yet in the lap (must cross)
     expect(insideCourseProper(new Tile(2998, 3924, 0), centre, 25, entrance, 10)).toBe(false);
-    // far away -> not inside
     expect(insideCourseProper(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(false);
 });
 
 test('classifyAttempt: xp -> cleared; damage-without-xp -> failed (retry fast); nothing -> noop', () => {
     expect(classifyAttempt(true, false)).toBe('cleared');
-    expect(classifyAttempt(true, true)).toBe('cleared'); // xp wins even if a tick of damage landed
-    expect(classifyAttempt(false, true)).toBe('failed'); // fell off -> retry, don't wait for xp
-    expect(classifyAttempt(false, false)).toBe('noop'); // click did nothing -> stuck counter
+    expect(classifyAttempt(true, true)).toBe('cleared');
+    expect(classifyAttempt(false, true)).toBe('failed');
+    expect(classifyAttempt(false, false)).toBe('noop');
 });
 
 test('inPit: the wolf pit sits far above the course in world-z', () => {
     const centre = new Tile(2998, 3945, 0);
-    expect(inPit(new Tile(2998, 10346, 0), centre, 2000)).toBe(true); // log-balance fail pit
-    expect(inPit(new Tile(3004, 10357, 0), centre, 2000)).toBe(true); // ropeswing fail pit
-    expect(inPit(new Tile(2998, 3945, 0), centre, 2000)).toBe(false); // on the course
-    expect(inPit(new Tile(3094, 3493, 0), centre, 2000)).toBe(false); // Edgeville
-    expect(inPit(new Tile(2998, 4736, 0), centre, 2000)).toBe(false); // a mime stage ~800 north — NOT the pit
+    expect(inPit(new Tile(2998, 10346, 0), centre, 2000)).toBe(true);
+    expect(inPit(new Tile(3004, 10357, 0), centre, 2000)).toBe(true);
+    expect(inPit(new Tile(2998, 3945, 0), centre, 2000)).toBe(false);
+    expect(inPit(new Tile(3094, 3493, 0), centre, 2000)).toBe(false);
+    expect(inPit(new Tile(2998, 4736, 0), centre, 2000)).toBe(false);
 });

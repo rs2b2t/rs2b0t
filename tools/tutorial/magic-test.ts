@@ -1,19 +1,3 @@
-// Task 13 section test: jump-start a fresh account to the magic section
-// (the 610 -> 1000 ladder) and assert TutorialBot's five
-// Magic.ts stages carry it through Terrova, the two forced Wind Strike
-// casts and the mainland prompt to Lumbridge unattended.
-//
-// Same jump-start shape as `bankchapel-test.ts` (Task 12): two-step setvar +
-// the faithful-account kit (mining xp gates the pre-mine sections shut;
-// ranged xp opens the bank section's `pastCombat()` — quiet here anyway via
-// its position boxes, and the magic section's own era gate) + relog + tele
-// to the chapel-exit landing (3122,3101).
-//
-// PASS = tutorial >= 1000 AND the client tile on the mainland (Lumbridge —
-// `@tutorial_complete` telejumps to (3222,3222)).
-//
-// Usage: bun tools/tutorial/magic-test.ts [base-url]
-
 import { launchBrowser } from '../lib/harness.js';
 import { bootAndLogin, cheatQuiet, getServerVarQuiet, relog, startScript } from './harness.js';
 
@@ -22,12 +6,9 @@ const TARGET = 1000;
 const DEADLINE_MS = 8 * 60_000;
 const POLL_MS = 3000;
 
-/** Chapel-exit landing (BankChapel.ts's ExitChapel outcome: just south of newbie_door8). */
 const LANDING = { x: 3122, z: 3101 };
-/** `tele level,mx,mz,lx,lz` for LANDING: mapsquare 48,48, local (50,29). */
 const TELE_CMD = 'tele 0,48,48,50,29';
 
-/** Mainland proof: west Lumbridge is x > 3190; the island tops out ~3155. */
 const MAINLAND_X = 3190;
 
 type Rs2b0t = {
@@ -67,7 +48,6 @@ try {
         fail(`setvar jump to 610 did not stick (got ${jumped})`);
     }
 
-    // Faithful-account kit (bankchapel-test's, unchanged — nothing new gates here).
     await cheatQuiet(page, 'give bronze_axe 1');
     await cheatQuiet(page, 'give net 1');
     await cheatQuiet(page, 'give bread 1');
@@ -114,7 +94,6 @@ try {
         fail(`stalled at tutorial=${v} (wanted >= ${TARGET}) -- check the ladder table for which stage this is`);
     }
 
-    // Terminal observable: the mainland teleport.
     await page.waitForTimeout(1500);
     const mainlandTile = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
     console.log(`[${ts()}] post-teleport tile: ${JSON.stringify(mainlandTile)}`);

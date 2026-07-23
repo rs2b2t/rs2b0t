@@ -26,15 +26,9 @@ import { Traversal } from '../api/Traversal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
-// Moss giants NW of Ardougne. The safespot tile (2553,3406) reaches all four
-// giants for range/mage while their melee can't path to it; melee just fights in
-// the pile. One target, always attackable — no crab-style stack/aggro-reset.
 const TARGET = 'Moss giant';
 const DEFAULT_SAFESPOT = new Tile(2553, 3406, 0);
-// Booth-adjacent tile at the north East-Ardougne bank.
 const DEFAULT_BANK = new Tile(2615, 3332, 0);
-// Giants wander 3 tiles from their spawns; 10 covers the whole cluster and keeps
-// every field giant inside range of the safespot.
 const FIELD_RADIUS = 10;
 
 const ASSERT_BATCH = 5;
@@ -44,9 +38,6 @@ const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 
-// Loot options are the monster's OFFICIAL drop table (generated dropdb). Default
-// ticks the valuables; low-value ammo/coal/food start unticked (still banked as
-// loot if picked up — the bank keeps only supplies).
 const DROPS: string[] = DROP_DB[TARGET] ?? [];
 const DEFAULT_LOOT = DROPS.filter(n => !/\barrow\b|^coal$|spinach roll/i.test(n));
 
@@ -72,7 +63,6 @@ export const SETTINGS: SettingsSchema = {
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Ardougne N)', group: 'Location' }
 };
 
-// --- settings mirror (set in onStart) ---
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
 let MELEE_MODE = 1;
 let RANGE_MODE = 1;
@@ -90,7 +80,6 @@ let BANK_COMMON = true;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let BANK_TILE = DEFAULT_BANK;
 
-// --- helpers ---
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
 }
@@ -103,11 +92,9 @@ function foodCount(): number {
 function hasFood(): boolean {
     return foodCount() > 0;
 }
-/** Full casts of the configured spell affordable with the held runes. */
 function castsLeft(): number {
     return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
 }
-/** Out of the style's consumable (mage: no casts; range: no ammo anywhere). */
 function needStyleSupplies(): boolean {
     if (STYLE === 'mage') {
         return castsLeft() < 1;
@@ -130,7 +117,6 @@ function usesSafespot(): boolean {
     return STYLE === 'mage' || STYLE === 'range';
 }
 
-/** Alive, attackable moss giants in the field that aren't in another player's fight. */
 function fieldGiants(): Npc[] {
     return Npcs.query()
         .name(TARGET)
@@ -138,7 +124,6 @@ function fieldGiants(): Npc[] {
         .results();
 }
 
-/** Nearest ticked-loot drop in the field (or shared junk if enabled), else null. */
 function findLoot() {
     return GroundItems.query()
         .where(g => {
@@ -149,7 +134,6 @@ function findLoot() {
         .nearest();
 }
 
-/** Items to KEEP on a bank run — everything else (all loot + random loot) banks. */
 function keepNames(): string[] {
     return combatKeepNames({ food: FOOD_NAME, style: STYLE, spell: SPELL, ammo: AMMO, weapon: WEAPON, extra: ['Coins'] });
 }
@@ -181,9 +165,6 @@ async function lootOnce(bot: MossGiant): Promise<boolean> {
     return false;
 }
 
-// ============================ tasks ============================
-
-/** Eat food below the eat gate (primary HP management). */
 class Eat implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -194,9 +175,6 @@ class Eat implements Task {
     }
 }
 
-/** Wield the staff/bow AND (range) quiver loose arrows whenever they're in the
- *  pack — start, post-bank, post-death salvage. Bounded fails so an un-equippable
- *  item can't starve the loop. */
 class GearEquip implements Task {
     private fails = 0;
     constructor(private bot: MossGiant) {}
@@ -204,7 +182,7 @@ class GearEquip implements Task {
         return WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null;
     }
     private needQuiver(): boolean {
-        return STYLE === 'range' && Inventory.count(AMMO) > 0; // loose arrows belong in the quiver
+        return STYLE === 'range' && Inventory.count(AMMO) > 0;
     }
     validate(): boolean {
         return STYLE !== 'melee' && this.fails < 5 && (this.needWeapon() || this.needQuiver());
@@ -230,7 +208,6 @@ class GearEquip implements Task {
     }
 }
 
-/** Keep melee/ranged attack style on the configured com_mode (mage owns autocast). */
 class SetAttackStyle implements Task {
     private fails = 0;
     private retryAt = 0;
@@ -255,9 +232,6 @@ class SetAttackStyle implements Task {
     }
 }
 
-/** Arm the staff's autocast spell (mage). Runes-gated: the engine's
- *  set_autocast_spell needs the spell's runes in the pack, so without them the
- *  select silently no-ops — we defer to BankRun to stock runes first. */
 class ArmAutocast implements Task {
     private fails = 0;
     private retryAt = 0;
@@ -267,7 +241,7 @@ class ArmAutocast implements Task {
             return false;
         }
         if (castsLeft() < 1) {
-            return false; // no runes yet — BankRun stocks them, then we arm
+            return false;
         }
         return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
     }
@@ -284,9 +258,6 @@ class ArmAutocast implements Task {
     }
 }
 
-/** The full bank routine: walk to the bank, deposit everything except supplies,
- *  restock food + style supplies, walk back to the safespot. Shared by BankRun
- *  and PanicBank via `run`. */
 async function bankRoutine(bot: MossGiant, withdrawFood: boolean): Promise<void> {
     if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
@@ -296,7 +267,6 @@ async function bankRoutine(bot: MossGiant, withdrawFood: boolean): Promise<void>
         bot.log('could not open the bank — will retry');
         return;
     }
-    // keep-list deposit: bank all loot + random loot, keep only supplies
     await Bank.depositAllMatching(depositAllExcept(keepNames()), m => bot.log(`  ${m}`));
 
     if (withdrawFood) {
@@ -324,7 +294,6 @@ async function bankRoutine(bot: MossGiant, withdrawFood: boolean): Promise<void>
     await Traversal.walkResilient(SAFESPOT, { radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) });
 }
 
-/** Withdraw + equip the weapon, then top up runes (mage) / ammo (range). Bank open. */
 async function withdrawStyleSupplies(bot: MossGiant): Promise<void> {
     if (STYLE !== 'melee' && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null) {
         bot.setStatus(`withdrawing ${WEAPON}`);
@@ -363,7 +332,6 @@ async function withdrawStyleSupplies(bot: MossGiant): Promise<void> {
     }
 }
 
-/** Top an item up to `target` — Withdraw-X for the shortfall, 1/5/10 fallback. */
 async function withdrawTo(name: string, target: number): Promise<number> {
     const start = Inventory.count(name);
     for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
@@ -383,7 +351,6 @@ async function withdrawTo(name: string, target: number): Promise<number> {
     return Inventory.count(name) - start;
 }
 
-/** Retreat to the bank when HP is critical (out of food, or damage outpacing eating). */
 class PanicBank implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -399,7 +366,6 @@ class PanicBank implements Task {
     }
 }
 
-/** Restock when out of food or style supplies, or when the pack is full of loot. */
 class BankRun implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -421,7 +387,6 @@ class BankRun implements Task {
     }
 }
 
-/** Grab ticked drops off the ground in the field (after a kill, or as they fall). */
 class LootCorpse implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -432,7 +397,6 @@ class LootCorpse implements Task {
     }
 }
 
-/** Range/mage: walk back onto the safespot tile after looting knocks us off it. */
 class ReturnToSafespot implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -444,14 +408,8 @@ class ReturnToSafespot implements Task {
     }
 }
 
-/** Attack moss giants: range/mage from the safespot (never stepping off — only
- *  hit giants reachable in place, let aggro bring the rest), melee in the pile.
- *  Eats mid-fight; hands off to LootCorpse when a drop falls. */
 class Fight implements Task {
     private targetIdx: number | null = null;
-    // giant index -> time until which to skip it (it forced a walk off the
-    // safespot, i.e. isn't hittable in place right now; retried once aggro pulls
-    // it into the pocket). Keyed by scene slot; cleared as it expires.
     private skip = new Map<number, number>();
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -459,7 +417,7 @@ class Fight implements Task {
             return false;
         }
         if (usesSafespot() && !atSafespot()) {
-            return false; // ReturnToSafespot re-mounts first
+            return false;
         }
         return fieldGiants().length > 0;
     }
@@ -475,11 +433,9 @@ class Fight implements Task {
                 continue;
             }
             if (hpFrac() < PANIC_HP) {
-                return; // PanicBank/Eat take over
+                return;
             }
 
-            // Kill accounting FIRST — a dead target must be counted before looting
-            // steps a safespot bot off the tile and returns out of this loop.
             const giants = fieldGiants();
             if (this.targetIdx !== null && !giants.some(g => g.index === this.targetIdx)) {
                 this.bot.countKill();
@@ -487,8 +443,6 @@ class Fight implements Task {
                 this.targetIdx = null;
             }
 
-            // grab drops as they fall; for range/mage, break off if looting stepped
-            // us off the safespot so ReturnToSafespot re-mounts before we attack.
             if (!Inventory.isFull() && findLoot() !== null) {
                 await lootOnce(this.bot);
                 if (usesSafespot() && !atSafespot()) {
@@ -500,7 +454,6 @@ class Fight implements Task {
                 return;
             }
 
-            // already fighting → let autocast/auto-retaliate keep hitting.
             if (Game.inCombat()) {
                 await Execution.delayTicks(2);
                 continue;
@@ -511,8 +464,6 @@ class Fight implements Task {
                 .filter(g => !usesSafespot() || (this.skip.get(g.index) ?? 0) < now)
                 .sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
-                // nothing hittable in place — wait for aggro to pull giants into
-                // the pocket (skips expire), rather than chasing off the safespot.
                 await Execution.delayTicks(2);
                 return;
             }
@@ -520,18 +471,14 @@ class Fight implements Task {
             await target.interact('Attack');
             this.targetIdx = target.index;
             await Execution.delayUntil(() => Game.inCombat() || (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 3000);
-            // Safespot styles NEVER chase: if attacking made us leave the tile,
-            // that giant isn't reachable in place — skip it briefly and re-mount.
             if (usesSafespot() && !atSafespot()) {
                 this.skip.set(target.index, now + 8000);
                 this.targetIdx = null;
-                return; // ReturnToSafespot walks us back
+                return;
             }
         }
     }
 }
-
-// ============================ bot ============================
 
 export default class MossGiant extends TaskBot {
     override loopDelay = 600;

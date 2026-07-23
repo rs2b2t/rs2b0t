@@ -14,7 +14,6 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-/** Tunable parameters (panel + `?Woodcutter.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
     treeName: { type: 'string', default: 'Tree', label: 'Tree name', help: 'e.g. Tree, Oak, Willow' },
     chopAction: { type: 'string', default: 'Chop down', label: 'Chop action' },
@@ -23,26 +22,16 @@ export const SETTINGS: SettingsSchema = {
     bankOp: { type: 'string', default: 'Use-quickly', label: 'Bank object action', help: 'e.g. Use-quickly, Use, Bank' }
 };
 
-/** An inventory item is logs if its name contains "log" (Logs, Oak logs, Willow logs, …). */
 function isLogs(name: string | null | undefined): boolean {
     return (name ?? '').toLowerCase().includes('log');
 }
 
-/** Total logs (of any kind) currently in the backpack. */
 function logsHeld(): number {
     return Inventory.items()
         .filter(i => isLogs(i.name))
         .reduce((sum, i) => sum + i.count, 0);
 }
 
-/**
- * Chops trees and BANKS the logs at the nearest bank, forever. Anchors to
- * wherever it was started — stand near trees with an axe (inventory or wielded)
- * and within scene range of a bank booth. When the pack fills it walks to the
- * nearest bank booth in the scene, deposits every kind of logs, and returns to
- * the trees. If no bank is in the scene it warns and drops instead, so it never
- * hard-stalls. Uses the event bus for xp/level/inventory tracking.
- */
 export default class Woodcutter extends TaskBot {
     override loopDelay = 600;
 
@@ -147,7 +136,6 @@ export default class Woodcutter extends TaskBot {
         this.trips++;
     }
 
-    /** Set by the skill.xp listener; consumed by Chop to detect progress. */
     consumeChopProgress(): boolean {
         const was = this.chopping;
         this.chopping = false;
@@ -155,7 +143,6 @@ export default class Woodcutter extends TaskBot {
     }
 }
 
-/** Full pack -> walk to the nearest bank booth in the scene, deposit all logs, return to the trees. */
 class BankLogs implements Task {
     constructor(private bot: Woodcutter) {}
 
@@ -188,7 +175,6 @@ class BankLogs implements Task {
     }
 }
 
-/** Fallback when no bank is reachable: drop every log so the bot keeps chopping. */
 async function dropAllLogs(bot: Woodcutter): Promise<void> {
     bot.setStatus('dropping logs');
     for (let guard = 0; guard < 30; guard++) {
@@ -226,19 +212,12 @@ class Chop implements Task {
             return;
         }
 
-        // wait for chopping to take hold: a log, the swing animation starting, or
-        // a timeout (walking to the tree takes a moment). Nothing => click refused.
         await Execution.delayUntil(() => Inventory.used() > before || Game.animating() || ChatDialog.canContinue(), 12000);
         if (Inventory.used() === before && !Game.animating()) {
             await Execution.delayTicks(2);
             return;
         }
 
-        // Stay on the tree WHILE we're swinging — key the loop on the chop
-        // ANIMATION, not on the tree loc (which reads absent between logs on a
-        // standing oak and caused re-clicks). An oak keeps animating and yields
-        // many logs, so we wait instead of re-clicking; a normal tree falls after
-        // one log, the animation stops, and we return at once for the next tree.
         for (let guard = 0; guard < 120; guard++) {
             if (Inventory.isFull() || ChatDialog.canContinue()) {
                 return;
@@ -249,12 +228,11 @@ class Chop implements Task {
                 return;
             }
             if (Inventory.used() > mark) {
-                continue; // got a log — keep swinging the same tree
+                continue;
             }
             if (!Game.animating()) {
-                return; // stopped swinging with no new log — tree fell/depleted; find the next
+                return;
             }
-            // still animating after 8s with no log — a slow tree; keep waiting
         }
     }
 
@@ -273,7 +251,6 @@ class ReturnToAnchor implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        // don't wrestle the banking trip: only re-anchor when we've drifted off with an empty-ish pack
         return here !== null && this.bot.getAnchor().distanceTo(here) > this.bot.leashRadius() && !Inventory.isFull();
     }
 

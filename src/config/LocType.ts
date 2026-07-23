@@ -308,7 +308,6 @@ export default class LocType {
         return ready;
     }
 
-    // custom name
     prefetchModelAll(od: OnDemand) {
         if (this.model == null) {
             return;

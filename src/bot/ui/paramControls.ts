@@ -1,16 +1,11 @@
 import type { SettingDef, SettingsSchema } from '../runtime/Settings.js';
 import { el } from './dom.js';
 
-// ---- grouping + conditional visibility (pure — no DOM) ----
-
 export interface SettingGroup {
-    /** '' = the ungrouped lead section (rendered without a header). */
     name: string;
     keys: string[];
 }
 
-/** Partition a schema into its render sections: ungrouped settings first (in
- *  schema order), then each named group in first-appearance order. */
 export function groupSchema(schema: SettingsSchema): SettingGroup[] {
     const byName = new Map<string, string[]>([['', []]]);
     for (const [key, def] of Object.entries(schema)) {
@@ -25,8 +20,6 @@ export function groupSchema(schema: SettingsSchema): SettingGroup[] {
     return [...byName.entries()].filter(([, keys]) => keys.length > 0).map(([name, keys]) => ({ name, keys }));
 }
 
-/** showIf gate: visible when unconditioned, or when the referenced setting's
- *  current value matches any listed option (case-insensitive). */
 export function isVisible(def: SettingDef, valueOf: (key: string) => string): boolean {
     if (!def.showIf) {
         return true;
@@ -35,8 +28,6 @@ export function isVisible(def: SettingDef, valueOf: (key: string) => string): bo
     return def.showIf.anyOf.some(v => v.toLowerCase() === value);
 }
 
-/** Keys other settings' visibility depends on — a change to one of these
- *  needs a re-render, anything else can just save in place. */
 export function visibilityDeps(schema: SettingsSchema): Set<string> {
     const deps = new Set<string>();
     for (const def of Object.values(schema)) {
@@ -50,7 +41,6 @@ export function visibilityDeps(schema: SettingsSchema): Set<string> {
 type ControlKind =
     | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'multiselect' | 'taglist' | 'tile';
 
-/** Pick the control kind from a SettingDef's shape (pure — no DOM). */
 export function resolveControl(def: SettingDef): ControlKind {
     switch (def.type) {
         case 'boolean':
@@ -66,12 +56,10 @@ export function resolveControl(def: SettingDef): ControlKind {
     }
 }
 
-/** Split a comma-joined list value into trimmed, non-empty items. */
 function listItems(value: string): string[] {
     return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
 }
 
-/** Compact read-only value string for the panel summary (pure). */
 export function summarize(def: SettingDef, value: string): string {
     switch (resolveControl(def)) {
         case 'checkbox':
@@ -87,7 +75,7 @@ export function summarize(def: SettingDef, value: string): string {
         }
         case 'text':
             return value.trim().length > 0 ? value.trim() : '(empty)';
-        default: // slider, number, dropdown
+        default:
             return value;
     }
 }
@@ -261,7 +249,6 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
     }
 };
 
-/** Build the editable control for a setting (dispatches by resolved kind). */
 export function renderControl(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }): HTMLElement {
     return CONTROLS[resolveControl(def)].edit(def, current, onChange, opts);
 }

@@ -1,29 +1,3 @@
-// Offline collision pack builder (Slice 5, "Navigation / web-walking").
-//
-// Replays Engine-TS@274 GameMap.loadGround/loadLocations over every packed
-// mapsquare (engine repo, data/pack/.cache/maps-server.zip or
-// data/pack/server/maps/) through the vendored rsmod collision engine
-// (src/bot/nav/rsmod/), then bakes per-tile walkability + 8-direction step
-// legality (rsmod StepValidator semantics) into collision.lcnav.
-//
-// Shared cache/map parsing lives in tools/nav/lib.ts (also used by
-// derive-doors.ts).
-//
-// Usage: bun tools/nav/build-collision.ts [--engine <dir>] [--members true|false]
-//                                         [--out <file>] [--verify true|false]
-//
-// Output format (little-endian):
-//   magic 'LCNV' (4 bytes), version u8=2, members u8, reserved u16=0,
-//   mapsquareCount u16; then per mapsquare: mx u8, mz u8, levelMask u8
-//   (bit L = level L present), then for each present level ascending:
-//   4096 bytes exit mask (index = x*64+z; bit 0=N,1=E,2=S,3=W,4=NE,5=SE,
-//   6=SW,7=NW = step legal), 512 bytes walkable bitset (bit (x*64+z)&7 of
-//   byte (x*64+z)>>3), then (v2) 2048 bytes wall-edge nibbles — two tiles
-//   per byte (index&1 = high nibble), bit 0=N,1=E,2=S,3=W = a wall on that
-//   edge of the tile (closed doors included; PathFinder.cardinalGoals uses
-//   this to reject interact-illegal through-wall goal tiles).
-//   Unallocated/void tiles: 0/0/0.
-
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -34,11 +8,8 @@ import { canTravel } from '#/bot/nav/rsmod/StepValidator.js';
 
 import { BLOCK_MAP_SQUARE, LEVELS, MAP_X, MAP_Z, OPEN, REMOVE_ROOFS, Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, packCoord, parseLands, zoneIndex, type LocDef } from './lib.js';
 
-// ---- GameMap port (Engine-TS@274 src/engine/GameMap.ts, collision parts only) ----
-
 class CollisionBuilder {
     readonly collision = new CollisionEngine();
-    /** Per-mapsquare drawn-ground bitmaps (packCoord-indexed), keyed mx<<8|mz. */
     private readonly grounds = new Map<number, Uint8Array>();
     private readonly members: boolean;
     private readonly freemap = new Set<number>();
@@ -81,15 +52,6 @@ class CollisionBuilder {
         this.loadLocations(lands, new Reader(locData), mapsquareX, mapsquareZ);
     }
 
-    /**
-     * The client draws ground here (underlay/overlay present) — the standable
-     * truth for levels above 0. The collision engine leaves un-floored sky
-     * OPEN (real players are contained by walls + reachability), which is fine
-     * for scene-scoped movement but poison for world A*: baked stair edges
-     * made the empty upper planes reachable and every long route flew across
-     * them (Seers→Varrock via a Catherby ladder, live-observed). Level 0 is
-     * always ground. Missing mapsquares read as no ground.
-     */
     hasGround(absX: number, absZ: number, level: number): boolean {
         if (level === 0) {
             return true;
@@ -111,7 +73,6 @@ class CollisionBuilder {
                     }
 
                     if (x % 7 === 0 && z % 7 === 0) {
-                        // allocate per zone
                         this.collision.allocateIfAbsent(absoluteX, absoluteZ, level);
                     }
 
@@ -163,24 +124,21 @@ class CollisionBuilder {
     }
 }
 
-// ---- baking ----
-
-// bit order 0=N,1=E,2=S,3=W,4=NE,5=SE,6=SW,7=NW
 const DIRS: [number, number][] = [
-    [0, 1], // N
-    [1, 0], // E
-    [0, -1], // S
-    [-1, 0], // W
-    [1, 1], // NE
-    [1, -1], // SE
-    [-1, -1], // SW
-    [-1, 1] // NW
+    [0, 1],
+    [1, 0],
+    [0, -1],
+    [-1, 0],
+    [1, 1],
+    [1, -1],
+    [-1, -1],
+    [-1, 1]
 ];
 
 interface BakedLevel {
-    exit: Uint8Array; // 4096 bytes, index = x*64+z
-    walk: Uint8Array; // 512-byte bitset, bit (x*64+z)&7 of byte (x*64+z)>>3
-    wall: Uint8Array; // 2048 bytes, packed wall-edge nibbles (two tiles/byte)
+    exit: Uint8Array;
+    walk: Uint8Array;
+    wall: Uint8Array;
     allocatedTiles: number;
     walkableTiles: number;
 }
@@ -197,7 +155,6 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
     const levels: (BakedLevel | null)[] = [null, null, null, null];
 
     for (let level = 0; level < LEVELS; level++) {
-        // a level is present iff at least one of its 8x8 zones is allocated
         const zoneAllocated: boolean[] = [];
         let any = false;
         for (let zx = 0; zx < 8; zx++) {
@@ -220,7 +177,7 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
         for (let x = 0; x < MAP_X; x++) {
             for (let z = 0; z < MAP_Z; z++) {
                 if (!zoneAllocated[(x >> 3) * 8 + (z >> 3)]) {
-                    continue; // unallocated/void: exit 0, walkable 0
+                    continue;
                 }
                 allocatedTiles++;
 
@@ -229,7 +186,7 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
                 const index = x * 64 + z;
 
                 if (!hasGround(absX, absZ, level)) {
-                    continue; // un-floored sky: exit 0, walkable 0 (see Builder.hasGround)
+                    continue;
                 }
 
                 const flags = collision.get(absX, absZ, level);
@@ -238,8 +195,6 @@ function bakeMapsquare(collision: CollisionEngine, hasGround: (x: number, z: num
                     walkableTiles++;
                 }
 
-                // wall-edge nibble: bit 0=N,1=E,2=S,3=W (closed doors count —
-                // they bake as walls; their doors.json edge bridges them)
                 let nib = 0;
                 if ((flags & CollisionFlag.WALL_NORTH) !== 0) nib |= 1;
                 if ((flags & CollisionFlag.WALL_EAST) !== 0) nib |= 2;
@@ -275,13 +230,13 @@ function writePack(baked: BakedMapsquare[], members: boolean): Uint8Array<ArrayB
     const view = new DataView(out.buffer);
     let pos = 0;
 
-    out[pos++] = 0x4c; // 'L'
-    out[pos++] = 0x43; // 'C'
-    out[pos++] = 0x4e; // 'N'
-    out[pos++] = 0x56; // 'V'
-    out[pos++] = 2; // version
+    out[pos++] = 0x4c;
+    out[pos++] = 0x43;
+    out[pos++] = 0x4e;
+    out[pos++] = 0x56;
+    out[pos++] = 2;
     out[pos++] = members ? 1 : 0;
-    view.setUint16(pos, 0, true); // reserved
+    view.setUint16(pos, 0, true);
     pos += 2;
     view.setUint16(pos, emitted.length, true);
     pos += 2;
@@ -315,8 +270,6 @@ function writePack(baked: BakedMapsquare[], members: boolean): Uint8Array<ArrayB
     }
     return out;
 }
-
-// ---- verification ----
 
 class Verifier {
     failures = 0;
@@ -361,8 +314,6 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
     console.log('verify:');
     const v = new Verifier(baked);
 
-    // loc decode sanity against content-repo ground truth: [tree] is a 2x2
-    // blockwalk/blockrange loc with ops (active=1) in this content build
     const treeId = locs.names.get('tree');
     const tree = treeId !== undefined ? locs.configs[treeId] : undefined;
     v.check("loc 'tree' decoded 2x2 blockwalk blockrange active", !!tree && tree.width === 2 && tree.length === 2 && tree.blockwalk && tree.blockrange && tree.active === 1);
@@ -370,21 +321,14 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
     const stump = stumpId !== undefined ? locs.configs[stumpId] : undefined;
     v.check("loc 'treestump' decoded 1x1 blockwalk", !!stump && stump.width === 1 && stump.length === 1 && stump.blockwalk);
 
-    // walkable world tiles (level 0)
     v.check('(3222,3218) Lumbridge castle courtyard walkable', v.walkable(3222, 3218, 0));
     v.check('(3232,3298) chicken pen east Lumbridge walkable', v.walkable(3232, 3298, 0));
     v.check('(3230,3250) walkable', v.walkable(3230, 3250, 0));
 
-    // upper levels: drawn floors stay walkable, un-floored sky does not (the
-    // Seers→Varrock ladder detour — A* flew across the empty level-1 plane)
     v.check('(3205,3209,1) Lumbridge castle first floor walkable', v.walkable(3205, 3209, 1));
     v.check('(3000,3430,1) open sky west of Barbarian Village NOT walkable', !v.walkable(3000, 3430, 1));
     v.check('(2960,3320,1) sky above the sea NOT walkable', !v.walkable(2960, 3320, 1));
 
-    // water: River Lum south of the Lumbridge bridge. The plan's guess
-    // (3228,3265) turned out to be the west bank (walkable); probing the
-    // baked grid puts the river at x=3231..3238 there, with pure FLOOR
-    // (0x200000) flags — these two tiles are mid-river water.
     for (const [x, z] of [
         [3231, 3265],
         [3232, 3264]
@@ -403,14 +347,11 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
         }
     }
 
-    // chicken pen fence line: the pen's east fence runs between x=3236 and
-    // x=3237 (the plan guessed 3235/3236; the baked grid puts the E-step
-    // block one tile east) — crossing must be blocked both ways
     let blockedPairs = 0;
     let openPair = -1;
     for (let z = 3290; z <= 3300; z++) {
-        const eastBlocked = (v.exitMask(3236, z, 0) & 0x2) === 0; // bit 1 = E
-        const westBlocked = (v.exitMask(3237, z, 0) & 0x8) === 0; // bit 3 = W
+        const eastBlocked = (v.exitMask(3236, z, 0) & 0x2) === 0;
+        const westBlocked = (v.exitMask(3237, z, 0) & 0x8) === 0;
         if (eastBlocked && westBlocked) {
             blockedPairs++;
         } else {
@@ -422,8 +363,6 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
         console.log(`    e.g. z=${openPair}: exit(3236)=${v.exitMask(3236, openPair, 0).toString(2)} exit(3237)=${v.exitMask(3237, openPair, 0).toString(2)}`);
     }
 
-    // exit masks must agree with the walkable bit (a legal step implies an
-    // enterable destination): spot-check the courtyard tile's neighbors
     let consistent = true;
     const mask = v.exitMask(3222, 3218, 0);
     for (let dir = 0; dir < 8; dir++) {
@@ -435,8 +374,6 @@ function verify(baked: BakedMapsquare[], collision: CollisionEngine, locs: { con
 
     return v.failures;
 }
-
-// ---- main ----
 
 function parseArgs(): { engine: string; members: boolean; out: string; verify: boolean } {
     const args = process.argv.slice(2);
@@ -476,7 +413,6 @@ function main(): void {
 
     const builder = new CollisionBuilder(opts.members, locs.configs);
 
-    // Environment.build.srcDir defaults to '../content' relative to the engine dir
     const f2pCsv = path.resolve(opts.engine, '../content/maps/free2play.csv');
     if (fs.existsSync(f2pCsv)) {
         console.log(`free2play zones: ${builder.loadFreeToPlayZones(f2pCsv)} (${f2pCsv})`);

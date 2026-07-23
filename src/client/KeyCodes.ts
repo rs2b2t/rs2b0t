@@ -5,7 +5,6 @@ export type JavaKeyCode = {
 
 export const CanvasEnabledKeys: string[] = ['F11', 'F12'];
 
-// could be an array, but mangling properties is a PITA
 export const KeyCodes: Map<string, JavaKeyCode> = new Map();
 KeyCodes.set('ArrowLeft', { code: 37, ch: 1 });
 KeyCodes.set('ArrowRight', { code: 39, ch: 2 });

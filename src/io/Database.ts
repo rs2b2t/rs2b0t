@@ -38,7 +38,6 @@ export default class Database {
                 if (request.result) {
                     resolve(Database.asUint8Array(request.result));
                 } else {
-                    // IDB will call onsuccess with "undefined" if key does not exist
                     resolve(undefined);
                 }
             };
@@ -59,7 +58,6 @@ export default class Database {
                 if (request.result) {
                     resolve(Database.asUint8Array(request.result));
                 } else {
-                    // IDB will call onsuccess with "undefined" if key does not exist
                     resolve(undefined);
                 }
             };
@@ -85,7 +83,6 @@ export default class Database {
             };
 
             request.onerror = (): void => {
-                // not too worried if it doesn't save, it'll redownload later
                 resolve();
             };
         });
@@ -106,7 +103,6 @@ export default class Database {
             };
 
             request.onerror = (): void => {
-                // not too worried if it doesn't save, it'll redownload later
                 resolve();
             };
         });

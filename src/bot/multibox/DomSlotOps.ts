@@ -2,9 +2,8 @@ import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from './typ
 
 const LOGICAL_W = 1100;
 const LOGICAL_H = 620;
-const THUMB_W = 300; // grid thumbnail width; height derives from the ratio
+const THUMB_W = 300;
 
-/** Subset of window.rs2b0t the manager drives (same-origin, direct calls). */
 interface Lcb {
     client: { constructor: { loopCycle: number } };
     reader: { ingame(): boolean };
@@ -16,13 +15,6 @@ interface Lcb {
 }
 interface LcbWindow extends Window { rs2b0t?: Lcb; }
 
-/**
- * One bot tile: an iframe of /bot.html at a fixed logical size, CSS-scaled to
- * a grid thumbnail or (when focused) letterboxed to the window. The iframe is
- * NEVER reparented — focus toggles a class, so the WebSocket/session survive
- * fullscreen↔wall. Control calls buffer until the iframe's rs2b0t handle
- * appears, then flush in order.
- */
 class DomSlotHandle implements SlotHandle {
     readonly el: HTMLDivElement;
 
@@ -42,8 +34,6 @@ class DomSlotHandle implements SlotHandle {
         this.iframe = document.createElement('iframe');
         this.iframe.className = 'mbx-frame';
         this.iframe.title = account.username;
-        // Forward nodeid/members from the wall's own URL, so a relay launch can
-        // target a specific world (e.g. multibox.html?nodeid=1 for rs2b2t).
         const q = new URLSearchParams(location.search);
         const forwarded = new URLSearchParams();
         for (const k of ['nodeid', 'members'] as const) {
@@ -132,7 +122,7 @@ export class DomSlotOps implements SlotOps {
 
     spawn(account: Account): SlotHandle {
         const handle = new DomSlotHandle(account);
-        this.wallEl.insertBefore(handle.el, this.beforeEl); // keep the "+" tile last
+        this.wallEl.insertBefore(handle.el, this.beforeEl);
         return handle;
     }
 }

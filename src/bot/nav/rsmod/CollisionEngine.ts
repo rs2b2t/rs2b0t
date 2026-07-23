@@ -1,6 +1,3 @@
-// Vendored from LostCityRS/Engine-TS@274: src/engine/routefinder/CollisionEngine.ts
-// (a TypeScript port of rsmod's pathfinder, https://github.com/rsmod/rsmod — MIT licensed).
-// Verbatim except imports rewritten from '#/engine/routefinder/*' to relative paths,
 // per the rs2b0t import fences (eslint.config.ts).
 import { CollisionFlag, LocAngle, LocShape } from './flags.js';
 

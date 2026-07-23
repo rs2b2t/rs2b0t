@@ -35,7 +35,6 @@ export default abstract class GameShell {
     protected keyQueueReadPos: number = 0;
     protected keyQueueWritePos: number = 0;
 
-    /// custom
     protected resizeToFit: boolean = false;
     protected tfps: number = 50;
     private absMouseX: number = 0;
@@ -55,9 +54,6 @@ export default abstract class GameShell {
     protected mainquit() { }
     protected async mainloop() { }
     protected async mainredraw() { }
-    /** Paces the frame loop. Overridable so the bot client can use a
-     *  throttle-immune timer — background tabs clamp setTimeout to ~1/min,
-     *  which would otherwise stall the loop. Default keeps upstream behaviour. */
     protected async frameDelay(ms: number): Promise<void> {
         await sleep(ms);
     }
@@ -115,8 +111,6 @@ export default abstract class GameShell {
             canvas.addEventListener('touchend', this.touchEndHandler, { passive: false });
         }
 
-        // Preventing mouse events from bubbling up to the context menu in the browser for our canvas.
-        // This may need to be hooked up to our own context menu in the future.
         canvas.oncontextmenu = (e: MouseEvent): void => {
             e.preventDefault();
         };
@@ -208,7 +202,6 @@ export default abstract class GameShell {
 
             await this.mainredraw();
 
-            // this is custom for targeting specific fps (on mobile).
             if (this.tfps < 50) {
                 const tfps: number = 1000 / this.tfps - (performance.now() - ntime);
                 if (tfps > 0) {
@@ -289,26 +282,21 @@ export default abstract class GameShell {
 
         const y: number = height / 2 - 18;
 
-        // draw full progress bar
         canvas2d.strokeStyle = 'rgb(140, 17, 17)';
         canvas2d.strokeRect(((width / 2) | 0) - 152, y, 304, 34);
         canvas2d.fillStyle = 'rgb(140, 17, 17)';
         canvas2d.fillRect(((width / 2) | 0) - 150, y + 2, progress * 3, 30);
 
-        // cover up progress bar
         canvas2d.fillStyle = 'black';
         canvas2d.fillRect(((width / 2) | 0) - 150 + progress * 3, y + 2, 300 - progress * 3, 30);
 
-        // draw text
         canvas2d.font = 'bold 13px helvetica, sans-serif';
         canvas2d.textAlign = 'center';
         canvas2d.fillStyle = 'white';
         canvas2d.fillText(message, (width / 2) | 0, y + 22);
 
-        await sleep(5); // return a slice of time to the main loop so it can update the progress bar
+        await sleep(5);
     }
-
-    // ----
 
     private onmousedown(e: MouseEvent) {
         if (e.clientX < 0 || e.clientY < 0) {
@@ -326,7 +314,6 @@ export default abstract class GameShell {
         this.nextMouseClickY = y;
         this.nextMouseClickTime = performance.now();
 
-        // custom: down event comes before and potentially without move event
         this.mouseX = x;
         this.mouseY = y;
 
@@ -362,7 +349,6 @@ export default abstract class GameShell {
         this.idleTimer = performance.now();
         this.mouseButton = 0;
 
-        // custom: up event comes before and potentially without move event
         this.mouseX = x;
         this.mouseY = y;
     }
@@ -400,7 +386,6 @@ export default abstract class GameShell {
         this.mouseX = -1;
         this.mouseY = -1;
 
-        // custom: moving off-canvas may have a stuck mouse event
         this.nextMouseClickX = -1;
         this.nextMouseClickY = -1;
         this.nextMouseClickButton = 0;
@@ -484,11 +469,6 @@ export default abstract class GameShell {
     }
 
     private onkeyup(e: KeyboardEvent) {
-        // if (e.isTrusted && MobileKeyboard.isDisplayed()) {
-        //     // physical keyboard started typing, hide virtual
-        //     MobileKeyboard.hide();
-        //     this.refresh();
-        // }
 
         this.idleTimer = performance.now();
 
@@ -556,13 +536,10 @@ export default abstract class GameShell {
     private onblur(_e: FocusEvent) {
         this.focus = false;
 
-        // custom: taken from later version to release all keys
         for (let i = 0; i < 128; i++) {
             this.keyHeld[i] = 0;
         }
     }
-
-    // ----
 
     private get hasTouchEvents() {
         return 'ontouchstart' in window;
@@ -599,12 +576,9 @@ export default abstract class GameShell {
         let y = 0;
 
         if (this.isFullScreen()) {
-            // Fullscreen logic will ensure the canvas aspect ratio is
-            // preserved, centering the canvas on the screen.
             const gameAspectRatio = fixedWidth / fixedHeight;
             const ourAspectRatio = window.innerWidth / window.innerHeight;
 
-            // Determine whether our aspect ratio is wider than canvas' one.
             const wider = ourAspectRatio >= gameAspectRatio;
 
             let trueCanvasWidth = 0;
@@ -613,16 +587,12 @@ export default abstract class GameShell {
             let offsetY = 0;
 
             if (wider) {
-                // Browser will scale canvas according to _height_.
                 trueCanvasWidth = window.innerHeight * gameAspectRatio;
                 trueCanvasHeight = window.innerHeight;
-                // As such, there will be a gap on the X axis either side.
                 offsetX = (window.innerWidth - trueCanvasWidth) / 2;
             } else {
-                // Browser will scale canvas according to _width_.
                 trueCanvasWidth = window.innerWidth;
                 trueCanvasHeight = window.innerWidth / gameAspectRatio;
-                // As such, there will be a gap on the Y axis either side.
                 offsetY = (window.innerHeight - trueCanvasHeight) / 2;
             }
             const scaleX = fixedWidth / trueCanvasWidth;
@@ -636,11 +606,6 @@ export default abstract class GameShell {
             y = (clickY * scaleY) | 0;
         }
 
-        // Specifically filter events outside of bounds of canvas; this can
-        // happen if fullscreen mode is on due to letterboxing! The result is
-        // that the mouse appears to move up/down vertically along X:0 if they
-        // move mouse on the black section to the left, vice versa for other
-        // sides, depending on aspect ratio.
         if (x < 0) {
             x = 0;
         }

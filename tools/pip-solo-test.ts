@@ -1,18 +1,3 @@
-// Fast iteration harness for Priest in Peril ALONE: skips the ~20-min Rune
-// Mysteries prefix by pre-setting the server varp runemysteries=6 (complete) —
-// that's the ONLY dependency (Aubury's essence-mine teleport is gated on it),
-// and PiP itself has no quest gate (F2P can start it). Everything else mirrors
-// tools/aio-quest-test.ts: mainland account, inject queue=priestperil, start,
-// poll the priestperil journal until complete or budget.
-//
-// Usage: bun tools/pip-solo-test.ts [base] [user] [budget-min] [give-csv] [stats-csv] [food] [pip-stage]
-//   NOT the acceptance run — that is aio-quest-test.ts with runemysteries,priestperil
-//   run uncheated. This exists only to iterate on PiP legs quickly.
-//   pip-stage: optional priestperil varp to jump to (e.g. 5 = find_drezel_key,
-//     6 = unlocked, 8 = meet_in_mausoleum) + tele to the temple + relog, so a
-//     mid/late-game leg can be exercised without replaying the ~15-min early game.
-//     Use the give-csv to hand the pack items that stage implies (e.g. bucket_empty:1).
-
 import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, getServerVarQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
 
@@ -49,19 +34,11 @@ try {
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
 
-    // Pre-complete Rune Mysteries (server gate for Aubury's essence teleport).
-    // cheatQuiet (NOT cheat): after mainlandAccount's setvar tutorial, the typed
-    // `cheat` path's focus is eaten and the command is silently dropped (harness
-    // note) — the swallowed setvar left RM incomplete and Aubury refused the
-    // teleport (live pspip6b). cheatQuiet writes the CLIENT_CHEAT packet directly.
     await cheatQuiet(page, 'setvar runemysteries 6');
     await relog(page, username);
     const rm = await getServerVarQuiet(page, 'runemysteries');
     console.log(`set runemysteries=${rm} (essence-mine teleport gate)`);
 
-    // Optional mid/late-game jump: set the priestperil varp + tele to the temple
-    // exterior + relog (headless ::tele leaves the scene un-rebuilt — relog
-    // rebuilds it). The give-csv supplies the pack items that stage implies.
     if (pipStage) {
         await cheatQuiet(page, `setvar priestperil ${pipStage}`);
         await cheatQuiet(page, 'tele 3406 3488 0');

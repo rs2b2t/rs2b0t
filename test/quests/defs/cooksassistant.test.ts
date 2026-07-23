@@ -12,8 +12,8 @@ const snap = (journal: string, items: [string, number][] = []): QuestSnapshot =>
 
 describe('cooksassistant gathers', () => {
     test('flour: pot first, then grain, then the mill custom', () => {
-        expect(gatherFlour(snap('inProgress')).kind).toBe('grabGround');            // no Pot
-        expect(gatherFlour(snap('inProgress', [['pot', 1]])).kind).toBe('pickLoc'); // no Grain
+        expect(gatherFlour(snap('inProgress')).kind).toBe('grabGround');
+        expect(gatherFlour(snap('inProgress', [['pot', 1]])).kind).toBe('pickLoc');
         expect(gatherFlour(snap('inProgress', [['pot', 1], ['grain', 1]])).kind).toBe('custom');
     });
     test('milk: bucket first, then use it on a cow', () => {
@@ -32,6 +32,6 @@ describe('cooksassistant decide', () => {
     });
     test('inProgress missing an ingredient self-heals through the gathers', () => {
         const s = decide(snap('inProgress', [['egg', 1], ['bucket of milk', 1]]));
-        expect(s.kind).not.toBe('talk'); // goes flour-gathering instead of nagging the Cook
+        expect(s.kind).not.toBe('talk');
     });
 });

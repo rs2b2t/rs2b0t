@@ -1,25 +1,14 @@
-// Live test for RockCrab's mage/range combat styles at the Rellekka field.
-// Spawns the style's gear+consumables via cheats (the bank withdraw path is
-// NOT exercised here — supplies start in the pack), injects the style
-// settings, and asserts the style actually worked:
-//   mage  — autocast armed (varp 108 = 3), kills logged, runes consumed.
-//   range — kills logged, arrows swept off the ground after kills.
-//
-// Usage: bun tools/rockcrab-style-test.ts <mage|range> [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 8 });
-const style = rest[0] ?? 'mage'; // default (fleet passes no style; melee is rockcrab-test's job)
+const style = rest[0] ?? 'mage';
 if (style !== 'mage' && style !== 'range') {
     fail('usage: bun tools/rockcrab-style-test.ts [mage|range] [minutes] [base-url] [username]');
 }
-// 12-char username cap: 'm'/'r' + crab + 6 base36 chars = 11
 const username = rest[1] ?? `${style === 'mage' ? 'm' : 'r'}crab${Date.now().toString(36).slice(-6)}`;
 
-const TELE = '::tele 0,42,58,22,8'; // ~2710,3720, in the crab field
-// staff of air + Wind Strike → only Mind runes consumed (air is free)
+const TELE = '::tele 0,42,58,22,8';
 const MAGE_ITEMS = ['::~item staff_of_air 1', '::~item mindrune 200', '::~item lobster 10'];
 const RANGE_ITEMS = ['::~item shortbow 1', '::~item bronze_arrow 150', '::~item lobster 10'];
 
@@ -35,8 +24,6 @@ try {
 
     await type(page, '::tele 0,50,50,20,20', 1500);
 
-    // relog #1: unlock the tutorial-locked sidebar tabs (cheats and the pack
-    // reader only work properly once the tabs are unlocked)
     const relog = async (): Promise<void> => {
         await page.reload();
         await boot(page);
@@ -56,10 +43,6 @@ try {
         await type(page, cheat, 1500);
     }
 
-    // wield now, then relog #2: tutorial-skipped accounts never get the
-    // equip-time combat-tab update (appearance.rs2 gates update_weapon_category
-    // on tutorial progress) but login.rs2 runs it unconditionally — the second
-    // login attaches the weapon's combat tab so autocast/styles work.
     const weaponName = style === 'mage' ? 'Staff of air' : 'Shortbow';
     const wielded = await page.evaluate(n => {
         const g = (globalThis as never as Rs2b0t).rs2b0t;
@@ -89,7 +72,7 @@ try {
         } else {
             localStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Shortbow');
             localStorage.setItem('rs2b0t:set:RockCrab:ammo', 'Bronze arrow');
-            localStorage.setItem('rs2b0t:set:RockCrab:minStack', '1'); // sweep-on-kill takes everything
+            localStorage.setItem('rs2b0t:set:RockCrab:minStack', '1');
         }
     }, style);
 

@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { CollisionFlag } from '#/dash3d/CollisionFlag.js';
 import { canReachLocal, canStepLocal, type FlagsAt } from '#/bot/nav/localReach.js';
 
-/** Build a FlagsAt from an ascii grid. '#' = fully blocked, '.' = open.
- *  rows[lz][lx]; out-of-grid = null (out of scene). */
 function grid(rows: string[]): FlagsAt {
     return (lx, lz) => {
         const row = rows[lz];
@@ -22,10 +20,8 @@ describe('canStepLocal', () => {
         expect(canStepLocal(g, 0, 0, 1, 0)).toBe(false);
     });
     test('wall flag on destination blocks entry from that side only', () => {
-        // destination (1,0) has a wall on its west side: entering eastward denied
         const g: FlagsAt = (lx, lz) => (lx === 1 && lz === 0 ? CollisionFlag.W_W : CollisionFlag._OPEN);
         expect(canStepLocal(g, 0, 0, 1, 0)).toBe(false);
-        // but entering it from the north is fine
         expect(canStepLocal(g, 1, 1, 0, -1)).toBe(true);
     });
     test('diagonal needs both cardinals open', () => {

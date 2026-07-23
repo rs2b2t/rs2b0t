@@ -3,8 +3,6 @@ import { chooseCrossClick, crossingEligible, locateOnPath, selectClickTarget, st
 
 const t = (x: number, z: number, level = 0): PathTileLike => ({ x, z, level });
 
-/** A switchback: 30 tiles east on z=0, then back 30 tiles west on z=2 —
- *  index 0..30 outbound, 31 = (30,1), 32..62 return (32+k = (30-k, 2)). */
 function switchback(): PathTileLike[] {
     const tiles: PathTileLike[] = [];
     for (let x = 0; x <= 30; x++) tiles.push(t(x, 0));
@@ -16,8 +14,6 @@ function switchback(): PathTileLike[] {
 describe('locateOnPath', () => {
     const tiles = switchback();
     test('advances to the furthest on-corridor index in the window', () => {
-        // at (12,0), window [10,36), corridor 3: outbound x 9..15 match; the
-        // return-leg tiles above (z=2) are indices 47..53 — outside the window
         expect(locateOnPath(tiles, t(12, 0), 10, 26, 3)).toBe(15);
     });
     test('returns -1 when off-corridor', () => {
@@ -31,8 +27,6 @@ describe('locateOnPath', () => {
 describe('selectClickTarget', () => {
     const tiles = switchback();
     test('targets by path index, not straight-line distance', () => {
-        // player at index 15; steps=20 ⇒ target index 35 (early return leg)
-        // even though its straight-line distance is tiny
         expect(selectClickTarget(tiles, 15, 20, tiles.length - 1, 0, () => true)).toBe(35);
     });
     test('pulls back to the first clickable tile', () => {
@@ -50,30 +44,24 @@ describe('selectClickTarget', () => {
 });
 
 describe('starvedTerminalIndex', () => {
-    // The corridor-snap starvation (live-reproduced at the Ardougne cake
-    // stand): any path whose terminal is within CORRIDOR(3) of the player
-    // snaps pathIdx to the LAST index, and selectClickTarget's strict
-    // `i > pathIdx` then returns -1 forever — 0 clicks, bogus "blocked live".
     const CORRIDOR = 3;
     const WINDOW = 26;
 
     test('cheb-1 claim: starved selection falls back to the terminal', () => {
-        // me beside the stand, fresh path [me, stand] — the 15:19:49 shape
         const tiles = [t(2667, 3312), t(2668, 3312)];
         const me = t(2667, 3312);
         const pathIdx = locateOnPath(tiles, me, 0, WINDOW, CORRIDOR);
-        expect(pathIdx).toBe(1); // snapped to the terminal
-        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1); // starved
+        expect(pathIdx).toBe(1);
+        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1);
         expect(starvedTerminalIndex(tiles, me, () => true)).toBe(1);
     });
 
     test('cheb-2 stand swap: starved from the very first iteration, rescued', () => {
-        // alt stand -> stand around the Boxes at (2669,3311)
         const tiles = [t(2669, 3310), t(2670, 3310), t(2670, 3311), t(2670, 3312), t(2669, 3312), t(2668, 3312)];
         const me = t(2669, 3310);
         const pathIdx = locateOnPath(tiles, me, 0, WINDOW, CORRIDOR);
-        expect(pathIdx).toBe(5); // terminal is cheb 2 away — snapped past everything
-        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1); // starved
+        expect(pathIdx).toBe(5);
+        expect(selectClickTarget(tiles, pathIdx, 20, tiles.length - 1, 0, () => true)).toBe(-1);
         expect(starvedTerminalIndex(tiles, me, () => true)).toBe(5);
     });
 
@@ -99,7 +87,7 @@ describe('starvedTerminalIndex', () => {
 
 describe('crossingEligible', () => {
     const approach = t(10, 10);
-    const far = t(10, 11, 1); // stair hop: far endpoint on the level above
+    const far = t(10, 11, 1);
 
     test('fires when proximate to the approach tile and it is reachable', () => {
         expect(crossingEligible(t(8, 8), approach, far, 4, () => true)).toBe(true);

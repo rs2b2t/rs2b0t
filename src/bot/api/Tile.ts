@@ -1,6 +1,5 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 
-/** Immutable world-coordinate tile. */
 export default class Tile implements WorldTile {
     constructor(
         readonly x: number,
@@ -12,7 +11,6 @@ export default class Tile implements WorldTile {
         return new Tile(tile.x, tile.z, tile.level);
     }
 
-    /** Chebyshev distance (game movement metric). */
     distanceTo(other: WorldTile): number {
         return Math.max(Math.abs(this.x - other.x), Math.abs(this.z - other.z));
     }

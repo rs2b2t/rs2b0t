@@ -1,12 +1,3 @@
-// Main-thread facade over the NavWorker. Lazy-spawns the worker
-// exactly like the client spawns OnDemand (src/io/OnDemand.ts), fetches the
-// collision pack relative to the bundle and transfers it in init, and
-// correlates path requests by id.
-//
-// findPath() is plain-promise async: infrastructure code. Scripts never await
-// it directly — WalkExecutor bridges it into Execution.delayUntil so stop/
-// abort semantics hold.
-
 import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
 
 export type PathResult = PathOutcome & { elapsedMs?: number };
@@ -26,7 +17,6 @@ class NavigatorImpl {
     mapsquares = 0;
     doorEdges = 0;
     transportEdges = 0;
-    /** elapsedMs of every completed worker pathfind this session (for stats). */
     readonly timings: number[] = [];
 
     private nextId = 1;
@@ -37,7 +27,6 @@ class NavigatorImpl {
         return this.state === 'ready';
     }
 
-    /** Spawn the worker and ship it the collision pack. Idempotent. */
     start(): void {
         if (this.state !== 'idle') {
             return;
@@ -65,10 +54,6 @@ class NavigatorImpl {
             .catch(err => this.fail(err instanceof Error ? err.message : String(err)));
     }
 
-    /**
-     * Resolve a world path off-thread. Never rejects: failures come back as
-     * {ok:false, reason}. Queues behind init when the worker isn't ready yet.
-     */
     async findPath(from: NavPoint, to: NavPoint, opts?: { avoidDoors?: { x: number; z: number }[]; timeoutMs?: number; maxExpansions?: number }): Promise<PathResult> {
         this.start();
 
@@ -104,7 +89,7 @@ class NavigatorImpl {
         } else if (message.type === 'path') {
             const request = this.pending.get(message.id);
             if (!request) {
-                return; // raced its timeout
+                return;
             }
             this.pending.delete(message.id);
             clearTimeout(request.timer);

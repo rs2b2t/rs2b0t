@@ -1,14 +1,9 @@
-import type { QuestStatus } from '#/bot/api/hud/Quests.js'; // type-only: does NOT pull the client at runtime
+import type { QuestStatus } from '#/bot/api/hud/Quests.js';
 
 import { checkItems } from './ItemChecker.js';
 import { checkRequirements } from './RequirementChecker.js';
 import type { QuestRecord, PlayerState, BankInventorySnapshot, QuestEligibility } from './types.js';
 
-/**
- * Combine requirement + item checks with the live journal status into a single
- * DONE/READY/BLOCKED verdict. Pure — journalStatus is passed in, so the client
- * never enters this module. 'complete' short-circuits to DONE.
- */
 export function evaluate(
     record: QuestRecord,
     player: PlayerState,
@@ -40,7 +35,6 @@ export function evaluate(
     };
 }
 
-/** Evaluate every record; statusOf maps a quest display name to its journal status. */
 export function evaluateAll(
     records: QuestRecord[],
     player: PlayerState,

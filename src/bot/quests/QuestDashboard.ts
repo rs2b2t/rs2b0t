@@ -11,12 +11,6 @@ import { evaluateAll } from './EligibilityEvaluator.js';
 import { loadQuestRecords } from './data/index.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility } from './types.js';
 
-/**
- * Reads live state (skills, quest journal, quest points, bank+inventory) and
- * reports DONE/READY/BLOCKED for all 63 quests on the overlay + log. The
- * decision half of the quest system — no execution; running quests is
- * QuestEngine's job (driven by AIOQuester).
- */
 export default class QuestDashboard extends LoopingBot {
     override loopDelay = 5000;
 
@@ -48,7 +42,6 @@ export default class QuestDashboard extends LoopingBot {
         this.report();
     }
 
-    /** Build a plain PlayerState from live readers (the only client contact for requirements). */
     private readPlayerState(): PlayerState {
         const skillNames = new Set<string>();
         for (const r of this.records) {
@@ -69,7 +62,6 @@ export default class QuestDashboard extends LoopingBot {
         return { questPoints: Quests.points(), skillLevels, completedQuests };
     }
 
-    /** Bank+inventory item counts. Bank is only readable when open; otherwise reuse the last seen. */
     private readItemSnapshot(): BankInventorySnapshot {
         const counts = new Map<string, number>();
         const wanted = new Set<string>();

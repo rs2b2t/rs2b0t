@@ -15,8 +15,8 @@ const npcOf = (s: ReturnType<typeof decide>): string => (s.kind === 'talk' ? s.s
 describe('romeojuliet decide', () => {
     test('held items disambiguate their stages', () => {
         expect(npcOf(decide(snap('notStarted')))).toBe('Romeo');
-        expect(npcOf(decide(snap('inProgress', ['message'])))).toBe('Romeo');        // deliver message (20->30)
-        expect(npcOf(decide(snap('inProgress', ['cadava potion'])))).toBe('Juliet'); // deliver potion (50->60)
+        expect(npcOf(decide(snap('inProgress', ['message'])))).toBe('Romeo');
+        expect(npcOf(decide(snap('inProgress', ['cadava potion'])))).toBe('Juliet');
         expect(decide(snap('complete')).kind).toBe('done');
     });
     test('invisible stages rotate the probe Juliet -> Lawrence -> Apothecary -> Romeo', () => {
@@ -24,6 +24,6 @@ describe('romeojuliet decide', () => {
         expect(npcOf(decide(snap('inProgress', ['cadava berries'], 1)))).toBe('Father Lawrence');
         expect(npcOf(decide(snap('inProgress', ['cadava berries'], 2)))).toBe('Apothecary');
         expect(npcOf(decide(snap('inProgress', ['cadava berries'], 3)))).toBe('Romeo');
-        expect(npcOf(decide(snap('inProgress', ['cadava berries'], 4)))).toBe('Juliet'); // wraps
+        expect(npcOf(decide(snap('inProgress', ['cadava berries'], 4)))).toBe('Juliet');
     });
 });

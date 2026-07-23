@@ -44,11 +44,6 @@ export interface EventMap {
 
 type Listener<K extends keyof EventMap> = (payload: EventMap[K]) => void;
 
-/**
- * Typed pub/sub fed by the frame producers (events/producers.ts). Listener
- * callbacks run synchronously during the frame hook, inside the BotHost
- * firewall — keep them light (set flags, log); do real work in loop().
- */
 class EventBusImpl {
     private listeners = new Map<keyof EventMap, Set<Listener<keyof EventMap>>>();
 

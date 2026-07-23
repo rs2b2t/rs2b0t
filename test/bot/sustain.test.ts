@@ -5,7 +5,7 @@ afterEach(() => Sustain.set(null));
 
 test('run() is a no-op with no hook registered', async () => {
     Sustain.set(null);
-    await Sustain.run(); // must not throw
+    await Sustain.run();
 });
 
 test('run() awaits the registered hook', async () => {
@@ -25,7 +25,7 @@ test('re-entrant run() is guarded (a hook that walks cannot recurse)', async () 
         depth++;
         maxDepth = Math.max(maxDepth, depth);
         if (depth === 1) {
-            await Sustain.run(); // simulates the hook's own waits reaching a walker loop
+            await Sustain.run();
         }
         depth--;
     });

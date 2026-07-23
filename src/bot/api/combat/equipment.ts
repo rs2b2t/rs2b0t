@@ -1,9 +1,3 @@
-// Curated wielded-weapon options for the combat bots' style-gated dropdowns
-// (display names, matching Equipment/Inventory strings). Era-appropriate 2004
-// bows and staves — enough to pick a weapon without free text. STAFFS covers the
-// autocast-capable staves (elemental/mystic/battlestaves provide a free rune per
-// STAFF_RUNES; the plain Staff/Magic staff autocast too, just paying every rune).
-
 export const BOWS: string[] = [
     'Shortbow', 'Longbow',
     'Oak shortbow', 'Oak longbow',
@@ -13,8 +7,6 @@ export const BOWS: string[] = [
     'Magic shortbow', 'Magic longbow'
 ];
 
-// One-handed melee weapons (leave the shield slot free — needed alongside an
-// anti-dragon shield). Scimitars/swords/longswords, bronze → rune.
 export const MELEE_WEAPONS: string[] = [
     'Bronze scimitar', 'Iron scimitar', 'Steel scimitar', 'Black scimitar', 'Mithril scimitar', 'Adamant scimitar', 'Rune scimitar',
     'Bronze sword', 'Iron sword', 'Steel sword', 'Black sword', 'Mithril sword', 'Adamant sword', 'Rune sword',

@@ -1,23 +1,10 @@
-// Repro for "RockCrab mage gets stuck trying to set autocast when there are no
-// runes." Spawns the mage staff + food but DELIBERATELY NO RUNES, starts the bot
-// at the crab field, and asserts the fix: with castsLeft()==0 the ArmAutocast
-// task now DEFERS (the engine's set_autocast_spell needs the runes in the pack,
-// so arming can't take) and hands the loop to BankRun to restock runes — instead
-// of spinning a futile "arming autocast" batch every loop.
-//
-// PASS: within the window the bot logs a BankRun restock ("banking"/"restocking"
-// /"casts 0") and NEVER logs an autocast arm attempt while it holds no runes.
-//
-// Usage: bun tools/rockcrab-mage-noruns-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 4 });
 const username = rest[0] ?? `mcrabnr${Date.now().toString(36).slice(-5)}`;
 
-const TELE = '::tele 0,42,58,22,8'; // ~2710,3720, in the crab field
-// staff of air + food, but NO runes on purpose.
+const TELE = '::tele 0,42,58,22,8';
 const ITEMS = ['::~item staff_of_air 1', '::~item lobster 10'];
 
 const browser = await launchBrowser();
@@ -42,8 +29,6 @@ try {
     for (const s of ['defence', 'hitpoints', 'magic']) { await type(page, `::setstat ${s} 40`, 1500); }
     for (const cheat of ITEMS) { await type(page, cheat, 1500); }
 
-    // wield the staff, relog so the tutorial-skipped account attaches the staff
-    // combat tab (staffTabAttached) — same dance as rockcrab-style-test.
     const wielded = await page.evaluate(() => {
         const g = (globalThis as never as Rs2b0t).rs2b0t;
         const it = g.reader.inventory().find(i => i.name === 'Staff of air');
@@ -90,14 +75,13 @@ try {
         });
         for (const line of snap.log.slice(lastLogged)) {
             console.log(`  [bot] ${line}`);
-            // an arm attempt WHILE holding no runes is the bug
             if (/arming autocast|could not arm autocast|autocast toggle did not|did not take/i.test(line) && snap.runes === 0) { sawArmAttempt = true; }
             if (/banking at|restocking|casts 0|bank can't supply|withdrew \d+ .*rune/i.test(line)) { sawBankRestock = true; }
             if (/autocast armed/i.test(line)) { sawArmed = true; }
         }
         lastLogged = snap.log.length;
         if (snap.state === 'crashed') { await page.screenshot({ path: 'out/rockcrab-mage-noruns.png' }); fail('script crashed'); }
-        if (sawBankRestock) { break; } // BankRun took over — the point is proven
+        if (sawBankRestock) { break; }
     }
 
     console.log(`--- result --- armAttemptWhileNoRunes=${sawArmAttempt} bankRestock=${sawBankRestock} armed=${sawArmed}`);

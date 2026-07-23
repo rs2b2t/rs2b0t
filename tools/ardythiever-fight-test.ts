@@ -1,12 +1,3 @@
-// Headless live smoke for ArdyThiever's FIGHT mode: with
-// ?ArdyThiever.guardResponse=Fight, a guard that catches the bot stealing from
-// the Baker's stall must be fought and killed IN PLACE — the bot must log the
-// fight + the kill, never travel to the kite tile (2655,3298), and resume
-// thieving afterwards. Uses a maxme'd account so the level-20 guard dies fast.
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/ardythiever-fight-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -46,12 +37,11 @@ try {
     const logLines = () => page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
     const clearDialogs = () => page.evaluate(async () => { const a = (globalThis as never as R).rs2b0t.actions; for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); } });
 
-    // URL param = URL-first settings resolution: guardResponse=Fight for this run
     await page.goto(`${base}/bot.html?ArdyThiever.guardResponse=Fight`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
     await type('::tele 0,50,50,20,20');
-    await page.reload(); // keeps the query string
+    await page.reload();
     await boot();
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
@@ -61,12 +51,9 @@ try {
     await type('::~maxme');
     await clearDialogs();
 
-    // Tele onto the stall stand; the bot restocks cake there. A patrolling
-    // guard that wanders within 5 tiles with LOS blocks the steal and attacks
-    // ("Hey! Get your hands off there!") — fight mode must kill it in place.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,44,48'); // (2668,3312) stall stand
+        await type('::tele 0,41,51,44,48');
         await page.waitForTimeout(1500);
         at = await tile();
         if (at && Math.abs(at.x - 2668) <= 8 && Math.abs(at.z - 3312) <= 8) { break; }
@@ -80,12 +67,12 @@ try {
 
     let sawFight = false;
     let sawKill = false;
-    let killAt = -1;          // log index of the first kill line
-    let resumed = false;      // restock/pickpocket AFTER the kill
-    let kited = false;        // must stay false
-    let closestToKite = 999;  // must stay > 3
+    let killAt = -1;
+    let resumed = false;
+    let kited = false;
+    let closestToKite = 999;
     let lastNote = 0;
-    for (let i = 0; i < 360; i++) { // ~720s — a patrolling guard must wander over
+    for (let i = 0; i < 360; i++) {
         await page.waitForTimeout(2000);
         const lines = await logLines();
         lines.forEach((l, idx) => {

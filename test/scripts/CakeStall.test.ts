@@ -3,25 +3,16 @@ import { expect, test, describe, mock, beforeEach } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 
-// Driver regression tests over mocked I/O singletons. The scripted "world"
-// advances a fake game tick inside Execution.delayUntil/delayTicks so lockout
-// waits and stall respawns resolve without wall-clock time. Shared script
-// modules (ArdyFighterLogic, CakeStallLogic) are real — bun module mocks leak
-// across test files, so only leaf client singletons are mocked here.
-
 let tick: number;
 let cakeCount: number;
 let inCombat: boolean;
 let stallStocked: boolean;
 let playerTile: Tile;
-let walks: string[]; // every walkTo dest
-let clicks: number; // stall interacts issued
+let walks: string[];
+let clicks: number;
 let chatHandler: ((e: { text: string }) => void) | null;
-// per-click script: what the world does when the stall is clicked
 let onClick: () => void;
-// called on every stall Locs poll — lets a test script the respawn
 let pollHook: () => void;
-// fail this many walks (walkTo returns false without moving) before succeeding
 let walkFails: number;
 
 mock.module('#/bot/api/Execution.js', () => ({
@@ -49,8 +40,6 @@ mock.module('#/bot/api/Game.js', () => ({
     }
 }));
 mock.module('#/bot/api/hud/Inventory.js', () => ({
-    // real InvItem passes through — a partial mock must not hide sibling exports
-    // from OTHER test files sharing the module registry (load-order hazard).
     InvItem,
     Inventory: {
         items: () => Array.from({ length: cakeCount }, (_, i) => ({ id: 1891, name: 'Cake', count: 1, slot: i })),
@@ -66,7 +55,7 @@ mock.module('#/bot/api/Traversal.js', () => ({
             walks.push(`${dest.x},${dest.z}`);
             if (walkFails > 0) {
                 walkFails--;
-                return false; // stayed put
+                return false;
             }
             playerTile = new Tile(dest.x, dest.z, 0);
             return true;
@@ -138,7 +127,7 @@ describe('stealCakes driver', () => {
         cakeCount = 0;
         inCombat = false;
         stallStocked = true;
-        playerTile = new Tile(2668, 3312, 0); // already on the stand
+        playerTile = new Tile(2668, 3312, 0);
         walks = [];
         clicks = 0;
         chatHandler = null;
@@ -154,22 +143,21 @@ describe('stealCakes driver', () => {
         expect(await stealCakes(opts())).toBe('stocked');
         expect(cakeCount).toBe(5);
         expect(clicks).toBe(5);
-        expect(walks).toEqual([]); // on the stand the whole time
+        expect(walks).toEqual([]);
     });
 
     test('claims the stand when off it, then steals', async () => {
         playerTile = new Tile(2660, 3308, 0);
         expect(await stealCakes(opts())).toBe('stocked');
-        expect(walks[0]).toBe('2668,3312'); // one claim walk, then stealing
+        expect(walks[0]).toBe('2668,3312');
     });
 
     test('a fallen-short claim far from the stall does NOT click — re-claims instead', async () => {
-        playerTile = new Tile(2655, 3298, 0); // back from the kite tile, 13 tiles out
-        walkFails = 1; // first claim walk times out mid-market
+        playerTile = new Tile(2655, 3298, 0);
+        walkFails = 1;
         expect(await stealCakes(opts())).toBe('stocked');
-        // pass 1: claim fails -> no click; pass 2: claim lands -> steals begin
         expect(walks.slice(0, 2)).toEqual(['2668,3312', '2668,3312']);
-        expect(clicks).toBe(5); // never clicked from the market side
+        expect(clicks).toBe(5);
     });
 
     test('a guard catch (combat, no cake) returns combat immediately', async () => {
@@ -178,7 +166,7 @@ describe('stealCakes driver', () => {
             inCombat = true;
         };
         expect(await stealCakes(opts())).toBe('combat');
-        expect(clicks).toBe(1); // no clicking into a fight
+        expect(clicks).toBe(1);
     });
 
     test('three silent refusals swap to the SE stand, then stealing resumes there', async () => {
@@ -187,15 +175,15 @@ describe('stealCakes driver', () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             if (refused < 3) {
                 refused++;
-                return; // watched at the north stand: nothing gained
+                return;
             }
-            cakeCount++; // the SE stand is shaded — steals land
+            cakeCount++;
         };
         const resets: number[] = [];
         expect(await stealCakes(opts({ onReset: () => resets.push(clicks) }))).toBe('stocked');
-        expect(resets).toEqual([3]); // exactly one swap, after the 3rd refusal
-        expect(walks).toContain('2669,3310'); // hopped to the SE-corner stand
-        expect(walks[walks.length - 1]).toBe('2669,3310'); // and stayed there stealing
+        expect(resets).toEqual([3]);
+        expect(walks).toContain('2669,3310');
+        expect(walks[walks.length - 1]).toBe('2669,3310');
     });
 
     test('a second watched streak swaps back to the north stand', async () => {
@@ -204,21 +192,17 @@ describe('stealCakes driver', () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             refused++;
             if (refused <= 6) {
-                return; // watched at BOTH stands for a streak each
+                return;
             }
             cakeCount++;
         };
         expect(await stealCakes(opts({ fillTo: 2 }))).toBe('stocked');
-        // north -> SE (after 3), SE -> north (after 6), then steals land
         const swaps = walks.filter(w => w === '2669,3310' || w === '2668,3312');
         expect(swaps[0]).toBe('2669,3310');
         expect(swaps[1]).toBe('2668,3312');
     });
 
     test('the lockout message parks clicks until the 10-tick window passes', async () => {
-        // Locked until tick 110: the first click at tick 100 gets the engine
-        // lockout line; the driver must then WAIT (selfLockout = 100 + 10),
-        // and the next click at tick >= 110 succeeds.
         onClick = () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             if (tick < 110) {
@@ -228,7 +212,6 @@ describe('stealCakes driver', () => {
             cakeCount++;
         };
         expect(await stealCakes(opts())).toBe('stocked');
-        // 1 locked click + 5 successes — a 10-tick wait, not click spam
         expect(clicks).toBe(6);
     });
 
@@ -238,9 +221,6 @@ describe('stealCakes driver', () => {
     });
 
     test('an emptied stall waits for the respawn instead of clicking nothing', async () => {
-        // Respawn model: after each success the stall empties; the stocked
-        // variant returns after 5 Locs polls (the tick-advancing delayUntil
-        // in the Execution mock drives those polls).
         let emptyPolls = 0;
         pollHook = () => {
             if (!stallStocked && ++emptyPolls >= 5) {
@@ -251,9 +231,9 @@ describe('stealCakes driver', () => {
         onClick = () => {
             say('You attempt to steal a cake from the baker\'s stall.');
             cakeCount++;
-            stallStocked = false; // our steal emptied it
+            stallStocked = false;
         };
         expect(await stealCakes(opts({ fillTo: 3 }))).toBe('stocked');
-        expect(cakeCount).toBe(3); // waited out two respawns to get there
+        expect(cakeCount).toBe(3);
     });
 });

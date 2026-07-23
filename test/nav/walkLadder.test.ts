@@ -1,17 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { advance, initialLadderState, judgeProbe, UNREACHABLE_PASSES, type LadderState } from '#/bot/nav/walkLadder.js';
 
-// Drive one full exhausted pass (baked fail → scene fail → unstick fail) and
-// return the state advance leaves behind at the end of the pass.
 function exhaustOnePass(state: LadderState, dist: number): { state: LadderState; endAction: string } {
     const obs = (last: 'failed' | null) => ({ curDist: dist, withinRadius: false, interrupted: false, lastOutcome: last });
-    let r = advance(state, obs(null)); // start of pass → baked
+    let r = advance(state, obs(null));
     expect(r.action.kind).toBe('baked');
-    r = advance(r.state, obs('failed')); // baked failed → scene
+    r = advance(r.state, obs('failed'));
     expect(r.action.kind).toBe('scene');
-    r = advance(r.state, obs('failed')); // scene failed → unstick
+    r = advance(r.state, obs('failed'));
     expect(r.action.kind).toBe('unstick');
-    r = advance(r.state, obs('failed')); // unstick failed → pass exhausted
+    r = advance(r.state, obs('failed'));
     return { state: r.state, endAction: r.action.kind };
 }
 
@@ -25,7 +23,6 @@ describe('walkLadder unreachable terminal', () => {
             endAction = r.endAction;
             if (pass < UNREACHABLE_PASSES) {
                 expect(endAction).toBe('backoff');
-                // backoff ends with lastOutcome=null → next advance starts a new pass
             }
         }
         expect(endAction).toBe('verify');

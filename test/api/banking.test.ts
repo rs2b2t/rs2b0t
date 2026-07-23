@@ -1,4 +1,3 @@
-// test/api/banking.test.ts
 import { expect, test } from 'bun:test';
 import { shouldBankNow, parseBankStrategy } from '#/bot/api/Banking.js';
 
@@ -17,15 +16,15 @@ test('no loot never banks, any strategy', () => {
 test('items banks at/over the item threshold only', () => {
     expect(shouldBankNow('items', state({ lootCount: 15 }))).toBe(true);
     expect(shouldBankNow('items', state({ lootCount: 14 }))).toBe(false);
-    expect(shouldBankNow('items', state({ lootCount: 14, minutesSinceLastBank: 99 }))).toBe(false); // time irrelevant
+    expect(shouldBankNow('items', state({ lootCount: 14, minutesSinceLastBank: 99 }))).toBe(false);
 });
 test('time banks at/over the minute threshold only (with loot)', () => {
     expect(shouldBankNow('time', state({ minutesSinceLastBank: 10, lootCount: 1 }))).toBe(true);
-    expect(shouldBankNow('time', state({ minutesSinceLastBank: 9, lootCount: 99 }))).toBe(false); // items irrelevant
+    expect(shouldBankNow('time', state({ minutesSinceLastBank: 9, lootCount: 99 }))).toBe(false);
 });
 test('either banks when items OR time trips', () => {
-    expect(shouldBankNow('either', state({ lootCount: 20, minutesSinceLastBank: 0 }))).toBe(true); // items
-    expect(shouldBankNow('either', state({ lootCount: 1, minutesSinceLastBank: 10 }))).toBe(true); // time
+    expect(shouldBankNow('either', state({ lootCount: 20, minutesSinceLastBank: 0 }))).toBe(true);
+    expect(shouldBankNow('either', state({ lootCount: 1, minutesSinceLastBank: 10 }))).toBe(true);
     expect(shouldBankNow('either', state({ lootCount: 1, minutesSinceLastBank: 0 }))).toBe(false);
 });
 test('parseBankStrategy maps labels, unknown -> off', () => {

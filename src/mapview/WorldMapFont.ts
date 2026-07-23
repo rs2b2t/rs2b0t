@@ -18,14 +18,13 @@ export default class WorldMapFont extends Pix2D {
         }
     }
 
-    private fontCharTrans: boolean = false; // detects antialiasing
+    private fontCharTrans: boolean = false;
     private fontCharPos: number = 0;
     private fontCharInfo: Uint8Array<ArrayBufferLike> = new Uint8Array(100_000);
 
     private canvas!: HTMLCanvasElement;
     private ctx!: CanvasRenderingContext2D;
 
-    // dumped from another system that guarantees no antialiasing was used
     static load(jag: JagFile, name: string) {
         const font = new WorldMapFont();
         const fm = jag.read(`${name}.dat`);
@@ -127,7 +126,6 @@ export default class WorldMapFont extends Pix2D {
             }
         }
 
-        // header
         this.fontCharInfo[id * 9 + 0] = this.fontCharPos >> 14;
         this.fontCharInfo[id * 9 + 1] = (this.fontCharPos >> 7) & 0x7f;
         this.fontCharInfo[id * 9 + 2] = this.fontCharPos & 0x7f;

@@ -38,9 +38,9 @@ describe('constants', () => {
         const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
         expect(cheb(STAND, STALL_TILE)).toBeLessThanOrEqual(2);
         expect(cheb(STAND_ALT, STALL_TILE)).toBeLessThanOrEqual(2);
-        expect(cheb(STAND, STAND_ALT)).toBeGreaterThan(0); // genuinely different tiles
+        expect(cheb(STAND, STAND_ALT)).toBeGreaterThan(0);
     });
     test('cake items cover the multi-bite stages by contains-match', () => {
-        expect(CAKE_ITEMS).toContain('cake'); // 'Cake', '2/3 cake', 'Slice of cake' all contain it
+        expect(CAKE_ITEMS).toContain('cake');
     });
 });

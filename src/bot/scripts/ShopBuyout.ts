@@ -17,7 +17,7 @@ import type { ShopRecord } from '../shops/types.js';
 import { SHOP_PRESETS, presetByLabel, presetBuyableNames } from './shopPresets.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-const DEFAULT_PRESET = SHOP_PRESETS[0]; // Mage Arena — Gundai still web-walk-free; park it in the room
+const DEFAULT_PRESET = SHOP_PRESETS[0];
 
 export const SHOPBUYOUT_SETTINGS: SettingsSchema = {
     shop: { type: 'string', default: DEFAULT_PRESET.label, options: SHOP_PRESETS.map(p => p.label), label: 'Shop', help: 'the shop to buy out — its trade tile and nearest bank are baked in (add more in shopPresets.ts)' },
@@ -28,13 +28,6 @@ export const SHOPBUYOUT_SETTINGS: SettingsSchema = {
     recheckSeconds: { type: 'number', default: 60, min: 5, max: 600, label: 'Restock recheck (s)', help: 'wait between buy passes once the stock is drained (elemental runes restock 1/30s, law/nature 1/3min)' }
 };
 
-/**
- * Single-shop buyout loop — the no-routing alternative to ShopRunner. Parked
- * at one shop's bank with a total gp budget: withdraw a trip's coins, buy the
- * shop out valuable-first, stash the haul at the bank (death insurance —
- * runes stack, so this is safety, not slot pressure), repeat as the stock
- * restocks, and stop once the budget is spent or the bank runs dry.
- */
 export default class ShopBuyout extends TaskBot {
     override loopDelay = 600;
 
@@ -55,7 +48,6 @@ export default class ShopBuyout extends TaskBot {
     boothName = DEFAULT_PRESET.boothName ?? 'Bank booth';
     boothOp = DEFAULT_PRESET.boothOp ?? 'Use-quickly';
     recheckMs = 60_000;
-    /** The shop's db record (pricing + name→obj); null for an unknown keeper. */
     rec: ShopRecord | null = null;
 
     override async onStart(): Promise<void> {
@@ -117,14 +109,11 @@ export default class ShopBuyout extends TaskBot {
         }
 
         p.gap();
-        // Pause/Stop only — a single-shop buyout has no safe mid-run switch (the
-        // shop/keeper/budget are baked into the funded trip).
         ScriptRunner.paintControls(p);
         p.end();
     }
 }
 
-/** Stash the haul, stop when done/dry, withdraw the next trip's coins. */
 class BankTrip implements Task {
     constructor(private bot: ShopBuyout) {}
 
@@ -144,7 +133,6 @@ class BankTrip implements Task {
             return;
         }
 
-        // Stash everything except coins — the haul stacks, this is death insurance.
         await Bank.depositAllMatching(name => name !== 'Coins');
         await Execution.delayTicks(1);
 
@@ -175,7 +163,6 @@ class BankTrip implements Task {
         bot.toPhase('buy');
     }
 
-    /** Gundai-style NPC bankers open via a Talk-to dialog; booths via the op. */
     private async openBank(): Promise<boolean> {
         const bot = this.bot;
         if (Bank.isOpen()) {
@@ -189,8 +176,6 @@ class BankTrip implements Task {
     }
 }
 
-/** One funded pass over the shop: buy the chosen stock valuable-first, then
- *  hand back to banking (coins low / haul to stash) or wait out a restock. */
 class BuyoutPass implements Task {
     constructor(private bot: ShopBuyout) {}
 
@@ -235,15 +220,12 @@ class BuyoutPass implements Task {
             return;
         }
         if (boughtUnits > 0) {
-            return; // still funded and the shop may hold more — next loop re-plans immediately
+            return;
         }
-        // Drained shop: wait out the restock near the stand; a pending random
-        // event ends the wait early so the Supervisor can run.
         bot.setStatus(`waiting for restock (${Math.round(bot.recheckMs / 1000)}s)`);
         await Execution.delayUntil(() => EventSignal.pending(), bot.recheckMs);
     }
 
-    /** Valuable-first allocation over the OPEN shop's live stock. */
     private plan(coins: number): { obj: string; name: string; units: number }[] {
         const bot = this.bot;
         const stock = Shop.stock();
@@ -263,7 +245,6 @@ class BuyoutPass implements Task {
             }
             return buyoutPlan(bot.rec, stockByObj, coins, chosen);
         }
-        // Unknown keeper: no price model — buy each row outright in shop order.
         return stock.filter(r => r.count > 0).map(r => ({ obj: r.name.toLowerCase(), name: r.name, units: r.count }));
     }
 }

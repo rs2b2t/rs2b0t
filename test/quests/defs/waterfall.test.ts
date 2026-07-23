@@ -14,7 +14,6 @@ const snap = (
     bankCoins: 0
 });
 
-// Held-item names are LOWERCASED in the snapshot (QuestSnapshot convention).
 const PEBBLE = "glarial's pebble";
 const AMULET = "glarial's amulet";
 const URN = "glarial's urn";
@@ -59,11 +58,6 @@ describe('waterfall decide — held-item phase dispatch', () => {
         expect(s.kind === 'custom' && s.name).toBe('falls + dungeon');
     });
     test('row 8: urn WITHOUT amulet (statue consumed it) -> amulet re-obtain dispatcher', () => {
-        // Post-statue-death scenario: the statue consumes the amulet at stage 8, then a
-        // death respawns on the SURFACE holding only the urn — the ledge door floods
-        // without the amulet, so the dispatcher must re-obtain it via the tomb chest
-        // (Finding 2). The SAME item signature in the raised room is instead the chalice
-        // finish, so the split lives in fallsAndDungeon (live position), not here.
         const s = decide(snap('inProgress', [[PEBBLE, 1], [URN, 1]]));
         expect(s.kind === 'custom' && s.name).toBe('amulet re-obtain');
     });

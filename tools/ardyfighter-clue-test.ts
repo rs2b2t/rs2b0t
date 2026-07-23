@@ -1,13 +1,3 @@
-// Headless live smoke for ArdyFighter's SolveClue wiring — the full RockCrab-
-// style chain: a clue scroll ON THE GROUND near the anchor gets looted by
-// LootDrops ('clue scroll' leads DEFAULT_LOOT), and the held clue then
-// preempts fighting into bank-first + the trail. Clue drops are 1/128, so a
-// second client stages one: it ::give's itself the clue and drops it at the
-// fighter's anchor (player drops go public after 100 ticks ≈ 60s).
-//
-// Requires the local engine running + the local build deployed (same as smokes).
-// Usage: bun tools/ardyfighter-clue-test.ts [base-url]
-
 import { launchBrowser } from './lib/harness.js';
 import { type Page } from 'playwright-core';
 
@@ -69,7 +59,7 @@ async function bootClient(label: string, username: string, maxme: boolean): Prom
     }
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,37,42'); // the fighter anchor (2661,3306)
+        await type('::tele 0,41,51,37,42');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - 2661) <= 8 && Math.abs(at.z - 3306) <= 8) { break; }
@@ -83,12 +73,7 @@ async function bootClient(label: string, username: string, maxme: boolean): Prom
 const logLines = (page: Page) => page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 
 try {
-    // ---- A: the fighter ----
     const A = await bootClient('A', `af${ts}`, true);
-    // Seed the fighter's 8-cake food target directly: the shared cake stall's
-    // restock is world-shared and slow after other Ardy smokes drain it, and
-    // waiting on it starved two sweeps' watch windows. The smoke tests clue
-    // preemption, not stall provisioning.
     const typeA = async (t: string) => {
         await A.locator('#canvas').click({ position: { x: 380, y: 250 } });
         await A.waitForTimeout(400);
@@ -99,10 +84,6 @@ try {
     await typeA('::give cake 8');
     await A.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyFighter')); });
     console.log('started ArdyFighter — waiting for kill evidence before staging the drop');
-    // Gate the drop on combat xp rising (ArdyFighter logs nothing per kill —
-    // xp is the only cheap kill evidence, same detector as autofighter-test).
-    // A flat 15s raced the food provisioning: after other Ardy smokes empty
-    // the cake stall, restock can take minutes (2026-07-21 sweep flake).
     const combatXpA = () => A.evaluate(() => {
         const { Skills } = (globalThis as never as R & { __rs2b0t: { Skills: { xp(s: string): number } } }).__rs2b0t;
         return ['attack', 'strength', 'defence', 'hitpoints'].reduce((n, s) => n + Skills.xp(s), 0);
@@ -119,7 +100,6 @@ try {
         fail('fighter never gained combat xp (stall/food or target contention?) — cannot stage the preemption test');
     }
 
-    // ---- B: the dropper ----
     const B = await bootClient('B', `bf${ts}`, false);
     const typeB = async (t: string) => {
         await B.locator('#canvas').click({ position: { x: 380, y: 250 } });
@@ -167,7 +147,7 @@ try {
 
     const before = (await logLines(A)).length;
     const seen = { banked: false, trail: false };
-    for (let i = 0; i < 180; i++) { // 6 min: reveal ≈60s + loot + bank walk + trail
+    for (let i = 0; i < 180; i++) {
         await A.waitForTimeout(2000);
         const lines = (await logLines(A)).slice(before);
         for (const l of lines) {

@@ -85,10 +85,8 @@ export default class PixFont extends Linkable2 {
         }
 
         if (quill) {
-            // ' '  = 'I'
             font.charAdvance[32] = font.charAdvance[73];
         } else {
-            // ' ' = 'i'
             font.charAdvance[32] = font.charAdvance[105];
         }
 

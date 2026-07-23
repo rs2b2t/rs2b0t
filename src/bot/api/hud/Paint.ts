@@ -1,21 +1,3 @@
-/**
- * Immediate-mode interactive paint API (the iDungeon-style panel over the
- * chatbox). Call `Paint.begin(ctx, {dock})` in onPaint, then widget methods —
- * each call DRAWS and reports interaction for this frame — and finish with
- * `p.end()`, which publishes the frame's hit regions to the input capture
- * layer (clicks inside the panel go to widgets and never reach the client).
- *
- *   const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ad0ff' });
- *   p.title('RockCrab');
- *   const tab = p.tabs('main', ['Overview', 'Loot']);
- *   if (tab === 'Overview') { p.row('Kills: 4', 'XP/hr: 31k'); p.bar('HP', 0.82); }
- *   if (p.buttons([{ id: 'pause', label: 'Pause' }]) === 'pause') this.pause();
- *   p.end();
- *
- * Widget ids are stable strings — the cross-frame state (active tab, queued
- * clicks, collapse) is keyed by them (see paintLogic.ts). State clears when
- * the script stops.
- */
 import { paintState, resolveDock, type Dock, type Rect, type Region } from '#/bot/api/hud/paintLogic.js';
 
 export interface PaintOptions {
@@ -57,8 +39,6 @@ export class PaintFrame {
         this.ctx.textBaseline = 'middle';
     }
 
-    /** Title bar with a collapse toggle. Everything after a collapsed title
-     *  is skipped (widgets no-op), leaving just the bar on screen. */
     title(text: string): void {
         const { x, w } = this.panel;
         const r = { x, y: this.cursorY, w, h: TITLE_H };
@@ -73,7 +53,6 @@ export class PaintFrame {
         this.ctx.fillText(text, r.x + PAD, r.y + r.h / 2 + 1);
         this.ctx.font = FONT;
 
-        // collapse toggle on the right edge
         const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
         this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
         this.ctx.fillText(this.collapsed ? '+' : '–', toggle.x + 7, toggle.y + r.h / 2 + 1);
@@ -85,20 +64,16 @@ export class PaintFrame {
 
         this.cursorY = r.y + r.h;
         if (!this.collapsed) {
-            // panel body backdrop is drawn lazily as widgets extend it; register
-            // the full dock as the swallow area up-front
             this.regions.push({ id: 'paint:panel', ...this.panel, kind: 'panel' });
             this.ctx.fillStyle = BG;
             this.ctx.fillRect(this.panel.x, this.cursorY, this.panel.w, this.panel.y + this.panel.h - this.cursorY);
             this.ctx.strokeStyle = BORDER;
             this.ctx.strokeRect(this.panel.x + 0.5, this.cursorY + 0.5, this.panel.w - 1, this.panel.y + this.panel.h - this.cursorY - 1);
         } else {
-            // collapsed: only the title bar swallows input
             this.regions.push({ id: 'paint:panel', x: this.panel.x, y: this.panel.y, w: this.panel.w, h: TITLE_H, kind: 'panel' });
         }
     }
 
-    /** Tab strip; returns the active tab name. `id` keys the selection. */
     tabs(id: string, names: string[]): string {
         if (this.collapsed || names.length === 0) {
             return paintState.get(`tabs:${id}`, names[0] ?? '');
@@ -134,7 +109,6 @@ export class PaintFrame {
         return active;
     }
 
-    /** One line of text. */
     text(line: string, color?: string): void {
         if (this.collapsed) {
             return;
@@ -144,7 +118,6 @@ export class PaintFrame {
         this.cursorY += LINE;
     }
 
-    /** Up to N columns on one line, split evenly across the panel. */
     row(...cols: string[]): void {
         if (this.collapsed || cols.length === 0) {
             return;
@@ -155,7 +128,6 @@ export class PaintFrame {
         this.cursorY += LINE;
     }
 
-    /** Labelled meter (HP, progress). `fraction` clamped to 0..1. */
     bar(label: string, fraction: number, color?: string): void {
         if (this.collapsed) {
             return;
@@ -176,7 +148,6 @@ export class PaintFrame {
         this.cursorY += LINE;
     }
 
-    /** A row of buttons; returns the id of the one clicked, or null. */
     buttons(items: { id: string; label: string }[]): string | null {
         if (this.collapsed || items.length === 0) {
             return null;
@@ -197,8 +168,6 @@ export class PaintFrame {
         return clicked;
     }
 
-    /** Click-to-cycle selector: `label: [value]`. Returns the NEWLY selected
-     *  option on the frame it changes, else null. */
     select(id: string, label: string, options: string[], current: string): string | null {
         if (this.collapsed || options.length === 0) {
             return null;
@@ -216,14 +185,12 @@ export class PaintFrame {
         return null;
     }
 
-    /** Small vertical gap. */
     gap(px = 6): void {
         if (!this.collapsed) {
             this.cursorY += px;
         }
     }
 
-    /** Publish this frame's regions to the input layer. Call last. */
     end(): void {
         paintState.publishRegions(this.regions);
     }

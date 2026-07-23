@@ -3,14 +3,11 @@ import { ScriptRegistry, type ScriptMeta } from './ScriptRegistry.js';
 import type { SettingsSchema } from './Settings.js';
 
 export interface BotManifest {
-    /** Manifest format tag the loader recognizes. */
     __rs2b0tManifest: 1;
     name: string;
     description?: string;
     version?: string;
-    /** Primary category for the library filter (usually a skill). */
     category?: string;
-    /** Free-form tags for filtering/search. */
     tags?: string[];
     settingsSchema?: SettingsSchema;
     create(): AbstractBot;
@@ -18,11 +15,6 @@ export interface BotManifest {
 
 export type BotManifestInput = Omit<BotManifest, '__rs2b0tManifest'>;
 
-/**
- * Script manifest helper. External scripts default-export
- * `defineBot({...})`; the loader registers the result. Works for built-ins
- * too.
- */
 export function defineBot(manifest: BotManifestInput): BotManifest {
     if (!manifest || typeof manifest.name !== 'string' || manifest.name.length === 0 || typeof manifest.create !== 'function') {
         throw new Error('defineBot requires { name, create }');
@@ -35,7 +27,6 @@ export function isBotManifest(value: unknown): value is BotManifest {
     return typeof value === 'object' && value !== null && (value as BotManifest).__rs2b0tManifest === 1;
 }
 
-/** Register (or hot-replace) a manifest in the script registry. */
 export function registerScript(manifest: BotManifestInput, origin?: string): ScriptMeta {
     const tagged = isBotManifest(manifest) ? manifest : defineBot(manifest);
     const meta: ScriptMeta = {

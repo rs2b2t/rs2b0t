@@ -1,40 +1,15 @@
-// Live verification of ArdyFighter at the East Ardougne market (Task 6).
-// Models tools/chaosdruid-test.ts (playwright-core + system Chrome, fresh
-// account, panel Browse->Combat->ArdyFighter->Start, poll runner log + reader)
-// but uses the death-test.ts CLIENT_CHEAT-packet route (typed commands get
-// swallowed in the crowded market square) and the CURRENT debug global
-// `rs2b0t` (the old `rs2b0t` name was renamed in commit 1ce35ab; the older
-// tool tests still referencing `rs2b0t` are stale against this build).
-//
-// Asserts IN ONE RUN, accelerated with URL overrides
-// (?ArdyFighter.bankAtLootSlots=2&foodTarget=4&eatAtHp=60):
-//   (a) restock  — steal counter rises / cakes enter the pack, surviving the
-//                  LOS-guard pull ("Hey! Get your hands off there!")
-//   (b) kill     — kill counter rises (guard pull + Fight)
-//   (c) loot     — a loot-list pickup (looted counter) OR an observed loot
-//                  deposit at the bank
-//   (d) bank run — deposits ONLY loot (cakes preserved), returns to the market
-// Eats are reported opportunistically (not a hard gate). Hard-fails on runner
-// state 'crashed'.
-//
-// Usage: bun tools/ardyfighter-test.ts [minutes] [base-url]
 import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8890', minutes: 18 });
-const mode = (rest[0] ?? 'assert').toLowerCase(); // 'assert' | 'soak'
+const mode = (rest[0] ?? 'assert').toLowerCase();
 const username = `af${Date.now().toString(36).slice(-7)}`;
-// URL overrides go on the page URL (SettingsStore reads location.search at
-// script start); page.reload() preserves them, so load the page WITH them.
-// assert: accelerate the loop and drive the 4 behaviours to a hard PASS.
-// soak: near-defaults (foodTarget 8, bankAtLootSlots 12), run unattended for
-// the full duration and report crashes/stalls/restarts + counter totals.
 const OVERRIDES = mode === 'soak' ? 'ArdyFighter.eatAtHp=50' : 'ArdyFighter.bankAtLootSlots=2&ArdyFighter.foodTarget=4&ArdyFighter.eatAtHp=60';
 const PAGE = `${base}/bot.html?${OVERRIDES}`;
 
 const ANCHOR = { x: 2661, z: 3306 };
-const UNLOCK_TELE = 'tele 0,50,50,20,20'; // generic off-Tutorial-Island tile
-const ANCHOR_TELE = 'tele 0,41,51,37,42'; // -> (2661,3306,0), the market anchor
+const UNLOCK_TELE = 'tele 0,50,50,20,20';
+const ANCHOR_TELE = 'tele 0,41,51,37,42';
 
 type Inv = { name: string | null; count: number };
 
@@ -48,8 +23,6 @@ try {
         await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
         return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 }).then(() => true).catch(() => false);
     };
-    // Byte-identical to the client's own Enter handler (CLIENT_CHEAT=224); no
-    // keyboard/focus click that a crowded scene could eat (see death-test.ts).
     const cheat = async (command: string, wait = 1200) => {
         const sent = await page.evaluate(cmd => {
             const c = (globalThis as never as Rs2b0t).rs2b0t.client;
@@ -63,10 +36,8 @@ try {
 
     const inv = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory());
     const countSub = (items: Inv[], sub: string) => items.filter(i => (i.name ?? '').toLowerCase().includes(sub)).reduce((s, i) => s + i.count, 0);
-    // total food the bot recognises (the Baker's stall yields cake OR bread —
-    // both are in the bot's FOOD list, so a 'cake'-only count under-reports)
     const foodOf = (items: Inv[]) => countSub(items, 'cake') + countSub(items, 'bread') + countSub(items, 'chocolate slice');
-    const lootOf = (items: Inv[]) => countSub(items, 'steel arrow') + countSub(items, 'iron ore'); // the two injected loot slots
+    const lootOf = (items: Inv[]) => countSub(items, 'steel arrow') + countSub(items, 'iron ore');
     const counters = () => page.evaluate(() => {
         const b = (globalThis as never as Rs2b0t).rs2b0t.runner.bot as Record<string, number | string> | null;
         return b ? { kills: +b.kills, steals: +b.steals, eats: +b.eats, looted: +b.looted, trips: +b.trips, deaths: +b.deaths, status: String(b.status) } : null;
@@ -75,29 +46,21 @@ try {
     const distAnchor = (t: { x: number; z: number } | null) => (t ? Math.max(Math.abs(t.x - ANCHOR.x), Math.abs(t.z - ANCHOR.z)) : 999);
     const runnerState = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
 
-    // --- bring-up: login, unlock the sidebar, raise stats -----------------
     await page.goto(PAGE); await boot(page);
     let firstIn = false;
     for (let i = 0; i < 3 && !firstIn; i++) firstIn = await login();
     if (!firstIn) fail('first login failed');
     await cheat(UNLOCK_TELE);
-    await page.reload(); await boot(page); // reload preserves ?overrides
+    await page.reload(); await boot(page);
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) fail('re-login failed');
-    // combat-capable account: high offence so the bot out-kills the 60s guard
-    // respawn at the stall. A steal is blocked by ANY guard within 5 tiles that
-    // has LOS and isn't already attacking someone (stealing_check_for_guard), so
-    // the bot must clear the blockers faster than they respawn — unarmed str 40
-    // is too slow and deadlocks. Moderate def/hp leaves some chip damage so the
-    // eat path is exercised too.
     await cheat('advancestat attack 80');
     await cheat('advancestat strength 80');
     await cheat('advancestat defence 45');
     await cheat('advancestat hitpoints 55');
-    await cheat('advancestat thieving 10'); // >= 5 for the Baker's stall
+    await cheat('advancestat thieving 10');
 
-    // --- tele to the anchor, verify the geography -------------------------
     for (let i = 0; i < 3 && distAnchor(await where()) > 6; i++) { await cheat(ANCHOR_TELE); await page.waitForTimeout(1500); }
     const t0 = await where();
     if (distAnchor(t0) > 6) fail(`anchor tele never took — at ${t0?.x},${t0?.z}`);
@@ -116,7 +79,6 @@ try {
     if (geo.guards === 0) console.log('[geo] WARNING: no Guard NPCs at the anchor — check the anchor tile');
     if (!geo.stall) console.log("[geo] WARNING: no 'Baker's stall' with 'Steal from' in scene — check STALL_TILE/name");
 
-    // --- start ArdyFighter (retry the Browse modal — the card list can render late) -
     let started = false;
     for (let attempt = 0; attempt < 4 && !started; attempt++) {
         await page.getByRole('button', { name: 'Browse…' }).click().catch(() => {});
@@ -138,7 +100,6 @@ try {
     if (!started) fail('could not find/start the ArdyFighter card in the Browse modal');
     console.log(`ArdyFighter started (mode=${mode}, overrides: ${OVERRIDES})`);
 
-    // --- soak: unattended stability run, report totals + crash/stall/restart -
     if (mode === 'soak') {
         console.log(`SOAK: running ${minutes} min unattended (near-defaults), polling every 20s`);
         const end = Date.now() + minutes * 60_000;
@@ -167,13 +128,12 @@ try {
         process.exit(0);
     }
 
-    // --- poll: restock+kill, then inject 2 loot slots to trigger the bank -
     const deadline = Date.now() + minutes * 60_000;
     let lastLog = 0;
     let stage: 'restock' | 'bank' = 'restock';
-    let sawPull = false; // "hands off" chat OR combat while restocking
+    let sawPull = false;
     let foodBeforeBank = 0;
-    let depositSeen = false; // "deposited the loot" logged with loot gone + cakes kept
+    let depositSeen = false;
     let returned = false;
 
     while (Date.now() < deadline) {
@@ -202,10 +162,6 @@ try {
         console.log(`  [diag] stage=${stage} kills=${c.kills} steals=${c.steals} eats=${c.eats} looted=${c.looted} trips=${c.trips} | food=${food} loot=${loot} | combat=${s.inCombat} hp=${s.hp} g=${s.guard} | tile ${t ? `${t.x},${t.z}` : '?'} d${distAnchor(t)} | '${c.status}'`);
 
         if (stage === 'restock') {
-            // wait for restock AND a counted kill (a guard pulled onto us dies to
-            // auto-retaliate uncounted; the Fight task only counts a kill once it
-            // initiates while idle, which happens after food hits foodTarget) so
-            // both behaviours are proven before the bank phase
             if (c.steals >= 2 && c.kills > 0 && food >= 3) {
                 foodBeforeBank = food;
                 console.log(`  >> restock+kill confirmed (steals=${c.steals}, kills=${c.kills}, food=${food}); injecting 2 loot slots to trigger the bank run`);
@@ -216,7 +172,6 @@ try {
             continue;
         }
 
-        // stage === 'bank'
         if (!depositSeen && c.trips > 0 && s.log.some(l => /deposited the loot/i.test(l))) {
             const lootNow = lootOf(items);
             const foodNow = foodOf(items);
@@ -244,7 +199,6 @@ try {
         }
     }
 
-    // timed out — dump why
     const c = await counters();
     await page.getByRole('button', { name: 'Stop' }).click().catch(() => {});
     fail(`timed out in stage '${stage}' — ${c ? `kills=${c.kills} steals=${c.steals} looted=${c.looted} trips=${c.trips} status='${c.status}'` : 'bot unreadable'} (depositSeen=${depositSeen}, returned=${returned})`);

@@ -1,20 +1,8 @@
-// Headless live smoke for AutoFighter: boots at Varrock East gate, maxme,
-// watches the fight loop land a Guard kill (combat seen + combat XP moved),
-// ::give's an easy clue (+ a Spade so the trail skips the cross-map spade
-// acquisition trek), asserts SolveClue preempts (bank-first + trail start),
-// then asserts the bot ends up back within the anchor leash — either after
-// the full solve->bank->return loop or via the abandon->return path. The
-// RETURN is the asserted terminal, not trail completion (trail legs are
-// ClueSolver's proven domain).
-//
-// Requires the local engine running + the local build deployed (same as smokes).
-// Usage: bun tools/autofighter-test.ts [base-url]
-
 import { chromium } from 'playwright-core';
 
 const base = process.argv[2] || 'http://localhost:8890';
 const username = process.argv[3] || `at${Date.now().toString(36).slice(-7)}`;
-const ANCHOR = { x: 3273, z: 3427 }; // Varrock East gate spot
+const ANCHOR = { x: 3273, z: 3427 };
 
 function fail(msg: string): never {
     console.error(`FAIL: ${msg}`);
@@ -35,8 +23,6 @@ type R = {
     };
 };
 
-// No SwiftShader forcing: repeated renderer crashes mid-smoke on long
-// sessions; headless Chrome on macOS drives WebGL via the real GPU fine.
 const browser = await chromium.launch({
     executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     headless: true,
@@ -73,7 +59,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -83,7 +69,7 @@ try {
     await clearDialogs();
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,51,53,9,35'); // Varrock East gate (3273,3427)
+        await type('::tele 0,51,53,9,35');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - ANCHOR.x) <= 8 && Math.abs(at.z - ANCHOR.z) <= 8) { break; }
@@ -93,15 +79,13 @@ try {
     console.log(`${username} at Varrock East gate (${at.x},${at.z})`);
 
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('AutoFighter')); });
-    // SwiftShader chokes on long draw sessions (page crashes seen mid-smoke):
-    // background render mode drops draws, input/logic unaffected.
     await page.evaluate(() => (globalThis as never as { rs2b0t: { setRenderMode(m: string): void } }).rs2b0t.setRenderMode('background'));
     console.log('started AutoFighter — watching for a Guard kill');
 
     const xp0 = await combatXp();
     let fought = false;
     let killEvidence = false;
-    for (let i = 0; i < 60; i++) { // up to 2 min for a kill
+    for (let i = 0; i < 60; i++) {
         await page.waitForTimeout(2000);
         if (await inCombat()) { fought = true; }
         const gained = (await combatXp()) - xp0;
@@ -119,13 +103,13 @@ try {
         fail('never entered combat at the gate');
     }
 
-    await type('::give spade'); // skip the cross-map spade acquisition trek
+    await type('::give spade');
     await type('::give trail_clue_easy_map001');
     console.log('gave Spade + easy clue — watching for SolveClue preemption');
 
     const before = (await logLines()).length;
     const seen = { banked: false, trail: false, returned: false };
-    for (let i = 0; i < 150 && !(seen.banked && seen.trail); i++) { // up to 5 min for preemption + trail start
+    for (let i = 0; i < 150 && !(seen.banked && seen.trail); i++) {
         await page.waitForTimeout(2000);
         const lines = (await logLines()).slice(before);
         for (const l of lines) {
@@ -134,7 +118,6 @@ try {
         }
         if (i > 0 && i % 45 === 0) { console.log(`  t+${i * 2}s ${JSON.stringify(seen)} at ${JSON.stringify(await tile())}`); }
     }
-    // Informational return grace: only trails that finish quickly come home in-window.
     for (let i = 0; i < 120 && seen.trail && !seen.returned; i++) {
         await page.waitForTimeout(2000);
         const t = await tile();
@@ -146,11 +129,6 @@ try {
     console.log(`seen: ${JSON.stringify(seen)}`);
     if (!seen.banked) { fail('clue never preempted into bank-first'); }
     if (!seen.trail) { fail('trail never started'); }
-    // Return is INFORMATIONAL: trail chains are server-random and a leg can
-    // wander cross-map (live: a chained leg walked to Yanille), blowing any
-    // bounded watch. The return machinery itself (BankRun walk-back +
-    // ReturnToAnchor) is exercised by the bank trips above; the full
-    // solve->bank->return loop completes on trails that end in-window.
     console.log(`PASS: AutoFighter — fought at the gate${killEvidence ? ' (kill)' : ''}, clue preempted (bank-first + trail)${seen.returned ? ', returned to the spot' : ' (trail still walking at timeout — return not observed this run)'}`);
 } finally {
     await browser.close();

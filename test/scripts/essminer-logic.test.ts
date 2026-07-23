@@ -44,7 +44,7 @@ describe('resolvePick', () => {
         expect(res.kind).toBe('stop');
         if (res.kind === 'stop') {
             expect(res.reason).toContain('Bronze pickaxe');
-            expect(res.reason).not.toContain('Steel pickaxe'); // level 6 > 5 — not usable, not offered
+            expect(res.reason).not.toContain('Steel pickaxe');
         }
     });
     test('specific tier below the mining level stops with the gate', () => {
@@ -69,7 +69,7 @@ describe('inEssMine', () => {
         expect(inEssMine(2879, 4800)).toBe(false);
         expect(inEssMine(2880, 4799)).toBe(false);
         expect(inEssMine(2944, 4800)).toBe(false);
-        expect(inEssMine(3253, 3418)).toBe(false); // the bank is not the mine
+        expect(inEssMine(3253, 3418)).toBe(false);
     });
 });
 

@@ -98,8 +98,8 @@ describe('coinFloatWithdraw', () => {
 
 describe('floatWithdraw (generalised, e.g. quest food)', () => {
     test('lowercases the lookup, keeps the display name on the withdraw', () => {
-        const inv = new Map<string, number>();               // no trout in pack
-        const bank = new Map<string, number>([['trout', 50]]); // 50 banked
+        const inv = new Map<string, number>();
+        const bank = new Map<string, number>([['trout', 50]]);
         expect(floatWithdraw(inv, bank, 'Trout', 10)).toEqual({ name: 'Trout', qty: 10 });
     });
     test('tops up to target, capped at the bank; null once held or bank dry', () => {

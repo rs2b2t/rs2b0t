@@ -1,15 +1,3 @@
-// Headless live smoke for ArdyThiever. Boots the WebGL client (SwiftShader),
-// logs in (auto-creates), teleports off Tutorial Island, maxes stats (Thieving
-// for the Guard pickpocket), teleports to the East Ardougne market anchor, starts
-// the bot, and watches for the restock -> pickpocket cycle (and a flee if a guard
-// retaliates).
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/ardythiever-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -51,7 +39,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -59,23 +47,17 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Max stats on the clean post-relogin state (Thieving 99 — Guard needs 40).
-    // Clear any blocking dialog programmatically (more reliable than keypresses)
-    // — ::~maxme spews level-up dialogs that otherwise swallow the next command.
     const clearDialogs = () => page.evaluate(async () => {
         const a = (globalThis as never as { rs2b0t: { actions?: { continueDialog?: () => boolean } } }).rs2b0t.actions;
         for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); }
     });
     const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
 
-    await type('::~maxme');                 // Thieving 99 (Guard needs 40) + everything else
+    await type('::~maxme');
     await clearDialogs();
-    // Teleport to the market; retry a couple times through any residual dialog state.
-    // Spawn adjacent to the Baker's stall so the core steal->pickpocket mechanic
-    // is exercised without depending on market navigation from the anchor.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,37,42'); // East Ardougne market anchor ~ (2661,3306)
+        await type('::tele 0,41,51,37,42');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - 2661) <= 8 && Math.abs(at.z - 3306) <= 8) { break; }
@@ -90,7 +72,7 @@ try {
 
     const before = (await logLines()).length;
     const seen = { restock: false, steal: false, flee: false };
-    for (let i = 0; i < 150; i++) { // ~200s of 2s polls (restock fills ~22 cakes before pickpocketing)
+    for (let i = 0; i < 150; i++) {
         await page.waitForTimeout(2000);
         const lines = (await logLines()).slice(before);
         for (const l of lines) {

@@ -1,42 +1,21 @@
 import Tile from '../api/Tile.js';
 
-/**
- * Per-bot parameters. A bot's manifest declares a
- * `settingsSchema`; the runner resolves values (schema default -> saved
- * localStorage edit -> URL override) and injects a SettingsBag onto the bot
- * before onStart. Bots read `this.settings.bool('gatherFeathers')` etc.
- *
- * URL override format: `?<ScriptName>.<key>=<value>` (case-insensitive name),
- * e.g. bot.html?ChickenKiller.gatherFeathers=true&RockCrab.stack=4 — same
- * parsed values the panel produces, for headless/scripted runs.
- */
-
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
 export interface SettingDef {
     type: SettingType;
     default: unknown;
-    /** Human label for the panel (defaults to the key). */
     label?: string;
-    /** number bounds (also used to clamp). */
     min?: number;
     max?: number;
     help?: string;
-    /** string enums: the panel renders a dropdown and values are snapped to
-     *  the list (case-insensitive) instead of free text. */
     options?: string[];
-    /** Collapsible section this setting renders under; ungrouped settings
-     *  render first, above every named group. Groups appear in schema order. */
     group?: string;
-    /** Render only while another setting's CURRENT value is in `anyOf`
-     *  (case-insensitive) — e.g. mage-only params behind combatStyle. Hidden
-     *  settings still resolve normally at runtime; this is panel-only. */
     showIf?: { key: string; anyOf: string[] };
 }
 
 export type SettingsSchema = Record<string, SettingDef>;
 
-/** Typed accessor handed to a bot as `this.settings`. */
 export class SettingsBag {
     constructor(private readonly values: Record<string, unknown> = {}) {}
 
@@ -83,7 +62,6 @@ function parseValue(def: SettingDef, raw: string): unknown {
         }
         case 'string': {
             if (def.options && def.options.length > 0) {
-                // snap to the declared option (URL overrides / stale saves)
                 const wanted = raw.trim().toLowerCase();
                 return def.options.find(o => o.toLowerCase() === wanted) ?? def.default;
             }
@@ -120,7 +98,6 @@ function parseTile(raw: string): Tile | null {
     return new Tile(parts[0], parts[1], parts[2] ?? 0);
 }
 
-/** Serialize a resolved value back to the string form inputs/localStorage use. */
 function settingToString(def: SettingDef, value: unknown): string {
     if (def.type === 'tile' && value instanceof Tile) {
         return `${value.x},${value.z},${value.level}`;
@@ -134,16 +111,12 @@ function settingToString(def: SettingDef, value: unknown): string {
     return String(value);
 }
 
-/** Genie/lamp skills (keys of LAMP_IF.skills) — the lampSkill dropdown options.
- *  Kept local to avoid a runtime→api import; handleLamp falls back to strength. */
 const LAMP_SKILLS: string[] = [
     'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer',
     'agility', 'herblore', 'thieving', 'crafting', 'runecraft', 'mining',
     'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'fletching'
 ];
 
-/** Reserved 'Global' namespace schema — settings that resolve as a fallback
- *  below per-script values (per-script overrides global). */
 export const GLOBAL_SETTINGS: SettingsSchema = {
     lampSkill: { type: 'string', default: 'strength', options: LAMP_SKILLS, label: 'Genie lamp skill', help: 'which skill genie/lamp random events train' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs (default)' },
@@ -151,9 +124,6 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' }
 };
 
-// Per-tab (sessionStorage) so sibling tabs each running a different bot don't
-// clobber each other's params; localStorage stays a read fallback for legacy
-// values and the smoke harness (which seeds `rs2b0t:set:*` there). Issue #7.
 const hasSession = typeof sessionStorage !== 'undefined';
 const hasLocal = typeof localStorage !== 'undefined';
 
@@ -162,7 +132,6 @@ function storageKey(name: string, key: string): string {
 }
 
 class SettingsStoreImpl {
-    /** URL overrides, parsed once. */
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
 
     private urlOverride(name: string, key: string): string | null {
@@ -178,8 +147,6 @@ class SettingsStoreImpl {
         return null;
     }
 
-    /** Saved panel edit for one key, or undefined. Per-tab value wins; falls
-     *  back to a legacy/shared localStorage value (also the smoke seed path). */
     saved(name: string, key: string): string | undefined {
         if (hasSession) {
             const v = sessionStorage.getItem(storageKey(name, key));
@@ -203,8 +170,6 @@ class SettingsStoreImpl {
     }
 
     clear(name: string, key: string): void {
-        // Drop the per-tab value AND any legacy/shared one, so a reset actually
-        // returns the key to its default instead of the localStorage fallback.
         if (hasSession) {
             sessionStorage.removeItem(storageKey(name, key));
         }
@@ -213,15 +178,6 @@ class SettingsStoreImpl {
         }
     }
 
-    /**
-     * The winning raw string (null = no override, use the default) and the def
-     * to parse/format against, across the ONE precedence ladder: per-script URL
-     * > per-script saved > (for global-eligible keys, not when resolving Global
-     * itself) global URL > global saved > default. Global-eligible keys hand
-     * back the Global schema's def so they parse/floor the same way regardless
-     * of which bot asked. displayString and resolve both ride this ladder, so
-     * the panel can never contradict what the bot runs.
-     */
     private winningRaw(name: string, key: string, def: SettingDef): { raw: string | null; def: SettingDef } {
         const url = this.urlOverride(name, key);
         if (url !== null) {
@@ -246,13 +202,11 @@ class SettingsStoreImpl {
         return { raw: null, def };
     }
 
-    /** The string an input should show. */
     displayString(name: string, key: string, def: SettingDef): string {
         const w = this.winningRaw(name, key, def);
         return w.raw !== null ? w.raw : settingToString(w.def, w.def.default);
     }
 
-    /** Resolve the full value map for a run: default <- saved <- URL. */
     resolve(name: string, schema: SettingsSchema): Record<string, unknown> {
         const out: Record<string, unknown> = {};
         for (const [key, def] of Object.entries(schema)) {
@@ -262,7 +216,6 @@ class SettingsStoreImpl {
         return out;
     }
 
-    /** Resolve the reserved Global namespace into a bag (for global-only reads). */
     globalBag(): SettingsBag {
         return new SettingsBag(this.resolve('Global', GLOBAL_SETTINGS));
     }

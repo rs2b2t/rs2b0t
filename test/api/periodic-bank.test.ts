@@ -1,4 +1,3 @@
-// test/api/periodic-bank.test.ts
 /* eslint-disable @typescript-eslint/no-explicit-any -- Game/Banking singletons are
    monkey-patched per test; typed shims would re-state the whole surface for no safety. */
 import { expect, test } from 'bun:test';
@@ -34,11 +33,10 @@ test('execute forwards the RAW own predicate + commonJunk=true (default) so bank
     const dep = (n: string) => n === 'mine';
     const task = make({ deposit: dep, returnTo: () => ({ x: 1, z: 2, level: 0 }) });
     await task.execute();
-    // bankNearest gets the RAW own predicate — NOT pre-composed with the junk list.
-    expect(called.deposit('mine')).toBe(true);             // bot's own predicate
-    expect(called.deposit('uncut sapphire')).toBe(false);  // raw own does NOT include common junk
-    expect(called.deposit('rune scimitar')).toBe(false);   // neither → kept
-    expect(called.commonJunk).toBe(true);                  // default flag forwarded (bankNearest composes)
+    expect(called.deposit('mine')).toBe(true);
+    expect(called.deposit('uncut sapphire')).toBe(false);
+    expect(called.deposit('rune scimitar')).toBe(false);
+    expect(called.commonJunk).toBe(true);
     expect(called.returnTo).toEqual({ x: 1, z: 2, level: 0 });
     (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
 });
@@ -49,24 +47,23 @@ test('execute forwards commonJunk=false so the junk opt-out reaches bankNearest'
     const dep = (n: string) => n === 'mine';
     const task = make({ deposit: dep, commonJunk: () => false });
     await task.execute();
-    expect(called.deposit('mine')).toBe(true);             // own predicate still honoured
-    expect(called.deposit('uncut sapphire')).toBe(false);  // raw own excludes common
-    expect(called.commonJunk).toBe(false);                 // opt-out plumbed end-to-end
+    expect(called.deposit('mine')).toBe(true);
+    expect(called.deposit('uncut sapphire')).toBe(false);
+    expect(called.commonJunk).toBe(false);
     (Banking as any).bankNearest = spy; (Game as any).inCombat = gspy;
 });
 test('backs off ALL strategies after a failed (unreachable-bank) attempt', async () => {
     const bspy = Banking.bankNearest; (Banking as any).bankNearest = async () => false;
     const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
-    const dspy = Execution.delayTicks; (Execution as any).delayTicks = async () => {}; // no scheduler in tests
-    const task = make(); // items strategy: countLoot 10 >= itemsThreshold 5 → would trip
-    expect(task.validate()).toBe(true);       // trips before any attempt
-    await task.execute();                      // bank unreachable → sets failure backoff
-    expect(task.validate()).toBe(false);       // suppressed despite still-carried loot
+    const dspy = Execution.delayTicks; (Execution as any).delayTicks = async () => {};
+    const task = make();
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(task.validate()).toBe(false);
     (Banking as any).bankNearest = bspy; (Game as any).inCombat = gspy; (Execution as any).delayTicks = dspy;
 });
 
 test('PeriodicBankOptions accepts a commonJunk getter (type-level + default include)', () => {
-    // Construct with commonJunk omitted and present; both must type-check and construct.
     const base = {
         strategy: () => 'off' as const, itemsThreshold: () => 1, minutesThreshold: () => 1,
         countLoot: () => 0, deposit: (_n: string) => false

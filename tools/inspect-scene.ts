@@ -1,9 +1,3 @@
-// Scene inspector for quest-nav debugging: teleport to a tile and dump the nearby
-// locs (staircases/ladders/manholes/gates/doors by default, or a name filter) with
-// their tiles + ops, plus nearby NPCs. Reusable for pinning climb/entrance tiles.
-//
-// Usage: bun tools/inspect-scene.ts <x,z,level> [locNameFilter] [npcNameFilter]
-//   e.g. bun tools/inspect-scene.ts 3108,3157,0 stair
 import { boot, fail, launchBrowser, login, type } from './lib/harness.js';
 
 const arg = (process.argv[2] || '').split(',').map(Number);

@@ -1,16 +1,3 @@
-// Headless live smoke for ArdyCakes' SolveClue wiring: boots the client, starts
-// ArdyCakes stealing at the Baker's stall, then ::give's it an easy clue and
-// asserts the clue PREEMPTS the steal loop — bank-first prep fires, the trail
-// starts, and (fresh account, empty bank) the spade acquisition walks to the
-// Ardougne ground spawn. Bounded: trail COMPLETION is ClueSolver's proven
-// domain; this smoke verifies the task wiring, then stops.
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/ardycakes-clue-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -58,7 +45,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -68,7 +55,7 @@ try {
     await clearDialogs();
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,37,42'); // East Ardougne market
+        await type('::tele 0,41,51,37,42');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - 2661) <= 8 && Math.abs(at.z - 3306) <= 8) { break; }
@@ -80,12 +67,11 @@ try {
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ArdyCakes')); });
     console.log('started ArdyCakes — letting the steal loop run');
 
-    // A steal (or at least an attempt) proves the core loop is alive pre-clue.
     let stealSeen = false;
     for (let i = 0; i < 45 && !stealSeen; i++) {
         await page.waitForTimeout(2000);
         stealSeen = (await logLines()).some(l => /stall emptied|swapping to the stand|stocked \d+/.test(l)) || (await page.evaluate(() => (globalThis as never as R).rs2b0t.runner.state)) === 'running';
-        if (i === 10) { stealSeen = true; } // 20s of running loop is enough staging
+        if (i === 10) { stealSeen = true; }
     }
 
     await type('::give trail_clue_easy_map001');

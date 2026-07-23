@@ -1,12 +1,3 @@
-// Headless live smoke for ArdyThiever's kite-flee: on any real combat (a guard
-// that caught it stealing from the Baker's stall), the bot must run to the fixed
-// kite tile (2655,3298,0), dragging the guard off the stall — through the market
-// WITHOUT snagging on a gate. Spawns guards at the stall to force the aggro, runs
-// the bot, and asserts it logs the kite AND reaches the kite tile.
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/ardythiever-kite-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -60,13 +51,9 @@ try {
     await type('::~maxme');
     await clearDialogs();
 
-    // No spawned guards: tele onto the stall stand (2668,3312) and let the bot
-    // restock cake by stealing from the stall. Over a long window the real
-    // patrolling Ardougne guards wander to the stall, witness the theft, and
-    // aggro into melee — the natural trigger for the kite.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,44,48'); // (2668,3312) stall stand
+        await type('::tele 0,41,51,44,48');
         await page.waitForTimeout(1500);
         at = await tile();
         if (at && Math.abs(at.x - 2668) <= 8 && Math.abs(at.z - 3312) <= 8) { break; }
@@ -82,7 +69,7 @@ try {
     let reached = false;
     let closest = 999;
     let lastNote = 0;
-    for (let i = 0; i < 360; i++) { // ~720s (12 min) — real guards must wander over
+    for (let i = 0; i < 360; i++) {
         await page.waitForTimeout(2000);
         const lines = await logLines();
         if (lines.some(l => /kiting the guard to 2655,3298/i.test(l))) { kiteLog = true; }

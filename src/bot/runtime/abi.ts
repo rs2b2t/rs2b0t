@@ -23,24 +23,12 @@ import { bus, type EventMap } from '../events/EventBus.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { defineBot, registerScript } from './defineBot.js';
 
-/**
- * The script-facing ABI. `globalThis.__rs2b0t` is the ONE global
- * externally-compiled scripts bind to (via the @rs2b0t/api shim); its
- * property names are stable because the bot bundle never mangles
- * (ADR-0004). Bump API_VERSION on breaking surface changes — the shim
- * refuses mismatches.
- *
- * Runtime CLASSES are exported (not just types) because external scripts
- * subclass them and TreeBot walks nodes via instanceof — class identity must
- * be shared with the bundle.
- */
 export const API_VERSION = 1;
 
 export function installAbi(): void {
     const abi = Object.freeze({
         apiVersion: API_VERSION,
 
-        // runtime
         Execution,
         defineBot,
         registerScript,
@@ -49,14 +37,12 @@ export function installAbi(): void {
             off: <K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void => bus.off(event, cb)
         }),
 
-        // world + movement
         Game,
         Tile,
         Area,
         Traversal,
         DirectNavigator,
 
-        // queries + entity classes
         Npcs,
         Players,
         Locs,
@@ -67,7 +53,6 @@ export function installAbi(): void {
         Loc,
         GroundItem,
 
-        // hud
         Inventory,
         InvItem,
         Equipment,
@@ -77,12 +62,10 @@ export function installAbi(): void {
         ChatDialog,
         Quests,
 
-        // item acquisition
         AcquireTask,
         hasAll,
         held,
 
-        // bot base classes
         AbstractBot,
         LoopingBot,
         TaskBot,
@@ -90,7 +73,6 @@ export function installAbi(): void {
         BranchTask,
         LeafTask,
 
-        // low-level reads (escape hatch; prefer the api surface)
         reader
     });
 

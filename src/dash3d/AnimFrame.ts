@@ -8,10 +8,10 @@ export default class AnimFrame {
     delay: number = -1;
     base: AnimBase | null = null;
     size: number = 0;
-    ti: Int32Array | null = null; // transform index
-    tx: Int32Array | null = null; // transform x
-    ty: Int32Array | null = null; // transform y
-    tz: Int32Array | null = null; // transform z
+    ti: Int32Array | null = null;
+    tx: Int32Array | null = null;
+    ty: Int32Array | null = null;
+    tz: Int32Array | null = null;
 
     static opaque: boolean[] = [];
 

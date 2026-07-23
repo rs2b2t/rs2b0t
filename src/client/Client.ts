@@ -565,8 +565,6 @@ export class Client extends GameShell {
     private idkDesignButton2: Pix32 | null = null;
     private readonly searchParams: URLSearchParams;
 
-    // ----
-
     constructor(nodeid: number, lowmem: boolean, members: boolean) {
         super();
         this.searchParams = new URLSearchParams(window.location.search);
@@ -642,7 +640,7 @@ export class Client extends GameShell {
             canvas2d.fillText('1: Try closing ALL open web-browser windows, and reloading', 30, y);
 
             y += 30;
-            canvas2d.fillText('2: Try clearing your web-browsers cache', 30, y); // "2: Try clearing your web-browsers cache from tools->internet options"
+            canvas2d.fillText('2: Try clearing your web-browsers cache', 30, y);
 
             y += 30;
             canvas2d.fillText('3: Try using a different game-world', 30, y);
@@ -651,7 +649,7 @@ export class Client extends GameShell {
             canvas2d.fillText('4: Try rebooting your computer', 30, y);
 
             y += 30;
-            canvas2d.fillText('5: Try selecting a different method from the play-game menu', 30, y); // "5: Try selecting a different version of Java from the play-game menu"
+            canvas2d.fillText('5: Try selecting a different method from the play-game menu', 30, y);
         } else if (this.errorHost) {
             canvas2d.font = 'bold 20px helvetica, sans-serif';
             canvas2d.textAlign = 'left';
@@ -664,7 +662,7 @@ export class Client extends GameShell {
             canvas2d.fillText('To play RuneScape make sure you play from', 50, y);
 
             y += 50;
-            canvas2d.fillText('An approved domain', 50, y); // "http://www.runescape.com"
+            canvas2d.fillText('An approved domain', 50, y);
         } else if (this.errorStarted) {
             canvas2d.font = 'bold 13px helvetica, sans-serif';
             canvas2d.textAlign = 'left';
@@ -742,7 +740,6 @@ export class Client extends GameShell {
                     wait = 60;
                 }
 
-                // the java client toggles a "JAGGRAB" HTTP fallback here
             }
         }
     }
@@ -758,7 +755,6 @@ export class Client extends GameShell {
                 data = await this.db.read(0, index);
             }
         } catch (_e) {
-            // empty
         }
 
         if (data && Packet.getcrc(data, 0, data.length) !== crc) {
@@ -783,7 +779,6 @@ export class Client extends GameShell {
                             await this.db.write(0, index, data);
                         }
                     } catch (_e) {
-                        // empty
                     }
                 } else {
                     data = undefined;
@@ -815,11 +810,8 @@ export class Client extends GameShell {
         return new JagFile(data);
     }
 
-    // ----
-
     override async maininit() {
         if (this.isMobile && Client.lowMem) {
-            // force mobile on low detail mode to 30 fps
             this.setTargetedFramerate(30);
         }
 
@@ -837,7 +829,6 @@ export class Client extends GameShell {
         try {
             this.db = new Database(await Database.openDatabase());
         } catch (_e) {
-            // possibly incognito mode
             this.db = null;
         }
 
@@ -877,7 +868,7 @@ export class Client extends GameShell {
             Model.init(this.onDemand.getFileCount(0), this.onDemand);
 
             if (!Client.lowMem) {
-                this.midiSong = 0; // scape_main
+                this.midiSong = 0;
                 this.midiSong = this.getIntParam('music', this.midiSong);
                 this.midiFading = true;
                 this.onDemand.request(2, this.midiSong);
@@ -1024,7 +1015,6 @@ export class Client extends GameShell {
                     this.mapscene[i] = Pix8.depack(media, 'mapscene', i);
                 }
             } catch (_e) {
-                // empty
             }
 
             try {
@@ -1032,7 +1022,6 @@ export class Client extends GameShell {
                     this.mapfunction[i] = Pix32.depack(media, 'mapfunction', i);
                 }
             } catch (_e) {
-                // empty
             }
 
             try {
@@ -1040,7 +1029,6 @@ export class Client extends GameShell {
                     this.hitmarks[i] = Pix32.depack(media, 'hitmarks', i);
                 }
             } catch (_e) {
-                // empty
             }
 
             try {
@@ -1048,7 +1036,6 @@ export class Client extends GameShell {
                     this.headicons[i] = Pix32.depack(media, 'headicons', i);
                 }
             } catch (_e) {
-                // empty
             }
 
             this.mapmarker1 = Pix32.depack(media, 'mapmarker', 0);
@@ -1309,8 +1296,6 @@ export class Client extends GameShell {
         this.drawArea = null;
     }
 
-    // ----
-
     async onDemandLoop() {
         if (!this.onDemand) {
             return;
@@ -1407,7 +1392,6 @@ export class Client extends GameShell {
             if (this.mouseClickButton === 1 && this.mouseClickY >= y - 15 && this.mouseClickY < y) {
                 this.loginSelect = 1;
             }
-            // y += 15; dead code
 
             let x = ((this.sWid / 2) | 0) - 80;
             y = ((this.sHei / 2) | 0) + 50;
@@ -1660,7 +1644,6 @@ export class Client extends GameShell {
         this.imageTitle8?.setPixels();
         background.quickPlotSprite(-562, -171);
 
-        // draw right side (mirror image)
         background.hflip();
 
         this.imageTitle0?.setPixels();
@@ -1746,7 +1729,7 @@ export class Client extends GameShell {
 
                 this.loginSeed = this.in.g8();
                 const seed: Int32Array = new Int32Array([
-                    Math.floor(Math.random() * 99999999), 
+                    Math.floor(Math.random() * 99999999),
                     Math.floor(Math.random() * 99999999),
                     Number(this.loginSeed >> 32n),
                     Number(this.loginSeed & BigInt(0xffffffff))
@@ -1758,7 +1741,7 @@ export class Client extends GameShell {
                 this.out.p4(seed[1]);
                 this.out.p4(seed[2]);
                 this.out.p4(seed[3]);
-                this.out.p4(1337); // uid
+                this.out.p4(1337);
                 this.out.pjstr(username);
                 this.out.pjstr(password);
                 this.out.rsaenc(BigInt(process.env.LOGIN_RSAN!), BigInt(process.env.LOGIN_RSAE!));
@@ -1929,7 +1912,7 @@ export class Client extends GameShell {
                 this.loginMes1 = 'Unable to connect.';
                 this.loginMes2 = 'Bad session id.';
             } else if (response === 11) {
-                this.loginMes2 = 'Login server rejected session.'; // [sic] loginMes2
+                this.loginMes2 = 'Login server rejected session.';
                 this.loginMes2 = 'Please try again.';
             } else if (response === 12) {
                 this.loginMes1 = 'You need a members account to login to this world.';
@@ -1980,11 +1963,9 @@ export class Client extends GameShell {
             }
         } catch (e) {
             if (e instanceof WebSocket && e.readyState === 3) {
-                // IO error
                 this.loginMes1 = '';
                 this.loginMes2 = 'Error connecting to server.';
             } else {
-                // exceptions in Java get stuck permanently on "Connecting to server..."
                 throw e;
             }
         }
@@ -2037,7 +2018,6 @@ export class Client extends GameShell {
 
     private async gameLoop(): Promise<void> {
         if (this.players === null) {
-            // client is unloading asynchronously
             return;
         }
 
@@ -2050,7 +2030,6 @@ export class Client extends GameShell {
         }
 
         for (let i: number = 0; i < 5 && (await this.tcpIn()); i++) {
-            // empty
         }
 
         const now = performance.now();
@@ -2067,8 +2046,6 @@ export class Client extends GameShell {
             const start = this.out.pos;
             let count = 0;
 
-            // custom: Java client checks `start - this.out.pos < 240` but this is obviously wrong
-            //   and will lead to an invalid packet if the user is buffering a lot of mouse movements (i.e. while disconnected)
             for (let i = 0; i < this.mouseTracking.length && this.out.pos - start < 240; i++) {
                 count++;
 
@@ -2194,7 +2171,6 @@ export class Client extends GameShell {
         await this.soundsDoQueue();
 
         if (now - this.timeoutTimer > 15_000) {
-            // no packets received recently, connection lost
             await this.lostCon();
         }
 
@@ -2356,19 +2332,13 @@ export class Client extends GameShell {
 
         await this.handleInputKey();
 
-        if (now - this.idleTimer > 300_000) { // rs2b2t: 5min idle logout (ADR-0023 in the rs2b2t repo)
-            // rs2b2t farm: an active runner counts as presence. Synthetic input is meant
-            // to keep idleTimer fresh (fidgets/frame ticks), but that liveness can starve
-            // in headless farm conditions — and one wrongly-volunteered IDLE_TIMER logs
-            // the bot out at exactly 90s (whole-fleet outage, 2026-07-06). A bot with no
-            // script running still idles out like a human would.
+        if (now - this.idleTimer > 300_000) {
             const runner = (globalThis as unknown as { rs2b0t?: { runner?: { state?: string } } }).rs2b0t?.runner;
             if (runner?.state === 'running') {
                 this.idleTimer = performance.now();
             } else {
-                // no input in 90s, notify the server
                 this.logoutTimer = 250;
-                this.idleTimer += 10_000; // 10s backoff
+                this.idleTimer += 10_000;
 
                 this.out.p1Enc(ClientProt.IDLE_TIMER);
             }
@@ -2439,7 +2409,6 @@ export class Client extends GameShell {
         }
 
         if (now - this.noTimeoutTimer > 1_000) {
-            // nothing sent in the last 1s, keep the client connected
             this.out.p1Enc(ClientProt.NO_TIMEOUT);
         }
 
@@ -2451,10 +2420,8 @@ export class Client extends GameShell {
             }
         } catch (e) {
             if (e instanceof WebSocket && e.readyState === 3) {
-                // IO error
                 await this.lostCon();
             } else {
-                // logic error
                 await this.logout();
             }
         }
@@ -2521,7 +2488,6 @@ export class Client extends GameShell {
         oldStream?.close();
     }
 
-    // todo: order
     private buildMinimenu(): void {
         if (this.objDragArea !== 0) {
             return;
@@ -2608,7 +2574,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private addPrivateChatOptions(): void {
         if (this.splitPrivateChat === 0) {
             return;
@@ -2666,7 +2631,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private addChatOptions(_mouseX: number, mouseY: number): void {
         let line: number = 0;
         for (let i: number = 0; i < 100; i++) {
@@ -2779,7 +2743,6 @@ export class Client extends GameShell {
         const tileZ: number = (this.localPlayer.z - relY) >> 7;
 
         if (this.tryMove(this.localPlayer.routeX[0], this.localPlayer.routeZ[0], tileX, tileZ, true, 0, 0, 0, 0, 0, 1)) {
-            // the additional 14-bytes in MOVE_MINIMAPCLICK
             this.out.p1(x);
             this.out.p1(y);
             this.out.p2(this.orbitCameraYaw);
@@ -2794,7 +2757,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private iconLoop(): void {
         if (this.mouseClickButton !== 1) {
             return;
@@ -2859,7 +2821,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private chatModeLoop(): void {
         if (this.mouseClickButton !== 1) {
             return;
@@ -2944,7 +2905,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private async handleInputKey(): Promise<void> {
         Client.cyclelogic4++;
         if (Client.cyclelogic4 > 192) {
@@ -3047,7 +3007,6 @@ export class Client extends GameShell {
                                 try {
                                     value = parseInt(this.dialogInput, 10);
                                 } catch (_e) {
-                                    // empty
                                 }
 
                                 this.out.p1Enc(ClientProt.RESUME_P_COUNTDIALOG);
@@ -3058,7 +3017,6 @@ export class Client extends GameShell {
                             this.redrawChat = true;
                         }
                     } else if (this.chatModalId === -1) {
-                        // custom: when typing a command, you can use the debugproc character (tilde)
                         if (key >= 32 && (key <= 122 || (this.chatInput.startsWith('::') && key <= 126)) && this.chatInput.length < 80) {
                             this.chatInput = this.chatInput + String.fromCharCode(key);
                             this.redrawChat = true;
@@ -3084,20 +3042,15 @@ export class Client extends GameShell {
                                 }
                             }
 
-                            // custom: player-facing commands
                             if (this.chatInput === '::fpson') {
-                                // authentic in later revs
                                 this.showFps = true;
                             } else if (this.chatInput === '::fpsoff') {
-                                // authentic in later revs
                                 this.showFps = false;
                             } else if (this.chatInput.startsWith('::fps ')) {
-                                // authentic in later revs
                                 try {
                                     const desiredFps = parseInt(this.chatInput.substring(6)) || 50;
                                     this.setTargetedFramerate(desiredFps);
                                 } catch (_e) {
-                                    // empty
                                 }
                             } else if (this.chatInput.startsWith('::')) {
                                 this.out.p1Enc(ClientProt.CLIENT_CHEAT);
@@ -3215,7 +3168,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private lag() {
         console.log('============');
         console.log(`flame-cycle:${this.titleFlames?.coolingCycle ?? 0}`);
@@ -3226,13 +3178,12 @@ export class Client extends GameShell {
         console.log(`draw-cycle:${Client.drawCycle}`);
         console.log(`ptype:${this.ptype}`);
         console.log(`psize:${this.psize}`);
-        // this.stream?.debug();
         this.debug = true;
     }
 
     private followCamera(): void {
         if (!this.localPlayer) {
-            return; // custom
+            return;
         }
 
         const orbitX: number = this.localPlayer.x + this.macroCameraX;
@@ -3438,7 +3389,6 @@ export class Client extends GameShell {
                         await playWave(buf.data.slice(0, buf.pos));
                     }
                 } catch (_e) {
-                    // empty
                 }
 
                 this.waveCount--;
@@ -3894,13 +3844,11 @@ export class Client extends GameShell {
             this.imageTitle8?.draw(562, 171);
         }
 
-        await sleep(5); // return a slice of time to the main loop so it can update the progress bar
+        await sleep(5);
     }
 
-    // todo: order
     private gameDraw(): void {
         if (this.players === null) {
-            // client is unloading asynchronously
             return;
         }
 
@@ -4478,7 +4426,7 @@ export class Client extends GameShell {
 
     private roofCheck2(): number {
         if (!this.mapl) {
-            return 0; // custom
+            return 0;
         }
 
         const y: number = this.getAvH(this.camX, this.camZ, this.minusedlevel);
@@ -4802,7 +4750,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private textureRunAnims(cycle: number): void {
         if (!Client.lowMem) {
             if (Pix3D.texCycle[17] >= cycle) {
@@ -4885,7 +4832,6 @@ export class Client extends GameShell {
             this.headicons[1]?.plotSprite(472, 296);
         }
 
-        // custom: taken from later client
         if (this.showFps) {
             const x: number = 507;
             let y: number = 20;
@@ -4923,7 +4869,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private drawPrivateMessages(): void {
         if (this.splitPrivateChat === 0) {
             return;
@@ -4999,7 +4944,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private getSpecialArea(): void {
         if (!this.localPlayer) {
             return;
@@ -5010,7 +4954,6 @@ export class Client extends GameShell {
 
         this.chatDisabled = 0;
 
-        // tutorial island
         if (x >= 3053 && x <= 3156 && z >= 3056 && z <= 3136) {
             this.chatDisabled = 1;
         } else if (x >= 3072 && x <= 3118 && z >= 9492 && z <= 9535) {
@@ -5063,7 +5006,7 @@ export class Client extends GameShell {
 
     private getAvH(sceneX: number, sceneZ: number, level: number): number {
         if (!this.groundh) {
-            return 0; // custom
+            return 0;
         }
 
         const tileX: number = sceneX >> 7;
@@ -5098,7 +5041,6 @@ export class Client extends GameShell {
         if (this.sceneState === 1) {
             const status = this.checkScene();
             if (status != 0 && performance.now() - this.sceneLoadStartTime > 360000) {
-                // "game loop check ..."
                 console.log(`${this.loginUser} glcfb ${this.loginSeed},${status},${Client.lowMem},${this.db !== null},${this.onDemand?.remaining()},${this.minusedlevel},${this.mapBuildCentreZoneX},${this.mapBuildCentreZoneZ}`);
                 this.sceneLoadStartTime = performance.now();
             }
@@ -5112,7 +5054,7 @@ export class Client extends GameShell {
 
     private checkScene(): number {
         if (!this.mapBuildIndex || !this.mapBuildGroundData || !this.mapBuildLocationData) {
-            return -1000; // custom
+            return -1000;
         }
 
         for (let i = 0; i < this.mapBuildGroundData.length; i++) {
@@ -5173,7 +5115,6 @@ export class Client extends GameShell {
                     const x: number = this.mapBuildIndex[index] >> 8;
                     const z: number = this.mapBuildIndex[index] & 0xff;
 
-                    // underground pass check
                     if (x === 33 && z >= 71 && z <= 73) {
                         ClientBuild.lowMem = false;
                         break;
@@ -5839,7 +5780,7 @@ export class Client extends GameShell {
         }
 
         if (length > 0) {
-            bufferSize = Math.min(length, 25); // max number of turns in a single pf request
+            bufferSize = Math.min(length, 25);
             length--;
 
             const startX: number = this.routeX[length];
@@ -6258,7 +6199,6 @@ export class Client extends GameShell {
                 }
 
                 for (let i: number = 0; i < inv.linkObjType.length; i++) {
-                    // [sic] redundant assignment
                     inv.linkObjType[i] = -1;
                     inv.linkObjType[i] = 0;
                 }
@@ -6523,7 +6463,6 @@ export class Client extends GameShell {
                             this.addChat(3, filtered, JString.toScreenName(JString.toRawUsername(from)));
                         }
                     } catch (_e) {
-                        // signlink.reporterror('cde1'); TODO?
                     }
                 }
 
@@ -6732,11 +6671,9 @@ export class Client extends GameShell {
                 this.warnMembersInNonMembers = this.in.g1();
 
                 if (this.lastAddress !== 0 && this.mainModalId === -1) {
-                    // custom: we don't have access to the user's DNS resolver in a browser, but we can use DNS over HTTPS (DoH)
                     this.dnsReq = null;
                     let ipStr = JString.formatIPv4(this.lastAddress);
                     if (!ipStr.startsWith('127.')) {
-                        // we're using localhost as a privacy flag for now
                         reverseDnsLookup(ipStr).then(results => {
                             this.dnsReq = results[0];
                         });
@@ -7013,7 +6950,6 @@ export class Client extends GameShell {
             }
 
             if (this.ptype === ServerProt.VARP_SYNC) {
-                // "Resetting variables to authoritative set"
                 for (let i: number = 0; i < this.var.length; i++) {
                     if (this.var[i] !== this.varServ[i]) {
                         this.var[i] = this.varServ[i];
@@ -7138,22 +7074,18 @@ export class Client extends GameShell {
                 return true;
             }
 
-            // (java tries to report this to the world)
             console.error(`T1 - ${this.ptype},${this.psize} - ${this.ptype1},${this.ptype2}`);
             await this.logout();
         } catch (e) {
             if (e instanceof WebSocket && e.readyState === 3) {
-                // IO error
                 await this.lostCon();
             } else {
-                // logic error
                 console.error(e);
 
                 let str = `T2 - ${this.ptype},${this.psize} - ${this.ptype1},${this.ptype2} - ${this.psize},${(this.localPlayer?.routeX[0] ?? 0) + this.mapBuildBaseX},${(this.localPlayer?.routeZ[0] ?? 0) + this.mapBuildBaseZ} -`;
                 for (let i = 0; i < this.psize && i < 50; i++) {
                     str += this.in.data[i] + ',';
                 }
-                // (java tries to report this to the world)
                 console.error(str);
 
                 await this.logout();
@@ -7603,7 +7535,7 @@ export class Client extends GameShell {
         }
 
         if (!topObj) {
-            return; // custom
+            return;
         }
 
         objs.pushFront(topObj);
@@ -7949,7 +7881,6 @@ export class Client extends GameShell {
                             this.addChat(2, filtered, player.name);
                         }
                     } catch (_e) {
-                        // signlink.reporterror('cde2');
                     }
                 }
             }
@@ -8495,7 +8426,6 @@ export class Client extends GameShell {
             this.menuHeight = this.menuNumEntries * 15 + 22;
         }
 
-        // the sidebar/tabs area
         if (this.mouseClickX > 553 && this.mouseClickY > 205 && this.mouseClickX < 743 && this.mouseClickY < 466) {
             x = this.mouseClickX - ((width / 2) | 0) - 553;
             if (x < 0) {
@@ -8519,7 +8449,6 @@ export class Client extends GameShell {
             this.menuHeight = this.menuNumEntries * 15 + 22;
         }
 
-        // the chatbox area
         if (this.mouseClickX > 17 && this.mouseClickY > 357 && this.mouseClickX < 496 && this.mouseClickY < 453) {
             x = this.mouseClickX - ((width / 2) | 0) - 17;
             if (x < 0) {
@@ -9636,7 +9565,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private addComponentOptions(com: IfType, mouseX: number, mouseY: number, x: number, y: number, scrollPosition: number): void {
         if (com.type !== 0 || !com.children || com.hide || mouseX < x || mouseY < y || mouseX > x + com.width || mouseY > y + com.height || !com.childX || !com.childY) {
             return;
@@ -9852,7 +9780,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private addSocialOptions(component: IfType): boolean {
         let clientCode: number = component.clientCode;
 
@@ -9885,7 +9812,6 @@ export class Client extends GameShell {
         return false;
     }
 
-    // todo: order
     private combatColourCode(viewerLevel: number, otherLevel: number): string {
         const diff: number = viewerLevel - otherLevel;
         if (diff < -9) {
@@ -10276,7 +10202,6 @@ export class Client extends GameShell {
         Pix2D.setClipping(left, top, right, bottom);
     }
 
-    // todo: order
     private invNumber(amount: number): string {
         if (amount < 100000) {
             return String(amount);
@@ -10428,16 +10353,12 @@ export class Client extends GameShell {
                 }
 
                 if (opcode === 1) {
-                    // stat_level {skill}
                     register = this.statEffectiveLevel[script[pc++]];
                 } else if (opcode === 2) {
-                    // stat_base_level {skill}
                     register = this.statBaseLevel[script[pc++]];
                 } else if (opcode === 3) {
-                    // stat_xp {skill}
                     register = this.statXP[script[pc++]];
                 } else if (opcode === 4) {
-                    // inv_count {interface id} {obj id}
                     const com: IfType = IfType.list[script[pc++]];
                     const obj: number = script[pc++] + 1;
 
@@ -10449,25 +10370,20 @@ export class Client extends GameShell {
                         }
                     }
                 } else if (opcode === 5) {
-                    // pushvar {id}
                     register = this.var[script[pc++]];
                 } else if (opcode === 6) {
-                    // stat_xp_remaining {skill}
                     register = Client.levelExperience[this.statBaseLevel[script[pc++]] - 1];
                 } else if (opcode === 7) {
                     register = ((this.var[script[pc++]] * 100) / 46875) | 0;
                 } else if (opcode === 8) {
-                    // combat level
                     register = this.localPlayer?.combatLevel || 0;
                 } else if (opcode === 9) {
-                    // total level
                     for (let i: number = 0; i < Skill.count; i++) {
                         if (Skill.used[i]) {
                             register += this.statBaseLevel[i];
                         }
                     }
                 } else if (opcode === 10) {
-                    // inv_contains {interface id} {obj id}
                     const com: IfType = IfType.list[script[pc++]];
                     const obj: number = script[pc++] + 1;
 
@@ -10480,45 +10396,35 @@ export class Client extends GameShell {
                         }
                     }
                 } else if (opcode === 11) {
-                    // runenergy
                     register = this.runenergy;
                 } else if (opcode === 12) {
-                    // runweight
                     register = this.runweight;
                 } else if (opcode === 13) {
-                    // testbit {varp} {bit: 0..31}
                     const varp: number = this.var[script[pc++]];
                     const lsb: number = script[pc++];
 
                     register = (varp & (0x1 << lsb)) === 0 ? 0 : 1;
                 } else if (opcode === 14) {
-                    // push_varbit {varbit}
                     const varbit: VarBitType = VarBitType.list[script[pc++]];
                     const { basevar, startbit, endbit } = varbit;
 
                     const mask = Client.readbit[endbit - startbit];
                     register = (this.var[basevar] >> startbit) & mask;
                 } else if (opcode === 15) {
-                    // subtract
                     nextArithmetic = 1;
                 } else if (opcode === 16) {
-                    // divide
                     nextArithmetic = 2;
                 } else if (opcode === 17) {
-                    // multiply
                     nextArithmetic = 3;
                 } else if (opcode === 18) {
-                    // coordx
                     if (this.localPlayer) {
                         register = (this.localPlayer.x >> 7) + this.mapBuildBaseX;
                     }
                 } else if (opcode === 19) {
-                    // coordz
                     if (this.localPlayer) {
                         register = (this.localPlayer.z >> 7) + this.mapBuildBaseZ;
                     }
                 } else if (opcode === 20) {
-                    // push_constant
                     register = script[pc++];
                 }
 
@@ -10634,16 +10540,16 @@ export class Client extends GameShell {
             const lastMidiActive: boolean = this.midiActive;
 
             if (value === 0) {
-                this.midiVolume = 0; // +0 dB
+                this.midiVolume = 0;
                 this.midiActive = true;
             } else if (value === 1) {
-                this.midiVolume = -4; // -4 dB
+                this.midiVolume = -4;
                 this.midiActive = true;
             } else if (value === 2) {
-                this.midiVolume = -8; // -8 dB
+                this.midiVolume = -8;
                 this.midiActive = true;
             } else if (value === 3) {
-                this.midiVolume = -12; // -12 dB
+                this.midiVolume = -12;
                 this.midiActive = true;
             } else if (value === 4) {
                 this.midiActive = false;
@@ -10666,16 +10572,16 @@ export class Client extends GameShell {
             }
         } else if (clientcode === 4) {
             if (value === 0) {
-                this.waveVolume = 0; // +0 dB
+                this.waveVolume = 0;
                 this.waveEnabled = true;
             } else if (value === 1) {
-                this.waveVolume = -4; // -4 dB
+                this.waveVolume = -4;
                 this.waveEnabled = true;
             } else if (value === 2) {
-                this.waveVolume = -8; // -8 dB
+                this.waveVolume = -8;
                 this.waveEnabled = true;
             } else if (value === 3) {
-                this.waveVolume = -12; // -12 dB
+                this.waveVolume = -12;
                 this.waveEnabled = true;
             } else if (value === 4) {
                 this.waveEnabled = false;
@@ -10885,7 +10791,6 @@ export class Client extends GameShell {
 
                 com.text = `You last logged in ${text}`;
 
-                // custom: we're using localhost as a privacy flag for now
                 let ipStr = JString.formatIPv4(this.lastAddress);
                 if (!ipStr.startsWith('127.')) {
                     com.text += ` from: ${this.dnsReq ?? ipStr}`;
@@ -11106,7 +11011,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private drawSide(): void {
         this.areaSide?.setPixels();
         if (this.sideScanline) {
@@ -11133,7 +11037,6 @@ export class Client extends GameShell {
         }
     }
 
-    // todo: order
     private drawChat(): void {
         this.areaChat?.setPixels();
         if (this.chatScanline) {
@@ -11399,7 +11302,6 @@ export class Client extends GameShell {
             this.minimapDrawDot(anchorY, this.mapmarker1, anchorX);
         }
 
-        // the white square local player position in the center of the minimap.
         Pix2D.fillRect(97, 78, 3, 3, Colour.WHITE);
 
         this.areaGame?.setPixels();
@@ -11622,20 +11524,14 @@ export class Client extends GameShell {
         }
     }
 
-    // ----
-
-    /// touch controls
     private startedInGame: boolean = false;
     private startedInSide: boolean = false;
     private startedInChat: boolean = false;
     private ttime: number = -1;
-    // start
     private sx: number = 0;
     private sy: number = 0;
-    // mouse
     private mx: number = 0;
     private my: number = 0;
-    // new
     private nx: number = 0;
     private ny: number = 0;
     private dragging: boolean = false;
@@ -11648,8 +11544,6 @@ export class Client extends GameShell {
         }
 
         if (e.pointerType !== 'mouse') {
-            // custom: touchscreen support
-            // we don't acknowledge the first press as a click, instead we interpret the user's gesture on release
 
             this.idleTimer = performance.now();
             this.nextMouseClickX = -1;
@@ -11673,7 +11567,6 @@ export class Client extends GameShell {
         this.idleTimer = performance.now();
         this.mouseButton = 0;
 
-        // custom: up event comes before and potentially without move event
         this.mouseX = x;
         this.mouseY = y;
     }
@@ -11685,8 +11578,6 @@ export class Client extends GameShell {
         }
 
         if (e.pointerType !== 'mouse') {
-            // custom: touchscreen support
-            // we don't acknowledge the first press as a click, instead we interpret the user's gesture on release
 
             this.idleTimer = performance.now();
             this.mouseX = x;
@@ -11700,10 +11591,8 @@ export class Client extends GameShell {
                 this.nextMouseClickButton = 0;
                 this.mouseButton = 0;
             } else if (this.panning) {
-                // ignore up events if the player was moving the camera
                 this.panning = false;
 
-                // release all arrow keys
                 this.keyHeld[1] = 0;
                 this.keyHeld[2] = 0;
                 this.keyHeld[3] = 0;
@@ -11711,15 +11600,12 @@ export class Client extends GameShell {
                 return;
             } else {
                 if (!MobileKeyboard.isDisplayed() && this.insideMobileInput()) {
-                    // show keyboard when tapping in an input area
                     MobileKeyboard.show(x, y, e.clientX, e.clientY);
                 } else if (MobileKeyboard.isDisplayed() && !MobileKeyboard.isWithinCanvasKeyboard(x, y)) {
-                    // hide keyboard when tapping outside of an input area
                     MobileKeyboard.hide();
                     this.refresh();
                 }
 
-                // within click threshold: activate mouse button
                 this.nextMouseClickX = x;
                 this.nextMouseClickY = y;
                 this.nextMouseClickTime = performance.now();
@@ -11733,7 +11619,6 @@ export class Client extends GameShell {
                     this.mouseButton = 1;
                 }
 
-                // release after a client cycle has passed
                 setTimeout(() => {
                     this.mouseButton = 0;
                 }, 40);
@@ -11746,7 +11631,6 @@ export class Client extends GameShell {
             this.mouseX = x;
             this.mouseY = y;
         } else {
-            // custom: touchscreen support
 
             this.idleTimer = performance.now();
             this.nextMouseClickX = -1;
@@ -11771,16 +11655,13 @@ export class Client extends GameShell {
             this.mouseX = -1;
             this.mouseY = -1;
 
-            // custom: moving off-canvas may have a stuck mouse event
             this.nextMouseClickX = -1;
             this.nextMouseClickY = -1;
             this.nextMouseClickButton = 0;
             this.mouseButton = 0;
         } else {
-            // custom: touchscreen support
             this.idleTimer = performance.now();
 
-            // release all arrow keys
             this.keyHeld[1] = 0;
             this.keyHeld[2] = 0;
             this.keyHeld[3] = 0;
@@ -11794,7 +11675,6 @@ export class Client extends GameShell {
             this.mouseX = x;
             this.mouseY = y;
         } else {
-            // custom: touchscreen support
             this.idleTimer = performance.now();
             this.mouseX = x;
             this.mouseY = y;
@@ -11803,30 +11683,23 @@ export class Client extends GameShell {
             this.ny = e.screenY | 0;
 
             if (this.dragging) {
-                // no-op
             } else if (MobileKeyboard.isWithinCanvasKeyboard(x, y) && this.exceedsGrabThreshold(20)) {
                 MobileKeyboard.notifyTouchMove(x, y);
             } else if (this.startedInGame && !this.isGameObscured() && this.exceedsGrabThreshold(20)) {
-                // moving camera
                 this.panning = true;
 
-                // emulate arrow keys:
                 if (this.mx - this.nx > 0) {
-                    // right
                     this.keyHeld[1] = 0;
                     this.keyHeld[2] = 1;
                 } else if (this.mx - this.nx < 0) {
-                    // left
                     this.keyHeld[1] = 1;
                     this.keyHeld[2] = 0;
                 }
 
                 if (this.my - this.ny > 0) {
-                    // down
                     this.keyHeld[3] = 0;
                     this.keyHeld[4] = 1;
                 } else if (this.my - this.ny < 0) {
-                    // up
                     this.keyHeld[3] = 1;
                     this.keyHeld[4] = 0;
                 }

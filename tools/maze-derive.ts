@@ -1,8 +1,3 @@
-// tools/maze-derive.ts
-// Derive the 4 hardcoded maze routes from the static map and code-generate
-// src/bot/api/maze/mazeRoutes.ts. Also prints an ASCII render of each route
-// for eyeball-validation against the OSRS-wiki solution image.
-// Usage: bun tools/maze-derive.ts [--map <m45_71.jm2>] [--out <mazeRoutes.ts>]
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { buildMaze, parseJm2Locs, solveRoute, MAZE_SHRINE, MAZE_SPAWNS, edgeKey } from '../src/bot/api/maze/mazeGraph.js';
@@ -24,8 +19,6 @@ const locs = parseJm2Locs(readFileSync(map, 'utf8'));
 const g = buildMaze(locs);
 const routes = MAZE_SPAWNS.map(spawn => ({ spawn, doors: solveRoute(g, spawn) }));
 
-// ASCII render: one grid per route. '#' wall edge (approx), 'D' door on route,
-// 'S' spawn, 'X' shrine. Rendered at tile resolution over the maze bounds.
 function render(spawn: { x: number; z: number }, doors: { x: number; z: number }[]): string {
     const onRoute = new Set(doors.map(d => `${d.x},${d.z}`));
     const rows: string[] = [];

@@ -1,28 +1,13 @@
-// AIO quest engine — shared types. Type-only imports so the pure evaluators
-// that consume these snapshots stay free of any client/DOM dependency (their
-// tests run under bun:test with no game client). Live reads happen only in
-// QuestEngine.ts, which converts game state into the plain snapshots here —
-// the same "pure snapshots, no client at runtime" discipline as quests/types.ts.
-
 import type Tile from '../../api/Tile.js';
-import type { QuestStatus } from '#/bot/api/hud/Quests.js'; // type-only import, no client at runtime
+import type { QuestStatus } from '#/bot/api/hud/Quests.js';
 import type { QuestRecord } from '../types.js';
 import type { NpcStop, LadderHop } from '../exec/primitives.js';
 
-/** Plain-data view of the world for ONE quest's decide(). Engine-assembled. */
 export interface QuestSnapshot {
-    journal: QuestStatus;              // this quest's journal colour
-    inv: Map<string, number>;          // LOWERCASED display name -> inventory count
-    worn: Set<string>;                 // LOWERCASED equipped item names
-    /** Current no-progress count from the engine watchdog (0 = last step
-     *  moved the world). Lets a PURE decide() rotate empty-handed probes
-     *  (probeOrder[noProgress % probeOrder.length]) without module state —
-     *  quest varps are never transmitted, so mid-quest stages with no
-     *  inventory signal (Romeo & Juliet 30/40/60) are only reachable this way. */
+    journal: QuestStatus;
+    inv: Map<string, number>;
+    worn: Set<string>;
     noProgress: number;
-    /** Last-SEEN bank coin count (0 until a bank has been opened this run) —
-     *  lets pure gather fns decide buy vs 'need ~N gp' wait. Same staleness
-     *  contract as provisioning's bank counts. */
     bankCoins: number;
 }
 
@@ -31,65 +16,23 @@ export type QuestStep =
     | { kind: 'grabGround'; item: string; anchor: Tile }
     | { kind: 'pickLoc'; loc: string; op: string; item: string; anchor: Tile }
     | { kind: 'interactLoc'; loc: string; op: string; anchor: Tile; expectItem?: string }
-    /** Use `item` on another world entity or on a second held item. For
-     *  targetKind 'item' the target is resolved from the pack (Inventory.first)
-     *  and `anchor` is unused (item-on-item needs no world position) — e.g. use
-     *  a Bucket of water on Clay to make Soft clay (Prince Ali). */
     | { kind: 'useOn'; item: string; targetKind: 'npc' | 'loc' | 'item'; target: string; anchor: Tile; product?: string }
     | { kind: 'equip'; item: string }
-    /** `bank` overrides the default nearestBank() target — needed where the
-     *  geometric nearest is gated/unreachable (Waterfall's nearest is the
-     *  Fishing-Guild bank behind a level-68 gate; it routes to Ardougne West). */
     | { kind: 'withdraw'; items: { name: string; qty: number }[]; bank?: Tile }
-    /** Deposit every backpack item whose LOWERCASED name matches none of the
-     *  `keep` substrings (worn equipment is untouched). Issued by the engine
-     *  once per quest before provisioning so each quest starts with a clean
-     *  pack — provisioning is bank-first, so anything deposited that the quest
-     *  needs comes straight back via `withdraw`. `bank` overrides nearestBank()
-     *  as in `withdraw`. */
     | { kind: 'deposit'; keep: string[]; bank?: Tile }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
-    /** Buy `qty` of `item` from the shop run by `shop.npc` (Trade op). The
-     *  executor self-provisions coins: pack < estGp -> bank-leg withdraw of
-     *  estGp first. Gather fns pair this with gpShort(): affordable -> buy,
-     *  broke -> {kind:'wait', reason:`need ~N gp for <item>`} (wait-park
-     *  surfaces it). estGp is a deliberate overestimate (shop prices climb as
-     *  stock drops — ShopRunner's est×1.25 lesson). */
     | { kind: 'buy'; item: string; qty: number; shop: { npc: string; anchor: Tile }; estGp: number }
     | { kind: 'custom'; name: string; run: (log: (m: string) => void) => Promise<boolean> }
     | { kind: 'wait'; reason: string }
     | { kind: 'done' };
 
 export interface QuestModule {
-    record: QuestRecord;               // the existing quests/data record (one source of truth)
-    hops?: LadderHop[];                // scripted level crossings the nav graph lacks
-    /** Bank this quest provisions at (deposit spillover + withdraw items/coins/
-     *  food) — near the quest's START, so a fresh account banks once on the way
-     *  in instead of detouring to the global default. Toll-free from the
-     *  Lumbridge spawn (never Al Kharid on a 0-coin account). Defaults to
-     *  QuestEngine.PROVISION_BANK (Draynor) when unset. */
+    record: QuestRecord;
+    hops?: LadderHop[];
     bank?: Tile;
-    /** NPC names this quest legitimately fights, surfaced through
-     *  AIOQuester.grindTargets() so the random-event guard never mistakes the
-     *  quarry for a hostile event (the ArdyFighter mechanism). */
     grind?: string[];
-    /** How many food items to carry for this quest — withdrawn from the bank at
-     *  provisioning time using the AIOQuester's configured `food` item (0/undefined
-     *  = none). The AIOQuester sustain hook eats it when HP dips during the run.
-     *  For combat/danger quests (e.g. Waterfall's dungeon). Best-effort: an empty
-     *  bank or unset food item simply carries none. */
     food?: number;
-    /** Per acquirable item (LOWERCASED name): next step toward obtaining it.
-     *  Called by provisioning when the bank lacks the item; `need` is how many
-     *  more are required. decide-shaped so multi-leg gathers (windmill flour)
-     *  re-plan from the snapshot each loop. */
     gather?: Record<string, (snap: QuestSnapshot, need: number) => QuestStep>;
-    /** LOWERCASED substring matchers for pack items the engine's between-quest
-     *  deposit must KEEP: gather tools ('pickaxe', 'shears') and quest-internal
-     *  items a mid-quest restart may be holding ('ghostspeak amulet', 'cadava').
-     *  record.items names are always kept implicitly. Conservative (substring)
-     *  on purpose — keeping too much is harmless, depositing a tool wedges. */
     tools?: string[];
-    /** PURE quest brain: (journal, inv, worn) -> next step. */
     decide(snap: QuestSnapshot): QuestStep;
 }

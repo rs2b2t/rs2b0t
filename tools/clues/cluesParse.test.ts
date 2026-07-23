@@ -37,10 +37,6 @@ describe('parseKillForKey', () => {
 });
 
 describe('parseChallengeTalk', () => {
-    // The 6 challenge anagrams never appear in a literal progress_clue_medium(<obj>,…)
-    // call (the proc takes $clue), so parseTalkMappings can't see them. They are
-    // attributed to the opnpc that gates on inv_total(inv, <clue>) — even when the
-    // challenge-prompt label precedes that opnpc (the gnomeball referee shape).
     test('attributes a challenge anagram to its gating opnpc when the prompt label precedes it', () => {
         const src = [
             '[label,trail_gnome_ball_ref]',

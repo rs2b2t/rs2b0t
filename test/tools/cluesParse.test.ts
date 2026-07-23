@@ -3,8 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { decodeCoord } from '../../tools/nav/stairsParse.js';
 import { buildClueDb, parseClueObjs, parseEnum, parseTalkMappings } from '../../tools/clues/cluesParse.js';
 
-// Fixtures cut from rs2b2t-content game_trail configs + an NPC handler script.
-
 const ENUM_FIXTURE = `
 [trail_easy_enum]
 inputtype=int
@@ -47,9 +45,6 @@ param=trail_desc,Search the drawers found upstairs|in East Ardougne's houses.
 tradeable=no
 `;
 
-// The progress call lives in a [label,...] block reached from the [opnpc1,ned]
-// handler — the real ned.rs2 shape. The nearest preceding opnpc block names the
-// npc. Also includes an [opnpcu,ned] block (non-digit op) that must be ignored.
 const NED_SCRIPT = `
 [opnpc1,ned]
 if(map_members = ^true & inv_total(inv, trail_clue_easy_simple021) = 1) {
@@ -64,8 +59,6 @@ if(map_members = ^true & inv_total(inv, trail_clue_easy_simple021) = 1) {
 ~progress_clue_easy(trail_clue_easy_simple021, "Ned has given you another clue!");
 `;
 
-// Duel-arena shape: several single-line [opnpcN,npc] headers precede the block
-// that actually carries the progress call. Only the last one before the call wins.
 const DUEL_SCRIPT = `
 [opnpc1,duel_crowdmale1] @duel_arena_spectator_dialogue;
 [opnpc1,duel_crowdfemale3]
@@ -95,12 +88,10 @@ describe('parseClueObjs', () => {
             coord: '0_49_52_41_32',
             casket: 'trail_clue_easy_map001_casket',
             loc: undefined,
-            // map dig clues carry desc= (generic item text), not param=trail_desc
             desc: undefined
         });
         expect(objs['trail_clue_easy_simple001'].loc).toBe('^true');
         expect(objs['trail_clue_easy_simple001'].coord).toBe('1_50_50_9_18');
-        // talk clue: only a desc, no coord/loc/casket
         expect(objs['trail_clue_easy_simple021']).toEqual({
             coord: undefined,
             loc: undefined,

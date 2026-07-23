@@ -15,13 +15,10 @@ export default class JString {
             l *= 37n;
 
             if (c >= 0x41 && c <= 0x5a) {
-                // A-Z
                 l += BigInt(c + 1 - 0x41);
             } else if (c >= 0x61 && c <= 0x7a) {
-                // a-z
                 l += BigInt(c + 1 - 0x61);
             } else if (c >= 0x30 && c <= 0x39) {
-                // 0-9
                 l += BigInt(c + 27 - 0x30);
             }
         }
@@ -34,7 +31,6 @@ export default class JString {
     }
 
     static toRawUsername(value: bigint): string {
-        // >= 37 to the 12th power
         if (value < 0n || value >= 6582952005840035281n) {
             return 'invalid_name';
         }

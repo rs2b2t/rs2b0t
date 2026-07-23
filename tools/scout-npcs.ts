@@ -1,9 +1,3 @@
-// Scout tool: log in, teleport to a list of jagex-format coords, and dump the
-// NPCs + their tiles visible in each scene. Used to confirm whether a target
-// (e.g. Rellekka rock crabs) actually spawns in the open world.
-//
-// Usage: bun tools/scout-npcs.ts "0,42,58,22,8" "0,42,58,40,20" ...
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = 'http://localhost:8888';

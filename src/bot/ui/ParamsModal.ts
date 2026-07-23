@@ -2,25 +2,12 @@ import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { groupSchema, isVisible, renderControl, visibilityDeps } from './paramControls.js';
 import { el } from './dom.js';
 
-/**
- * Full-screen modal that edits the selected script's parameters, mirroring
- * ScriptLibrary. Live-saves each change through SettingsStore and calls
- * onChanged() so the panel summary refreshes. Controls are disabled while a
- * script is active (isActive()).
- *
- * Schemas can declare `group` (collapsible sections, remembered per script for
- * the session) and `showIf` (rows hidden until another setting matches — a
- * change to a depended-on key re-renders the body so dependent rows appear
- * in place; independent edits save without a re-render, keeping slider drags
- * and half-typed text alive).
- */
 export default class ParamsModal {
     private backdrop: HTMLElement;
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
     private schema: SettingsSchema = {};
-    /** collapsed group names per script (session-scoped). */
     private collapsed = new Map<string, Set<string>>();
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
@@ -83,7 +70,7 @@ export default class ParamsModal {
         for (const group of groupSchema(this.schema)) {
             const visibleKeys = group.keys.filter(key => isVisible(this.schema[key], valueOf));
             if (visibleKeys.length === 0) {
-                continue; // a group whose every row is hidden disappears whole
+                continue;
             }
 
             let host = this.bodyEl;
@@ -131,7 +118,7 @@ export default class ParamsModal {
             SettingsStore.save(this.scriptName, key, raw);
             this.onChanged();
             if (deps.has(key)) {
-                this.render(); // dependent rows appear/disappear in place
+                this.render();
             }
         }, { disabled });
         control.classList.add('rs2b0t-param-control');

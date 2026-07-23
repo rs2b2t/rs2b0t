@@ -1,33 +1,17 @@
-// based on: https://github.com/raybellis/java-random + TS support
-
-//
-// An almost complete implementation in JS of the `java.util.Random`
-// class from J2SE, designed to so far as possible produce the same
-// output sequences as the Java original when supplied with the same
-// seed.
-//
-
 const p2_16 = 0x0000000010000;
 const p2_24 = 0x0000001000000;
 const p2_27 = 0x0000008000000;
 const p2_31 = 0x0000080000000;
 const p2_32 = 0x0000100000000;
 const p2_48 = 0x1000000000000;
-const p2_53 = Math.pow(2, 53);	// NB: exceeds Number.MAX_SAFE_INTEGER
+const p2_53 = Math.pow(2, 53);
 
 const m2_16 = 0xffff;
 
-//
-// multiplicative term for the PRNG
-//
 const [c2, c1, c0] = [0x0005, 0xdeec, 0xe66d];
 
 let s2 = 0, s1 = 0, s0 = 0;
 
-//
-// 53-bit safe version of
-// seed = (seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1)
-//
 function _next() {
     let carry = 0xb;
 
@@ -70,10 +54,6 @@ export default class JavaRandom {
         this.setSeed(seedval);
     }
 
-    //
-    // 53-bit safe version of
-    // seed = (seed ^ 0x5DEECE66DL) & ((1L << 48) - 1)
-    //
     setSeed(n: number) {
         checkIsPositiveInt(n);
         s0 = ((n) & m2_16) ^ c0;
@@ -81,7 +61,6 @@ export default class JavaRandom {
         s2 = ((n / p2_32) & m2_16) ^ c2;
     }
 
-    // generate exclusive random number within bound
     nextInt(bound?: number) {
         if (bound === undefined) {
             return next_signed(32);
@@ -89,7 +68,6 @@ export default class JavaRandom {
 
         checkIsPositiveInt(bound, 0x7fffffff);
 
-        // special case if bound is a power of two
         if ((bound & -bound) === bound) {
             const r = next(31) / p2_31;
             return ~~(bound * r);

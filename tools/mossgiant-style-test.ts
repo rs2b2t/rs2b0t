@@ -1,24 +1,15 @@
-// Live test for MossGiant's combat styles at the Ardougne-north moss giants.
-// Spawns the style's gear+consumables via cheats (bank withdraw NOT exercised),
-// teleports onto the safespot tile (2553,3406), starts the bot, and asserts:
-//   mage/range — autocast/kills logged AND the bot HOLDS the safespot tile
-//                (never steps off to melee), loot grabbed.
-//   melee      — kills logged (fights in the pile), loot grabbed.
-//
-// Usage: bun tools/mossgiant-style-test.ts <mage|range|melee> [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 6 });
-const style = rest[0] ?? 'range'; // default = the canonical safespot mode (fleet passes no style)
+const style = rest[0] ?? 'range';
 if (style !== 'mage' && style !== 'range' && style !== 'melee') {
     fail('usage: bun tools/mossgiant-style-test.ts [mage|range|melee] [minutes] [base-url] [username]');
 }
 const username = rest[1] ?? `mg${style[0]}${Date.now().toString(36).slice(-6)}`;
 
 const SAFESPOT = { x: 2553, z: 3406 };
-const TELE = '::tele 0,39,53,57,14'; // 2553,3406 — the safespot
+const TELE = '::tele 0,39,53,57,14';
 const ITEMS: Record<string, string[]> = {
     mage: ['::~item staff_of_air 1', '::~item mindrune 400', '::~item lobster 15'],
     range: ['::~item maple_shortbow 1', '::~item iron_arrow 600', '::~item lobster 15'],
@@ -97,7 +88,6 @@ try {
             if (/autocast armed/i.test(line)) armed = true;
         }
         lastLogged = snap.log.length;
-        // safespot adherence (range/mage): count on/off the tile
         if (style !== 'melee' && snap.pos) {
             if (snap.pos.x === SAFESPOT.x && snap.pos.z === SAFESPOT.z) onSafespot++; else offSafespot++;
         }

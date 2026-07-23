@@ -14,8 +14,8 @@ function checkRoute(route: Route): void {
             for (const buy of shop.buys) {
                 const item = rec.items.find(i => i.obj === buy.obj);
                 expect(item).toBeDefined();
-                expect(item!.stackable).toBe(true);   // v1 buylist must stack (no inv pressure)
-                expect(item!.baseline).toBeGreaterThan(0); // baseline-0 never restocks
+                expect(item!.stackable).toBe(true);
+                expect(item!.baseline).toBeGreaterThan(0);
                 if (buy.policy?.kind === 'floor') {
                     expect(buy.policy.pct).toBeGreaterThan(0);
                     expect(buy.policy.pct).toBeLessThan(100);
@@ -42,12 +42,12 @@ describe('route data integrity vs generated shopdb', () => {
     });
     test('the Mage Arena cluster carries the full wilderness protocol', () => {
         const ma = ROUTE.clusters.find(c => c.id === 'magearena')!;
-        expect(ma.setting).toBe('mageArena');                    // operator toggle
-        expect(ma.keep).toEqual(['Rune scimitar']);              // the ONLY carried item — a slash weapon
-        expect(ma.wield).toEqual(['Rune scimitar']);             // worn: op1 Slash reads slash_checker
-        expect(ma.haulBank).toEqual({ stand: { x: 2533, z: 4714, level: 0 }, banker: 'Gundai' }); // haul never walks the wild
-        expect(ma.waypoints?.length ?? 0).toBeGreaterThan(0);    // staged deep-wildy walk
-        expect(ma.bank.banker).toBeUndefined();                  // funding = Edgeville BOOTH
+        expect(ma.setting).toBe('mageArena');
+        expect(ma.keep).toEqual(['Rune scimitar']);
+        expect(ma.wield).toEqual(['Rune scimitar']);
+        expect(ma.haulBank).toEqual({ stand: { x: 2533, z: 4714, level: 0 }, banker: 'Gundai' });
+        expect(ma.waypoints?.length ?? 0).toBeGreaterThan(0);
+        expect(ma.bank.banker).toBeUndefined();
     });
     test('smoke route is the Aubury-only varrock cluster', () => {
         checkRoute(SMOKE_ROUTE);

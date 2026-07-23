@@ -1,15 +1,3 @@
-// Headless smoke: the global `lampSkill` drives the genie/lamp random event.
-// Opens bot.html?Global.lampSkill=mining (a URL override on the reserved Global
-// namespace), gives a genie Lamp via the item cheat, starts a host bot so the
-// RandomEvents supervisor's handleLamp runs, and asserts the lamp is rubbed for
-// MINING xp (not the old hardcoded strength).
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/global-settings-test.ts [base-url]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -48,24 +36,20 @@ try {
     };
     const logs = () => page.evaluate(() => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).map(l => l.msg));
 
-    // The URL override sets the GLOBAL lampSkill to mining (?Global.lampSkill=mining).
     await page.goto(`${base}/bot.html?Global.lampSkill=mining`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
-    await page.reload(); // keeps the ?Global.lampSkill=mining query
+    await type('::tele 0,50,50,20,20');
+    await page.reload();
     await boot();
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island (Global.lampSkill=mining)');
 
-    // Give a genie Lamp (obj macro_genilamp) on the clean state.
     await type('::~item macro_genilamp 1');
     await page.waitForTimeout(1000);
 
-    // Start a host bot; the RandomEvents supervisor bridges the global lampSkill
-    // after onStart, then handleLamp rubs the Lamp.
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ChickenKiller')); });
     console.log('started ChickenKiller — waiting for the lamp to be rubbed');
 

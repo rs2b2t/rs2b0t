@@ -16,7 +16,6 @@ const snap = (
     bankCoins
 });
 
-// The four disguise pieces the prince handover consumes (research doc §5.5).
 const ALL4: [string, number][] = [['bronze key', 1], ['wig', 1], ['pink skirt', 1], ['paste', 1]];
 
 describe('princeali provisioning — raw items declared + gatherable', () => {
@@ -39,7 +38,6 @@ describe('princeali provisioning — raw items declared + gatherable', () => {
         expect(princeali.gather!['bronze bar'](s, 1).kind).toBe('buy');
         expect(princeali.gather!['pink skirt'](s, 1).kind).toBe('buy');
         expect(princeali.gather!['rope'](s, 1).kind).toBe('buy');
-        // gathered just-in-time in the chains, not provisioned up front
         for (const jit of ['onion', 'logs', 'ball of wool', 'clay', 'jug of water']) {
             expect(princeali.gather?.[jit]).toBeUndefined();
             expect(princeali.record.items.map(i => i.name.toLowerCase())).not.toContain(jit);
@@ -95,18 +93,10 @@ describe('princeali decide — row 3 Osman/key', () => {
 
 describe('princeali decide — rows 4/5/6 key acquisition', () => {
     test('soft clay held -> osman briefing + keli imprint (custom)', () => {
-        // Pins routing through the COMBINED custom: Keli's imprint is stage-20
-        // gated (lady_keli.rs2:90) and Osman is the only 10->20 advance
-        // (osman.rs2:48-50), so briefing Osman must precede the imprint — else
-        // the quest deadlocks at stage 10. The new custom name proves the fold.
         const s = decide(snap('inProgress', [['soft clay', 1]]));
         expect(s.kind === 'custom' && s.name).toBe('osman briefing + keli imprint');
     });
     test('fresh start (holds Bronze bar + pickaxe), noProgress 0 -> mine Clay, NOT a premature Osman trip', () => {
-        // The pre-forge Osman probe used to fire here and oscillate Al Kharid<->
-        // Rimmington (noProgress resets on the long mining walk, re-firing the probe).
-        // Osman is briefed inline by the soft-clay custom instead, so a fresh start
-        // goes straight to building clay.
         const s = decide(snap('inProgress', [['bronze bar', 1], ['bronze pickaxe', 1]], 0));
         expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
     });
@@ -151,8 +141,7 @@ describe('princeali decide — row 7 wig', () => {
 });
 
 describe('princeali decide — row 8 paste chain', () => {
-    // bankCoins covers the chain's buys so gpShort===0 -> buy (not the broke wait).
-    const base: [string, number][] = [['bronze key', 1], ['wig', 1]]; // past rows 1-7
+    const base: [string, number][] = [['bronze key', 1], ['wig', 1]];
     test('no redberries -> buy at Port Sarim (Wydin)', () => {
         const s = decide(snap('inProgress', base, 0, 100));
         expect(s.kind === 'buy' && s.item).toBe('Redberries');

@@ -86,18 +86,18 @@ export default class JagFX {
     getWave(loopCount: number): Packet {
         const length = this.makeSound(loopCount);
         JagFX.waveBuffer.pos = 0;
-        JagFX.waveBuffer.p4(0x52494646); // "RIFF" ChunkID
-        JagFX.waveBuffer.ip4(length + 36); // ChunkSize
-        JagFX.waveBuffer.p4(0x57415645); // "WAVE" format
-        JagFX.waveBuffer.p4(0x666d7420); // "fmt " chunk id
-        JagFX.waveBuffer.ip4(16); // chunk size
-        JagFX.waveBuffer.ip2(1); // audio format
-        JagFX.waveBuffer.ip2(1); // num channels
-        JagFX.waveBuffer.ip4(22050); // sample rate
-        JagFX.waveBuffer.ip4(22050); // byte rate
-        JagFX.waveBuffer.ip2(1); // block align
-        JagFX.waveBuffer.ip2(8); // bits per sample
-        JagFX.waveBuffer.p4(0x64617461); // "data"
+        JagFX.waveBuffer.p4(0x52494646);
+        JagFX.waveBuffer.ip4(length + 36);
+        JagFX.waveBuffer.p4(0x57415645);
+        JagFX.waveBuffer.p4(0x666d7420);
+        JagFX.waveBuffer.ip4(16);
+        JagFX.waveBuffer.ip2(1);
+        JagFX.waveBuffer.ip2(1);
+        JagFX.waveBuffer.ip4(22050);
+        JagFX.waveBuffer.ip4(22050);
+        JagFX.waveBuffer.ip2(1);
+        JagFX.waveBuffer.ip2(8);
+        JagFX.waveBuffer.p4(0x64617461);
         JagFX.waveBuffer.ip4(length);
         JagFX.waveBuffer.pos += length;
         return JagFX.waveBuffer;

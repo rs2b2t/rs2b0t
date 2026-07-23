@@ -24,7 +24,6 @@ import { SolveClue } from '../clues/SolveClue.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-/** Bank keep-set beyond food/coins: the trail kit stays for future clues. */
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
 
@@ -42,7 +41,6 @@ export const SETTINGS: SettingsSchema = {
     bankAtLootSlots: { type: 'number', default: 12, min: 1, max: 27, label: 'Safety-bank at loot slots' }
 };
 
-// Active run config (ADR-0006 single-script module state).
 let TARGET = 'Guard';
 let ANCHOR = SPOTS['Varrock East gate'].tile;
 let LEASH = 8;
@@ -59,20 +57,10 @@ let COMBAT_MODE = 1;
 function foodCount(): number {
     return countMatching(Inventory.items(), [FOOD]);
 }
-/** Pack slots holding loot-list items (clue rewards included via 'clue'/'casket'). */
 function lootSlots(): number {
     return slotsMatching(Inventory.items(), LOOT);
 }
 
-/**
- * AutoFighter — anchor-based target killer that farms and solves clues
- * (2026-07-20 design). Kills the selected target at the selected spot, loots
- * ONLY gem-table items + clue scrolls (guards never roll the gem table in
- * this engine — the list is future-proofing for targets that do), invokes
- * the shared SolveClue the moment a clue is looted, banks the loot when the
- * clue finishes (plus full-pack/foodless safeties), and returns to killing.
- * Start it anywhere — it walks to the spot first. Food comes from the bank.
- */
 export default class AutoFighter extends TaskBot {
     override loopDelay = 600;
 
@@ -83,12 +71,7 @@ export default class AutoFighter extends TaskBot {
     private deaths = 0;
     private cluesSolved = 0;
     private solveClue: SolveClue | undefined;
-    /** Set when a solve completes; BankRun consumes it (the user loop:
-     *  clue done -> bank the loot -> back to killing). */
     bankAfterSolve = false;
-    /** The bank had no food last trip — disarms the foodless safety bank so
-     *  an empty bank can't hot-loop bank<->spot (live smoke find); re-arms
-     *  the moment food is seen in the pack again. */
     bankFoodEmpty = false;
     private status = 'starting';
     private startedAt = Date.now();
@@ -129,8 +112,6 @@ export default class AutoFighter extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        // Eat mid-walk: clue trails leave the spot and the Eat task can't run
-        // while a walk or solve holds the task loop (RockCrab's proven shape).
         Sustain.set(async () => {
             if (Skills.hpFraction() < EAT_AT && foodCount() > 0) {
                 const food = Inventory.items().find(i => matchesAny(i.name, [FOOD]));
@@ -161,7 +142,7 @@ export default class AutoFighter extends TaskBot {
                 onDeath: () => {
                     this.setStatus('died — recovering');
                     this.deaths++;
-                    this.solveClue?.noteDeath(); // died mid-solve: food re-bank before resuming
+                    this.solveClue?.noteDeath();
                     this.log('died! waiting for respawn, then walking back to the spot');
                 },
                 onRecovered: () => {
@@ -171,7 +152,7 @@ export default class AutoFighter extends TaskBot {
             new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
-            this.solveClue!, // a looted clue preempts banking/fighting (RockCrab shape)
+            this.solveClue!,
             new BankRun(this),
             new SetStyle(this),
             new Fight(this),
@@ -208,7 +189,6 @@ export default class AutoFighter extends TaskBot {
     countTrip(): void { this.trips++; }
 }
 
-/** Ground gem/clue within leash+4, out of combat -> Take (ArdyFighter shape). */
 class LootDrops implements Task {
     constructor(private bot: AutoFighter) {}
     private find() {
@@ -237,7 +217,6 @@ class LootDrops implements Task {
     }
 }
 
-/** Eat below the gate up to the target (ArdyFighter shape). */
 class EatFood implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
@@ -268,7 +247,6 @@ class EatFood implements Task {
     }
 }
 
-/** No food + low HP: retreat to the nearest bank, restock or regen. */
 class PanicRetreat implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
@@ -301,9 +279,6 @@ class PanicRetreat implements Task {
     }
 }
 
-/** Bank after a solved clue (the user loop) or on the full-pack/foodless
- *  safeties: deposit everything except food + kit + coins, top food up,
- *  walk back to the spot. */
 class BankRun implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
@@ -311,7 +286,7 @@ class BankRun implements Task {
             return false;
         }
         if (foodCount() > 0) {
-            this.bot.bankFoodEmpty = false; // food came from somewhere — re-arm the safety
+            this.bot.bankFoodEmpty = false;
         }
         return this.bot.bankAfterSolve || lootSlots() >= BANK_AT
             || (foodCount() === 0 && FOOD_WITHDRAW > 0 && !this.bot.bankFoodEmpty);
@@ -326,7 +301,7 @@ class BankRun implements Task {
         this.bot.setStatus(this.bot.bankAfterSolve ? 'clue done — banking the loot' : 'banking');
         this.bot.log(`banking at the ${bank.name} bank (${bank.tile})`);
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
-            return; // walk failed — revalidate next loop
+            return;
         }
         if (!(await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             return;
@@ -356,7 +331,6 @@ class BankRun implements Task {
     }
 }
 
-/** Re-apply the combat style whenever com_mode drifts (not saved by the engine). */
 class SetStyle implements Task {
     private announced = false;
     constructor(private bot: AutoFighter) {}
@@ -374,8 +348,6 @@ class SetStyle implements Task {
     }
 }
 
-/** Attack the nearest free target in leash; see the fight through, yielding
- *  below the eat gate so EatFood can fire mid-combat (ArdyFighter shape). */
 class Fight implements Task {
     constructor(private bot: AutoFighter) {}
     private findTarget() {
@@ -411,7 +383,7 @@ class Fight implements Task {
                 return;
             }
             if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount()) || Skills.hpFraction() < PANIC_AT) {
-                return; // EatFood / PanicRetreat outrank us next loop
+                return;
             }
             const cur = this.track(target);
             if (!cur || (cur.health === 0 && cur.snap.totalHealth > 0)) {
@@ -419,7 +391,7 @@ class Fight implements Task {
                     await Execution.delayUntil(() => this.track(target) === null, 10_000);
                 }
                 this.bot.countKill();
-                await Execution.delayTicks(2); // let the drop land for LootDrops
+                await Execution.delayTicks(2);
                 return;
             }
             if (!Game.inCombat() && !cur.inCombat) {
@@ -430,7 +402,6 @@ class Fight implements Task {
     }
 }
 
-/** Start-anywhere travel + drift recovery. */
 class ReturnToAnchor implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {

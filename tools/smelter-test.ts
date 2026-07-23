@@ -1,17 +1,3 @@
-// Headless live smoke for SmelterBot. Boots the WebGL client (SwiftShader), logs
-// in (auto-creates), teleports off Tutorial Island, maxes stats (Smithing),
-// seeds ore into the BANK via the ::~bankitem cheat, teleports to the Al Kharid
-// bank, starts the bot, and validates a full BRONZE cycle: reach the bank, open
-// the booth, withdraw 14 copper + 14 tin, cross to the furnace, smelt bars, then
-// rebank. Also confirms the out-of-ore STOP (empty tin → shortage log + runner
-// stops).
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/smelter-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -54,7 +40,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -68,19 +54,15 @@ try {
     });
     const tile = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.worldTile());
 
-    // Seed ore into the bank BEFORE ::~maxme — maxme's level-up dialogs swallow
-    // the next typed command, so seeding after it drops the first ::~bankitem.
-    // Object names are the engine's obj ids (copper_ore, tin_ore, ...).
     await type('::~bankitem copper_ore 5000');
-    await type('::~bankitem tin_ore 14'); // exactly one bronze trip — so trip 2 hits the tin shortage + stops
+    await type('::~bankitem tin_ore 14');
     await type('::~bankitem iron_ore 5000');
     await type('::~bankitem coal 5000');
     await type('::~bankitem gold_ore 5000');
 
-    await type('::~maxme');                 // Smithing 99 + everything
+    await type('::~maxme');
     await clearDialogs();
 
-    // Al Kharid bank stand (3269,3167) — mapsquare 51_49, local (5,31).
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
         await type('::tele 0,51,49,5,31');
@@ -93,21 +75,20 @@ try {
     if (!at || Math.abs(at.x - 3269) > 8 || Math.abs(at.z - 3167) > 8) { fail(`Al Kharid tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
     await clearDialogs();
 
-    // SmelterBot defaults to Bronze — no URL override needed for the bronze cycle.
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('SmelterBot')); });
     console.log('started SmelterBot (Bronze) — watching for withdraw → smelt → rebank');
 
     const invBars = () => page.evaluate(() => (globalThis as never as R).rs2b0t.reader.inventory().filter(i => (i.name ?? '').toLowerCase().includes('bronze bar')).reduce((s, i) => s + i.count, 0));
     const before = (await logLines()).length;
     let started = false, reachedFurnace = false, peakBars = 0;
-    for (let i = 0; i < 75; i++) { // ~150s
+    for (let i = 0; i < 75; i++) {
         await page.waitForTimeout(2000);
         if ((await logLines()).slice(before).some(l => /SmelterBot smelting/i.test(l))) { started = true; }
         const here = await tile();
         if (here && Math.abs(here.x - 3275) <= 1 && Math.abs(here.z - 3185) <= 1) { reachedFurnace = true; }
         peakBars = Math.max(peakBars, await invBars());
         if (i % 5 === 0) { console.log(`  t=${i * 2}s pos=${here ? `${here.x},${here.z}` : '?'} bronzeBars=${await invBars()}`); }
-        if (peakBars >= 12) { break; } // near-full 14-bar pack — proves it doesn't stall mid-pack
+        if (peakBars >= 12) { break; }
     }
 
     const tail = (await logLines()).slice(-25);
@@ -119,14 +100,9 @@ try {
     if (peakBars === 0) { await page.screenshot({ path: 'out/smelter-test.png' }); fail('SmelterBot produced no bronze bars (furnace interact did not land)'); }
     console.log('bronze half PASS (bank → withdraw copper+tin → smelt bronze bars at the furnace)');
 
-    // Out-of-ore STOP: empty the tin so the next bank trip can't supply a full
-    // bronze set, and confirm the bot logs the shortage and the runner stops.
-    // Tin was seeded at exactly one trip's worth, so once the first pack is
-    // smelted the next bank trip finds 0 tin — no drain cheat needed (bankitem
-    // can't remove items anyway).
     console.log('first pack smelting; the next bank trip should log the tin shortage and stop');
     let stopped = false, shortage = false;
-    for (let i = 0; i < 90; i++) { // ~180s — trip 1 must finish (14 bars) + bank + trip 2 shortage
+    for (let i = 0; i < 90; i++) {
         await page.waitForTimeout(2000);
         const lines = await logLines();
         if (lines.some(l => /out of .?Tin ore/i.test(l))) { shortage = true; }

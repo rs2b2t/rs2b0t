@@ -1,4 +1,3 @@
-/** Query facade over player snapshots (builder: where/name/within/nearest). */
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Player } from '../entities/index.js';
 import EntityQuery from './Query.js';

@@ -3,11 +3,9 @@ import { Quests } from './hud/Quests.js';
 import { Skills } from './hud/Skills.js';
 import Tile from './Tile.js';
 
-/** Entry gate on a bank AREA (not the booth): the door/village refuses
- *  characters that don't meet it, so selection must skip the bank entirely. */
 export interface BankRequirement {
     skill?: { name: string; level: number };
-    quest?: string; // exact journal name, complete required
+    quest?: string;
 }
 
 export interface BankLocation {
@@ -16,21 +14,6 @@ export interface BankLocation {
     requires?: BankRequirement;
 }
 
-/**
- * Known bank centres (level 0), world coords, mostly derived from the content's
- * `bank_zones.dbrow` (skill_firemaking) — midpoint of each named zone. Used to
- * web-walk to the NEAREST bank when a gathering bot fills up and no booth is
- * loaded in the current scene (the resource is more than a screen from a bank).
- * A centre may be a solid booth tile; callers walk to within a couple tiles and
- * then open the nearest booth from there.
- *
- * Gated areas carry `requires` and are SKIPPED for characters that can't
- * enter — pure geometry stranded sub-68 fishers at the guild door (live
- * 2026-07-17, re-hit 2026-07-21). Shantay Pass is ungated: its bank sits on
- * the free north side of the gate. Canifis is NOT in bank_zones.dbrow (that's
- * the firemaking list) — its centre is the walkable tile west of the Canifis
- * booth column (3513,3479-3482); it's Morytania, gated behind Priest in Peril.
- */
 export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Varrock East', tile: new Tile(3253, 3420, 0) },
     { name: 'Varrock West', tile: new Tile(3185, 3440, 0) },
@@ -51,8 +34,6 @@ export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Duel Arena', tile: new Tile(3382, 3269, 0) }
 ];
 
-/** Nearest bank passing `usable`, on the same level, by Chebyshev distance.
- *  Pure — the selection logic under test; live callers use nearestBank(). */
 export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) => boolean): BankLocation | null {
     let best: BankLocation | null = null;
     let bestD = Infinity;
@@ -69,7 +50,6 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
     return best;
 }
 
-/** Can THIS character enter the bank's area right now (live reads)? */
 function meetsRequirement(bank: BankLocation): boolean {
     const req = bank.requires;
     if (!req) {
@@ -84,8 +64,6 @@ function meetsRequirement(bank: BankLocation): boolean {
     return true;
 }
 
-/** Nearest known bank this character can actually ENTER, same level, by
- *  Chebyshev distance. */
 export function nearestBank(from: WorldTile): BankLocation | null {
     return nearestUsableBank(from, meetsRequirement);
 }

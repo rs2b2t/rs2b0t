@@ -42,8 +42,6 @@ export default class Pix3D extends Pix2D {
         }
 
         for (let i: number = 0; i < 2048; i++) {
-            // angular frequency: 2 * pi / 2048 = 0.0030679615757712823
-            // * 65536 = maximum amplitude
             this.sinTable[i] = (Math.sin(i * 0.0030679615757712823) * 65536.0) | 0;
             this.cosTable[i] = (Math.cos(i * 0.0030679615757712823) * 65536.0) | 0;
         }
@@ -103,7 +101,6 @@ export default class Pix3D extends Pix2D {
 
                 this.numTextures++;
             } catch (_e) {
-                // empty
             }
         }
     }

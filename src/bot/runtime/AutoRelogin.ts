@@ -4,22 +4,10 @@ import { Credentials, type Creds } from './Credentials.js';
 import { LoginBackoff } from './LoginBackoff.js';
 import { ScriptRunner } from './ScriptRunner.js';
 
-const FIRST_RETRY_MS = 6000; // delay before the first reconnect attempt
-const RECONNECT_INTERVAL_MS = 9000; // spacing between attempts (non-overlapping)
+const FIRST_RETRY_MS = 6000;
+const RECONNECT_INTERVAL_MS = 9000;
 const MAX_ATTEMPTS = 15;
 
-/**
- * Login keeper. While ingame it captures the
- * live session credentials (Client.logout() clears them); on a drop to the
- * title screen it logs back in with backoff (the server rejects "already
- * online" for ~10s) and resumes the running script. Credentials fall back to
- * the locally-saved ones (Credentials), so it works even on a fresh page or
- * after the in-memory creds were wiped.
- *
- * With auto-login enabled (panel toggle / ?autologin=1) it also logs in from
- * the title screen unprompted whenever saved credentials exist — for fully
- * unattended operation. Host-side: runs off the frame hook.
- */
 class AutoReloginImpl {
     private enabled = false;
     private autoLogin = false;
@@ -47,14 +35,11 @@ class AutoReloginImpl {
         this.autoLogin = on;
     }
 
-    /** Inject per-instance credentials (MultiBox) so creds() never falls back
-     *  to the shared localStorage key. Set BEFORE arming auto-login. */
     setCredentials(username: string, password: string): void {
         this.username = username;
         this.password = password;
     }
 
-    /** Best credentials: the live session's, else the locally-saved ones. */
     private creds(): Creds | null {
         if (this.username.length > 0) {
             return { username: this.username, password: this.password };
@@ -62,7 +47,6 @@ class AutoReloginImpl {
         return Credentials.get();
     }
 
-    /** Explicit login (panel "Log in" button): log in now if on the title screen. */
     loginNow(): boolean {
         const c = this.creds();
         if (!c || reader.ingame()) {
@@ -107,10 +91,7 @@ class AutoReloginImpl {
             return;
         }
 
-        // --- on the title screen ---
         const c = this.creds();
-        // re-login if a script was running (mid-session drop) OR auto-login is
-        // on and we have saved credentials
         const wantLogin = c !== null && (this.autoLogin || this.scriptActive() || this.reconnecting);
 
         if (this.wasIngame) {
@@ -126,7 +107,6 @@ class AutoReloginImpl {
                 this.log('warn', `disconnected — logging back in as '${c?.username}'`);
             }
         } else if (wantLogin && !this.reconnecting) {
-            // fresh title screen (e.g. page load) with saved creds + auto-login
             this.reconnecting = true;
             this.attempts = 0;
             this.nextAttemptAt = performance.now();
@@ -136,10 +116,6 @@ class AutoReloginImpl {
             return;
         }
 
-        // response 16: the server's per-IP rate-limit counters are sliding
-        // windows that every attempt refreshes, so retrying on the normal
-        // cadence keeps the IP locked forever (and poisons it for every other
-        // client behind it — all clients share uid 1337). Hold off instead.
         if (this.attempts > 0 && this.rateLimitedAttempt !== this.attempts && reader.loginMessage().startsWith('Login attempts exceeded')) {
             this.rateLimitedAttempt = this.attempts;
             const holdMs = this.backoff.next();
@@ -158,10 +134,6 @@ class AutoReloginImpl {
         }
 
         this.attempts++;
-        // flat spacing: wide enough that a login handshake fully completes (or
-        // fails) before the next attempt — overlapping login() calls stomp on
-        // each other's connection and never finish. Also clears the server's
-        // ~10s already-online window within a couple of tries.
         this.nextAttemptAt = performance.now() + RECONNECT_INTERVAL_MS;
         this.log('info', `auto-login: attempt ${this.attempts}/${MAX_ATTEMPTS} as '${c.username}'`);
         actions.login(c.username, c.password);

@@ -1,8 +1,3 @@
-/**
- * The walking facade scripts use: walkTo/walkResilient wrap the nav
- * Navigator (A* over the baked collision pack + live scene) with the
- * retry/escalation ladder; honest false on unreachable.
- */
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { Navigator } from '../nav/Navigator.js';
@@ -17,49 +12,30 @@ import { Execution } from './Execution.js';
 import { Sustain } from './Sustain.js';
 
 export interface WalkResilientOptions {
-    /** Arrive when within this Chebyshev distance of dest. */
     radius: number;
-    /** Bound the escalation to this many baked-walk passes. Default: undefined =
-     *  retry forever (the walker never gives up; only a random event / Stop ends
-     *  it early). Set a number for a bounded caller. */
     attempts?: number;
-    /** Per baked-walk budget (default 90s — several fit one recovery window). */
     timeoutMs?: number;
-    /** Client-scene-walk arrival radius when bridging a baked gap (default = radius+1). */
     sceneRadius?: number;
-    /** Big-budget baked retry's node budget (default 1.2M). */
     maxBudget?: number;
-    /** Progress lines. */
     log?: (msg: string) => void;
 }
 
-const SCENE_TIMEOUT_MS = 6000; // short: return to the ladder promptly to re-check events/progress
+const SCENE_TIMEOUT_MS = 6000;
 const DEFAULT_MAX_BUDGET = 1_200_000;
 const PROGRESS_LOG_MS = 15_000;
 
 export const Traversal = {
-    /** Walk to `dest` anywhere in the world (baked graph + doors + transports).
-     *  True on arrival (within opts.radius, default 2), false on failure/timeout. */
     walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         return WalkExecutor.walkTo(dest, opts);
     },
 
-    /**
-     * Tenacious world-walk: an escalation ladder (baked → bigger-budget baked →
-     * client-scene walk → unstick maneuver → backoff) driven by the pure
-     * `walkLadder` state machine, looping until it genuinely arrives within
-     * `radius`. Retries FOREVER by default — returns false ONLY when a random
-     * event / Stop interrupts (a yield, not a give-up; the runtime
-     * Supervisor→StallGuard is the backstop for a truly impossible target). Pass
-     * `attempts` to bound it. Sleeps via Execution.* so Stop unwinds it.
-     */
     async walkResilient(dest: WorldTile, opts: WalkResilientOptions): Promise<boolean> {
         const log = opts.log ?? ((): void => {});
         const radius = opts.radius;
         const sceneRadius = opts.sceneRadius ?? radius + 1;
         const maxBudget = opts.maxBudget ?? DEFAULT_MAX_BUDGET;
         const bakedTimeout = opts.timeoutMs ?? 90000;
-        const maxPasses = opts.attempts; // undefined = forever
+        const maxPasses = opts.attempts;
 
         const dist = (): number => {
             const me = reader.worldTile();
@@ -67,9 +43,6 @@ export const Traversal = {
         };
         const withinRadius = (): boolean => {
             const me = reader.worldTile();
-            // SAME predicate as WalkExecutor/DirectNavigator: if the outer ladder
-            // and the inner baked-walk disagreed on "arrived", walkResilient would
-            // spin (outer says done, inner refuses / vice-versa).
             return me !== null && isArrived(me, dest, radius, Reachability.arrivalProbe());
         };
 
@@ -79,18 +52,10 @@ export const Traversal = {
         let lastProbeTerminal: WorldTile | null = null;
         let lastLoggedAt = performance.now();
 
-        // Guard against the pathological empty-scene case where every observation
-        // is Infinity (no player tile): a bounded safety cap on total iterations
-        // that is astronomically above any real walk but prevents a hot spin if
-        // reader.worldTile() is null forever.
         for (let iter = 0; iter < 100_000; iter++) {
-            await Sustain.run(); // eat mid-ladder: scene/unstick/backoff passes can stall in aggro zones
+            await Sustain.run();
             if (EventSignal.pending()) {
                 log('walk interrupted by a random event — yielding to the runtime');
-                // Surface the interruption on WalkExecutor.lastOutcome so a caller
-                // that distinguishes yield-vs-failure after we return false (the
-                // Supervisor watchdog) reads a true signal, not a stale sub-walk
-                // outcome. Interruption = yield; a bounded/cap give-up = 'failed'.
                 WalkExecutor.lastOutcome = 'interrupted';
                 return false;
             }
@@ -122,21 +87,12 @@ export const Traversal = {
                 await WalkExecutor.walkTo(dest, { radius, timeoutMs: bakedTimeout, log, ...(action.bigBudget ? { maxExpansions: maxBudget } : {}) });
                 const outcome = WalkExecutor.lastOutcome;
                 if (outcome === 'blocked') {
-                    // The baked walker got adjacent to a destination blocked LIVE (an
-                    // occupied stall stand / booth). The scene walk can't beat a live
-                    // block and repathing loops, so accept adjacency as arrival here
-                    // (callers interact from range) rather than churning escalation
-                    // passes to the bounded give-up — the short-path "0 clicks stuck"
-                    // loop (ArdyThiever stall stand, Leela, the waterfall bookcase).
                     return true;
                 }
-                // 'unreachable' is walkResilient's own verify terminal (set below),
-                // never emitted by a baked walkTo — coerce the widened public field
-                // back into the state machine's LastOutcome input domain.
                 lastOutcome = outcome === 'unreachable' ? 'failed' : outcome;
             } else if (action.kind === 'scene') {
                 await DirectNavigator.walkTo(dest, sceneRadius, SCENE_TIMEOUT_MS);
-                lastOutcome = EventSignal.pending() ? 'interrupted' : 'failed'; // progress is read from the tile next iteration
+                lastOutcome = EventSignal.pending() ? 'interrupted' : 'failed';
             } else if (action.kind === 'unstick') {
                 await WalkExecutor.tryNearbyDoor(log);
                 const me = reader.worldTile();
@@ -150,7 +106,7 @@ export const Traversal = {
                 lastOutcome = 'failed';
             } else if (action.kind === 'backoff') {
                 await Execution.delayTicks(action.ticks);
-                lastOutcome = null; // a new pass starts at baked
+                lastOutcome = null;
             } else if (action.kind === 'verify') {
                 const probe = await WalkExecutor.probeDest(dest, maxBudget);
                 const outcome = judgeProbe(lastProbeTerminal, probe);
@@ -170,12 +126,10 @@ export const Traversal = {
         return false;
     },
 
-    /** Spawn the nav worker + load the collision pack ahead of first walkTo. */
     preload(): void {
         Navigator.start();
     },
 
-    /** Remaining tile count of the walk in progress (0 when idle). */
     remaining(): number {
         return WalkExecutor.remaining;
     }

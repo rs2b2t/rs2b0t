@@ -1,38 +1,15 @@
-// Panic-retreat / recovery verification for ArdyFighter (Task 6, behavior 5).
-// Models tools/death-test.ts (fresh account, CLIENT_CHEAT packets, panel
-// Browse->Combat->ArdyFighter->Start, poll runner log + reader) on the CURRENT
-// `rs2b0t` debug global.
-//
-// Path verified: PANIC RETREAT (behavior 5). Override food to a pattern that
-// matches no item (?ArdyFighter.food=zzz-nothing) so the bot can never eat or
-// count a restock; leave defence at 1 so the market guards land hits; it drops
-// below panicHp with zero food, and PanicRetreat must fire — leave the square,
-// walk to the south bank, find the bank empty (fresh account), wait out regen
-// to restUntilHp (already met, so instant), and walk back to the market. We
-// assert that full round-trip end-to-end.
-//
-// (Death recovery — behavior 6 — is the alternative path: floor defence+hp
-// mid-fight so a guard kills the bot, then DeathRecovery walks it back from the
-// Lumbridge respawn. That leg is a long, nav-flaky Lumbridge->Ardougne cross-
-// country walk; panic is the contained, deterministic path, so it is the one
-// this harness drives. See tools/death-test.ts for the death-kill recipe.)
-//
-// Usage: bun tools/ardyfighter-death-test.ts [minutes] [base-url]
 import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { base: 'http://localhost:8890', minutes: 10 });
 const username = `ap${Date.now().toString(36).slice(-7)}`;
-// food=zzz-nothing -> matches no item (foodCount always 0); panicHp=85 fires
-// after ~7 damage on a 40-hp bar; restUntilHp=40 is already met at the panic
-// point so the regen wait returns promptly and the bot walks back.
 const OVERRIDES = 'ArdyFighter.food=zzz-nothing&ArdyFighter.panicHp=85&ArdyFighter.restUntilHp=40&ArdyFighter.foodTarget=4';
 const PAGE = `${base}/bot.html?${OVERRIDES}`;
 
 const ANCHOR = { x: 2661, z: 3306 };
-const BANK = { x: 2655, z: 3286 }; // DEFAULT_BANK_STAND
+const BANK = { x: 2655, z: 3286 };
 const UNLOCK_TELE = 'tele 0,50,50,20,20';
-const ANCHOR_TELE = 'tele 0,41,51,37,42'; // -> (2661,3306,0)
+const ANCHOR_TELE = 'tele 0,41,51,37,42';
 
 const browser = await launchBrowser();
 
@@ -60,7 +37,6 @@ try {
     const status = () => page.evaluate(() => { const b = (globalThis as never as Rs2b0t).rs2b0t.runner.bot as Record<string, unknown> | null; return b ? String(b.status) : '?'; });
     const runnerState = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state);
 
-    // --- bring-up ---------------------------------------------------------
     await page.goto(PAGE); await boot(page);
     let firstIn = false;
     for (let i = 0; i < 3 && !firstIn; i++) firstIn = await login();
@@ -70,9 +46,6 @@ try {
     let backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
     if (!backIn) fail('re-login failed');
-    // raise offence + hp + thieving, but LEAVE defence at 1 so guards connect
-    // and the bot bleeds down to the panic gate quickly (still 40 hp of buffer
-    // between the panic point ~33 and death, so it panics long before dying)
     for (const s of ['attack', 'strength', 'hitpoints']) await cheat(`advancestat ${s} 40`);
     await cheat('advancestat thieving 10');
 
@@ -82,7 +55,6 @@ try {
     const guards = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Guard').length);
     console.log(`[geo] at ${t0?.x},${t0?.z}  guards=${guards}`);
 
-    // --- start ArdyFighter (no food it can use) — retry the Browse modal --
     let started = false;
     for (let attempt = 0; attempt < 4 && !started; attempt++) {
         await page.getByRole('button', { name: 'Browse…' }).click().catch(() => {});
@@ -104,14 +76,13 @@ try {
     if (!started) fail('could not find/start the ArdyFighter card in the Browse modal');
     console.log(`ArdyFighter started (overrides: ${OVERRIDES}) — fighting with no usable food, expecting a panic retreat`);
 
-    // --- poll for the panic round-trip ------------------------------------
     const deadline = Date.now() + minutes * 60_000;
     let lastLog = 0;
-    let panicked = false; // "panic retreat at ..." logged
-    let leftSquare = false; // moved > 8 from the anchor toward the bank
-    let reachedBank = false; // within 4 of the bank stand
-    let bankEmptyWait = false; // "bank empty — waiting for regen" reached
-    let returned = false; // back within 8 of the anchor AFTER panicking
+    let panicked = false;
+    let leftSquare = false;
+    let reachedBank = false;
+    let bankEmptyWait = false;
+    let returned = false;
 
     while (Date.now() < deadline) {
         await page.waitForTimeout(6000);

@@ -1,17 +1,10 @@
-// Validates the generalized GatheringBot via the Miner preset at the
-// Lumbridge Swamp mine: pick it from the library, run it, and assert ore
-// ends up in the inventory (mining works: find rock -> Mine -> ore -> repeat,
-// handling depletion).
-//
-// Usage: bun tools/gathering-test.ts [minutes] [base-url]
-
 import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 4 });
 const username = `mine${Date.now().toString(36).slice(-7)}`;
 
-const MINE_TELE = '::tele 0,50,49,38,24'; // Lumbridge Swamp mine floor near the rock wall
+const MINE_TELE = '::tele 0,50,49,38,24';
 
 const browser = await launchBrowser();
 try {
@@ -20,19 +13,14 @@ try {
 
     const hasOre = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('ore')));
 
-    // Miner's `rocks` multi-select defaults to Iron; the SE swamp mine is
-    // mithril/adamant, so select Mithril via the URL override — an Iron-only
-    // Miner here matches zero rock ids and idles forever (2026-07-21 sweep).
     await page.goto(`${base}/bot.html?Miner.rocks=Mithril`);
     await boot(page);
     if (!(await login(page, username))) fail('login failed');
     await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
     await type(page, '::give rune_pickaxe', 1400);
-    await type(page, '::advancestat mining 99', 1400); // the SE swamp mine is mithril (lvl 55+)
+    await type(page, '::advancestat mining 99', 1400);
     await type(page, MINE_TELE, 1400);
 
-    // Poll: post-tele loc streaming can lag a few seconds (same flake class
-    // as chaosdruid-test's NPC probe).
     const rocksSeen = await page
         .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.locs().some(l => l.name === 'Rocks' && l.ops.some(o => o === 'Mine')), undefined, { timeout: 15000 })
         .then(() => true)
@@ -40,11 +28,9 @@ try {
     console.log(`minable rocks seen: ${rocksSeen}`);
     if (!rocksSeen) fail('no minable Rocks at the tele spot');
 
-    // pick Miner from the library
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Mining/ }).click();
-    // exact card-name match — a bare hasText:'Miner' also matches EssMiner's card
     await page.locator('.rs2b0t-library-card', { has: page.locator('.rs2b0t-card-name', { hasText: /^Miner$/ }) }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     const current = await page.textContent('.rs2b0t-current-script');
@@ -64,7 +50,7 @@ try {
         const diag = await page.evaluate(() => {
             const r = (globalThis as never as Rs2b0t).rs2b0t.reader;
             const t = r.worldTile();
-            const m = r.stat(14); // mining
+            const m = r.stat(14);
             const chat = r.chat(3).map(c => c.text).join(' | ');
             const nearRock = r.locs().filter(l => l.name === 'Rocks' && l.ops.includes('Mine') && t).sort((a, b) => Math.max(Math.abs(a.tile.x - t!.x), Math.abs(a.tile.z - t!.z)) - Math.max(Math.abs(b.tile.x - t!.x), Math.abs(b.tile.z - t!.z)))[0];
             const slots = nearRock ? nearRock.ops.map((o, i) => `${i + 1}:${o ?? '-'}`).join(' ') : 'none';

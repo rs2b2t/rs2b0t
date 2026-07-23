@@ -30,12 +30,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Range search radius (tiles)' }
 };
 
-/**
- * Catherby cook-and-bank loop. Withdraw a full pack of raw fish, cross to the
- * range (opening the closing door), cook every raw fish by using the LAST one on
- * the range one at a time, then return and bank the whole pack (cooked + burnt +
- * junk), and repeat. Start it at the Catherby bank.
- */
 export default class CookBot extends TaskBot {
     override loopDelay = 600;
 
@@ -81,8 +75,6 @@ export default class CookBot extends TaskBot {
         p.row(`Cooking: ${this.fish}`, `Raw left: ${this.rawCount()}`, `Bank trips: ${this.trips}`);
 
         p.gap();
-        // processing bot — switching food mid-pack would strand a half-cooked
-        // batch, so Pause/Stop only (no live selector)
         ScriptRunner.paintControls(p);
         p.end();
     }
@@ -98,7 +90,6 @@ export default class CookBot extends TaskBot {
     rangeTile(): Tile { return this.rangeStand; }
     boothLocName(): string { return this.boothName; }
     rawCount(): number { return countRaw(Inventory.items(), this.fish); }
-    /** The LAST raw-fish InvItem in the pack (the cook target), or null. */
     lastRaw() {
         const items = Inventory.items();
         const idx = lastRawIndex(items, this.fish);
@@ -106,22 +97,18 @@ export default class CookBot extends TaskBot {
     }
 }
 
-/** Standard fish don't prompt, but karambwan (and future picks) open a make-X
- *  menu — pick the fish product and let the cook proceed. */
 class CookDialog implements Task {
     constructor(private bot: CookBot) {}
     validate(): boolean { return ChatDialog.isMakeMenu(); }
     async execute(): Promise<void> {
         this.bot.setStatus('choosing product');
         if (!(await ChatDialog.make(this.bot.fishName()))) {
-            await ChatDialog.make(); // fall back to the first product
+            await ChatDialog.make();
         }
         await Execution.delayTicks(1);
     }
 }
 
-/** No raw fish in the pack → cross to the bank, deposit EVERYTHING, withdraw a
- *  full pack of raw fish. */
 class BankTrip implements Task {
     constructor(private bot: CookBot) {}
     validate(): boolean { return this.bot.rawCount() === 0; }
@@ -132,10 +119,8 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositInventory(); // cooked + burnt + junk — the whole pack
+        await Bank.depositInventory();
         await Execution.delayTicks(1);
-        // Find the fish bank item by substring (the `fish` setting may be partial)
-        // — Bank.withdraw/count match names EXACTLY, so resolve the real name first.
         const pat = this.bot.fishName().toLowerCase();
         const fishItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat));
         this.bot.countTrip();
@@ -159,12 +144,9 @@ class BankTrip implements Task {
                 if (!(await Execution.delayUntil(() => this.bot.rawCount() > before || Inventory.isFull(), 3000))) { break; }
             }
         }
-        // walking closes the bank; CookTrip crosses to the range next tick
     }
 }
 
-/** Raw fish in the pack → cross to the range and cook the LAST raw fish, one at
- *  a time, until none remain. */
 class CookTrip implements Task {
     constructor(private bot: CookBot) {}
     validate(): boolean { return this.bot.rawCount() > 0 && !ChatDialog.isOpen(); }
@@ -175,13 +157,8 @@ class CookTrip implements Task {
             this.bot.setStatus('crossing to the range');
             await walkOpening(this.bot.rangeTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
         }
-        // cook the last raw fish repeatedly until none remain (bounded)
         for (let n = 0; n < 30 && this.bot.rawCount() > 0; n++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) { return; }
-            // Yield out of this multi-minute cook loop the instant a random event
-            // fires, so the runtime Supervisor can resolve it (talk to the Genie,
-            // etc.) — otherwise it's ignored until the whole pack finishes and the
-            // event teleports the bot away mid-cook (issue #4).
             if (EventSignal.pending()) { return; }
             const raw = this.bot.lastRaw();
             const oven = range();
@@ -189,7 +166,6 @@ class CookTrip implements Task {
             this.bot.setStatus(`cooking ${raw.name}`);
             const before = this.bot.rawCount();
             if (!(await raw.useOn(oven))) { await Execution.delayTicks(2); continue; }
-            // wait for the fish to cook (raw count drops), a menu, or a dialog
             if (await Execution.delayUntil(() => this.bot.rawCount() < before || ChatDialog.isMakeMenu() || ChatDialog.canContinue(), 6000)) {
                 if (this.bot.rawCount() < before) { this.bot.recordCook(before - this.bot.rawCount()); }
             }

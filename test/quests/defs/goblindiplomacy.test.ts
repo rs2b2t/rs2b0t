@@ -2,8 +2,6 @@ import { expect, test, describe } from 'bun:test';
 import { decide } from '#/bot/quests/defs/goblindiplomacy.js';
 import type { QuestSnapshot } from '#/bot/quests/engine/types.js';
 
-// inv entries are [lowercased display name, count] — quantities matter here
-// (the plain-mail count gates the dye legs), unlike Romeo & Juliet's set model.
 const snap = (journal: string, inv: [string, number][] = []): QuestSnapshot => ({
     journal: journal as QuestSnapshot['journal'],
     inv: new Map(inv),
@@ -33,7 +31,6 @@ describe('goblindiplomacy decide', () => {
     });
 
     test('blue dye is NOT applied with only 1 plain mail left (reserved for brown)', () => {
-        // 1 plain + blue dye but no spare: fall through to the hand-in talk.
         const s = decide(snap('inProgress', [['goblin mail', 1], ['blue dye', 1]]));
         expect(npcOf(s)).toBe('General Wartface');
     });
@@ -44,7 +41,6 @@ describe('goblindiplomacy decide', () => {
     });
 
     test('order-independent: blue-first start still keeps a plain for brown', () => {
-        // 3 plain + blue dye only (orange dye not yet held): blue leg has >=2, fires.
         const s = decide(snap('inProgress', [['goblin mail', 3], ['blue dye', 1]]));
         expect(useProduct(s)).toBe('Blue goblin mail');
     });

@@ -2,16 +2,8 @@ import { BotHost } from '../BotHost.js';
 import { RecoveryHints } from './RecoveryHints.js';
 import { ScriptRunner } from './ScriptRunner.js';
 
-const HARD_STALL_MS = 15 * 60_000; // no loop completion for this long ⇒ hung await
+const HARD_STALL_MS = 15 * 60_000;
 
-/**
- * Tier-2 stall recovery (host-side, off the frame hook like AutoRelogin).
- * Triggers: an explicit requestRestart() from the Supervisor watchdog, or a
- * hard stall — ctx.lastProgressAt frozen because an await never settles
- * (tier 1 can't run then). Recovery = stop + restart the same script with
- * RecoveryHints.pendingRecovery set so anchored scripts re-anchor correctly
- * and walk themselves home.
- */
 class StallGuardImpl {
     private enabled = false;
     private restartPending = false;

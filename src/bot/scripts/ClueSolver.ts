@@ -21,15 +21,6 @@ export const SETTINGS: SettingsSchema = {
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' }
 };
 
-/**
- * Standalone easy-clue solver. Watches the pack for a clue scroll or reward
- * casket and runs the shared bank-first solve flow: dump everything except
- * the clue + food + spade at the NEAREST known bank, walk the trail, open the
- * casket. After a completed solve it walks to the nearest known bank and
- * idles there — hand it a clue (or start it holding one) and it goes.
- * Abandoned clues (missing tool, unreachable step) stay in the pack and are
- * skipped until they change.
- */
 export default class ClueSolver extends TaskBot {
     override loopDelay = 600;
 
@@ -59,8 +50,6 @@ export default class ClueSolver extends TaskBot {
             weaponName: () => this.settings.str('weapon', '')
         });
 
-        // eat mid-walk/mid-step: solves cross aggro zones and nothing else can
-        // run while the solve holds the loop (no-op when running foodless)
         const eatAt = this.settings.num('eatAtHp', 50) / 100;
         const isFood = (name: string | null | undefined): boolean => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat);
         Sustain.set(async () => {
@@ -77,9 +66,6 @@ export default class ClueSolver extends TaskBot {
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
         });
 
-        // Post-solve bank return. Registered AFTER solveClue so a fresh clue
-        // (dropped in mid-walk, or straight out of the casket) preempts the
-        // walk; the flag survives that solve and the return fires after it.
         const bankReturn: Task = {
             validate: () => this.returnToBank && heldClueLikeId() === null && Game.tile() !== null,
             execute: async () => {

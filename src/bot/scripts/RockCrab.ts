@@ -33,45 +33,22 @@ import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// The rock crab field east of Rellekka, on the northern shoreline (verified
-// live: dormant "Rocks" NPCs at x 2694-2719, z 3714-3729; walking adjacent
-// wakes them into attacking "Rock Crab" lvl 13). Two clusters share one
-// scene, so the whole spot is reachable with scene-local walking. The stand
-// spots the bot rotates between (loc1-5, defaults in RockCrabSpots.ts) are
-// tiles whose 3x3 square touches 2-3 dormant spawns.
-// Inland reset tile, ~31 tiles south of the field — far enough that the crabs
-// de-aggro and revert, so walking back in wakes them again (the "run out and
-// back" reset). Pushed further out (was z=3699) after the shorter run left the
-// crabs still aggro'd so the reset never re-woke them (issue #8).
 const DEFAULT_RESET = new Tile(2712, 3688, 0);
-// Seers' Village bank — the nearest bank to the Rellekka shoreline (the game
-// says so: quest_viking/viking_peer.rs2). Coords are the verified Seers bank
-// zone (firemaking bank_zones: mapsquare 42,54 -> x 2721-2730, z 3487-3497).
-// The exact walkable stand tile next to a booth may need a nudge on the first
-// live run.
 const DEFAULT_BANK = new Tile(2725, 3491, 0);
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
-const MAX_FAILED_WAKES = 3; // consecutive dud wakes => area is de-aggro'd
-// How close to the field centre counts as "regrouped" for the run-back step.
+const MAX_FAILED_WAKES = 3;
 const CENTRE_RADIUS = 2;
-// The local player's render-alias slot in reader.players() — filtered out of
-// "other players" checks in case the scene list ever carries it.
 const LOCAL_PLAYER_SLOT = 2047;
 
-// Valuables to grab off the ground. Both crystal-key halves share the item
-// name "Half of a key"; the rest are the notable rock-crab drops.
 const DEFAULT_LOOT = 'half of a key, casket, clue scroll, small oyster pearls, oyster pearls, uncut sapphire, uncut emerald, uncut ruby, uncut diamond';
 
-/** Every edible the era banks stock (single-item foods + the multi-bite
- *  bakes the FOOD_FORMS table below knows how to eat down). */
 const FOOD_OPTIONS = [
     'Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout', 'Pike', 'Bass', 'Herring', 'Sardine', 'Anchovies', 'Shrimps',
     'Cooked meat', 'Cooked chicken', 'Bread', 'Stew',
     'Cake', 'Chocolate cake', 'Plain pizza', 'Meat pizza', 'Anchovy pizza', 'Pineapple pizza', 'Redberry pie', 'Meat pie', 'Apple pie'
 ];
 
-// XP/hr tracks every stat this bot can train, whatever the style.
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
 
 const AMMO_OPTIONS = ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Ogre arrow', 'Bolts', 'Barbed bolts'];
@@ -80,9 +57,6 @@ const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
 
-/** Tunable parameters (panel + `?RockCrab.<key>=...`). The field/reset tiles
- *  let you point it at a different rock-crab spot entirely. Grouped for the
- *  panel; style-specific rows show only under their combatStyle. */
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage', 'range'], label: 'Combat style' },
 
@@ -120,12 +94,6 @@ export const SETTINGS: SettingsSchema = {
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)', group: 'Clues' }
 };
 
-// Active run config — set from settings in onStart. Safe as module state
-// because exactly one script runs at a time (ADR-0006).
-// The configured stand spots (loc1-5, zero/duplicate slots filtered) and the
-// index of the one currently worked. The spot is STATIC: nothing in the task
-// loop ever changes it — only the paint's live spot selector (and the
-// nearest-spot pick at start) sets locIdx.
 let LOCS: Tile[] = [...DEFAULT_SPOTS];
 let locIdx = 0;
 let RESET_TILE = DEFAULT_RESET;
@@ -142,8 +110,8 @@ let BANK_COMMON = true;
 let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
-let MELEE_MODE = 1; // com_mode: 0 accurate/Attack, 1 aggressive/Strength, 2 defensive/Defence
-let RANGE_MODE = 1; // com_mode: 0 accurate, 1 rapid, 2 longrange
+let MELEE_MODE = 1;
+let RANGE_MODE = 1;
 let WEAPON = '';
 let SPELL = 'Wind Strike';
 let RUNES_WITHDRAW = 150;
@@ -152,15 +120,6 @@ let AMMO_WITHDRAW = 200;
 let MIN_STACK = 1;
 let COLLECT_RANGE = 12;
 
-/**
- * Rock crab trainer for the Rellekka shoreline. Walks among the dormant
- * "Rocks" to aggro them; once the stack is built it runs back to the field
- * centre so the crabs pile up there, then kills the pile. Eats food to sustain,
- * and when it runs out it web-walks to the Seers' Village bank, withdraws more,
- * and returns. Loots key halves and other valuables, and runs out-and-back to
- * reset aggression when the rocks stop waking. Start it anywhere — it web-walks
- * to the field first. Handles every random event via the shared handler.
- */
 export default class RockCrab extends TaskBot {
     override loopDelay = 600;
 
@@ -184,10 +143,6 @@ export default class RockCrab extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        // loc1-5 → the spot list: zero-coord slots are disabled, duplicates
-        // collapse, and an all-disabled config falls back to the presets. Start
-        // at the spot nearest the player so a mid-field relaunch stays put;
-        // after that only the paint's spot selector changes it.
         const slots = [1, 2, 3, 4, 5].map(i => this.settings.tile(`loc${i}`, DEFAULT_SPOTS[i - 1]));
         const seen = new Set<string>();
         LOCS = slots.filter(t => {
@@ -257,8 +212,6 @@ export default class RockCrab extends TaskBot {
             }
         });
 
-        // eat mid-walk/mid-clue-solve: hostiles chip HP on long walks and the
-        // Eat task can't run while a walk or solve holds the task loop
         Sustain.set(async () => {
             if (Skills.hpFraction() < EAT_HP && hasFood()) {
                 await eatOnce(this);
@@ -267,19 +220,15 @@ export default class RockCrab extends TaskBot {
 
         this.add(
             new DeathRecovery(this, {
-                // static anchor: recovery always returns to spot 1 (locIdx is
-                // reset to match in onRecovered)
                 anchor: LOCS[0],
                 radius: 4,
                 onDeath: () => {
                     this.setStatus('died — recovering');
                     this.countDeath();
-                    this.solveClue?.noteDeath(); // died mid-solve: force a food re-bank before resuming a retained clue
+                    this.solveClue?.noteDeath();
                     this.log('died! waiting for respawn, then web-walking back to the field');
                 },
                 onRecovered: () => {
-                    // locIdx is untouched: the player's paint-selected spot
-                    // survives a death; the loop re-converges on it from here.
                     this.died = false;
                 }
             }),
@@ -287,7 +236,7 @@ export default class RockCrab extends TaskBot {
             new GearEquip(this),
             new SetAttackStyle(this),
             new ArmAutocast(this),
-            new CollectAmmo(this), // before SolveClue/BankRun: sweep arrows before anything walks us out
+            new CollectAmmo(this),
             this.solveClue!,
             new BankRun(this),
             new PeriodicBank({
@@ -352,14 +301,11 @@ export default class RockCrab extends TaskBot {
         }
 
         p.gap();
-        // live controls — style switch converges via the gear/banking tasks
         const styleNow = this.settings.str('combatStyle', STYLE);
         const picked = p.select('style', 'style', ['melee', 'mage', 'range'], styleNow);
         if (picked && picked !== STYLE) {
             this.switchStyle(picked as typeof STYLE);
         }
-        // spot selector — the ONLY thing that changes the active spot; the
-        // loop re-anchors on it (regroup/walk-backs) without any forced walk
         if (LOCS.length > 1) {
             const spotNow = `${locIdx + 1} @ ${currentSpot().x},${currentSpot().z}`;
             const spotPick = p.select('spot', 'spot', LOCS.map((t, i) => `${i + 1} @ ${t.x},${t.z}`), spotNow);
@@ -373,8 +319,6 @@ export default class RockCrab extends TaskBot {
         p.end();
     }
 
-    /** Live style switch from the paint: update the run config + persist; the
-     *  gear/banking/autocast tasks converge on the new style by themselves. */
     private switchStyle(style: typeof STYLE): void {
         STYLE = style;
         SettingsStore.save('RockCrab', 'combatStyle', style);
@@ -434,7 +378,6 @@ export default class RockCrab extends TaskBot {
     }
 }
 
-/** The stand spot currently worked — the anchor every field query/walk uses. */
 function currentSpot(): Tile {
     return LOCS[locIdx % LOCS.length];
 }
@@ -443,22 +386,16 @@ function inField(tile: Tile): boolean {
     return currentSpot().distanceTo(tile) <= FIELD_RADIUS;
 }
 
-/** True once we've stacked enough crabs (or there are no more rocks to gather). */
 function stackReady(): boolean {
     const crabs = activeCrabs().length;
     return crabs >= DESIRED_STACK || (crabs >= 1 && dormantRocks().length === 0);
 }
 
-/** True when we're standing at (within CENTRE_RADIUS of) the current spot. */
 function atCentre(): boolean {
     const here = Game.tile();
     return here !== null && currentSpot().distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
 }
 
-// Multi-bite foods eat DOWN through intermediate items (a cake is 3 items:
-// Cake -> 2/3 cake -> Slice of cake), so an exact name match would stop seeing
-// it as food after the first bite. List every edible form, keyed by the full
-// item you'd bank/withdraw. Anything not listed is treated as a single-item food.
 const FOOD_FORMS: Record<string, string[]> = {
     'cake': ['cake', '2/3 cake', 'slice of cake'],
     'chocolate cake': ['chocolate cake', '2/3 chocolate cake', 'chocolate slice'],
@@ -471,18 +408,15 @@ const FOOD_FORMS: Record<string, string[]> = {
     'apple pie': ['apple pie', 'half an apple pie']
 };
 
-/** Every edible form of the configured food (all 3 slices of a cake, etc.). */
 function foodForms(): string[] {
     const key = FOOD_NAME.toLowerCase();
     return FOOD_FORMS[key] ?? [key];
 }
 
-/** True if an item is one of the edible forms of the configured food. */
 function isFoodItem(name: string | null | undefined): boolean {
     return foodForms().includes((name ?? '').toLowerCase());
 }
 
-/** Edible food items in the pack, counting part-eaten cakes/pizzas/pies too. */
 function foodCount(): number {
     return Inventory.items().filter(i => isFoodItem(i.name)).length;
 }
@@ -491,23 +425,18 @@ function hasFood(): boolean {
     return foodCount() > 0;
 }
 
-// ---- combat-style helpers (mage/range) ----
-
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
 }
 
-/** Ammo count in the worn quiver slot. */
 function quiverCount(): number {
     return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
 }
 
-/** Full casts of the configured spell affordable with the held runes. */
 function castsLeft(): number {
     return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
 }
 
-/** Our fired-ammo stacks on the ground in the field. */
 function ammoStacksOnGround(): GroundItem[] {
     return GroundItems.query()
         .where(g => (g.name ?? '').toLowerCase() === AMMO.toLowerCase() && inField(g.tile()))
@@ -519,7 +448,6 @@ function stackKey(g: GroundItem): string {
     return `${t.x}|${t.z}|${t.level}`;
 }
 
-/** Out of the style's consumable with nothing recoverable in the field. */
 function needStyleSupplies(): boolean {
     if (STYLE === 'mage') {
         return castsLeft() < 1;
@@ -530,15 +458,10 @@ function needStyleSupplies(): boolean {
     return false;
 }
 
-/** A clue solve is about to walk us out of the field. */
 function cluePending(): boolean {
     return SOLVE_CLUES && Inventory.items().some(i => (i.name ?? '').toLowerCase() === 'clue scroll');
 }
 
-/** Sweep our fired ammo off the ground: every stack within COLLECT_RANGE, at
- *  least MIN_STACK big (force takes the small ones too), nearest first. Runs
- *  after each kill and on the leave-field/empty-quiver forces. Returns the
- *  number of stacks collected. */
 async function sweepAmmoOnce(bot: RockCrab, force: boolean): Promise<number> {
     const stacks = ammoStacksOnGround();
     const plan = new Set(
@@ -559,16 +482,12 @@ async function sweepAmmoOnce(bot: RockCrab, force: boolean): Promise<number> {
             bot.log(`swept ${Inventory.count(AMMO) - before} ${AMMO} off the ground`);
         }
     }
-    // straight into the quiver so the pack stays free for loot
     if (Inventory.count(AMMO) > 0) {
         await quiverPackAmmo();
     }
     return collected;
 }
 
-/** Wield pack ammo into the quiver — ALWAYS dispatches the Wield op (unlike
- *  Equipment.equip, which short-circuits when any ammo is already worn, so a
- *  top-up would never move). True once the pack count dropped / no ammo held. */
 async function quiverPackAmmo(): Promise<boolean> {
     const item = Inventory.first(AMMO);
     if (!item) {
@@ -583,7 +502,6 @@ async function quiverPackAmmo(): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.count(AMMO) < before, 3000);
 }
 
-/** Eat one piece of food if we have any (any form); resolves true if HP went up. */
 async function eatOnce(bot: RockCrab): Promise<boolean> {
     const food = Inventory.items().find(i => isFoodItem(i.name));
     if (!food) {
@@ -595,11 +513,6 @@ async function eatOnce(bot: RockCrab): Promise<boolean> {
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
 }
 
-/** Active, attackable crabs inside the field that are OURS to fight — free or
- *  engaging us. A crab locked onto ANOTHER player is their stack: skipping it
- *  here keeps Fight off it, keeps it out of the stack count, and keeps Aggro
- *  topping OUR pile up instead. If someone invades OUR spot the same rule
- *  still fights the crabs facing us and leaves theirs alone. */
 function activeCrabs(): Npc[] {
     return Npcs.query()
         .name('Rock Crab')
@@ -607,9 +520,6 @@ function activeCrabs(): Npc[] {
         .results();
 }
 
-/** Dormant "Rocks" NPCs (not the mining loc of the same name) inside the
- *  field — minus any sitting in another player's lap (within 2 of them):
- *  waking those is barging into an occupied spot's respawn cycle. */
 function dormantRocks(): Npc[] {
     const others = Players.query()
         .where(p => p.index !== LOCAL_PLAYER_SLOT && inField(p.tile()))
@@ -620,7 +530,6 @@ function dormantRocks(): Npc[] {
         .results();
 }
 
-/** Eat food when HP dips below the eat gate (primary HP management). */
 class Eat implements Task {
     constructor(private bot: RockCrab) {}
 
@@ -633,9 +542,6 @@ class Eat implements Task {
     }
 }
 
-/** Wield the style weapon / stow loose arrows whenever they're in the pack
- *  (start, post-bank, post-death salvage). No walking — BankRun owns trips.
- *  Bounded fails so an un-wieldable item can't starve the loop below it. */
 class GearEquip implements Task {
     private fails = 0;
 
@@ -648,7 +554,6 @@ class GearEquip implements Task {
         if (WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null) {
             return true;
         }
-        // loose arrows in the pack (withdrawn or collected) belong in the quiver
         return STYLE === 'range' && Inventory.count(AMMO) > 0;
     }
 
@@ -672,14 +577,6 @@ class GearEquip implements Task {
     }
 }
 
-/** Keep the attack style on the configured com_mode (ArdyFighter shape) —
- *  melee attack/strength/defence, ranged accurate/rapid/longrange (bow0/1/2
- *  share the same varp). Not persisted, so this re-asserts once per session
- *  and again if a weapon swap resets it. Mage owns its style via autocast. */
-// Failed style/autocast asserts retry in bounded batches with a cooldown
-// between them — NEVER permanently. A DC used to burn the old hard cap in
-// seconds against the still-loading post-relogin UI, leaving the style wrong
-// for the rest of the session (live-hit: came back from a DC stuck off rapid).
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 
@@ -694,11 +591,6 @@ class SetAttackStyle implements Task {
     }
 
     validate(): boolean {
-        // com_mode isn't persisted: this re-fires whenever the varp disagrees —
-        // session start, after a DC/relogin, after a weapon swap. Deliberately
-        // NOT gated on !inCombat: rock crabs keep you in combat near-constantly,
-        // so an out-of-combat-only assert never gets a window at the pile (the
-        // post-DC stuck-off-rapid failure). Style clicks are legal mid-fight.
         return STYLE !== 'mage' && Game.combatMode() !== this.target() && Date.now() >= this.retryAt;
     }
 
@@ -719,9 +611,6 @@ class SetAttackStyle implements Task {
     }
 }
 
-/** Arm the staff's autocast spell — the style varp resets on every login, so
- *  this re-fires after DCs too. Failed batches back off (ASSERT_RETRY_MS)
- *  rather than dying for the session. */
 class ArmAutocast implements Task {
     private fails = 0;
     private retryAt = 0;
@@ -732,25 +621,15 @@ class ArmAutocast implements Task {
         if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
             return false;
         }
-        // Arming needs the spell's runes IN THE PACK: the engine's set_autocast_spell
-        // runs check_spell_requirements (magic.rs2), which fails on missing runes, so
-        // the select silently no-ops and arm() times out. Without this gate — and
-        // because ArmAutocast outranks BankRun — a fresh mage with no runes spins a
-        // futile arm batch every loop instead of letting BankRun stock runes first.
-        // castsLeft() accounts for a rune-providing staff (matches staff_runes), so
-        // >=1 means the select can actually take. Deferring here hands the loop to
-        // BankRun, which restocks runes; we then arm cleanly on the next pass.
         if (castsLeft() < 1) {
             return false;
         }
-        // staff tab attached, or the staff is at least worn (a stale combat
-        // tab still deserves attempts so the failure gets LOGGED, not silent)
         return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
     }
 
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3); // give a fresh wield's tab swap a moment to land
+        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -761,13 +640,6 @@ class ArmAutocast implements Task {
     }
 }
 
-/**
- * Out-of-fight ammo sweeps. The primary sweep runs INSIDE Fight after each
- * kill (sweep-on-kill — see sweepAmmoOnce); this task covers the forces that
- * happen between fights: an empty quiver (grab everything now) and leaving
- * the field (bank/clue — abandon nothing). Also warns once about ground ammo
- * that doesn't match the Ammo setting (it would never be collected).
- */
 class CollectAmmo implements Task {
     private warnedMismatch = false;
 
@@ -796,15 +668,10 @@ class CollectAmmo implements Task {
     }
 }
 
-/** Out of food or style supplies -> web-walk to the Seers bank, restock, and
- *  return to the field. Also withdraws + wields the style weapon when it's
- *  missing (start and after a death that lost it). */
 class BankRun implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        // restock when we've run out — unless we've already learned the bank is
-        // empty of what we need (then fall back to no-food combat + resting)
         if (this.needWeapon()) {
             return true;
         }
@@ -820,19 +687,16 @@ class BankRun implements Task {
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
-            return; // runtime event guard takes over next loop
+            return;
         }
         this.bot.setStatus('restocking — walking to the bank');
         this.bot.log(`banking at ${BANK_TILE} (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, ammo ${quiverCount()}` : ''}${this.needWeapon() ? `, need ${WEAPON}` : ''})`);
 
-        // long web-walk south; the crabs de-aggro as we leave the field
         if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
             this.bot.log('walk to the bank failed — will retry');
             return;
         }
 
-        // interact the nearest booth directly; the engine walks us to its
-        // accessible side and opens it (BANK_TILE just needs to land us near it)
         if (!(await Bank.openNearest(BANK_NAME, BANK_OP, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — will retry');
             return;
@@ -845,7 +709,7 @@ class BankRun implements Task {
             const before = Inventory.count(FOOD_NAME);
             await Bank.withdraw(FOOD_NAME, op);
             if (!(await Execution.delayUntil(() => Inventory.count(FOOD_NAME) > before, 2500))) {
-                break; // bank out of this food, or the button didn't fire
+                break;
             }
         }
 
@@ -865,11 +729,6 @@ class BankRun implements Task {
         this.bot.clearWakes();
     }
 
-    /** Top an item up to `target` — one Withdraw-X for the exact shortfall
-     *  (ammo/rune restocks are hundreds; button-batching was 20+ click-and-wait
-     *  round trips per trip), falling back to the era's 1/5/10 buttons when the
-     *  item offers no X op or the count dialog doesn't open. Returns the amount
-     *  gained (0 = the bank has none). */
     private async withdrawTo(name: string, target: number): Promise<number> {
         const start = Inventory.count(name);
         for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
@@ -877,20 +736,19 @@ class BankRun implements Task {
             const need = target - before;
             if (need > 10 && (await Bank.withdrawX(name, need))) {
                 if (Inventory.count(name) > before) {
-                    continue; // got some (maybe all the bank had) — loop re-checks target
+                    continue;
                 }
-                break; // X flow completed but nothing arrived — bank is dry
+                break;
             }
             const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
             await Bank.withdraw(name, op);
             if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-                break; // bank ran out, or the button didn't fire
+                break;
             }
         }
         return Inventory.count(name) - start;
     }
 
-    /** Weapon + runes/ammo for the configured style (bank already open). */
     private async withdrawStyleSupplies(): Promise<void> {
         if (this.needWeapon()) {
             this.bot.setStatus(`withdrawing ${WEAPON}`);
@@ -935,7 +793,6 @@ class BankRun implements Task {
     }
 }
 
-/** Web-walk to the field when we're not in it (start, post-death, post-bank). */
 class GoToField implements Task {
     constructor(private bot: RockCrab) {}
 
@@ -953,7 +810,6 @@ class GoToField implements Task {
     }
 }
 
-/** Nearest valuable drop in the field (a configured loot name), or null. */
 function findLoot() {
     return GroundItems.query()
         .where(g => LOOT_NAMES.includes((g.name ?? '').toLowerCase()))
@@ -961,7 +817,6 @@ function findLoot() {
         .nearest();
 }
 
-/** Grab the nearest valuable drop; resolves true if the pack grew. */
 async function lootOnce(bot: RockCrab): Promise<boolean> {
     const drop = findLoot();
     if (!drop) {
@@ -990,36 +845,29 @@ class LootValuables implements Task {
     }
 }
 
-/** After the stack is built, run back to the field centre so the crabs pile up there. */
 class RegroupAtField implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        // only once we've stacked enough and we're healthy; Eat/ResetAggro own low HP
         return Skills.hpFraction() >= FIGHT_HP_GATE && stackReady() && !atCentre();
     }
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
-            return; // runtime event guard takes over next loop
+            return;
         }
         this.bot.setStatus('regrouping — running back to the stand spot');
-        // scene-local walk; the aggroed crabs chase us to the spot
         await DirectNavigator.walkTo(currentSpot(), CENTRE_RADIUS, 30000);
     }
 }
 
-/** Clear the stacked crabs at the centre; eats mid-fight when HP dips. */
 class Fight implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
         if (Skills.hpFraction() < FIGHT_HP_GATE) {
-            return false; // too low to keep fighting — Eat or ResetAggro takes over
+            return false;
         }
-        // Clear the pile only once it's stacked to size (or there are no more
-        // rocks to gather). RegroupAtField runs first to drag the stack to the
-        // centre; while still gathering, Aggro keeps priority.
         return stackReady();
     }
 
@@ -1029,22 +877,19 @@ class Fight implements Task {
         const deadline = performance.now() + 120000;
         while (performance.now() < deadline) {
             if (EventSignal.pending()) {
-                return; // runtime event guard takes over next loop
+                return;
             }
             if (this.bot.died || ChatDialog.canContinue()) {
                 return;
             }
-            // eat mid-fight so we sustain without leaving the pile
             if (Skills.hpFraction() < EAT_HP && hasFood()) {
                 await eatOnce(this.bot);
                 continue;
             }
             if (Skills.hpFraction() < FIGHT_HP_GATE) {
-                return; // out of food and low — Eat/ResetAggro handles it next loop
+                return;
             }
 
-            // grab valuable drops as they fall, without waiting for the whole
-            // stack to clear (the crabs keep auto-retaliating while we step over)
             if (!Inventory.isFull() && findLoot() !== null) {
                 await lootOnce(this.bot);
                 continue;
@@ -1052,7 +897,7 @@ class Fight implements Task {
 
             const crab = activeCrabs().sort((a, b) => a.distance() - b.distance())[0];
             if (!crab) {
-                return; // stack cleared
+                return;
             }
 
             if (!Game.inCombat()) {
@@ -1062,14 +907,12 @@ class Fight implements Task {
                 await Execution.delayTicks(2);
             }
 
-            // count kills by watching the active-crab population fall
             const remaining = activeCrabs().length;
             if (remaining < this.lastCount) {
                 for (let i = 0; i < this.lastCount - remaining; i++) {
                     this.bot.countKill();
                 }
                 this.bot.log(`rock crab down — ${this.bot.killsTotal()} kills total`);
-                // sweep-on-kill: grab our arrows while we're standing in the pile
                 if (STYLE === 'range') {
                     await sweepAmmoOnce(this.bot, false);
                 }
@@ -1081,7 +924,6 @@ class Fight implements Task {
     private lastCount = 0;
 }
 
-/** Walk adjacent to a dormant Rocks to wake it into an attacking Rock Crab. */
 class Aggro implements Task {
     constructor(private bot: RockCrab) {}
 
@@ -1094,7 +936,7 @@ class Aggro implements Task {
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
-            return; // runtime event guard takes over next loop
+            return;
         }
         const rocks = dormantRocks().sort((a, b) => a.distance() - b.distance())[0];
         if (!rocks) {
@@ -1105,9 +947,7 @@ class Aggro implements Task {
         const before = activeCrabs().length;
         const rockTile = rocks.tile();
 
-        // walk adjacent (radius 1) — proximity fires the crab's approach AI
         await DirectNavigator.walkTo(rockTile, 1, 15000);
-        // give the engine a couple ticks to flip it active
         const woke = await Execution.delayUntil(() => activeCrabs().length > before || !dormantRocks().some(r => r.tile().equals(rockTile)), 4000);
 
         this.bot.noteWake(woke);
@@ -1123,34 +963,27 @@ class Aggro implements Task {
     }
 }
 
-/** Run out of the field and back to reset aggression, or (with no food) to regen HP. */
 class ResetAggro implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        // reset when the rocks stopped waking, or when we're low with no food to
-        // eat (the no-food fallback: drop aggro at the reset tile and regen)
         return this.bot.deAggroed() || (Skills.hpFraction() < FIGHT_HP_GATE && !hasFood() && !Game.inCombat());
     }
 
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
-            return; // runtime event guard takes over next loop
+            return;
         }
         const low = Skills.hpFraction() < FIGHT_HP_GATE;
         this.bot.setStatus(low ? 'low HP, no food — retreating to regen' : 'running out to reset aggression');
         this.bot.countReset();
 
-        // Resilient web-walk (not the scene-local DirectNavigator) so the full
-        // ~31-tile run actually LANDS on the reset tile — a scene-clamped walk
-        // stopped short, leaving the crabs in leash range so they never reverted.
         await Traversal.walkResilient(RESET_TILE, { radius: 1, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
 
         if (low) {
             this.bot.log(`resting at the reset tile (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
             await Execution.delayUntil(() => Skills.hpFraction() >= REST_HP, 120000);
         } else {
-            // pause so the crabs walk back to spawn and revert to dormant Rocks
             await Execution.delayTicks(5);
         }
 

@@ -37,7 +37,6 @@ export default class ClientStream {
         return parseInt(this.socket.url.split(':')[2], 10);
     }
 
-    // note: Java throws IOException on failure
     get available(): number {
         if (this.dummy || this.remoteClosed) {
             return 0;
@@ -46,7 +45,6 @@ export default class ClientStream {
         return this.wsin.available;
     }
 
-    // note: Java throws IOException on failure
     write(src: Uint8Array, len: number): void {
         if (this.dummy || this.remoteClosed) {
             return;
@@ -55,7 +53,6 @@ export default class ClientStream {
         this.wsout.write(src, len);
     }
 
-    // note: Java throws IOException on failure
     async read(): Promise<number> {
         if (this.dummy) {
             return 0;
@@ -67,7 +64,6 @@ export default class ClientStream {
         return await this.wsin.read();
     }
 
-    // note: Java throws IOException on failure
     async readBytes(dst: Uint8Array, off: number, len: number): Promise<void> {
         if (this.dummy) {
             return;

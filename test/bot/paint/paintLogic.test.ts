@@ -3,7 +3,7 @@ import { PaintState, hitRegion, resolveDock, toCanvasPoint, type Region } from '
 
 describe('toCanvasPoint', () => {
     test('maps CSS pixels to 765x503 logical space via the bounding rect', () => {
-        const rect = { left: 100, top: 50, width: 1530, height: 1006 }; // 2x scale
+        const rect = { left: 100, top: 50, width: 1530, height: 1006 };
         expect(toCanvasPoint(1630, 553, rect)).toEqual({ x: 765, y: 251.5 });
         expect(toCanvasPoint(100, 50, rect)).toEqual({ x: 0, y: 0 });
     });
@@ -12,8 +12,8 @@ describe('toCanvasPoint', () => {
 describe('resolveDock', () => {
     test('chatbox dock covers the chat area; topleft matches the legacy box', () => {
         const chat = resolveDock('chatbox');
-        expect(chat.y).toBeGreaterThan(330); // below the viewport
-        expect(chat.x + chat.w).toBeLessThanOrEqual(520); // left of the sidebar tabs
+        expect(chat.y).toBeGreaterThan(330);
+        expect(chat.x + chat.w).toBeLessThanOrEqual(520);
         const top = resolveDock('topleft');
         expect(top).toMatchObject({ x: 6, y: 6 });
     });
@@ -47,9 +47,9 @@ describe('PaintState', () => {
             { id: 'panel', x: 0, y: 0, w: 100, h: 100, kind: 'panel' },
             { id: 'b1', x: 10, y: 10, w: 20, h: 10, kind: 'widget' }
         ]);
-        expect(state.pointerDown(15, 15)).toBe(true); // swallowed
+        expect(state.pointerDown(15, 15)).toBe(true);
         expect(state.consumeClick('b1')).toBe(true);
-        expect(state.consumeClick('b1')).toBe(false); // consumed once
+        expect(state.consumeClick('b1')).toBe(false);
     });
 
     test('click on the panel backdrop swallows but queues nothing', () => {

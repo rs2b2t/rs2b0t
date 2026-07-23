@@ -19,7 +19,6 @@ import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-/** Tunable parameters (panel + `?ChaosDruidKiller.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
     loot: {
         type: 'string',
@@ -33,26 +32,14 @@ export const SETTINGS: SettingsSchema = {
     ...PERIODIC_BANK_SETTINGS
 };
 
-// --- Edgeville dungeon banking route (fixed waypoints) ---
 const DRUID = 'Chaos druid';
-const UNDERGROUND_Z = 6400; // dungeon tiles sit above this; surface below it
-const LADDER = { name: 'Ladder', op: 'Climb-up', tile: new Tile(3096, 9867, 0) }; // dungeon -> surface (3096,3468)
-const TRAPDOOR = { name: 'Trapdoor', tile: new Tile(3097, 3468, 0), stand: new Tile(3096, 3468, 0) }; // surface -> dungeon (Open then Climb-down); stand = the climb-up landing tile, adjacent to it
-const BANK = { name: 'Bank booth', op: 'Use-quickly', stand: new Tile(3094, 3491, 0) }; // Edgeville bank
+const UNDERGROUND_Z = 6400;
+const LADDER = { name: 'Ladder', op: 'Climb-up', tile: new Tile(3096, 9867, 0) };
+const TRAPDOOR = { name: 'Trapdoor', tile: new Tile(3097, 3468, 0), stand: new Tile(3096, 3468, 0) };
+const BANK = { name: 'Bank booth', op: 'Use-quickly', stand: new Tile(3094, 3491, 0) };
 
-// XP/hr sums every melee stat this bot can train.
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
 
-/**
- * Kills Chaos druids in the Edgeville (wilderness) dungeon, loots the herb /
- * law-rune drops, and banks them: when the pack fills it climbs the dungeon
- * ladder, web-walks to the Edgeville bank, deposits the loot, then climbs back
- * down and returns to the druids. Start it standing among the druids
- * (~3110,9928) — that tile becomes the anchor it fights around and returns to.
- *
- * The web-walker can't cross the dungeon ladder (it's not a transport edge), so
- * the up/down climbs are scripted while every walk segment uses the walker.
- */
 export default class ChaosDruidKiller extends TaskBot {
     override loopDelay = 600;
 
@@ -61,7 +48,7 @@ export default class ChaosDruidKiller extends TaskBot {
     private leash = 8;
     private fightHpGate = 0.4;
     private restHp = 0.65;
-    bankCommon = true; // public: read by the BankRun task
+    bankCommon = true;
 
     private kills = 0;
     private looted = 0;
@@ -113,9 +100,6 @@ export default class ChaosDruidKiller extends TaskBot {
                 onRecovered: () => {
                     this.died = false;
                 },
-                // the web-walker can't cross the dungeon ladder (see the
-                // class doc comment) — climb down first, exactly like the
-                // BankRun leg does, then walk the last stretch underground
                 walkBack: async () => {
                     if ((Game.tile()?.z ?? 0) < UNDERGROUND_Z) {
                         const climbed = await this.descendToDungeon();
@@ -200,14 +184,6 @@ export default class ChaosDruidKiller extends TaskBot {
         this.deaths++;
     }
 
-    // --- shared route helpers (climbs the walker can't do) ---
-
-    /**
-     * Web-walk to a dungeon tile, manually opening any Gate/Door we stall at —
-     * the walker's own door handling is unreliable at the dungeon gates, so we
-     * drive each stall: walk a segment, and if we didn't progress, open the
-     * nearest closed gate and try again.
-     */
     async gatedWalk(dest: Tile, radius = 2): Promise<boolean> {
         for (let seg = 0; seg < 12; seg++) {
             const here = Game.tile();
@@ -233,10 +209,9 @@ export default class ChaosDruidKiller extends TaskBot {
         return here !== null && dest.distanceTo(here) <= radius;
     }
 
-    /** Walk to the dungeon ladder and climb to the surface. */
     async ascendToSurface(): Promise<boolean> {
         if ((Game.tile()?.z ?? 0) < UNDERGROUND_Z) {
-            return true; // already on the surface (e.g. a retry after a failed bank open)
+            return true;
         }
         await this.gatedWalk(LADDER.tile, 2);
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -253,12 +228,10 @@ export default class ChaosDruidKiller extends TaskBot {
         return (Game.tile()?.z ?? 0) < UNDERGROUND_Z;
     }
 
-    /** Walk to the surface trapdoor and climb down into the dungeon. */
     async descendToDungeon(): Promise<boolean> {
         if ((Game.tile()?.z ?? 0) > UNDERGROUND_Z) {
-            return true; // already underground
+            return true;
         }
-        // gatedWalk opens the entrance-house door the plain walker stalls at
         await this.gatedWalk(TRAPDOOR.stand, 1);
         for (let attempt = 0; attempt < 6; attempt++) {
             const trap = Locs.query().name(TRAPDOOR.name).where(l => l.distance() <= 3).nearest();
@@ -266,7 +239,6 @@ export default class ChaosDruidKiller extends TaskBot {
                 await this.gatedWalk(TRAPDOOR.stand, 1);
                 continue;
             }
-            // closed trapdoor offers "Open"; opened one offers "Climb-down"
             const op = trap.actions().find(a => /climb-down/i.test(a)) ?? trap.actions().find(a => /open/i.test(a));
             if (!op) {
                 await Execution.delayTicks(2);
@@ -281,7 +253,6 @@ export default class ChaosDruidKiller extends TaskBot {
     }
 }
 
-/** Full pack -> ladder up -> Edgeville bank -> deposit loot -> ladder down -> anchor. */
 class BankRun implements Task {
     constructor(private bot: ChaosDruidKiller) {}
 
@@ -310,7 +281,6 @@ class BankRun implements Task {
         this.bot.countTrip();
         this.bot.log('deposited the haul');
 
-        // walking opens distance from the booth; the bank closes on its own
         this.bot.setStatus('banking: heading back down');
         if (!(await this.bot.descendToDungeon())) {
             this.bot.log('could not climb back down — will retry');
@@ -321,7 +291,6 @@ class BankRun implements Task {
     }
 }
 
-/** Pick up wanted drops near the anchor when out of combat. */
 class Loot implements Task {
     constructor(private bot: ChaosDruidKiller) {}
 
@@ -354,7 +323,6 @@ class Loot implements Task {
     }
 }
 
-/** Low HP and out of combat: stand down until we regen. */
 class Rest implements Task {
     constructor(private bot: ChaosDruidKiller) {}
     validate(): boolean {
@@ -446,7 +414,6 @@ class ReturnToAnchor implements Task {
     constructor(private bot: ChaosDruidKiller) {}
     validate(): boolean {
         const here = Game.tile();
-        // only re-anchor while we're underground; the bank run owns surface travel
         return here !== null && here.z > UNDERGROUND_Z && this.bot.getAnchor().distanceTo(here) > this.bot.leashRadius();
     }
     async execute(): Promise<void> {

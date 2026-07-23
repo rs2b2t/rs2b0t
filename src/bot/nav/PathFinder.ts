@@ -1,34 +1,18 @@
-// World-scale A* over the baked collision pack. Pure module — no
-// worker glue, no client imports — so the same code runs inside NavWorker in
-// the browser and under Bun for offline benches (tools/nav/bench-path.ts).
-//
-// Pack format: see tools/nav/build-collision.ts (LCNV v1). Per mapsquare and
-// present level: 4096-byte exit-mask array (index x*64+z, bit 0=N,1=E,2=S,
-// 3=W,4=NE,5=SE,6=SW,7=NW = step legal) + 512-byte walkable bitset.
-
 export interface NavPoint {
     x: number;
     z: number;
     level: number;
 }
 
-/** How to cross a non-grid edge: interact `action` on the loc named
- *  `locName` found at/near (locX,locZ). */
 export interface TransportInfo {
     locName: string;
     action: string;
     locX: number;
     locZ: number;
-    /** Present when the crossing changes level (stairs/ladders). */
     toLevel?: number;
-    /** Present when the crossing teleports across the map on the SAME level
-     *  (kind 'dungeon': trapdoor/ladder z±6400 jumps). The walker interacts and
-     *  waits to land near this tile — door/stair checks can't see the jump. */
     toTile?: { x: number; z: number };
 }
 
-/** Tile path compressed to direction-change points; transport crossings are
- *  explicit annotated entries (the tile you occupy after crossing). */
 export interface Waypoint extends NavPoint {
     transport?: TransportInfo;
 }
@@ -52,8 +36,6 @@ export interface TransportEdgeData {
     kind: string;
 }
 
-// ---- worker protocol (NavWorker.ts <-> Navigator.ts) ----
-
 export type NavRequest = { type: 'init'; pack: ArrayBuffer } | { type: 'path'; id: number; from: NavPoint; to: NavPoint; avoid?: { x: number; z: number }[]; maxExpansions?: number };
 
 export type NavResponse =
@@ -61,13 +43,10 @@ export type NavResponse =
     | { type: 'error'; message: string }
     | ({ type: 'path'; id: number; elapsedMs: number } & PathOutcome);
 
-// ---- costs / limits ----
-
 const DOOR_COST = 4;
 const TRANSPORT_COST = 10;
 const MAX_EXPANSIONS = 300_000;
 
-// direction bit order must match tools/nav/build-collision.ts DIRS
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
 
@@ -78,7 +57,6 @@ const DOOR_DIR: Record<DoorEdgeData['dir'], [number, number]> = {
     W: [-1, 0]
 };
 
-// node id: (level<<28)|(x<<14)|z — world x<3648, z<10368 both fit 14 bits
 function nodeId(x: number, z: number, level: number): number {
     return (level << 28) | (x << 14) | z;
 }
@@ -101,8 +79,6 @@ interface CompiledEdge {
     transport: TransportInfo;
 }
 
-/** Binary min-heap of (key, nodeId); key = f*2^20 - g so equal-f ties pop the
- *  deepest node first (classic A* speedup on open plains). */
 class MinHeap {
     private keys: number[] = [];
     private ids: number[] = [];
@@ -163,18 +139,14 @@ class MinHeap {
 interface LevelSlot {
     exit: Uint8Array;
     walk: Uint8Array;
-    /** v2 packs: packed 4-bit wall-edge nibbles (bit 0=N,1=E,2=S,3=W), two
-     *  tiles per byte. null on v1 packs — wall queries read as "no wall". */
     wall: Uint8Array | null;
 }
 
 export class PathFinder {
-    /** slot index = (level<<16)|(mx<<8)|mz */
     private readonly slots: (LevelSlot | null)[] = new Array(4 << 16).fill(null);
     readonly mapsquares: number;
     readonly members: boolean;
 
-    /** non-grid edges by source node id */
     private readonly edges = new Map<number, CompiledEdge[]>();
     doorEdges = 0;
     transportEdges = 0;
@@ -236,7 +208,6 @@ export class PathFinder {
         return slot ? slot.exit[(x & 0x3f) * 64 + (z & 0x3f)] : 0;
     }
 
-    /** Wall-edge nibble of a tile (bit 0=N,1=E,2=S,3=W). 0 on v1 packs. */
     wallMask(x: number, z: number, level: number): number {
         const slot = this.slotAt(x, z, level);
         if (!slot || !slot.wall) {
@@ -246,10 +217,6 @@ export class PathFinder {
         return (index & 1 ? slot.wall[index >> 1] >> 4 : slot.wall[index >> 1]) & 0xf;
     }
 
-    /** Compile door + transport + stair edges into the search graph. Edges
-     *  whose endpoints are not walkable in the pack are dropped. `stairs` are
-     *  TransportEdgeData too (baked cross-level hops from derive-stairs.ts) and
-     *  are processed by the same loop as `transports`. */
     addEdges(doors: DoorEdgeData[], transports: TransportEdgeData[], stairs: TransportEdgeData[] = []): void {
         for (const door of doors) {
             const [dx, dz] = DOOR_DIR[door.dir];
@@ -292,7 +259,6 @@ export class PathFinder {
         list.push({ to, cost, transport });
     }
 
-    /** Nearest walkable tile within `radius` (Chebyshev rings), or null. */
     snapWalkable(p: NavPoint, radius: number): NavPoint | null {
         if (this.walkable(p.x, p.z, p.level)) {
             return p;
@@ -312,17 +278,6 @@ export class PathFinder {
         return null;
     }
 
-    /**
-     * Goal candidates for an unwalkable target — WALL-AWARE. Prefer tiles
-     * CONNECTED to the target: a bounded flood seeded from its wall-open
-     * cardinal adjacents (cardinalGoals' exact rule), expanded over the same
-     * exit-mask steps A* uses, confined to the Chebyshev `radius` box. A tile
-     * the flood can't touch is wall-separated from the target (the witch-house
-     * exterior (2908,3478) vs its interior stand (2906,3476) — one cost-unit
-     * cheaper and useless) and must NOT be a goal. When the flood finds
-     * NOTHING (the target's component is sealed — the Varrock-fountain
-     * enclave), fall back to the plain ring so those stay harmless.
-     */
     private goalCandidates(p: NavPoint, radius: number): Set<number> {
         const goals = new Set<number>();
         if (this.walkable(p.x, p.z, p.level)) {
@@ -359,7 +314,6 @@ export class PathFinder {
         if (goals.size > 0) {
             return goals;
         }
-        // Sealed target — the old wall-blind ring keeps enclaves harmless.
         for (let dx = -radius; dx <= radius; dx++) {
             for (let dz = -radius; dz <= radius; dz++) {
                 if (this.walkable(p.x + dx, p.z + dz, p.level)) {
@@ -370,24 +324,16 @@ export class PathFinder {
         return goals;
     }
 
-    /** Walkable tiles CARDINALLY adjacent to an unwalkable target — the only
-     *  tiles a server interact (search a box, open a booth) can be issued from.
-     *  A candidate with a wall on its edge toward the target is excluded: it is
-     *  interact-ILLEGAL (the Seers drawers house — the tile west of the drawers
-     *  is walkable and adjacent but outside the wall, so Search no-ops there).
-     *  Empty when the target itself is walkable. */
     private cardinalGoals(p: NavPoint): Set<number> {
         const goals = new Set<number>();
         if (this.walkable(p.x, p.z, p.level)) {
             return goals;
         }
-        // candidate offset from target → wall bit on the candidate's edge FACING
-        // the target (nibble bits 0=N,1=E,2=S,3=W)
         const sides: [number, number, number][] = [
-            [0, 1, 1 << 2], // candidate north of target, its S edge
-            [1, 0, 1 << 3], // east, its W edge
-            [0, -1, 1 << 0], // south, its N edge
-            [-1, 0, 1 << 1] // west, its E edge
+            [0, 1, 1 << 2],
+            [1, 0, 1 << 3],
+            [0, -1, 1 << 0],
+            [-1, 0, 1 << 1]
         ];
         for (const [dx, dz, facingBit] of sides) {
             const cx = p.x + dx;
@@ -405,14 +351,6 @@ export class PathFinder {
             return { ok: false, reason: `start (${fromRaw.x},${fromRaw.z},${fromRaw.level}) not walkable`, expanded: 0 };
         }
 
-        // Interact-first: for an unwalkable target, search the cardinal-adjacent
-        // goals before anything wider — the wall-blind ring happily terminates
-        // within 5 tiles on the WRONG SIDE of a wall (the Varrock diagonal-door
-        // clue house), where no interact can ever succeed. When no cardinal goal
-        // resolves, fall back to goalCandidates: the wall-aware connected flood out
-        // from the target's own component (goalCandidates itself drops to the plain
-        // ring only when that flood is empty — the sealed Varrock-fountain enclave,
-        // which the ring keeps harmless).
         const cardinal = this.cardinalGoals(toRaw);
         if (cardinal.size > 0) {
             const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions);
@@ -429,9 +367,6 @@ export class PathFinder {
         return this.search(from, toRaw, goals, goalSlack, avoidDoors, maxExpansions);
     }
 
-    /** One A* run to whichever of `goals` pops first. `goalSlack` keeps the
-     *  heuristic admissible for every candidate: distance to the requested
-     *  centre minus the candidate ring radius. */
     private search(from: NavPoint, toRaw: NavPoint, goals: Set<number>, goalSlack: number, avoidDoors: Set<string> | undefined, maxExpansions: number): PathOutcome {
         const start = nodeId(from.x, from.z, from.level);
         const goalX = toRaw.x;
@@ -496,13 +431,6 @@ export class PathFinder {
                     if (closed.has(edge.to)) {
                         continue;
                     }
-                    // Any crossing that FAILED during this walkTo is excluded on
-                    // repath — door, staircase, ladder, or teleport alike (keyed by
-                    // its from-tile `locX|locZ`). Level-change transports used to be
-                    // exempt here, which stranded the bot looping "Climb-up Staircase
-                    // did not resolve, retrying" on a bad synthesized stair edge
-                    // (Lumbridge castle staircases, 2004 stairs forceapproach=south)
-                    // while the proven curated operate edge 2 tiles away went unused.
                     if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
                         continue;
                     }
@@ -537,8 +465,6 @@ export class PathFinder {
         }
         chain.reverse();
 
-        // compress to direction-change points; transport crossings stay as
-        // annotated entries and their approach tile is always kept
         const waypoints: Waypoint[] = [];
         const point = (id: number): NavPoint => ({ x: nodeX(id), z: nodeZ(id), level: nodeLevel(id) });
         const stepDir = (a: number, b: number): number => {

@@ -1,14 +1,3 @@
-// Validates the RenderGate on a single client (bot.html): (1) focused draws
-// fast / background draws slow while LOGIC (loopCycle) keeps full speed in
-// both, and (2) a backgrounded bot running a walking script keeps acting at
-// full logic rate — draws stay throttled, the script never crashes.
-//
-// Part 2's script picker: BotPanel.ts no longer exposes the old script-select
-// dropdown the original desktop-test.ts copies from — script choice now goes
-// through the ScriptLibrary modal (Browse… -> category chip -> script card ->
-// close), same pattern already used by tools/chicken-test.ts / library-test.ts.
-//
-//   PATH="/opt/homebrew/opt/node@24/bin:$PATH" npx tsx tools/rendergate-test.ts [server-url]
 import { _electron as electron } from 'playwright-core';
 
 const server = process.argv[2] ?? 'http://localhost:8888';
@@ -42,7 +31,6 @@ try {
 
     await page.waitForFunction(() => ((globalThis as never as Rs2b0t).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
     if (!(await login())) fail('first login failed');
-    // teleport off tutorial island, then relog
     await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
     await page.keyboard.type('::tele 0,50,50,20,20', { delay: 25 });
     await page.keyboard.press('Enter');
@@ -51,7 +39,6 @@ try {
     if (!backIn) fail('relogin off tutorial failed');
     console.log('logged in off tutorial');
 
-    // ---- (1) mode gating: draw rate follows mode, logic rate does not ----
     async function rate(seconds: number) {
         const a = await probe();
         await page.waitForTimeout(seconds * 1000);
@@ -68,14 +55,7 @@ try {
     if (foc.loopFps < 25 || bg.loopFps < 25) fail(`logic starved (focused ${foc.loopFps.toFixed(1)}, bg ${bg.loopFps.toFixed(1)})`);
     console.log('PASS: draw rate follows mode, logic stays full speed');
 
-    // ---- (2) a backgrounded bot keeps acting: full logic rate, throttled draws ----
     await setMode('background');
-    // Bot panel script picker: Browse… -> category chip -> script card -> Start
-    // (the old script-select dropdown this test's original brief was drafted
-    // against has been replaced by the ScriptLibrary modal; pattern matches
-    // tools/chicken-test.ts / tools/library-test.ts). WalkTo web-walks from
-    // Lumbridge to Falador (set via the ?WalkTo.destination override above),
-    // so the backgrounded script keeps issuing walk actions the whole window.
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Navigation/ }).click();

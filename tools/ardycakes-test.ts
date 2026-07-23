@@ -1,15 +1,3 @@
-// Headless live smoke for ArdyCakes. Boots the WebGL client (SwiftShader),
-// logs in (auto-creates), teleports off Tutorial Island, maxes stats, teleports
-// to the East Ardougne market, starts the bot, and watches the steal -> bank
-// cycle. Refusal resets and guard responses are stochastic (the Baker/guards
-// decide) — they're reported but not required for a PASS.
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/ardycakes-test.ts [base-url] [username] [Fight|Flee]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -52,7 +40,7 @@ try {
     await page.goto(`${base}/bot.html${mode === 'Fight' ? '?ArdyCakes.guardResponse=Fight' : ''}`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -60,8 +48,6 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Max stats on the clean post-relogin state (Thieving 5 needed; Fight mode
-    // wants combat stats too). Clear level-up dialogs programmatically.
     const clearDialogs = () => page.evaluate(async () => {
         const a = (globalThis as never as { rs2b0t: { actions?: { continueDialog?: () => boolean } } }).rs2b0t.actions;
         for (let i = 0; i < 30; i++) { a?.continueDialog?.(); await new Promise(r => setTimeout(r, 250)); }
@@ -70,10 +56,9 @@ try {
 
     await type('::~maxme');
     await clearDialogs();
-    // Teleport to the market square near the Baker's stall.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,41,51,37,42'); // East Ardougne market ~ (2661,3306)
+        await type('::tele 0,41,51,37,42');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - 2661) <= 8 && Math.abs(at.z - 3306) <= 8) { break; }
@@ -88,8 +73,6 @@ try {
 
     const before = (await logLines()).length;
     const seen = { stocked: false, banked: false, reset: false, combat: false };
-    // ~12 min: Flee mode pays ~25s per guard catch (kite + return + lockout),
-    // so a full 28-slot pack can take 8-10 min in a crowded market.
     for (let i = 0; i < 360; i++) {
         await page.waitForTimeout(2000);
         const lines = (await logLines()).slice(before);

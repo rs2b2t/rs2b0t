@@ -11,14 +11,6 @@ import type { ScriptMeta } from './ScriptRegistry.js';
 import { SettingsBag, SettingsStore } from './Settings.js';
 import { Supervisor } from './Supervisor.js';
 
-/**
- * Lifecycle of the (single) active script run.
- *
- * Stop = abort: every pending Execution.* promise rejects ScriptAborted, the
- * await chain unwinds through the script's own finally blocks, then onStop()
- * runs. Pause = the pump stops resolving waiters (and the clock shift on
- * resume means paused time never counts toward delays/timeouts).
- */
 class ScriptRunnerImpl {
     ctx: ScriptContext | null = null;
     bot: AbstractBot | null = null;
@@ -30,9 +22,6 @@ class ScriptRunnerImpl {
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
     }
 
-    /** The standard pause/stop controls every bot's paint renders: the pause
-     *  label toggles with the runner state; clicks pause/resume or stop the
-     *  script. Bots with extra buttons (AIOQuester's Skip) keep their own. */
     paintControls(p: PaintFrame): void {
         const clicked = p.buttons([
             { id: 'pause', label: this.state === 'paused' ? 'Resume' : 'Pause' },
@@ -61,7 +50,6 @@ class ScriptRunnerImpl {
         const ctx = new ScriptContext();
         const bot = meta.create();
         bot.bindLog(msg => ctx.addLog('info', msg));
-        // resolve this run's parameters (schema default <- saved <- URL)
         if (meta.settingsSchema) {
             bot.settings = new SettingsBag(SettingsStore.resolve(meta.name, meta.settingsSchema));
         }
@@ -71,13 +59,11 @@ class ScriptRunnerImpl {
         this.meta = meta;
         Scheduler.active = ctx;
 
-        // wire this run's failure log sink into the router (direct-only)
         ActionRouter.beginRun((level, msg) => ctx.addLog(level, msg));
 
         ctx.addLog('info', `${meta.name} started (input: ${ActionRouter.driver.mode})`);
         this.fireChange();
 
-        // onStart runs as iteration zero: loop() won't launch until it settles
         ctx.loopInFlight = true;
         (async () => {
             await bot.onStart?.();
@@ -86,11 +72,6 @@ class ScriptRunnerImpl {
                 RandomEvents.setGrindTargets(bot.grindTargets());
                 RandomEvents.setLampSkill(SettingsStore.globalBag().str('lampSkill', 'strength'));
                 Supervisor.resetProgress();
-                // A recovery hint still set after onStart means this script never
-                // consumed it (only anchored scripts call RecoveryHints.takeAnchor),
-                // so clear it before it can leak into a later run. A consumer already
-                // flipped pendingRecovery=false via takeAnchor and re-registered its
-                // anchor for the next watchdog restart, so this is a no-op for them.
                 if (RecoveryHints.pendingRecovery) {
                     RecoveryHints.clear();
                 }
@@ -148,15 +129,11 @@ class ScriptRunnerImpl {
         this.fireChange();
         ctx.abortWaiters();
 
-        // if no iteration is in flight the abort has nothing to unwind
         if (!ctx.loopInFlight) {
             this.finishStop(ctx);
         }
-        // otherwise the in-flight loop promise settles (usually with
-        // ScriptAborted) and settleFailure/iteration-then finishes the stop
     }
 
-    /** Panel subscription for state transitions. */
     onChange(cb: () => void): () => void {
         this.changeListeners.add(cb);
         return () => this.changeListeners.delete(cb);
@@ -174,7 +151,7 @@ class ScriptRunnerImpl {
         (async (): Promise<number | void> => {
             if (takeover) {
                 await takeover.run();
-                return; // supervisor iterations re-schedule at a fixed cadence
+                return;
             }
             return (bot as AbstractBot & { loop(): number | void | Promise<number | void> }).loop();
         })()
@@ -201,8 +178,6 @@ class ScriptRunnerImpl {
             return;
         }
 
-        // genuine script crash: isolate, report, tear down — the client and
-        // panel keep running
         const error = err instanceof Error ? err : new Error(String(err));
         ctx.crashError = error;
         ctx.state = 'crashed';
@@ -225,14 +200,10 @@ class ScriptRunnerImpl {
             ctx.addLog('warn', `onStop threw: ${err}`);
         }
 
-        // a stopped bot's sustain hook (mid-walk eating) must not outlive it
         Sustain.set(null);
 
-        // paint regions/state die with the script — nothing may keep
-        // swallowing canvas input after stop
         paintState.reset();
 
-        // input-driver teardown hook (no-op for direct input)
         ActionRouter.endRun();
 
         this.bot?.disposeSubscriptions();

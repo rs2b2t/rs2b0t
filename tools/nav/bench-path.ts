@@ -1,8 +1,3 @@
-// Offline A* check + timing bench over the baked pack (Slice 5b). Runs the
-// exact PathFinder module the NavWorker ships, under Bun.
-//
-// Usage: bun tools/nav/bench-path.ts [--pack out/collision.lcnav.gz] [--runs 20]
-
 import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
@@ -69,8 +64,6 @@ for (const route of routes) {
     }
 }
 
-// Budget param check: a tiny budget makes a real long route fail 'budget
-// exceeded'; the default solves it. Proves maxExpansions reaches findPath.
 {
     const from = { x: 3222, z: 3218, level: 0 };
     const to = { x: 3213, z: 3428, level: 0 };

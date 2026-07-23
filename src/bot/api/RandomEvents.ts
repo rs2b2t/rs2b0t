@@ -17,92 +17,26 @@ import { MIME_SQUARE, performMimeStage } from './solvers/Mime.js';
 import { rubLamp, solveAllBoxes } from './solvers/StrangeBox.js';
 import { MAZE_SQUARE, solveMaze } from './maze/solveMaze.js';
 
-/**
- * Comprehensive random-event ("macro event") handling, shared by every bot.
- * Verified against the 21 implemented events in content/scripts/macro events/.
- *
- * The runtime Supervisor (ScriptRunner) consults detect()/handle() before
- * every loop() iteration — scripts install nothing; combat scripts declare
- * grindTargets() so their quarry is never mistaken for a hostile event.
- *
- * Coverage by class (every class is actively resolved — nothing is merely
- * waited out):
- *  - DIALOG  (Genie, Drunken Dwarf, Mysterious Old Man, Sandwich lady, Frog):
- *    walk up, Talk-to, click through, take the gift — fully auto.
- *  - PICK    (Strange plant / triffid): Pick the fruit before it turns hostile.
- *  - EVADE   (Swarm, Zombie, Shade, Rock Golem, River troll, Tree spirit,
- *    Watchman): walk away — server truth is EVERY hostile event NPC despawns
- *    once you get clear (macro_event_lost_hostile), so never fight them.
- *  - LOST TOOL (lost axe / pickaxe): pick up the broken head, use it on the
- *    handle to reattach.
- *  - LOST GEAR (big-fish knock-off): our fishing gear lands on a nearby tile —
- *    pick it back up.
- *  - HAZARD  (poison gas, whirlpool): step away and let it expire.
- *  - STRANGE BOX: Open it, read the cube puzzle, click the matching answer.
- *    It REPLICATES on this server if left unsolved, so an unhandled box keeps
- *    duplicating and fills the inventory — always solve it.
- *  - LAMP    (genie lamp): Rub it and pick the configured skill (lampSkill).
- *  - MIME / MAZE: teleport-to-minigame stages, detected by mapsquare. MIME
- *    mirrors the performance via the emote interface; MAZE walks to the Strange
- *    shrine and touches it to teleport out.
- *
- * A per-signature attempt cap + cooldown (MAX_ATTEMPTS / GIVE_UP_COOLDOWN_MS)
- * is a generic backstop: any event a handler can't finish on a given pass never
- * wedges the bot — it resumes working and re-detects the event after the
- * cooldown.
- */
-
-// Unique event NPC names (lowercase) — safe to treat as events on sight.
 const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sandwich lady', 'frog'];
 const PICK_EVENT_NPCS = ['strange plant'];
-// Hostile event monsters. Server truth (macro_events.rs2
-// [proc,macro_event_lost_hostile]): EVERY one despawns once the player gets
-// away (mode=wander & range>3) — the universal handler is EVADE, never fight.
-// Matched by NPC ID, NOT name: the event display names (Zombie, Shade, Rock
-// Golem, River troll, ...) collide with ordinary in-world monsters, and a name
-// match wedged non-combat scripts whenever a REGULAR monster of that name
-// attacked (a normal Zombie in the Baxtorian dungeon paused the waterfall quest).
-// These are the macro_* event spawns only (antimacro.npc / npc.pack). Ent events
-// (macro_ent_*, name "Tree") are excluded — same as before.
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
-    ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
-    411,                  // Swarm        (macro_swarm)
-    ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
-    ...idRange(419, 424), // Zombie       (macro_zombie1..6)
-    ...idRange(425, 430), // Shade        (macro_shade1..6)
-    ...idRange(431, 436), // Watchman     (macro_watchman1..6)
-    ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
+    ...idRange(391, 396),
+    411,
+    ...idRange(413, 418),
+    ...idRange(419, 424),
+    ...idRange(425, 430),
+    ...idRange(431, 436),
+    ...idRange(438, 443)
 ]);
 
-// Hazards (fishing/thieving): step away / recover gear. antimacro configs:
-// chest_macro_gas loc 2141; whirlpool npcs 403/404/405; big fish npc 390.
 const GAS_CHEST_LOC_ID = 2141;
 const WHIRLPOOL_NPC_IDS = [403, 404, 405];
-// Mining "smoking rock" (macro gas): the rock being mined swaps to a
-// macro_<ore>rock1/2 variant (loc ids 2119-2138, all named "Rocks", the
-// macro_plainrock model) that the server auto-re-mines until it EXPLODES —
-// 10 damage + breaks the pickaxe (macro_event_gas.rs2). Treat it as a hazard:
-// stop mining and step away until it expires (~60 ticks).
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
 const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fly fishing rod', 'harpoon', 'lobster pot'];
-// The big-fish drop lasts ^lootdrop_duration/2 (~1min); a loss older than this
-// can't still be our gear on the ground.
 const GEAR_LOSS_WINDOW_MS = 90_000;
 
-/**
- * Remembers fishing gear that recently LEFT the pack, because gear-on-the-
- * ground alone proves nothing: the world has PERMANENT gear ground spawns
- * (found live: big_net/harpoon/lobster_pot sit at the Fishing Guild gate,
- * 2605-2608,3395-3397), and detecting on presence alone hijacked every bot
- * that walked past into an endless pick-it-up loop. The real event
- * (macro_event_big_fish.rs2) inv_del's the gear from the PACK and drops it
- * within 7 tiles — so a genuine knock-off always shows as a held item
- * vanishing moments before it appears on the ground. Bank/shop suppression
- * covers deposits/sales, plus the FOLLOWING update: the vanish is usually
- * noticed one detect cycle after the interface closes. Pure (times injected).
- */
 export class GearLossTracker {
     private held = new Set<string>();
     private lost = new Map<string, number>();
@@ -110,7 +44,6 @@ export class GearLossTracker {
 
     constructor(private readonly windowMs = GEAR_LOSS_WINDOW_MS) {}
 
-    /** Feed the currently-held gear names each detect cycle. */
     update(heldNow: readonly string[], suppressedNow: boolean, nowMs: number): void {
         const now = new Set(heldNow.map(s => s.toLowerCase()));
         if (!suppressedNow && !this.wasSuppressed) {
@@ -130,9 +63,6 @@ export class GearLossTracker {
     }
 }
 
-// Teleport-minigame stages, detected by mapsquare (survives relogs into the
-// stage). macro_event_mime.rs2 / macro_event_maze.rs2.
-
 type EventKind = 'dialog' | 'pick' | 'evade' | 'lost-tool' | 'box' | 'lamp' | 'hazard' | 'lost-gear' | 'mime' | 'maze';
 
 interface DetectedEvent {
@@ -140,35 +70,18 @@ interface DetectedEvent {
     name: string;
 }
 
-const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
-const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
-// Strange plant (triffid): it "grows" for ~54s (Pick just says "the fruit isn't
-// ready yet"), is pickable for the next ~54s, then turns hostile and poisons. So
-// keep trying Pick across the whole grow window in a single handling pass rather
-// than spending the 4-attempt budget before the fruit is ever ripe.
+const MAX_ATTEMPTS = 4;
+const GIVE_UP_COOLDOWN_MS = 45000;
 const PICK_WAIT_MS = 80_000;
 
-/**
- * Strange-plant (triffid) handling from its right-click ops. While growing/ready
- * the plant carries a 'Pick' op; once it turns hostile the server changes it to
- * macro_triffidseed_angry — an 'Attack' op, NO 'Pick', and it poisons — so it
- * must be fled then, never picked. Unknown/empty ops default to 'pick' (keep
- * trying) rather than fleeing a plant that isn't actually attacking. Pure.
- */
 export function plantStrategy(ops: string[]): 'pick' | 'evade' {
     const canPick = ops.some(a => /pick|take/i.test(a));
     const canAttack = ops.some(a => /attack/i.test(a));
     return !canPick && canAttack ? 'evade' : 'pick';
 }
 
-// Lost-tool event pieces + tools we must never drop to free a slot. Ores,
-// logs, fish and gems all fail this test — any of them is worth pennies next
-// to the rune pickaxe the free slot is rescuing.
 const PROTECTED_FROM_DROP = /(handle|head$|axe|pick|hammer|chisel|knife|tinderbox|rod|net|harpoon)/i;
 
-/** Which sacrificial item to drop when the pack is full mid-recovery: the
- *  most-duplicated name that isn't a tool or an event piece. Null when the
- *  pack is all-protected (log loudly and attempt recovery anyway). Pure. */
 export function pickSacrificial(names: (string | null)[]): string | null {
     const counts = new Map<string, number>();
     for (const n of names) {
@@ -187,10 +100,6 @@ export function pickSacrificial(names: (string | null)[]): string | null {
     return best;
 }
 
-/** Where the lost-tool event left the handle. WORN first: a wielded tool's
- *  handle is force-equipped into the rhand slot (macro_event_lost_pickaxe.rs2
- *  inv_setslot(worn, ...)) — invisible to an inventory-only scan, which is
- *  how wielded rune picks used to despawn. Pure. */
 export function handleLocation(invNames: (string | null)[], wornNames: (string | null)[]): 'worn' | 'inventory' | null {
     const isHandle = (n: string | null): boolean => n !== null && /(axe|pickaxe) handle/i.test(n);
     if (wornNames.some(isHandle)) {
@@ -203,30 +112,20 @@ export function handleLocation(invNames: (string | null)[], wornNames: (string |
 }
 
 class RandomEventsImpl {
-    /** Names the host bot legitimately fights, so they're never mistaken for a combat event. */
     grindTargets: string[] = [];
 
-    /** Which skill genie lamps train (fleet default: strength). */
     lampSkill = 'strength';
 
-    /** Big-fish evidence: only gear that recently left the pack counts as lost. */
     private readonly gearLoss = new GearLossTracker();
 
-    // Per-event-signature bookkeeping so an unclearable event (a context the
-    // handler can't fully resolve — e.g. mime/maze, or a plant that won't
-    // despawn) never wedges the bot in an infinite handling loop.
     private attempts = new Map<string, number>();
     private cooldownUntil = new Map<string, number>();
 
-    /** True while a guard handler is running — pending() goes quiet so the
-     *  handler's own walks (evade, maze) don't interrupt themselves. */
     handling = false;
 
     private lastCheckTick = -1;
     private lastPending = false;
 
-    /** Cheap per-tick cached "is an event live?" — polled by the walker and
-     *  long script loops as their safe-point yield signal. */
     pending(): boolean {
         if (this.handling) {
             return false;
@@ -252,11 +151,10 @@ class RandomEventsImpl {
         return until !== undefined && performance.now() < until;
     }
 
-    /** Cheap check used by the task's validate(); returns the event to handle, or null. */
     detect(): DetectedEvent | null {
         const event = this.detectRaw();
         if (event && this.cooledDown(`${event.kind}:${event.name}`)) {
-            return null; // gave up on this one recently; let the bot work
+            return null;
         }
         return event;
     }
@@ -272,9 +170,6 @@ class RandomEventsImpl {
             }
         }
 
-        // dialog + pick events: a uniquely-named event NPC near us (they
-        // playerfollow their target, so OURS stays close — distance-gate so
-        // another player's event NPC isn't chased)
         for (const npc of reader.npcs()) {
             const name = npc.name?.toLowerCase();
             if (!name) {
@@ -288,24 +183,12 @@ class RandomEventsImpl {
             }
         }
 
-        // hostile event: an event monster attacking us — or right on top of us —
-        // that we don't grind. NOT gated on OUR combat flag: the Swarm event is a
-        // 0-damage interrupter (antimacro.npc: max_dealt=0) that may never flip
-        // the player's combat state, yet it wedges non-combat scripts (agility,
-        // woodcutting) until we walk off. Keying on the event NPC attacking
-        // (npc.inCombat) or being adjacent is the reliable signal.
         for (const npc of reader.npcs()) {
-            // ID-based: a macro_* event spawn attacking us (or on top of us). No
-            // grind-target exclusion needed — the event ids never collide with a
-            // quarry's id, and excluding by NAME would wrongly suppress a real
-            // event for a bot grinding a same-named regular monster.
             if (HOSTILE_EVENT_NPC_IDS.has(npc.id) && (npc.inCombat || npc.distance <= 1)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
         }
 
-        // hazards: gas chest adjacent; smoking rock at the mining spot; whirlpool
-        // where our fishing spot was
         for (const loc of reader.locs()) {
             if (loc.id === GAS_CHEST_LOC_ID && loc.distance <= 1) {
                 return { kind: 'hazard', name: 'poisonous gas' };
@@ -320,10 +203,6 @@ class RandomEventsImpl {
             }
         }
 
-        // big fish aftermath: our fishing gear got knocked onto the ground.
-        // Gated on the gear having RECENTLY LEFT the pack — gear lying around
-        // is not evidence by itself (permanent guild-gate ground spawns froze
-        // passing world-walks in an event loop; see GearLossTracker).
         this.gearLoss.update(
             FISHING_GEAR.filter(g => Inventory.contains(g)),
             Bank.isOpen() || Shop.isOpen(),
@@ -342,22 +221,14 @@ class RandomEventsImpl {
             }
         }
 
-        // lost tool: the event leaves an axe/pickaxe handle in the pack — or,
-        // when the tool was WIELDED, force-equipped in the worn rhand slot
-        // (macro_event_lost_pickaxe.rs2 inv_setslot(worn, ...)) while the head
-        // despawns in 200 ticks. Worn was invisible to the old inventory-only
-        // scan: the "bot mines with a bare handle until the rune pick is gone"
-        // loss.
         if (handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name)) !== null) {
             return { kind: 'lost-tool', name: 'lost tool' };
         }
 
-        // strange box: REPLICATES on this server if left unsolved — solve it
         if (Inventory.contains('Strange box')) {
             return { kind: 'box', name: 'strange box' };
         }
 
-        // genie lamp: rub it (it otherwise sits in the inventory forever)
         if (Inventory.contains('Lamp')) {
             return { kind: 'lamp', name: 'lamp' };
         }
@@ -365,7 +236,6 @@ class RandomEventsImpl {
         return null;
     }
 
-    /** Handle the currently-detected event. Returns true if it acted. */
     async handle(log: (msg: string) => void): Promise<boolean> {
         this.handling = true;
         try {
@@ -378,12 +248,6 @@ class RandomEventsImpl {
             const n = (this.attempts.get(sig) ?? 0) + 1;
             this.attempts.set(sig, n);
             if (n > MAX_ATTEMPTS) {
-                // Generic backstop: this handler couldn't clear the event in
-                // MAX_ATTEMPTS passes, so stop trying for a while and let the bot
-                // work — it re-detects the event after the cooldown. Every event
-                // is actively solved (mime/maze are WALKED out, not waited out);
-                // this only fires when a handler can't finish a given pass — e.g.
-                // an interface it can't read, or an NPC that won't despawn.
                 this.attempts.delete(sig);
                 this.cooldownUntil.set(sig, performance.now() + GIVE_UP_COOLDOWN_MS);
                 log(`random event: gave up on ${event.name} after ${MAX_ATTEMPTS} attempts — ignoring it for ${GIVE_UP_COOLDOWN_MS / 1000}s`);
@@ -426,7 +290,6 @@ class RandomEventsImpl {
                     break;
             }
 
-            // cleared? reset the attempt counter for this signature
             const after = this.detectRaw();
             if (!after || `${after.kind}:${after.name}` !== sig) {
                 this.attempts.delete(sig);
@@ -446,12 +309,9 @@ class RandomEventsImpl {
             return false;
         }
 
-        // talk-to (the event NPC is adjacent; the client approaches as needed)
         await npc.interact('Talk-to');
         await Execution.delayUntil(() => ChatDialog.isOpen(), 5000);
 
-        // click through; if an option list appears, take the first (the
-        // affirmative/accept path that ends the event)
         for (let i = 0; i < 25; i++) {
             if (!ChatDialog.isOpen()) {
                 break;
@@ -463,7 +323,6 @@ class RandomEventsImpl {
             } else {
                 await Execution.delayTicks(1);
             }
-            // the event is gone once the NPC despawns
             const stillThere = reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name);
             if (!stillThere && !ChatDialog.isOpen()) {
                 break;
@@ -474,11 +333,6 @@ class RandomEventsImpl {
         return true;
     }
 
-    /** True once the server has told us the triffid isn't ours ("It's not here for
-     *  you.") in a chat line newer than `sinceText`. The strange plant is bound to
-     *  the player who triggered it (macro_event_triffid: [opnpc1] rejects a picker
-     *  whose uid != the plant's target), so a non-owner sees that message and never
-     *  gets the fruit — this lets us END the event instead of picking it forever. */
     private plantNotOurs(sinceText: string): boolean {
         for (const line of reader.chat(5)) {
             if (line.text === sinceText) {
@@ -492,13 +346,6 @@ class RandomEventsImpl {
     }
 
     private async handlePick(name: string, log: (msg: string) => void): Promise<boolean> {
-        // The strange plant grows for ~54s — during which "Pick" only reports
-        // "the fruit isn't ready yet" and does nothing — is then pickable for
-        // ~54s, and finally turns hostile (a changetype'd plant that poisons). So
-        // keep trying Pick across the grow window in this one pass until the fruit
-        // lands in the pack; if it has ALREADY turned hostile (Attack op, no Pick)
-        // flee it like any other hostile event — picking is impossible then and
-        // standing next to it just eats poison damage.
         const deadline = performance.now() + PICK_WAIT_MS;
         let announced = false;
         while (performance.now() < deadline) {
@@ -506,7 +353,7 @@ class RandomEventsImpl {
                 .where(n => (n.name?.toLowerCase() ?? '') === name)
                 .nearest();
             if (!plant) {
-                return true; // picked, despawned, or we walked out of range
+                return true;
             }
             if (plantStrategy(plant.actions()) === 'evade') {
                 log(`random event: ${name} turned hostile — fleeing (it poisons)`);
@@ -521,10 +368,6 @@ class RandomEventsImpl {
                 const before = Inventory.count('Strange fruit');
                 const sinceText = reader.chat(1)[0]?.text ?? '';
                 await plant.interact(op);
-                // Resolve on any of: the fruit lands (ours, ripe), the plant
-                // despawns, or the server says it isn't ours. The plant only
-                // despawns ~13 ticks after a successful pick, so don't gate solely
-                // on its disappearance.
                 await Execution.delayUntil(
                     () => Inventory.count('Strange fruit') > before
                         || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
@@ -532,9 +375,6 @@ class RandomEventsImpl {
                     6000
                 );
                 if (this.plantNotOurs(sinceText)) {
-                    // Another player's plant — picking it just spams "It's not here
-                    // for you". End the event and ignore this one for a while so we
-                    // don't re-pick it every loop while it's on screen (the freeze).
                     this.cooldownUntil.set(`pick:${name}`, performance.now() + GIVE_UP_COOLDOWN_MS);
                     log(`random event: ${name} isn't ours ("it's not here for you") — ignoring it for ${GIVE_UP_COOLDOWN_MS / 1000}s`);
                     return true;
@@ -544,7 +384,6 @@ class RandomEventsImpl {
                     return true;
                 }
             }
-            // not ripe yet ("the fruit isn't ready to be picked yet") — wait, retry
             await Execution.delayTicks(4);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
@@ -560,8 +399,6 @@ class RandomEventsImpl {
             return false;
         }
 
-        // server truth (macro_event_lost_hostile): hostile event NPCs despawn
-        // once we get away — walk ~12 tiles to a reachable tile away from it
         log(`random event: ${name} attacking — evading (it despawns once we're away)`);
         const flee = fleeCandidates(me, threat.tile(), 12).find(t => Reachability.canReach(t, { maxSteps: 1500 }));
         if (!flee) {
@@ -578,7 +415,6 @@ class RandomEventsImpl {
         return true;
     }
 
-    /** Gas chest / whirlpool: step a few tiles away and let it expire. */
     private async handleHazard(name: string, log: (msg: string) => void): Promise<boolean> {
         const me = Game.tile();
         if (!me) {
@@ -589,15 +425,10 @@ class RandomEventsImpl {
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
-        // gas timer clears >10 tiles / whirlpool reverts after 60 ticks (36s)
         await Execution.delayTicks(60);
         return true;
     }
 
-    /** Drop one sacrificial item (ore/log — never a tool or event piece) so
-     *  the unequip/Take has a slot to land in. Full packs are ROUTINE while
-     *  mining; without this the head Take silently fails until the 200-tick
-     *  despawn eats the head. */
     private async freeSlot(log: (msg: string) => void): Promise<void> {
         if (!Inventory.isFull()) {
             return;
@@ -623,9 +454,6 @@ class RandomEventsImpl {
             return false;
         }
 
-        // A WORN handle (the tool was wielded when the event fired) must come
-        // off first — useOn needs both pieces in the pack — and unequipping
-        // needs a free inventory slot for the handle to land in.
         const wasWorn = where === 'worn';
         if (wasWorn) {
             const worn = Equipment.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
@@ -636,8 +464,6 @@ class RandomEventsImpl {
             }
         }
 
-        // the head lands <=7 tiles away (map_findsquare lineofwalk) and
-        // despawns after 200 ticks — grab it, freeing a slot first
         const head = GroundItems.query()
             .where(g => /(axe|pickaxe) head/i.test(g.snap.name ?? ''))
             .within(12)
@@ -649,8 +475,6 @@ class RandomEventsImpl {
             await Execution.delayUntil(() => Inventory.used() > before, 6000);
         }
 
-        // reattach: use the head on the handle (either direction — opheldu is
-        // wired on both ends in macro_event_lost_pickaxe.rs2)
         const headItem = Inventory.items().find(i => /(axe|pickaxe) head/i.test(i.name ?? ''));
         const handleItem = Inventory.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
         if (!headItem || !handleItem) {
@@ -664,8 +488,6 @@ class RandomEventsImpl {
             return true;
         }
 
-        // the reattached tool lands in the PACK even when the original was
-        // wielded — restore the pre-event state
         if (wasWorn) {
             const tool = Inventory.items().find(i => /(pickaxe|axe)$/i.test(i.name ?? '') && i.actions().some(o => /wield|wear/i.test(o)));
             if (tool?.name != null) {
@@ -678,7 +500,6 @@ class RandomEventsImpl {
         return true;
     }
 
-    /** Big fish knocked our fishing gear onto a nearby tile — pick it up. */
     private async handleLostGear(name: string, log: (msg: string) => void): Promise<boolean> {
         const drop = GroundItems.query()
             .where(g => (g.name?.toLowerCase() ?? '') === name)
@@ -699,6 +520,4 @@ class RandomEventsImpl {
 
 export const RandomEvents = new RandomEventsImpl();
 
-// The walker (and long script loops) poll EventSignal.pending() to yield at a
-// safe point; register RandomEvents as the provider at module init.
 EventSignal.setProvider(() => RandomEvents.pending());

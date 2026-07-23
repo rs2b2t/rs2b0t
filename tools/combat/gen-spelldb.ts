@@ -1,22 +1,3 @@
-/**
- * Regenerates src/bot/api/combat/data/spelldb.ts from the content pack — the
- * autocast spell table (staff_spells ssbN button order, level, per-cast rune
- * costs) and the staff→provided-rune table, both keyed by DISPLAY names so
- * bots can match settings/Equipment/Inventory strings directly.
- *   bun tools/combat/gen-spelldb.ts            # rewrite the file
- *   bun tools/combat/gen-spelldb.ts --check    # exit 1 if the committed file is stale
- * Content root: $CONTENT_DIR or ~/code/rs2b2t-content.
- *
- * Sources:
- *   scripts/skill_combat/configs/magic/magic_combat_spells.dbrow — name,
- *     levelrequired, runesrequired (debugname,count triples, 'null' padded).
- *   scripts/skill_magic/configs/magic_staff.dbrow — staff debugnames + the
- *     rune each provides for free.
- *   scripts/** *.obj — debugname → display name (canonical configs win over
- *     the _unpack dumps, same as gen-cluedb's npc loader).
- *   The ssbN button order is the staff_spells interface layout, fixed in
- *     skill_combat/scripts/player/auto_cast.rs2 (ssb0..ssb15).
- */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +5,6 @@ import { join } from 'node:path';
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-content');
 const OUT = 'src/bot/api/combat/data/spelldb.ts';
 
-// staff_spells:ssb0..ssb15 → spell debugname (auto_cast.rs2 if_button order)
 const SSB_ORDER = [
     'wind_strike', 'water_strike', 'earth_strike', 'fire_strike',
     'wind_bolt', 'water_bolt', 'earth_bolt', 'fire_bolt',
@@ -39,7 +19,6 @@ function filesUnder(root: string, ext: string): string[] {
         .sort();
 }
 
-/** obj debugname → display name; canonical configs override _unpack dumps. */
 function loadObjDisplayNames(): Map<string, string> {
     const files = filesUnder(join(CONTENT, 'scripts'), '.obj');
     const unpack = files.filter(f => f.includes('/_unpack/'));
@@ -62,7 +41,7 @@ function loadObjDisplayNames(): Map<string, string> {
 
 interface DbBlock {
     header: string;
-    data: Map<string, string[]>; // field → every data=field,... payload
+    data: Map<string, string[]>;
 }
 
 function parseDbrows(path: string): DbBlock[] {
@@ -97,11 +76,10 @@ function generate(): string {
         return name;
     };
 
-    // ---- spells ----
     const spellRows = parseDbrows(join(CONTENT, 'scripts', 'skill_combat', 'configs', 'magic', 'magic_combat_spells.dbrow'));
     const byDebug = new Map<string, DbBlock>();
     for (const block of spellRows) {
-        const spellRef = block.data.get('spell')?.[0]; // "^wind_strike"
+        const spellRef = block.data.get('spell')?.[0];
         if (spellRef?.startsWith('^')) {
             byDebug.set(spellRef.slice(1), block);
         }
@@ -116,7 +94,7 @@ function generate(): string {
         }
         const name = block.data.get('name')?.[0];
         const level = Number(block.data.get('levelrequired')?.[0]);
-        const runesRaw = block.data.get('runesrequired')?.[0]; // "mindrune,1,airrune,1,null,null"
+        const runesRaw = block.data.get('runesrequired')?.[0];
         if (!name || !Number.isFinite(level) || !runesRaw) {
             throw new Error(`spell '${debug}' missing name/level/runes`);
         }
@@ -130,10 +108,7 @@ function generate(): string {
         spells.push(`    ${JSON.stringify(name)}: ${JSON.stringify({ ssb: i, level, runes })}`);
     }
 
-    // ---- staves ----
     const staffRows = parseDbrows(join(CONTENT, 'scripts', 'skill_magic', 'configs', 'magic_staff.dbrow'));
-    // a staff can appear in several rows (Lava battlestaff provides earth AND
-    // fire — the engine reads two db_findnext rows) — group runes per staff
     const byStaff = new Map<string, string[]>();
     for (const block of staffRows) {
         const rune = block.data.get('rune')?.[0];

@@ -1,4 +1,3 @@
-/** Shared types for the MultiBox wall (roster accounts + per-slot status). */
 import type { RenderMode } from '../runtime/RenderGate.js';
 
 export type { RenderMode };
@@ -24,7 +23,6 @@ export interface SlotSnapshot extends SlotStatus {
     mode: RenderMode;
 }
 
-/** Control surface over one bot iframe. Real impl wraps `window.rs2b0t`. */
 export interface SlotHandle {
     setRenderMode(mode: RenderMode): void;
     setCredentials(username: string, password: string): void;
@@ -33,7 +31,6 @@ export interface SlotHandle {
     destroy(): void;
 }
 
-/** Creates a slot's iframe + handle. Real impl is DOM; fake impl in tests. */
 export interface SlotOps {
     spawn(account: Account): SlotHandle;
 }

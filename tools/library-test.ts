@@ -1,8 +1,3 @@
-// Validates the script library modal: open, category-filter, search, and
-// selecting a script drives the panel + runner.
-//
-// Usage: bun tools/library-test.ts [base-url]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
@@ -21,25 +16,20 @@ try {
     await page.goto(`${base}/bot.html`);
     await page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
 
-    // open the library
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     const chips = await page.$$eval('.rs2b0t-chip', els => els.map(e => e.textContent ?? ''));
     console.log(`categories: ${chips.join('  ')}`);
-    // 'Develop' died with the retired dev/demo scripts (83203fe) — assert
-    // durable categories only.
     for (const want of ['Combat', 'Woodcutting', 'Mining', 'Fishing', 'Navigation', 'Quest']) {
         if (!chips.some(c => c.startsWith(want))) fail(`category chip "${want}" missing`);
     }
     console.log('library: all expected category chips present');
 
-    // filter by Mining -> exactly the Mining-category scripts (Miner + EssMiner)
     await page.getByRole('button', { name: /^Mining/ }).click();
     let cards = await page.$$eval('.rs2b0t-card-name', els => els.map(e => e.textContent ?? ''));
     if (cards.sort().join(',') !== 'EssMiner,Miner') fail(`Mining filter showed ${JSON.stringify(cards)} (expected Miner + EssMiner)`);
     console.log('library: Mining filter -> Miner + EssMiner');
 
-    // back to All, search "crab" -> only RockCrab
     await page.getByRole('button', { name: /^All/ }).click();
     await page.fill('.rs2b0t-modal .rs2b0t-input', 'crab');
     await page.waitForTimeout(300);
@@ -47,24 +37,19 @@ try {
     if (cards.length !== 1 || !cards[0].includes('RockCrab')) fail(`search "crab" showed ${JSON.stringify(cards)} (expected just RockCrab)`);
     console.log('library: search "crab" -> RockCrab');
 
-    // select a card -> modal closes, panel shows it, params render
     await page.fill('.rs2b0t-modal .rs2b0t-input', '');
     await page.getByRole('button', { name: /^Combat/ }).click();
     await page.locator('.rs2b0t-library-card', { hasText: 'ChickenKiller' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
     const current = await page.textContent('.rs2b0t-current-script');
     if (current !== 'ChickenKiller') fail(`panel shows "${current}" after selecting ChickenKiller`);
-    // The panel renders a read-only key:value summary (.rs2b0t-param-skey =
-    // schema KEY, not the label) + an Edit button; the editable form is the
-    // ParamsModal (see settings-test).
     const hasFeatherParam = (await page.locator('.rs2b0t-param-skey', { hasText: 'gatherFeathers' }).count()) > 0;
     if (!hasFeatherParam) fail('selecting ChickenKiller did not load its parameters');
     console.log('library: selected ChickenKiller -> panel + params updated');
 
-    // selection drives the runner: pick QuestDashboard, log in, Start
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
-    await page.getByRole('button', { name: /^All/ }).click(); // library remembers the last filter
+    await page.getByRole('button', { name: /^All/ }).click();
     await page.locator('.rs2b0t-library-card', { hasText: 'QuestDashboard' }).click();
     await page.evaluate(() => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = `lib${Date.now().toString(36).slice(-5)}`; c.loginPass = 't'; void c.login(c.loginUser, 't', false); });
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 20000 }).catch(() => {});

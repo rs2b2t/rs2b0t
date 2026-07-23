@@ -1,8 +1,3 @@
-// Auto-relogin check (Slice 7): start a script, force-close the game socket,
-// and assert the watchdog logs us back in and resumes the run.
-//
-// Usage: bun tools/relogin-test.ts [base-url] [username]
-
 import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
@@ -44,11 +39,6 @@ try {
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.runner.state === 'running', undefined, { timeout: 10000 });
     await page.waitForTimeout(3000);
 
-    // force a session loss that reaches the title screen. (A plain socket
-    // close is healed by the client's NATIVE reconnect — login(.., true) —
-    // without ever leaving the game, verified experimentally; logout() is
-    // the path that ends at the title with credentials cleared, which is
-    // exactly what AutoRelogin exists to recover.)
     await page.evaluate(() => (globalThis as never as { rs2b0t: { client: { logout(): Promise<void> } } }).rs2b0t.client.logout());
     console.log('forced logout; waiting for auto-relogin...');
 

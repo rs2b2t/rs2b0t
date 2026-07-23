@@ -1,45 +1,3 @@
-// Generates src/bot/nav/data/stairEdges.json — cross-level transport edges
-// from two sources:
-//   (1) explicit switch_coord→p_telejump cases in the content pack's
-//       ladders+stairs/scripts/stairs.rs2 (Climb-up/Climb-down on named
-//       staircases; also a handful of dungeon↔surface hops), resolved to a
-//       loc name + op label via the debugname on each [oplocN,<debugname>]
-//       block.
-//   (2) generic ladders (loc ids 1746-1750) that climb ±1 level in place —
-//       ladders.rs2 handles these with movecoord(coord(), 0, ±1, 0), keyed by
-//       the loc's op labels; we scan every packed mapsquare for their
-//       instances and emit one in-place ±1 edge per Climb-up/Climb-down op.
-//
-// The runtime mechanic already works: handleTransport interacts the loc with
-// `action` and waits for worldTile().level === to.level. This just bakes the
-// graph edges so walkResilient's A* can route through them.
-//
-// Endpoint choice (snapAndReverse): the natural tiles — stairs.rs2 `from` = the
-// case's loc_coord (the loc SW tile) and a generic ladder's own tile — are
-// almost always NON-walkable in the baked pack (you stand beside a stair/ladder,
-// not on it), so PathFinder.addEdges would drop them. So each endpoint is snapped
-// to the nearest walkable tile (cardinal-first, radius 2); an in-place ladder hop
-// is snapped to a tile walkable on BOTH levels (the tile you stand on to climb).
-// We then add a reverse for every cross-level hop with the opposite op label — a
-// staircase you climb up you can also climb down — so descent reuses the same
-// connected tiles as ascent (some manors, e.g. Draynor, wall the up- and
-// down-stair landings into separate L1 rooms). This mirrors how transports.json
-// lists both directions. The nav-target coverage gate (tools/nav/coverage.ts,
-// Task 2) over the 16 upstairs clue tiles is the acceptance test. Out of scope
-// (angle-/literal-based, not baked here): wooden spiral / ship / cellar ladders.
-//
-// Curated-supersede (final pruning step): a spiral staircase's loc_coord sits ON
-// the (unwalkable) stairs, so the cardinal-first snap can pull the OPERATE tile to
-// the wrong side — and 2004 `stairs` are forceapproach=south, so an op-click from
-// there never fires server-side (the live "Climb-up Staircase did not resolve"
-// wedge at Lumbridge castle). Where transports.json — the hand-curated,
-// live-verified set — already reaches a cross-level destination, its from-tiles are
-// THE proven operate tiles; any derived edge to that destination from a different
-// tile is a snap artefact and is dropped. Destinations transports.json doesn't
-// cover (Draynor et al.) are untouched, so their synthesized reverses all survive.
-//
-// Usage: bun tools/nav/derive-stairs.ts [--engine <dir>] [--content <dir>] [--out <file>] [--check]
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -61,17 +19,12 @@ const content = argVal('--content') ?? process.env.CONTENT_DIR ?? path.join(home
 const out = argVal('--out') ?? 'src/bot/nav/data/stairEdges.json';
 const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 
-// generic ladders: climb ±1 in place. 1746 laddertop(down) 1747 ladder(up)
-// 1748 laddermiddle(up+down) 1749 laddertop_directional(down) 1750 ladder_directional(up)
 const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 
 function edge(from: NavPoint, to: NavPoint, locName: string, action: string): TransportEdgeData {
     return { from, to, locName, action, kind: 'stair' };
 }
 
-// Chebyshev-ring offsets within radius R, cardinal-first (axis-aligned before
-// diagonal at equal distance): the stand tile beside a stair/ladder is a cardinal
-// neighbour, and preferring it avoids snapping into a walled-off diagonal closet.
 function offsets(R: number): [number, number][] {
     const o: [number, number][] = [];
     for (let dx = -R; dx <= R; dx++) {
@@ -93,7 +46,6 @@ function offsets(R: number): [number, number][] {
 }
 const SNAP_OFFSETS = offsets(2);
 
-// Opposite op label for the reverse hop: Climb-up<->Climb-down, Walk-up<->Walk-down.
 function reverseAction(action: string): string {
     if (/-down/i.test(action)) return action.replace(/-down/i, '-up');
     if (/-up/i.test(action)) return action.replace(/-up/i, '-down');
@@ -107,8 +59,6 @@ function snapWalkable(finder: PathFinder, x: number, z: number, level: number): 
     return null;
 }
 
-// Nearest tile beside (x,z) walkable on BOTH levels a and b — the tile you stand
-// on to climb an in-place ladder (same x,z one level up/down).
 function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: number): { x: number; z: number } | null {
     for (const [dx, dz] of SNAP_OFFSETS) {
         if (finder.walkable(x + dx, z + dz, a) && finder.walkable(x + dx, z + dz, b)) return { x: x + dx, z: z + dz };
@@ -116,11 +66,6 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
     return null;
 }
 
-// Snap every raw edge's endpoints to walkable tiles (else PathFinder.addEdges
-// drops them), then add a reverse for each cross-level hop with the opposite op
-// label. Dedupe by endpoints. Finally drop any cross-level edge whose OPERATE
-// (from) tile is superseded by a curated transports.json edge (see below). The
-// `curated` arg is the live-verified transports.json set. See the file header.
 function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number; supersededDropped: number } {
     const snapped: TransportEdgeData[] = [];
     let dropped = 0;
@@ -160,25 +105,11 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
         }
     }
 
-    // Curated-supersede pruning. transports.json is the hand-curated, live-verified
-    // set of operate tiles (two full RuneMysteries quest runs). For any cross-level
-    // DESTINATION that transports.json also reaches, its from-tiles are THE proven
-    // operate tiles; a derived edge to that same destination from any OTHER tile is
-    // a snap artefact and a liability. Concretely: `stairs.rs2`'s spiral-staircase
-    // Climb-up case has its loc-coord ON the (unwalkable) staircase, e.g. Lumbridge
-    // castle's Duke stairs at (3204,3229); snapWalkable pulls it CARDINAL-first to
-    // the wrong side — (3203,3229,0) — but 2004 `stairs` are forceapproach=south, so
-    // an op-click from the west never fires server-side, silently. That is the exact
-    // live wedge: the bot reached (3203,3229,0) and looped "Climb-up Staircase did
-    // not resolve, retrying" forever. The curated operate tile (3205,3228,0) reaches
-    // the same top (3205,3228,1), so we drop the wrong-side derived edge and keep the
-    // curated-matching one. Draynor-style manor stairs are NOT in transports.json, so
-    // no destination there is superseded and every synthesized reverse survives.
     const tileKey = (p: NavPoint): string => `${p.x},${p.z},${p.level}`;
     const curatedFromsByDest = new Map<string, Set<string>>();
     for (const c of curated) {
         if (c.from.level === c.to.level) {
-            continue; // only cross-level (stair/ladder) operate tiles are authoritative here
+            continue;
         }
         const dk = tileKey(c.to);
         let froms = curatedFromsByDest.get(dk);
@@ -204,7 +135,6 @@ function main(): void {
     const { configs } = loadLocTypes(engine);
     const edges: TransportEdgeData[] = [];
 
-    // (1) stairs.rs2 explicit cases → resolve debugname → locName + op label
     const byDebug = new Map<string, (typeof configs)[number]>();
     for (const c of configs) {
         if (c.debugname) {
@@ -225,7 +155,6 @@ function main(): void {
         stairsCases++;
     }
 
-    // (2) generic ladders from the map loc data → ±1-in-place edges
     let ladderEdges = 0;
     for (const { mx, mz, land, loc } of loadMapsquares(engine)) {
         const baseX = mx << 6;
@@ -259,16 +188,11 @@ function main(): void {
         });
     }
 
-    // snap endpoints to walkable tiles + add reverse hops (needs the baked pack)
     let packBytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
     if (packBytes[0] === 0x1f && packBytes[1] === 0x8b) {
         packBytes = gunzipSync(packBytes);
     }
     const finder = new PathFinder(packBytes);
-    // Curated operate tiles (always the canonical data dir, never --out's dir): the
-    // supersede pruning treats transports.json as the live-verified ground truth for
-    // any staircase it covers, and drops derived edges that reach a curated
-    // destination from a non-curated (snap-artefact) operate tile. See snapAndReverse.
     const dataDir = path.join('src', 'bot', 'nav', 'data');
     const curatedTransports = JSON.parse(fs.readFileSync(path.join(dataDir, 'transports.json'), 'utf8')) as TransportEdgeData[];
     const rawCount = edges.length;
@@ -276,7 +200,6 @@ function main(): void {
 
     finalEdges.sort((a, b) => a.from.level - b.from.level || a.from.x - b.from.x || a.from.z - b.from.z || a.to.level - b.to.level || a.to.x - b.to.x || a.to.z - b.to.z);
 
-    // one edge per line: greppable, hand-editable, diff-stable
     const json = '[\n' + finalEdges.map(e => '    ' + JSON.stringify(e)).join(',\n') + '\n]\n';
 
     const stats = `${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; ${supersededDropped} curated-superseded dropped; snapped + reversed)`;
@@ -294,9 +217,6 @@ function main(): void {
         console.log(`wrote ${out}: ${stats}`);
     }
 
-    // sanity gate: a cross-level edge with BOTH endpoints walkable must survive
-    // near each known staircase/ladder (proves the snap kept it — addEdges would
-    // otherwise drop a non-walkable endpoint and its upstairs clue tile FAILs).
     const cheb = (p: NavPoint, x: number, z: number): number => Math.max(Math.abs(p.x - x), Math.abs(p.z - z));
     const expect: { name: string; fl: number; tl: number; x: number; z: number }[] = [
         { name: 'Lumbridge Castle South (stairs.rs2)', fl: 0, tl: 1, x: 3205, z: 3209 },

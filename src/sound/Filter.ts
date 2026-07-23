@@ -69,7 +69,7 @@ export default class Filter {
         const base: number = this.ranges[direction][0][pair];
         const range: number = this.ranges[direction][1][pair];
         const value: number = base + t * (range - base);
-        const scaled: number = value * 0.0015258789; // 1 / 655.36
+        const scaled: number = value * 0.0015258789;
         return 1.0 - Math.pow(10.0, -scaled / 20.0);
     }
 

@@ -1,19 +1,9 @@
-// Shared offline nav-tooling pieces (Slice 5): the minimal byte reader,
-// jagfile reader, LocType decoder and mapsquare enumeration that both
-// build-collision.ts and derive-doors.ts replay from Engine-TS@274.
-//
-// Everything here mirrors engine semantics exactly (src/io/Packet.ts,
-// src/io/Jagfile.ts, src/cache/config/LocType.ts, src/engine/GameMap.ts);
-// deviations are bugs.
-
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { unzipSync } from 'fflate';
 
 import { bunzip2 } from '#/io/BZip2.js';
-
-// ---- minimal big-endian byte reader (Engine-TS@274 src/io/Packet.ts semantics) ----
 
 export class Reader {
     readonly data: Uint8Array;
@@ -74,15 +64,10 @@ export class Reader {
         return str;
     }
 
-    // 1-or-2-byte smart: first byte < 0x80 reads u8, else u16 - 0x8000
     gsmarts(): number {
         return this.view.getUint8(this.pos) < 0x80 ? this.g1() : this.g2() - 0x8000;
     }
 }
-
-// ---- minimal jagfile reader (Engine-TS@274 src/io/Jagfile.ts semantics) ----
-// Needed only to pull loc.dat out of the client config archive; per-file
-// streams are headerless bzip2 (decompressed with the client's own bunzip2).
 
 class JagArchive {
     private readonly data: Uint8Array;
@@ -100,7 +85,6 @@ class JagArchive {
             this.data = src;
             this.compressWhole = false;
         } else {
-            // whole-archive compression: re-read the table from the decompressed stream
             this.data = bunzip2(src.subarray(6));
             reader = new Reader(this.data);
             this.compressWhole = true;
@@ -110,7 +94,7 @@ class JagArchive {
         let pos: number = reader.pos + fileCount * 10;
         for (let i: number = 0; i < fileCount; i++) {
             this.fileHash[i] = reader.g4s();
-            reader.g3(); // unpacked size
+            reader.g3();
             this.filePackedSize[i] = reader.g3();
             this.filePos[i] = pos;
             pos += this.filePackedSize[i];
@@ -136,11 +120,6 @@ class JagArchive {
         return this.compressWhole ? src : bunzip2(src);
     }
 }
-
-// ---- minimal LocType decoder (Engine-TS@274 src/cache/config/LocType.ts) ----
-// Decodes only what nav tooling needs (width, length, blockwalk, blockrange,
-// active, name, ops — plus models/shapes for the active postDecode rule);
-// every other opcode is consumed per the format and discarded.
 
 export class LocDef {
     models: Uint16Array | null = null;
@@ -176,7 +155,7 @@ export class LocDef {
         } else if (code === 2) {
             this.name = dat.gjstr();
         } else if (code === 3) {
-            dat.gjstr(); // desc
+            dat.gjstr();
         } else if (code === 5) {
             const count = dat.g1();
             this.models = new Uint16Array(count);
@@ -195,13 +174,12 @@ export class LocDef {
         } else if (code === 19) {
             this.active = dat.g1();
         } else if (code === 21 || code === 22 || code === 23 || code === 25 || code === 62 || code === 64 || code === 73 || code === 74) {
-            // hillskew / sharelight / occlude / hasalpha / mirror / !shadow / forcedecor / breakroutefinding
         } else if (code === 24 || code === 60 || code === 61 || code === 65 || code === 66 || code === 67 || code === 68) {
-            dat.g2(); // anim / mapfunction / category / resizex/y/z / mapscene
+            dat.g2();
         } else if (code === 28 || code === 69 || code === 75) {
-            dat.g1(); // wallwidth / forceapproach / raiseobject
+            dat.g1();
         } else if (code === 29 || code === 39) {
-            dat.g1b(); // ambient / contrast
+            dat.g1b();
         } else if (code >= 30 && code < 35) {
             if (!this.op) {
                 this.op = new Array(5).fill(null);
@@ -210,15 +188,15 @@ export class LocDef {
         } else if (code === 40) {
             const count = dat.g1();
             for (let i = 0; i < count; i++) {
-                dat.g2(); // recol_s
-                dat.g2(); // recol_d
+                dat.g2();
+                dat.g2();
             }
         } else if (code === 70 || code === 71 || code === 72) {
-            dat.g2s(); // offsetx / offsety / offsetz
+            dat.g2s();
         } else if (code === 249) {
             const count = dat.g1();
             for (let i = 0; i < count; i++) {
-                dat.g3(); // param id
+                dat.g3();
                 if (dat.gbool()) {
                     dat.gjstr();
                 } else {
@@ -272,8 +250,6 @@ export function loadLocTypes(engineDir: string): { configs: LocDef[]; names: Map
     return { configs, names };
 }
 
-// ---- map data (Engine-TS@274 src/engine/GameMap.ts collision parts) ----
-
 export const OPEN = 0x0;
 export const BLOCK_MAP_SQUARE = 0x1;
 const LINK_BELOW = 0x2;
@@ -284,7 +260,6 @@ export const MAP_X = 64;
 export const MAP_Z = 64;
 const MAPSQUARE = MAP_X * LEVELS * MAP_Z;
 
-// ZoneMap.zoneIndex (src/engine/zone/ZoneMap.ts)
 export function zoneIndex(x: number, z: number, level: number): number {
     return ((x >> 3) & 0x7ff) | (((z >> 3) & 0x7ff) << 11) | ((level & 0x3) << 22);
 }
@@ -307,7 +282,6 @@ export interface MapsquareData {
     loc: Uint8Array;
 }
 
-/** Every packed mapsquare, zip cache first like the engine, sorted by mx,mz. */
 export function loadMapsquares(engineDir: string): MapsquareData[] {
     const squares: MapsquareData[] = [];
     const zipPath = path.join(engineDir, 'data/pack/.cache/maps-server.zip');
@@ -337,18 +311,6 @@ export function loadMapsquares(engineDir: string): MapsquareData[] {
     return squares;
 }
 
-/**
- * First pass of GameMap.loadGround: walk the land opcode stream and collect
- * the per-tile flag bytes (BLOCK_MAP_SQUARE/LINK_BELOW/REMOVE_ROOFS),
- * indexed by packCoord.
- *
- * `ground` (optional out, MAPSQUARE bytes) is set to 1 where the tile has
- * DRAWN ground — an overlay (opcode 2..49) or underlay (opcode >= 82). Levels
- * above 0 are mostly void: the collision engine leaves un-floored sky OPEN
- * (walls + reachability contain real players), but a world-scale A* must not
- * route through it — a tile the client never draws can never be clicked or
- * stood on, so ground presence is the truth for upper-level walkability.
- */
 export function parseLands(packet: Reader, ground?: Uint8Array): Int8Array {
     const lands = new Int8Array(MAPSQUARE);
     for (let level: number = 0; level < LEVELS; level++) {
@@ -382,17 +344,14 @@ export function parseLands(packet: Reader, ground?: Uint8Array): Int8Array {
 
 export interface LocInstance {
     locId: number;
-    /** mapsquare-local coords + raw (pre-bridge) level */
     x: number;
     z: number;
     level: number;
-    /** packed coord (packCoord of x,z,level) for lands[] lookups */
     coord: number;
     shape: number;
     angle: number;
 }
 
-/** Walk a loc stream (GameMap.loadLocations encoding) instance by instance. */
 export function forEachLoc(packet: Reader, cb: (loc: LocInstance) => void): void {
     let locId: number = -1;
     let locIdOffset: number = packet.gsmarts();
@@ -414,12 +373,6 @@ export function forEachLoc(packet: Reader, cb: (loc: LocInstance) => void): void
     }
 }
 
-/**
- * GameMap's bridge adjustment: a tile flagged LINK_BELOW on level 1 renders
- * its level-1 content on level 0 and shifts everything above down one level.
- * Returns the effective level, or -1 when the content vanishes (level 0 under
- * a bridge).
- */
 export function bridgedLevel(lands: Int8Array, coord: number, x: number, z: number, level: number): number {
     const bridged: boolean = (level === 1 ? lands[coord] & LINK_BELOW : lands[packCoord(x, z, 1)] & LINK_BELOW) === LINK_BELOW;
     return bridged ? level - 1 : level;

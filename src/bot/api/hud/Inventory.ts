@@ -1,8 +1,3 @@
-/**
- * Backpack reader: InvItem wraps a slot snapshot (held ops -> OPHELD*,
- * use-on -> item-on-item/loc/npc); Inventory is the query surface
- * (items/count/first/isFull/used).
- */
 import type { InvItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
@@ -31,7 +26,6 @@ export class InvItem {
         return this.snap.ops.filter((op): op is string => op !== null);
     }
 
-    /** Held op by name, e.g. item.interact('Bury'). */
     interact(action: string): boolean | Promise<boolean> {
         const wanted = action.toLowerCase();
         for (let i = 0; i < this.snap.ops.length; i++) {
@@ -43,12 +37,6 @@ export class InvItem {
         return false;
     }
 
-    /**
-     * Use this item on another item, a scenery loc, or an npc — the
-     * "use X with Y" interaction behind every processing skill (knife→logs,
-     * bar→anvil, ess→altar, herb→vial). Returns false if a loc target is
-     * off-scene.
-     */
     useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean> {
         const driver = ActionRouter.driver;
         if (target instanceof InvItem) {
@@ -79,12 +67,10 @@ export const Inventory = {
         return Inventory.first(name) !== null;
     },
 
-    /** Occupied slots (stack = one slot, matching the real backpack). */
     used(): number {
         return reader.inventory().length;
     },
 
-    /** Total quantity of an item across the backpack (sums stacks + slots). */
     count(name: string): number {
         const wanted = name.toLowerCase();
         return reader

@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { CHALLENGE_ANSWERS, challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
 
 describe('challengeAnswer', () => {
-    // Keyed by the held anagram clue's obj id (== talk step.id), not the closed
-    // prompt text. Ids mirror pack/obj.pack + CLUE_DB's talk rows.
     test('zoo animals — anagram003 (Zoo keeper)', () => {
         expect(challengeAnswer(2845)).toBe(40);
     });
@@ -23,7 +21,7 @@ describe('challengeAnswer', () => {
         expect(challengeAnswer(2853)).toBe(5096);
     });
     test('a non-challenge clue id → null (leave the dialog alone)', () => {
-        expect(challengeAnswer(2847)).toBeNull(); // anagram004 has no _challenge scroll
+        expect(challengeAnswer(2847)).toBeNull();
         expect(challengeAnswer(0)).toBeNull();
     });
 });

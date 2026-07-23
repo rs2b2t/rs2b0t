@@ -1,6 +1,3 @@
-// Live verify for issue #5: the REAL ChickenKiller, started OUTSIDE the shut
-// chicken-pen gate. The Fight can't-reach recovery must walk it through the
-// gate and kill inside. Usage: bun tools/nav/chicken-gate-test.ts [base-url]
 import { launchBrowser } from '../lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -50,7 +47,7 @@ try {
 
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,50,51,40,31'); // (3240,3295) just east of the chicken gate
+        await type('::tele 0,50,51,40,31');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && at.level === 0 && Math.abs(at.x - 3240) <= 4 && Math.abs(at.z - 3295) <= 4) { break; }
@@ -59,7 +56,6 @@ try {
     if (!at) { fail('pen tele failed'); }
     console.log(`outside the chicken gate: (${at.x},${at.z},${at.level})\n`);
 
-    // Force the pen gate SHUT via the script ABI (Close the open leaf if any).
     const shut = await page.evaluate(async () => {
         const abi = (globalThis as never as { __rs2b0t: { Locs: { query(): { name(n: string): { action(a: string): { where(f: (l: { tile(): { x: number; z: number } }) => boolean): { nearest(): { interact(op: string): Promise<boolean> } | null } } } } } } }).__rs2b0t;
         const near = (l: { tile(): { x: number; z: number } }) => Math.max(Math.abs(l.tile().x - 3236), Math.abs(l.tile().z - 3295)) <= 5;

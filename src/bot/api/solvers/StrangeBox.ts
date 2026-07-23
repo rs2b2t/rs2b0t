@@ -1,20 +1,12 @@
-// Strange-box puzzle solver. Server truth (rs2b2t-content 'macro events'
-// macro_event_strange_box.rs2): the box asks "What colour is the <Shape>?"
-// or "Which shape is <Colour>?"; the three spinning models are set via
-// IF_SETOBJECT so their obj ids are readable client-side; answer buttons are
-// ordered center/side/top matching the model components. Wrong answers (and
-// slow solving) REPLICATE the box, so it must be solved promptly + correctly.
-// All ids from rs2b2t-content/pack — guarded at runtime by the modal-root check.
-
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../Execution.js';
 import { Inventory } from '../hud/Inventory.js';
 
 export const CUBE_IF = {
     root: 6554,
-    models: [6555, 6557, 6559] as const, // center, side, top
+    models: [6555, 6557, 6559] as const,
     question: 6561,
-    buttons: [6562, 6563, 6564] as const // answer_button1..3 (center/side/top)
+    buttons: [6562, 6563, 6564] as const
 };
 
 export const CUBE_PARTS: Record<number, { shape: string; colour: string }> = {
@@ -35,7 +27,6 @@ export const CUBE_PARTS: Record<number, { shape: string; colour: string }> = {
     3091: { shape: 'Half Moon', colour: 'Yellow' }
 };
 
-/** Answer index (0=center,1=side,2=top) for the current puzzle, or null. */
 export function solveCube(question: string, models: [number | null, number | null, number | null]): number | null {
     const parts = models.map(id => (id !== null ? (CUBE_PARTS[id] ?? null) : null));
     if (parts.some(p => p === null)) {
@@ -59,7 +50,6 @@ export function solveCube(question: string, models: [number | null, number | nul
     return null;
 }
 
-// Genie lamp (obj 2528 'Lamp', opheld1 'Rub' → xplamp interface).
 export const LAMP_IF = {
     root: 2808,
     confirm: 2831,
@@ -87,12 +77,6 @@ export const LAMP_IF = {
 };
 
 export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean> {
-    // Each Strange box is its OWN cube puzzle, solved one at a time, and the
-    // reward only lands once EVERY box is gone (the server inv_del's one per
-    // correct answer). Unsolved boxes REPLICATE until they fill the pack — so
-    // solve them ALL in this single pass. (Solving one per handle() call let
-    // the generic MAX_ATTEMPTS backstop give up after 4 boxes — the attempt
-    // counter never resets while more boxes remain — and the rest replicated.)
     let solved = 0;
     for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
         const box = Inventory.first('Strange box');
@@ -126,7 +110,6 @@ export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean
     return solved > 0;
 }
 
-/** Rub a reward Lamp and put the xp on `lampSkill` (falls back to strength). */
 export async function rubLamp(lampSkill: string, log: (msg: string) => void): Promise<boolean> {
     const lamp = Inventory.first('Lamp');
     if (!lamp) {

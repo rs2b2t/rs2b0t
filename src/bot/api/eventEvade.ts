@@ -1,7 +1,3 @@
-// Pure flee-tile candidates for hostile random events: 8 compass points at
-// `dist`, sorted furthest-from-threat first so walking to the first
-// REACHABLE one moves directly away.
-
 export interface Pt {
     x: number;
     z: number;

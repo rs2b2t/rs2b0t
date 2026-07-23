@@ -1,28 +1,3 @@
-// Auto-derive door/gate transport edges for the web-walker (Slice 5b).
-//
-// Scans every packed mapsquare for WALL-layer loc instances whose LocType has
-// an 'Open' op (doors, gates, large doors) and emits one edge per instance
-// into src/bot/nav/data/doors.json. The two tiles an edge connects follow
-// from how rsmod's CollisionEngine.changeWallStraight applies wall flags
-// (src/bot/nav/rsmod/CollisionEngine.ts):
-//
-//   angle 0 (WEST)  -> WALL_WEST  on (x,z), WALL_EAST  on (x-1,z): door joins (x,z)<->(x-1,z)
-//   angle 1 (NORTH) -> WALL_NORTH on (x,z), WALL_SOUTH on (x,z+1): door joins (x,z)<->(x,z+1)
-//   angle 2 (EAST)  -> WALL_EAST  on (x,z), WALL_WEST  on (x+1,z): door joins (x,z)<->(x+1,z)
-//   angle 3 (SOUTH) -> WALL_SOUTH on (x,z), WALL_NORTH on (x,z-1): door joins (x,z)<->(x,z-1)
-//
-// Sanity-checked against known instances (validated with probe-locs.ts +
-// build-collision verify): the east-Lumbridge chicken-pen gate halves at
-// (3236,3295..3296) angle 2 connect across the fence line the collision bake
-// blocks at x=3236/3237, and the Lumbridge castle ground-floor door sits at
-// (3208,3211) angle 1.
-//
-// Non-straight wall shapes (diagonal/square corner, L) with an Open op are
-// counted and skipped — a corner wall joins tiles diagonally and the runtime
-// walker only consumes N/E/S/W door edges.
-//
-// Usage: bun tools/nav/derive-doors.ts [--engine <dir>] [--out <file>]
-
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -39,7 +14,6 @@ interface DoorEdge {
     dir: 'N' | 'E' | 'S' | 'W';
 }
 
-// LocAngle.WEST/NORTH/EAST/SOUTH (0..3) -> the wall edge of the loc's tile
 const ANGLE_DIR: ('W' | 'N' | 'E' | 'S')[] = ['W', 'N', 'E', 'S'];
 
 function parseArgs(): { engine: string; out: string } {
@@ -63,7 +37,6 @@ function main(): void {
     const opts = parseArgs();
     const { configs } = loadLocTypes(opts.engine);
 
-    // loc ids whose type is openable: any op slot is exactly 'Open'
     const openable = new Set<number>();
     let lockedSkipped = 0;
     for (let id = 0; id < configs.length; id++) {
@@ -71,13 +44,6 @@ function main(): void {
         if (!type.op || !type.op.some(op => op?.toLowerCase() === 'open')) {
             continue;
         }
-        // skip content a walker can never legitimately use: names that say
-        // 'locked', random-event instance locs (macro_* — e.g. the 1373
-        // 'Open'-able macro_maze_wallhigh maze walls), and quest-gated doors
-        // whose Open is scripted to refuse (Draynor Manor: the key-locked
-        // closet_door "The door is locked." and the Ernest basement
-        // lever-puzzle haunted_door category "This door is locked." — baking
-        // them lured exit paths into dead-end corners, live 2026-07-22)
         const QUEST_LOCKED = new Set(['closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8']);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
         if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || QUEST_LOCKED.has(type.debugname ?? '')) {
@@ -87,12 +53,6 @@ function main(): void {
         openable.add(id);
     }
 
-    // ONE-WAY doors, excluded from the (always bidirectional) baked edges and
-    // modeled instead as single-direction curated edges in transports.json.
-    // Draynor Manor's front pair (haunteddoorl/r) scripts "The doors won't
-    // open." from the inside — baking it two-way routed exits into a live
-    // refusal and wedged every bot that entered (the manor clue, live
-    // 2026-07-22); the real exit is the two-way back door (3123,3360).
     const ONE_WAY_EXCLUDED = new Set(['3108,3353,0', '3109,3353,0']);
 
     const edges: DoorEdge[] = [];
@@ -143,7 +103,6 @@ function main(): void {
 
     edges.sort((a, b) => a.level - b.level || a.x - b.x || a.z - b.z || a.locId - b.locId);
 
-    // one edge per line: greppable and hand-editable, diff-stable
     const json = '[\n' + edges.map(edge => '    ' + JSON.stringify(edge)).join(',\n') + '\n]\n';
     fs.mkdirSync(path.dirname(opts.out), { recursive: true });
     fs.writeFileSync(opts.out, json);
@@ -162,8 +121,6 @@ function main(): void {
         }
     }
 
-    // sanity: the chicken-pen gate halves and the Lumbridge castle door must
-    // have been derived with the expected directions
     const expect: [number, number, string][] = [
         [3236, 3296, 'E'],
         [3236, 3295, 'E'],

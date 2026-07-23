@@ -24,14 +24,8 @@ import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// East Ardougne layout — baked in (see the 2026-07-20 cakethiever design).
-// The bot lives on the golden stand; everything else is a short fixed walk.
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
-// FLEE_TILE (the SW kite tile) now lives in CakeStallLogic — shared with the
-// Merlin's-Crystal bread steal leg.
-// Market-local boundary: covers the stand AND the south bank (cheb 26 apart),
-// so bank trips never fight ReturnToStall for control.
 const MARKET_RADIUS = 40;
 const OBSTACLE = ['door', 'gate'];
 const ENGAGE_RADIUS = 5;
@@ -44,7 +38,6 @@ export const SETTINGS: SettingsSchema = {
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'Fight mode kills guards, which drop medium clues — solve them on the spot' }
 };
 
-// Active run config (ADR-0006 single-script module state).
 let RESPONSE = 'Flee';
 let EAT_AT = 0.4;
 let EAT_TO = 0.9;
@@ -56,13 +49,6 @@ function nearMarket(): boolean {
     return here !== null && STAND.distanceTo(here) <= MARKET_RADIUS;
 }
 
-/**
- * Baker's-stall cake thiever. Stands on THE stand (2668,3312), steals cakes
- * via the shared outcome-classified driver (no Baker line-of-sight
- * prediction — refusals are free; a streak resets nearby until he drifts),
- * banks full packs at the south bank, and answers a guard catch with Flee
- * (kite) or Fight per the guardResponse setting. Thieving 5 required.
- */
 export default class ArdyCakes extends TaskBot {
     override loopDelay = 600;
 
@@ -98,14 +84,11 @@ export default class ArdyCakes extends TaskBot {
                 this.setStatus(s);
             },
             isFood: n => matchesAny(n, CAKE_ITEMS),
-            // BankRun banks every stolen cake, so trails top up from the bank.
             foodName: () => 'Cake',
             foodWithdraw: () => 10,
             spadeName: () => 'Spade',
             enabled: () => SOLVE_CLUES
         });
-        // Eat mid-walk (clue trails leave the market): EatCake can't run while
-        // a walk or solve holds the task loop — RockCrab's proven shape.
         Sustain.set(async () => {
             if (Skills.hpFraction() < EAT_AT && carriedCakes() > 0) {
                 const food = Inventory.items().find(i => matchesAny(i.name, CAKE_ITEMS));
@@ -144,7 +127,7 @@ export default class ArdyCakes extends TaskBot {
             }),
             ...(RESPONSE === 'Fight' ? [new FightBack(this)] : [new Flee(this)]),
             new EatCake(this),
-            this.solveClue!, // a clue from a killed guard preempts banking/stealing (RockCrab shape)
+            this.solveClue!,
             new BankRun(this),
             new StealCakes(this),
             new ReturnToStall(this)
@@ -152,8 +135,6 @@ export default class ArdyCakes extends TaskBot {
     }
 
     override grindTargets(): string[] {
-        // In Fight mode the retaliating market hostiles are legitimate targets,
-        // not random events; harmless in Flee mode (we never attack them).
         return HOSTILE_NAMES.map(n => n.toLowerCase());
     }
     override recoveryAnchor(): Tile | null {
@@ -177,8 +158,6 @@ export default class ArdyCakes extends TaskBot {
     }
 
     setStatus(s: string): void { this.status = s; }
-    /** Called by Flee/FightBack the moment combat clears — feeds the driver's
-     *  10-tick engine lockout so the first post-fight click isn't wasted. */
     markCombatEnd(): void { this.combatEndTick = Game.tick(); }
     lockedOutUntil(): number { return this.combatEndTick + LOCKOUT_TICKS; }
     countSteal(): void { this.steals++; }
@@ -190,10 +169,6 @@ export default class ArdyCakes extends TaskBot {
     countKill(): void { this.kills++; }
 }
 
-/** Flee mode: on any combat, kite the guard to the fixed SW tile (drags it off
- *  the stall + breaks melee), wait out combat, record the end tick for the
- *  driver's lockout. ArdyThiever's proven shape, minus its pickpocket-stun
- *  ambiguity — ArdyCakes never pickpockets, so combat is always real. */
 class Flee implements Task {
     constructor(private bot: ArdyCakes) {}
     validate(): boolean { return Game.inCombat(); }
@@ -209,8 +184,6 @@ class Flee implements Task {
     }
 }
 
-/** Fight mode: kill the market hostile that caught us (auto-retaliate-proof —
- *  attacks explicitly). ArdyThiever's FightBack shape with cake-eating gates. */
 class FightBack implements Task {
     constructor(private bot: ArdyCakes) {}
     private findAttacker(): Npc | null {
@@ -238,7 +211,7 @@ class FightBack implements Task {
         while (performance.now() < deadline) {
             if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died) { return; }
             if (shouldEat(Skills.hpFraction(), EAT_AT, carriedCakes())) {
-                return; // EatCake outranks us next loop; combat resumes after
+                return;
             }
             const target = this.track(attacker);
             if (!target || (target.health === 0 && target.snap.totalHealth > 0)) {
@@ -259,7 +232,6 @@ class FightBack implements Task {
     }
 }
 
-/** Eat stolen cakes below the gate up to the eat-to target — they're free. */
 class EatCake implements Task {
     constructor(private bot: ArdyCakes) {}
     validate(): boolean { return shouldEat(Skills.hpFraction(), EAT_AT, carriedCakes()); }
@@ -278,7 +250,6 @@ class EatCake implements Task {
     }
 }
 
-/** Full pack -> south bank: deposit the cakes (+ common junk), walk back. */
 class BankRun implements Task {
     constructor(private bot: ArdyCakes) {}
     validate(): boolean { return nearMarket() && !Game.inCombat() && Inventory.isFull(); }
@@ -301,7 +272,6 @@ class BankRun implements Task {
     }
 }
 
-/** The main loop: run the shared steal driver until the pack fills. */
 class StealCakes implements Task {
     constructor(private bot: ArdyCakes) {}
     validate(): boolean {
@@ -309,7 +279,7 @@ class StealCakes implements Task {
     }
     async execute(): Promise<void> {
         const result = await stealCakes({
-            fillTo: 28, // Inventory.isFull() is the real stop; 28 = never early
+            fillTo: 28,
             abort: () => this.bot.died || EventSignal.pending() || ChatDialog.canContinue(),
             shouldEat: () => shouldEat(Skills.hpFraction(), EAT_AT, carriedCakes()),
             lockedOutUntil: () => this.bot.lockedOutUntil(),
@@ -326,7 +296,6 @@ class StealCakes implements Task {
     }
 }
 
-/** Start-anywhere travel + displacement recovery (ArdyThiever shape). */
 class ReturnToStall implements Task {
     constructor(private bot: ArdyCakes) {}
     validate(): boolean {

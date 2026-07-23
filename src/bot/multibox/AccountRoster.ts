@@ -2,15 +2,6 @@ import type { Account } from './types.js';
 
 const KEY = 'rs2b0t:multibox:accounts';
 
-/**
- * The manager's account list, persisted under its OWN localStorage key — never
- * the client's `rs2b0t:creds`, so the per-iframe credential injection is the only
- * source of a bot's identity (spec constraint #4). `claimNext` hands out an
- * unused account; `release` returns it when a slot closes.
- *
- * SECURITY: plaintext, this machine only, throwaway/dev accounts (same posture
- * as Credentials.ts). Do not store real passwords.
- */
 export class AccountRoster {
     private accounts: Account[] = [];
     private assigned = new Set<string>();
@@ -61,7 +52,6 @@ export class AccountRoster {
                 this.accounts = parsed.filter(a => typeof a?.username === 'string' && typeof a?.password === 'string');
             }
         } catch {
-            /* ignore corrupt storage */
         }
     }
 

@@ -129,7 +129,6 @@ export default class Packet extends Linkable2 {
         return this.view.getUint8(this.pos++);
     }
 
-    // signed
     g1b(): number {
         return this.view.getInt8(this.pos++);
     }
@@ -140,7 +139,6 @@ export default class Packet extends Linkable2 {
         return result;
     }
 
-    // signed
     g2b(): number {
         const result: number = this.view.getInt16(this.pos);
         this.pos += 2;

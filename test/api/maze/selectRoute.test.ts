@@ -3,10 +3,10 @@ import { selectRoute } from '#/bot/api/maze/selectRoute.js';
 import type { MazeRoute } from '#/bot/api/maze/mazeRoutes.js';
 
 const R: MazeRoute[] = [
-    { spawn: { x: 2891, z: 4597 }, doors: [{ x: 1, z: 1 }] }, // NW
-    { spawn: { x: 2933, z: 4597 }, doors: [{ x: 2, z: 2 }] }, // NE
-    { spawn: { x: 2933, z: 4555 }, doors: [{ x: 3, z: 3 }] }, // SE
-    { spawn: { x: 2891, z: 4555 }, doors: [{ x: 4, z: 4 }] }  // SW
+    { spawn: { x: 2891, z: 4597 }, doors: [{ x: 1, z: 1 }] },
+    { spawn: { x: 2933, z: 4597 }, doors: [{ x: 2, z: 2 }] },
+    { spawn: { x: 2933, z: 4555 }, doors: [{ x: 3, z: 3 }] },
+    { spawn: { x: 2891, z: 4555 }, doors: [{ x: 4, z: 4 }] }
 ];
 
 describe('selectRoute', () => {

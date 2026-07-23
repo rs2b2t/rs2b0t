@@ -26,7 +26,6 @@ test('summarize formats each kind compactly', () => {
     expect(summarize(def({ type: 'tile', default: null }), '2661,3306,0')).toBe('2661, 3306');
 });
 
-// ---- grouping + conditional visibility ----
 import { groupSchema, isVisible, visibilityDeps } from '#/bot/ui/paramControls.js';
 import type { SettingsSchema } from '#/bot/runtime/Settings.js';
 

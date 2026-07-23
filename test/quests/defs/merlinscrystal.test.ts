@@ -3,12 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { breadPlan } from '#/bot/quests/defs/merlinscrystal.js';
 import type { QuestSnapshot } from '#/bot/quests/engine/types.js';
 
-// The bread acquisition priority (user-directed): bank first — structural, in
-// planProvisioning (pack -> BANK withdraw -> gather), so breadPlan only runs
-// when the bank had none — then STEAL from the Baker's stall, then BUY from
-// Wydin. breadPlan is the pure steal-vs-buy dispatch with the live reads
-// (thieving level, passes used) injected.
-
 function snap(coins: number): QuestSnapshot {
     return {
         journal: 'inProgress',

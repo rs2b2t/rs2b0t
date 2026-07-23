@@ -7,6 +7,5 @@ test('the router always returns the direct driver', () => {
 });
 
 test('beginRun takes only a log sink (no input-mode arg)', () => {
-    // one parameter now: the log function
     expect(ActionRouter.beginRun.length).toBe(1);
 });

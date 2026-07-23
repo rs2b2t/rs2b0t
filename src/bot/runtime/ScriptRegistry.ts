@@ -5,20 +5,13 @@ export interface ScriptMeta {
     name: string;
     description: string;
     version?: string;
-    /** Primary category for the library filter (usually a skill). */
     category?: string;
-    /** Free-form tags for filtering/search (banking, afk, gathering, ...). */
     tags?: string[];
-    /** Where the script came from: undefined = built-in, else URL/file label. */
     origin?: string;
-    /** Tunable parameters shown in the panel and resolvable from the URL. */
     settingsSchema?: SettingsSchema;
     create(): AbstractBot;
 }
 
-/** Available scripts. Built-ins register at module load (scripts/index.ts);
- *  external scripts register through the loader — re-registering a
- *  name replaces it (the hot-reload path). */
 class ScriptRegistryImpl {
     private metas = new Map<string, ScriptMeta>();
     private changeListeners = new Set<() => void>();

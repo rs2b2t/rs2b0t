@@ -1,11 +1,3 @@
-/**
- * Bounded per-solve trace for the clue executor. Every log line is stamped
- * with wall time + the player's tile so a failed solve can be reconstructed
- * after the fact — the panel's log ring is shared and shallow, and live-wall
- * failures were unreproducible without knowing WHERE each step stalled.
- * Clock/position/storage are injected so this stays unit-testable.
- */
-
 export interface TraceLine {
     t: number;
     pos: string;
@@ -18,7 +10,6 @@ export interface TraceDump {
     reason: string;
     startedAt: number;
     endedAt: number;
-    /** Trail legs completed this session before the dump (best guess). */
     legs: number;
     lines: TraceLine[];
 }
@@ -40,7 +31,6 @@ export class ClueTrace {
         this.pos = opts?.pos ?? (() => '?');
     }
 
-    /** Start tracing a new solve (drops the previous one). */
     begin(clueId: number | null, name: string): void {
         this.buf = [];
         this.clueId = clueId;
@@ -77,7 +67,6 @@ interface StringStorage {
     setItem(key: string, value: string): void;
 }
 
-/** Prepend `dump` to the persisted failure ring (newest first, capped). */
 export function pushTraceRing(storage: StringStorage, key: string, dump: TraceDump, max = 5): void {
     const ring = [dump, ...readTraceRing(storage, key)].slice(0, max);
     storage.setItem(key, JSON.stringify(ring));

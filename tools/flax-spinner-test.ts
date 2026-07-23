@@ -1,13 +1,3 @@
-// Headless live smoke for FlaxSpinner (Seers Village). Boots the WebGL client,
-// logs in, teleports off Tutorial Island, seeds flax into the BANK (before maxme,
-// which swallows the next typed command), maxes stats, teleports to the Seers
-// bank, runs the bot, and asserts a full withdraw → climb up → spin → climb down
-// → bank cycle: bow string appears, the player visits level 1 and returns to
-// level 0, and the bot stops cleanly once the seeded flax is spent.
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/flax-spinner-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -54,7 +44,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -62,12 +52,10 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Seed exactly ONE pack of flax (28) so trip 2 hits the out-of-flax stop.
     await type('::~bankitem flax 28');
     await type('::~maxme');
     await clearDialogs();
 
-    // Seers bank (2722,3493): region 42,54 local 34,37.
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
         await type('::tele 0,42,54,34,37');
@@ -83,7 +71,7 @@ try {
     console.log('started FlaxSpinner (Flax) — watching ~200s');
 
     let peakString = 0, wentUp = false, cameBackDown = false, sawFlax = false, stopped = false;
-    for (let i = 0; i < 100; i++) { // ~200s
+    for (let i = 0; i < 100; i++) {
         await page.waitForTimeout(2000);
         const v = await inv();
         peakString = Math.max(peakString, sub(v, 'bow string'));

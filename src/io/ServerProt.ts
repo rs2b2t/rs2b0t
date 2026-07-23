@@ -1,5 +1,4 @@
 export const enum ServerProt {
-    // interfaces
     IF_OPENCHAT = 166,
     IF_OPENMAIN_SIDE = 158,
     IF_CLOSE = 171,
@@ -9,7 +8,6 @@ export const enum ServerProt {
     IF_OPENSIDE = 16,
     IF_OPENOVERLAY = 240,
 
-    // updating interfaces
     IF_SETCOLOUR = 183,
     IF_SETHIDE = 10,
     IF_SETOBJECT = 28,
@@ -21,26 +19,21 @@ export const enum ServerProt {
     IF_SETPOSITION = 77,
     IF_SETSCROLLPOS = 54,
 
-    // tutorial area
     TUT_FLASH = 90,
     TUT_OPEN = 130,
 
-    // inventory
     UPDATE_INV_STOP_TRANSMIT = 227,
     UPDATE_INV_FULL = 106,
     UPDATE_INV_PARTIAL = 172,
 
-    // camera control
     CAM_LOOKAT = 233,
     CAM_SHAKE = 64,
     CAM_MOVETO = 200,
     CAM_RESET = 101,
 
-    // entity updates
     NPC_INFO = 197,
     PLAYER_INFO = 167,
 
-    // social
     FRIENDLIST_LOADED = 185,
     MESSAGE_GAME = 161,
     UPDATE_IGNORELIST = 3,
@@ -48,7 +41,6 @@ export const enum ServerProt {
     MESSAGE_PRIVATE = 235,
     UPDATE_FRIENDLIST = 247,
 
-    // misc
     UNSET_MAP_FLAG = 115,
     UPDATE_RUNWEIGHT = 67,
     HINT_ARROW = 156,
@@ -64,25 +56,20 @@ export const enum ServerProt {
     SET_PLAYER_OP = 17,
     MINIMAP_TOGGLE = 194,
 
-    // maps
     REBUILD_NORMAL = 231,
 
-    // vars
     VARP_SMALL = 203,
     VARP_LARGE = 245,
     VARP_SYNC = 190,
 
-    // audio
     SYNTH_SOUND = 34,
     MIDI_SONG = 23,
     MIDI_JINGLE = 15,
 
-    // zones
     UPDATE_ZONE_PARTIAL_FOLLOWS = 32,
     UPDATE_ZONE_FULL_FOLLOWS = 153,
     UPDATE_ZONE_PARTIAL_ENCLOSED = 195,
 
-    // zone protocol
     P_LOCMERGE = 176,
     LOC_ANIM = 48,
     OBJ_DEL = 52,

@@ -38,21 +38,16 @@ export default class VarpType {
             } else if (code === 2) {
                 dat.pos += 1;
             } else if (code === 3) {
-                // server-side
             } else if (code === 4) {
-                // server-side
             } else if (code === 5) {
                 this.clientcode = dat.g2();
             } else if (code === 6) {
-                // server-side
             } else if (code === 7) {
                 dat.pos += 4;
             } else if (code === 8) {
-                // server-side
             } else if (code === 10) {
                 dat.gjstr();
             } else if (code === 11) {
-                // server-side
             } else {
                 console.log('Error unrecognised config code: ', code);
             }

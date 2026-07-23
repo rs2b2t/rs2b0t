@@ -7,21 +7,14 @@ import { WalkExecutor } from '../nav/WalkExecutor.js';
 import { ScriptAborted, type ScriptContext } from './ScriptContext.js';
 import { StallGuard } from './StallGuard.js';
 
-const WEDGE_MS = 10 * 60_000; // no xp AND no movement this long ⇒ wedged
-const RETRY_MS = 15 * 60_000; // at most one recovery attempt per this window
+const WEDGE_MS = 10 * 60_000;
+const RETRY_MS = 15 * 60_000;
 
 interface SupervisorIteration {
     label: string;
     run: () => Promise<void>;
 }
 
-/**
- * Runtime supervision above the script (spec Part 2/3): consulted by
- * ScriptRunner.launchIteration before EVERY loop() launch. When a random
- * event is live, the event handler runs AS the iteration — the script is
- * visibly paused (ctx.activeEvent + log lines) and receives no loop() calls
- * until the guard reports clear. The progress watchdog lives here too.
- */
 class SupervisorImpl {
     private lastProgressAt = performance.now();
     private lastTile: WorldTile | null = null;
@@ -31,7 +24,6 @@ class SupervisorImpl {
         bus.on('skill.xp', () => (this.lastProgressAt = performance.now()));
     }
 
-    /** Call when a new script run starts so old-state never spills over. */
     resetProgress(): void {
         this.lastProgressAt = performance.now();
         this.lastTile = null;
@@ -61,7 +53,7 @@ class SupervisorImpl {
                         await RandomEvents.handle(msg => ctx.addLog('info', msg));
                     } catch (err) {
                         if (err instanceof ScriptAborted) {
-                            throw err; // Stop must unwind the script
+                            throw err;
                         }
                         ctx.addLog('error', `event handler (${label}) threw: ${err instanceof Error ? err.message : String(err)} — ignoring; attempt/cooldown backstop applies`);
                     }
@@ -86,20 +78,12 @@ class SupervisorImpl {
                     ctx.addLog('warn', `watchdog: no progress for ${Math.round(WEDGE_MS / 60000)}min at (${me?.x},${me?.z},${me?.level})`);
                     if (anchor && me && Math.max(Math.abs(anchor.x - me.x), Math.abs(anchor.z - me.z)) > 8) {
                         ctx.addLog('info', 'watchdog: walking back to the anchor');
-                        // BOUNDED (attempts:3): the watchdog IS the recovery path — it
-                        // must be able to give up (walkResilient returns false after 3
-                        // no-progress passes) so an unreachable anchor escalates to
-                        // StallGuard.requestRestart below. The default (retry-forever)
-                        // would keep it walking and the restart would never fire.
                         const ok = await Traversal.walkResilient(anchor, { radius: 3, attempts: 3, log: msg => ctx.addLog('info', msg) });
                         if (ok) {
                             this.lastProgressAt = performance.now();
                             return;
                         }
                         if (WalkExecutor.lastOutcome === 'interrupted') {
-                            // an event fired mid-walk-home; the Supervisor handles
-                            // it next iteration and the watchdog re-attempts later —
-                            // do NOT treat this as a failed recovery
                             ctx.addLog('info', 'watchdog: walk home interrupted by a random event — deferring');
                             return;
                         }

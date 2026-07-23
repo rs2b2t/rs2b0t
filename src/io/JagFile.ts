@@ -6,7 +6,7 @@ export default class JagFile {
         let hash: number = 0;
         name = name.toUpperCase();
         for (let i: number = 0; i < name.length; i++) {
-            hash = (hash * 61 + name.charCodeAt(i) - 32) | 0; // wtf?
+            hash = (hash * 61 + name.charCodeAt(i) - 32) | 0;
         }
         return hash;
     }

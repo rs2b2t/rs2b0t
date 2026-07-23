@@ -1,11 +1,6 @@
 import { BotHost } from '../BotHost.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 
-/**
- * Owns the transparent overlay canvas stacked on the game canvas. Each redraw
- * it paints the running script's onPaint(ctx) — bots draw stats without ever
- * touching Pix2D.
- */
 export default class Overlay {
     private readonly ctx2d: CanvasRenderingContext2D | null;
     private readonly canvas: HTMLCanvasElement;

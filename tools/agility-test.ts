@@ -1,8 +1,3 @@
-// Validates AgilityBot on the Gnome Stronghold course: tele to the log
-// balance, run GnomeCourse, and assert a FULL LAP completes. One lap awards
-// ~46xp of obstacle xp plus the 39xp completion bonus, so gaining >= 80xp
-// proves every obstacle (including the level-2 rope -> climb-down transition
-// that used to wedge on the op-less rope mid segments) and the lap rollover.
 import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 const LAP_XP = 80;
@@ -12,12 +7,12 @@ const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    const agiXp = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.stat(16).xp); // 16 = agility
+    const agiXp = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.stat(16).xp);
     await page.goto(`${base}/bot.html`); await boot(page);
     if (!(await login(page, username))) fail('login failed');
     await bringUpOffIsland(page, { user: username, typeWaitMs: 1400 });
     await type(page, '::advancestat agility 10', 1400);
-    await type(page, '::tele 0,38,53,42,44', 1400); // (2474,3436) at the gnome log balance
+    await type(page, '::tele 0,38,53,42,44', 1400);
     const baseXp = await agiXp();
     console.log(`at gnome course, agility xp baseline ${baseXp}`);
     await page.getByRole('button', { name: 'Browse…' }).click();

@@ -1,16 +1,8 @@
-// Slice 5 functional test: fresh account, unlock tabs, run WalkTo through the
-// panel and assert the web-walker routes from Lumbridge to Varrock and arrives.
-// (Previously drove the multi-leg NavDemo; NavDemo was retired, so this now
-// exercises the resilient web-walker over a single cross-region route.)
-//
-// Usage: bun tools/nav-test.ts [base-url] [username]
-
 import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 const username = process.argv[3] ?? `nav${Date.now().toString(36).slice(-7)}`;
 
-// Lumbridge castle courtyard
 const TELE = '::tele 0,50,50,22,22';
 const DEMO_TIMEOUT_MS = 25 * 60_000;
 
@@ -57,7 +49,6 @@ try {
     if (!(await login())) fail('first login failed');
     console.log(`logged in as '${username}'`);
 
-    // unlock sidebar tabs: tele off Tutorial Island, re-login (docs/DEV.md)
     await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
     await page.waitForTimeout(500);
     await page.keyboard.type(TELE, { delay: 30 });

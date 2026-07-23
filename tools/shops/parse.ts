@@ -1,12 +1,3 @@
-/**
- * Pure parsers for the 2004scape content pack's shop data. Line formats
- * (verified against rs2b2t-content):
- *   .inv : [name] + scope=/restock=/allstock= + stockN=<obj>,<baseline>,<rateTicks>
- *          (2-field stockN lines are crafting menus, not shops — excluded)
- *   .npc : [id] + name= + param=owned_shop,<inv> + param=shop_*_multiplier/delta/title
- *   .obj : [id] + name= + cost= + stackable=yes + members=yes (any field order)
- * Client-free and IO-free: callers feed file text in.
- */
 import type { ShopRecord } from '#/bot/shops/types.js';
 
 export interface ParsedInv {
@@ -87,7 +78,6 @@ export function parseNpcKeepers(text: string): ParsedKeeper[] {
             npc: b.id,
             name: field(b.lines, 'name') ?? b.id,
             ownedShops: owned,
-            // shopkeeper.param defaults: sell 100, buy 60, delta 10 (real shops override to the 1000 scale)
             sell: num('shop_sell_multiplier', 100),
             buy: num('shop_buy_multiplier', 60),
             delta: num('shop_delta', 10),
@@ -119,7 +109,7 @@ export function joinShopDb(
     for (const inv of invs) {
         const owners = keepers.filter(k => k.ownedShops.includes(inv.inv));
         if (owners.length === 0) {
-            continue; // stocked inv with no shopkeeper is not a reachable shop
+            continue;
         }
         const first = owners[0];
         db[inv.inv] = {

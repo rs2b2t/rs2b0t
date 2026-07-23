@@ -2,9 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { ARDOUGNE_PICKPOCKET_TARGETS } from '#/bot/scripts/PickpocketTargets.js';
 import { HOSTILE_NAMES, chooseTarget, isHostileAttacker, requiredThieving, targetSpot } from '#/bot/scripts/ArdyThieverLogic.js';
 
-// Spawn tiles decoded from the engine's packed server maps (n40_51/n41_51) —
-// the source data behind the anchor table. Hero's far-SW spawn (2630,3288) is
-// deliberately out of scope (spec: market-side heroes only).
 const SPAWNS: Record<string, [number, number][]> = {
     'Guard': [[2651, 3307], [2659, 3309], [2660, 3309], [2661, 3309], [2663, 3301], [2665, 3300], [2664, 3318]],
     'Knight of Ardougne': [[2652, 3318], [2653, 3300], [2669, 3298], [2671, 3313]],
@@ -12,16 +9,11 @@ const SPAWNS: Record<string, [number, number][]> = {
     'Hero': [[2647, 3306], [2667, 3316]]
 };
 
-// Engine maxrange per target (data/pack/server/npc.dat, opcode 201) — the hard
-// cap on how far the engine lets an npc drift from ITS OWN spawn (wander dests
-// are spawn±wanderrange; combat drag is bounded by maxrange). A leash that
-// covers spawns but not spawn+maxrange starves the Pickpocket task whenever
-// the wanderers dwell outside it — the live "stuck, knights out of leash" bug.
 const MAXRANGE: Record<string, number> = {
-    'Guard': 7, // ardougne_guard: wanderrange 5, maxrange 7
-    'Knight of Ardougne': 17, // wanderrange 15, maxrange 17
-    'Paladin': 4, // wanderrange 2, maxrange 4
-    'Hero': 7 // wanderrange 5, maxrange 7
+    'Guard': 7,
+    'Knight of Ardougne': 17,
+    'Paladin': 4,
+    'Hero': 7
 };
 
 describe('targetSpot', () => {
@@ -33,9 +25,6 @@ describe('targetSpot', () => {
         }
     });
     test('every spawn PLUS its engine roam cap sits within the target leash (Chebyshev)', () => {
-        // spawn-only coverage is not enough: the npc dwells anywhere in
-        // spawn±maxrange, so the leash must contain the whole roam envelope or
-        // candidates() starves while the target wanders (the knights bug).
         for (const [name, spawns] of Object.entries(SPAWNS)) {
             const spot = targetSpot(name);
             for (const [x, z] of spawns) {
@@ -66,8 +55,6 @@ describe('isHostileAttacker', () => {
         expect(isHostileAttacker(guard, 5)).toBe(true);
     });
     test('rejects a guard already fighting ANOTHER player (not us)', () => {
-        // faceEntity points at a different player's scene slot — attacking it
-        // would steal someone else's fight and pull aggro we never had
         expect(isHostileAttacker({ ...guard, targetsAnotherPlayer: true }, 5)).toBe(false);
     });
     test('every fight-mode hostile is an Ardougne dropdown target and vice versa', () => {
@@ -95,7 +82,6 @@ describe('chooseTarget (reachability-aware pickpocket selection)', () => {
     const reach = (set: Set<string>) => (t: string) => set.has(t);
 
     test('picks the nearest REACHABLE target, skipping closer unreachable ones', () => {
-        // nearest-first: A (unreachable, fenced edge), B (reachable), C (reachable)
         const r = chooseTarget(['A', 'B', 'C'], reach(new Set(['B', 'C'])));
         expect(r).toEqual({ target: 'B', blocked: null });
     });

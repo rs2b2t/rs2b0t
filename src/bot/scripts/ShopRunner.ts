@@ -1,17 +1,3 @@
-/**
- * ShopRunner — the DUMB shop ring (user-directed rework, 2026-07-22): cycle a
- * fixed ring of shop clusters; at each one bank (deposit everything, withdraw
- * the cluster's full-buyout estimate + buffer), walk to each shop and buy out
- * its listed items valuable-first, then move on. No haul prediction, no
- * funded plans, no restock idling — a lap that finds empty shops just keeps
- * walking. Gated clusters (guilds) are skipped for accounts that can't enter.
- *
- * The Mage Arena cluster follows the WILDERNESS PROTOCOL: fund at Edgeville
- * carrying nothing but a Knife (the ruin-web slasher) + the leg's coins, buy
- * out Lundail, deposit the whole haul with Gundai INSIDE the arena cellar,
- * and walk home empty — a PK death costs a knife and pocket change, never
- * the haul.
- */
 import { Bank } from '../api/hud/Bank.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -35,7 +21,6 @@ import { ROUTE, SMOKE_ROUTE } from '../shops/data/route.js';
 import type { AccountView, NavPointLike, Route, RouteCluster } from '../shops/types.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-/** Every distinct display name the live route can buy — the buyItems options. */
 const BUYABLE_NAMES: string[] = [...new Set(
     ROUTE.clusters.flatMap(c => c.shops.flatMap(s => s.buys.map(b => SHOP_DB[s.shopId]?.items.find(i => i.obj === b.obj)?.name).filter((n): n is string => n !== undefined)))
 )].sort();
@@ -51,7 +36,6 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
 
 const STATE_KEY_PREFIX = 'rs2b0t:shoprun:state:';
 const hasStorage = typeof localStorage !== 'undefined';
-/** Shop-open failure cooldown: skip a shop this long after 3 consecutive open failures. */
 const COOLDOWN_MS = 10 * 60_000;
 
 interface RunnerState { lastClusterId: string | null }
@@ -60,8 +44,8 @@ export class ShopRunner extends TaskBot {
     override loopDelay = 600;
 
     route: Route = ROUTE;
-    chosen = new Set<string>();       // lowercased buyItems selection
-    buyNames = new Set<string>();     // lowercased names the ROUTE can buy (deposit filter)
+    chosen = new Set<string>();
+    buyNames = new Set<string>();
     gpBufferPct = 25;
     maxGpPerLeg = 100_000;
     stopFloorGp = 5000;
@@ -182,7 +166,6 @@ async function walkNear(bot: ShopRunner, dest: NavPointLike, radius = 2): Promis
     return Traversal.walkResilient({ x: dest.x, z: dest.z, level: dest.level }, { radius, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) });
 }
 
-/** Open an NPC Talk-to bank (the Mage Arena's Gundai — the ShopBuyout-proven idiom). */
 async function openNpcBank(bot: ShopRunner, banker: string): Promise<boolean> {
     if (Bank.isOpen()) {
         return true;
@@ -191,13 +174,6 @@ async function openNpcBank(bot: ShopRunner, banker: string): Promise<boolean> {
     return Execution.delayUntil(() => Bank.isOpen(), 4000);
 }
 
-/**
- * One full cluster per pass: fund at the bank -> buy out each shop -> (Mage
- * Arena: bank the haul with Gundai in-cellar) -> advance the ring. Re-entrant:
- * any failed leg returns and the next pass resumes the SAME cluster (the ring
- * only advances after the shops are done). Yields to the runtime event guard
- * between shops (the CookBot lesson — a Genie mid-lap must be handled).
- */
 class RunCluster implements Task {
     constructor(private readonly bot: ShopRunner) {}
     validate(): boolean { return true; }
@@ -211,7 +187,6 @@ class RunCluster implements Task {
             return;
         }
 
-        // ---- fund at the cluster's bank --------------------------------------
         bot.status = `banking for ${cluster.id}`;
         if (!(await walkNear(bot, cluster.bank.stand))) {
             return;
@@ -223,7 +198,6 @@ class RunCluster implements Task {
         const keep = new Set((cluster.keep ?? []).map(s => s.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
 
-        // wilderness protocol: the keep-list (Knife) must be HELD before heading out
         for (const item of cluster.keep ?? []) {
             if (!Inventory.contains(item) && !Equipment.contains(item)) {
                 if (!(await Bank.withdrawX(item, 1))) {
@@ -252,20 +226,17 @@ class RunCluster implements Task {
             }
             bot.log(`[shoprun] ${cluster.id}: withdrew ${take}gp (estimate ${estimate} +${bot.gpBufferPct}%, cap ${bot.maxGpPerLeg})`);
         }
-        // no explicit close — the first walk step shuts the bank interface
 
-        // WIELD the web-slasher: op1 Slash checks the WORN slot, not the pack
         for (const item of cluster.wield ?? []) {
             if (!Equipment.contains(item)) {
                 await Equipment.equip(item);
             }
         }
 
-        // ---- staged approach (the wilderness waypoints), then the shops -------
         for (const wp of cluster.waypoints ?? []) {
             bot.status = `walking the ${cluster.id} route`;
             if (!(await walkNear(bot, wp, 4))) {
-                return; // interrupted/failed — re-enter resumes this cluster
+                return;
             }
             if (EventSignal.pending()) {
                 return;
@@ -303,7 +274,6 @@ class RunCluster implements Task {
             }
             bot.openFails[shop.shopId] = 0;
 
-            // buy what's ACTUALLY in stock, valuable-first, within the coins held
             const stock: Record<string, number> = {};
             for (const row of Shop.stock()) {
                 const item = rec.items.find(i => i.name.toLowerCase() === row.name.toLowerCase());
@@ -327,9 +297,6 @@ class RunCluster implements Task {
             await Shop.close();
         }
 
-        // ---- wilderness clusters: bank the haul IN-CELLAR before walking out --
-        // (haulBank ≠ the funding bank: fund at the Edgeville booth, deposit with
-        // Gundai beside Lundail so the walk home carries only the Knife)
         if (cluster.haulBank) {
             bot.status = `banking the haul with ${cluster.haulBank.banker}`;
             if (!(await walkNear(bot, cluster.haulBank.stand))) {

@@ -1,8 +1,3 @@
-/**
- * MultiBox wall entry point (multibox.html): boots N embedded bot.html slots,
- * hands each a roster account, and renders the tab strip (window.multibox is
- * the operator console).
- */
 import { AccountRoster } from './AccountRoster.js';
 import { DomSlotOps } from './DomSlotOps.js';
 import { MultiBoxController } from './MultiBoxController.js';
@@ -22,7 +17,7 @@ function boot(): void {
     const controller = new MultiBoxController(ops, roster);
 
     wall.addEventListener('click', ev => {
-        if (controller.focusedId !== null) return; // only the wall focuses
+        if (controller.focusedId !== null) return;
         const slotEl = (ev.target as HTMLElement).closest('.mbx-slot');
         if (!slotEl || slotEl.id === 'mbx-add') return;
         const idx = Array.from(wall.querySelectorAll('.mbx-slot:not(.mbx-addtile)')).indexOf(slotEl);
@@ -34,7 +29,7 @@ function boot(): void {
     gridBtn.addEventListener('click', openWall);
 
     addTile.addEventListener('click', () => {
-        if (controller.add()) { // claimed a free roster account
+        if (controller.add()) {
             renderTabs();
         } else {
             form.hidden = false;
@@ -47,7 +42,7 @@ function boot(): void {
         const password = passIn.value;
         if (!username) return;
         roster.add({ username, password });
-        controller.add(); // claims the just-added account
+        controller.add();
         userIn.value = '';
         passIn.value = '';
         form.hidden = true;

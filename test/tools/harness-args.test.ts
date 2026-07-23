@@ -12,8 +12,6 @@ describe('parseArgs', () => {
     });
 
     test('the sweep case: a lone base URL is the base, not NaN minutes (uses caller minutes default)', () => {
-        // run-all-smokes spawns `bun tools/<name> <base>`; a minutes-first smoke
-        // used to parse that URL as minutes -> NaN deadline + wrong port.
         expect(parseArgs(['http://localhost:8890'], { base: 'http://localhost:8888', minutes: 8 })).toEqual({
             base: 'http://localhost:8890',
             minutes: 8,

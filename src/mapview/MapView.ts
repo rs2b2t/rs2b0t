@@ -29,7 +29,6 @@ export class MapView extends GameShell {
     focusX: number = this.mapStartX - this.mapOriginX;
     focusZ: number = this.mapOriginZ + this.mapHeight - this.mapStartZ;
 
-    // custom:
     mapArea: number = 0;
 
     readonly maxLabelCount: number = 1000;
@@ -39,32 +38,24 @@ export class MapView extends GameShell {
     mapLabelY: number[] = [];
     mapLabelSize: number[] = [];
 
-    // floorcol.dat
     floorcol1: number[] = [0];
     floorcol2: number[] = [0];
 
-    // underlay.dat
     floort1: number[][] = [];
 
-    // overlay.dat
     floort2: number[][] = [];
     floorsr: number[][] = [];
 
-    // loc.dat
     locWall: number[][] = [];
     locMapscene: number[][] = [];
     locMapfunction: number[][] = [];
 
-    // custom: obj.dat
     objPos: boolean[][] = [];
 
-    // custom: npc.dat
     npcPos: boolean[][] = [];
 
-    // custom: multi.dat
     multiPos: boolean[][] = [];
 
-    // custom: free.dat
     freePos: boolean[][] = [];
 
     mapscene: Pix8[] = [];
@@ -185,7 +176,6 @@ export class MapView extends GameShell {
     }
 
     override async maininit(): Promise<void> {
-        // custom:
         this.keyHeight = this.sHei - this.keyY - 20;
         this.overviewX = this.sWid - this.overviewWidth - 5;
         this.overviewY = this.sHei - this.overviewHeight - 20;
@@ -228,27 +218,22 @@ export class MapView extends GameShell {
         this.loadLoc(loc);
 
         try {
-            // custom:
             const obj: Packet = new Packet(worldmap.read('obj.dat'));
             this.objPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
             this.loadObj(obj);
 
-            // custom:
             const npc: Packet = new Packet(worldmap.read('npc.dat'));
             this.npcPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
             this.loadNpc(npc);
 
-            // custom:
             const multi: Packet = new Packet(worldmap.read('multi.dat'));
             this.multiPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
             this.loadMulti(multi);
 
-            // custom:
             const free: Packet = new Packet(worldmap.read('free.dat'));
             this.freePos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
             this.loadFree(free);
         } catch (_e) {
-            /* optional custom layer missing — fine */
         }
 
         try {
@@ -256,7 +241,6 @@ export class MapView extends GameShell {
                 this.mapscene[i] = Pix8.depack(worldmap, 'mapscene', i);
             }
         } catch (_e) {
-            // empty
         }
 
         try {
@@ -264,20 +248,16 @@ export class MapView extends GameShell {
                 this.mapfunction[i] = Pix32.depack(worldmap, 'mapfunction', i);
             }
         } catch (_e) {
-            // empty
         }
 
-        // custom:
         try {
             this.mapdot0 = Pix32.depack(worldmap, 'mapdots', 0);
             this.mapdot1 = Pix32.depack(worldmap, 'mapdots', 1);
         } catch (_e) {
-            /* optional custom layer missing — fine */
         }
 
         this.b12 = PixFont.depack(worldmap, 'b12_full', false);
 
-        // custom:
         try {
             this.f11 = WorldMapFont.load(worldmap, 'f11');
             this.f12 = WorldMapFont.load(worldmap, 'f12');
@@ -491,37 +471,28 @@ export class MapView extends GameShell {
                 const map = canvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
                 saveDataURL(map, 'worldmap.png');
             } else if (key == 'n'.charCodeAt(0) || key == 'N'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawNpcs = !MapView.shouldDrawNpcs;
                 this.redraw = true;
             } else if (key == 'i'.charCodeAt(0) || key == 'I'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawItems = !MapView.shouldDrawItems;
                 this.redraw = true;
             } else if (key == 'l'.charCodeAt(0) || key == 'L'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawLabels = !MapView.shouldDrawLabels;
                 this.redraw = true;
             } else if (key == 'b'.charCodeAt(0) || key == 'B'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawBorders = !MapView.shouldDrawBorders;
                 this.redraw = true;
             } else if (key == 'm'.charCodeAt(0) || key == 'M'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawMultimap = !MapView.shouldDrawMultimap;
                 this.redraw = true;
             } else if (key == 'f'.charCodeAt(0) || key == 'F'.charCodeAt(0)) {
-                // custom:
                 MapView.shouldDrawFreemap = !MapView.shouldDrawFreemap;
                 this.redraw = true;
             } else if (key === '['.charCodeAt(0)) {
-                // custom:
                 await this.reloadMain();
             } else if (key === ']'.charCodeAt(0)) {
-                // custom:
                 await this.reloadDungeon();
             } else if (key === '\\'.charCodeAt(0)) {
-                // custom:
                 await this.reloadExtra();
             }
         } while (key > 0);
@@ -668,8 +639,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // ----
-
     worldmap: JagFile | null = null;
 
     async loadWorldmap(): Promise<JagFile> {
@@ -677,7 +646,6 @@ export class MapView extends GameShell {
             return this.worldmap;
         }
 
-        // todo: save to cache and redownload if necessary
         let data: Uint8Array | undefined = undefined;
 
         let retry: number = 5;
@@ -727,7 +695,6 @@ export class MapView extends GameShell {
         this.b12?.centreString(str, xPad + ((widthPad / 2) | 0), yPad + ((heightPad / 2) | 0) + 4, 0xffffff);
     }
 
-    // jag::oldscape::rs2lib::worldmap::RenderedMapSquare::GetBlendedGroundColour
     getBlendedGroundColour(): void {
         const maxX: number = this.mapWidth;
         const maxZ: number = this.mapHeight;
@@ -762,8 +729,6 @@ export class MapView extends GameShell {
             }
         }
     }
-
-    // ----
 
     loadUnderlay(data: Packet): void {
         while (data.available > 0) {
@@ -859,7 +824,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // custom:
     loadObj(data: Packet): void {
         while (data.available > 0) {
             const mx: number = data.g1() * 64 - this.mapOriginX;
@@ -879,7 +843,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // custom:
     loadNpc(data: Packet): void {
         while (data.available > 0) {
             const mx: number = data.g1() * 64 - this.mapOriginX;
@@ -899,7 +862,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // custom:
     loadMulti(data: Packet): void {
         while (data.available > 0) {
             const mx: number = data.g1() * 64 - this.mapOriginX;
@@ -919,7 +881,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // custom:
     loadFree(data: Packet): void {
         while (data.available > 0) {
             const mx: number = data.g1() * 64 - this.mapOriginX;
@@ -939,9 +900,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // ----
-
-    // jag::oldscape::rs2lib::worldmap::HslUtils::GetRgb
     getRgb(hue: number, saturation: number, lightness: number): number {
         let r: number = lightness;
         let g: number = lightness;
@@ -1003,7 +961,6 @@ export class MapView extends GameShell {
         return (intR << 16) + (intG << 8) + intB;
     }
 
-    // jag::oldscape::worldmap::Worldmap::RenderWorldmap
     renderWorldMap(left: number, top: number, right: number, bottom: number, widthOffset: number, heightOffset: number, width: number, height: number): void {
         const visibleX: number = right - left;
         const visibleY: number = bottom - top;
@@ -1098,7 +1055,6 @@ export class MapView extends GameShell {
                         wall -= 4;
                     }
                     if (wall == 27 || wall == 28) {
-                        // custom: fix drawing diagonal doors
                         rgb = 0xcc0000;
                         wall -= 2;
                     }
@@ -1405,7 +1361,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // jag::oldscape::rs2lib::worldmap::OverlayShapes::DrawOverlayShape
     drawOverlayShape(data: Int32Array, off: number, underlay: number, overlay: number, width: number, height: number, shape: number, rotation: number): void {
         const step: number = Pix2D.width - width;
         if (shape == 9) {
@@ -1790,7 +1745,6 @@ export class MapView extends GameShell {
         }
     }
 
-    // custom:
     async reloadMain() {
         if (this.mapArea === 0) {
             return;
@@ -1813,7 +1767,6 @@ export class MapView extends GameShell {
         await this.maininit();
     }
 
-    // custom:
     async reloadDungeon() {
         if (this.mapArea === 1) {
             return;
@@ -1836,7 +1789,6 @@ export class MapView extends GameShell {
         await this.maininit();
     }
 
-    // custom:
     async reloadExtra() {
         if (this.mapArea === 2) {
             return;
@@ -1858,8 +1810,6 @@ export class MapView extends GameShell {
         await this.maininit();
     }
 
-    // ----
-
     dragging = false;
     activePointerId: number | null = null;
 
@@ -1880,7 +1830,6 @@ export class MapView extends GameShell {
             this.dragging = true;
         }
 
-        // e.preventDefault();
     }
 
     override mouseUp(_x: number, _y: number, _e: MouseEvent) {
@@ -1894,7 +1843,6 @@ export class MapView extends GameShell {
         this.nextMouseClickY = -1;
         this.nextMouseClickButton = 0;
 
-        // e.preventDefault();
     }
 
     override pointerDown(x: number, y: number, _e: PointerEvent) {

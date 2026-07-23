@@ -1,6 +1,3 @@
-// Validates ChaosDruidKiller's banking round-trip: fill the pack with herbs at
-// the druid spot, then confirm the bot climbs the ladder, web-walks to the
-// Edgeville bank, deposits, climbs back down, and returns underground.
 import { boot, fail, launchBrowser, login, parseArgs } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 5 });
@@ -18,8 +15,8 @@ try {
     await type('::tele 0,50,50,20,20'); await page.reload(); await boot(page);
     let backIn = false; for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(page, username); }
     if (!backIn) fail('relogin failed');
-    for (const s of ['attack','strength','defence','hitpoints']) await type(`::advancestat ${s} 90`); await type('::tele 0,48,155,38,8'); // among the druids
-    for (let i = 0; i < 34 && (await used()) < 28; i++) await type('::give unidentified_guam', 450); // fill the pack with herbs
+    for (const s of ['attack','strength','defence','hitpoints']) await type(`::advancestat ${s} 90`); await type('::tele 0,48,155,38,8');
+    for (let i = 0; i < 34 && (await used()) < 28; i++) await type('::give unidentified_guam', 450);
     console.log(`pack: ${await used()} used, ${await herbs()} herbs, at ${await where()}`);
     if (await used() < 28) fail(`pack not full (${await used()}/28) — can't trigger BankRun`);
 

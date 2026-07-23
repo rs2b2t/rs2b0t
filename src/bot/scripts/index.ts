@@ -1,9 +1,3 @@
-/**
- * The script registry barrel: importing this module registers every built-in
- * bot with ScriptRegistry (name string -> create()), grouped by category
- * section below. The UI library, settings keys (`rs2b0t:set:<Name>:<key>`)
- * and smokes all reference scripts by these registered names.
- */
 import { AGILITY_SETTINGS } from './AgilityBot.js';
 import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';
@@ -40,7 +34,6 @@ import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
-// --- tutorial ---
 ScriptRegistry.register({
     name: 'TutorialBot',
     description: 'Completes Tutorial Island unassisted (no cheats)',
@@ -49,7 +42,6 @@ ScriptRegistry.register({
     create: () => new TutorialBot()
 });
 
-// --- quest ---
 ScriptRegistry.register({
     name: 'QuestDashboard',
     description: 'Reports DONE/READY/BLOCKED eligibility for all quests',
@@ -67,7 +59,6 @@ ScriptRegistry.register({
     create: () => new AIOQuester()
 });
 
-// --- combat ---
 ScriptRegistry.register({
     name: 'ChickenKiller',
     description: 'Kills chickens, loots and buries bones (anchor = start tile)',
@@ -77,7 +68,6 @@ ScriptRegistry.register({
     create: () => new ChickenKiller()
 });
 
-/** Build a ChickenKiller-based combat preset: CHICKEN_SETTINGS with overridden defaults. */
 function chickenPreset(overrides: Record<string, unknown>): SettingsSchema {
     const schema: SettingsSchema = {};
     for (const [key, def] of Object.entries(CHICKEN_SETTINGS)) {
@@ -91,9 +81,6 @@ ScriptRegistry.register({
     description: 'Kills cows in the Lumbridge field, loots cow hides + bones (anchor = start tile)',
     category: 'Combat',
     tags: ['lumbridge', 'cowhide', 'bones', 'afk'],
-    // 274 content: [cow] name=Cow; the hide drop is obj [cow_hide] name="Cow hide"
-    // (confirmed in content/scripts/skill_crafting/configs/crafting.obj -- NOT
-    // the one-word "Cowhide" the plan guessed).
     settingsSchema: chickenPreset({ targetName: 'Cow', lootMatch: 'cow hide|bones', buryBones: false, gatherFeathers: false }),
     create: () => new ChickenKiller()
 });
@@ -143,7 +130,6 @@ ScriptRegistry.register({
     create: () => new ArdyFighter()
 });
 
-// --- thieving ---
 ScriptRegistry.register({
     name: 'Thiever',
     description: 'Pickpockets an NPC (Man by default); eats food when a failed steal hurts (anchor = start tile)',
@@ -180,7 +166,6 @@ ScriptRegistry.register({
     create: () => new ArdyCakes()
 });
 
-// --- woodcutting ---
 ScriptRegistry.register({
     name: 'Woodcutter',
     description: 'Chops trees and drops logs (anchor = start tile, needs an axe)',
@@ -189,8 +174,6 @@ ScriptRegistry.register({
     settingsSchema: WOODCUTTER_SETTINGS,
     create: () => new Woodcutter()
 });
-
-// --- gathering presets (all GatheringBot, varied by settings defaults) ---
 
 ScriptRegistry.register({
     name: 'Miner',
@@ -269,7 +252,6 @@ ScriptRegistry.register({
     create: () => new BankFletcher()
 });
 
-// --- smithing (smelting) ---
 ScriptRegistry.register({
     name: 'SmelterBot',
     description: 'Al Kharid smelter — withdraw ore, use it on the Furnace to smelt bars (all 8 bar types), bank, repeat',
@@ -288,11 +270,6 @@ ScriptRegistry.register({
     create: () => new SmithingBot()
 });
 
-// NOTE: bar-on-anvil SMITHING is still not registered — it opens the dedicated
-// `smithing` interface (inv-transmit item columns), not the skill-multi chat
-// menu, and needs a bespoke handler. (SmelterBot above is smelting, not smithing.)
-
-// --- crafting ---
 ScriptRegistry.register({
     name: 'FlaxPicker',
     description: 'Seers flax field picker — pick flax until full, bank it at Seers, repeat',
@@ -311,7 +288,6 @@ ScriptRegistry.register({
     create: () => new FlaxSpinner()
 });
 
-// --- agility ---
 ScriptRegistry.register({
     name: 'GnomeCourse',
     description: 'Runs the Gnome Stronghold agility course (start at the log balance)',
@@ -330,7 +306,6 @@ ScriptRegistry.register({
     create: () => new WildyAgility()
 });
 
-// --- money making ---
 ScriptRegistry.register({
     name: 'ShopBuyout',
     description: "Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing. Defaults to Lundail's Mage Arena rune shop (banks via Gundai's dialog); get the bot to the shop yourself.",
@@ -349,7 +324,6 @@ ScriptRegistry.register({
     create: () => new ShopRunner()
 });
 
-// --- treasure trails ---
 ScriptRegistry.register({
     name: 'ClueSolver',
     description: 'Solves the easy clue scroll (or opens the casket) in your pack — banks everything except clue/food/spade at the nearest bank, walks the trail, opens the reward. Idles until you hand it a clue.',
@@ -359,7 +333,6 @@ ScriptRegistry.register({
     create: () => new ClueSolver()
 });
 
-// --- navigation ---
 ScriptRegistry.register({
     name: 'WalkTo',
     description: 'Walks to a chosen destination and stops — Lumbridge, Varrock, Falador, Ardougne, Rellekka, Taverley (centre); Draynor, Al Kharid, Edgeville, Seers, Yanille (bank); or a custom tile',

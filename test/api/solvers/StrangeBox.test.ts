@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CUBE_PARTS, solveCube } from '#/bot/api/solvers/StrangeBox.js';
 
-// pack ids (rs2b2t-content/pack/obj.pack): 3063 red triangle, 3071 blue
-// square, 3085 yellow star, 3079 yellow circle, 3089 blue half moon
 describe('solveCube', () => {
     test('answers a colour question by shape position', () => {
         expect(solveCube('What colour is the Star?', [3063, 3085, 3071])).toBe(1);

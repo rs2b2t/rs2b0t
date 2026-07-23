@@ -1,47 +1,8 @@
-// Aggregate runner for the tools/*-test.ts live smokes. Deploys the current
-// build once, then runs each smoke SEQUENTIALLY against the local engine (they
-// share one engine + each spawns a headless WebGL client, so they can't run in
-// parallel), printing a PASS/FAIL matrix with timings and the failing assertion.
-// Each smoke's full output is saved to out/smoke-logs/<name>.log. Exit 1 if any
-// smoke fails.
-//
-// Prereqs: the local engine running on the base URL (docs/DEV.md —
-// `npm run quickstart` in ~/code/rs2b2t-engine, serves :8890). The deploy step
-// needs Google Chrome installed (the smokes launch it headless).
-//
-// Usage:
-//   bun tools/run-all-smokes.ts                       # deploy, then run the full sweep
-//   bun tools/run-all-smokes.ts --only smelter,flax   # only smokes whose file matches
-//   bun tools/run-all-smokes.ts --skip maze,tutorial  # exclude some
-//   bun tools/run-all-smokes.ts --no-deploy           # skip the build+deploy step
-//   bun tools/run-all-smokes.ts --timeout 300         # override kill timeout for ALL smokes (s)
-//   bun tools/run-all-smokes.ts --base http://localhost:8890
-//   bun tools/run-all-smokes.ts --list                # print what would run and exit
-//
-// NOTE: this is a long sweep — ~40 smokes × 2-5 min each is 2-3 hours. Use --only
-// for a fast subset (e.g. the bank-cycle bots after a banking change).
-//
-// Each smoke is killed at DEFAULT_TIMEOUT (360s); a few legitimately-long smokes
-// (see LONG below) get a bigger budget automatically. An explicit --timeout
-// overrides that for every smoke.
-
 import { readdirSync, mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Smokes that need a special environment (Electron desktop shell / prod origin /
-// the multibox wall / a different port + Chrome channel) — not part of the
-// local-engine bot sweep. Run these by hand when relevant. rendergate-test is
-// Electron-based (npx tsx, not bun) like desktop-test, so it belongs here too.
-// merlin-tail-test drives the UNVERIFIED Merlin's Crystal draft and
-// pip-solo-test is the PiP fast-iteration harness (30-min default budget,
-// "NOT the acceptance run" per its own header) — dev harnesses, not
-// regression smokes; the PiP acceptance path is aio-quest-test.
 const SPECIAL = ['desktop-test', 'hosted-proof-test', 'external-script-test', 'e2e-smoke', 'multibox-test', 'rendergate-test', 'merlin-tail-test', 'pip-solo-test'];
 
-// Default per-smoke kill timeout (s). Smokes that legitimately run far longer
-// than this (e.g. a full quest walk) get a bigger budget via LONG — keyed by
-// filename substring → kill timeout (s). Both are only consulted when the user
-// hasn't passed an explicit --timeout, which overrides everything.
 const DEFAULT_TIMEOUT = 360;
 const LONG: Record<string, number> = { 'aio-quest-test': 1600, 'ardythiever-kite-test': 900, 'ardythiever-fight-test': 900, 'essminer-test': 900, 'shoprun-test': 900, 'cluesolve-test': 900, 'door-cross-test': 600, 'ardyfighter-clue-test': 900, 'autofighter-test': 900, 'cow-test': 600, 'greendragon-style-test': 600, 'mossgiant-style-test': 600, 'maze-test': 600, 'rockcrab-style-test': 600, 'rockcrab-multibot-test': 900, 'rockcrab-test': 900, 'fisher-banking-test': 900, 'bankfletcher-test': 600 };
 
@@ -59,8 +20,6 @@ const listOnly = hasFlag('--list');
 
 const LOG_DIR = 'out/smoke-logs';
 
-// Per-smoke kill timeout (s). An explicit --timeout wins for every smoke;
-// otherwise long-running smokes get their LONG entry, all others DEFAULT_TIMEOUT.
 function killTimeoutSec(name: string): number {
     if (timeoutArg !== undefined) { return Number(timeoutArg); }
     const long = Object.entries(LONG).find(([sub]) => name.includes(sub));
@@ -94,10 +53,6 @@ type Result = { name: string; ok: boolean; sec: number; detail: string; timedOut
 
 async function runOne(name: string): Promise<Result> {
     const start = Date.now();
-    // Write the child's stdout+stderr straight to the log file (an fd), NOT a
-    // pipe: a timed-out smoke's orphaned headless-Chrome grandchild can hold the
-    // stdout pipe open, so reading it back would hang the runner past the kill.
-    // A file has no such dependency — SIGKILL the child, then read the file.
     const logPath = join(LOG_DIR, name.replace('.ts', '.log'));
     const fd = openSync(logPath, 'w');
     const proc = Bun.spawn(['bun', join('tools', name), base], { stdout: fd, stderr: fd });
@@ -112,8 +67,6 @@ async function runOne(name: string): Promise<Result> {
     const combined = readFileSync(logPath, 'utf8');
 
     const lines = combined.split('\n').map(l => l.trim()).filter(Boolean);
-    // Ignore stack-trace / runtime-footer noise when picking a failure summary,
-    // so a crash reports its actual error, not "Bun v1.3.14 (macOS arm64)".
     const junk = /^Bun v\d|^at\s|coreBundle|node_modules|^\^|^\d+\s*\||^\s*-\s/;
     const passLine = [...lines].reverse().find(l => /^PASS\b/.test(l));
     const failLine = [...lines].reverse().find(l => /^FAIL\b/.test(l));
@@ -134,7 +87,6 @@ function hms(totalSec: number): string {
     return (h ? `${h}h ` : '') + (h || m ? `${m}m ` : '') + `${s}s`;
 }
 
-// --- main ---
 const tests = selectTests();
 if (tests.length === 0) { console.error('no smokes matched the filters'); process.exit(2); }
 

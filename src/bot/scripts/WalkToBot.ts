@@ -10,18 +10,12 @@ import { SettingsStore } from '../runtime/Settings.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { WALK_OPTIONS, resolveDestination } from './WalkDestinations.js';
 
-/** Tunable parameters (panel + `?WalkTo.<key>=...`). */
 export const WALKTO_SETTINGS: SettingsSchema = {
     destination: { type: 'string', default: WALK_OPTIONS[0], options: WALK_OPTIONS, label: 'Destination' },
     customTile: { type: 'tile', default: new Tile(0, 0, 0), label: 'Custom tile (x,z)', help: 'if set (non-zero), walk here instead of the destination above' },
     arriveRadius: { type: 'number', default: 3, min: 0, max: 12, label: 'Arrive within (tiles)' }
 };
 
-/**
- * Walks to a chosen destination (a named town centre / bank, or a custom tile)
- * with the resilient web-walker, then stops — no other behaviour. Start it
- * anywhere; it routes there and idles on arrival.
- */
 export default class WalkToBot extends TaskBot {
     override loopDelay = 600;
 
@@ -70,8 +64,6 @@ export default class WalkToBot extends TaskBot {
         p.bar('Trip', progress, '#6cb6ff');
         p.row(`Walker queue: ${Traversal.remaining()}`, `Arrive within: ${this.radius}`);
         p.gap();
-        // live re-route: pick a new destination mid-walk — the short walk
-        // passes re-plan toward the current target within seconds
         const picked = p.select('dest', 'dest', WALK_OPTIONS, WALK_OPTIONS.includes(this.label) ? this.label : WALK_OPTIONS[0]);
         if (picked) {
             this.switchDestination(picked);
@@ -80,8 +72,6 @@ export default class WalkToBot extends TaskBot {
         p.end();
     }
 
-    /** Live destination switch from the paint. The WalkTo task re-reads the
-     *  target every short pass, so the route converges within one pass. */
     private switchDestination(name: string): void {
         const dest = resolveDestination(name);
         if (!dest || dest.name === this.label) {
@@ -116,13 +106,6 @@ export default class WalkToBot extends TaskBot {
     }
 }
 
-/** Route to the target in SHORT walk passes and stop on arrival. Each pass
- *  re-reads targetTile(), so a paint-switched destination re-routes within
- *  one ~15s pass instead of riding out a single 5-minute walk call
- *  (walkResilient can't be bounded this way — it only returns on arrival or
- *  NO-progress, so a healthy walk would hold the old target to the end).
- *  Three passes without distance progress escalate to one resilient
- *  recovery walk (doors/unstick), then back to short passes. */
 class WalkTo implements Task {
     private lastDist = Number.POSITIVE_INFINITY;
     private stalls = 0;
@@ -137,7 +120,6 @@ class WalkTo implements Task {
         const target = this.bot.targetTile();
         const radius = this.bot.arriveRadius();
 
-        // already there? (started at/near the destination)
         const start = Game.tile();
         if (start && target.distanceTo(start) <= radius) {
             this.arrive(start);
@@ -149,7 +131,6 @@ class WalkTo implements Task {
 
         const here = Game.tile();
         if (!this.bot.targetTile().equals(target)) {
-            // switched mid-pass: fresh trip, fresh stall tracking
             this.lastDist = Number.POSITIVE_INFINITY;
             this.stalls = 0;
             return;

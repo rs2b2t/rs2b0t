@@ -1,13 +1,3 @@
-/**
- * Locally-saved login credentials so the bot can (re)log in by itself — on a
- * fresh page load and after a disconnect that drops to the title screen
- * (Client.logout() clears the in-memory loginUser/loginPass).
- *
- * SECURITY: stored in localStorage in plaintext, on this machine only. Fine
- * for a private/dev server with throwaway accounts (the dev server doesn't
- * even check passwords); do not save a password you care about on a shared
- * machine. Clear it from the panel.
- */
 const hasStorage = typeof localStorage !== 'undefined';
 const KEY = 'rs2b0t:creds';
 

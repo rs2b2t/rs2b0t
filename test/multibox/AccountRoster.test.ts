@@ -18,10 +18,9 @@ describe('AccountRoster', () => {
         const s = fakeStorage();
         const r = new AccountRoster(s);
         r.add({ username: 'alice', password: 'a' });
-        r.add({ username: 'alice', password: 'a2' }); // dup ignored
+        r.add({ username: 'alice', password: 'a2' });
         r.add({ username: 'bob', password: 'b' });
         expect(r.list().map(a => a.username)).toEqual(['alice', 'bob']);
-        // a fresh instance over the same storage loads the persisted list
         expect(new AccountRoster(s).list().map(a => a.username)).toEqual(['alice', 'bob']);
     });
 

@@ -4,8 +4,6 @@ import { parseJm2Locs, MAZE_ORIGIN, DOOR_DIRS } from '#/bot/api/maze/mazeGraph.j
 import { buildMaze, edgeKey, doorPassable } from '#/bot/api/maze/mazeGraph.js';
 import { solveRoute, MAZE_SHRINE, MAZE_SPAWNS } from '#/bot/api/maze/mazeGraph.js';
 
-// Vendored from the engine content (region 0_45_71) so the suite is portable —
-// no dependency on a sibling checkout. Regenerate with tools/maze-derive.ts.
 const MAP = new URL('./fixtures/m45_71.jm2', import.meta.url).pathname;
 
 describe('parseJm2Locs', () => {
@@ -14,7 +12,7 @@ describe('parseJm2Locs', () => {
         expect(locs).toEqual([
             { lx: 8, lz: 43, id: 3628, shape: 0, angle: 2 },
             { lx: 31, lz: 31, id: 3634, shape: 10, angle: 0 }
-        ]); // level-1 loc dropped
+        ]);
     });
 
     test('ignores the MAP height section', () => {
@@ -24,28 +22,26 @@ describe('parseJm2Locs', () => {
     test('real map: expected maze loc population', () => {
         const locs = parseJm2Locs(readFileSync(MAP, 'utf8'));
         const count = (id: number): number => locs.filter(l => l.id === id).length;
-        expect(count(3626)).toBe(1459); // walls
-        expect(count(3628)).toBe(45);   // dir-0 doors
-        expect(Object.keys(DOOR_DIRS).reduce((n, id) => n + count(Number(id)), 0)).toBe(49); // all doors
-        expect(count(3634)).toBe(1);    // shrine
+        expect(count(3626)).toBe(1459);
+        expect(count(3628)).toBe(45);
+        expect(Object.keys(DOOR_DIRS).reduce((n, id) => n + count(Number(id)), 0)).toBe(49);
+        expect(count(3634)).toBe(1);
         expect(MAZE_ORIGIN).toEqual({ x: 2880, z: 4544 });
     });
 });
 
 describe('buildMaze edge model', () => {
-    // world tile for local (lx,lz): (2880+lx, 4544+lz)
     test('wall_straight blocks its one cardinal edge (angle EAST=2)', () => {
         const g = buildMaze([{ lx: 10, lz: 10, id: 3626, shape: 0, angle: 2 }]);
-        // EAST edge of (2890,4554): between (2890,4554) and (2891,4554)
         expect(g.wallEdge.has(edgeKey(2890, 4554, 2891, 4554))).toBe(true);
         expect(g.wallEdge.has(edgeKey(2890, 4554, 2889, 4554))).toBe(false);
     });
 
     test('wall_L (shape 2, angle WEST=0) blocks NORTH and WEST edges', () => {
         const g = buildMaze([{ lx: 10, lz: 10, id: 3626, shape: 2, angle: 0 }]);
-        expect(g.wallEdge.has(edgeKey(2890, 4554, 2890, 4555))).toBe(true); // north
-        expect(g.wallEdge.has(edgeKey(2890, 4554, 2889, 4554))).toBe(true); // west
-        expect(g.wallEdge.has(edgeKey(2890, 4554, 2891, 4554))).toBe(false); // east open
+        expect(g.wallEdge.has(edgeKey(2890, 4554, 2890, 4555))).toBe(true);
+        expect(g.wallEdge.has(edgeKey(2890, 4554, 2889, 4554))).toBe(true);
+        expect(g.wallEdge.has(edgeKey(2890, 4554, 2891, 4554))).toBe(false);
     });
 
     test('square_corner (shape 3) contributes no cardinal wall', () => {
@@ -60,17 +56,15 @@ describe('buildMaze edge model', () => {
 });
 
 describe('doorPassable gating', () => {
-    // dir-1 door, angle EAST (2): check_axis true iff fromX == door.x
     const d1 = { tile: { x: 2890, z: 4554 }, id: 3629, angle: 2 };
     test('dir-1 opens from axis-aligned side only', () => {
-        expect(doorPassable(d1, 2890, 4554)).toBe(true);  // fromX == door.x -> axisTrue
-        expect(doorPassable(d1, 2891, 4554)).toBe(false); // other side
+        expect(doorPassable(d1, 2890, 4554)).toBe(true);
+        expect(doorPassable(d1, 2891, 4554)).toBe(false);
     });
-    // dir-2 door, angle NORTH (1): check_axis true iff fromZ == door.z
     const d2 = { tile: { x: 2890, z: 4554 }, id: 3630, angle: 1 };
     test('dir-2 opens from off-axis side only', () => {
-        expect(doorPassable(d2, 2890, 4554)).toBe(false); // fromZ == door.z -> axisTrue -> blocked for dir2
-        expect(doorPassable(d2, 2890, 4555)).toBe(true);  // off-axis -> open
+        expect(doorPassable(d2, 2890, 4554)).toBe(false);
+        expect(doorPassable(d2, 2890, 4555)).toBe(true);
     });
     test('dir-0 opens from either side', () => {
         const d0 = { tile: { x: 2890, z: 4554 }, id: 3628, angle: 2 };
@@ -90,14 +84,11 @@ describe('buildMaze on real map', () => {
 });
 
 describe('solveRoute (synthetic 1-D corridor)', () => {
-    // Corridor along z at x=2900: tiles z=4570..4575. A door at (2900,4572)
-    // angle NORTH joins (2900,4572)<->(2900,4573). Walls seal the sides so the
-    // only spawn->shrine path crosses that door.
     function corridor(): ReturnType<typeof buildMaze> {
         const g = buildMaze([]);
         for (let z = 4570; z <= 4575; z++) {
-            g.wallEdge.add(edgeKey(2900, z, 2899, z)); // west wall
-            g.wallEdge.add(edgeKey(2900, z, 2901, z)); // east wall
+            g.wallEdge.add(edgeKey(2900, z, 2899, z));
+            g.wallEdge.add(edgeKey(2900, z, 2901, z));
         }
         g.door.set(edgeKey(2900, 4572, 2900, 4573), { tile: { x: 2900, z: 4572 }, id: 3628, angle: 1 });
         return g;
@@ -108,8 +99,7 @@ describe('solveRoute (synthetic 1-D corridor)', () => {
     });
     test('gated door blocks the wrong-side approach (empty route)', () => {
         const g = corridor();
-        g.door.set(edgeKey(2900, 4572, 2900, 4573), { tile: { x: 2900, z: 4572 }, id: 3630, angle: 1 }); // dir-2
-        // Approaching northward from z=4572 (fromZ==door.z -> axisTrue -> dir2 blocked): no path north.
+        g.door.set(edgeKey(2900, 4572, 2900, 4573), { tile: { x: 2900, z: 4572 }, id: 3630, angle: 1 });
         expect(solveRoute(g, { x: 2900, z: 4570 }, { x: 2900, z: 4575 })).toEqual([]);
     });
 });
@@ -121,7 +111,6 @@ describe('solveRoute on real map', () => {
         for (const r of routes) {
             expect(r.length).toBeGreaterThan(0);
             const last = r[r.length - 1];
-            // last door borders the centre chamber: within a few tiles of the shrine
             expect(Math.abs(last.x - MAZE_SHRINE.x) + Math.abs(last.z - MAZE_SHRINE.z)).toBeLessThanOrEqual(4);
         }
     });
@@ -131,6 +120,6 @@ describe('solveRoute on real map', () => {
             return `${t.x},${t.z}`;
         };
         const tails = new Set(routes.map(tailKey));
-        expect(tails.size).toBe(1); // same final door for all spawns
+        expect(tails.size).toBe(1);
     });
 });

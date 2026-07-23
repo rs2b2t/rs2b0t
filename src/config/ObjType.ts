@@ -439,7 +439,6 @@ export default class ObjType {
 
         model.objRender(0, obj.yan2d, obj.zan2d, obj.xan2d, obj.xof2d, sinPitch + ((model.minY / 2) | 0) + obj.yof2d, cosPitch + obj.yof2d);
 
-        // add outline
         for (let x: number = 31; x >= 0; x--) {
             for (let y: number = 31; y >= 0; y--) {
                 if (icon.data[x + y * 32] !== 0) {
@@ -459,7 +458,6 @@ export default class ObjType {
         }
 
         if (outlineRgb > 0) {
-            // add outline
             for (let x: number = 31; x >= 0; x--) {
                 for (let y: number = 31; y >= 0; y--) {
                     if (icon.data[x + y * 32] !== 0) {
@@ -478,7 +476,6 @@ export default class ObjType {
                 }
             }
         } else if (outlineRgb === 0) {
-            // add shadow
             for (let x: number = 31; x >= 0; x--) {
                 for (let y: number = 31; y >= 0; y--) {
                     if (icon.data[x + y * 32] === 0 && x > 0 && y > 0 && icon.data[x + (y - 1) * 32 - 1] > 0) {

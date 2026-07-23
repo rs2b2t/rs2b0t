@@ -1,6 +1,5 @@
 import { describe, expect, mock, test, beforeEach } from 'bun:test';
 
-// --- capture state the mocks read/write ---
 let sceneLoc: { name: string; ops: string[]; tile: { x: number; z: number; level: number }; interactResult: boolean } | null;
 let sceneDoor: { name: string; ops: string[]; tile: { x: number; z: number; level: number }; distance: number; interactResult: boolean } | null;
 let sceneNpc: { name: string; tile: { x: number; z: number; level: number }; interactResult: boolean } | null;
@@ -8,31 +7,21 @@ let walkCalls: { x: number; z: number; level: number }[];
 let walkResult: boolean;
 let walkLastOutcome: string;
 let canReachResult: boolean;
-let cantReach: boolean; // GameMessages.sawSince(mark, CANT_REACH) result — the server's door signal
+let cantReach: boolean;
 let locInteractCount: number;
 let doorInteractCount: number;
 let npcInteractCount: number;
 let dialogOpen: boolean;
-let expectFlips: boolean; // locOp/npcDialog's expect() reads this
-let onDoorOpen: (() => void) | null; // side effect when the mock door swings (clears the block)
+let expectFlips: boolean;
+let onDoorOpen: (() => void) | null;
 
-// Capture the REAL barrier predicates BEFORE mocking WalkExecutor. mock.module is
-// process-global, so a WalkExecutor mock that omitted them would clobber them for
-// every test loaded after this file. The mock factory below re-exports them.
 const { isOpenableBarrier, isOpenBarrierLeaf } = await import('#/bot/nav/WalkExecutor.js');
 
-// Same global-mock rule: spread the REAL modules so sibling suites loaded later
-// still see every export (the real reader methods null-guard safely unattached;
-// the real CANT_REACH regex + walkOpening/followMath helpers stay intact).
 const RealAdapter = await import('#/bot/adapter/ClientAdapter.js');
 mock.module('#/bot/adapter/ClientAdapter.js', () => ({
     ...RealAdapter,
     reader: { ...RealAdapter.reader, worldTile: () => ({ x: 0, z: 0, level: 0 }) }
 }));
-// DON'T mock GameMessages — mock.module is process-global and stubbing its
-// methods leaks into gameMessages.test.ts. Use the REAL singleton: the mock
-// loc/npc interact records an actual "I can't reach that!" when `cantReach` is
-// set, so the reach loop's mark()/sawSince(CANT_REACH) work for real.
 const { GameMessages } = await import('#/bot/events/gameMessages.js');
 mock.module('#/bot/api/Execution.js', () => ({
     Execution: {
@@ -41,10 +30,6 @@ mock.module('#/bot/api/Execution.js', () => ({
     }
 }));
 
-// The target-loc chain: query().name().action().within().nearest() → sceneLoc.
-// The door chain (openBlockingDoor): query().where(pred)…nearest() → sceneDoor,
-// kept only when every predicate passes (so isOpenableBarrier/towardDest/canReach
-// all gate it, exactly as production does).
 const locHandle = () => (sceneLoc ? {
     name: sceneLoc.name, tile: () => sceneLoc!.tile, actions: () => sceneLoc!.ops,
     interact: async () => { locInteractCount++; if (cantReach) { GameMessages.record("I can't reach that!"); } return sceneLoc!.interactResult; }
@@ -54,8 +39,8 @@ const doorHandle = () => (sceneDoor ? {
     interact: async () => {
         doorInteractCount++;
         if (!sceneDoor!.interactResult) { return false; }
-        onDoorOpen?.();   // clears the block (cantReach=false + expect/dialog flips)
-        sceneDoor = null; // the leaf swung open — the shut loc is gone
+        onDoorOpen?.();
+        sceneDoor = null;
         return true;
     }
 } : null);
@@ -132,7 +117,7 @@ describe('Reach.locOp', () => {
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('retry');
         expect(walkCalls.length).toBe(1);
-        expect(walkCalls[0]).toEqual({ x: 5, z: 5, level: 0 }); // the hint, not a target tile
+        expect(walkCalls[0]).toEqual({ x: 5, z: 5, level: 0 });
     });
     test('hint walk proven unreachable → unreachable', async () => {
         walkResult = false;
@@ -145,25 +130,23 @@ describe('Reach.locOp', () => {
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('done');
         expect(locInteractCount).toBe(1);
-        expect(walkCalls.length).toBe(1);              // walks to the stand...
-        expect(walkCalls[0]).toEqual({ x: 5, z: 5, level: 0 }); // ...the NEAR hint, never the loc tile
+        expect(walkCalls.length).toBe(1);
+        expect(walkCalls[0]).toEqual({ x: 5, z: 5, level: 0 });
     });
     test("server 'can't reach' → open the blocking door, then the op lands → done", async () => {
         sceneLoc = { name: 'Staircase', ops: ['Climb-up'], tile: { x: 8, z: 5, level: 0 }, interactResult: true };
         sceneDoor = { name: 'Door', ops: ['Open'], tile: { x: 1, z: 0, level: 0 }, distance: 1, interactResult: true };
-        cantReach = true;   // first click: the server can't reach the staircase (a door blocks)
-        expectFlips = false; // not climbed yet
-        // Opening the door clears the block: the leaf vanishes, and the next
-        // click's op-walk reaches the staircase (level change).
+        cantReach = true;
+        expectFlips = false;
         onDoorOpen = () => { cantReach = false; expectFlips = true; };
         const r = await Reach.locOp({ name: 'Staircase', op: 'Climb-up', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('done');
-        expect(doorInteractCount).toBeGreaterThanOrEqual(1); // the door was opened
-        expect(locInteractCount).toBeGreaterThanOrEqual(2); // clicked, opened door, clicked again
+        expect(doorInteractCount).toBeGreaterThanOrEqual(1);
+        expect(locInteractCount).toBeGreaterThanOrEqual(2);
     });
     test("server 'can't reach' + no openable door → unreachable (honest block)", async () => {
         sceneLoc = { name: 'Staircase', ops: ['Climb-up'], tile: { x: 8, z: 5, level: 0 }, interactResult: true };
-        sceneDoor = null; // nothing to open
+        sceneDoor = null;
         cantReach = true;
         expectFlips = false;
         const r = await Reach.locOp({ name: 'Staircase', op: 'Climb-up', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
@@ -218,9 +201,9 @@ describe('Reach.npcDialog', () => {
         sceneNpc = { name: 'Traiborn', tile: { x: 6, z: 5, level: 0 }, interactResult: true };
         dialogOpen = false;
         const promise = Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
-        dialogOpen = true; // opens before the wait's condition is polled
+        dialogOpen = true;
         const r = await promise;
-        expect(walkCalls.length).toBe(1);              // walks to the stand, not the npc tile
+        expect(walkCalls.length).toBe(1);
         expect(npcInteractCount).toBe(1);
         expect(r).toBe('done');
     });
@@ -233,7 +216,7 @@ describe('Reach.npcDialog', () => {
         const r = await Reach.npcDialog({ name: 'Traiborn', near: { x: 5, z: 5, level: 0 } });
         expect(r).toBe('done');
         expect(doorInteractCount).toBeGreaterThanOrEqual(1);
-        expect(npcInteractCount).toBeGreaterThanOrEqual(2); // talked, opened door, talked again
+        expect(npcInteractCount).toBeGreaterThanOrEqual(2);
     });
     test("server 'can't reach' the npc + no door → unreachable", async () => {
         sceneNpc = { name: 'Traiborn', tile: { x: 8, z: 5, level: 0 }, interactResult: true };

@@ -1,15 +1,9 @@
 import type { QuestRecord, PlayerState, RequirementResult } from './types.js';
 
-/** Capitalize a skill token for display: 'mining' -> 'Mining'. */
 function skillLabel(skill: string): string {
     return skill.length === 0 ? skill : skill[0].toUpperCase() + skill.slice(1);
 }
 
-/**
- * Evaluate a quest's hard requirements against a plain PlayerState snapshot.
- * Pure — no client access. Returns one result per gate, ordered:
- * quest-points, then each skill, then each prerequisite quest.
- */
 export function checkRequirements(record: QuestRecord, player: PlayerState): RequirementResult[] {
     const out: RequirementResult[] = [];
     const req = record.requirements;

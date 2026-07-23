@@ -1,11 +1,3 @@
-/**
- * Pure stock/pricing math mirroring the engine exactly (client-free):
- *  - restock: ±1 per item-slot restockTicks toward baseline (World.ts processCleanup)
- *  - buy price: max(1, floor(max(100, sell − clamp((stock−baseline)·delta, −5000, 1000)) · cost / 1000)),
- *    repriced per unit as stock falls (shop/scripts/shop.rs2 calc_shop_value)
- * Predictions are optimistic upper bounds — stock is world-shared and other
- * players buy too; the runner corrects with observed stock on arrival.
- */
 import type { BuyPolicy, Seen, ShopItemDef } from '#/bot/shops/types.js';
 
 export const TICK_MS = 600;

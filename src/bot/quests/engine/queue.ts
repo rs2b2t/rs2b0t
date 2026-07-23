@@ -9,8 +9,6 @@ export interface QueueRow {
     reasons: string[];
 }
 
-/** READY-and-not-parked first in def order; then parked READY (retry after
- *  everything else had its turn); null when nothing is runnable. Pure. */
 export function nextQuest(
     order: string[],
     picked: Set<string>,

@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test';
 
 import { GAS_ROCK_IDS, PICKAXES, ROCK_OPTIONS, ROCK_TYPES, bestPickaxe, resolveRockIds } from '#/bot/scripts/MiningRocks.js';
 
-// The rock loc ids are hand-transcribed from content pack/loc.pack — a typo
-// would silently mine the wrong rock, so pin them.
 test('every ore type maps to exactly two rock loc ids', () => {
     for (const [name, ids] of Object.entries(ROCK_TYPES)) {
         expect(ids.length, name).toBe(2);

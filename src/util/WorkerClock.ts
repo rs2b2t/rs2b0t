@@ -1,17 +1,5 @@
 import { sleep } from './JsUtil.js';
 
-/**
- * A timer backed by a Web Worker, immune to background-tab throttling.
- *
- * Browsers clamp `setTimeout` in a minimized/occluded tab to ~once per minute
- * (intensive throttling). The client's frame loop paces on `setTimeout`, so a
- * backgrounded bot stalls and drops its connection. Worker timers are NOT
- * throttled, so we relay the frame delay through a tiny inline worker.
- *
- * Falls back to `setTimeout` when a worker can't be created (no `Worker`, no
- * blob URLs, or a strict CSP blocking `worker-src blob:`), so it is always
- * safe to call — the worst case is the pre-existing throttled behaviour.
- */
 const WORKER_SRC = `
 const timers = new Map();
 onmessage = (e) => {
@@ -58,7 +46,6 @@ class WorkerClockImpl {
         return this.worker;
     }
 
-    /** Worker died: re-arm every pending wait on setTimeout so nothing hangs. */
     private fail(): void {
         this.available = false;
         this.worker = null;
@@ -69,7 +56,6 @@ class WorkerClockImpl {
         this.pending.clear();
     }
 
-    /** Resolve after ~ms, unaffected by background-tab timer throttling. */
     sleep(ms: number): Promise<void> {
         const worker = this.ensure();
         if (!worker) {

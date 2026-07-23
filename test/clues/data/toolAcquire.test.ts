@@ -16,7 +16,6 @@ describe('nextCoordTool (item-keyed chain order)', () => {
         expect(nextCoordTool({ sextant: true, watch: true, chart: true })).toBe(null);
     });
     test('strict order: a held watch without a sextant still asks for the sextant first', () => {
-        // the server chain is strictly ordered — you cannot get a watch before a sextant
         expect(nextCoordTool({ sextant: false, watch: true, chart: false })).toBe('sextant');
     });
 });

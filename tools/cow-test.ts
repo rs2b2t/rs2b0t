@@ -1,19 +1,9 @@
-// CowKiller functional test: log in, unlock off Tutorial Island, teleport to
-// the Lumbridge east cow field, run CowKiller through the real Browse…->card
-// ->Start panel flow, and assert a kill+loot cycle happens repeatedly.
-//
-// Usage: PATH="/opt/homebrew/opt/node@24/bin:$PATH" bun tools/cow-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 6 });
 const username = rest[0] ?? `cow${Date.now().toString(36).slice(-7)}`;
 
-// Lumbridge east cow field. Confirmed via tools/scout-npcs.ts: jagex coord
-// 0,50,51,55,6 lands at world (3255,3270), with 6-7 attackable Cows within
-// leash range and no Chickens nearby (the brief's guessed 0,50,51,20,20 is
-// actually duck/chicken/sheep territory at world (3220,3284) -- no cows).
 const TELE = '::tele 0,50,51,55,6';
 
 const browser = await launchBrowser();
@@ -28,9 +18,6 @@ try {
     if (!(await login(page, username))) fail('login failed');
     console.log(`logged in as '${username}'`);
 
-    // fresh accounts spawn tutorial-locked on Tutorial Island (no sidebar
-    // tabs -> no inventory component). Teleport off the island and reload +
-    // re-login until the tabs unlock (see tools/chicken-test.ts:50-86).
     await type(page, TELE, 1400);
     await page.reload();
     await boot(page);
@@ -46,8 +33,6 @@ try {
     console.log(`re-logged in; inventory tab ${invTab ? 'present' : 'STILL MISSING'}`);
     if (!invTab) fail('re-login off tutorial island did not unlock sidebar tabs');
 
-    // land exactly on the cow field (re-send: relogin isn't guaranteed to
-    // resume precisely on the pre-reload tile)
     await type(page, TELE, 1400);
 
     await page.getByRole('button', { name: 'Browse…' }).click();
@@ -80,11 +65,6 @@ try {
             fail('script crashed — see log above');
         }
 
-        // Count distinct kill events only -- NOT loot lines. Cows have a 100%
-        // drop table (Cow hide + Bones every time), so a single kill produces
-        // up to three matching lines ("Cow killed", "looted Bones", "looted Cow
-        // hide"); counting those let one kill clear a >=2 bar meant to prove
-        // the bot re-engages after a kill.
         kills = snap.log.filter(m => /killed/i.test(m)).length;
         if (kills >= 2) break;
         await page.waitForTimeout(3000);

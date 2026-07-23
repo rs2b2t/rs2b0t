@@ -1,24 +1,3 @@
-/**
- * Regenerates src/bot/api/combat/data/dropdb.ts from the content pack — each
- * monster's OFFICIAL drop table (the item display names it can drop), so bots
- * can offer a loot multi-select drawn from real data instead of free text.
- *   bun tools/combat/gen-dropdb.ts            # rewrite the file
- *   bun tools/combat/gen-dropdb.ts --check    # exit 1 if the committed file is stale
- * Content root: $CONTENT_DIR or ~/code/rs2b2t-content.
- *
- * Sources:
- *   scripts/drop tables/scripts/ ** *.rs2 — one file per monster. A monster's
- *     entry is an [ai_queueN,<npcdebug>] block; drops are obj_add(npc_coord,
- *     <obj>, ...) calls. The always-drop obj_add(npc_coord, npc_param(death_drop))
- *     resolves via the npc's death_drop param; ~randomherb/~randomjewel/etc.
- *     resolve against the [proc,*] sub-tables in the same directory.
- *   scripts/ ** *.npc  — npc debugname → display name + death_drop param.
- *   scripts/ ** *.obj  — obj debugname → display name (canonical wins over _unpack).
- *
- * Best-effort across all monsters: a file that can't be parsed is skipped with a
- * warning, never aborting the run — the bots that consume DROP_DB verify their
- * own monster's list.
- */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +13,6 @@ function filesUnder(root: string, ext: string): string[] {
         .sort();
 }
 
-/** debugname → display name; canonical configs override the _unpack dumps. */
 function loadConfigNames(ext: string, extra?: (cur: string, line: string) => void): Map<string, string> {
     const files = filesUnder(join(CONTENT, 'scripts'), ext);
     const unpack = files.filter(f => f.includes('/_unpack/'));
@@ -58,12 +36,11 @@ function loadConfigNames(ext: string, extra?: (cur: string, line: string) => voi
 }
 
 interface Block {
-    type: string; // ai_queue3, proc, label, ...
-    name: string; // mossgiant, randomherb, ...
+    type: string;
+    name: string;
     body: string;
 }
 
-/** Every [type,name] block across the drop-table scripts, keyed 'type:name'. */
 function loadBlocks(): Map<string, Block> {
     const blocks = new Map<string, Block>();
     for (const f of filesUnder(DROP_DIR, '.rs2')) {
@@ -93,7 +70,6 @@ const npcNames = loadConfigNames('.npc', (cur, line) => {
 });
 const blocks = loadBlocks();
 
-/** Item debugnames a block can yield, resolving proc refs + the death drop. */
 function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>): Set<string> {
     const out = new Set<string>();
     const block = blocks.get(key);
@@ -101,26 +77,22 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
         return out;
     }
     seen.add(key);
-    // Tokens fed to obj_add(npc_coord, TOKEN, …) or returned from a proc: return (TOKEN, …).
     const tokens: string[] = [];
     for (const m of block.body.matchAll(/obj_add\s*\(\s*npc_coord\s*,\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
     for (const m of block.body.matchAll(/return\s*\(\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
     for (const tok of tokens) {
         if (tok.startsWith('~')) {
-            // proc sub-table (~randomherb, ~randomjewel, ~megararetable, …)
             for (const it of itemsIn(`proc:${tok.slice(1)}`, deathDrop, seen)) { out.add(it); }
         } else if (tok === 'npc_param') {
             if (deathDrop) { out.add(deathDrop); }
         } else if (objNames.has(tok)) {
             out.add(tok);
         }
-        // else: not an obj (a keyword/var) — ignore
     }
     return out;
 }
 
 function generate(): string {
-    // Monster entry = an [ai_queue*,<npcdebug>] block whose name is a known npc.
     const byDisplay = new Map<string, Set<string>>();
     for (const block of blocks.values()) {
         if (!/^ai_queue/.test(block.type) || !npcNames.has(block.name)) {

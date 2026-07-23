@@ -20,10 +20,8 @@ import { RecoveryHints } from '../runtime/RecoveryHints.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// XP/hr sums every melee stat this bot can train (whichever com_mode is set).
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
 
-/** Tunable parameters (shown in the panel; also `?ChickenKiller.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
     gatherFeathers: { type: 'boolean', default: false, label: 'Gather feathers?', help: 'Also pick up the feathers chickens drop' },
     leashRadius: { type: 'number', default: 12, min: 3, max: 30, label: 'Leash radius (tiles)' },
@@ -42,22 +40,6 @@ export const SETTINGS: SettingsSchema = {
     ...PERIODIC_BANK_SETTINGS
 };
 
-/**
- * Kills a configurable target NPC (settings:
- * targetName, default 'Chicken'), loots ground items matching lootMatch and
- * optionally buries bones, unattended. Anchors to wherever it was started —
- * stand among the target NPCs. Also fronts the CowKiller preset (same class,
- * different settings defaults — see scripts/index.ts).
- *
- * Hardening: fights are target-tracked (a kill is the target dying, not our
- * health bar clearing), death is detected via the chat event and recovered
- * by web-walking home from the respawn, and an HP gate stops new fights when
- * low. Random events: dialog events (genie/old man/dwarf) are clicked
- * through by ContinueDialog; attack events (swarm/mage) are survived via the
- * HP gate + death recovery; teleport-away events recover through
- * ReturnToAnchor where a walkable path home exists (the enclosed maze is not
- * solvable in v1).
- */
 export default class ChickenKiller extends TaskBot {
     override loopDelay = 600;
 
@@ -71,7 +53,6 @@ export default class ChickenKiller extends TaskBot {
     private xpAtStart = 0;
     died = false;
 
-    // resolved from settings in onStart (defaults match SETTINGS)
     private leash = 12;
     private gatherFeathers = false;
     private fightHpGate = 0.45;
@@ -79,7 +60,7 @@ export default class ChickenKiller extends TaskBot {
     private target = 'Chicken';
     private loot = ['bones'];
     private buryEnabled = true;
-    private combatMode = 1; // com_mode target: 1 = aggressive (Strength xp)
+    private combatMode = 1;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -104,8 +85,6 @@ export default class ChickenKiller extends TaskBot {
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
         this.log(`anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}${this.gatherFeathers ? ', gathering feathers' : ''}`);
 
-        // 274 content says "Oh dear you are dead!" (no comma); match loosely
-        // so a punctuation tweak upstream can't silently break recovery
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
                 this.died = true;
@@ -131,11 +110,6 @@ export default class ChickenKiller extends TaskBot {
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
                 minutesThreshold: () => this.settings.num('bankEveryMinutes', 10),
-                // Count + deposit EVERY pack item (loot AND random-event junk),
-                // keeping only what the bot still needs — bones when burying. So
-                // 'bank at N items' counts the whole pack the way the UX reads it
-                // (issue #3) and a bank trip clears event junk too (issue #9),
-                // instead of leaving the pack to silently fill and stall Fight.
                 countLoot: () => this.depositables(),
                 deposit: depositAllExcept(this.keepList()),
                 returnTo: () => this.getAnchor(),
@@ -185,14 +159,9 @@ export default class ChickenKiller extends TaskBot {
     carriedLoot(): number {
         return Inventory.items().filter(i => this.wantsLoot(i.name)).length;
     }
-    /** Items the bank trip must NOT deposit: bones when we're burying them for
-     *  XP (else they'd bank before BuryBones runs). Everything else — loot,
-     *  feathers, random-event junk — is banked. */
     keepList(): string[] {
         return this.shouldBury() ? ['Bones'] : [];
     }
-    /** Pack items a bank trip WOULD deposit (loot + junk, minus the keep-list):
-     *  the count the periodic-bank threshold reads, so a junk-filled pack banks. */
     depositables(): number {
         const keep = new Set(this.keepList().map(s => s.toLowerCase()));
         return Inventory.items().filter(i => (i.name ?? '').length > 0 && !keep.has((i.name ?? '').toLowerCase())).length;
@@ -248,11 +217,6 @@ export default class ChickenKiller extends TaskBot {
     }
 }
 
-/**
- * Select the configured combat style (default aggressive = Strength xp) before
- * fighting. com_mode isn't persisted, so this re-asserts it whenever it drifts
- * (e.g. after a relogin), gated on being out of combat.
- */
 class SetCombatStyle implements Task {
     private announced = false;
     constructor(private bot: ChickenKiller) {}
@@ -301,7 +265,6 @@ class BuryBones implements Task {
     }
 }
 
-/** Loots any ground item whose lowercased name includes one of the configured lootMatch terms (e.g. "cow hide|bones"). */
 class LootDrops implements Task {
     constructor(private bot: ChickenKiller) {}
 
@@ -340,7 +303,6 @@ class LootDrops implements Task {
     }
 }
 
-/** Optional: pick up the feathers chickens drop (gatherFeathers setting). */
 class LootFeathers implements Task {
     constructor(private bot: ChickenKiller) {}
 
@@ -362,7 +324,6 @@ class LootFeathers implements Task {
         }
 
         this.bot.setStatus(`looting feathers at ${drop.tile()}`);
-        // feathers stack, so watch the held count rise (not the slot count)
         const before = Inventory.first('Feather')?.count ?? 0;
         await drop.interact('Take');
         if (await Execution.delayUntil(() => (Inventory.first('Feather')?.count ?? 0) > before, 5000)) {
@@ -372,7 +333,6 @@ class LootFeathers implements Task {
     }
 }
 
-/** Low HP and out of combat: stand down until we regen (no new fights). */
 class Rest implements Task {
     constructor(private bot: ChickenKiller) {}
 
@@ -387,9 +347,6 @@ class Rest implements Task {
 }
 
 class Fight implements Task {
-    // consecutive attack clicks that never engaged: an npc attack blocked by a
-    // shut pen gate is SILENT (the server keeps pursuing, no "can't reach"
-    // message), so repeated no-engage is the only reliable oracle
     private misses = 0;
 
     constructor(private bot: ChickenKiller) {}
@@ -415,14 +372,6 @@ class Fight implements Task {
 
         const engaged = await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
         if (!engaged || ChatDialog.canContinue()) {
-            // The attack never engaged: a shut pen gate/fence between us and the
-            // flock (issue #5). We're inside the leash so ReturnToAnchor never
-            // fires, and re-clicking through the fence repeats forever — the
-            // server just keeps silently pursuing an unreachable npc (a loc gets
-            // "I can't reach that!", an npc does NOT, live 2026-07-22). So after
-            // a can't-reach OR two silent misses, walk to the target instead:
-            // the resilient walker opens the gate on the way, and the next pass
-            // attacks from inside the pen.
             if (!engaged && (GameMessages.sawSince(mark, CANT_REACH) || ++this.misses >= 2)) {
                 this.bot.log(`can't engage ${name} — a shut gate/fence in the way; walking through it`);
                 this.bot.setStatus('crossing the pen gate');
@@ -433,34 +382,29 @@ class Fight implements Task {
         }
         this.misses = 0;
 
-        // fight THIS mob until it dies — our own health bar clearing
-        // mid-fight does not end the kill
         this.bot.setStatus('fighting');
         const deadline = performance.now() + 90000;
         let reattacks = 0;
 
         while (performance.now() < deadline) {
             if (ChatDialog.canContinue() || this.bot.died) {
-                return; // dialog/death tasks take over next loop
+                return;
             }
 
             const me = Game.tile();
             if (!me || mob.tile().distanceTo(me) > this.bot.leashRadius() + 8) {
-                // we got moved (teleport/death), not the mob dying
                 this.bot.log('displaced mid-fight — abandoning target');
                 return;
             }
 
             const engagedMob = this.resnapshot(mob);
             if (!engagedMob) {
-                // despawned: died (corpse removed after the death animation)
                 this.bot.countKill();
                 this.bot.log(`${name} killed`);
                 return;
             }
 
             if (engagedMob.health === 0 && engagedMob.snap.totalHealth > 0) {
-                // death animation playing — wait for the despawn, then count
                 await Execution.delayUntil(() => this.resnapshot(mob) === null, 10000);
                 this.bot.countKill();
                 this.bot.log(`${name} killed`);
@@ -468,7 +412,6 @@ class Fight implements Task {
             }
 
             if (!Game.inCombat() && !engagedMob.inCombat) {
-                // both disengaged but it's alive (wandered/blocked)
                 if (reattacks >= 2) {
                     this.bot.log(`target disengaged twice — abandoning this ${name.toLowerCase()}`);
                     return;
@@ -484,7 +427,6 @@ class Fight implements Task {
         }
     }
 
-    /** Re-snapshot our engaged target by scene slot (name-checked). */
     private resnapshot(mob: Npc): Npc | null {
         const name = this.bot.targetName().toLowerCase();
         return Npcs.all().find(n => n.index === mob.index && n.name?.toLowerCase() === name) ?? null;

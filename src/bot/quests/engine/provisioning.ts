@@ -7,11 +7,6 @@ export interface ProvisionPlan {
     satisfied: boolean;
 }
 
-/**
- * Bank-first, gather fallback (design decision): pack counts first, then bank
- * (withdraw), then gather for acquirable / BLOCKED for mustHave. Inputs are
- * lowercased-name count maps so live casing never matters here. Pure.
- */
 export function planProvisioning(
     items: QuestItem[],
     inv: Map<string, number>,
@@ -43,34 +38,15 @@ export function planProvisioning(
     return plan;
 }
 
-/**
- * Items the between-quest deposit should send to the bank: everything in the
- * pack whose name matches none of the `keep` substrings. `inv` keys and `keep`
- * entries are both LOWERCASED (the QuestSnapshot convention); matching is
- * substring-inclusive so 'pickaxe' keeps every pickaxe tier and 'cadava' keeps
- * both the berries and the potion. Pure — the engine only issues a deposit
- * step when this is non-empty, so a clean pack never earns a bank trip.
- */
 export function depositPlan(inv: Map<string, number>, keep: string[]): string[] {
     return [...inv.keys()].filter(name => !keep.some(k => name.includes(k)));
 }
 
-/** How many MORE gp a purchase needs beyond pack + last-seen bank coins.
- *  0 = affordable. bankCoins is last-SEEN (0 before any bank visit this run),
- *  so a broke verdict can be stale-pessimistic on a fresh login; the buy
- *  executor's own bank trip refreshes it and the next loop re-decides. Pure. */
 export function gpShort(snap: { inv: Map<string, number>; bankCoins: number }, estGp: number): number {
     const have = (snap.inv.get('coins') ?? 0) + snap.bankCoins;
     return Math.max(0, estGp - have);
 }
 
-/** Top the PACK up to `target` of a named item from the BANK, fetched once at
- *  provisioning time. Returns the withdraw to issue, or null when the pack already
- *  holds the target or the bank is dry. Capped at what the bank holds, so a partial
- *  bank drains in one trip and — with bank counts refreshed after the withdraw —
- *  the next pass sees `banked === 0` and stops (no re-withdraw loop). `inv`/`bank`
- *  keys are LOWERCASED (snapshot convention); the returned name keeps its casing
- *  for the withdraw step. Pure. */
 export function floatWithdraw(
     inv: Map<string, number>,
     bank: Map<string, number>,
@@ -84,9 +60,6 @@ export function floatWithdraw(
     return want > 0 ? { name, qty: want } : null;
 }
 
-/** Default coin float: coins are useful in nearly every quest (gate tolls, shop
- *  buys), so top the pack up to `float` from the bank. Thin wrapper over
- *  {@link floatWithdraw}. */
 export function coinFloatWithdraw(
     inv: Map<string, number>,
     bank: Map<string, number>,

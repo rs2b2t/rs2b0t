@@ -39,8 +39,6 @@ export default class Model extends ModelSource {
     static meta: (Metadata | null)[] = [];
     static provider: OnDemandProvider;
 
-    // unlit model
-
     static tmpVertexX: Int32Array = new Int32Array(2000);
     static tmpVertexY: Int32Array = new Int32Array(2000);
     static tmpVertexZ: Int32Array = new Int32Array(2000);
@@ -80,8 +78,6 @@ export default class Model extends ModelSource {
 
     objRaise: number = 0;
 
-    // lit model
-
     static tempModel: Model = new Model();
     static tempFTran: Int32Array = new Int32Array(2000);
 
@@ -117,9 +113,9 @@ export default class Model extends ModelSource {
     static clippedY: Int32Array = new Int32Array(10);
     static clippedColour: Int32Array = new Int32Array(10);
 
-    static oX: number = 0; // animation origin x
-    static oY: number = 0; // animation origin y
-    static oZ: number = 0; // animation origin z
+    static oX: number = 0;
+    static oY: number = 0;
+    static oZ: number = 0;
 
     static mouseCheck: boolean = false;
     static mouseX: number = 0;
@@ -127,11 +123,6 @@ export default class Model extends ModelSource {
     static pickedCount: number = 0;
     static pickedEntityTypecode: Int32Array = new Int32Array(1000);
 
-    // drawn-bounds tracking (bot aim assist): while trackTypecode is set,
-    // worldRender accumulates the screen-space bounds of every vertex drawn
-    // under that typecode this frame — the exact rendered extent, immune to
-    // stale/degenerate model AABBs and draw-time offsets. One typecode at a
-    // time; same coordinate space as Model.mouseX (canvas minus view origin).
     static trackTypecode: number = 0;
     static frameStamp: number = 0;
     static trackStamp: number = -1;
@@ -408,13 +399,11 @@ export default class Model extends ModelSource {
                 c = vertex1.gsmarts() + b;
                 last = c;
             } else if (order === 2) {
-                // a = a;
                 b = c;
                 c = vertex1.gsmarts() + last;
                 last = c;
             } else if (order === 3) {
                 a = c;
-                // b = b;
                 c = vertex1.gsmarts() + last;
                 last = c;
             } else if (order === 4) {
@@ -1558,7 +1547,6 @@ export default class Model extends ModelSource {
                     n.w++;
                 }
             } else {
-                // face normal
                 const lightness: number = ambient + (((x * nx + y * ny + z * nz) / (scale + ((scale / 2) | 0))) | 0);
                 if (this.faceColour) {
                     this.faceColourA[f] = Model.getColour(this.faceColour[f], lightness, this.faceRenderType[f]);
@@ -1655,7 +1643,6 @@ export default class Model extends ModelSource {
 
     static getColour(hsl: number, scalar: number, faceRenderType: number): number {
         if ((faceRenderType & 0x2) === 2) {
-            // getTexLight
             if (scalar < 0) {
                 scalar = 0;
             } else if (scalar > 127) {
@@ -1664,7 +1651,6 @@ export default class Model extends ModelSource {
 
             return 127 - scalar;
         } else {
-            // getColour
             scalar = (scalar * (hsl & 0x7f)) >> 7;
 
             if (scalar < 2) {
@@ -1736,10 +1722,8 @@ export default class Model extends ModelSource {
         }
 
         try {
-            // try catch for example a model being drawn from 3d can crash like at baxtorian falls
             this.render2(false, false, 0);
         } catch (_e) {
-            // empty
         }
     }
 
@@ -1871,10 +1855,8 @@ export default class Model extends ModelSource {
         }
 
         try {
-            // try catch for example a model being drawn from 3d can crash like at baxtorian falls
             this.render2(clipped, picking, typecode);
         } catch (_e) {
-            // empty
         }
     }
 
@@ -1944,7 +1926,6 @@ export default class Model extends ModelSource {
                     try {
                         this.render3(faces[f]);
                     } catch (_e) {
-                        // chrome's V8 optimizer hates us
                     }
                 }
             }
@@ -2033,7 +2014,6 @@ export default class Model extends ModelSource {
                         priorityDepth = -1000;
                     }
                 } catch (_e) {
-                    // chrome's V8 optimizer hates us
                 }
             }
 
@@ -2054,7 +2034,6 @@ export default class Model extends ModelSource {
                         priorityDepth = -1000;
                     }
                 } catch (_e) {
-                    // chrome's V8 optimizer hates us
                 }
             }
 
@@ -2075,7 +2054,6 @@ export default class Model extends ModelSource {
                         priorityDepth = -1000;
                     }
                 } catch (_e) {
-                    // chrome's V8 optimizer hates us
                 }
             }
 
@@ -2086,7 +2064,6 @@ export default class Model extends ModelSource {
                 try {
                     this.render3(faces[i]);
                 } catch (_e) {
-                    // chrome's V8 optimizer hates us
                 }
             }
         }
@@ -2108,7 +2085,6 @@ export default class Model extends ModelSource {
                     priorityDepth = -1000;
                 }
             } catch (_e) {
-                // chrome's V8 optimizer hates us
             }
         }
     }

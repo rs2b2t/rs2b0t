@@ -1,8 +1,3 @@
-/**
- * Shared banking helpers: nearest-bank deposit runs, the common junk
- * deposit matcher, and the PERIODIC_BANK settings block the combat bots
- * splice into their schemas.
- */
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { nearestBank } from './BankLocations.js';
@@ -21,7 +16,6 @@ export interface BankTriggerState {
     minutesThreshold: number;
 }
 
-/** Pure: does the selected strategy say to bank now? Never trips with no loot. */
 export function shouldBankNow(strategy: BankStrategy, s: BankTriggerState): boolean {
     if (s.lootCount <= 0) {
         return false;
@@ -42,7 +36,6 @@ export function shouldBankNow(strategy: BankStrategy, s: BankTriggerState): bool
 
 const BANK_STRATEGY_OPTIONS = ['Off', 'Loot count', 'Time', 'Either'];
 
-/** Map the settings-dropdown label to a BankStrategy (unknown -> off). */
 export function parseBankStrategy(label: string): BankStrategy {
     switch (label.trim().toLowerCase()) {
         case 'loot count':
@@ -56,7 +49,6 @@ export function parseBankStrategy(label: string): BankStrategy {
     }
 }
 
-/** Settings fragment an opt-in bot spreads into its schema. */
 export const PERIODIC_BANK_SETTINGS: SettingsSchema = {
     bankStrategy: { type: 'string', default: 'Off', options: BANK_STRATEGY_OPTIONS, label: 'Periodic bank', help: 'save accumulated loot so a death does not lose it all' },
     bankEveryItems: { type: 'number', default: 15, min: 1, max: 27, label: 'Bank at N loot items' },
@@ -64,10 +56,6 @@ export const PERIODIC_BANK_SETTINGS: SettingsSchema = {
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also bank gems/fruit/beer/kebabs' }
 };
 
-// Junk every banking bot offloads unless it opts out (bankCommonJunk=false).
-// Name-contains (case-insensitive), like all deposit filters. NOTE: 'sapphire'
-// etc. also match cut-gem jewellery — intended (saving a valuable); opt out per
-// bot if a script wants to keep them.
 export const COMMON_BANK_LOOT: string[] = [
     'uncut', 'sapphire', 'emerald', 'ruby', 'diamond', 'opal', 'jade', 'topaz',
     'strange fruit', 'beer', 'kebab'
@@ -81,17 +69,10 @@ export function matchesCommonBankLoot(name: string): boolean {
     return COMMON_BANK_LOOT.some(p => n.includes(p));
 }
 
-/** Compose a bot's own deposit predicate with the shared junk list. */
 export function depositMatcher(own: (name: string) => boolean, includeCommon: boolean): (name: string) => boolean {
     return (name: string) => own(name) || (includeCommon && matchesCommonBankLoot(name));
 }
 
-/**
- * Keep-list deposit predicate: bank EVERYTHING except the named items (exact
- * display-name match, case-insensitive). Combat bots keep only what they need
- * to keep fighting — food (every bite form), the spell's runes, ammo, the
- * wielded weapon — and bank all loot AND any random-event loot with this.
- */
 export function depositAllExcept(keep: Iterable<string>): (name: string) => boolean {
     const set = new Set([...keep].map(s => s.toLowerCase()));
     return (name: string) => name.length > 0 && !set.has(name.toLowerCase());
@@ -102,14 +83,6 @@ function realBooth(boothName: string) {
 }
 
 export const Banking = {
-    /**
-     * Bank at the nearest bank. Real booth in the loaded scene → use it; else
-     * web-walk to the nearest known bank (BANK_LOCATIONS). Bank.openNearest then
-     * walks onto a reachable stand beside the booth and opens it (reach-the-stall
-     * guarantee). Deposit everything `deposit` matches; optionally web-walk back
-     * to `returnTo`. True once loot was deposited; false if no bank was reachable
-     * or it could not open.
-     */
     async bankNearest(opts: {
         deposit: (name: string) => boolean;
         commonJunk?: boolean;

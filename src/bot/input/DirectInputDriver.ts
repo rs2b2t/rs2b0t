@@ -9,41 +9,29 @@ const OBJ_OPS = [MiniMenuAction.OP_OBJ1, MiniMenuAction.OP_OBJ2, MiniMenuAction.
 const HELD_OPS = [MiniMenuAction.OP_HELD1, MiniMenuAction.OP_HELD2, MiniMenuAction.OP_HELD3, MiniMenuAction.OP_HELD4, MiniMenuAction.OP_HELD5];
 const INV_BUTTONS = [MiniMenuAction.INV_BUTTON1, MiniMenuAction.INV_BUTTON2, MiniMenuAction.INV_BUTTON3, MiniMenuAction.INV_BUTTON4, MiniMenuAction.INV_BUTTON5];
 
-/**
- * The direct input driver: byte-identical OP packets via the client's own
- * doAction, no mouse/click telemetry (ADR-0003 — rs2b0t is direct-only).
- */
 export default class DirectInputDriver implements InputDriver {
     readonly mode = 'direct';
 
     interactNpc(index: number, op: number): boolean {
-        // OPNPC*: a = npc scene index
         return actions.menuAction(NPC_OPS[op - 1], index, 0, 0);
     }
 
     interactLoc(lx: number, lz: number, typecode: number, op: number): boolean {
-        // OPLOC*: a = typecode, b/c = scene-local tile
         return actions.menuAction(LOC_OPS[op - 1], typecode, lx, lz);
     }
 
     takeObj(lx: number, lz: number, objId: number, op: number): boolean {
-        // OPOBJ*: a = obj id, b/c = scene-local tile
         return actions.menuAction(OBJ_OPS[op - 1], objId, lx, lz);
     }
 
     heldOp(objId: number, slot: number, comId: number, op: number): boolean {
-        // OPHELD*: a = obj id, b = slot, c = component id
         return actions.menuAction(HELD_OPS[op - 1], objId, slot, comId);
     }
 
     invButton(objId: number, slot: number, comId: number, op: number): boolean {
-        // INV_BUTTON*: same (a, b, c) encoding as OPHELD
         return actions.menuAction(INV_BUTTONS[op - 1], objId, slot, comId);
     }
 
-    // USEHELD_START first selects the held item (sets objComId / objSelectedSlot
-    // / objSelectedComId on the client); the follow-up action reads that state
-    // and emits the OPLOCU / OPNPCU / OPHELDU packet.
     private select(useObjId: number, useSlot: number, useComId: number): boolean {
         return actions.menuAction(MiniMenuAction.USEHELD_START, useObjId, useSlot, useComId);
     }
@@ -61,9 +49,6 @@ export default class DirectInputDriver implements InputDriver {
     }
 
     castOnNpc(spellComId: number, index: number): boolean {
-        // TGT_BUTTON arms the spell client-side (c = spell component id ->
-        // targetMode/targetComId/targetMask); TGT_NPC casts it (a = npc scene
-        // index) — the client walks toward the target and sends OPNPCT itself.
         return actions.menuAction(MiniMenuAction.TGT_BUTTON, 0, 0, spellComId) && actions.menuAction(MiniMenuAction.TGT_NPC, index, 0, 0);
     }
 

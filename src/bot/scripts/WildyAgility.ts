@@ -17,36 +17,14 @@ import { Locs, type Loc } from '../api/queries/Locs.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// Grounded from ~/code/rs2b2t-content (2026-07-08):
-// skill_agility/scripts/wilderness_course.rs2 + configs/wilderness_course.loc.
-//
-// Lap obstacles (display name / op1 — every one calls stat_advance(agility),
-// so agility-xp is the completion signal, same as the Gnome course):
-//   1. obstical_pipe2        "Obstacle pipe" / "Squeeze-through"  (enter from
-//                             the south: the op errors if coordz >= 3939)
-//   2. obstical_ropeswing2   "Ropeswing"     / "Swing-on"         (one word)
-//   3. wilderness_stepping_stone "Stepping stone" / "Jump-from"   (can fail ->
-//                             lava damage: the main food sink)
-//   4. wilderness_log_balance1  "Log balance" / "Walk-across"     (can fail ->
-//                             spike damage)
-//   5. wilderness_rocks      "Rocks"         / "Climb"            (varp==5 ->
-//                             +4989 agility lap bonus, drops you back south
-//                             near the pipe so the lap loops without the ridge)
-//
-// Entry ridge (NOT part of the repeating lap): loc_2309, display name "Door",
-// op1 "Open" (rs2 requires Agility 52, forcemoves you ~13 tiles north over the
-// ridge into the course, awards 150 agility). "Door" is a very generic loc
-// name, so the ridge match is a best-effort nearest-Door-near-the-entrance
-// (tunable via the ridgeName/ridgeOp settings); flagged for live verification.
 const DEFAULT_OBSTACLES = 'Obstacle pipe,Ropeswing,Stepping stone,Log balance,Rocks';
 const DEFAULT_CENTRE = new Tile(2998, 3945, 0);
 const DEFAULT_ENTRANCE = new Tile(2998, 3924, 0);
-const EDGEVILLE = new Tile(3094, 3493, 0); // BankLocations 'Edgeville', the nearest bank
-const RIDGE_MIN_AGILITY = 52; // loc_2309 refuses below this; the whole course is gated on it
-const PIT_Z_GAP = 2000; // the wolf pit (ropeswing/log-balance fail) sits ~6400 tiles north in world-z; anything this far above the course centre is the pit (mime/maze are only ~600-800 away)
-const LAP_RETRY_LIMIT = 4; // retry a failing obstacle this many times (falls happen), then move on to the next so a spot it can't be finished from never wedges the lap
+const EDGEVILLE = new Tile(3094, 3493, 0);
+const RIDGE_MIN_AGILITY = 52;
+const PIT_Z_GAP = 2000;
+const LAP_RETRY_LIMIT = 4;
 
-/** Tunable parameters (panel + `?WildyAgility.<key>=...`). */
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
     food: {
         type: 'string',
@@ -75,8 +53,6 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
     bankTile: { type: 'tile', default: EDGEVILLE, label: 'Bank tile (x,z)', help: 'nearest bank for the food-only restock (default Edgeville)' },
 };
 
-// Active run config — module state is safe because exactly one script runs at
-// a time (ADR-0006), same pattern as ArdyFighter.
 let FOOD = 'lobster';
 let EAT_AT = 0.5;
 let EAT_TO = 0.9;
@@ -92,7 +68,6 @@ let PIT_LADDER_NAME = '';
 let PIT_LADDER_OP = 'Climb-up';
 let BANK_TILE: WorldTile = EDGEVILLE;
 
-/** Split an obstacle CSV into trimmed, lowercased, non-empty step names. */
 export function parseObstacles(csv: string): string[] {
     return csv
         .split(',')
@@ -100,47 +75,22 @@ export function parseObstacles(csv: string): string[] {
         .filter(Boolean);
 }
 
-/** True when `here` is within Chebyshev `radius` of `centre` on the same level. */
 export function inRegion(here: WorldTile, centre: WorldTile, radius: number): boolean {
     return here.level === centre.level && Math.max(Math.abs(here.x - centre.x), Math.abs(here.z - centre.z)) <= radius;
 }
 
-/**
- * True when `here` is outside BOTH the course region and the entrance region —
- * i.e. not at the course at all, so the bot must web-walk to it before it can
- * cross the ridge (EnterCourse) or run the lap (RunLap).
- */
 export function awayFromCourse(here: WorldTile, centre: WorldTile, courseRadius: number, entrance: WorldTile, entryRadius: number): boolean {
     return !inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
 }
 
-/**
- * True when `here` is inside the course PROPER — in the course region but past
- * the entrance region, i.e. north of the ridge running the lap (not still at the
- * ridge waiting to cross). Used to seed the "entered" latch at start and to
- * confirm a ridge crossing.
- */
 export function insideCourseProper(here: WorldTile, centre: WorldTile, courseRadius: number, entrance: WorldTile, entryRadius: number): boolean {
     return inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
 }
 
-/**
- * True when `here` is in the wolf pit — the isolated area (~6400 tiles north in
- * world-z, rendered "just below" the course) a ropeswing / log-balance FAIL
- * drops you into. Detected by the large z gap from the course rather than exact
- * pit coords: nothing else the bot visits is that far north (mime/maze stages
- * are only ~600-800 away), and the pit is escapable only by its ladder.
- */
 export function inPit(here: WorldTile, courseCentre: WorldTile, zGap: number): boolean {
     return here.level === courseCentre.level && here.z - courseCentre.z > zGap;
 }
 
-/**
- * Classify an obstacle attempt from its aftermath. Success is the agility xp
- * every wilderness obstacle awards on completion; a FAILURE awards none but
- * always deals damage (lava/spikes/pit), so an HP drop with no xp is a fall to
- * retry (fast) rather than a stuck step. Neither = the click did nothing.
- */
 export function classifyAttempt(xpGained: boolean, tookDamage: boolean): 'cleared' | 'failed' | 'noop' {
     if (xpGained) {
         return 'cleared';
@@ -148,26 +98,10 @@ export function classifyAttempt(xpGained: boolean, tookDamage: boolean): 'cleare
     return tookDamage ? 'failed' : 'noop';
 }
 
-/** Carried food slots (contains-match on the food name; food is non-stacking). */
 function foodCount(): number {
     return Inventory.items().filter(i => i.name?.toLowerCase().includes(FOOD)).length;
 }
 
-/**
- * Runs the Wilderness Agility Course: an agility-xp-gated 5-obstacle lap
- * (pipe -> ropeswing -> stepping stone -> log balance -> rocks), eating carried
- * food while it runs. On DEATH it world-walks to Edgeville, deposits the WHOLE
- * pack, re-withdraws ONLY food, walks back to the entrance and re-crosses the
- * ridge — so a wilderness death can never cost anything but the food. Failing
- * the ropeswing or log balance drops you into the pit below — PitEscape climbs
- * the ladder back up and the lap resumes at the right obstacle.
- *
- * Start it anywhere: if it isn't at the course it web-walks to the entrance
- * (TravelToCourse), crosses the ridge (EnterCourse), then runs the lap. Needs
- * Agility 52 (the ridge minimum) or it refuses to run rather than spin on a door
- * it can't cross. (Wilderness web-walk reach is the same live-only caveat as the
- * death return.)
- */
 export default class WildyAgility extends TaskBot {
     override loopDelay = 600;
 
@@ -181,10 +115,6 @@ export default class WildyAgility extends TaskBot {
     private startedAt = Date.now();
     private xpAtStart = 0;
     died = false;
-    // Latched once we've crossed the ridge into the course, so the lap loops
-    // rocks -> pipe without EnterCourse re-firing when we pass back through the
-    // pipe's south approach (which overlaps the ridge entrance region). Reset on
-    // death and whenever we've left the course area (TravelToCourse).
     private entered = false;
 
     override async onStart(): Promise<void> {
@@ -206,9 +136,6 @@ export default class WildyAgility extends TaskBot {
         BANK_TILE = this.settings.tile('bankTile', EDGEVILLE);
         this.course = parseObstacles(this.settings.str('obstacles', DEFAULT_OBSTACLES));
 
-        // The ridge (loc_2309) refuses below Agility 52, and the op is a no-op
-        // that never moves you or awards xp — EnterCourse would spin forever.
-        // Refuse to run rather than wedge, same shape as ArdyFighter's stat gate.
         const agility = Skills.level('agility');
         if (agility < RIDGE_MIN_AGILITY) {
             this.log(`WildyAgility needs Agility ${RIDGE_MIN_AGILITY} to cross the ridge (have ${agility}) — stopping.`);
@@ -220,8 +147,6 @@ export default class WildyAgility extends TaskBot {
 
         this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}`);
 
-        // Already inside the course (past the ridge)? Latch "entered" so we start
-        // lapping instead of trying to re-cross. Otherwise EnterCourse/TravelToCourse get us in.
         const here = Game.tile()!;
         this.entered = insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
 
@@ -236,12 +161,9 @@ export default class WildyAgility extends TaskBot {
             new DeathRecovery(this, {
                 anchor: COURSE_ENTRANCE,
                 radius: 6,
-                // No `needs`: DeathRecovery routes needs through AcquireTask,
-                // which has no 'bank' ItemSource and would run BEFORE (instead
-                // of) walkBack. The food-only restock lives entirely in walkBack.
                 onDeath: () => {
                     this.deaths++;
-                    this.entered = false; // respawned outside — must re-cross the ridge after recovery
+                    this.entered = false;
                     this.setStatus('died — recovering');
                     this.log('died in the wilderness — banking (food-only) then returning');
                 },
@@ -283,20 +205,11 @@ export default class WildyAgility extends TaskBot {
         p.end();
     }
 
-    /**
-     * DeathRecovery.walkBack: after respawn, ALWAYS restock food-only at the
-     * bank, then return to the course entrance. Every death walks to the bank,
-     * deposits the WHOLE pack and withdraws ONLY food — so the pack is
-     * guaranteed food-only when re-entering the wilderness, unconditionally
-     * (never contingent on the post-death food count). Returns true once we're
-     * back at the entrance.
-     */
     private async recoverAndReturn(): Promise<boolean> {
         this.setStatus('recovering: walking to the bank');
         await Traversal.walkResilient(BANK_TILE, { radius: 4, attempts: 4, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
 
         if (await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`))) {
-            // Food-only guarantee: empty the WHOLE pack, THEN take only food.
             await Bank.depositInventory();
             await Execution.delayTicks(1);
             await this.withdrawFood();
@@ -310,7 +223,6 @@ export default class WildyAgility extends TaskBot {
         return Traversal.walkResilient(COURSE_ENTRANCE, { radius: 3, attempts: 6, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
     }
 
-    /** Withdraw food (by its exact bank name) up to foodWithdraw, or until the bank runs out. */
     private async withdrawFood(): Promise<void> {
         for (let i = 0; i < FOOD_WITHDRAW * 2 && foodCount() < FOOD_WITHDRAW; i++) {
             const banked = Bank.items().find(it => it.name?.toLowerCase().includes(FOOD));
@@ -323,7 +235,7 @@ export default class WildyAgility extends TaskBot {
                 return;
             }
             if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) {
-                return; // withdraw stalled / bank emptied mid-loop
+                return;
             }
         }
     }
@@ -334,11 +246,9 @@ export default class WildyAgility extends TaskBot {
     isEntered(): boolean {
         return this.entered;
     }
-    /** Latched by EnterCourse once we've crossed the ridge into the course. */
     markEntered(): void {
         this.entered = true;
     }
-    /** Cleared when we've left the course area (TravelToCourse) or died. */
     markLeft(): void {
         this.entered = false;
     }
@@ -357,7 +267,6 @@ export default class WildyAgility extends TaskBot {
     courseNames(): string[] {
         return this.course;
     }
-    /** Advance to the next obstacle, counting laps on wrap (rocks -> pipe). */
     advance(): void {
         this.step++;
         if (this.step >= this.course.length) {
@@ -366,7 +275,6 @@ export default class WildyAgility extends TaskBot {
             this.log(`lap ${this.laps} complete`);
         }
     }
-    /** Re-point the lap at the first step whose loc is in range (desync recovery). */
     resyncTo(name: string): boolean {
         const idx = this.course.indexOf(name);
         if (idx === -1) {
@@ -378,12 +286,6 @@ export default class WildyAgility extends TaskBot {
     }
 }
 
-/**
- * Eat carried food up to the eat-to target once HP drops below the gate (not
- * just one bite) — ranks above EnterCourse/RunLap so it fires mid-lap too (the
- * stepping stone and log balance both deal damage on a failed roll). Copied
- * from ArdyFighter's EatFood, simplified to a single contains-matched food.
- */
 class EatFood implements Task {
     constructor(private bot: WildyAgility) {}
 
@@ -394,7 +296,7 @@ class EatFood implements Task {
     async execute(): Promise<void> {
         for (let bite = 0; bite < 28; bite++) {
             if (this.bot.died || ChatDialog.canContinue() || EventSignal.pending()) {
-                return; // yield to death / dialog / runtime-event handling
+                return;
             }
             if (Skills.hpFraction() >= EAT_TO || foodCount() === 0) {
                 return;
@@ -416,14 +318,6 @@ class EatFood implements Task {
     }
 }
 
-/**
- * Climb out of the wolf pit. Failing the ropeswing or log balance drops you into
- * an isolated pit (far north in world-z, rendered "just below" the course); a
- * ladder there climbs you back up. Ranks above TravelToCourse because the pit is
- * isolated — you leave ONLY by the ladder, never by web-walking. After climbing
- * out the lap's own resync picks up the right obstacle (e.g. after a log-balance
- * fall you resume at the log, skipping the stepping stones).
- */
 class PitEscape implements Task {
     constructor(private bot: WildyAgility) {}
 
@@ -431,7 +325,6 @@ class PitEscape implements Task {
         if (PIT_LADDER_NAME) {
             return Locs.query().name(PIT_LADDER_NAME).action(PIT_LADDER_OP).nearest();
         }
-        // best-effort: the nearest loc offering a climb/ladder op
         return Locs.query()
             .where(l => l.actions().some(a => /climb|ladder/i.test(a)))
             .nearest();
@@ -454,7 +347,6 @@ class PitEscape implements Task {
 
         const op = ladder.actions().find(a => /climb|ladder/i.test(a)) ?? PIT_LADDER_OP;
 
-        // run to the ladder if we fell in away from it, then climb
         const here = Game.tile();
         const lt = ladder.tile();
         if (here && lt.level === here.level && Math.max(Math.abs(here.x - lt.x), Math.abs(here.z - lt.z)) > 2) {
@@ -475,13 +367,6 @@ class PitEscape implements Task {
     }
 }
 
-/**
- * Web-walk to the course when started (or stranded) away from it — i.e. outside
- * both the course region and the entrance region. Walks to the entrance (south
- * of the ridge); EnterCourse then crosses the ridge and RunLap takes over. Ranks
- * below EatFood (heal first) but above EnterCourse/RunLap. Same wilderness
- * web-walk reach caveat as the death return.
- */
 class TravelToCourse implements Task {
     constructor(private bot: WildyAgility) {}
 
@@ -491,20 +376,12 @@ class TravelToCourse implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.markLeft(); // away from the course — must re-cross the ridge to get back in
+        this.bot.markLeft();
         this.bot.setStatus('walking to the wilderness agility course');
         await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 2, attempts: 6, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
-/**
- * Cross the ridge (loc_2309, "Door"/"Open") to get INTO the course from the
- * south — handles the first start and every post-death return. Fires only near
- * the entrance (south of the ridge); the ~13-tile ridge hop then carries us
- * clear of the entrance radius, so this stops firing once we are across and
- * RunLap takes over. Best-effort ridge match: "Door" is a generic name, so we
- * take the nearest one within the search radius after lining up on the entrance.
- */
 class EnterCourse implements Task {
     constructor(private bot: WildyAgility) {}
 
@@ -522,7 +399,6 @@ class EnterCourse implements Task {
     }
 
     async execute(): Promise<void> {
-        // Line up on the entrance tile so the ridge op fires from the right side.
         const here = Game.tile();
         if (here && COURSE_ENTRANCE.level === here.level && Math.max(Math.abs(here.x - COURSE_ENTRANCE.x), Math.abs(here.z - COURSE_ENTRANCE.z)) > 2) {
             this.bot.setStatus('walking to the course entrance');
@@ -544,15 +420,11 @@ class EnterCourse implements Task {
             return;
         }
 
-        // The ridge forcemoves us ~13 tiles north into the course and awards
-        // agility on success; wait for that xp OR for us to land in the region.
         await Execution.delayUntil(() => {
             const t = Game.tile();
             return Skills.xp('agility') > before || (!!t && insideCourseProper(t, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS)) || EventSignal.pending();
         }, 15_000);
 
-        // Latch "entered" once we're across (the ridge awarded agility, or we
-        // landed north of the entrance) so the lap loops without re-crossing.
         const after = Game.tile();
         if (Skills.xp('agility') > before || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS))) {
             this.bot.markEntered();
@@ -560,19 +432,7 @@ class EnterCourse implements Task {
     }
 }
 
-/**
- * The agility-xp-gated lap (adapted from AgilityBot.DoObstacle): for each step,
- * use the nearest in-range loc matching that step's name, wait for the agility
- * xp every wilderness obstacle grants on traversal, then advance (wrapping laps
- * on the Rocks climb). Ordered stepping + xp gating survives the directional,
- * same-named-loc hazards the Gnome course also has.
- */
 class RunLap implements Task {
-    // consecutive non-clearing attempts at the current step (a fall, or a click
-    // with no xp). A few are normal — you retry the obstacle. Past
-    // LAP_RETRY_LIMIT we can't complete it from where we are (e.g. up the ladder
-    // you land in the pocket between the log and the rocks, where the only way on
-    // is the rocks), so we advance to the next obstacle.
     private stuck = 0;
 
     constructor(private bot: WildyAgility) {}
@@ -586,9 +446,6 @@ class RunLap implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        // Run the lap once we've crossed the ridge (entered), anywhere in the
-        // course area (course region OR the entrance/pipe approach). When truly
-        // away (a fail pit, or started far) TravelToCourse handles the walk back.
         return here !== null && this.bot.isEntered() && this.bot.courseNames().length > 0 && (inRegion(here, COURSE_CENTRE, COURSE_RADIUS) || inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS));
     }
 
@@ -598,7 +455,7 @@ class RunLap implements Task {
             for (const name of new Set(this.bot.courseNames())) {
                 if (this.find(name) && this.bot.resyncTo(name)) {
                     obstacle = this.find(name);
-                    this.stuck = 0; // relocated to a fresh obstacle — start its retry count over
+                    this.stuck = 0;
                     break;
                 }
             }
@@ -619,10 +476,6 @@ class RunLap implements Task {
         this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
         const clicked = await obstacle.interact(op);
 
-        // Resolve the attempt fast: success is the agility xp every obstacle
-        // awards on completion; a FAILURE never awards xp but always deals damage
-        // (lava/spikes/pit) — so break on an HP drop too, instead of burning the
-        // full timeout on every fall. Also yield to events / level-up dialogs.
         if (clicked) {
             await Execution.delayUntil(() => Skills.xp('agility') > before || Skills.effective('hitpoints') < hpBefore || EventSignal.pending() || ChatDialog.canContinue(), 15_000);
         } else {
@@ -636,12 +489,11 @@ class RunLap implements Task {
 
         const outcome = classifyAttempt(Skills.xp('agility') > before, Skills.effective('hitpoints') < hpBefore);
 
-        // Let any trailing force-move / fall settle before the next click.
         let last = Game.tile();
         for (let settle = 0; settle < 25; settle++) {
             await Execution.delayTicks(1);
             if (ChatDialog.canContinue()) {
-                break; // level-up dialog — ContinueDialog clears it next loop
+                break;
             }
             const now = Game.tile();
             if (now && last && now.x === last.x && now.z === last.z && !Game.animating()) {
@@ -657,12 +509,6 @@ class RunLap implements Task {
             return;
         }
 
-        // Not cleared — retry the SAME obstacle (a fall you re-attempt after the
-        // ladder, a stepping stone you redo in place). But if it keeps not
-        // completing, we're on a spot it can't be finished from — most often the
-        // pocket between the log and the rocks reached up the ladder, where the
-        // only way on is the rocks — so after a few tries advance to the next
-        // obstacle rather than wedge the lap forever.
         if (++this.stuck >= LAP_RETRY_LIMIT) {
             this.bot.log(`'${this.bot.currentName()}' isn't completing from here after ${this.stuck} tries — moving on to the next obstacle`);
             this.stuck = 0;

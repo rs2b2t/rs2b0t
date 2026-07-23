@@ -1,4 +1,3 @@
-// test/ui/param-controls-dom.test.ts
 import { expect, test } from 'bun:test';
 import { renderControl } from '#/bot/ui/paramControls.js';
 import type { SettingDef } from '#/bot/runtime/Settings.js';
@@ -13,7 +12,6 @@ test('slider edit fires onChange with the numeric string', () => {
     range.value = '8';
     range.dispatchEvent(new Event('input'));
     expect(saved).toBe('8');
-    // the numeric box mirrors it
     const num = elc.querySelector('input[type=number]') as HTMLInputElement;
     expect(num.value).toBe('8');
 });
@@ -21,17 +19,17 @@ test('slider edit fires onChange with the numeric string', () => {
 test('multiselect edit saves the comma-joined selection', () => {
     let saved = '';
     const elc = renderControl(def({ type: 'string[]', default: [], options: ['Iron', 'Coal', 'Gold'] }), 'Iron', v => (saved = v), { disabled: false });
-    document.body.appendChild(elc); // happy-dom v20: click() fires change only on connected nodes
+    document.body.appendChild(elc);
     const boxes = Array.from(elc.querySelectorAll('input[type=checkbox]')) as HTMLInputElement[];
-    expect(boxes[0].checked).toBe(true); // Iron
-    boxes[1].click(); // check Coal
+    expect(boxes[0].checked).toBe(true);
+    boxes[1].click();
     expect(saved).toBe('Iron, Coal');
 });
 
 test('checkbox edit saves true/false', () => {
     let saved = '';
     const elc = renderControl(def({ type: 'boolean', default: false }), 'false', v => (saved = v), { disabled: false });
-    document.body.appendChild(elc); // happy-dom v20: click() fires change only on connected nodes
+    document.body.appendChild(elc);
     const box = elc.querySelector('input[type=checkbox]') as HTMLInputElement;
     box.click();
     expect(saved).toBe('true');

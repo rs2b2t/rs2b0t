@@ -17,7 +17,7 @@ import AnimFrame from '#/dash3d/AnimFrame.js';
 
 export const enum ComponentType {
     TYPE_LAYER = 0,
-    TYPE_UNUSED = 1, // TODO
+    TYPE_UNUSED = 1,
     TYPE_INV = 2,
     TYPE_RECT = 3,
     TYPE_TEXT = 4,

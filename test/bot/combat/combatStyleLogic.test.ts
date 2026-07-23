@@ -61,11 +61,11 @@ describe('spellButtonCom', () => {
 describe('castsAvailable', () => {
     test('limited by the scarcest rune', () => {
         const held = { 'Mind rune': 100, 'Air rune': 7 };
-        expect(castsAvailable('Fire Strike', ['Staff of fire'], name => held[name as keyof typeof held] ?? 0)).toBe(3); // 7 air / 2 per cast
+        expect(castsAvailable('Fire Strike', ['Staff of fire'], name => held[name as keyof typeof held] ?? 0)).toBe(3);
     });
 
     test('zero when a rune is absent; staff makes a mono-rune spell castable', () => {
-        expect(castsAvailable('Wind Strike', ['Staff of air'], () => 0)).toBe(0); // still needs minds
+        expect(castsAvailable('Wind Strike', ['Staff of air'], () => 0)).toBe(0);
         expect(castsAvailable('Wind Strike', ['Staff of air'], name => (name === 'Mind rune' ? 5 : 0))).toBe(5);
     });
 });

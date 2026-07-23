@@ -1,8 +1,3 @@
-// Every implemented quest must provision at a bank near ITS start, not the
-// global Draynor default (user report 2026-07-21: every quest banked in
-// Draynor). Each QuestModule declares `bank`; this pins that (a) all are set
-// and (b) each is a REAL known bank tile — a typo'd/unreachable tile would
-// strand the quest's provisioning.
 import { describe, expect, test } from 'bun:test';
 
 import { QUEST_DEFS } from '#/bot/quests/defs/index.js';

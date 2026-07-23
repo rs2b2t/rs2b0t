@@ -29,18 +29,18 @@ describe('nextCluster', () => {
         const t = { mageArena: true };
         expect(nextCluster(ROUTE, null, a, t)?.id).toBe('varrock');
         expect(nextCluster(ROUTE, 'varrock', a, t)?.id).toBe('portsarim');
-        expect(nextCluster(ROUTE, 'magearena', a, t)?.id).toBe('varrock'); // wrap
+        expect(nextCluster(ROUTE, 'magearena', a, t)?.id).toBe('varrock');
     });
     test('skips ineligible clusters', () => {
         const fresh = acct({ fishing: 1, ranged: 1, magic: 1 });
-        expect(nextCluster(ROUTE, 'catherby', fresh, {})?.id).toBe('varrock'); // guilds + arena all skipped
+        expect(nextCluster(ROUTE, 'catherby', fresh, {})?.id).toBe('varrock');
     });
 });
 
 describe('gp math', () => {
     test('withdrawFor applies buffer and cap', () => {
         expect(withdrawFor(1000, 25, 100_000)).toBe(1250);
-        expect(withdrawFor(90_000, 25, 100_000)).toBe(100_000); // capped
+        expect(withdrawFor(90_000, 25, 100_000)).toBe(100_000);
         expect(withdrawFor(0, 25, 100_000)).toBe(0);
     });
     test('buyout cost rises as stock is drained (engine curve, > baseline*base-price... the curve premium)', () => {
@@ -48,8 +48,6 @@ describe('gp math', () => {
         const item = rec.items.find(i => i.obj === 'deathrune')!;
         const cost = buyoutCostFromBaseline(rec, 'deathrune');
         expect(cost).toBeGreaterThan(0);
-        // draining stock below baseline raises the unit price, so the total
-        // must exceed a flat baseline*list-price floor at the shop's sell rate
         expect(cost).toBeGreaterThanOrEqual(item.baseline * Math.floor((Math.max(100, rec.sell) * item.cost) / 1000));
     });
     test('estimateClusterGp respects the chosen filter', () => {

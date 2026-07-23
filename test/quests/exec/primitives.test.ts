@@ -2,7 +2,6 @@ import { expect, test, describe } from 'bun:test';
 import { pickPreferred, isUnderground, needsHop, talkOp } from '#/bot/quests/exec/primitives.js';
 
 describe('pickPreferred', () => {
-    // exact option strings from the quest .rs2 sources
     const sedridor = ["Nothing thanks, I'm just looking around.", 'What are you doing down here?', "I'm looking for the head wizard."];
 
     test('returns the full option text for the first preferred match', () => {

@@ -12,7 +12,7 @@ test('every bank centre is a plausible level-0 world tile', () => {
     for (const b of BANK_LOCATIONS) {
         expect(b.tile.level, b.name).toBe(0);
         expect(b.tile.x, b.name).toBeGreaterThan(2500);
-        expect(b.tile.x, b.name).toBeLessThan(3600); // Morytania (Canifis) sits east of the 3500 mainland
+        expect(b.tile.x, b.name).toBeLessThan(3600);
         expect(b.tile.z, b.name).toBeGreaterThan(2900);
         expect(b.tile.z, b.name).toBeLessThan(3600);
     }
@@ -25,11 +25,8 @@ test('Yanille bank centre matches its bank_zones midpoint', () => {
 });
 
 test('nearestBank returns the closest bank on the same level', () => {
-    // just outside Yanille bank
     expect(nearestBank({ x: 2605, z: 3085, level: 0 })?.name).toBe('Yanille');
-    // right by the Al Kharid bank
     expect(nearestBank({ x: 3270, z: 3168, level: 0 })?.name).toBe('Al Kharid');
-    // by Draynor bank
     expect(nearestBank({ x: 3090, z: 3245, level: 0 })?.name).toBe('Draynor');
 });
 
@@ -37,13 +34,6 @@ test('nearestBank returns null when no bank is on the tile level', () => {
     expect(nearestBank({ x: 2612, z: 3092, level: 2 })).toBeNull();
 });
 
-// nearestBank must never route a character to a bank it cannot ENTER: the
-// Fishing Guild needs Fishing 68 and Shilo Village needs its quest — pure
-// geometry stranded sub-68 characters at the guild door (live 2026-07-17,
-// re-hit 2026-07-21). Selection is tested PURE via an injected usability
-// predicate; the live nearestBank() wrapper is one branch reading
-// Skills/Quests with the standard idiom (mocking those modules globally
-// would poison sibling suites — the bun mock.module gotcha).
 const openOnly = (b: BankLocation): boolean => b.requires === undefined;
 const all = (): boolean => true;
 

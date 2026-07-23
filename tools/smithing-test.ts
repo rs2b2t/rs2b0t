@@ -1,13 +1,3 @@
-// Headless live smoke for SmithingBot (Varrock West anvil). Boots the WebGL
-// client, logs in, teleports off Tutorial Island, SEEDS the bank with bronze
-// bars + a hammer (before ::~maxme, which swallows the next typed command),
-// maxes stats, teleports to the Varrock West bank, discovers the real Anvil loc
-// tile, runs the bot (Bronze → Dagger), and asserts bronze daggers appear from a
-// full withdraw → smith → bank cycle.
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/smithing-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -53,7 +43,7 @@ try {
     await page.goto(`${base}/bot.html?SmithingBot.product=Dagger`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -61,13 +51,11 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Seed bronze bars + a hammer BEFORE maxme (maxme swallows the next command).
     await type('::~bankitem bronze_bar 5000');
     await type('::~bankitem hammer 1');
     await type('::~maxme');
     await clearDialogs();
 
-    // Varrock West bank (3185,3440).
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
         await type('::tele 0,49,53,49,48');
@@ -84,12 +72,12 @@ try {
     console.log('started SmithingBot (Bronze → Dagger) — watching ~180s');
 
     let peakDaggers = 0;
-    for (let i = 0; i < 120; i++) { // ~240s
+    for (let i = 0; i < 120; i++) {
         await page.waitForTimeout(2000);
         peakDaggers = Math.max(peakDaggers, countSub(await inv(), 'dagger'));
         const t = await tile();
         if (i % 6 === 0) { console.log(`  t=${i * 2}s pos=${t ? `${t.x},${t.z}` : '?'} daggers=${peakDaggers} bars=${countSub(await inv(), 'bronze bar')}`); }
-        if (peakDaggers >= 20) { break; } // sustained smithing — most of a 27-bar pack, not a one-off
+        if (peakDaggers >= 20) { break; }
     }
 
     console.log('--- recent bot log ---');

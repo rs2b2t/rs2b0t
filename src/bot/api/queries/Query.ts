@@ -6,36 +6,28 @@ interface QueryableEntity extends Locatable {
     actions(): string[];
 }
 
-/**
- * RuneMate-shaped fluent filter over a snapshot supplier. Cheap: the supplier
- * runs once per terminal call (results/nearest/first/...).
- */
 export default class EntityQuery<E extends QueryableEntity> {
     private filters: ((e: E) => boolean)[] = [];
 
     constructor(private readonly supplier: () => E[]) {}
 
-    /** Case-insensitive exact name match against any of the given names. */
     name(...names: string[]): this {
         const wanted = names.map(n => n.toLowerCase());
         this.filters.push(e => e.name !== null && wanted.includes(e.name.toLowerCase()));
         return this;
     }
 
-    /** Entity offers this action (case-insensitive). */
     action(action: string): this {
         const wanted = action.toLowerCase();
         this.filters.push(e => e.actions().some(a => a.toLowerCase() === wanted));
         return this;
     }
 
-    /** Within `dist` tiles of the local player. */
     within(dist: number): this {
         this.filters.push(e => e.distance() <= dist);
         return this;
     }
 
-    /** Within a rectangle (inclusive), e.g. a script's working area. */
     inside(area: { minX: number; maxX: number; minZ: number; maxZ: number }): this {
         this.filters.push(e => {
             const t: WorldTile = e.tile();

@@ -16,161 +16,49 @@ import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 
-// Demon Slayer — content facts traced from ~/code/rs2b2t-content/scripts (cited
-// inline as file:line). Coordinates are map-derived (maps/*.jm2 NPC/LOC sections
-// decoded to absolute tiles) and pack ids from pack/{npc,loc,obj}.pack. Verified
-// against those sources for every coord/name/op below; LIVE-VERIFY tags flag the
-// spots static data couldn't fully pin (chiefly the sewer ascent).
-//
-// FLOW (demon.constant stages, all INVISIBLE to the snapshot — only journal
-// colour + inventory reach decide()):
-//   notStarted            -> talk Gypsy Aris (Varrock square), needs 1 coin.
-//   talked_aris (1)       -> talk Sir Prysin (palace) to open the KEY HUNT (2).
-//   key_hunt (2)          -> collect THREE keys (one of each, all named "Key"):
-//                              Captain Rovin (palace NW tower, L2) -> key_2 (2400)
-//                              Wizard Traiborn (Wizards' Tower, L1) -> key_1 (2399), needs 25 Bones
-//                              the palace kitchen DRAIN -> key_3 (2401): pour a
-//                                Bucket of water on it, then fetch it from the sewer.
-//   (all 3 keys)          -> talk Sir Prysin -> he assembles Silverlight (stage 29).
-//   silverlight (29)      -> equip Silverlight, attack Delrith at the stone circle;
-//                              at 0 HP he weakens and the incantation fires — answer
-//                              option 4 "Carlem Aber Camerinthum Purchai Gabindo".
-//   complete (30)         -> done.
-//
-// THE THREE KEYS ALL DISPLAY "Key" (demon.obj: silverlight_key_1/2/3 all name=Key),
-// so the name-only snapshot can only see a merged "key" count and CANNOT tell which
-// key it holds — the same collision as Waterfall's "A key". decide() therefore
-// routes the whole key phase to ONE re-entrant custom (keyHunt) that reads the obj
-// IDs live (2399/2400/2401, like Prince Ali's blond-wig id read) to know which key
-// is still missing. Every custom leg returns false on any missing precondition so
-// decide() re-routes (re-entrant), and all live world reads live inside the customs.
+const TRAIBORN_KEY_ID = 2399;
+const ROVIN_KEY_ID = 2400;
+const DRAIN_KEY_ID = 2401;
 
-// --- Obj ids (pack/obj.pack). The keys are name-collided ("Key"), so they are
-//     ONLY distinguishable by these ids — read live inside the customs. ---
-const TRAIBORN_KEY_ID = 2399; // silverlight_key_1 — Wizard Traiborn (25 bones)
-const ROVIN_KEY_ID = 2400;    // silverlight_key_2 — Captain Rovin
-const DRAIN_KEY_ID = 2401;    // silverlight_key_3 — washed down the palace drain
-
-// --- NPC stops (map-derived spawns: maps/*.jm2 NPC section decoded). aris DISPLAYS
-//     as "Gypsy" (varrock.npc [aris] name=Gypsy), NOT "Gypsy Aris". ---
-// Gypsy Aris — Varrock square tent, m50_53 "0 3 32: 882" -> (3203,3424,0). The start
-// needs 1 coin (gypsy.rs2:162-165, deducted at demon_slayer_aris_quest_start). prefer
-// MUST include "Ok, here you go." — the not_started menu's last option is "No, I
-// don't believe in that stuff." (gypsy.rs2:79), so a fallback there declines and
-// never starts. The reward-branch options after it all advance to demon_talked_aris
-// (:238); "Okay, thanks..." ends the trailing info loop cleanly (:266).
 const GYPSY: NpcStop = { npc: 'Gypsy', anchor: new Tile(3203, 3424, 0), leash: 6, prefer: [
-    'Ok, here you go.',                                    // pay the coin -> quest_start (gypsy.rs2:79,159)
-    'Very interesting. What does that Aaargh bit mean?',   // the vision menu — any option advances (:171)
-    "Who's Delrith?",                                      // :181
-    "Okay, where is he? I'll kill him for you!",           // who_is_delrith -> destroy_delrith sets talked_aris (:200,238)
-    'Where can I find Silverlight?',                       // more_info -> points at Sir Prysin (:243,270)
-    "Okay, thanks. I'll do my best to stop the demon."     // close (:258,274). Incantation is FLAVOUR, not a gate.
+    'Ok, here you go.',
+    'Very interesting. What does that Aaargh bit mean?',
+    "Who's Delrith?",
+    "Okay, where is he? I'll kill him for you!",
+    'Where can I find Silverlight?',
+    "Okay, thanks. I'll do my best to stop the demon."
 ] };
-// Sir Prysin — Varrock palace ground floor, m50_54 "0 4 17: 883" -> (3204,3473,0).
-// Two jobs: (a) at talked_aris his pre_silverlight dialogue sets key_hunt (stage 2)
-// — the gate Rovin/Traiborn's key options need (sir_prysin.rs2:119-123); pick
-// "Gypsy Aris said I should come and talk to you." (proc opt3, :270) then
-// "I need to find Silverlight." / "So give me the keys!". (b) with ALL THREE keys
-// held, a plain Talk-to auto-assembles Silverlight (prysin_got_them, :64-76) — no
-// menu. "I'm still looking." exits the <3-keys key_search_progress branch (:54-61).
 const PRYSIN: NpcStop = { npc: 'Sir Prysin', anchor: new Tile(3205, 3473, 0), leash: 6, prefer: [
-    'Gypsy Aris said I should come and talk to you.',          // pre_silverlight opt3 (sir_prysin.rs2:270)
-    'I need to find Silverlight.',                             // aris branch opt1 (:80)
-    "He's back and unfortunately I've got to deal with him.",  // silverlight branch — either advances (:96)
-    'So give me the keys!',                                    // -> keys label, which SETS demon_key_hunt (:108,123)
-    'Where does the wizard live?',                             // post-key_hunt info menu (:124)
-    "Well I'd better go key hunting.",                         // close (:152,166 — note the apostrophe)
-    "I'm still looking."                                       // key_search_progress revisit close (:54)
+    'Gypsy Aris said I should come and talk to you.',
+    'I need to find Silverlight.',
+    "He's back and unfortunately I've got to deal with him.",
+    'So give me the keys!',
+    'Where does the wizard live?',
+    "Well I'd better go key hunting.",
+    "I'm still looking."
 ] };
-// Captain Rovin — TOP of the palace NW tower, LEVEL 2, m50_54 "2 4 40: 884" ->
-// (3204,3496,2). Reached via the baked palace staircases (transports/stairEdges:
-// (3201,3497,0)->1->2 confirmed present). His key_2 comes from the "important"
-// path: opt3 "Yes I know, but this is important." (only offered at stage>=key_hunt,
-// captain_rovin.rs2:60-61) -> "There's a demon who wants to invade this city."
-// (:30-45) -> inv_add(silverlight_key_2). LIVE-VERIFY the L0->L2 climb.
 const ROVIN: NpcStop = { npc: 'Captain Rovin', anchor: new Tile(3204, 3496, 2), leash: 6, prefer: ['Yes I know, but this is important.', "There's a demon who wants to invade this city."] };
-// Wizard Traiborn — Wizards' Tower FIRST FLOOR, LEVEL 1, m48_49 "1 40 26: 881" ->
-// (3112,3162,1). Reached via the baked tower staircases (stairEdges (3102,3159,0)->
-// (3105,3160,1) confirmed). Two-talk key_1 flow (traiborn.rs2): the FIRST talk at
-// stage key_hunt takes opt3 "I need to get a key given to you by Sir Prysin."
-// (:38,52) -> "...have you got any keys knocking around?" (:54) -> "I'll get the
-// bones for you." (:138) which sets find_bones (stage 3). The SECOND talk, while
-// holding bones and at stage>=find_bones, routes straight to the bones handover
-// (:4-8 -> :10-32), consuming ALL held bones (one stage per bone) — 25 bones takes
-// stage 3->28 -> the incantation gives key_1 (:191-209). LIVE-VERIFY the L0->L1 climb.
-// Traiborn stands at (3113,3162,1), just EAST of an L1 door at (3110,3162,1); the
-// stair landing is WEST of it (probe 2026-07-19). leash MUST be small: at 6, gotoNpc's
-// npcNear fires while the bot is still west of the door (it "sees" Traiborn d4 across
-// it), so it stops there and talkThrough can't reach him — and the wedged door-cross
-// then lets the resilient walker escalate into a counterproductive climb-DOWN. leash 2
-// only satisfies at d<=2 of Traiborn (x>=3111 = EAST of the door), forcing the crossing.
 const TRAIBORN: NpcStop = { npc: 'Traiborn', anchor: new Tile(3112, 3162, 1), leash: 2, prefer: ['I need to get a key given to you by Sir Prysin.', 'have you got any keys knocking around', "I'll get the bones for you"] };
-// Wizards' Tower L0->L1 climb. The baked stair edge for this tower has a
-// WALL-BLIND snapped start tile — derive-stairs snapped the staircase (3103,3159)
-// operate tile to (3102,3159,0), which is walkable but sits OUTSIDE the tower's
-// west wall, so the live server rejects Climb-up from there ("can't reach
-// Staircase", live 2026-07-19). Worse, that exterior tile is a CHEAP shortcut the
-// A* prefers, so a plain walk-to-L1 loops forever at (3102,3159). Fix: baked-walk
-// to the INTERIOR stand (3105,3160,0) — a pure-L0 target, which forces the real
-// door route (offline trace: (3109,3166)[Open] -> ... -> (3106,3162)[Open] ->
-// inside) instead of the bogus edge — then OPLOC the staircase from INSIDE, where
-// the server can reach it. (Global follow-up: a curated transports.json edge with
-// the interior from-tile would fix this for every tower-climbing bot.)
 const WIZ_INSIDE_STAND = new Tile(3105, 3160, 0);
 
-// --- Drain / sewer geometry (the bespoke key_3 mechanic) ---
-// The Drain (questdrain, loc 2843) — palace kitchen, m50_54 "0 25 39: 2843" ->
-// (3225,3495,0). name=Drain (all.loc). Pouring bucket_water on it (oplocu,
-// demon_slayer.rs2:23-40) spawns silverlight_key_3 as a GROUND obj in the sewer at
-// obj coord 0_50_154_25_41 = (3225,9897,0), lasting ~300 ticks (~3 min).
 const DRAIN_TILE = new Tile(3225, 3495, 0);
-// The palace kitchen Sink (sink2, loc 874) — m50_54 "0 24 38: 874" -> (3224,3494,0),
-// ONE tile from the drain; name=Sink, category=watersource (water_sources.loc), so
-// an empty Bucket USED on it fills to Bucket of water (water_sources.rs2:63-82).
 const SINK_TILE = new Tile(3224, 3494, 0);
-// Varrock Sewers Manhole — m50_54 "0 37 2: 881" (manholeclosed) -> (3237,3458,0).
-// name=Manhole. op1 "Open" (manholeclosed) flips it to manholeopen; op1 "Climb down"
-// (manholeopen) p_telejumps +6400 z -> the sewer landing (manholes.rs2:1-11).
 const MANHOLE_TILE = new Tile(3237, 3458, 0);
-const SEWER_LAND = new Tile(3237, 9858, 0); // manhole "Climb down" lands here (3237,3458 + 6400 z)
-const SEWER_KEY = new Tile(3225, 9897, 0);  // where the washed-down key spawns
-// Stone circle south of Varrock — Delrith spawns at m50_52 "0 29 41: 879" ->
-// (3229,3369,0), ringed by Dark wizards (ids 172/174). demon.npc: Delrith 7 HP,
-// death_drop=ashes; delrith_weakened has no Attack op.
+const SEWER_LAND = new Tile(3237, 9858, 0);
+const SEWER_KEY = new Tile(3225, 9897, 0);
 const DELRITH_TILE = new Tile(3229, 3369, 0);
-// The Bones grind: kill the plain "Wizard" NPCs on the Wizards' Tower GROUND
-// floor (all.npc [wizard]: vislevel 9, op2 Attack, casts magic at range 8; the
-// non-combat Wizard Mizgog/Grayzag have no Attack op, so the action('Attack')
-// query skips them). Their default death drop is Bones (drop tables/wizard.rs2:
-// `obj_add(npc_param(death_drop))` = bones, every kill) — same guaranteed drop
-// as chickens, but AT the tower (Traiborn is up the stairs), so no Lumbridge
-// round-trip. They fight back, unlike the risk-free chickens: melee + the
-// AIOQuester eat hook (food:10 is provisioned) covers it, and a death is
-// recoverable. LIVE-VERIFY the exact wizard spawn tiles + interior melee pathing.
-const WIZARD_ANCHOR = new Tile(3107, 3159, 0); // tower ground-floor room centre
-const WIZ_L1_STAND = new Tile(3105, 3160, 1);  // L1 landing beside the staircase (Climb-down stand)
-// Varrock general store (generalshop2, varrock.inv:32 stock4=bucket_empty) — keeper
-// generalshopkeeper2 (npc 522) at ~(3218,3414,0); op3 Trade. Display "Shop keeper"
-// (the fleet's general-store convention, cf. Prince Ali's Lumbridge LUMBY_SHOP).
+const WIZARD_ANCHOR = new Tile(3107, 3159, 0);
+const WIZ_L1_STAND = new Tile(3105, 3160, 1);
 const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3414, 0) };
 
-// The exact incantation option (delrith.rs2:21 p_choice4 option 4). Two options
-// start "Carlem..."; "Aber Camerinthum" is unique to the correct one, so a
-// substring match on it can never pick option 1 ("Carlem Gabindo...").
 const INCANTATION = 'Aber Camerinthum Purchai Gabindo';
 
-const BONES_NEEDED = 25; // traiborn.rs2: got_traiborn_key(28) - find_bones(3) = 25
+const BONES_NEEDED = 25;
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
 const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-/** Live check for one of the three name-collided keys BY OBJ ID (the snapshot
- *  can't — all three are "Key"). Pack-only; the keys are never worn. */
 const heldId = (id: number): boolean => Inventory.items().some(i => i.id === id);
 
-/** Emit a buy, but park a WAIT the engine surfaces if pack+bank can't cover it —
- *  a bare buy that can't self-provision coins re-enters silently forever
- *  (Prince Ali's buyOrWait invariant). */
 function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
     if (gpShort(snap, step.estGp) > 0) {
         return { kind: 'wait', reason: `need ~${step.estGp} gp for ${step.item}` };
@@ -178,30 +66,17 @@ function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }
     return step;
 }
 
-// --- Provisioning gather fns (called bank-first before the quest starts) --------
-
-/** Bucket of water (record item): fill an empty Bucket at the palace kitchen Sink
- *  (adjacent to the drain), buying the empty Bucket from the Varrock general store
- *  first if none is held. Re-plans each loop (decide-shaped), so buy -> fill -> done. */
 function fillBucket(snap: QuestSnapshot): QuestStep {
-    if (has(snap, 'bucket')) { // an EMPTY Bucket ('bucket' != 'bucket of water')
+    if (has(snap, 'bucket')) {
         return { kind: 'useOn', item: 'Bucket', targetKind: 'loc', target: 'Sink', anchor: SINK_TILE, product: 'Bucket of water' };
     }
     return buyOrWait(snap, { kind: 'buy', item: 'Bucket', qty: 1, shop: VARROCK_GENERAL, estGp: 15 });
 }
 
-// --- Custom legs (all live reads; each returns false to re-enter) ---------------
-
-/** Grind the Wizards' Tower ground-floor Wizards for Bones (one kill/loot cycle
- *  per call; true once BONES_NEEDED held — for the `bones` gather). Loots only
- *  Bones off the ground (never the wizard's rune/coin drops), so the pack fills
- *  with bones. Melee; the AIOQuester eat hook (food:10) heals stray magic damage
- *  between cycles. Shared by the `bones` gather AND keyHunt's Traiborn branch. */
 async function grindWizards(log: (m: string) => void): Promise<boolean> {
     if (Inventory.count('Bones') >= BONES_NEEDED) {
         return true;
     }
-    // Loot our dropped bones first (tight radius — right where we're killing).
     const drop = GroundItems.query().name('Bones').within(6).nearest();
     if (drop) {
         const before = Inventory.count('Bones');
@@ -209,7 +84,6 @@ async function grindWizards(log: (m: string) => void): Promise<boolean> {
         await Execution.delayUntil(() => Inventory.count('Bones') > before, 6000);
         return false;
     }
-    // Attack the nearest idle Wizard on the tower floor; walk to the anchor if none.
     const wiz = Npcs.query().name('Wizard').action('Attack').where(n => !n.inCombat).within(10).nearest();
     if (!wiz) {
         await Traversal.walkResilient(WIZARD_ANCHOR, { radius: 3, attempts: 3, timeoutMs: 90_000, log });
@@ -218,29 +92,10 @@ async function grindWizards(log: (m: string) => void): Promise<boolean> {
     const idx = wiz.index;
     if (!(await wiz.interact('Attack'))) { return false; }
     await Execution.delayUntil(() => Game.inCombat(), 5000);
-    // Kill = the target NPC leaving the scene (death despawn), tracked by scene slot.
     await Execution.delayUntil(() => !Npcs.all().some(n => n.index === idx && /wizard/i.test(n.name ?? '')), 30_000);
     return false;
 }
 
-/**
- * The DRAIN key_3 leg (bespoke mechanic). Position-aware like Waterfall's legs,
- * since the sewer excursion has NO baked nav edge in or out (verified: transports/
- * stairEdges have nothing in the Varrock-sewer z-band), so the surface<->sewer
- * crossing must be driven explicitly here.
- *
- * UNDERGROUND: grab the "Key" ground item, then ALWAYS climb back out (so a missed
- *   grab or a first-try ascent miss self-heals on re-entry — keyHunt routes here for
- *   ANY underground position, not just while the key is missing).
- * SURFACE (no key): pour a Bucket of water on the Drain (spawns the key in the
- *   sewer) THEN descend the manhole in the SAME pass — an empty Bucket alone can't
- *   tell "just poured, go down" from "key despawned, re-pour", so pouring and
- *   descending are kept contiguous; a lone empty Bucket means re-fill at the Sink.
- *
- * ⚠ TOP LIVE-VERIFY: the sewer ASCENT. Static map data shows no ladder/Climb-up loc
- *   at the landing and no baked exit edge — the real exit loc/op/coords must be
- *   confirmed live. Until then the bot can grab the key but may not climb out.
- */
 async function drainLeg(log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here === null) {
@@ -248,7 +103,6 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
     }
 
     if (isUnderground(here)) {
-        // In the sewer: grab the washed-down key if we don't have it yet.
         if (!heldId(DRAIN_KEY_ID)) {
             if (!(await Traversal.walkResilient(SEWER_KEY, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
                 return false;
@@ -262,7 +116,6 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
                 log('drainLeg: no "Key" on the sewer floor — despawned? climbing out to re-pour');
             }
         }
-        // Climb OUT regardless (self-healing). LIVE-VERIFY the exit loc/op.
         if (!(await Traversal.walkResilient(SEWER_LAND, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
@@ -279,12 +132,10 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
 
-    // Surface, key not yet held.
     if (heldId(DRAIN_KEY_ID)) {
         return true;
     }
     if (Inventory.contains('Bucket of water')) {
-        // Pour on the drain (oplocu, last_useitem==bucket_water) to spawn the key...
         if (!(await Traversal.walkResilient(DRAIN_TILE, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
@@ -292,11 +143,8 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
         const bucket = Inventory.first('Bucket of water');
         if (drain && bucket) {
             await bucket.useOn(drain);
-            // Confirm the pour landed (bucket_water -> bucket_empty) before leaving,
-            // so we don't walk off mid-oplocu and skip the key spawn.
             await Execution.delayUntil(() => !Inventory.contains('Bucket of water'), 6000);
         }
-        // ...then descend the manhole in the SAME pass (Open if closed, then Climb down).
         if (!(await Traversal.walkResilient(MANHOLE_TILE, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
@@ -315,8 +163,6 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     if (Inventory.contains('Bucket')) {
-        // Poured earlier (or key despawned) and back on the surface with an empty
-        // Bucket -> re-fill at the Sink; next pass takes the pour+descend branch.
         if (!(await Traversal.walkResilient(SINK_TILE, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
         }
@@ -328,31 +174,15 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
         }
         return false;
     }
-    // No bucket at all (never provisioned / lost mid-quest) — buy an empty one from
-    // the Varrock general store; next pass fills it at the Sink.
     await executeStep({ kind: 'buy', item: 'Bucket', qty: 1, shop: VARROCK_GENERAL, estGp: 15 }, [], log);
     return false;
 }
 
-/**
- * The KEY HUNT + Silverlight assembly (the quest's spine while it lacks the sword).
- * Fully obj-id-aware, so the name-collided "Key" count never confuses it:
- *   underground            -> drainLeg (grab + climb out)
- *   all 3 keys held        -> talk Sir Prysin -> he assembles Silverlight (stage 29)
- *   no key yet             -> talk Sir Prysin first to OPEN the hunt (stage->key_hunt),
- *                             then fall through to collect (getting any key proves the
- *                             stage is set, so this Prysin talk only fires pre-first-key)
- *   missing Rovin key      -> talk Captain Rovin (palace L2)
- *   missing Traiborn key   -> grind 25 Bones (just-in-time) then talk Traiborn (L1)
- *   missing Drain key      -> drainLeg (pour + sewer)
- * Each leg returns false to re-enter; success bubbles up as "Silverlight held".
- */
 async function keyHunt(log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     if (here === null) {
         return false;
     }
-    // Underground = mid drain-leg (grab/ascend) regardless of which keys we hold.
     if (isUnderground(here)) {
         return drainLeg(log);
     }
@@ -361,47 +191,27 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
     const hasTraiborn = heldId(TRAIBORN_KEY_ID);
     const hasDrain = heldId(DRAIN_KEY_ID);
 
-    // All three distinct keys -> Sir Prysin assembles Silverlight (no menu; the
-    // got_them branch fires on a plain Talk-to, sir_prysin.rs2:35-76).
     if (hasRovin && hasTraiborn && hasDrain) {
         if (!(await gotoNpc(PRYSIN, [], log))) { return false; }
         await talkThrough('Sir Prysin', PRYSIN.prefer, log);
-        // The sword inv_add trails the if_close() by ~2 ticks — wait for it so decide()
-        // routes to `equip`, not back into a keyless keyHunt pass.
         return Execution.delayUntil(() => Inventory.contains('Silverlight'), 6000);
     }
 
-    // Before the first key, guarantee stage key_hunt via Sir Prysin (idempotent — a
-    // harmless key_search_progress at stage>=key_hunt). Fall THROUGH to Rovin in the
-    // same pass so "no key yet" can't loop on Prysin (his talk yields no key).
     if (!hasRovin && !hasTraiborn && !hasDrain) {
         if (!(await gotoNpc(PRYSIN, [], log))) { return false; }
         await talkThrough('Sir Prysin', PRYSIN.prefer, log);
     }
 
-    // Captain Rovin's key (palace NW tower, L2). "important" option is stage-gated.
-    // WAIT for the key to land: Rovin's inv_add trails if_close() by ~2 ticks and his
-    // dialogue has NO already-have guard, so an immediate re-talk hands a DUPLICATE
-    // key_2 (captain_rovin.rs2:42-45).
     if (!hasRovin) {
         if (!(await gotoNpc(ROVIN, [], log))) { return false; }
         await talkThrough('Captain Rovin', ROVIN.prefer, log);
         return Execution.delayUntil(() => heldId(ROVIN_KEY_ID), 6000);
     }
 
-    // Wizard Traiborn's key (Wizards' Tower, L1) — needs 25 Bones handed over.
-    // Traiborn consumes ALL held bones per hand-in, advancing the stage one per
-    // bone toward got_traiborn_key (28), so partial batches accumulate: 25 bones
-    // + food:10 don't fit in 28 slots, so we FILL the pack with bones on the
-    // ground floor, climb up and hand over whatever we hold, climb back down and
-    // grind more — repeating until key_1 lands (e.g. 15 then 10). Kill the tower
-    // Wizards for the bones (grindWizards), not the far Lumbridge chickens.
     if (!hasTraiborn) {
         const level = Game.tile()?.level ?? 0;
         const bones = Inventory.count('Bones');
 
-        // Not a full pack yet → grind more. Descend to the ground-floor Wizards
-        // if we're up on L1 from a prior hand-in (Reach handles the Climb-down).
         if (!(bones > 0 && Inventory.isFull())) {
             if (level === 1) {
                 await Reach.locOp({
@@ -413,9 +223,6 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
             return grindWizards(log);
         }
 
-        // Full pack of bones → hand-in trip. Climb to the first floor (Reach
-        // walks to the interior stand, then the Climb-up OPLOC server-walks the
-        // last tiles and opens any blocking door).
         if (level !== 1) {
             const climbed = await Reach.locOp({
                 name: 'Staircase',
@@ -427,68 +234,40 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
             if (climbed === 'unreachable') {
                 log('demon: tower staircase unreachable — re-entering to re-plan');
             }
-            return false; // re-enter: next pass talks Traiborn from L1
+            return false;
         }
-        // On L1 — get Traiborn's dialogue open (tracks his patrol; opens the
-        // interior door leaf when the way is shut), then drive it.
         if ((await Reach.npcDialog({ name: 'Traiborn', near: TRAIBORN.anchor, log })) !== 'done') {
             return false;
         }
-        // First talk sets find_bones; the second (holding bones) hands over ALL
-        // held, one stage per bone toward got_traiborn_key (28). talkThrough drives
-        // both. The handover is a per-bone SERVER chain (traiborn.rs2:22-32:
-        // if_close + inv_del(bones,1) + p_delay(1)) that runs with the dialogue
-        // CLOSED; the FINAL batch (reaching 28) then reopens a Hurrah!/incantation
-        // dialogue (chatnpc + mesbox×3, :191-212) whose continues MUST be clicked
-        // to receive key_1. A PARTIAL batch just consumes its bones and settles
-        // with no key. So: drive continues until the key lands OR the handover has
-        // clearly settled (no open box + bones stopped changing for several ticks
-        // — never mid-chain, where bones tick down each server tick). A settled
-        // partial returns false; the grind trip above then descends and refills.
         const beforeHand = Inventory.count('Bones');
         await talkThrough('Traiborn', TRAIBORN.prefer, log);
-        await Execution.delayTicks(2); // let a started handover consume its first bone(s)
+        await Execution.delayTicks(2);
         if (Inventory.count('Bones') < beforeHand || ChatDialog.isOpen()) {
             let lastBones = Inventory.count('Bones');
-            let settled = 0; // consecutive ticks with the chain quiescent (no box, no consumption)
+            let settled = 0;
             for (let i = 0; i < 60 && !heldId(TRAIBORN_KEY_ID); i++) {
                 if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
                 await Execution.delayTicks(1);
                 const now = Inventory.count('Bones');
                 settled = (!ChatDialog.isOpen() && now === lastBones) ? settled + 1 : 0;
                 lastBones = now;
-                if (settled >= 8) { break; } // partial batch fully consumed, no incantation coming
+                if (settled >= 8) { break; }
             }
         }
         return false;
     }
 
-    // The drain/sewer key (key_3).
     if (!hasDrain) {
         return drainLeg(log);
     }
     return false;
 }
 
-/**
- * The Delrith fight (delrith.rs2 + npc_combat.rs2:174-185). Silverlight MUST be worn
- * in the weapon slot to damage him (npc_combat.rs2:177 checks worn slot 3; otherwise
- * "Maybe I'd better wield silverlight first."). At 0 HP the death queue is intercepted
- * (ai_queue3) -> he becomes Weakened Delrith and the incantation p_choice4 fires;
- * answer option 4 ("...Aber Camerinthum...") to banish him (correct -> npc_death +
- * demon_slayer_complete). A wrong answer restores him to full HP, so we just re-attack.
- * The dialog is driven INLINE (like Prince Ali's beer / Waterfall's Hudon chains) —
- * the incantation appears mid-fight, inside this custom's own await window.
- */
 async function fightDelrith(log: (m: string) => void): Promise<boolean> {
-    // 1. Silverlight in the weapon slot, or no damage lands.
     if (!Equipment.contains('Silverlight')) {
         if (Inventory.contains('Silverlight')) { await Equipment.equip('Silverlight'); }
         return false;
     }
-    // 2. Only walk/attack when no dialog is already up — a re-entry mid-incantation
-    //    must answer it FIRST (an open p_choice4 blocks the walk). Otherwise get to
-    //    the stone circle and open the fight; driveIncantation re-attacks as needed.
     if (!ChatDialog.canContinue() && ChatDialog.options().length === 0) {
         if (!(await Traversal.walkResilient(DELRITH_TILE, { radius: 4, attempts: 3, timeoutMs: 90_000, log }))) {
             return false;
@@ -501,14 +280,9 @@ async function fightDelrith(log: (m: string) => void): Promise<boolean> {
             return false;
         }
     }
-    // 3. Drive the fight/incantation inline. Success = the journal flipping to
-    //    complete after the correct answer (option 4).
     return driveIncantation(log);
 }
 
-/** Poll the dialog for ~a fight's worth of time: answer the incantation p_choice4
- *  with option 4, continue any pages, re-attack Delrith if he restored (wrong answer
- *  or still alive). Returns true once the journal is complete; false to re-enter. */
 async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
     const deadline = performance.now() + 60_000;
     while (performance.now() < deadline) {
@@ -527,8 +301,6 @@ async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
             await Execution.delayTicks(1);
             continue;
         }
-        // No dialog: if Delrith is up and we're not fighting, (re)attack — a wrong
-        // incantation restores him to full HP (delrith.rs2:37-45).
         if (!Game.inCombat()) {
             const d = Npcs.query().name('Delrith').action('Attack').within(12).nearest();
             if (d) {
@@ -542,44 +314,26 @@ async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
     return Quests.status('Demon Slayer') === 'complete';
 }
 
-// --- Pure quest brain ----------------------------------------------------------
-
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
     if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
     if (snap.journal === 'notStarted') { return { kind: 'talk', stop: GYPSY }; }
 
-    // Silverlight in hand -> equip it; worn -> the Delrith fight. (Both checks come
-    // before the key phase so a re-equip after a stray unequip is handled.)
     if (worn(snap, 'Silverlight')) { return { kind: 'custom', name: 'fight Delrith', run: fightDelrith }; }
     if (has(snap, 'Silverlight')) { return { kind: 'equip', item: 'Silverlight' }; }
 
-    // Everything else (open the hunt, collect the 3 keys, assemble Silverlight) is
-    // obj-id-driven inside keyHunt — the snapshot can't tell the three "Key"s apart.
     return { kind: 'custom', name: 'key hunt', run: keyHunt };
 }
 
 export const demonslayer: QuestModule = {
     record: QUESTS.find(r => r.id === 'demon')!,
-    bank: new Tile(3185, 3440, 0), // Varrock West — Gypsy, Varrock square
-    // Carry food for the Delrith fight — the stone circle is ringed by Dark wizards
-    // that cast earth/water strike (dark_wizard.rs2). Best-effort via the eat hook.
+    bank: new Tile(3185, 3440, 0),
     food: 10,
-    // NPCs the quest legitimately fights, so the random-event guard never flags them:
-    // Delrith (+ its weakened form) and the Dark wizards at the circle, plus the
-    // tower Wizards the Bones grind kills. ('wizard' also covers 'dark wizard'.)
     grind: ['delrith', 'weakened delrith', 'dark wizard', 'wizard'],
-    // Bank-first gathers for the DECLARED record raws. Bucket of water fills at the
-    // palace Sink (buying the empty Bucket if needed); Bones grinds the tower Wizards.
-    // Both are also re-derivable mid-quest (keyHunt grinds Bones just-in-time;
-    // drainLeg re-fills the Bucket), so a mid-run loss can't hard-block.
     gather: {
         'bucket of water': fillBucket,
         'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindWizards })
     },
-    // Between-quest deposit KEEP list: the quest-internal items a mid-quest restart
-    // may hold. 'key' covers all three silverlight keys (name-collided); 'bucket'
-    // covers empty + water; 'silverlight'/'bones'/'coins' are self-explanatory.
     tools: ['key', 'silverlight', 'bucket', 'bones', 'coins'],
     decide
 };

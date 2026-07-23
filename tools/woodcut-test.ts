@@ -1,16 +1,9 @@
-// Slice 4 functional test: fresh account, unlock tabs (tele off Tutorial
-// Island + re-login), ::give an axe, anchor near trees, run Woodcutter and
-// assert logs get chopped and dropped.
-//
-// Usage: bun tools/woodcut-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, login, parseArgs, startFromLibrary, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 5 });
 const username = rest[0] ?? `wood${Date.now().toString(36).slice(-7)}`;
 
-// trees north-east of Lumbridge: world (3230, 3250) -> 0,50,50,30,50
 const TELE = '::tele 0,50,50,30,50';
 
 const browser = await launchBrowser();

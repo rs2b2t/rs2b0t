@@ -24,8 +24,8 @@ describe('RenderGate', () => {
     test('background throttles to the interval', () => {
         RenderGate.setMode('background');
         RenderGate.markDrawn(1000);
-        expect(RenderGate.shouldDraw(1100)).toBe(false); // 100ms < 300ms
-        expect(RenderGate.shouldDraw(1300)).toBe(true);  // 300ms elapsed
+        expect(RenderGate.shouldDraw(1100)).toBe(false);
+        expect(RenderGate.shouldDraw(1300)).toBe(true);
     });
 
     test('markDrawn advances the counter', () => {

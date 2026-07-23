@@ -3,9 +3,6 @@ import { DEFAULT_LOOT, SPOTS, SPOT_OPTIONS, TARGET_OPTIONS } from '#/bot/scripts
 
 describe('AutoFighter data', () => {
     test('loot defaults to exactly gems + clues (the spec set)', () => {
-        // Engine-verified display names (uncut_gems.obj / runecraft.obj /
-        // all.obj 225): both key halves display as 'Half of a key', so one
-        // contains-entry covers the pair.
         expect(DEFAULT_LOOT).toEqual([
             'clue scroll',
             'uncut sapphire', 'uncut emerald', 'uncut ruby', 'uncut diamond',

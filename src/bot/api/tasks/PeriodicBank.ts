@@ -4,7 +4,6 @@ import { Execution } from '../Execution.js';
 import { Game } from '../Game.js';
 import { Banking, shouldBankNow, type BankStrategy } from '../Banking.js';
 
-/** After a failed attempt (no bank reachable), suppress ALL strategies this long. */
 const FAILURE_BACKOFF_MS = 3 * 60_000;
 
 export interface PeriodicBankOptions {
@@ -13,19 +12,12 @@ export interface PeriodicBankOptions {
     minutesThreshold: () => number;
     countLoot: () => number;
     deposit: (name: string) => boolean;
-    /** Include the shared junk list too (default: yes). */
     commonJunk?: () => boolean;
     returnTo?: () => WorldTile | null;
     setStatus?: (s: string) => void;
     log?: (m: string) => void;
 }
 
-/**
- * Opt-in: banks accumulated loot when the selected strategy trips, so a death
- * doesn't lose it all. Never fires mid-combat (so it doesn't abandon a fight);
- * resets its timer on every attempt and backs off ALL strategies after a failed
- * (unreachable-bank) attempt, so it doesn't livelock retrying an unreachable bank.
- */
 export class PeriodicBank implements Task {
     private lastBankAt = performance.now();
     private suppressUntil = 0;

@@ -1,14 +1,3 @@
-// Headless live smoke for EssMiner: seeds a Rune pickaxe in the BANK (so the
-// GetPick withdraw path is exercised), completes Rune Mysteries via setvar
-// (relog required — quest journal colours only recompute on login), then
-// asserts a DOUBLE cycle: teleport in (mapsquare 45_75) → pack fills (27 ess,
-// pick carried) → portal back → deposit logged → pick retained → second
-// teleport. Cheats go BEFORE ::~maxme (maxme's level-up dialogs swallow the
-// next typed command).
-//
-// Requires: engine on :8890 + the local build deployed (deploy-local.sh).
-// Usage: bun tools/essminer-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -59,26 +48,16 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     if (!(await relog())) { fail('relogin failed (off-island)'); }
     console.log('logged in off Tutorial Island');
 
-    // Seed BEFORE maxme (maxme swallows the next typed cheat), then relog so the
-    // quest journal colour recomputes and Quests.status() sees 'complete'. Pick
-    // goes into the PACK (::~item) — the spec's "pickaxe equipped or in
-    // inventory" base case, which is also what makes start-anywhere reliable:
-    // TeleportIn web-walks to Aubury (reachable from afar), never the
-    // weakly-baked bank tile. (Auto-withdraw-from-bank is exercised separately;
-    // reaching the Varrock East bank from across the map is a known nav-graph
-    // gap — see the 2026-07-13 essminer notes.)
     await type('::~item rune_pickaxe 1');
     await type('::setvar runemysteries 6');
     if (!(await relog())) { fail('relogin failed (post-setvar)'); }
     await type('::~maxme');
     await clearDialogs();
 
-    // Start ANYWHERE: no teleport to the bank — the bot is at its post-maxme
-    // spawn (Lumbridge). It web-walks to Aubury, teleports in, and cycles.
     const start = await tile();
     console.log(`starting EssMiner from ${JSON.stringify(start)} (start-anywhere) — watching for a double cycle (~10 min cap)...`);
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('EssMiner')); });
@@ -87,12 +66,9 @@ try {
     const essOf = (items: Inv[]) => items.filter(i => /^rune essence$/i.test(i.name ?? '')).length;
     const hasPick = (items: Inv[]) => items.some(i => /rune pickaxe/i.test(i.name ?? ''));
 
-    // Core loop: enter the mine, fill the pack, portal back, bank, and enter the
-    // mine a SECOND time (proving the recurring teleport→mine→portal→bank cycle),
-    // keeping the pickaxe throughout.
     let sawMine = false, sawFull = false, sawBank = false, pickKept = false, mineEntries = 0, wasInMine = false;
     let lastNote = 0;
-    for (let i = 0; i < 330; i++) { // ~660s
+    for (let i = 0; i < 330; i++) {
         await page.waitForTimeout(2000);
         const lines = await logLines();
         if (lines.some(l => /^mining rune essence/i.test(l))) { sawMine = true; }

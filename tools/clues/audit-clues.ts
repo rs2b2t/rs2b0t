@@ -1,43 +1,3 @@
-/**
- * Offline audit of EVERY clue variant in CLUE_DB against the real collision
- * pack + engine map data — catches each abandonment class the solver has hit
- * live, without a game session:
- *
- *   search — a searchable loc (Search/Open op, pickSearchLoc semantics) exists
- *            within 1 tile of the clue coord at its level, AND the pathfinder
- *            terminal from BOTH solver banks is interact-legal (exact tile, or
- *            cardinally adjacent with no wall between — the Varrock diagonal-
- *            door house and Seers drawers bugs).
- *   dig    — the coord is standable-or-adjacent: terminal within Chebyshev 1
- *            on the right level (spade dig checks distance<=1).
- *   talk   — a TALK_ANCHORS entry exists, the anchor is pathable (terminal
- *            within 2), and an NPC spawn with the clue's display name sits
- *            within NPC_LEASH of the anchor at its level (content maps'
- *            `==== NPC ====` sections).
- *
- * Reachability is probed at AUDIT_BUDGET (matching live walkResilient's big-
- * budget escalation, below the 1.2M live cap) so a distant-but-reachable clue
- * isn't failed by a low probe. The KNOWN_UNREACHABLE allowlist covers clues the
- * solver abandons gracefully live (rope/quest-bridge islands): a NAV-UNREACHABLE
- * finding for such a clue is reported as expected-abandon and not counted as a
- * failure — but ANY other finding for it (missing sextant flag, wrong
- * coord/level, malformed keyFrom) still fails normally, and an allowlisted id
- * that stops being unreachable is itself surfaced as a failure, so the allowlist
- * can neither mask a data bug nor silently go stale. Medium rows also assert
- * their new fields (kill-for-key npc/keyId, sextant needsSextant flag). Each
- * kill-for-key riddle must additionally carry a KILL_ANCHORS hunt spawn that is
- * present, a well-formed Tile, and nav-reachable at AUDIT_BUDGET (the killer is
- * NOT at the container — the executor walks to the anchor to fight it, so a
- * missing anchor is the pre-fix broken hunt and a real finding; a genuinely
- * UNREACHABLE killer routes to expected-abandon like an island clue). A
- * KILL_ANCHORS key that is not a kill-for-key clue id is a stale entry and fails.
- *
- * Usage: bun tools/clues/audit-clues.ts [--engine <dir>] [--content <dir>]
- *                                       [--pack <file>]
- * Exit 1 when any clue fails. The pack-gated bun test
- * (test/clues/clue-audit.test.ts) runs the same audit and pins it to zero
- * failures, so a nav-data or cluedb regression surfaces before a live abandon.
- */
 import fs from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -54,44 +14,15 @@ import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from '../nav/lib.js';
 
-// mirror the executor's constants (ClueExecutor.ts)
 const SEARCH_OPS = ['search', 'open'];
 const NPC_LEASH = 10;
-// both banks a solver realistically starts a leg from (RockCrab banks Seers,
-// ClueSolver nearest-bank; Varrock East covers the eastern half)
 const STARTS: NavPoint[] = [
-    { x: 3253, z: 3420, level: 0 }, // Varrock East bank
-    { x: 2725, z: 3491, level: 0 } // Seers bank
+    { x: 3253, z: 3420, level: 0 },
+    { x: 2725, z: 3491, level: 0 }
 ];
 
-// Reachability probe budget. Live `walkResilient` (Traversal.ts) escalates its
-// baked findPath to a big budget on a 'budget' failure — Traversal's
-// DEFAULT_MAX_BUDGET is 1.2M (used for both the bigBudget baked retry and the
-// probeDest verify). The audit does a SINGLE findPath, so at the 300k default
-// it would fail a distant-but-reachable clue the live solver reaches after
-// escalating. 600k is the measured ceiling of what live actually needs (worst
-// real clue Fycie = 449546 expansions; King Bolren 369632, Hazelmere 300518)
-// and stays well under the 1.2M live cap, so the audit never claims reachable
-// beyond what the runtime would.
 const AUDIT_BUDGET = 600_000;
 
-// Clues the audit EXPECTS to be unreachable over the STATIC baked nav graph.
-// The solver abandons these gracefully live, so the audit reports a nav-
-// unreachable finding for them as expected-abandon rather than a failure. Do NOT
-// add ids here to paper over a real nav gap — an id belongs here only when the
-// crossing is fundamentally not a static edge. The audit enforces this: an id
-// listed here that is NOT actually nav-unreachable (it became reachable, or its
-// only problem is a data bug) is surfaced as a real failure (see runClueAudit).
-//   2811 trail_clue_medium_sextant006 — Baxtorian Falls / Waterfall-Quest
-//        island (2512,3467): reached by a held rope swing + a quest-spawned
-//        dynamic bridge, neither of which is a static baked edge.
-//   2815 trail_clue_medium_sextant008 — Crandor (2848,3296): gated behind
-//        Dragon Slayer and an unmodeled sea crossing; no static edge reaches
-//        the island.
-// Both are DIG-TILE unreachability, NOT the sextant-tool requirement — the
-// 2026-07-20 tool-acquisition feature (AcquireTools) obtains the trio, so these
-// no longer abandon for lack of tools; they abandon only because the dig tile
-// itself is off the static graph. Acquisition does not (and cannot) rescue them.
 const KNOWN_UNREACHABLE = new Set<number>([2811, 2815]);
 
 export interface ClueAuditFinding {
@@ -102,15 +33,9 @@ export interface ClueAuditFinding {
 }
 
 export interface ClueAuditResult {
-    /** total clue variants audited (all of CLUE_DB) */
     total: number;
-    /** real failures — anything a live solver would trip on. Empty == green. */
     findings: ClueAuditFinding[];
-    /** allowlisted ids that produced their EXPECTED nav-unreachable finding this
-     *  run (routed to expected-abandon), sorted. A KNOWN_UNREACHABLE id missing
-     *  here became reachable / audited clean and is surfaced as a finding. */
     expectedAbandon: number[];
-    /** clues that passed every check outright (total − allowlisted − failed). */
     clean: number;
 }
 
@@ -143,7 +68,6 @@ function defaults(opts: ClueAuditOptions): Required<ClueAuditOptions> {
     };
 }
 
-/** All the audit's inputs exist on this machine (the bun test's skip gate). */
 export function auditInputsPresent(opts: ClueAuditOptions = {}): boolean {
     const o = defaults(opts);
     return fs.existsSync(o.pack) && fs.existsSync(o.engine) && fs.existsSync(join(o.content, 'maps'));
@@ -159,7 +83,6 @@ function loadPack(pack: string): PathFinder {
     return finder;
 }
 
-/** Every loc instance with at least one op, keyed by world tile. */
 function loadOpLocs(engine: string): Map<string, LocAt[]> {
     const { configs } = loadLocTypes(engine);
     const locs = new Map<string, LocAt[]>();
@@ -190,8 +113,6 @@ function loadOpLocs(engine: string): Map<string, LocAt[]> {
     return locs;
 }
 
-/** NPC spawns with display names, from the content maps' `==== NPC ====`
- *  sections (`level lx lz: npcId`) + pack/npc.pack ids + .npc config names. */
 function loadNpcSpawns(content: string): NpcSpawn[] {
     const idToDebug = new Map<number, string>();
     for (const raw of fs.readFileSync(join(content, 'pack', 'npc.pack'), 'utf8').split('\n')) {
@@ -203,7 +124,6 @@ function loadNpcSpawns(content: string): NpcSpawn[] {
 
     const debugToDisplay = new Map<string, string>();
     const files = (fs.readdirSync(join(content, 'scripts'), { recursive: true }) as string[]).filter(f => f.endsWith('.npc')).sort();
-    // canonical configs win over the _unpack decompiled dumps (gen-cluedb.ts)
     for (const f of [...files.filter(f => f.includes('_unpack')), ...files.filter(f => !f.includes('_unpack'))]) {
         let cur: string | null = null;
         for (const raw of fs.readFileSync(join(content, 'scripts', f), 'utf8').split('\n')) {
@@ -252,13 +172,8 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
     const opLocs = loadOpLocs(o.engine);
     const spawns = loadNpcSpawns(o.content);
     const findings: ClueAuditFinding[] = [];
-    // Allowlisted ids that produced their expected nav-unreachable finding (see
-    // the fail() closure). Used to (a) count real allowlisted clues for the
-    // summary and (b) catch a stale entry that no longer earns its place.
     const expectedAbandon = new Set<number>();
 
-    /** pickSearchLoc semantics: nearest op-loc within 1 tile of coord offering
-     *  a search-style op. */
     const searchableAt = (coord: NavPoint): LocAt | null => {
         let best: { at: LocAt; dist: number } | null = null;
         for (let dx = -1; dx <= 1; dx++) {
@@ -277,14 +192,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
         return best?.at ?? null;
     };
 
-    /** A terminal the executor can actually act from: exact tile, or cardinal-
-     *  adjacent with no wall on the terminal's edge facing the coord. `slack`
-     *  loosens to plain Chebyshev for dig (held op, no interact reach).
-     *  `unreachable` distinguishes a genuine NAV-UNREACHABILITY (the pathfinder
-     *  found no path at all — reason `unreachable`/budget/off-graph, either the
-     *  forward leg or the egress) from a reachable-but-wrong terminal (wrong
-     *  level, off-coord, egress that stops short). Only the former is an
-     *  expected graceful-abandon for an allowlisted island clue. */
     const navProblem = (coord: NavPoint, slack: 'interact' | 'cheb1' | 'cheb2'): { msg: string; unreachable: boolean } | null => {
         for (const start of STARTS) {
             const r = finder.findPath(start, coord, undefined, AUDIT_BUDGET);
@@ -302,9 +209,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             if (!near && !exact) {
                 return { msg: `terminal (${last.x},${last.z}) not ${slack === 'interact' ? 'interact-legal' : `within ${slack}`} of coord (cheb ${d})`, unreachable: false };
             }
-            // egress: the solver walks OUT afterwards (next leg / bank) from
-            // where it stood — a one-way crossing (missing reverse edge) would
-            // strand it there
             const back = finder.findPath(last, start, undefined, AUDIT_BUDGET);
             if (!back.ok) {
                 return { msg: `no return path from terminal (${last.x},${last.z},${last.level}): ${back.reason}`, unreachable: true };
@@ -319,12 +223,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
 
     for (const [idStr, clue] of Object.entries(CLUE_DB)) {
         const id = Number(idStr);
-        // Allowlisted clues (KNOWN_UNREACHABLE) still run every check. Only a
-        // genuine nav-UNREACHABILITY finding (pathfinder found no path) is routed
-        // to expected-abandon — the live solver abandons THAT gracefully. Any
-        // OTHER problem for an allowlisted id (missing sextant flag, wrong
-        // coord/level, malformed keyFrom) is a real cluedb regression and fails
-        // normally, so an allowlist entry can never mask a data bug.
         const expected = KNOWN_UNREACHABLE.has(id);
         const fail = (problem: string, unreachable = false): void => {
             if (expected && unreachable) {
@@ -346,7 +244,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
                 if (!loc) {
                     fail(`no searchable loc within 1 of (${clue.coord.x},${clue.coord.z},${clue.coord.level})`);
                 } else if (loc.x !== clue.coord.x || loc.z !== clue.coord.z) {
-                    // the trail script matches loc_coord == trail_coord exactly
                     fail(`searchable '${loc.name}' is at (${loc.x},${loc.z}), off the clue coord`);
                 }
             }
@@ -370,20 +267,7 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
                 fail(`no '${clue.npc}' spawn within ${NPC_LEASH} of anchor (${anchor.x},${anchor.z},${anchor.level})`);
             }
         }
-        // open-casket entries have no world state to audit
 
-        // medium: kill-for-key rows must carry a resolved npc + numeric key id
-        // (Task 2 gen-cluedb should have populated both from the riddle content)
-        // AND a reachable KILL_ANCHORS hunt spawn. The key drops wherever the NPC
-        // dies, so the killer is NOT at the container — the executor walks to
-        // KILL_ANCHORS[id] to hunt it (huntTile, radius 5) then finds the roamer
-        // in-scene, exactly like a talk anchor. A MISSING anchor falls the
-        // executor back to the container coord (the pre-617e5a0 behaviour that
-        // hunts the wrong place and abandons the riddle), so it's a real finding.
-        // A present anchor must be a well-formed Tile and nav-reachable from the
-        // solver's banks at the same budget/edges as every other anchor; a
-        // genuinely UNREACHABLE killer is an unsolvable riddle → routed to
-        // expected-abandon via the same reason-gate as an island clue.
         if (clue.keyFrom) {
             if (!clue.keyFrom.npc || !Number.isFinite(clue.keyFrom.keyId)) {
                 fail(`keyFrom unresolved (${JSON.stringify(clue.keyFrom)})`);
@@ -400,18 +284,11 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
                 }
             }
         }
-        // medium: sextant/coordinate digs must be flagged so the solver knows to
-        // carry sextant+watch+chart before digging.
         if (clue.type === 'dig' && /_sextant\d+$/.test(clue.obj) && clue.needsSextant !== true) {
             fail('sextant clue missing needsSextant flag');
         }
     }
 
-    // Stale-allowlist guard: every KNOWN_UNREACHABLE id must have earned its
-    // place THIS run by producing a nav-unreachable finding. One that didn't
-    // became reachable (a new edge/data made it solvable) or audited clean —
-    // surface it as a real failure so the allowlist can't silently rot, and so
-    // padding it to silence a genuine failure is caught.
     for (const id of KNOWN_UNREACHABLE) {
         if (expectedAbandon.has(id)) {
             continue;
@@ -425,11 +302,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
         });
     }
 
-    // Stale kill-anchor guard (mirrors the KNOWN_UNREACHABLE guard above): every
-    // KILL_ANCHORS key must belong to a kill-for-key (keyFrom) clue. A key that
-    // doesn't — a renumbered/typo'd id, or an anchor left behind after a riddle
-    // changed shape — points the executor's hunt at the wrong (or a non-)clue, so
-    // surface it as a real finding rather than let it rot silently.
     for (const idStr of Object.keys(KILL_ANCHORS)) {
         const id = Number(idStr);
         const clue = CLUE_DB[id];
@@ -444,8 +316,6 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
     }
 
     const total = Object.keys(CLUE_DB).length;
-    // clean = clues touched by neither an expected-abandon nor a real finding
-    // (union guards the overlap when an allowlisted id ALSO trips a data check).
     const touched = new Set<number>([...expectedAbandon, ...findings.map(f => f.id)]);
     return {
         total,

@@ -5,31 +5,22 @@ export interface WalkDestination {
     tile: Tile;
 }
 
-/**
- * Named destinations for the WalkTo bot (level 0). Town centres use the
- * spellbook teleport landing tile (canonical, from magic_spells.dbrow); the
- * rest use the town's bank (user choice). Rellekka/Taverley have no teleport,
- * so their centres are hand-picked central tiles — the walker's arrive radius
- * covers minor offset.
- */
 export const WALK_DESTINATIONS: WalkDestination[] = [
-    { name: 'Lumbridge', tile: new Tile(3221, 3218, 0) }, // centre (home teleport)
-    { name: 'Varrock', tile: new Tile(3213, 3424, 0) }, // centre (teleport)
-    { name: 'Falador', tile: new Tile(2965, 3378, 0) }, // centre (teleport)
-    { name: 'Ardougne', tile: new Tile(2661, 3301, 0) }, // centre (teleport)
-    { name: 'Rellekka', tile: new Tile(2668, 3660, 0) }, // centre
-    { name: 'Taverley', tile: new Tile(2895, 3435, 0) }, // centre
-    { name: 'Draynor', tile: new Tile(3093, 3243, 0) }, // bank
-    { name: 'Al Kharid', tile: new Tile(3269, 3167, 0) }, // bank
-    { name: 'Edgeville', tile: new Tile(3094, 3493, 0) }, // bank
-    { name: "Seers' Village", tile: new Tile(2725, 3491, 0) }, // bank
-    { name: 'Yanille', tile: new Tile(2612, 3092, 0) } // bank
+    { name: 'Lumbridge', tile: new Tile(3221, 3218, 0) },
+    { name: 'Varrock', tile: new Tile(3213, 3424, 0) },
+    { name: 'Falador', tile: new Tile(2965, 3378, 0) },
+    { name: 'Ardougne', tile: new Tile(2661, 3301, 0) },
+    { name: 'Rellekka', tile: new Tile(2668, 3660, 0) },
+    { name: 'Taverley', tile: new Tile(2895, 3435, 0) },
+    { name: 'Draynor', tile: new Tile(3093, 3243, 0) },
+    { name: 'Al Kharid', tile: new Tile(3269, 3167, 0) },
+    { name: 'Edgeville', tile: new Tile(3094, 3493, 0) },
+    { name: "Seers' Village", tile: new Tile(2725, 3491, 0) },
+    { name: 'Yanille', tile: new Tile(2612, 3092, 0) }
 ];
 
-/** Destination names, in list order — the WalkTo dropdown options. */
 export const WALK_OPTIONS = WALK_DESTINATIONS.map(d => d.name);
 
-/** Resolve a destination name (case-insensitive) to its tile, or null. */
 export function resolveDestination(name: string): WalkDestination | null {
     const key = name.trim().toLowerCase();
     return WALK_DESTINATIONS.find(d => d.name.toLowerCase() === key) ?? null;

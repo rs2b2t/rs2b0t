@@ -29,44 +29,14 @@ import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// East Ardougne market layout — baked in, not settings. Per-target anchors
-// come from the packed spawn data (see ArdyThieverLogic + the 2026-07-12
-// design spec); the Baker's-stall layout lives in CakeStallLogic and the
-// stealing itself in the shared CakeStall driver (2026-07-20 design). Start
-// the bot anywhere: ReturnToAnchor travels to the target's spot.
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const PICKPOCKET_OP = 'Pickpocket';
-// On any real combat (a guard caught us stealing from the stall), flee mode
-// runs to this fixed tile SW of the market — far enough to drag the guard off
-// the stall and break its melee, so the stall clears for the next restock.
 const FLEE_TILE = new Tile(2655, 3298, 0);
-// A failed pickpocket damages you (health bar shows -> Game.inCombat() true) AND
-// stuns you — the target does NOT enter combat (engine: fail_pick_pocket ends on
-// npc_setmode(null)). So a caught pickpocket looks like "combat" for as long as
-// the health bar lingers: combatCycle = loopCycle + 400, shown while within 300
-// client cycles ≈ 6s ≈ 10 server ticks at 50fps. Suppress Flee for a slightly
-// longer window (headroom for frame-rate dips) after each stun so a normal miss
-// isn't mistaken for a real attacker. Genuine combat never emits a stun message,
-// so it still flees once the window lapses.
-// A failed pickpocket freezes us for the target's stun_ticks (content
-// pickpocket.dbrow — 8 ticks / ~4.8s for every Ardougne market target). We
-// suppress Flee/FightBack for exactly that window (so a normal miss isn't
-// read as a real attacker) and use it to re-attempt the INSTANT the stun
-// clears. It was 17 (~10s) — more than double the real stun — which both
-// delayed the next steal and blinded us to a genuine attacker for ~5s too long.
-const STUN_COMBAT_TICKS = 8; // matches the engine freeze; the "been stunned" chat lands ~1 tick in, so stunned() clears ~1 tick AFTER the real freeze — late enough not to re-fire mid-freeze, tight enough not to idle
-// How close an in-combat market hostile must be to count as "the one attacking
-// us" — melee attackers stand adjacent; 5 gives slack for a pathing hostile.
+const STUN_COMBAT_TICKS = 8;
 const ENGAGE_RADIUS = 5;
 const OBSTACLE = ['door', 'gate'];
-// What the Baker's stall gives — the shared driver's list, also what
-// PanicRetreat withdraws if the bank holds any.
 const FOOD = CAKE_ITEMS;
-// Pickpocket loot across all four targets (content pickpocket.dbrow: coins for
-// all; Paladin +chaos runes; Hero +death/blood runes, wine, fire orb, gold ore)
-// plus guard drops for fight mode (clue, body talisman, steel arrows, runes,
-// iron ore). Gems bank via the shared common-junk list.
 const LOOT = ['coins', 'chaos rune', 'death rune', 'blood rune', 'nature rune', 'jug of wine', 'fire orb', 'gold ore', 'clue scroll', 'body talisman', 'steel arrow', 'iron ore'];
 const TARGET_OPTIONS = ARDOUGNE_PICKPOCKET_TARGETS;
 
@@ -84,7 +54,6 @@ export const SETTINGS: SettingsSchema = {
     ...PERIODIC_BANK_SETTINGS
 };
 
-// Active run config (ADR-0006 single-script module state).
 let TARGET = 'Guard';
 let RESPONSE = 'Flee';
 let ANCHOR = targetSpot(TARGET).anchor;
@@ -106,24 +75,11 @@ function lootSlots(): number {
     return slotsMatching(Inventory.items(), LOOT);
 }
 
-/** Inside ReturnToAnchor's boundary (LEASH+6 of the anchor) — the market-local
- *  tasks (restock/bank/panic) only run here, so beyond it ReturnToAnchor owns
- *  the travel with the resilient walker. Without this gate a zero-food restock
- *  fired from ANYWHERE and preempted ReturnToAnchor forever with a plain 60s
- *  walk it could never finish (cost-621 route looping 'walk timed out' live). */
 function nearMarket(): boolean {
     const here = Game.tile();
     return here !== null && ANCHOR.distanceTo(here) <= LEASH + 6;
 }
 
-/**
- * East Ardougne market pickpocket bot. Start it anywhere — it walks to the
- * chosen target's market spot (baked-in layout; nothing to place). Fills up on
- * cake from the Baker's stall, pickpockets the target (Guard/Knight/Paladin/
- * Hero), eats below a threshold, refills cake when low, banks loot + the
- * shared junk list, grabs ground coins. A guard that catches the stall theft
- * is fled (kited off the stall) or fought, per the guardResponse setting.
- */
 export default class ArdyThiever extends TaskBot {
     override loopDelay = 600;
 
@@ -173,8 +129,6 @@ export default class ArdyThiever extends TaskBot {
             spadeName: () => 'Spade',
             enabled: () => SOLVE_CLUES
         });
-        // Eat mid-walk (clue trails leave the market): the EatFood task can't
-        // run while a walk or solve holds the task loop — RockCrab's proven shape.
         Sustain.set(async () => {
             if (Skills.hpFraction() < EAT_AT && foodCount() > 0) {
                 const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
@@ -190,9 +144,6 @@ export default class ArdyThiever extends TaskBot {
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('thieving');
 
-        // Gate on the target's pickpocket requirement (subsumes the stall's
-        // Thieving 5 — every market target needs 40+): stop with a clear
-        // message instead of spamming failed pickpockets.
         const need = requiredThieving(TARGET);
         if (Skills.level('thieving') < need) {
             this.log(`ArdyThiever needs Thieving ${need} to pickpocket ${TARGET} (have ${Skills.level('thieving')}) — stopping.`);
@@ -205,8 +156,6 @@ export default class ArdyThiever extends TaskBot {
             if (/oh dear.*you are dead/i.test(e.text)) {
                 this.died = true;
             }
-            // a caught pickpocket stuns us and shows the health bar (looks like
-            // combat) — mark the stun so Flee ignores the self-inflicted hit.
             if (/been stunned|fail to pick/i.test(e.text)) {
                 this.stunnedUntilTick = Game.tick() + STUN_COMBAT_TICKS;
             }
@@ -225,7 +174,7 @@ export default class ArdyThiever extends TaskBot {
             new EatFood(this),
             new PanicRetreat(this),
             ...(RESPONSE === 'Fight' ? [new FightBack(this)] : []),
-            this.solveClue!, // a looted clue preempts banking/pickpocketing (RockCrab shape)
+            this.solveClue!,
             new PeriodicBank({
                 strategy: () => parseBankStrategy(this.settings.str('bankStrategy', 'Off')),
                 itemsThreshold: () => this.settings.num('bankEveryItems', 15),
@@ -287,8 +236,6 @@ export default class ArdyThiever extends TaskBot {
         p.end();
     }
 
-    /** Live target switch from the paint — level-gated; the anchor/leash move
-     *  with the target and ReturnToAnchor walks us to the new market spot. */
     private switchTarget(target: string): void {
         const need = requiredThieving(target);
         if (Skills.level('thieving') < need) {
@@ -304,15 +251,8 @@ export default class ArdyThiever extends TaskBot {
     }
 
     setStatus(s: string): void { this.status = s; }
-    /** True while a recent thieving stun still explains Game.inCombat() (a caught
-     *  pickpocket, not a real attacker). Public so Pickpocket can wait EXACTLY
-     *  until the stun clears before re-attempting. */
     stunned(): boolean { return this.inThievingStun(); }
     private inThievingStun(): boolean { return Game.tick() <= this.stunnedUntilTick; }
-    /** In combat with an actual attacker — the self-inflicted pickpocket-fail
-     *  stun (which also shows the health bar) does NOT count. Every task that
-     *  pauses "while in combat" gates on this so a normal miss neither flees nor
-     *  freezes the loop. */
     inRealCombat(): boolean { return Game.inCombat() && !this.inThievingStun(); }
     countSteal(): void { this.steals++; }
     countEat(): void { this.eats++; }
@@ -327,14 +267,6 @@ export default class ArdyThiever extends TaskBot {
     countKill(): void { this.kills++; }
 }
 
-/** A low-level thief never trades hits: on a REAL attack (a guard that caught us
- *  stealing from the stall), run to the fixed kite tile — far enough to drag the
- *  guard off the stall and break its melee — then wait out combat. Uses the same
- *  door-opening market walk as the bot's other navigation so it doesn't snag on a
- *  market gate en route. Highest non-recovery priority. A caught pickpocket also
- *  shows the health bar, but that self-inflicted stun is not combat —
- *  inThievingStun() keeps us from fleeing a normal miss (we're stunned in place
- *  anyway). */
 class Flee implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean { return this.bot.inRealCombat(); }
@@ -347,13 +279,6 @@ class Flee implements Task {
     }
 }
 
-/** Fight mode: kill the guard that caught us instead of kiting it. Triggers on
- *  the same inRealCombat() signal as Flee (the pickpocket-stun suppression is
- *  load-bearing — a failed pickpocket must NOT start a fight). Registered
- *  BELOW EatFood/PanicRetreat so the eat ladder outranks the fight, and above
- *  the bank/restock/pickpocket tasks so nothing else runs mid-combat. Attacks
- *  explicitly (robust even with auto-retaliate off); a second attacker (the
- *  Baker can alert several) is picked up by revalidation after the first kill. */
 class FightBack implements Task {
     constructor(private bot: ArdyThiever) {}
     private findAttacker(): Npc | null {
@@ -368,8 +293,6 @@ class FightBack implements Task {
     async execute(): Promise<void> {
         const attacker = this.findAttacker();
         if (!attacker) {
-            // combat flag with no visible aggressor (it died, or the health bar
-            // is lingering) — idle a moment; tasks resume once combat clears
             await Execution.delayTicks(2);
             return;
         }
@@ -380,9 +303,8 @@ class FightBack implements Task {
         while (performance.now() < deadline) {
             if (EventSignal.pending() || ChatDialog.canContinue() || this.bot.died) { return; }
             if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount()) || shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount())) {
-                return; // EatFood / PanicRetreat outrank us next loop
+                return;
             }
-            // No displaced-mid-fight leash bail (unlike ArdyFighter's Fight): as the responder the attacker is already adjacent, and any runtime-event displacement is caught by EventSignal.pending() above.
             const target = this.track(attacker);
             if (!target) {
                 this.bot.countKill();
@@ -396,15 +318,13 @@ class FightBack implements Task {
                 return;
             }
             if (!Game.inCombat() && !target.inCombat) {
-                return; // both disengaged — over; revalidation handles re-aggro
+                return;
             }
             await Execution.delayTicks(2);
         }
     }
 }
 
-/** Grab wanted ground drops (coins by default) within the leash — reachable
- *  piles only. Confirmed by quantity (coins stack into one slot). */
 class LootDrops implements Task {
     constructor(private bot: ArdyThiever) {}
     private find() {
@@ -427,7 +347,6 @@ class LootDrops implements Task {
     }
 }
 
-/** Eat below the gate up to the eat-to target (standard mechanic). */
 class EatFood implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean { return shouldEat(Skills.hpFraction(), EAT_AT, foodCount()); }
@@ -446,7 +365,6 @@ class EatFood implements Task {
     }
 }
 
-/** Out of food + very low HP: retreat to the bank, withdraw food or wait out regen. */
 class PanicRetreat implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean { return nearMarket() && shouldPanic(Skills.hpFraction(), PANIC_AT, foodCount()); }
@@ -471,7 +389,6 @@ class PanicRetreat implements Task {
     }
 }
 
-/** Bank loot (+ shared junk) once it fills enough slots. */
 class BankRun implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean { return nearMarket() && shouldBank(lootSlots(), BANK_AT, Inventory.isFull()); }
@@ -482,9 +399,6 @@ class BankRun implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        // Loot delta around the deposit — a "banked N->N (nothing deposited)" line
-        // in the live log is the signature of the "bank instantly opens and shuts"
-        // report (bank opened, deposit no-op'd, walk-away closed it, re-triggered).
         const before = lootSlots();
         await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON), m => this.bot.log(`  ${m}`));
         await Execution.delayTicks(1);
@@ -496,12 +410,6 @@ class BankRun implements Task {
     }
 }
 
-/** Fill cake to FOOD_TARGET once food drops to/below RESTOCK_AT (low-water
- *  trigger, high-water fill — so it doesn't shuttle to the stall on every
- *  dip). The shared CakeStall driver does the stealing: golden stand,
- *  outcome classification, refusal-streak stand swap — no Baker
- *  line-of-sight prediction (2026-07-20 design). A guard catch returns
- *  'combat' and the Flee/FightBack task owns it next loop. */
 class RestockCakes implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean {
@@ -521,16 +429,11 @@ class RestockCakes implements Task {
     }
 }
 
-/** Pickpocket the target while we have food. Success = thieving XP/slot gain;
- *  failure = stun waited out. Combat (a retaliating guard) is handled by Flee. */
 class Pickpocket implements Task {
-    /** consecutive executes where no in-leash target was reachable — bounds the
-     *  path-clear so an un-openable fenced-off wanderer can't wedge us. */
     private unreachableStreak = 0;
 
     constructor(private bot: ArdyThiever) {}
 
-    /** In-leash targets offering the pickpocket op, nearest first. */
     private candidates(): Npc[] {
         return Npcs.query()
             .name(TARGET)
@@ -545,17 +448,9 @@ class Pickpocket implements Task {
     }
 
     async execute(): Promise<void> {
-        // Reachability-aware: pick the nearest target we can actually stand next
-        // to. Fixating on the nearest regardless (the old find().nearest()) is
-        // what wedged the bot when the closest knight wandered to a fenced market
-        // edge — it looped on walkOpening while reachable knights stood ignored.
         const { target, blocked } = chooseTarget(this.candidates(), n => Reachability.canReach(n.tile(), { adjacentOk: true }));
 
         if (!target) {
-            // Nothing reachable. Try ONE bounded path-clear toward the nearest
-            // (covers a genuinely walled-off target / us boxed in a shop), then
-            // stop and let it wander back — a fence has no door to open, and
-            // grinding walkOpening on it for minutes is the reported "stuck".
             if (blocked && this.unreachableStreak++ < 2) {
                 this.bot.setStatus(`clearing path to ${TARGET}`);
                 await walkOpening(blocked.tile(), 1, OBSTACLE, m => this.bot.log(m));
@@ -571,8 +466,6 @@ class Pickpocket implements Task {
         const xpBefore = Skills.xp('thieving');
         const usedBefore = Inventory.used();
         if (!(await target.interact(PICKPOCKET_OP))) { await Execution.delayTicks(2); return; }
-        // Resolve the attempt: a SUCCESS lands thieving xp/loot within a tick or
-        // two; a FAILURE stuns us (chat sets stunned()). Poll briefly for either.
         await Execution.delayUntil(
             () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || this.bot.stunned() || Skills.hpFraction() < EAT_AT,
             2500
@@ -582,20 +475,12 @@ class Pickpocket implements Task {
             this.bot.log(`pickpocketed ${TARGET}`);
             return;
         }
-        // Stunned: wait EXACTLY until it clears (or HP forces an eat), then return
-        // so the next loop re-attempts immediately — no blind idle after the stun.
-        // Re-firing opnpc mid-stun is dropped by the engine, so don't; just wait
-        // out the real 8-tick freeze precisely instead of a fixed 3s guess.
         if (this.bot.stunned()) {
             await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < EAT_AT, 8000);
         }
     }
 }
 
-/** Travel task: covers both start-anywhere (launched across the map) and
- *  displacement recovery. Long hauls web-walk first (ArdyFighter's proven
- *  shape); the final market approach always runs walkOpening so a shut market
- *  door/gate can't wedge the arrival. */
 class ReturnToAnchor implements Task {
     constructor(private bot: ArdyThiever) {}
     validate(): boolean {

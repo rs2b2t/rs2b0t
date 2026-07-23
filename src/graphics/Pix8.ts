@@ -5,13 +5,13 @@ import Packet from '#/io/Packet.js';
 
 export default class Pix8 extends Pix2D {
     data: Int8Array;
-    readonly bpal: Int32Array; // base palette
-    wi: number; // width
-    hi: number; // height
-    xof: number; // x offset
-    yof: number; // y offset
-    owi: number; // original width
-    ohi: number; // original height
+    readonly bpal: Int32Array;
+    wi: number;
+    hi: number;
+    xof: number;
+    yof: number;
+    owi: number;
+    ohi: number;
 
     constructor(width: number, height: number, palette: Int32Array) {
         super();
@@ -279,8 +279,6 @@ export default class Pix8 extends Pix2D {
             srcOff += srcStep;
         }
     }
-
-    // mapview applet:
 
     scalePlotSprite(arg0: number, arg1: number, arg2: number, arg3: number): void {
         try {

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { buyoutPlan } from '#/bot/shops/BuyoutLogic.js';
 import type { ShopRecord } from '#/bot/shops/types.js';
 
-// Shaped like magearena_runeshop: high delta, mixed-value runes.
 const REC: ShopRecord = {
     inv: 'magearena_runeshop', title: '', keepers: ['Lundail'], sell: 1000, buy: 550, delta: 30, scope: 'shared', allstock: false,
     items: [
@@ -23,13 +22,12 @@ describe('buyoutPlan', () => {
     });
 
     test('coin budget bounds the plan; cheap tail starves before the valuable head', () => {
-        // laws at stock 10 (240 below baseline) price at the 6x cap: 240gp each
         const plan = buyoutPlan(REC, { lawrune: 10, mindrune: 10 }, 1000, ALL);
         const law = plan.find(p => p.obj === 'lawrune')!;
         const mind = plan.find(p => p.obj === 'mindrune')!;
-        expect(law.units).toBe(4); // 4 × 240 = 960; a 5th (240) would pass 1000
+        expect(law.units).toBe(4);
         expect(law.estCost).toBe(960);
-        expect(mind.units).toBe(2); // 40gp left, minds at 6x cap = 18gp each
+        expect(mind.units).toBe(2);
     });
 
     test('honors the chosen filter and skips empty stock', () => {

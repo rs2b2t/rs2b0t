@@ -15,26 +15,8 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-// Spinning is a weakqueue (spinning.rs2): it drains the pack ~1 fibre / 2 ticks,
-// replaying the anim each item — so Game.animating() FLICKERS false between items
-// and any click/move CANCELS the batch. Gauge "still spinning" by the pack
-// actually draining; only re-spin once it's been this many ticks with no fibre
-// consumed and flax still left (i.e. it genuinely stopped).
 const RESPIN_AFTER_TICKS = 6;
 
-// Seers Village — verified live (dumped reader.locs()): the flax spinning wheel is
-// UPSTAIRS. Bank (2722,3493,0) → house door (2716,3472,0) → Ladder (2715,3470)
-// Climb-up → Spinning wheel (2711,3471,1) "Spin" → same Ladder Climb-down → bank.
-//
-// The ground-floor walk target is (2714,3471) — a walkable tile INSIDE the house
-// beside the ladder, never the ladder's own loc-blocked tile. An unwalkable dest
-// lets the pathfinder accept any walkable tile within 5 as the goal, and the
-// cheapest one from the bank is on the STREET outside the sealed house: the walk
-// "arrives" without ever planning the door crossing, and the stall-recovery door
-// hunt then opened the NEIGHBOUR house's door (2713,3483) once ours stood open.
-// An exactly-walkable interior dest forces the planned path through the door
-// edge at (2716,3472), which walkTo opens like any other crossing. Its whole
-// radius-1 arrival ball is also inside, so we can't "arrive" across a wall.
 const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
 const DEFAULT_LADDER_TILE = new Tile(2714, 3471, 0);
 const DEFAULT_WHEEL_TILE = new Tile(2711, 3471, 1);
@@ -55,9 +37,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Wheel/ladder search radius (tiles)' }
 };
 
-/** Interact the nearest `name` loc offering `op` (a Climb-up/Climb-down — an OPLOC,
- *  so the server walks us to the ladder and climbs) and wait for our floor to
- *  change. Returns true once `Game.tile().level` differs from before. */
 async function climbLadder(name: string, op: string, log: (m: string) => void): Promise<boolean> {
     const ladder = Locs.query().name(name).action(op).nearest();
     if (!ladder) {
@@ -72,13 +51,6 @@ async function climbLadder(name: string, op: string, log: (m: string) => void): 
     }, 8000);
 }
 
-/**
- * Seers Village flax spinner. Withdraw a full pack of flax at the Seers bank, run
- * to the spinning-wheel house (opening the door), climb the ladder up, Spin-X the
- * whole pack into bow string, climb back down, return to the bank, deposit
- * everything, repeat. Runs off bank-fed flax; stops cleanly when the bank runs
- * out. Start it at the Seers bank.
- */
 export default class FlaxSpinner extends TaskBot {
     override loopDelay = 600;
 
@@ -134,8 +106,6 @@ export default class FlaxSpinner extends TaskBot {
         p.row(`${this.product} left: ${this.fibreCount()}`, `Floor: ${Game.tile()?.level ?? '?'}`, `Bank trips: ${this.trips}`);
 
         p.gap();
-        // processing bot — switching fibre mid-batch would cancel the weak-queue
-        // spin, so Pause/Stop only (no live selector)
         ScriptRunner.paintControls(p);
         p.end();
     }
@@ -157,16 +127,12 @@ export default class FlaxSpinner extends TaskBot {
     leashRadius(): number { return this.leash; }
     onFloor(level: number): boolean { return Game.tile()?.level === level; }
 
-    /** Fibre (flax/wool) still in the pack. Flax and bow string don't stack, so
-     *  count slots; the bow-string product never matches the fibre keyword. */
     fibreCount(): number {
         const pat = this.product.toLowerCase();
         return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
     }
 }
 
-/** Ground floor, no flax → cross to the bank (opening the house door), deposit
- *  everything, then Withdraw-All flax. Stop cleanly when the bank runs dry. */
 class BankTrip implements Task {
     constructor(private bot: FlaxSpinner) {}
     validate(): boolean { return this.bot.onFloor(0) && this.bot.fibreCount() === 0; }
@@ -177,7 +143,7 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositInventory(); // bow string + any leftover flax/junk
+        await Bank.depositInventory();
         await Execution.delayTicks(1);
         this.bot.countTrip();
 
@@ -193,12 +159,9 @@ class BankTrip implements Task {
         this.bot.setStatus(`withdrawing ${flaxName}`);
         await Bank.withdraw(flaxName, allOp);
         await Execution.delayUntil(() => this.bot.fibreCount() > 0 || Bank.count(flaxName) === 0, 4000);
-        // walking closes the bank; Ascend heads for the ladder next tick
     }
 }
 
-/** Ground floor, flax in the pack → walk to the ladder (opening the house door)
- *  and climb up to the spinning wheel. */
 class Ascend implements Task {
     constructor(private bot: FlaxSpinner) {}
     validate(): boolean { return this.bot.onFloor(0) && this.bot.fibreCount() > 0; }
@@ -212,23 +175,14 @@ class Ascend implements Task {
     }
 }
 
-/** Upstairs with flax → click the wheel, Spin-X the whole pack, and ride the batch
- *  to completion. Only (re)clicks the wheel when spinning has genuinely stopped —
- *  a mid-batch click would cancel the weak-queue spin. The wheel's Spin op is an
- *  OPLOC (forceapproach=south), so the server walks us onto it — no web-walking on
- *  the un-baked upper floor. */
 class Spin implements Task {
     constructor(private bot: FlaxSpinner) {}
     validate(): boolean { return this.bot.onFloor(1) && this.bot.fibreCount() > 0 && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
-        // Already mid-batch (entered while the pack is draining) → just ride it out;
-        // do NOT touch anything, or the weak-queue spin cancels.
         if (Game.animating() && !ChatDialog.isMakeMenu()) {
             await this.ride();
             return;
         }
-        // Open the wheel's Spin panel if it isn't already up (a click here is safe:
-        // we're not currently spinning).
         if (!ChatDialog.isMakeMenu()) {
             const wheel = Locs.query().name(this.bot.wheelLocName()).action(this.bot.spinOpName())
                 .where(l => l.tile().distanceTo(this.bot.wheelStand()) <= this.bot.leashRadius()).nearest();
@@ -236,10 +190,9 @@ class Spin implements Task {
             this.bot.setStatus('opening the spinning wheel');
             if (!(await wheel.interact(this.bot.spinOpName()))) { await Execution.delayTicks(2); return; }
             if (!(await Execution.delayUntil(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || Game.animating(), 6000))) {
-                return; // the wheel didn't respond — retry next tick
+                return;
             }
         }
-        // Spin-X the whole pack.
         if (ChatDialog.isMakeMenu()) {
             if (!(await ChatDialog.makeX(this.bot.productName(), this.bot.fibreCount()))) {
                 this.bot.log(`Spin menu open but couldn't Make-X '${this.bot.productName()}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
@@ -247,15 +200,9 @@ class Spin implements Task {
                 return;
             }
         }
-        // Ride the batch to completion in THIS execute so we never re-click mid-spin.
         await this.ride();
     }
 
-    /** Wait while the weak-queue batch drains the pack. Returns when the pack is
-     *  empty (→ Descend), a dialog/event interrupts, we leave the floor, or
-     *  spinning STALLS — no fibre consumed for RESPIN_AFTER_TICKS with flax left,
-     *  meaning it stopped for some reason and execute() should re-spin. Touches
-     *  nothing: any action would cancel the spin. */
     private async ride(): Promise<void> {
         this.bot.setStatus('spinning');
         let last = this.bot.fibreCount();
@@ -270,7 +217,6 @@ class Spin implements Task {
     }
 }
 
-/** Upstairs, no flax left → climb back down to the ground floor. */
 class Descend implements Task {
     constructor(private bot: FlaxSpinner) {}
     validate(): boolean { return this.bot.onFloor(1) && this.bot.fibreCount() === 0; }

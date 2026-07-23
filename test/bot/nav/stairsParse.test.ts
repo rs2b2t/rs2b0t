@@ -10,7 +10,6 @@ describe('decodeCoord', () => {
 
 describe('applyMovecoord', () => {
     test('args are (dx, dLevel, dz) — middle is the level delta', () => {
-        // Draynor: from 3108,3363,0 telejump movecoord(coord, 0, 1, 4) → +1 level, +4 z
         expect(applyMovecoord({ x: 3108, z: 3363, level: 0 }, [0, 1, 4])).toEqual({ x: 3108, z: 3367, level: 1 });
         expect(applyMovecoord({ x: 3108, z: 3364, level: 1 }, [0, -1, -4])).toEqual({ x: 3108, z: 3360, level: 0 });
     });

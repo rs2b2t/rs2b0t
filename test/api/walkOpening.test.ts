@@ -19,10 +19,6 @@ describe('isOpenableObstacle', () => {
 });
 
 describe('towardDest', () => {
-    // Seers Village flax-spinner geometry: walkTo strands the bot at (2720,3474)
-    // outside the shut spinning house (dest = ladder inside at 2715,3470). The
-    // house door (2716,3472) blocks the way in; the neighbour house's door
-    // (2713,3483) is also within the 10-tile hunt radius but leads nowhere.
     const dest = { x: 2715, z: 3470, level: 0 };
     const stall = { x: 2720, z: 3474, level: 0 };
 

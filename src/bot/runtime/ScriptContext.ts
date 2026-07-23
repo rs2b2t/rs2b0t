@@ -1,4 +1,3 @@
-/** Thrown into a script's await chain when it is stopped. */
 export class ScriptAborted extends Error {
     constructor() {
         super('script stopped');
@@ -25,28 +24,19 @@ export type Waiter = WaiterSpec & {
 
 const LOG_RING_CAPACITY = 500;
 
-/**
- * Per-run bookkeeping shared by the Scheduler (pump) and ScriptRunner
- * (lifecycle). Scripts never see this directly — they sleep through
- * Execution.* which registers waiters here.
- */
 export class ScriptContext {
     state: ScriptState = 'running';
     waiters: Waiter[] = [];
 
-    /** True while a loop() iteration promise is unsettled. */
     loopInFlight = false;
     nextLoopAt = 0;
     loopCount = 0;
 
-    /** For the sync-stuck / external-await watchdog. */
     lastProgressAt = performance.now();
     watchdogWarned = false;
 
-    /** Set when state is 'crashed'. */
     crashError: Error | null = null;
 
-    /** Set while the runtime Supervisor is handling a random event ("kind: name"). */
     activeEvent: string | null = null;
 
     startedAt = performance.now();
@@ -69,7 +59,6 @@ export class ScriptContext {
             try {
                 listener();
             } catch {
-                // ui problem, not the script's
             }
         }
     }
@@ -98,8 +87,6 @@ export class ScriptContext {
             return;
         }
 
-        // waiter deadlines and the loop schedule are wall-clock; shift them so
-        // paused time doesn't count against delays or timeouts
         const pausedFor = performance.now() - this.pausedAt;
         for (const waiter of this.waiters) {
             if (waiter.kind === 'time') {
@@ -113,7 +100,6 @@ export class ScriptContext {
         this.progress();
     }
 
-    /** Reject every pending waiter (stop path). */
     abortWaiters(): void {
         const pending = this.waiters;
         this.waiters = [];

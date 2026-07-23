@@ -1,17 +1,6 @@
-// Browser smoke test for the bot client (Slice 1 exit criterion): boots
-// bot.html in headless Chrome, logs in through the client's own login(),
-// and asserts the panel mirrors live game state.
-//
-// Requires a running local Engine (docs/DEV.md) with the bot deployed
-// (tools/deploy-local.sh) and Google Chrome installed.
-//
-// Usage: bun tools/e2e-smoke.ts [base-url] [username] [password]
-
 import { launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
-// default to a per-run name: fresh save, and immune to a lingering
-// "already online" session from a previous run
 const username = process.argv[3] ?? `smoke${Date.now().toString(36).slice(-7)}`;
 const password = process.argv[4] ?? 'test';
 
@@ -33,8 +22,6 @@ try {
             return;
         }
 
-        // missing favicon / content-pack gaps 404 on the stock client too;
-        // they are environment noise, not a bot-client regression
         if (msg.text().includes('Failed to load resource')) {
             resourceNoise.push(msg.location().url || msg.text());
         } else {
@@ -44,7 +31,6 @@ try {
 
     await page.goto(`${base}/bot.html`);
 
-    // client booted and main loop running (maininit finished)
     await page.waitForFunction(
         () => {
             const lcb = (globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t;
@@ -55,7 +41,6 @@ try {
     );
     console.log('client booted, title loop running');
 
-    // log in through the client's own (unmangled) login path
     await page.evaluate(
         ([user, pass]) => {
             const { client } = (globalThis as never as { rs2b0t: { client: { loginUser: string; loginPass: string; login(u: string, p: string, r: boolean): Promise<void> } } }).rs2b0t;
@@ -84,7 +69,6 @@ try {
     }
     console.log(`logged in as '${username}', scene rendering`);
 
-    // let a few server ticks flow
     await page.waitForTimeout(2500);
 
     const panel = await page.evaluate(() => {
@@ -103,7 +87,6 @@ try {
         };
     });
 
-    // healthy adapter now shows NO banner (it only appears on not-attached / self-test FAILED)
     if (panel.banner !== '') fail(`unexpected adapter banner: '${panel.banner}'`);
     console.log('banner: none (adapter healthy)');
 
@@ -119,14 +102,12 @@ try {
     console.log(`stats: ${panel.stats.length} skills populated (hp ${panel.stats[3]})`);
     console.log(`chat: ${panel.chat.join(' | ')}`);
 
-    // tick counter must advance (~600ms cadence)
     const before = panel.tick;
     await page.waitForTimeout(2000);
     const after = await page.evaluate(() => (globalThis as never as { rs2b0t: { host: { tickCount: number } } }).rs2b0t.host.tickCount);
     if (after < before + 2) fail(`tick counter stalled: ${before} -> ${after}`);
     console.log(`ticks advanced ${before} -> ${after}`);
 
-    // ---- Slice 2: script runtime ----
     type RunnerGlobal = { rs2b0t: { runner: { state: string; ctx: { log: { level: string; msg: string }[]; loopCount: number } | null }; host: { tickCount: number } } };
     const runnerState = (): Promise<string> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.state);
     const logLength = (): Promise<number> => page.evaluate(() => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.log.length ?? 0);
@@ -157,8 +138,6 @@ try {
     await page.waitForFunction(len => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: unknown[] } | null } } }).rs2b0t.runner.ctx?.log.length ?? 0) > len, pausedLogLength, { timeout: 15000 });
     console.log('QuestDashboard: resumed');
 
-    // QuestDashboard has no onStop hook, so a clean stop is proven by the runner
-    // reaching the 'stopped' state (the runner still tears down subscriptions).
     await page.getByRole('button', { name: 'Stop' }).click();
     await page.waitForFunction(() => (globalThis as never as { rs2b0t: { runner: { state: string } } }).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10000 });
     console.log('QuestDashboard: stopped cleanly');

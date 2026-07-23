@@ -17,19 +17,18 @@ describe('specialCrossingAt', () => {
     });
 
     test('gnome stronghold gate: reopen-after-dialogue, free, helps with the boxes', () => {
-        const g = specialCrossingAt(2461, 3382, 0); // south approach = the enter edge's from-tile
+        const g = specialCrossingAt(2461, 3382, 0);
         expect(g?.label).toBe('Gnome Stronghold gate (Femi boxes)');
         expect(g?.locName).toBe('Gate');
         expect(g?.action).toBe('Open');
-        expect(g?.reopenAfterDialogue).toBe(true); // first Open runs the boxes dialogue, second crosses
-        expect(g?.requires).toBeUndefined(); // no fare
-        // "OK then" (help) is picked from Femi's p_choice2 rather than declining.
+        expect(g?.reopenAfterDialogue).toBe(true);
+        expect(g?.requires).toBeUndefined();
         expect(pickChoice(['Sorry, I\'m a bit busy.', 'OK then.'], g!.dialogue!.choose)).toBe('OK then.');
     });
 
     test('gnome gate: only the enter direction is a special crossing (leave is a plain Open)', () => {
-        expect(specialCrossingAt(2461, 3382, 0)).not.toBeNull(); // enter (south -> north)
-        expect(specialCrossingAt(2461, 3385, 0)).toBeNull();     // leave (north -> south): crossMultiTileDoor
+        expect(specialCrossingAt(2461, 3382, 0)).not.toBeNull();
+        expect(specialCrossingAt(2461, 3385, 0)).toBeNull();
     });
 
     test('every crossing carries the fields the executor reads', () => {

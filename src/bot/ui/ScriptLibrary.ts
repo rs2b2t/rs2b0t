@@ -1,15 +1,8 @@
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { el } from './dom.js';
 
-/** Preferred category order; anything else falls in alphabetically after. */
 const CATEGORY_ORDER = ['Combat', 'Woodcutting', 'Fishing', 'Mining', 'Cooking', 'Smithing', 'Fletching', 'Firemaking', 'Crafting', 'Herblore', 'Agility', 'Thieving', 'Runecrafting', 'Prayer', 'Magic', 'Navigation', 'Utility', 'Develop'];
 
-/**
- * Full-screen modal script library: a transparent backdrop over the client
- * with a category filter + search + script cards. Picking a card selects it
- * for the panel. Registry-driven, so loaded/external scripts appear and
- * filter alongside the built-ins.
- */
 export default class ScriptLibrary {
     private backdrop: HTMLElement;
     private listEl: HTMLElement;

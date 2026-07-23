@@ -1,5 +1,3 @@
-// Validates ChaosDruidKiller combat + loot at the Edgeville dungeon druids.
-// (Banking round-trip is validated separately by chaosdruid-bank-test.ts.)
 import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 2.5 });
@@ -13,9 +11,7 @@ try {
     if (!(await login(page, username))) fail('login failed');
     await bringUpOffIsland(page, { user: username, typeWaitMs: 1300 });
     for (const s of ['attack', 'strength', 'defence', 'hitpoints']) await type(page, `::advancestat ${s} 80`, 1300);
-    await type(page, '::tele 0,48,155,38,8', 1300); // (3110,9928) among the druids
-    // Poll instead of a fixed 1.5s: the post-tele scene rebuild + NPC streaming
-    // can lag several seconds (this raced and flaked in the 2026-07-21 sweep).
+    await type(page, '::tele 0,48,155,38,8', 1300);
     const druidsSeen = await page
         .waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.reader.npcs().filter(n => n.name === 'Chaos druid').length > 0, undefined, { timeout: 15000 })
         .then(() => true)

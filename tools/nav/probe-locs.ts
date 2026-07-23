@@ -1,9 +1,3 @@
-// Dev utility: print packed loc instances near a world tile — for verifying
-// door/transport coordinates when curating src/bot/nav/data/transports.json.
-//
-// Usage: bun tools/nav/probe-locs.ts <x> <z> [radius=5] [--engine <dir>] [--ops]
-//   --ops  only locs that have at least one op
-
 import { LocShape, locShapeLayer } from '#/bot/nav/rsmod/flags.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';

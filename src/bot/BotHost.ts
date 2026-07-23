@@ -6,18 +6,11 @@ import { pumpProducers } from './events/producers.js';
 
 type FrameListener = () => void;
 
-/**
- * Singleton fan-out between the BotClient hooks and everything bot-
- * side. Every listener call is wrapped in try/catch: a bot bug can never
- * crash the client.
- */
 class BotHostImpl {
-    /** Internal names the adapter self-test found missing after attach(). */
     selfTestMissing: string[] = [];
 
     private attached = false;
 
-    /** Server ticks observed (PLAYER_INFO packets ≈ one per 600ms). */
     tickCount = 0;
 
     private lastTickAt = 0;
@@ -26,7 +19,6 @@ class BotHostImpl {
     private frameListeners = new Set<FrameListener>();
     private drawListeners = new Set<FrameListener>();
 
-    /** Called once from the BotClient constructor. */
     attach(client: unknown): void {
         if (this.attached) {
             return;
@@ -43,7 +35,6 @@ class BotHostImpl {
         }
     }
 
-    /** Mean PLAYER_INFO interval over the last ~10 ticks, ms (0 until known). */
     get tickMeanMs(): number {
         if (this.tickIntervals.length === 0) {
             return 0;
@@ -52,11 +43,7 @@ class BotHostImpl {
         return this.tickIntervals.reduce((a, b) => a + b, 0) / this.tickIntervals.length;
     }
 
-    // ---- hook entry points (called from BotClient overrides) ----
-
     onFrame(): void {
-        // event producers diff state first so frame listeners (including the
-        // scheduler pump) observe this frame's events
         try {
             pumpProducers(this.tickCount);
         } catch (err) {
@@ -72,12 +59,6 @@ class BotHostImpl {
 
     private handlePacket(ptype: number): void {
         if (ptype === ServerProt.MESSAGE_GAME) {
-            // addChat ran synchronously during this packet, so the new line is
-            // ring slot 0. Type-0 only: tradereq/duelreq suffixed messages add
-            // type-4 lines (or, when the sender is ignored, none at all — the
-            // one case where slot 0 is a stale type-0 line; a rare duplicate
-            // record there is benign, consumers just fail an attempt fast and
-            // repath).
             const line = reader.chat(1)[0];
             if (line && line.type === 0) {
                 GameMessages.record(line.text);
@@ -100,8 +81,6 @@ class BotHostImpl {
         }
         this.lastTickAt = now;
     }
-
-    // ---- subscriptions ----
 
     addFrameListener(cb: FrameListener): () => void {
         this.frameListeners.add(cb);

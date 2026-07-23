@@ -34,12 +34,12 @@ export default class ClientBuild {
     private readonly maxTileX: number;
     private readonly maxTileZ: number;
 
-    private readonly groundh: Int32Array[][]; // ground height
-    private readonly mapl: Uint8Array[][]; // map land flags
-    private readonly floort1: Uint8Array[][]; // floor type 1
-    private readonly floort2: Uint8Array[][]; // floor type 2
-    private readonly floors: Uint8Array[][]; // floor shape
-    private readonly floorr: Uint8Array[][]; // floor rotation
+    private readonly groundh: Int32Array[][];
+    private readonly mapl: Uint8Array[][];
+    private readonly floort1: Uint8Array[][];
+    private readonly floort2: Uint8Array[][];
+    private readonly floors: Uint8Array[][];
+    private readonly floorr: Uint8Array[][];
     private readonly shadow: Uint8Array[][];
     private readonly lightmap: Int32Array[];
     private readonly huetot: Int32Array;
@@ -47,7 +47,7 @@ export default class ClientBuild {
     private readonly ligtot: Int32Array;
     private readonly comtot: Int32Array;
     private readonly tot: Int32Array;
-    private readonly mapo: Int32Array[][]; // map occlusion
+    private readonly mapo: Int32Array[][];
 
     public constructor(maxTileX: number, maxTileZ: number, groundh: Int32Array[][], mapl: Uint8Array[][]) {
         this.maxTileX = maxTileX;
@@ -239,7 +239,6 @@ export default class ClientBuild {
                                         occludes = false;
                                     }
 
-                                    // occludes && flat
                                     if (occludes && heightSW === heightSE && heightSW === heightNE && heightSW === heightNW) {
                                         this.mapo[level][x0][z0] |= 0x924;
                                     }
@@ -339,9 +338,9 @@ export default class ClientBuild {
             }
         }
 
-        let wall0: number = 0x1; // this flag is set by walls with rotation 0 or 2
-        let wall1: number = 0x2; // this flag is set by walls with rotation 1 or 3
-        let floor: number = 0x4; // this flag is set by floors which are flat
+        let wall0: number = 0x1;
+        let wall1: number = 0x2;
+        let floor: number = 0x4;
 
         for (let topLevel: number = 0; topLevel < BuildArea.LEVELS; topLevel++) {
             if (topLevel > 0) {
@@ -783,7 +782,7 @@ export default class ClientBuild {
 
         let typecode: number = (x + (z << 7) + (locId << 14) + 0x40000000) | 0;
         if (!loc.active) {
-            typecode += -0x80000000; // int.min
+            typecode += -0x80000000;
         }
         typecode |= 0;
 
@@ -1179,7 +1178,7 @@ export default class ClientBuild {
 
         let typecode: number = (x + (z << 7) + (locId << 14) + 0x40000000) | 0;
         if (!loc.active) {
-            typecode += -0x80000000; // int.min
+            typecode += -0x80000000;
         }
         typecode |= 0;
 

@@ -1,19 +1,3 @@
-// Headless live smoke for BankFletcher. Boots the WebGL client (SwiftShader),
-// logs in (auto-creates), teleports off Tutorial Island, SEEDS the bank with logs
-// + a knife (::~bankitem), maxes stats (Fletching), teleports to the Varrock West
-// bank, starts the bot, and validates a full withdraw→fletch→deposit cycle by
-// asserting the chosen PRODUCT appears in the pack. Two phases:
-//   phase 1  ?BankFletcher.product=Arrow shafts   → assert "Arrow shaft" in the pack
-//   phase 2  ?BankFletcher.product=Short bow       → assert an unstrung shortbow
-//   phase 3  ?BankFletcher.product=Headless arrows → attach mode: feathers onto shafts
-//   phase 4  ?BankFletcher.product=Bronze arrows   → attach mode: heads onto headless
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/bankfletcher-test.ts [base-url] [username]
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -45,9 +29,6 @@ try {
         await page.evaluate(([u, p]) => { const c = (globalThis as never as R).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [username, 'test']);
         return page.waitForFunction(() => (globalThis as never as R).rs2b0t.client.ingame && (globalThis as never as R).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
     };
-    // Typed command: click the canvas, type, Enter. Debugprocs need '::~'; note
-    // ::~maxme spews level-up dialogs that swallow the NEXT typed command — so we
-    // seed the bank BEFORE maxme and clear dialogs after it.
     const type = async (t: string) => {
         await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
         await page.waitForTimeout(400);
@@ -68,7 +49,6 @@ try {
         return b ? { made: +b.made, trips: +b.trips, status: String(b.status) } : null;
     });
 
-    // Varrock West bank (3185,3440) — mapsquare 49_53, local (49,48).
     const teleToBank = async () => {
         let at = null as { x: number; z: number; level: number } | null;
         for (let attempt = 0; attempt < 4; attempt++) {
@@ -81,11 +61,10 @@ try {
         return at;
     };
 
-    // --- phase 1: Arrow shafts ------------------------------------------------
     await page.goto(`${base}/bot.html?BankFletcher.product=Arrow shafts`);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -93,10 +72,9 @@ try {
     if (!backIn) { fail('relogin failed'); }
     console.log('logged in off Tutorial Island');
 
-    // Seed the bank BEFORE maxme (maxme's dialogs would swallow these commands).
     await type('::~bankitem logs 5000');
     await type('::~bankitem knife 1');
-    await type('::~maxme'); // Fletching 99 + everything
+    await type('::~maxme');
     await clearDialogs();
 
     let at = await teleToBank();
@@ -108,7 +86,7 @@ try {
     console.log('started BankFletcher (product=Arrow shafts) — watching for arrow shafts + a full cycle');
 
     let sawShafts = false, boothFail = false;
-    for (let i = 0; i < 60; i++) { // ~120s
+    for (let i = 0; i < 60; i++) {
         await page.waitForTimeout(2000);
         if (i % 5 === 0) { console.log(`  t=${i * 2}s inv=${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`); }
         if (countSub(await inv(), 'arrow shaft') > 0) { sawShafts = true; break; }
@@ -122,25 +100,23 @@ try {
     if (!sawShafts) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('BankFletcher did not produce arrow shafts within the window'); }
     console.log('PHASE 1 PASS (arrow shafts produced from a withdraw→fletch cycle)');
 
-    // --- phase 2: Short bow (same account, bank still seeded, already maxed) ---
     await page.goto(`${base}/bot.html?BankFletcher.product=Short bow`);
     await boot();
     backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(3000); backIn = await login(); }
     if (!backIn) { fail('phase 2 relogin failed'); }
-    // top up logs in case phase 1 drained the seed, then return to the bank
     await type('::~bankitem logs 5000');
     at = await teleToBank();
     if (!at || Math.abs(at.x - 3185) > 8 || Math.abs(at.z - 3440) > 8) { fail(`phase 2 Varrock West tele failed (at ${at ? `${at.x},${at.z}` : '?'})`); }
     await clearDialogs();
 
-    await clearDialogs(); // phase 1's abrupt goto can leave a make-menu/level-up open
+    await clearDialogs();
     console.log(`phase 2 starting pack: ${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`);
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('BankFletcher')); });
     console.log('started BankFletcher (product=Short bow) — watching for an unstrung shortbow');
 
     let sawBow = false;
-    for (let i = 0; i < 60; i++) { // ~120s
+    for (let i = 0; i < 60; i++) {
         await page.waitForTimeout(2000);
         if (countSub(await inv(), 'shortbow') > 0) { sawBow = true; break; }
     }
@@ -152,11 +128,8 @@ try {
     if (!sawBow) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('BankFletcher did not produce an unstrung shortbow within the window'); }
     console.log('PHASE 2 PASS (unstrung shortbow produced)');
 
-    // EXACT-name count: countSub('bronze arrow') would also match the
-    // 'Bronze arrowheads' input stack (same trap the bot dodges).
     const countExact = (items: Inv[], name: string) => items.filter(i => (i.name ?? '').toLowerCase() === name).reduce((sum, i) => sum + Math.max(1, i.count), 0);
 
-    // --- phase 3: Headless arrows (attach mode — feathers onto shafts) --------
     await page.goto(`${base}/bot.html?BankFletcher.product=Headless arrows`);
     await boot();
     backIn = false;
@@ -172,7 +145,7 @@ try {
     console.log('started BankFletcher (product=Headless arrows) — watching the attach loop');
 
     let sawHeadless = false;
-    for (let i = 0; i < 60; i++) { // ~120s
+    for (let i = 0; i < 60; i++) {
         await page.waitForTimeout(2000);
         if (i % 5 === 0) { console.log(`  t=${i * 2}s inv=${JSON.stringify((await inv()).map(x => `${x.name}:${x.count}`))}`); }
         if (countExact(await inv(), 'headless arrow') >= 15) { sawHeadless = true; break; }
@@ -184,13 +157,11 @@ try {
     if (!sawHeadless) { await page.screenshot({ path: 'out/bankfletcher-test.png' }); fail('phase 3: no headless arrows attached within the window'); }
     console.log('PHASE 3 PASS (feathers attached onto shafts through a bank cycle)');
 
-    // --- phase 4: Bronze arrows (attach mode — heads onto headless) -----------
     await page.goto(`${base}/bot.html?BankFletcher.product=Bronze arrows`);
     await boot();
     backIn = false;
     for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(3000); backIn = await login(); }
     if (!backIn) { fail('phase 4 relogin failed'); }
-    // seed heads + top-up headless so phase 4 doesn't depend on phase 3's yield
     await type('::~bankitem bronze_arrowheads 300');
     await type('::~bankitem headless_arrow 300');
     at = await teleToBank();
@@ -201,7 +172,7 @@ try {
     console.log('started BankFletcher (product=Bronze arrows) — watching the attach loop');
 
     let sawBronze = false;
-    for (let i = 0; i < 60; i++) { // ~120s
+    for (let i = 0; i < 60; i++) {
         await page.waitForTimeout(2000);
         if (countExact(await inv(), 'bronze arrow') >= 15) { sawBronze = true; break; }
     }

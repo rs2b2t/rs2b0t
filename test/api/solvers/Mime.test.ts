@@ -8,8 +8,8 @@ describe('mime mapping', () => {
         expect(MIME_IF.buttons).toHaveLength(8);
     });
     test('answers the seen emote', () => {
-        expect(mimeAnswer(866)).toBe(3); // dance
-        expect(mimeAnswer(1131)).toBe(7); // glass box
+        expect(mimeAnswer(866)).toBe(3);
+        expect(mimeAnswer(1131)).toBe(7);
     });
     test('null for unknown/none (bow, cheer, idle)', () => {
         expect(mimeAnswer(858)).toBeNull();

@@ -1,25 +1,3 @@
-// Isolated tail smoke for Merlin's Crystal (quest id `arthur`). Skips the long,
-// combat-heavy MIDDLE of the opening (the two knights + the crate voyage + the ~6-min
-// Mordred fight) so a tail leg can be iterated in ~one Camelot walk instead of a full
-// run. It CANNOT skip the King Arthur start: %arthur is scope=perm (never transmitted),
-// so the client quest-journal that decide() reads only flips to inProgress when the
-// quest scripts call ~send_quest_progress — a raw `::setvar arthur` sets the server
-// value but leaves the client journal notStarted, and the bot just walks off to start
-// the quest anyway. So:
-//   1. seed a Phase-B product (bat_bones) so decide() enters the tail (it dispatches on
-//      held items) AND the Giant-bat fight is skipped -> the probe is combat-free;
-//   2. let the bot walk to King Arthur and START the quest naturally (journal ->
-//      inProgress, %arthur=1);
-//   3. THEN `::setvar arthur 4` to jump the SERVER stage to spoken_morgan_lefaye — every
-//      tail gate (candle maker black-candle, Lady of the Lake, chaos altar Check, the
-//      summon) keys off this. getWax (the first leg) has no stage gate, so the setvar
-//      lands well before the first gated leg (the candle maker).
-// Then: getWax -> candle maker -> lightCandle -> Excalibur -> summon Thrantax -> break
-// crystal -> King Arthur -> complete. PASS = arthur 'complete', qp 6, clean stop.
-//
-// Usage: bun tools/merlin-tail-test.ts [base-url] [username] [budget-min]
-// Sequential with the other smokes (single-instance engine + bundle). DEBUG harness —
-// a real PASS still needs the full aio-quest-test.ts run.
 import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 
@@ -30,8 +8,6 @@ const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 
-// bat_bones = the Phase-B seed (enters the tail, skips the bat fight); trout = a little
-// insurance food; the rest are the player-supplied consumables.
 const GIVES = ['coins 50000', 'bread 1', 'insect_repellent 1', 'bucket_empty 1', 'tinderbox 1', 'bat_bones 1', 'trout 10'];
 
 type Snapshot = {
@@ -87,10 +63,6 @@ try {
     while (Date.now() < deadline) {
         last = await snap();
         const t = Math.round((Date.now() - t0) / 1000);
-        // Once the quest has actually STARTED (journal synced to inProgress), jump the
-        // server stage to spoken_morgan_lefaye so the tail's gated legs pass. The server
-        // %arthur is perm (not transmitted), so it can't be read back to verify — send a
-        // few times for reliability and trust it (level-4 dev privilege, valid varp).
         if (!jumped && last.status === 'inProgress') {
             for (let i = 0; i < 4; i++) { await cheatQuiet(page, 'setvar arthur 4'); await page.waitForTimeout(600); }
             jumped = true;

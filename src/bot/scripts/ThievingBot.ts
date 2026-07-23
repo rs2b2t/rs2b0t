@@ -17,7 +17,6 @@ import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-/** Tunable parameters (panel + `?ThievingBot.<key>=...`). */
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Man', options: PICKPOCKET_TARGET_NAMES, label: 'Pickpocket target', help: 'pick by exact in-game name (level in parens): Man/Woman 1, Farmer 10, Rogue 32, Guard 40, Knight of Ardougne 55, Paladin 70, Hero 80' },
     action: { type: 'string', default: 'Pickpocket', label: 'Action', help: 'right-click op, e.g. Pickpocket / Steal-from' },
@@ -29,7 +28,6 @@ export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Leash radius (tiles)' }
 };
 
-/** Split a comma-separated keyword setting into lowercased, non-blank terms. */
 function splitKeywords(raw: string): string[] {
     return raw
         .split(',')
@@ -37,16 +35,6 @@ function splitKeywords(raw: string): string[] {
         .filter(Boolean);
 }
 
-/**
- * Pickpockets an NPC in a loop: find the target by name + steal-op within a
- * leash of the start tile, steal, and (if given food) eat when a failed steal
- * knocks HP below the gate. Structurally the NPC-op cousin of GatheringBot —
- * stealing is an NPC action, not a loc action — with a combat-style HP gate
- * bolted on. Coins stack into one slot so the pack rarely fills; set dropMatch
- * to shed bulky loot for sustained runs. Picks up wanted ground drops (coins
- * by default) within the leash, and when a target or the anchor is walled off
- * it opens the door/gate in the way. Start it standing by the targets.
- */
 export default class ThievingBot extends TaskBot {
     override loopDelay = 600;
 
@@ -85,7 +73,6 @@ export default class ThievingBot extends TaskBot {
         this.xpAtStart = Skills.xp('thieving');
         this.log(`thieving '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}${this.food ? `, eating *${this.food}* below ${Math.round(this.eatAtHp * 100)}% hp` : ''}`);
 
-        // count successful steals for the overlay (chat confirms the pick)
         this.on('chat.message', e => {
             if (/you (pick|steal|manage to steal)/i.test(e.text)) {
                 this.steals++;
@@ -106,8 +93,6 @@ export default class ThievingBot extends TaskBot {
         p.bar('HP', Skills.hpFraction());
 
         p.gap();
-        // live target switch — Steal/Loot re-read the target each loop, and each
-        // steal is atomic (no multi-step transaction to corrupt), so it's safe
         const picked = p.select('target', 'target', PICKPOCKET_TARGET_NAMES, this.target);
         if (picked && picked !== this.target) {
             this.switchTarget(picked);
@@ -116,9 +101,6 @@ export default class ThievingBot extends TaskBot {
         p.end();
     }
 
-    /** Live target switch from the paint — the Steal/Loot tasks re-read the
-     *  target name each loop, so the new target takes over immediately. The
-     *  leash anchor stays put (generic targets carry no location data). */
     private switchTarget(target: string): void {
         this.target = target;
         SettingsStore.save('Thiever', 'target', target);
@@ -163,7 +145,6 @@ export default class ThievingBot extends TaskBot {
     }
 }
 
-/** HP dropped from a failed steal: eat, if we're carrying food. */
 class EatFood implements Task {
     constructor(private bot: ThievingBot) {}
     private food() {
@@ -186,7 +167,6 @@ class EatFood implements Task {
     }
 }
 
-/** Shed bulky loot when the pack fills (coins stack, so this is rare). */
 class DropJunk implements Task {
     constructor(private bot: ThievingBot) {}
     private junk() {
@@ -210,8 +190,6 @@ class DropJunk implements Task {
     }
 }
 
-/** Grab wanted drops off the ground (coins by default) within the leash —
- *  only piles we can currently path to, so a walled-off drop can't wedge us. */
 class Loot implements Task {
     constructor(private bot: ThievingBot) {}
 
@@ -242,8 +220,6 @@ class Loot implements Task {
         }
         const name = drop.name ?? '';
         this.bot.setStatus(`picking up ${name}`);
-        // coins (and other stackables) merge into an existing slot, so the slot
-        // count needn't change — confirm the take by the item's total quantity.
         const before = Inventory.count(name);
         if (!(await drop.interact('Take'))) {
             await Execution.delayTicks(2);
@@ -255,7 +231,6 @@ class Loot implements Task {
     }
 }
 
-/** Steal from the nearest target, then wait out the attempt (success or stun). */
 class Steal implements Task {
     constructor(private bot: ThievingBot) {}
 
@@ -270,7 +245,6 @@ class Steal implements Task {
     }
 
     validate(): boolean {
-        // a stuffed pack with no droppable junk = idle (handled by DropJunk otherwise)
         return !Inventory.isFull() && this.find() !== null;
     }
 
@@ -279,8 +253,6 @@ class Steal implements Task {
         if (!npc) {
             return;
         }
-        // The steal op paths the engine's own way and won't open a shut door to
-        // reach a walled-off target — clear the way first, then steal next loop.
         if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
             this.bot.setStatus(`clearing path to ${this.bot.targetName()}`);
             await walkOpening(npc.tile(), 1, this.bot.obstacleList(), m => this.bot.log(m));
@@ -293,11 +265,6 @@ class Steal implements Task {
             await Execution.delayTicks(2);
             return;
         }
-        // A SUCCESS awards thieving xp (and usually loot) within a tick or two —
-        // break the moment it lands so the next loop steals again, instead of
-        // idling out the full timeout on every pick. A FAILURE gives neither and
-        // stuns us for a few ticks: wait it out (yielding to EatFood if the hit
-        // dropped us) rather than hammering inputs the stun ignores.
         await Execution.delayUntil(
             () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || Skills.hpFraction() < this.bot.eatGate(),
             3000

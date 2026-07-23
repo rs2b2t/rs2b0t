@@ -50,7 +50,6 @@ describe('RECIPES table', () => {
         expect(coalPer('Mithril')).toBe(4);
         expect(coalPer('Adamant')).toBe(6);
         expect(coalPer('Rune')).toBe(8);
-        // single-ore bars carry no coal
         expect(coalPer('Iron')).toBe(0);
         expect(coalPer('Gold')).toBe(0);
         expect(coalPer('Silver')).toBe(0);
@@ -111,7 +110,6 @@ describe('countPrimary', () => {
     test('counts only the primary ore, ignoring coal + tin + bars', () => {
         const steel = recipeForBar('Steel')!;
         const items = pack('Iron ore', 'Coal', 'Coal', 'Iron ore', 'Steel bar', null);
-        // iron is primary; coal, the produced steel bar, and empty slots don't count
         expect(countPrimary(items, steel)).toBe(2);
     });
 

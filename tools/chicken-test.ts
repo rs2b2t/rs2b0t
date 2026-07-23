@@ -1,16 +1,9 @@
-// Slice 3 functional test: log in, ::tele to the Lumbridge east chicken pen,
-// run ChickenKiller through the real panel, and report the kill/loot/bury
-// cycle. Duration configurable for soak runs.
-//
-// Usage: bun tools/chicken-test.ts [minutes] [base-url] [username]
-
 import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 4 });
 const username = rest[0] ?? `chick${Date.now().toString(36).slice(-7)}`;
 
-// pen at world (3232, 3298) -> jagex coords 0,50,51,32,34
 const TELE = '::tele 0,50,51,32,34';
 
 const browser = await launchBrowser();
@@ -34,10 +27,6 @@ try {
     await page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 30000 });
     console.log(`logged in as '${username}'`);
 
-    // new accounts spawn tutorial-locked on Tutorial Island (no sidebar tabs
-    // -> no inventory component). the login script only (re)starts the
-    // tutorial when standing on the island, so teleport away and re-login to
-    // get the full tab set.
     await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
     await page.waitForTimeout(600);
     await page.keyboard.type(TELE, { delay: 35 });
@@ -47,8 +36,6 @@ try {
     await page.reload();
     await boot(page);
 
-    // the server takes a few seconds to process the disconnect; retry past
-    // the already-online window
     let backIn = false;
     for (let attempt = 0; attempt < 8 && !backIn; attempt++) {
         await page.waitForTimeout(5000);
@@ -97,7 +84,6 @@ try {
 
     await page.waitForTimeout(2000);
 
-    // start ChickenKiller through the panel: Browse… -> Combat category -> card -> Start
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: /^Combat/ }).click();

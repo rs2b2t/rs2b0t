@@ -1,17 +1,3 @@
-// Validates the Fisher preset's location banking (plan: fisher-location-banking).
-// Four modes against a local engine (see tools/fishing-test.ts for the harness
-// pattern):
-//   schema — no login: Fisher shows the 'Fishing location' dropdown (Auto,
-//            5 options), Miner does not
-//   away   — Auto outside every known region logs the drop-mode determination
-//   walkin — forced 'Draynor Village' from the bank walks itself to the spots
-//   cycle  — the real thing at Draynor on Auto: auto-detect -> fill -> bank at
-//            the booth -> deposit raw fish only -> walk back -> resume
-//
-// Usage: bun tools/fisher-banking-test.ts [mode] [minutes] [base-url]
-// (order-independent: URLs -> base, numbers -> minutes, bare word -> mode —
-// the fleet spawns `bun tools/<name> <base>`, which used to land in `mode`.)
-
 import { launchBrowser, parseArgs } from './lib/harness.js';
 
 import { FISHING_LOCATIONS } from '../src/bot/scripts/FishingLocations.js';
@@ -20,9 +6,9 @@ const { base, minutes, rest } = parseArgs(process.argv.slice(2), { minutes: 25 }
 const mode = rest[0] ?? 'cycle';
 const username = `fb${Date.now().toString(36).slice(-8)}`;
 
-const TELE_LUMBRIDGE = '::tele 0,50,50,20,20'; // (3220,3220)
-const TELE_DRAYNOR_SPOTS = '::tele 0,48,50,14,31'; // (3086,3231) — the spot cluster
-const TELE_DRAYNOR_BANK = '::tele 0,48,50,20,43'; // (3092,3243) — the booth stand guess
+const TELE_LUMBRIDGE = '::tele 0,50,50,20,20';
+const TELE_DRAYNOR_SPOTS = '::tele 0,48,50,14,31';
+const TELE_DRAYNOR_BANK = '::tele 0,48,50,20,43';
 
 function fail(msg: string): never {
     console.error(`FAIL(${mode}): ${msg}`);
@@ -58,7 +44,6 @@ try {
         await page.getByRole('button', { name: 'Browse…' }).click();
         await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
         await page.getByRole('button', { name: category }).click();
-        // anchor to the card's leading name — descriptions mention other scripts
         await page.locator('.rs2b0t-library-card', { hasText: new RegExp(`^${card}`) }).click();
         await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'hidden', timeout: 5000 });
         const current = await page.textContent('.rs2b0t-current-script');
@@ -70,7 +55,6 @@ try {
     const hasNet = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().some(i => (i.name ?? '').toLowerCase().includes('net')));
     const tile = () => page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.worldTile());
 
-    /** Poll the bot log (printing new lines) until `want` matches a line or timeout. */
     let lastLogged = 0;
     const waitForLog = async (want: RegExp, timeoutMs: number): Promise<string | null> => {
         const deadline = Date.now() + timeoutMs;
@@ -86,7 +70,6 @@ try {
         return null;
     };
 
-    /** Fresh account on the mainland with a net, standing at `tele`. */
     const standAt = async (tele: string, url = `${base}/bot.html`) => {
         await page.goto(url);
         await boot();
@@ -98,9 +81,6 @@ try {
         for (let i = 0; i < 8 && !backIn; i++) { await page.waitForTimeout(5000); backIn = await login(); }
         if (!backIn) fail('relogin failed');
         await type('::give net');
-        // Fishing 40: a LEVEL-1 net cycle (fill 27 slots) runs 10-15+ min and
-        // can't fit a fleet budget; the cycle contract (fill -> bank -> resume)
-        // is level-independent, so seed a faster catch rate.
         await type('::advancestat fishing 40');
         await type(tele);
     };
@@ -154,7 +134,6 @@ try {
 
         if (!(await waitForLog(/location: Draynor Village \(auto-detected\) — banking the catch/, 60000))) fail('auto-detection log never appeared');
 
-        // the UNVERIFIED warning must track the table row's verified flag
         const draynorVerified = FISHING_LOCATIONS.find(l => l.name === 'Draynor Village')!.verified;
         const warned = (await botLog()).some(l => /UNVERIFIED — watch the first bank run/.test(l));
         if (draynorVerified && warned) fail('verified row still logs the UNVERIFIED warning');
@@ -168,8 +147,6 @@ try {
         console.log(`  bank trip: "${bankedLine}"`);
         if (!(await hasNet())) fail('net missing from inventory after the deposit — deposit filter too broad');
 
-        // deposit happened before that log line; the pack should be (nearly)
-        // fish-free now and refill as fishing resumes
         const afterDeposit = await rawCount();
         if (afterDeposit > 2) fail(`still ${afterDeposit} raw fish right after the deposit`);
         const deadline = Date.now() + 300000;

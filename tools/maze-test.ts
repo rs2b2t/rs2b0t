@@ -1,17 +1,3 @@
-// Headless live smoke for the Maze random event. Boots the WebGL client
-// headlessly (SwiftShader), logs in (auto-creates), teleports off Tutorial
-// Island, starts a host bot so the RandomEvents supervisor gets the loop, then
-// fires the maze debugproc (::~maze) and waits for handleMaze to replay the
-// hardcoded route and Touch the shrine ("maze solved — returned").
-//
-// Requires the local engine running + the local build deployed:
-//   cd ~/code/rs2b2t-engine && npm run quickstart          (web :8890)
-//   ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh
-//
-// Usage: bun tools/maze-test.ts [base-url] [username] [runs]
-//   base-url default http://localhost:8890 ; runs = how many ::~maze attempts
-//   (each is a random spawn corner) — default 4 to exercise multiple corners.
-
 import { launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -63,7 +49,7 @@ try {
     await page.goto(`${base}/bot.html`);
     await boot();
     if (!(await loginRetry(6))) fail('login failed (is the engine up + local build deployed?)');
-    await type('::tele 0,50,50,20,20'); // off Tutorial Island
+    await type('::tele 0,50,50,20,20');
     await page.reload();
     await boot();
     let backIn = false;
@@ -74,8 +60,6 @@ try {
     if (!backIn) fail('relogin failed');
     console.log('logged in off Tutorial Island');
 
-    // Start a host bot so the RandomEvents supervisor (first task) runs. Bypass
-    // the UI selectors — drive the runner directly with the registry entry.
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('ChickenKiller')); });
     await page.waitForTimeout(1500);
 
@@ -85,7 +69,6 @@ try {
         await type('::~maze');
         const t0 = await tile();
         console.log(`run ${run}: fired ::~maze (tile ${t0 ? `${t0.x},${t0.z}` : '?'})`);
-        // Wait for the handler to finish this maze (solved) or give up (still inside).
         const done = await page.waitForFunction(n => {
             const log = (globalThis as never as R).rs2b0t.runner.ctx?.log ?? [];
             return log.slice(n).some(l => /maze solved — returned|maze — still inside/.test(l.msg));

@@ -8,37 +8,14 @@ import { Traversal } from '../Traversal.js';
 const DEATH_RE = /oh dear.*you are dead/i;
 
 export interface DeathRecoveryOptions {
-    /** Tile to return to once the respawn settles. */
     anchor: WorldTile;
-    /** Chebyshev radius counted as "back home" (default 6). */
     radius?: number;
-    /** Items to re-acquire before walking back (e.g. lost consumables). Omit if the script has none. */
     needs?: ItemNeed[];
-    /** Fires once per death, right when the chat line is matched — e.g. to bump a script's own death counter/status line. */
     onDeath?: () => void;
-    /** Fires once recovery completes (back at anchor, needs re-acquired) — e.g. to clear a script's own `died` flag that other tasks (mid-fight abort checks) read. */
     onRecovered?: () => void;
-    /**
-     * Overrides the default `Traversal.walkResilient(anchor)` leg. Use when
-     * the anchor sits behind a transport the web-walker can't cross on its
-     * own (a scripted ladder/trapdoor climb, like ChaosDruidKiller's dungeon)
-     * — supply the script's own climb-then-walk sequence instead.
-     */
     walkBack?: () => Promise<boolean>;
 }
 
-/**
- * Generalized death & stuck recovery: lifts the copy-pasted
- * per-script death task (ChaosDruidKiller/RockCrab/ChickenKiller all had
- * their own identical-shaped one) into shared machinery every quest module
- * installs.
- *
- * Install FIRST among the script's own tasks. Arms on the death chat
- * message ("Oh dear, you are dead!" — matched loosely so upstream
- * punctuation drift can't silently break recovery, same regex every prior
- * script already used); stays valid from that point until the bot is back at
- * `anchor` with `needs` (if any) re-acquired.
- */
 export class DeathRecovery implements Task {
     private died = false;
     private readonly reacquire: AcquireTask | null;
@@ -71,8 +48,6 @@ export class DeathRecovery implements Task {
     }
 
     async execute(): Promise<void> {
-        // same respawn-wait condition every prior per-script death task used:
-        // wait for the respawn scene to load, then let it settle a few ticks.
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 20000);
         await Execution.delayTicks(3);
 

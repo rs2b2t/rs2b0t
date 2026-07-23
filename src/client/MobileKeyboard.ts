@@ -1,26 +1,23 @@
 import { canvas, canvas2d } from '#/graphics/Canvas.js';
 
-// ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!"£$%^&*()-_=+[{]};:\'@#~,<.>/?\\| 
-// ^ Allowed characters in client
-
 const KEYMAP_REGULAR = [
-    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',  // 10 chars
-    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',  // 9 chars
-    'Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'Del',  // 9 chars
-    '123', ',', ' ', '.', 'Enter'  // 5 chars
+    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
+    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',
+    'Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'Del',
+    '123', ',', ' ', '.', 'Enter'
 ];
 
 const KEYMAP_SHIFT = [
-    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',  // 10 chars
-    'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',  // 9 chars
-    'Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Del',  // 9 chars
-    '123', ',', ' ', '.', 'Enter'  // 5 chars
+    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',
+    'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',
+    'Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Del',
+    '123', ',', ' ', '.', 'Enter'
 ];
 
 const KEYMAP_SYMBOLS = [
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',  // 10 chars
-    '!', '"', '$', '%', '_', '&', '*', '(', ')',  // 9 chars
-    '1/2', '@', '=', '<', '>', '~', ';', ':', 'Del',  // 9 chars
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    '!', '"', '$', '%', '_', '&', '*', '(', ')',
+    '1/2', '@', '=', '<', '>', '~', ';', ':', 'Del',
     'abc', '#', ' ', '?', 'Enter'
 ];
 
@@ -31,22 +28,16 @@ const KEYMAP_SYMBOLS_EXTRA = [
     'abc', '', ' ', '', 'Enter'
 ];
 
-// Offset for addressing individual rows; four rows total.
 const CHAR_OFFSET_PER_ROW = [0, 10, 19, 28];
 
-// Width in pixels for each key.
 const WIDTH_PER_KEYBOX = 50;
 
-// Height in pixels for each key.
 const HEIGHT_PER_KEYBOX = 30;
 
-// Timeout in milliseconds between each drag event, before considering the drag to have ended.
 const DRAG_TIMEOUT_MS = 1000;
 
-// How far a drag must move at least, before the keyboard starts moving.
 const DRAG_MIN_DIST_PX = 5;
 
-// How far a drag can move at most in one touch event.
 const DRAG_MAX_DIST_PX = 75;
 
 interface KeyBox {
@@ -79,11 +70,9 @@ interface Keyboard {
     notifyTouchMove(x: number, y: number): void;
 }
 
-
 function isFullScreen() {
     return document.fullscreenElement !== null;
 }
-
 
 class MobileKeyboard {
     canvasKeyboard: CanvasMobileKeyboard;
@@ -158,12 +147,6 @@ class MobileKeyboard {
     }
 }
 
-
-
-
-/**
- * QWERTY-based OSK module.
- */
 class CanvasMobileKeyboard implements Keyboard {
     private displayed: boolean = false;
     private height: number = (HEIGHT_PER_KEYBOX * 4) + 10;
@@ -178,11 +161,7 @@ class CanvasMobileKeyboard implements Keyboard {
     private touching: boolean = false;
     private touchStartTimestamp: number = 0;
 
-    /**
-     * Returns a CSS style colour string for the given keyboard key index.
-     */
     private getBoxColourForIndex(index: number): string {
-        // If we are animating that key, mark it as a bit darker.
         if (this.animateBoxIndex > -1) {
             if (this.animateBoxIndex === index) {
                 return '#a6a6a6';
@@ -190,16 +169,11 @@ class CanvasMobileKeyboard implements Keyboard {
         }
         const char = this.getCharForIndex(index);
         if (char !== undefined && char.length > 1) {
-            // Special keys have more than one character, so shade darker.
             return '#a9afba';
         }
-        // Regular shade for regular keys.
         return '#c8cdd1';
     }
 
-    /**
-     * Returns the position of a key box for the given index.
-     */
     private getBoxForIndex(index: number): KeyBox {
         const lineIndex = (index < CHAR_OFFSET_PER_ROW[1] ? 0 : (index < CHAR_OFFSET_PER_ROW[2] ? 1 : (index < CHAR_OFFSET_PER_ROW[3] ? 2 : 3)));
         const offsetPos = index - CHAR_OFFSET_PER_ROW[lineIndex];
@@ -213,20 +187,15 @@ class CanvasMobileKeyboard implements Keyboard {
             box.startX += (WIDTH_PER_KEYBOX / 2);
         }
 
-        // Space bar has more chars than normal.
         if (index === 30) {
             box.width *= 6;
         }
-        // Adjust chars after space bar to start further along.
         if (index > 30) {
             box.startX += (WIDTH_PER_KEYBOX * 5);
         }
         return box;
     }
 
-    /**
-     * Returns the character assigned to the given keymap index.
-     */
     private getCharForIndex(index: number): string {
         if (this.mode === KeyboardMode.Shift) {
             return KEYMAP_SHIFT[index];
@@ -237,10 +206,7 @@ class CanvasMobileKeyboard implements Keyboard {
         }
         return KEYMAP_REGULAR[index];
     }
-    
-    /**
-     * Draw all keyboard key backgrounds to the 2D canvas context.
-     */
+
     private drawKeyBoxes() {
         for (let i = 0; i < KEYMAP_REGULAR.length; i++) {
             const box = this.getBoxForIndex(i);
@@ -251,9 +217,6 @@ class CanvasMobileKeyboard implements Keyboard {
         }
     }
 
-    /**
-     * Draw all key 'chars' to the 2D canvas context.
-     */
     private drawKeyChars() {
         canvas2d.fillStyle = 'black';
         canvas2d.textAlign = 'center';
@@ -271,9 +234,6 @@ class CanvasMobileKeyboard implements Keyboard {
         }
     }
 
-    /**
-     * Draw the keyboard main background to the 2D canvas context.
-     */
     private drawBackground() {
         canvas2d.fillStyle = '#dadde2';
         canvas2d.beginPath();
@@ -281,9 +241,6 @@ class CanvasMobileKeyboard implements Keyboard {
         canvas2d.fill();
     }
 
-    /**
-     * Draw the keyboard to the 2D canvas context.
-     */
     draw() {
         if (!this.isDisplayed()) {
             return;
@@ -295,46 +252,29 @@ class CanvasMobileKeyboard implements Keyboard {
         canvas2d.restore();
     }
 
-    /**
-     * Show the keyboard.
-     */
     public show(_originX?: number, _originY?: number) {
         this.mode = KeyboardMode.Regular;
         this.displayed = true;
     }
 
-    /**
-     * Hide the keyboard.
-     */
     public hide() {
         this.displayed = false;
     }
 
-    /**
-     * Returns whether the keyboard is displayed on-screen.
-     */
     public isDisplayed() {
         return this.displayed;
     }
 
-    /**
-     * Determines whether given x and y are within the bounds of the keyboard.
-     */
     public posWithinKeyboard(x: number, y: number): boolean {
         const withinX = x >= this.startX && x < (this.startX + this.width);
         const withinY = y >= this.startY && y < (this.startY + this.height);
         return withinX && withinY;
     }
 
-    /**
-     * Returns the box index for given x and y position.
-     * Will return -1 on error.
-     */
     private getBoxIndexForClick(x: number, y: number): number {
         const relativeX = x - this.startX;
         const relativeY = y - this.startY;
         if (relativeX < 0 || relativeY < 0 || relativeX >= this.width || relativeY >= this.height) {
-            // Out of bounds
             return -1;
         }
         const rowIndex = Math.floor(relativeY / HEIGHT_PER_KEYBOX);
@@ -343,7 +283,6 @@ class CanvasMobileKeyboard implements Keyboard {
             return columnIndex;
         }
         if (rowIndex === 1) {
-            // second row is offset by half a key
             if (relativeX < (WIDTH_PER_KEYBOX / 2) || relativeX > (this.width - (WIDTH_PER_KEYBOX / 2))) {
                 return -1;
             }
@@ -358,16 +297,11 @@ class CanvasMobileKeyboard implements Keyboard {
         return CHAR_OFFSET_PER_ROW[3] + columnIndex;
     }
 
-    /**
-     * Returns the character for an x and y position on the keyboard.
-     */
     private getCharForClick(x: number, y: number): string {
         const boxIndex = this.getBoxIndexForClick(x, y);
         if (boxIndex > -1) {
-            // there is a key corresponding to the click
             let char = '';
             if (boxIndex >= 30 && boxIndex <= 35) {
-                // space takes 6 keyboxes
                 char = ' ';
             } else if (boxIndex === 36) {
                 char = this.getCharForIndex(31);
@@ -384,23 +318,13 @@ class CanvasMobileKeyboard implements Keyboard {
         return '';
     }
 
-    /**
-     * Signal that a MouseDown event occurred at x and y.
-     * If this returns true, the MouseDown event should be considered swallowed
-     * by the keyboard.
-     */
     public captureMouseDown(x: number, y: number): boolean {
         if (this.posWithinKeyboard(x, y)) {
-            return true;  // handled by keyboard
+            return true;
         }
         return false;
     }
 
-    /**
-     * Signal that a MouseUp event occurred at x and y.
-     * If this returns true, the MouseUp event should be considered swallowed
-     * by the keyboard.
-     */
     public captureMouseUp(x: number, y: number): boolean {
         this.touching = false;
         if (this.posWithinKeyboard(x, y)) {
@@ -423,10 +347,8 @@ class CanvasMobileKeyboard implements Keyboard {
                 this.mode = KeyboardMode.Regular;
                 return true;
             } else if (char === '') {
-                // Swallow here, something went wrong.
                 return true;
             }
-            // relay to canvas!
             const downEvent = new KeyboardEvent('keydown', {
                 key: char,
                 code: char,
@@ -450,48 +372,36 @@ class CanvasMobileKeyboard implements Keyboard {
                     this.animateBoxTimeout = 0;
                 }, 100);
             }
-            return true;  // handled by keyboard
+            return true;
         }
         return false;
     }
 
-    /**
-     * Signal that a TouchMove event occurred at x and y.
-     * This is used for the keyboard drag logic.
-     */
     public notifyTouchMove(x: number, y: number) {
         if (!this.posWithinKeyboard(x, y)) {
             return;
         }
         if (this.touching && performance.now() > (this.touchStartTimestamp + DRAG_TIMEOUT_MS)) {
-            // Timeout since touch started
             this.touching = false;
             return;
         }
         if (!this.touching) {
-            // Record when and where the touch event started.
             this.touching = true;
             this.touchStartTimestamp = performance.now();
             this.touchStartAtX = x - this.startX;
             this.touchStartAtY = y - this.startY;
             return;
         }
-        // How far have we moved in this touch event?
         const deltaX = Math.abs(Math.abs(this.touchStartAtX - x) - this.startX);
         const deltaY = Math.abs(Math.abs(this.touchStartAtY - y) - this.startY);
         if (deltaX > DRAG_MAX_DIST_PX || deltaY > DRAG_MAX_DIST_PX) {
-            // Dragged further than the maximum distance in one touch event.
             return;
         }
         if (deltaX > DRAG_MIN_DIST_PX || deltaY > DRAG_MIN_DIST_PX) {
-            // Dragged further than the minimum distance in one touch event.
-            // Restrict movement such that the keyboard can't be repositioned out of sight
-            // Otherwise, it's possible to make the keyboard unusable!
             const newStartX = Math.max(0, Math.min(789 - this.width, x - this.touchStartAtX));
             const newStartY = Math.max(0, Math.min(532 - this.height, y - this.touchStartAtY));
             this.startX = newStartX;
             this.startY = newStartY;
-            // Focus event forces a re-draw of canvas
             canvas.dispatchEvent(new FocusEvent('focus'));
         }
     }
@@ -502,11 +412,9 @@ class NativeMobileKeyboard implements Keyboard {
     private displayed: boolean = false;
     private isAndroid: boolean = false;
     constructor() {
-        // android device detection
         this.isAndroid = navigator.userAgent.includes('Android');
-        // Create the virtual input field
         this.virtualInputElement = document.createElement('input');
-        this.virtualInputElement.setAttribute('type', 'password'); // "text" fields use a different key press flow on android
+        this.virtualInputElement.setAttribute('type', 'password');
         this.virtualInputElement.setAttribute('autofocus', 'autofocus');
         this.virtualInputElement.setAttribute('spellcheck', 'false');
         this.virtualInputElement.setAttribute('autocomplete', 'off');
@@ -514,7 +422,6 @@ class NativeMobileKeyboard implements Keyboard {
         this.virtualInputElement.setAttribute('autocapitalize', 'off');
         this.virtualInputElement.setAttribute('style', 'position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; opacity: 0;');
         if (this.isAndroid) {
-            // Android uses `input` event for text entry rathern than `keydown` / `keyup`
 
             this.virtualInputElement.addEventListener('input', (ev: Event) => {
                 if (!(ev instanceof InputEvent)) {
@@ -545,7 +452,6 @@ class NativeMobileKeyboard implements Keyboard {
                 }
             });
         } else {
-            // Non-android can use `keydown` / `keyup` directly
             this.virtualInputElement.addEventListener('keydown', (ev: KeyboardEvent) => {
                 canvas.dispatchEvent(new KeyboardEvent('keydown', { key: ev.key, code: ev.key }));
             });
@@ -556,10 +462,8 @@ class NativeMobileKeyboard implements Keyboard {
         document.body.appendChild(this.virtualInputElement);
     }
     draw(): void {
-        // Native keyboard, nothing to draw
     }
     show(originX?: number, originY?: number): void {
-        // Focus and click the virtual input field
         if (originX && originY) {
             this.virtualInputElement.style.left = `${originX}px`;
             this.virtualInputElement.style.top = `${originY}px`;
@@ -570,7 +474,6 @@ class NativeMobileKeyboard implements Keyboard {
         this.displayed = true;
     }
     hide(): void {
-        // Blur the virtual input field
         this.virtualInputElement.blur();
         canvas.focus();
         this.displayed = false;
@@ -579,15 +482,12 @@ class NativeMobileKeyboard implements Keyboard {
         return this.displayed;
     }
     captureMouseUp(_x: number, _y: number): boolean {
-        // We don't capture mouse events as the keyboard is Native so doesn't bubble
         return false;
     }
     captureMouseDown(_x: number, _y: number): boolean {
-        // We don't capture mouse events as the keyboard is Native so doesn't bubble
         return false;
     }
     notifyTouchMove(_x: number, _y: number) {
-        // We don't capture touch movement as we don't move the native keyboard
         return;
     }
 

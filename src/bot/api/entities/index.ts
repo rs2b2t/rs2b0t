@@ -3,19 +3,8 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import Tile from '../Tile.js';
 
-/**
- * Entity wrappers (RuneMate shape): Locatable + Interactable over adapter
- * snapshots. interact() resolves an action name against the entity's op list
- * and routes the 1-based op through the input driver.
- */
-
 export interface Interactable {
     actions(): string[];
-    /**
-     * Dispatch an action by name. The direct driver resolves synchronously;
-     * the promise form stays in the signature for ABI compat — always await.
-     * Outcome checks (delayUntil on game state) are the source of truth.
-     */
     interact(action: string): boolean | Promise<boolean>;
 }
 
@@ -28,7 +17,7 @@ function opIndex(ops: (string | null)[], action: string): number {
     const wanted = action.toLowerCase();
     for (let i = 0; i < ops.length; i++) {
         if (ops[i]?.toLowerCase() === wanted) {
-            return i + 1; // 1-based OP_*
+            return i + 1;
         }
     }
 
@@ -46,8 +35,6 @@ export class Npc implements Interactable, Locatable {
         return this.snap.name;
     }
 
-    /** NPC type (config) id — distinguishes same-name variants (e.g. unsheared
-     *  vs shorn 'Sheep', ids 43/42), matching Loc/GroundItem's `id` surface. */
     get id(): number {
         return this.snap.id;
     }
@@ -68,10 +55,6 @@ export class Npc implements Interactable, Locatable {
         return this.snap.health;
     }
 
-    /** Face/interaction target this npc is locked onto — someone ELSE's fight
-     *  when it's a player slot that isn't ours (player targets ride faceEntity
-     *  as slot+32768). False for untargeted npcs, npc-facing npcs, and ones
-     *  engaging US — those are fair game. */
     targetsAnotherPlayer(): boolean {
         return this.snap.faceEntity >= 32768 && this.snap.faceEntity - 32768 !== reader.selfSlot();
     }
@@ -88,7 +71,6 @@ export class Npc implements Interactable, Locatable {
         return presentOps(this.snap.ops);
     }
 
-    /** True while the same npc still occupies this scene slot. */
     valid(): boolean {
         return reader.npcs().some(n => n.index === this.snap.index && n.name === this.snap.name);
     }
@@ -110,7 +92,6 @@ export class Player implements Locatable {
         return this.snap.name;
     }
 
-    /** Scene slot index (the local player's render alias is 2047). */
     get index(): number {
         return this.snap.index;
     }

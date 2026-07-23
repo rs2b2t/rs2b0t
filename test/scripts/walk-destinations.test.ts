@@ -20,11 +20,9 @@ test('every destination is a plausible level-0 world tile', () => {
 
 test('canonical coords match their source (teleport landings + banks)', () => {
     const at = (n: string) => resolveDestination(n)?.tile;
-    // town centres from magic_spells.dbrow teleport landings
     expect(at('Varrock')).toMatchObject({ x: 3213, z: 3424 });
     expect(at('Lumbridge')).toMatchObject({ x: 3221, z: 3218 });
     expect(at('Falador')).toMatchObject({ x: 2965, z: 3378 });
-    // banks from the BankLocations registry
     expect(at('Yanille')).toMatchObject({ x: 2612, z: 3092 });
     expect(at("Seers' Village")).toMatchObject({ x: 2725, z: 3491 });
 });

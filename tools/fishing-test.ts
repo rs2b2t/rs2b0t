@@ -1,16 +1,10 @@
-// Validates the GatheringBot's NPC path via the Fisher preset at the Al Kharid
-// net/bait fishing spot: pick it from the library, run it, assert raw fish end
-// up in the inventory (find spot -> Net -> shrimp -> repeat).
-//
-// Usage: bun tools/fishing-test.ts [minutes] [base-url]
-
 import { boot, bringUpOffIsland, fail, launchBrowser, login, parseArgs, type } from './lib/harness.js';
 import type { Rs2b0t } from './lib/harness.js';
 
 const { base, minutes } = parseArgs(process.argv.slice(2), { minutes: 3 });
 const username = `fish${Date.now().toString(36).slice(-7)}`;
 
-const FISH_TELE = '::tele 0,51,49,3,12'; // Al Kharid riverside (3267,3148)
+const FISH_TELE = '::tele 0,51,49,3,12';
 
 const browser = await launchBrowser();
 try {

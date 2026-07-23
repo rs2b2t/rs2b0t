@@ -25,7 +25,7 @@ describe('progressSignature', () => {
 describe('ProgressWatchdog', () => {
     test('unchanged signature counts up; change resets', () => {
         const w = new ProgressWatchdog();
-        expect(w.note('a')).toBe(0); // first sighting is progress
+        expect(w.note('a')).toBe(0);
         expect(w.note('a')).toBe(1);
         expect(w.note('a')).toBe(2);
         expect(w.note('b')).toBe(0);

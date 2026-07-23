@@ -1,7 +1,3 @@
-// Live verify for issue #12: webwalk OUT of the Lumbridge castle basement
-// (random events teleport bots there; the exit ladder edge was missing from
-// the baked graph). Teles into the basement, runs WalkTo -> Lumbridge spawn.
-// Usage: bun tools/nav/basement-escape-test.ts [base-url]
 import { launchBrowser } from '../lib/harness.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -51,7 +47,7 @@ try {
 
     let at = null as { x: number; z: number; level: number } | null;
     for (let attempt = 0; attempt < 4; attempt++) {
-        await type('::tele 0,50,150,12,15'); // (3212,9615) — the Lumbridge castle basement
+        await type('::tele 0,50,150,12,15');
         await page.waitForTimeout(2000);
         at = await tile();
         if (at && Math.abs(at.x - 3212) <= 5 && Math.abs(at.z - 9615) <= 5) { break; }
