@@ -111,6 +111,7 @@ export default class RuneCrafter extends TaskBot {
     countBankFail(): number { return ++this.bankFails; }
     resetBankFail(): void { this.bankFails = 0; }
     talismanName(): string { return this.cfg.talisman; }
+    runeName(): string { return this.cfg.rune; }
     ruinsTile(): Tile { return this.cfg.ruins; }
     bankTile(): Tile { return this.cfg.bank; }
 
@@ -131,10 +132,12 @@ class Craft implements Task {
         if (!altar) { await Execution.delayTicks(2); return; } // scene still syncing after the telejump
         this.bot.setStatus('crafting runes');
         const before = essCount();
+        this.bot.log(`crafting ${before} essence at the altar`);
         if (!(await altar.interact(ALTAR.op))) { await Execution.delayTicks(2); return; }
-        this.bot.log('crafting runes');
         await Execution.delayUntil(() => essCount() === 0, 8000);
-        this.bot.countCraft(before - essCount());
+        const made = before - essCount();
+        this.bot.countCraft(made);
+        this.bot.log(`crafted ${made} ${this.bot.runeName()}s`);
     }
 }
 
@@ -147,7 +150,9 @@ class Exit implements Task {
         this.bot.setStatus('taking the portal out');
         this.bot.log('taking the portal back to the ruins');
         if (!(await portal.interact(PORTAL.op))) { await Execution.delayTicks(2); return; }
-        await Execution.delayUntil(() => !inTemple(), 15_000);
+        if (await Execution.delayUntil(() => !inTemple(), 15_000)) {
+            this.bot.log('back at the mysterious ruins');
+        }
     }
 }
 
@@ -156,6 +161,7 @@ class BankTrip implements Task {
     validate(): boolean { return !inTemple() && essCount() === 0; }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
+        this.bot.log('heading to the bank');
         await this.bot.walkTo(this.bot.bankTile(), 3);
         const opened = (await Bank.openBooth(this.bot.bankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
             || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
@@ -171,9 +177,14 @@ class BankTrip implements Task {
         this.bot.resetBankFail();
 
         const talisman = this.bot.talismanName();
+        const rune = this.bot.runeName();
+        const madeRunes = Inventory.count(rune);
         await Bank.depositAllMatching(depositAllExcept([talisman]), m => this.bot.log(`  ${m}`));
         await Execution.delayTicks(1);
         this.bot.countTrip();
+        if (madeRunes > 0) {
+            this.bot.log(`deposited ${madeRunes} ${rune}s`);
+        }
 
         if (!Inventory.contains(talisman)) {
             const tal = Bank.items().find(i => i.name?.toLowerCase() === talisman.toLowerCase());
@@ -185,6 +196,7 @@ class BankTrip implements Task {
             const op = withdrawOp(tal.ops, '1') ?? withdrawOp(tal.ops, 'any') ?? 'Withdraw-1';
             await Bank.withdraw(talisman, op);
             await Execution.delayUntil(() => Inventory.contains(talisman), 3000);
+            this.bot.log(`withdrew an ${talisman}`);
         }
 
         if (Bank.count(ESSENCE) === 0) {
@@ -205,14 +217,17 @@ class Enter implements Task {
     constructor(private bot: RuneCrafter) {}
     validate(): boolean { return !inTemple() && essCount() > 0; }
     async execute(): Promise<void> {
+        this.bot.setStatus('heading to the ruins');
+        this.bot.log('heading to the mysterious ruins with a pack of essence');
         await this.bot.walkTo(this.bot.ruinsTile(), 2);
         const ruins = Locs.query().name(RUINS).nearest();
         const talisman = Inventory.first(this.bot.talismanName());
         if (!ruins || !talisman) { await Execution.delayTicks(2); return; }
         this.bot.setStatus('entering the altar');
-        this.bot.log('using the talisman on the mysterious ruins');
+        this.bot.log(`using the ${this.bot.talismanName()} on the mysterious ruins`);
         if (!(await talisman.useOn(ruins))) { await Execution.delayTicks(2); return; }
         if (await Execution.delayUntil(() => inTemple(), 10_000)) {
+            this.bot.log('entered the altar');
             this.fails = 0;
             return;
         }
