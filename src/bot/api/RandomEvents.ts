@@ -21,13 +21,13 @@ const DIALOG_EVENT_NPCS = ['genie', 'drunken dwarf', 'mysterious old man', 'sand
 const PICK_EVENT_NPCS = ['strange plant'];
 const idRange = (lo: number, hi: number): number[] => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
 const HOSTILE_EVENT_NPC_IDS = new Set<number>([
-    ...idRange(391, 396),
-    411,
-    ...idRange(413, 418),
-    ...idRange(419, 424),
-    ...idRange(425, 430),
-    ...idRange(431, 436),
-    ...idRange(438, 443)
+    ...idRange(391, 396), // River troll  (macro_rivertrollguardian_1..6)
+    411,                  // Swarm        (macro_swarm)
+    ...idRange(413, 418), // Rock Golem   (macro_golemguardian_1..6)
+    ...idRange(419, 424), // Zombie       (macro_zombie1..6)
+    ...idRange(425, 430), // Shade        (macro_shade1..6)
+    ...idRange(431, 436), // Watchman     (macro_watchman1..6)
+    ...idRange(438, 443)  // Tree spirit  (macro_dryhadguardian_1..6)
 ]);
 
 const GAS_CHEST_LOC_ID = 2141;
@@ -70,8 +70,8 @@ interface DetectedEvent {
     name: string;
 }
 
-const MAX_ATTEMPTS = 4;
-const GIVE_UP_COOLDOWN_MS = 45000;
+const MAX_ATTEMPTS = 4; // give up on an event we can't clear after this many tries
+const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so the bot resumes
 const PICK_WAIT_MS = 80_000;
 
 export function plantStrategy(ops: string[]): 'pick' | 'evade' {
