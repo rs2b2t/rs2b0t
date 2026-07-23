@@ -16,16 +16,16 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
-const DEFAULT_FIELD = new Tile(2741, 3444, 0);
-const DEFAULT_FIELD_GATE = new Tile(2736, 3443, 0);
-const DEFAULT_BANK_ENTRANCE = new Tile(2726, 3487, 0);
-const DEFAULT_BANK_STAND = new Tile(2725, 3493, 0);
-const BANK_STAND_SPAN = 4;
+const DEFAULT_FIELD = new Tile(2741, 3444, 0);      // centre of the flax field
+const DEFAULT_FIELD_GATE = new Tile(2736, 3443, 0); // the opening on the west side
+const DEFAULT_BANK_ENTRANCE = new Tile(2726, 3487, 0); // doorway into the Seers bank
+const DEFAULT_BANK_STAND = new Tile(2725, 3493, 0); // middle of the booth-stand row (2721..2729, z3493)
+const BANK_STAND_SPAN = 4; // booth stands run bankStand.x ± this along the same z
 const BOOTH = { op: 'Use-quickly' };
 const FIELD_SCOPE = 12;
-const FIELD_ARRIVE = 3;
+const FIELD_ARRIVE = 3; // arrival radius when walking to the field centre
 const POCKET_CAP = 40;
-const CARVE_DROP = 5;
+const CARVE_DROP = 5; // flax to drop to free slots for carving a way out
 
 export const SETTINGS: SettingsSchema = {
     flaxName: { type: 'string', default: 'Flax', label: 'Flax loc name' },
@@ -205,7 +205,7 @@ export default class FlaxPicker extends TaskBot {
             const pocket = this.pocketTiles(POCKET_CAP);
             if (pocket.length >= POCKET_CAP) { this.log('carved back out to open ground'); return; }
             const walls = this.boundaryFlax(pocket);
-            if (walls.length === 0) { return; }
+            if (walls.length === 0) { return; } // walled by map, not flax — nothing to carve
             if (Inventory.isFull()) { await this.dropFlax(CARVE_DROP); }
             const target = walls.sort((a, b) => a.tile().distanceTo(this.fieldGate) - b.tile().distanceTo(this.fieldGate))[0];
             const t = target.tile();
@@ -298,7 +298,7 @@ class StartupReset implements Task {
     validate(): boolean { return this.bot.startupPending; }
     async execute(): Promise<void> {
         this.bot.startupPending = false;
-        if (Inventory.used() === 0) { return; }
+        if (Inventory.used() === 0) { return; } // already clean — go straight to the field
         this.bot.log('startup: emptying the pack at the bank before picking');
         await this.bot.bankRun();
     }
@@ -338,7 +338,7 @@ class GoToField implements Task {
     async execute(): Promise<void> {
         const here = Game.tile();
         if (here && this.bot.fieldCentre().distanceTo(here) <= FIELD_ARRIVE) {
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(2); // at the centre — flax just respawning, wait it out
             return;
         }
         this.bot.setStatus('travelling to the flax field');

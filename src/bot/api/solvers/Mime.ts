@@ -7,14 +7,14 @@ export const MIME_IF = {
 };
 
 export const MIME_EMOTE_BY_SEQ: Record<number, number> = {
-    860: 0,
-    857: 1,
-    861: 2,
-    866: 3,
-    1130: 4,
-    1129: 5,
-    1128: 6,
-    1131: 7
+    860: 0, // emote_cry
+    857: 1, // emote_think
+    861: 2, // emote_laugh
+    866: 3, // emote_dance
+    1130: 4, // emote_climbing_rope
+    1129: 5, // emote_mime_lean
+    1128: 6, // emote_glass_wall
+    1131: 7 // emote_glass_box
 };
 
 export function mimeAnswer(lastSeenSeq: number | null): number | null {
@@ -34,7 +34,7 @@ export async function performMimeStage(log: (msg: string) => void): Promise<bool
     };
 
     let lastSeen: number | null = null;
-    const deadline = performance.now() + 180_000;
+    const deadline = performance.now() + 180_000; // ~9 full cycles
 
     while (onStage() && performance.now() < deadline) {
         const mime = reader.npcs().find(n => (n.name ?? '').toLowerCase() === 'mime');

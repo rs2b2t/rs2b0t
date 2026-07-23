@@ -6,13 +6,13 @@ export interface MazeLoc {
     angle: number;
 }
 
-export const MAZE_ORIGIN = { x: 45 * 64, z: 71 * 64 } as const;
-export const MAZE_SHRINE = { x: 2911, z: 4575 } as const;
+export const MAZE_ORIGIN = { x: 45 * 64, z: 71 * 64 } as const; // (2880, 4544)
+export const MAZE_SHRINE = { x: 2911, z: 4575 } as const;       // local (31,31)
 export const MAZE_SPAWNS = [
-    { x: 2891, z: 4597 },
-    { x: 2933, z: 4597 },
-    { x: 2933, z: 4555 },
-    { x: 2891, z: 4555 }
+    { x: 2891, z: 4597 }, // NW  local (11,53)
+    { x: 2933, z: 4597 }, // NE  local (53,53)
+    { x: 2933, z: 4555 }, // SE  local (53,11)
+    { x: 2891, z: 4555 }  // SW  local (11,11)
 ] as const;
 
 const WALL_ID = 3626;
@@ -62,10 +62,10 @@ export function edgeKey(ax: number, az: number, bx: number, bz: number): string 
 
 function straightEdge(wx: number, wz: number, angle: number): [number, number, number, number] {
     switch (angle) {
-        case 0: return [wx, wz, wx - 1, wz];
-        case 1: return [wx, wz, wx, wz + 1];
-        case 2: return [wx, wz, wx + 1, wz];
-        default: return [wx, wz, wx, wz - 1];
+        case 0: return [wx, wz, wx - 1, wz]; // WEST
+        case 1: return [wx, wz, wx, wz + 1]; // NORTH
+        case 2: return [wx, wz, wx + 1, wz]; // EAST
+        default: return [wx, wz, wx, wz - 1]; // SOUTH
     }
 }
 

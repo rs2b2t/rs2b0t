@@ -18,11 +18,11 @@ export const ROCKS_SPAWNS: readonly Tile[] = [
 ];
 
 export const DEFAULT_SPOTS: readonly Tile[] = [
-    new Tile(2704, 3726, 0),
-    new Tile(2701, 3719, 0),
-    new Tile(2717, 3720, 0),
-    new Tile(2710, 3717, 0),
-    new Tile(2713, 3727, 0)
+    new Tile(2704, 3726, 0), // wakes 2 standing still
+    new Tile(2701, 3719, 0), // wakes 2 standing still
+    new Tile(2717, 3720, 0), // wakes 1, 3x3 touches 2
+    new Tile(2710, 3717, 0), // 3x3 touches 3
+    new Tile(2713, 3727, 0) // 3x3 touches 2
 ];
 
 export function spawnsWithin(spot: Tile, ring: number, spawns: readonly Tile[] = ROCKS_SPAWNS): number {

@@ -14,17 +14,17 @@ export const ROCK_TYPES: Record<string, number[]> = {
 export const ROCK_OPTIONS = Object.keys(ROCK_TYPES);
 
 export const GAS_ROCK_IDS: Set<number> = new Set([
-    2119, 2120,
-    2121, 2122,
-    2123, 2124,
-    2125, 2126,
-    2127, 2128,
-    2129, 2130,
-    2131, 2132,
-    2133, 2134,
-    2135, 2136,
-    2137, 2138,
-    2139
+    2119, 2120, // copper
+    2121, 2122, // iron
+    2123, 2124, // tin
+    2125, 2126, // coal
+    2127, 2128, // gold
+    2129, 2130, // silver
+    2131, 2132, // mithril
+    2133, 2134, // adamantite
+    2135, 2136, // runite
+    2137, 2138, // clay
+    2139 // blurite
 ]);
 
 export const GAS_ROCK_TICKS = 60;
