@@ -63,7 +63,8 @@ import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import { ensureSpade, ensureCoordTools } from '#/bot/clues/AcquireTools.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
-import { gotoNpc, talkThrough, type NpcStop } from '#/bot/quests/exec/primitives.js';
+import { talkThrough } from '#/bot/quests/exec/primitives.js';
+import { Reach } from '#/bot/api/Reach.js';
 
 const SPADE = 'Spade';
 
@@ -79,7 +80,6 @@ const COORD_ITEMS = ['Sextant', 'Watch', 'Chart'];
 const SEARCH_OPS = ['Search', 'Open'];
 
 const ARRIVE_RADIUS = 1; // dig checks distance<=1; search locs sit on the clue coord
-const NPC_LEASH = 10; // NPCs wander; talkThrough re-finds them from the anchor
 const WALK_ATTEMPTS = 4; // bounded so an unreachable coord escalates to abandon
 const WALK_TIMEOUT_MS = 45_000; // per baked-walk pass
 const STEP_ATTEMPTS = 4; // interact tries per step before abandoning
@@ -365,8 +365,13 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
                 await talkThrough(step.npc, [], log);
                 return;
             }
-            const stop: NpcStop = { npc: step.npc, anchor, leash: NPC_LEASH, prefer: [] };
-            if (await gotoNpc(stop, [], log)) {
+            // Reach.npcDialog, not a leash-camped gotoNpc: patrol NPCs (Hans laps
+            // the WHOLE Lumbridge castle) are routinely outside any anchor leash,
+            // and four fast leash-misses used to abandon the clue. npcDialog walks
+            // to the anchor, finds the NPC anywhere in the SCENE, and clicks —
+            // the server op-walk then chases the patrol to the dialogue.
+            const st = await Reach.npcDialog({ name: step.npc, near: anchor, log });
+            if (st === 'done') {
                 await talkThrough(step.npc, [], log);
             }
             return;
