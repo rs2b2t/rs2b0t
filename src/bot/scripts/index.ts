@@ -30,6 +30,7 @@ import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
+import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -207,6 +208,15 @@ ScriptRegistry.register({
     tags: ['varrock', 'mining', 'banking', 'afk'],
     settingsSchema: ESSMINER_SETTINGS,
     create: () => new EssMiner()
+});
+
+ScriptRegistry.register({
+    name: 'RuneCrafter',
+    description: 'AIO Runecrafting — withdraw essence + talisman, walk to the Mysterious ruins, use the talisman to enter, craft-rune at the altar, portal back, bank. Rune type via dropdown (Air for now, south of Falador)',
+    category: 'Runecrafting',
+    tags: ['runecrafting', 'banking', 'falador', 'afk'],
+    settingsSchema: RUNECRAFTER_SETTINGS,
+    create: () => new RuneCrafter()
 });
 
 ScriptRegistry.register({
