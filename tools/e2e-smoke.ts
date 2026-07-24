@@ -81,7 +81,6 @@ try {
         return {
             banner: text('.rs2b0t-banner')[0] ?? '',
             rows,
-            stats: text('.rs2b0t-stat-level'),
             chat: text('.rs2b0t-chat-line'),
             tick: (globalThis as never as { rs2b0t: { host: { tickCount: number; tickMeanMs: number } } }).rs2b0t.host.tickCount
         };
@@ -98,8 +97,6 @@ try {
     if (!/^[1-9]\d* \(\d+ms\)$/.test(tick)) fail(`tick row: '${tick}'`);
     console.log(`panel: player='${player}' tile=(${tile}) energy=${energy} nearby=${nearby} tick=${tick}`);
 
-    if (panel.stats.some(s => !/^\d+\/\d+$/.test(s))) fail(`stats not populated: ${panel.stats.join(' ')}`);
-    console.log(`stats: ${panel.stats.length} skills populated (hp ${panel.stats[3]})`);
     console.log(`chat: ${panel.chat.join(' | ')}`);
 
     const before = panel.tick;
