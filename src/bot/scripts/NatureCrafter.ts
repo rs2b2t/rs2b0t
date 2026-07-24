@@ -22,6 +22,7 @@ import { type SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const ESSENCE = 'Rune essence';
+const ESSENCE_ID = 1436; // blankrune (unnoted, craftable essence); the bank-note variant stacks under a different id
 const NATURE = 'Nature rune';
 const TALISMAN = 'Nature talisman';
 const RUINS = 'Mysterious ruins';
@@ -61,12 +62,13 @@ function essCount(): number {
 function natureCount(): number {
     return Inventory.count(NATURE);
 }
-// Noted essence stacks in one slot (count > 1); unnoted essence is one item per slot.
+// Noted vs unnoted essence share a name but differ by obj id — classify by id, NOT by
+// stack count (a note un-noted down to a remainder of 1 has count 1 yet is still noted).
 function notedEssence(): number {
-    return Inventory.items().filter(i => i.name?.toLowerCase() === ESSENCE.toLowerCase() && i.count > 1).reduce((s, i) => s + i.count, 0);
+    return Inventory.items().filter(i => i.name?.toLowerCase() === ESSENCE.toLowerCase() && i.id !== ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
 function unnotedEssence(): number {
-    return Inventory.items().filter(i => i.name?.toLowerCase() === ESSENCE.toLowerCase() && i.count === 1).length;
+    return Inventory.items().filter(i => i.id === ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
 
 export default class NatureCrafter extends TaskBot {
@@ -169,24 +171,35 @@ class HandleOpenTrade implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return Trade.active(); }
     async execute(): Promise<void> {
+        // Confirm screen: partner already verified on the offer screen — accept, and record
+        // the intake here (this is where essence actually arrives + the trade closes).
+        if (Trade.onConfirmScreen()) {
+            this.bot.setStatus('confirming the essence trade');
+            const before = essCount();
+            await Trade.accept();
+            if (await Execution.delayUntil(() => !Trade.active(), 3000) && essCount() > before) {
+                this.bot.countTrade(essCount() - before);
+                this.bot.log(`received ${essCount() - before} essence`);
+            }
+            return;
+        }
+
+        // Offer screen. The "Trading With" header can lag a tick after the screen opens —
+        // wait for it rather than declining a real runner; the master only ever opens
+        // trades with configured runners (AcceptRunner), so a synced name should match.
         const who = Trade.partner();
+        if (who === null) {
+            this.bot.setStatus('reading trade partner');
+            await Execution.delayTicks(1);
+            return;
+        }
         if (!this.bot.isPartner(who)) {
-            this.bot.setStatus(`declining trade from ${who ?? 'stranger'}`);
-            this.bot.log(`declining a trade from '${who ?? 'unknown'}' — not a configured runner`);
+            this.bot.setStatus(`declining trade from ${who}`);
+            this.bot.log(`declining a trade from '${who}' — not a configured runner`);
             await Trade.decline();
             return;
         }
-
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming the essence trade');
-            await Trade.accept();
-            await Execution.delayUntil(() => !Trade.active(), 3000);
-            return;
-        }
-
-        // Offer screen: never give anything away; wait for the runner's essence.
-        const mine = Trade.myOffer();
-        if (mine.length > 0) {
+        if (Trade.myOffer().length > 0) {
             this.bot.log('safety: something is in MY trade offer — declining so nothing is given away');
             await Trade.decline();
             return;
@@ -198,16 +211,8 @@ class HandleOpenTrade implements Task {
             await Execution.delayTicks(1);
             return;
         }
-
         this.bot.setStatus(`accepting ${theirEssence} essence from ${who}`);
-        this.bot.log(`accepting ${theirEssence} ${ESSENCE} from ${who}`);
-        const before = essCount();
         await Trade.accept();
-        // Second accept happens on the confirm screen next loop; record the intake once it lands.
-        if (await Execution.delayUntil(() => !Trade.active() && essCount() > before, 4000)) {
-            this.bot.countTrade(essCount() - before);
-            this.bot.log(`received ${essCount() - before} essence`);
-        }
     }
 }
 
@@ -358,7 +363,7 @@ class DriveTrade implements Task {
                 this.pending = unnotedEssence();
                 this.bot.setStatus('offering essence');
                 this.bot.log(`trade open — offering ${this.pending} essence`);
-                await Trade.offerAll(ESSENCE, i => i.count === 1);
+                await Trade.offerAll(ESSENCE, i => i.id === ESSENCE_ID);
             } else {
                 this.bot.setStatus('accepting the offer');
                 await Trade.accept();
@@ -442,13 +447,14 @@ class BankRestock implements Task {
 
         await Bank.setNoteMode(false);
         const needCoins = COINS_BUFFER - Inventory.count(COINS);
-        if (needCoins > 0) {
-            if (Bank.count(COINS) === 0) {
-                this.bot.log('NatureCrafter runner: no coins in the bank for boat fares. Stopping.');
-                ScriptRunner.stop();
-                return;
-            }
-            await Bank.withdrawX(COINS, needCoins);
+        if (needCoins > 0 && Bank.count(COINS) > 0) {
+            await Bank.withdrawX(COINS, Math.min(needCoins, Bank.count(COINS)));
+        } else if (Inventory.count(COINS) < 500) {
+            // Genuinely broke — nothing to top up with and not enough in hand to cover the
+            // boat fares + un-note margin. (Merely dipping below the buffer is fine.)
+            this.bot.log('NatureCrafter runner: out of coins (bank + pack) for fares. Stopping.');
+            ScriptRunner.stop();
+            return;
         }
 
         const banked = Bank.count(ESSENCE);

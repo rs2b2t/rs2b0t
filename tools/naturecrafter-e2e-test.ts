@@ -87,7 +87,7 @@ try {
     await cheatQuiet(pageR, '~maxme');
     await pageR.waitForTimeout(1200);
     await cheatQuiet(pageR, '~clearinv');
-    await cheatQuiet(pageR, '~bankitem blankrune 52');
+    await cheatQuiet(pageR, '~bankitem blankrune 27'); // 27 = 26 + 1 -> leaves a "note of 1" (the finding-#1 wedge case)
     await cheatQuiet(pageR, '~bankitem coins 100000');
     await pageR.evaluate(n => {
         localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
@@ -115,7 +115,7 @@ try {
 
         if (r.logs.some(l => /delivered \d+ essence/.test(l))) { delivered = true; }
         if (delivered && r.noted > 0) { keptNoted = true; } // still holds the leftover note after a delivery
-        if (m.natures >= 20 && m.rcXp > xp0) { crafted = true; }
+        if (m.natures >= 54 && m.rcXp > xp0) { crafted = true; } // all 27 essence crafted (27*2) — a note-of-1 wedge would stall at 52
         if (crafted && delivered) { break; }
         if (r.state === 'crashed' || m.state === 'crashed') { break; }
         await pageM.waitForTimeout(3000);
