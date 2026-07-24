@@ -7,6 +7,7 @@ export default class ParamsModal {
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
+    private title = '';
     private schema: SettingsSchema = {};
     private globalExtra: HTMLElement | null = null;
     private collapsed = new Map<string, Set<string>>();
@@ -48,8 +49,9 @@ export default class ParamsModal {
         return this.backdrop.style.display === 'flex';
     }
 
-    open(scriptName: string, schema: SettingsSchema): void {
+    open(scriptName: string, schema: SettingsSchema, title: string): void {
         this.scriptName = scriptName;
+        this.title = title;
         this.schema = schema;
         this.render();
         this.backdrop.style.display = 'flex';
@@ -65,7 +67,7 @@ export default class ParamsModal {
     }
 
     private render(): void {
-        this.titleEl.textContent = `${this.scriptName} · parameters`;
+        this.titleEl.textContent = this.title;
         this.bodyEl.replaceChildren();
         if (this.scriptName === 'Global' && this.globalExtra) {
             this.bodyEl.appendChild(this.globalExtra);

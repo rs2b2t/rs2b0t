@@ -6,10 +6,9 @@ import { boxKey } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
+import { GLOBAL_SETTINGS } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
-import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
 const SELECTED_SCRIPT_KEY = boxKey('selectedScript');
@@ -27,7 +26,7 @@ export default class BotPanel {
     private scriptStatus: HTMLElement;
     private logBox: HTMLElement;
     private unsubLog: (() => void) | null = null;
-    private settingsBox: HTMLElement;
+    private scriptSettingsBtn!: HTMLButtonElement;
     private paramsModal!: ParamsModal;
 
     private banner: HTMLElement;
@@ -59,7 +58,10 @@ export default class BotPanel {
         const script = el('div', 'rs2b0t-section');
         script.appendChild(sectionTitle('script'));
 
-        this.library = new ScriptLibrary(name => this.selectScript(name));
+        this.library = new ScriptLibrary(name => {
+            this.selectScript(name);
+            this.openScriptSettings();
+        });
         const remembered = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SELECTED_SCRIPT_KEY) : null)
             ?? (typeof localStorage !== 'undefined' ? localStorage.getItem(SELECTED_SCRIPT_KEY) : null);
         this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
@@ -80,15 +82,19 @@ export default class BotPanel {
         root.appendChild(script);
 
         const settings = el('div', 'rs2b0t-section');
-        settings.appendChild(sectionTitle('parameters'));
-        this.settingsBox = el('div', 'rs2b0t-settings');
-        settings.appendChild(this.settingsBox);
+
+        this.scriptSettingsBtn = document.createElement('button');
+        this.scriptSettingsBtn.className = 'rs2b0t-button rs2b0t-param-edit';
+        this.scriptSettingsBtn.textContent = 'Script Settings';
+        this.scriptSettingsBtn.title = 'Settings for the selected script';
+        this.scriptSettingsBtn.addEventListener('click', () => this.openScriptSettings());
+        settings.appendChild(this.scriptSettingsBtn);
 
         const globalBtn = document.createElement('button');
         globalBtn.className = 'rs2b0t-button rs2b0t-param-edit';
         globalBtn.textContent = 'Global settings';
         globalBtn.title = 'Settings shared across all scripts (e.g. genie lamp skill); a script’s own value overrides these';
-        globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS));
+        globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS, 'Global settings'));
         settings.appendChild(globalBtn);
 
         root.appendChild(settings);
@@ -187,41 +193,17 @@ export default class BotPanel {
     }
 
     private renderSettings(): void {
-        this.settingsBox.replaceChildren();
+        const schema = ScriptRegistry.get(this.selectedScript)?.settingsSchema;
+        this.scriptSettingsBtn.disabled = !schema || Object.keys(schema).length === 0;
+    }
+
+    private openScriptSettings(): void {
         const meta = ScriptRegistry.get(this.selectedScript);
         const schema = meta?.settingsSchema;
         if (!meta || !schema || Object.keys(schema).length === 0) {
-            const none = el('div', 'rs2b0t-dim');
-            none.textContent = '(no parameters)';
-            this.settingsBox.appendChild(none);
             return;
         }
-
-        const active = isActiveState(ScriptRunner.state);
-
-        const summary = el('div', 'rs2b0t-param-summary');
-        const valueOf = (key: string): string => (schema[key] ? SettingsStore.displayString(meta.name, key, schema[key]) : '');
-        for (const [key, def] of Object.entries(schema)) {
-            if (!isVisible(def, valueOf)) {
-                continue;
-            }
-            const item = el('span', 'rs2b0t-param-sitem');
-            const k = el('span', 'rs2b0t-param-skey');
-            k.textContent = key;
-            const v = el('span', 'rs2b0t-param-sval');
-            v.textContent = summarize(def, SettingsStore.displayString(meta.name, key, def));
-            item.appendChild(k);
-            item.appendChild(v);
-            summary.appendChild(item);
-        }
-        this.settingsBox.appendChild(summary);
-
-        const edit = document.createElement('button');
-        edit.className = 'rs2b0t-button rs2b0t-param-edit';
-        edit.textContent = '✎ Edit parameters';
-        edit.disabled = active;
-        edit.addEventListener('click', () => this.paramsModal.open(meta.name, schema));
-        this.settingsBox.appendChild(edit);
+        this.paramsModal.open(meta.name, schema, `${meta.name} · Script Settings`);
     }
 
     private buildCredentials(): HTMLElement {
