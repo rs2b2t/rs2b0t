@@ -1,3 +1,4 @@
+import { loadFromFile, loadFromUrl, type LoadResult } from '../runtime/loader.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { el } from './dom.js';
 
@@ -8,6 +9,7 @@ export default class ScriptLibrary {
     private listEl: HTMLElement;
     private chipsEl: HTMLElement;
     private searchEl: HTMLInputElement;
+    private loadStatus!: HTMLElement;
 
     private category = 'All';
     private query = '';
@@ -50,6 +52,8 @@ export default class ScriptLibrary {
         this.listEl = el('div', 'rs2b0t-library-list');
         modal.appendChild(this.listEl);
 
+        modal.appendChild(this.buildLoadSection());
+
         this.backdrop.appendChild(modal);
         document.body.appendChild(this.backdrop);
 
@@ -58,6 +62,67 @@ export default class ScriptLibrary {
                 this.render();
             }
         });
+    }
+
+    private buildLoadSection(): HTMLElement {
+        const load = el('div', 'rs2b0t-library-load');
+        const title = el('div', 'rs2b0t-section-title');
+        title.textContent = 'load external script';
+        load.appendChild(title);
+
+        const urlRow = el('div', 'rs2b0t-buttons');
+        const urlInput = document.createElement('input');
+        urlInput.className = 'rs2b0t-input';
+        urlInput.type = 'text';
+        urlInput.placeholder = 'script URL (dist/bot.js)';
+        urlRow.appendChild(urlInput);
+        const urlBtn = document.createElement('button');
+        urlBtn.className = 'rs2b0t-button';
+        urlBtn.style.flex = '0 0 auto';
+        urlBtn.textContent = 'Load URL';
+        urlBtn.addEventListener('click', () => void this.handleLoad(loadFromUrl(urlInput.value.trim())));
+        urlRow.appendChild(urlBtn);
+        load.appendChild(urlRow);
+
+        const fileRow = el('div', 'rs2b0t-buttons');
+        const filePick = document.createElement('input');
+        filePick.type = 'file';
+        filePick.accept = '.js,.mjs';
+        filePick.style.display = 'none';
+        filePick.addEventListener('change', () => {
+            const file = filePick.files?.[0];
+            if (file) {
+                void this.handleLoad(loadFromFile(file));
+            }
+            filePick.value = '';
+        });
+        const fileBtn = document.createElement('button');
+        fileBtn.className = 'rs2b0t-button';
+        fileBtn.textContent = 'Load local script…';
+        fileBtn.addEventListener('click', () => filePick.click());
+        fileRow.appendChild(fileBtn);
+        fileRow.appendChild(filePick);
+        load.appendChild(fileRow);
+
+        this.loadStatus = el('div', 'rs2b0t-load-status');
+        load.appendChild(this.loadStatus);
+        return load;
+    }
+
+    private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
+        this.loadStatus.textContent = 'loading…';
+        this.loadStatus.className = 'rs2b0t-load-status';
+
+        const result = await pending;
+        if (result.ok && result.name) {
+            this.loadStatus.textContent = `loaded '${result.name}'`;
+            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
+            this.onSelect(result.name);
+            this.close();
+        } else {
+            this.loadStatus.textContent = `load failed: ${result.ok ? 'no bot exported' : result.error}`;
+            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
+        }
     }
 
     isOpen(): boolean {
