@@ -8,6 +8,7 @@ export default class ParamsModal {
     private bodyEl: HTMLElement;
     private scriptName = '';
     private schema: SettingsSchema = {};
+    private globalExtra: HTMLElement | null = null;
     private collapsed = new Map<string, Set<string>>();
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
@@ -58,9 +59,17 @@ export default class ParamsModal {
         this.backdrop.style.display = 'none';
     }
 
+    // extra DOM shown atop the Global popup only (account/login controls)
+    setGlobalExtra(extra: HTMLElement): void {
+        this.globalExtra = extra;
+    }
+
     private render(): void {
         this.titleEl.textContent = `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
+        if (this.scriptName === 'Global' && this.globalExtra) {
+            this.bodyEl.appendChild(this.globalExtra);
+        }
         const disabled = this.isActive();
         const deps = visibilityDeps(this.schema);
         const valueOf = (key: string): string => (this.schema[key] ? SettingsStore.displayString(this.scriptName, key, this.schema[key]) : '');
