@@ -507,6 +507,32 @@ export const reader = {
         return cachedRunControls;
     },
 
+    retaliateControls(): { onComId: number; offComId: number } | null {
+        if (cachedRetaliateControls !== null && cachedRetaliateControls !== undefined) {
+            return cachedRetaliateControls;
+        }
+
+        for (const root of IfType.list) {
+            if (!root?.children) {
+                continue;
+            }
+            const hasRetaliate = root.children.some(c => IfType.list[c]?.text === 'Auto retaliate');
+            if (!hasRetaliate || root.children.length <= 7) {
+                continue;
+            }
+
+            const off = root.children[6];
+            const on = root.children[7];
+            if (IfType.list[on]?.buttonType !== undefined && IfType.list[off] !== undefined) {
+                cachedRetaliateControls = { onComId: on, offComId: off };
+                return cachedRetaliateControls;
+            }
+            break;
+        }
+
+        return null;
+    },
+
     toWorld(lx: number, lz: number): WorldTile | null {
         if (!raw) {
             return null;
@@ -834,6 +860,7 @@ function loopCycleNow(): number {
 
 const cachedTabInvComId = new Map<number, number>();
 let cachedRunControls: { onComId: number; offComId: number } | null | undefined = undefined;
+let cachedRetaliateControls: { onComId: number; offComId: number } | null | undefined = undefined;
 
 function findTabInvComponent(tabIndex: number): number {
     if (!raw) {
