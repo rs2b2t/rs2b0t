@@ -576,8 +576,7 @@ export const reader = {
         return readInvComponent(comId, () => IfType.list[comId].iop ?? []);
     },
 
-    // Two-party trade (interface_trade). First screen = main modal 3323 (offers)
-    // with your pack in side modal 3321; second screen = main modal 3443 (confirm).
+    // offer screen = main modal 3323 (pack in side 3321); confirm screen = main modal 3443
     tradeOfferOpen(): boolean {
         return raw?.mainModalId === 3323;
     },

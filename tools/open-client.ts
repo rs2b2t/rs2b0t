@@ -1,6 +1,4 @@
-// Open a visible bot-client window at the login screen so a human can log in and
-// inspect. Does nothing else — no auto-login, no seeding. Stays open until closed.
-//
+// Open a visible bot-client window at the login screen for manual inspection.
 // Usage: HEADED=1 bun tools/open-client.ts [base]
 
 import { boot, fail, launchBrowser } from './lib/harness.js';

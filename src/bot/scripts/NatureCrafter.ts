@@ -22,7 +22,7 @@ import { type SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const ESSENCE = 'Rune essence';
-const ESSENCE_ID = 1436; // blankrune (unnoted, craftable essence); the bank-note variant stacks under a different id
+const ESSENCE_ID = 1436; // blankrune (unnoted essence); the bank-note variant has a different id
 const NATURE = 'Nature rune';
 const TALISMAN = 'Nature talisman';
 const RUINS = 'Mysterious ruins';
@@ -33,18 +33,13 @@ const RUINS_TILE = new Tile(2865, 3022, 0); // nature Mysterious ruins = the tra
 const BANK_TILE = new Tile(2852, 2954, 0); // Shilo Village bank (needs the Shilo Village quest)
 const TEMPLE_Z = 4000; // altar temples sit at z ~4800; the overworld is < 4000
 const RC_LEVEL = 44;
-const RUNNER_RANGE = 2; // only respond to an adjacent runner — OPPLAYER4 runs you to them, so the master stays anchored at the altar and lets the runner come to it
-
-// Runner: bank a big noted-essence stack at Ardougne, ship to Karamja (Captain
-// Barnaby, a baked SpecialCrossing — the walker crosses on its own), then loop on
-// Karamja: un-note 26 at Jiminua's store, deliver 26 to the master at the ruins, and
-// repeat until the noted stack runs out before shipping back to re-bank.
+const RUNNER_RANGE = 2; // tiles; only trade an adjacent runner (OPPLAYER4 walks you to them)
 const COINS = 'Coins';
-const ARD_BANK = new Tile(2655, 3283, 0); // Ardougne East bank, near Captain Barnaby's pier
+const ARD_BANK = new Tile(2655, 3283, 0); // Ardougne East bank, by Captain Barnaby's pier
 const STORE_TILE = new Tile(2767, 3122, 0); // Jiminua's Jungle Store, Karamja
 const UNNOTE_NPC = 'Jiminua';
-const BATCH = 26; // un-note this many at a time — fills the pack beside the noted stack + coins
-const COINS_BUFFER = 10000; // ship fares (30 each way) + the un-note margin across a whole note stack's cycles
+const BATCH = 26; // essence un-noted per store visit
+const COINS_BUFFER = 10000; // fare + un-note margin buffer
 
 export const SETTINGS: SettingsSchema = {
     mode: { type: 'string', default: 'Master', options: ['Master', 'Runner'], label: 'Mode', help: 'Master crafts natures at the altar and takes essence from runners; Runner ferries essence to the master (runner ships in a later phase)' },
@@ -62,8 +57,6 @@ function essCount(): number {
 function natureCount(): number {
     return Inventory.count(NATURE);
 }
-// Noted vs unnoted essence share a name but differ by obj id — classify by id, NOT by
-// stack count (a note un-noted down to a remainder of 1 has count 1 yet is still noted).
 function notedEssence(): number {
     return Inventory.items().filter(i => i.name?.toLowerCase() === ESSENCE.toLowerCase() && i.id !== ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
@@ -88,7 +81,7 @@ export default class NatureCrafter extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
         this.mode = this.settings.str('mode', 'Master');
         this.partners = this.settings.str('partner', '').split(',').map(s => s.trim()).filter(Boolean);
-        this.bankAt = Math.max(0, this.settings.num('bankAt', 0)); // 0 = never bank, just hold the (stacking) natures
+        this.bankAt = Math.max(0, this.settings.num('bankAt', 0)); // 0 = never bank
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('runecraft');
 
@@ -164,15 +157,10 @@ export default class NatureCrafter extends TaskBot {
     }
 }
 
-// Finish (or refuse) any open trade before doing anything else, so the master never
-// walks off mid-trade. Accept only a configured runner's essence, and only while
-// giving nothing away.
 class HandleOpenTrade implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return Trade.active(); }
     async execute(): Promise<void> {
-        // Confirm screen: partner already verified on the offer screen — accept, and record
-        // the intake here (this is where essence actually arrives + the trade closes).
         if (Trade.onConfirmScreen()) {
             this.bot.setStatus('confirming the essence trade');
             const before = essCount();
@@ -184,9 +172,7 @@ class HandleOpenTrade implements Task {
             return;
         }
 
-        // Offer screen. The "Trading With" header can lag a tick after the screen opens —
-        // wait for it rather than declining a real runner; the master only ever opens
-        // trades with configured runners (AcceptRunner), so a synced name should match.
+        // header can lag a tick — wait for it rather than declining a real runner
         const who = Trade.partner();
         if (who === null) {
             this.bot.setStatus('reading trade partner');
@@ -221,7 +207,7 @@ class CraftNatures implements Task {
     validate(): boolean { return inTemple() && essCount() > 0; }
     async execute(): Promise<void> {
         const altar = Locs.query().name(ALTAR.name).action(ALTAR.op).nearest();
-        if (!altar) { await Execution.delayTicks(2); return; } // scene still syncing after the telejump
+        if (!altar) { await Execution.delayTicks(2); return; }
         this.bot.setStatus('crafting natures');
         const before = essCount();
         this.bot.log(`crafting ${before} essence into natures at the altar`);
@@ -273,14 +259,11 @@ class BankNatures implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('banking natures');
         this.bot.log(`heading to the bank with ${natureCount()} natures`);
-        // Bounded walk (not the default 240s) so an unreachable quest-gated bank fails
-        // fast instead of hanging the master away from the altar.
+        // short timeout so an unreachable quest-gated bank fails fast, not after the default 240s
         const reached = await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 2, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
         const opened = reached && ((await Bank.openBooth(BANK_TILE, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
             || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))));
         if (!opened) {
-            // Bank unreachable (Shilo needs the quest). Natures stack into one slot, so
-            // hold them and keep serving runners rather than wedging here; retry later.
             this.bot.log('NatureCrafter: bank unreachable (Shilo Village quest?) — holding natures (they stack) and continuing to serve runners');
             this.backoffUntil = Date.now() + 300_000;
             await this.bot.walkTo(RUINS_TILE, 1);
@@ -294,14 +277,10 @@ class BankNatures implements Task {
     }
 }
 
-// The runner has come to us and is adjacent: accept its trade. OPPLAYER4 back opens the
-// screen; because the runner is right here, the master doesn't move off the altar.
 class AcceptRunner implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean {
-        // No nature-threshold guard here — task order already lets BankNatures (which
-        // only fires when banking is due) preempt this. Gating on natureCount would
-        // wrongly block accepting when bankAt is 0 (never-bank).
+        // no natureCount guard — task order lets BankNatures preempt; gating here breaks bankAt=0
         return !inTemple() && essCount() === 0 && !Trade.active() && this.bot.nearestRunner() !== null;
     }
     async execute(): Promise<void> {
@@ -324,10 +303,7 @@ class WaitForRunner implements Task {
     }
 }
 
-// ---- Runner tasks ----
-
-// The general store opens via Talk-to and its first ("yes/buy") dialogue option —
-// these shopkeepers (Jiminua, Aemad) have no bare-Trade opnpc3 handler.
+// opens via Talk-to + the first ("yes/buy") dialogue option, not a bare Trade op
 async function openUnnoteShop(): Promise<boolean> {
     if (Shop.isOpen()) {
         return true;
@@ -348,11 +324,7 @@ async function openUnnoteShop(): Promise<boolean> {
     return Shop.isOpen();
 }
 
-// Owns the loop while ANY trade modal is open — offering essence empties it from the
-// pack, so a pack-based task would otherwise think the delivery is done and walk off,
-// closing the trade. Never moves. Offers only the unnoted essence (the noted stack
-// rides along untouched), then accepts the offer screen and the confirm screen; the
-// master accepts both too.
+// owns the loop while a trade modal is open — never moves (movement/combat closes it)
 class DriveTrade implements Task {
     private pending = 0;
     constructor(private bot: NatureCrafter) {}
@@ -382,9 +354,6 @@ class DriveTrade implements Task {
     }
 }
 
-// No modal open but we're holding unnoted essence: walk to the master and open a trade.
-// Keeps retrying while any unnoted essence remains (an interrupted trade leaves it back
-// in the pack). Does NOT run while a trade is active — DriveTrade owns that.
 class DeliverEssence implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return unnotedEssence() > 0 && !Trade.active(); }
@@ -405,9 +374,6 @@ class DeliverEssence implements Task {
     }
 }
 
-// At Jiminua's store: sell one batch of noted essence and buy it straight back unnoted.
-// One batch fills the pack alongside the leftover noted stack + coins; the rest of the
-// noted stack waits for the next store visit.
 class UnNoteEssence implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return notedEssence() > 0 && unnotedEssence() === 0; }
@@ -430,8 +396,6 @@ class UnNoteEssence implements Task {
     }
 }
 
-// Out of essence: at Ardougne, top up coins then withdraw the whole essence stack as
-// one note (one slot) to feed many un-note/deliver cycles before the next bank trip.
 class BankRestock implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return essCount() === 0; }
@@ -450,8 +414,6 @@ class BankRestock implements Task {
         if (needCoins > 0 && Bank.count(COINS) > 0) {
             await Bank.withdrawX(COINS, Math.min(needCoins, Bank.count(COINS)));
         } else if (Inventory.count(COINS) < 500) {
-            // Genuinely broke — nothing to top up with and not enough in hand to cover the
-            // boat fares + un-note margin. (Merely dipping below the buffer is fine.)
             this.bot.log('NatureCrafter runner: out of coins (bank + pack) for fares. Stopping.');
             ScriptRunner.stop();
             return;
@@ -471,9 +433,7 @@ class BankRestock implements Task {
     }
 }
 
-// Craft locks the player (p_delay 3) and pops a level-up. Leave straight away: in a
-// tight loop, close any dialog and re-click the portal every tick so the Use fires
-// the instant the lock clears, instead of standing there.
+// craft locks the player (p_delay 3); tight-loop the portal so Use fires the instant it clears
 async function portalOut(bot: NatureCrafter): Promise<void> {
     bot.setStatus('taking the portal out');
     bot.log('taking the portal back to the ruins');

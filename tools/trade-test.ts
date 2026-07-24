@@ -1,9 +1,5 @@
-// Live 2-account smoke for the player-trade API (Master Nature Crafter, phase 1).
-// Two mainland accounts stand together off-island; B (giver) hands a stack of Rune
-// essence to A (receiver) through the full offer -> confirm handshake driven entirely
-// by the Trade API. PASS when the essence moves from B's pack into A's.
-//
-// Usage: bun tools/trade-test.ts [base]
+// 2-account smoke for the player-trade API: B hands essence to A through the full
+// offer -> confirm handshake. Usage: bun tools/trade-test.ts [base]
 
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login } from './lib/harness.js';
@@ -63,9 +59,7 @@ try {
     await bringUp(pageA, A_USER);
     await bringUp(pageB, B_USER);
 
-    // Seed after the relog (a pre-relog seed is rolled back). Direct packet
-    // (cheatQuiet), not typed chat — no canvas-focus dependency. Clear both packs
-    // first: B for a clean essence-only slate, A so it has room to receive.
+    // seed after the relog (a pre-relog seed is rolled back)
     await cheatQuiet(pageA, '~clearinv');
     await cheatQuiet(pageB, '~clearinv');
     if (!(await cheatQuiet(pageB, `~item blankrune ${SEED}`))) { fail('B seed command not sent'); }
@@ -77,7 +71,6 @@ try {
     if (bStart < SEED) fail(`B seed failed — holds ${bStart} ${ITEM}`);
     console.log(`B seeded ${bStart} ${ITEM}; A holds ${await count(pageA, ITEM)}`);
 
-    // Wait until each account can see the other in its player list.
     let visible = false;
     for (let i = 0; i < 10 && !visible; i++) {
         await pageA.waitForTimeout(1500);
@@ -86,7 +79,6 @@ try {
     if (!visible) fail(`accounts can't see each other (A sees B=${await sees(pageA, B_USER)}, B sees A=${await sees(pageB, A_USER)})`);
     console.log('both accounts see each other');
 
-    // 1. Mutual "Trade with" until both are on the offer screen.
     let opened = false;
     for (let i = 0; i < 20 && !opened; i++) {
         await request(pageA, B_USER);
@@ -97,7 +89,6 @@ try {
     if (!opened) fail(`offer screen never opened (A=${await onOffer(pageA)} B=${await onOffer(pageB)})`);
     console.log(`offer screen open — A trading with '${await partner(pageA)}', B with '${await partner(pageB)}'`);
 
-    // 2. B offers the whole essence stack; wait until A sees it.
     let sawOffer = false;
     for (let i = 0; i < 12 && !sawOffer; i++) {
         await offerAll(pageB, ITEM);
@@ -110,7 +101,6 @@ try {
     if (!sawOffer) fail(`A never saw B's ${ITEM} offer: ${JSON.stringify(await theirOffer(pageA))}`);
     console.log(`A sees B's offer of ${SEED} ${ITEM}`);
 
-    // 3. Both accept the offer screen -> confirm screen.
     let confirmed = false;
     for (let i = 0; i < 15 && !confirmed; i++) {
         if (await onOffer(pageA)) { await accept(pageA); }
@@ -121,7 +111,6 @@ try {
     if (!confirmed) fail(`confirm screen never reached (A=${await onConfirm(pageA)} B=${await onConfirm(pageB)})`);
     console.log('both on the confirm screen');
 
-    // 4. Both accept the confirm screen -> exchange + close.
     let done = false;
     for (let i = 0; i < 15 && !done; i++) {
         if (await active(pageA)) { await accept(pageA); }
@@ -131,7 +120,6 @@ try {
     }
     if (!done) fail('trade never closed after confirm');
 
-    // 5. Verify the essence changed hands.
     const aEnd = await count(pageA, ITEM);
     const bEnd = await count(pageB, ITEM);
     console.log(`after trade: A holds ${aEnd} ${ITEM}, B holds ${bEnd}`);

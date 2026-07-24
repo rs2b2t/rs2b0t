@@ -1,8 +1,5 @@
-// Hands-on session: open a visible local client, log in, teleport to the Ardougne
-// East bank, and seed 100k gp + 1000 rune essence. Then leave the window open so a
-// human can play and demonstrate the exact un-note flow.
-//
-// Usage: HEADED=1 bun tools/ardy-session.ts [base] [user]
+// Hands-on session: open a visible client at the Ardougne bank with 100k gp + 1000
+// essence and leave it open. Usage: HEADED=1 bun tools/ardy-session.ts [base] [user]
 
 import { boot, bringUpOffIsland, fail, launchBrowser, login, type } from './lib/harness.js';
 import { cheatQuiet } from './tutorial/harness.js';

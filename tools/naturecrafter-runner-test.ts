@@ -1,10 +1,5 @@
-// Live smoke for the NatureCrafter runner's crux (Master Nature Crafter, phase 3):
-// bank restock + un-note. Runner sits at the Ardougne East bank with essence + coins
-// banked, mode=Runner. It withdraws essence in Note mode and (if noteable) un-notes it
-// at Aemad's store. PASS when it ends up holding a deliverable stack of UNNOTED essence.
-// The withdraw log ("noted" vs "unnoted") is the definitive noteability answer.
-//
-// Usage: bun tools/naturecrafter-runner-test.ts [base] [budget-min]
+// Runner-crux smoke: withdraws essence in Note mode at Ardougne, ships to Karamja, and
+// un-notes at Jiminua. Usage: bun tools/naturecrafter-runner-test.ts [base] [budget-min]
 
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login, type } from './lib/harness.js';

@@ -1,8 +1,4 @@
-// Live smoke for the NatureCrafter master (Master Nature Crafter, phase 2).
-// Two mainland accounts at the nature Mysterious ruins (Karamja): M runs the
-// NatureCrafter master bot; R is a scripted runner that trades essence to M. PASS
-// when the master takes R's essence, enters the altar, and crafts Nature runes.
-//
+// Master smoke: a scripted runner trades essence to the master bot, which crafts natures.
 // Usage: bun tools/naturecrafter-master-test.ts [base] [budget-min]
 
 import type { Page } from 'playwright-core';
@@ -83,12 +79,10 @@ try {
     await teleToAltar(pageM, M_USER);
     await teleToAltar(pageR, R_USER);
 
-    // Master: max stats (runecraft 44+), clean pack + a nature talisman.
     await cheatQuiet(pageM, '~maxme');
     await pageM.waitForTimeout(1500);
     await cheatQuiet(pageM, '~clearinv');
     await cheatQuiet(pageM, '~item nature_talisman 1');
-    // Runner: clean pack + a batch of essence to deliver.
     await cheatQuiet(pageR, '~clearinv');
     await cheatQuiet(pageR, `~item blankrune ${SEED}`);
     await pageM.waitForTimeout(800);
@@ -101,7 +95,7 @@ try {
     if (rEss < SEED) fail(`runner holds ${rEss} essence, expected ${SEED}`);
     console.log(`seeded: master rc=${mRc} talisman=${mTal}, runner essence=${rEss}`);
 
-    // Configure + start the master bot. bankAt high so it won't try the quest-gated Shilo bank.
+    // bankAt high so it won't try the quest-gated Shilo bank
     await pageM.evaluate(n => {
         localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
         localStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
@@ -117,9 +111,7 @@ try {
     let m = await sampleMaster(pageM);
     while (Date.now() < deadline) {
         m = await sampleMaster(pageM);
-        // Drive the runner side until the master actually RECEIVES essence (not merely
-        // until it leaves the runner's pack — offered essence reads as 0 in the pack but
-        // the trade isn't done). Keep accepting through both offer + confirm screens.
+        // drive until the master RECEIVES essence — offered essence reads 0 in the pack pre-completion
         if (m.essence === 0 && m.natures === 0) {
             if (await tActive(pageR)) {
                 if (await tOnOffer(pageR)) { await tOfferAll(pageR, ITEM); }

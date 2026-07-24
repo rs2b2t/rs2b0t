@@ -1,11 +1,5 @@
-// Full end-to-end smoke for the Master Nature Crafter (phases 2+3 together): a master
-// bot at the nature altar and a runner bot starting from the Ardougne bank. The runner
-// banks a note, ships to Karamja, un-notes at Jiminua, walks to the altar, and hands the
-// unnoted essence to the master (keeping its noted stack); the master crafts natures.
-// PASS when the master crafts natures from delivered essence AND the runner never gives
-// away its noted stack.
-//
-// Usage: bun tools/naturecrafter-e2e-test.ts [base] [budget-min]
+// End-to-end smoke: a runner ships essence Ardougne->Karamja and hands it to a master
+// that crafts natures. Usage: bun tools/naturecrafter-e2e-test.ts [base] [budget-min]
 
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login, type } from './lib/harness.js';
@@ -71,7 +65,6 @@ try {
     await teleTo(pageR, R_USER, BANK_TELE);
     console.log('master at the altar, runner at the Ardougne bank');
 
-    // Master: maxed runecraft + a nature talisman, Master mode taking essence from the runner.
     await cheatQuiet(pageM, '~maxme');
     await pageM.waitForTimeout(1500);
     await cheatQuiet(pageM, '~clearinv');
@@ -82,8 +75,7 @@ try {
         localStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '400'); // never bank natures during the smoke
     }, R_USER);
 
-    // Runner: 99 hp + combat (dangerous monsters on the Karamja jungle route), essence
-    // + coins in the Ardougne bank, Runner mode delivering to the master.
+    // runner needs 99 hp — dangerous monsters on the Karamja route
     await cheatQuiet(pageR, '~maxme');
     await pageR.waitForTimeout(1200);
     await cheatQuiet(pageR, '~clearinv');

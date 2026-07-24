@@ -1,9 +1,5 @@
-// Soak test for the Master Nature Crafter: 1 master at the nature altar + N runners
-// (default 8), each seeded with 300 noted essence + 100k gp in the Ardougne bank. Starts
-// everyone and streams a live dashboard so you can watch throughput, contention at the
-// master, and whether any runner gets stuck. Runs until the budget or every runner is dry.
-//
-// Usage: bun tools/naturecrafter-soak-test.ts [base] [budget-min] [num-runners]
+// Soak test: 1 master + N runners (default 8), each seeded with 300 essence + 100k gp,
+// streaming a live dashboard. Usage: bun tools/naturecrafter-soak-test.ts [base] [budget-min] [num-runners]
 
 import type { Page } from 'playwright-core';
 import { boot, bringUpOffIsland, fail, launchBrowser, login, type } from './lib/harness.js';
