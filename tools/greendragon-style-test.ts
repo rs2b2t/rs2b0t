@@ -40,9 +40,9 @@ try {
     if (dragons === 0) fail('no green dragons in scene — wrong coords?');
 
     await page.evaluate(() => {
-        localStorage.setItem('rs2b0t:set:GreenDragon:combatStyle', 'melee');
-        localStorage.setItem('rs2b0t:set:GreenDragon:weapon', 'Rune scimitar');
-        localStorage.setItem('rs2b0t:set:GreenDragon:food', 'Lobster');
+        sessionStorage.setItem('rs2b0t:set:GreenDragon:combatStyle', 'melee');
+        sessionStorage.setItem('rs2b0t:set:GreenDragon:weapon', 'Rune scimitar');
+        sessionStorage.setItem('rs2b0t:set:GreenDragon:food', 'Lobster');
     });
 
     await startFromLibrary(page, 'Combat', 'GreenDragon');

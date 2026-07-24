@@ -62,9 +62,9 @@ try {
         console.log(`advanced ${pair}`);
     }
 
-    await page.evaluate(csv => localStorage.setItem('rs2b0t:set:AIOQuester:quests', csv), questsCsv);
+    await page.evaluate(csv => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', csv), questsCsv);
     if (foodSetting) {
-        await page.evaluate(f => localStorage.setItem('rs2b0t:set:AIOQuester:food', f), foodSetting);
+        await page.evaluate(f => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', f), foodSetting);
         console.log(`food setting: ${foodSetting}`);
     }
     console.log(`queued: ${queue.map(q => q.id).join(', ')}`);

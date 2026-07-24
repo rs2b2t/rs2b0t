@@ -81,9 +81,9 @@ try {
     await cheatQuiet(pageM, '~clearinv');
     await cheatQuiet(pageM, '~item nature_talisman 1');
     await pageM.evaluate(names => {
-        localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
-        localStorage.setItem('rs2b0t:set:NatureCrafter:partner', names);
-        localStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '0'); // never bank — hold the stacking natures (default now)
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', names);
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '0'); // never bank — hold the stacking natures (default now)
     }, R_USERS.join(','));
     console.log(`  master '${M_USER}' ready at the altar`);
 
@@ -96,8 +96,8 @@ try {
         await cheatQuiet(rPages[i], `~bankitem blankrune ${ESSENCE_PER}`);
         await cheatQuiet(rPages[i], '~bankitem coins 100000');
         await rPages[i].evaluate(m => {
-            localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
-            localStorage.setItem('rs2b0t:set:NatureCrafter:partner', m);
+            sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
+            sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', m);
         }, M_USER);
         console.log(`  runner '${R_USERS[i]}' ready at the Ardougne bank (${ESSENCE_PER} essence + 100k gp)`);
     }

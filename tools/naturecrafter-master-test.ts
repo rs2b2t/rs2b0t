@@ -97,9 +97,9 @@ try {
 
     // bankAt high so it won't try the quest-gated Shilo bank
     await pageM.evaluate(n => {
-        localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
-        localStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
-        localStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '50');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '50');
     }, R_USER);
     await startScript(pageM, 'NatureCrafter');
     console.log('master bot started — watching for a completed trade + crafted natures');

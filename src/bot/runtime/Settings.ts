@@ -1,4 +1,5 @@
 import Tile from '../api/Tile.js';
+import { boxKey } from './box.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
@@ -125,10 +126,11 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
 };
 
 const hasSession = typeof sessionStorage !== 'undefined';
-const hasLocal = typeof localStorage !== 'undefined';
 
+// Per-instance, box-scoped (see box.ts): sessionStorage only. No localStorage
+// fallback — that shared a single value across every tab.
 function storageKey(name: string, key: string): string {
-    return `rs2b0t:set:${name}:${key}`;
+    return boxKey(`set:${name}:${key}`);
 }
 
 class SettingsStoreImpl {
@@ -154,12 +156,6 @@ class SettingsStoreImpl {
                 return v;
             }
         }
-        if (hasLocal) {
-            const v = localStorage.getItem(storageKey(name, key));
-            if (v !== null) {
-                return v;
-            }
-        }
         return undefined;
     }
 
@@ -172,9 +168,6 @@ class SettingsStoreImpl {
     clear(name: string, key: string): void {
         if (hasSession) {
             sessionStorage.removeItem(storageKey(name, key));
-        }
-        if (hasLocal) {
-            localStorage.removeItem(storageKey(name, key));
         }
     }
 

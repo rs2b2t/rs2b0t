@@ -40,7 +40,7 @@ try {
     await cheat(page, '~bankitem air_talisman 1');
     console.log('seeded bank: 200 Rune essence + 1 Air talisman — walks from the spawn');
 
-    await page.evaluate(() => localStorage.setItem('rs2b0t:set:RuneCrafter:rune', 'Air runes'));
+    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:RuneCrafter:rune', 'Air runes'));
     await startScript(page, 'RuneCrafter');
     console.log('started RuneCrafter (Air) — watching for crafted Air runes');
 

@@ -64,15 +64,15 @@ try {
     console.log(`at the rock crab field (${style})`);
 
     await page.evaluate(s => {
-        localStorage.setItem('rs2b0t:set:RockCrab:combatStyle', s);
-        localStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'false');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:combatStyle', s);
+        sessionStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'false');
         if (s === 'mage') {
-            localStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Staff of air');
-            localStorage.setItem('rs2b0t:set:RockCrab:spell', 'Wind Strike');
+            sessionStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Staff of air');
+            sessionStorage.setItem('rs2b0t:set:RockCrab:spell', 'Wind Strike');
         } else {
-            localStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Shortbow');
-            localStorage.setItem('rs2b0t:set:RockCrab:ammo', 'Bronze arrow');
-            localStorage.setItem('rs2b0t:set:RockCrab:minStack', '1');
+            sessionStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Shortbow');
+            sessionStorage.setItem('rs2b0t:set:RockCrab:ammo', 'Bronze arrow');
+            sessionStorage.setItem('rs2b0t:set:RockCrab:minStack', '1');
         }
     }, style);
 

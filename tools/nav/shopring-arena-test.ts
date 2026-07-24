@@ -33,9 +33,9 @@ const seededKey = await page.evaluate(async (park: string) => {
     const g = globalThis as never as { __rs2b0t: { Game: { myName(): string | null } } };
     let name = '';
     for (let i = 0; i < 40 && !name; i++) { name = g.__rs2b0t.Game.myName() ?? ''; if (!name) { await new Promise(r => setTimeout(r, 250)); } }
-    localStorage.setItem('rs2b0t:set:ShopRunner:route', 'live');
-    localStorage.setItem('rs2b0t:set:ShopRunner:maxGpPerLeg', '60000');
-    localStorage.setItem('rs2b0t:set:ShopRunner:mageArena', 'true');
+    sessionStorage.setItem('rs2b0t:set:ShopRunner:route', 'live');
+    sessionStorage.setItem('rs2b0t:set:ShopRunner:maxGpPerLeg', '60000');
+    sessionStorage.setItem('rs2b0t:set:ShopRunner:mageArena', 'true');
     const key = `rs2b0t:shoprun:state:${name.toLowerCase()}`;
     localStorage.setItem(key, JSON.stringify({ lastClusterId: park }));
     return `${key} = ${localStorage.getItem(key)}`;

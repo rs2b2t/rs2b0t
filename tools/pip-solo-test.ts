@@ -58,8 +58,8 @@ try {
         console.log(`advanced ${pair}`);
     }
 
-    await page.evaluate(() => localStorage.setItem('rs2b0t:set:AIOQuester:quests', 'priestperil'));
-    if (foodSetting) { await page.evaluate(f => localStorage.setItem('rs2b0t:set:AIOQuester:food', f), foodSetting); }
+    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'priestperil'));
+    if (foodSetting) { await page.evaluate(f => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', f), foodSetting); }
     await startScript(page, 'AIOQuester');
     console.log('started AIOQuester — watching priestperil');
 

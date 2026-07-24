@@ -64,10 +64,10 @@ try {
     if (giants === 0) fail('no moss giants in scene at the safespot — wrong coords?');
 
     await page.evaluate(s => {
-        localStorage.setItem('rs2b0t:set:MossGiant:combatStyle', s);
-        localStorage.setItem('rs2b0t:set:MossGiant:food', 'Lobster');
-        if (s === 'mage') { localStorage.setItem('rs2b0t:set:MossGiant:staff', 'Staff of air'); localStorage.setItem('rs2b0t:set:MossGiant:spell', 'Wind Strike'); }
-        if (s === 'range') { localStorage.setItem('rs2b0t:set:MossGiant:bow', 'Maple shortbow'); localStorage.setItem('rs2b0t:set:MossGiant:ammo', 'Iron arrow'); }
+        sessionStorage.setItem('rs2b0t:set:MossGiant:combatStyle', s);
+        sessionStorage.setItem('rs2b0t:set:MossGiant:food', 'Lobster');
+        if (s === 'mage') { sessionStorage.setItem('rs2b0t:set:MossGiant:staff', 'Staff of air'); sessionStorage.setItem('rs2b0t:set:MossGiant:spell', 'Wind Strike'); }
+        if (s === 'range') { sessionStorage.setItem('rs2b0t:set:MossGiant:bow', 'Maple shortbow'); sessionStorage.setItem('rs2b0t:set:MossGiant:ammo', 'Iron arrow'); }
     }, style);
 
     await startFromLibrary(page, 'Combat', 'MossGiant');

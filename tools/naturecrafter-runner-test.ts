@@ -61,8 +61,8 @@ try {
 
     // Runner mode, delivering to a (not-present) master — we only exercise bank + un-note.
     await page.evaluate(() => {
-        localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
-        localStorage.setItem('rs2b0t:set:NatureCrafter:partner', 'DummyMaster');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', 'DummyMaster');
     });
     await startScript(page, 'NatureCrafter');
     console.log('runner started — watching bank restock + un-note');

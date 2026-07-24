@@ -82,7 +82,7 @@ try {
     const flaxTile = await nearestFlax();
     console.log(`discovered nearest Flax loc: ${flaxTile ? `${flaxTile.x},${flaxTile.z}` : 'NONE in scene'}`);
     if (!flaxTile) { fail('no "Flax" loc with a "Pick" op near the field — adjust FIELD_TELE / default fieldTile'); }
-    await page.evaluate(t => localStorage.setItem('rs2b0t:set:FlaxPicker:fieldTile', `${t.x},${t.z},${t.level}`), flaxTile);
+    await page.evaluate(t => sessionStorage.setItem('rs2b0t:set:FlaxPicker:fieldTile', `${t.x},${t.z},${t.level}`), flaxTile);
     console.log(`pinned FlaxPicker.fieldTile = ${flaxTile.x},${flaxTile.z}`);
 
     await page.evaluate(() => { const r = (globalThis as never as R).rs2b0t; r.runner.start(r.registry.get('FlaxPicker')); });

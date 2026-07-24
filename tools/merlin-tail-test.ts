@@ -37,7 +37,7 @@ try {
         console.log(`gave ${g}`);
     }
 
-    await page.evaluate(() => localStorage.setItem('rs2b0t:set:AIOQuester:quests', 'arthur'));
+    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'arthur'));
     await startScript(page, 'AIOQuester');
     console.log('started AIOQuester — bot will start the quest at King Arthur, then jump to stage 4');
 
