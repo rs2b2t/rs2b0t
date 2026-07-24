@@ -14,6 +14,7 @@ import { InvItem, Inventory } from '../api/hud/Inventory.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Shop } from '../api/hud/Shop.js';
 import { Skills } from '../api/hud/Skills.js';
+import { Trade } from '../api/hud/Trade.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
@@ -61,6 +62,7 @@ export function installAbi(): void {
         Skills,
         ChatDialog,
         Quests,
+        Trade,
 
         AcquireTask,
         hasAll,

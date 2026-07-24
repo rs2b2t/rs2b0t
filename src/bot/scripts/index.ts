@@ -31,6 +31,7 @@ import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
+import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -217,6 +218,15 @@ ScriptRegistry.register({
     tags: ['runecrafting', 'banking', 'falador', 'afk'],
     settingsSchema: RUNECRAFTER_SETTINGS,
     create: () => new RuneCrafter()
+});
+
+ScriptRegistry.register({
+    name: 'NatureCrafter',
+    description: 'Master Nature Crafter — a master stands at the nature altar (Karamja), takes essence from configured runners via trade, and crafts natures; runners bank essence at Ardougne, un-note it at the general store, and ship it to the master. Mode + partner name(s) via settings',
+    category: 'Runecrafting',
+    tags: ['runecrafting', 'nature', 'trade', 'master', 'runner', 'karamja'],
+    settingsSchema: NATURECRAFTER_SETTINGS,
+    create: () => new NatureCrafter()
 });
 
 ScriptRegistry.register({

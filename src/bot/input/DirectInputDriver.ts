@@ -4,6 +4,7 @@ import { actions } from '../adapter/ClientAdapter.js';
 import type { InputDriver } from './InputDriver.js';
 
 const NPC_OPS = [MiniMenuAction.OP_NPC1, MiniMenuAction.OP_NPC2, MiniMenuAction.OP_NPC3, MiniMenuAction.OP_NPC4, MiniMenuAction.OP_NPC5];
+const PLAYER_OPS = [MiniMenuAction.OP_PLAYER1, MiniMenuAction.OP_PLAYER2, MiniMenuAction.OP_PLAYER3, MiniMenuAction.OP_PLAYER4, MiniMenuAction.OP_PLAYER5];
 const LOC_OPS = [MiniMenuAction.OP_LOC1, MiniMenuAction.OP_LOC2, MiniMenuAction.OP_LOC3, MiniMenuAction.OP_LOC4, MiniMenuAction.OP_LOC5];
 const OBJ_OPS = [MiniMenuAction.OP_OBJ1, MiniMenuAction.OP_OBJ2, MiniMenuAction.OP_OBJ3, MiniMenuAction.OP_OBJ4, MiniMenuAction.OP_OBJ5];
 const HELD_OPS = [MiniMenuAction.OP_HELD1, MiniMenuAction.OP_HELD2, MiniMenuAction.OP_HELD3, MiniMenuAction.OP_HELD4, MiniMenuAction.OP_HELD5];
@@ -14,6 +15,10 @@ export default class DirectInputDriver implements InputDriver {
 
     interactNpc(index: number, op: number): boolean {
         return actions.menuAction(NPC_OPS[op - 1], index, 0, 0);
+    }
+
+    interactPlayer(index: number, op: number): boolean {
+        return actions.menuAction(PLAYER_OPS[op - 1], index, 0, 0);
     }
 
     interactLoc(lx: number, lz: number, typecode: number, op: number): boolean {
