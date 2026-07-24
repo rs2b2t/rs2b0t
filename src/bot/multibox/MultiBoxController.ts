@@ -1,4 +1,3 @@
-import type { AccountRoster } from './AccountRoster.js';
 import type { Account, RenderMode, SlotHandle, SlotOps, SlotSnapshot } from './types.js';
 
 interface Slot {
@@ -14,11 +13,14 @@ export class MultiBoxController {
     private slots: Slot[] = [];
     private nextId = 1;
 
-    constructor(private ops: SlotOps, private roster: AccountRoster) {}
+    constructor(private ops: SlotOps) {}
 
+    // A bot is added empty — its login is typed into the bot's own panel, so there
+    // is nothing to prompt for here. `account` is for automation, which injects
+    // credentials and arms auto-login (creds must land before auto-login is armed).
     add(account?: Account): SlotSnapshot | null {
-        const acct = account ?? this.roster.claimNext();
-        if (!acct || acct.username.length === 0) {
+        const acct: Account = account ?? { username: `bot${this.nextId}`, password: '' };
+        if (acct.username.length === 0) {
             return null;
         }
         if (this.slots.some(s => s.account.username === acct.username)) {
@@ -27,12 +29,15 @@ export class MultiBoxController {
         const handle = this.ops.spawn(acct);
         const slot: Slot = { id: this.nextId++, account: acct, handle, mode: 'background' };
         this.slots.push(slot);
-        handle.setCredentials(acct.username, acct.password);
-        if (this.slots.length === 1) {
-            this.focusedId = slot.id;
+        if (account) {
+            handle.setCredentials(acct.username, acct.password);
         }
+        // a new bot is what you want to look at — it still needs its login
+        this.focusedId = slot.id;
         this.applyModes();
-        handle.setAutoLogin(true);
+        if (account) {
+            handle.setAutoLogin(true);
+        }
         return this.snap(slot);
     }
 
@@ -42,7 +47,6 @@ export class MultiBoxController {
             return;
         }
         slot.handle.destroy();
-        this.roster.release(slot.account.username);
         this.slots = this.slots.filter(s => s.id !== id);
         if (this.focusedId === id) {
             this.focusedId = null;
@@ -61,18 +65,18 @@ export class MultiBoxController {
         this.applyModes();
     }
 
-    showWall(): void {
-        this.focusedId = null;
-        this.applyModes();
-    }
-
     snapshot(): SlotSnapshot[] {
         return this.slots.map(s => this.snap(s));
     }
 
     private applyModes(): void {
+        // exactly one slot is focused whenever any exist; the rest render live
+        // (background) so their rail thumbnails keep painting.
+        if (this.slots.length > 0 && !this.slots.some(s => s.id === this.focusedId)) {
+            this.focusedId = this.slots[0].id;
+        }
         for (const s of this.slots) {
-            this.setMode(s, this.focusedId === null ? 'background' : s.id === this.focusedId ? 'focused' : 'hidden');
+            this.setMode(s, s.id === this.focusedId ? 'focused' : 'background');
         }
     }
 

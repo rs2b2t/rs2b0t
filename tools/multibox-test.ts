@@ -8,7 +8,7 @@ const u2 = `mbx${tag}b`;
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 
 interface Snap { id: number; username: string; ingame: boolean; loopCycle: number; drawn: number; mode: string; focused: boolean }
-type Mbx = { multibox: { add(a: { username: string; password: string }): unknown; focus(id: number): void; wall(): void; slots(): Snap[] } };
+type Mbx = { multibox: { add(a: { username: string; password: string }): unknown; focus(id: number): void; slots(): Snap[] } };
 
 const app = await electron.launch({
     args: ['desktop/main.cjs', `--server=${server}/multibox.html`],
@@ -52,11 +52,11 @@ try {
     const beforeNav = by(await slots(), ids[1]).loopCycle;
     await page.evaluate(id => (globalThis as never as Mbx).multibox.focus(id), ids[1]);
     await page.waitForTimeout(500);
-    await page.evaluate(() => (globalThis as never as Mbx).multibox.wall());
+    await page.evaluate(id => (globalThis as never as Mbx).multibox.focus(id), ids[0]);
     await page.waitForTimeout(500);
     const afterNav = by(await slots(), ids[1]).loopCycle;
     if (afterNav < beforeNav) fail(`iframe reloaded on navigation (loopCycle ${beforeNav} -> ${afterNav})`);
-    console.log('PASS: fullscreen↔wall navigation kept sessions alive (no reload)');
+    console.log('PASS: switching the active bot kept sessions alive (no reload)');
 
     console.log('\nPASS');
 } finally {

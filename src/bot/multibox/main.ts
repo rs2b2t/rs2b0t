@@ -1,78 +1,49 @@
-import { AccountRoster } from './AccountRoster.js';
 import { DomSlotOps } from './DomSlotOps.js';
 import { MultiBoxController } from './MultiBoxController.js';
 import type { Account } from './types.js';
 
 function boot(): void {
-    const wall = document.getElementById('mbx-wall')!;
+    const rail = document.getElementById('mbx-rail')!;
     const addTile = document.getElementById('mbx-add')!;
-    const tabs = document.getElementById('mbx-tabs')!;
-    const gridBtn = document.getElementById('mbx-grid-btn')!;
-    const form = document.getElementById('mbx-addform') as HTMLElement;
-    const userIn = document.getElementById('mbx-user') as HTMLInputElement;
-    const passIn = document.getElementById('mbx-pass') as HTMLInputElement;
 
-    const roster = new AccountRoster();
-    const ops = new DomSlotOps(wall, addTile);
-    const controller = new MultiBoxController(ops, roster);
+    const ops = new DomSlotOps(rail, addTile);
+    const controller = new MultiBoxController(ops);
 
-    wall.addEventListener('click', ev => {
-        if (controller.focusedId !== null) return;
-        const slotEl = (ev.target as HTMLElement).closest('.mbx-slot');
-        if (!slotEl || slotEl.id === 'mbx-add') return;
-        const idx = Array.from(wall.querySelectorAll('.mbx-slot:not(.mbx-addtile)')).indexOf(slotEl);
+    // Tiles carry a click-catching overlay (.mbx-hit) because the iframe underneath
+    // would otherwise swallow the click and the rail could never switch bots.
+    rail.addEventListener('click', ev => {
+        const tile = (ev.target as HTMLElement).closest('.mbx-slot');
+        if (!tile) return;
+        const idx = Array.from(rail.querySelectorAll('.mbx-slot')).indexOf(tile);
         const snap = controller.snapshot()[idx];
-        if (snap) { controller.focus(snap.id); renderTabs(); }
+        if (snap) { controller.focus(snap.id); renderRail(); }
     });
 
-    const openWall = (): void => { controller.showWall(); renderTabs(); };
-    gridBtn.addEventListener('click', openWall);
+    // No prompt: a bot starts empty and gets its login typed into its own panel.
+    addTile.addEventListener('click', () => { controller.add(); renderRail(); });
 
-    addTile.addEventListener('click', () => {
-        if (controller.add()) {
-            renderTabs();
-        } else {
-            form.hidden = false;
-            userIn.focus();
-        }
-    });
-
-    (document.getElementById('mbx-add-go') as HTMLButtonElement).addEventListener('click', () => {
-        const username = userIn.value.trim();
-        const password = passIn.value;
-        if (!username) return;
-        roster.add({ username, password });
-        controller.add();
-        userIn.value = '';
-        passIn.value = '';
-        form.hidden = true;
-        renderTabs();
-    });
-    (document.getElementById('mbx-add-cancel') as HTMLButtonElement).addEventListener('click', () => { form.hidden = true; });
-
-    function renderTabs(): void {
+    // Bind live status (name + online dot) onto the rail tiles, which DomSlotOps
+    // keeps in slot order — so snapshot[i] is tile[i].
+    function renderRail(): void {
         const snaps = controller.snapshot();
-        gridBtn.classList.toggle('active', controller.focusedId === null);
-        tabs.textContent = '';
-        for (const s of snaps) {
-            const chip = document.createElement('button');
-            chip.className = 'mbx-chip' + (s.focused ? ' active' : '');
-            const dot = s.ingame ? '🟢' : s.ready ? '🟡' : '⚪';
-            chip.textContent = `${dot} ${s.username}`;
-            chip.addEventListener('click', () => { controller.focus(s.id); renderTabs(); });
-            tabs.appendChild(chip);
+        const tiles = Array.from(rail.querySelectorAll('.mbx-slot'));
+        if (tiles.length !== snaps.length) {
+            throw new Error(`rail desync: ${tiles.length} tiles vs ${snaps.length} slots`);
         }
+        snaps.forEach((s, i) => {
+            const tile = tiles[i];
+            tile.querySelector('.mbx-dot')!.classList.toggle('is-online', s.ingame);
+            tile.querySelector('.mbx-name')!.textContent = s.player ?? s.username;
+        });
     }
 
-    window.setInterval(renderTabs, 1000);
-    renderTabs();
+    window.setInterval(renderRail, 1000);
+    renderRail();
 
     (globalThis as Record<string, unknown>).multibox = {
         controller,
-        roster,
         add: (a?: Account) => controller.add(a),
-        focus: (id: number) => { controller.focus(id); renderTabs(); },
-        wall: () => openWall(),
+        focus: (id: number) => { controller.focus(id); renderRail(); },
         slots: () => controller.snapshot()
     };
 }
