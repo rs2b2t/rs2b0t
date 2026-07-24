@@ -27,12 +27,16 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pages: write
+  contents: write   # gh-pages holds every branch's build
+  pages: write      # publishing, and switching Pages on for a fresh fork
+  id-token: write   # required to deploy
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     env:
       GAME_ORIGIN: ${{ vars.PAGES_GAME_ORIGIN || 'https://w1.rs2b2t.com' }}
     steps:
@@ -80,16 +84,25 @@ jobs:
           sh tools/pages-publish.sh site "$GITHUB_REF_NAME" \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: turn Pages on if it is not already
+      # gh-pages accumulates one folder per branch; the whole tree is what gets
+      # served, so every branch's build stays reachable after any single push.
+      - name: collect every branch's build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # so a fork is playable by pushing, with no trip through Settings
-          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
-            echo "Pages is already on"
-          else
-            gh api -X POST "repos/$GITHUB_REPOSITORY/pages" \
-              -f 'source[branch]=gh-pages' -f 'source[path]=/'
-            echo "enabled Pages from the gh-pages branch"
-          fi
-          echo "site: $(gh api "repos/$GITHUB_REPOSITORY/pages" -q .html_url)"
+          git clone -q --depth 1 --branch gh-pages \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" published
+          rm -rf published/.git
+
+      # enablement:true switches Pages on for a fork that has never used it, so
+      # there is no manual trip through Settings
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: published
+
+      - uses: actions/deploy-pages@v4
+        id: deploy
