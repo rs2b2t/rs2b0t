@@ -21,7 +21,7 @@ import VarpType from '#/config/VarpType.js';
 import VarBitType from '#/config/VarBitType.js';
 import IfType from '#/config/IfType.js';
 import { ComponentType, ButtonType } from '#/config/IfType.js';
-import { TARGET } from '#/config/target.js';
+import { TARGET, cacheUrl } from '#/config/target.js';
 
 import ClientEntity from '#/dash3d/ClientEntity.js';
 import ClientLocAnim from '#/dash3d/ClientLocAnim.js';
@@ -701,7 +701,7 @@ export class Client extends GameShell {
             await this.drawProgress('Connecting to web server', 10);
 
             try {
-                const checksums: Packet = new Packet(await downloadUrl('/crc'));
+                const checksums: Packet = new Packet(await downloadUrl(cacheUrl('/crc')));
                 for (let i: number = 0; i < 9; i++) {
                     this.jagChecksum[i] = checksums.g4();
                 }
@@ -770,7 +770,7 @@ export class Client extends GameShell {
             await this.drawProgress(`Requesting ${displayName}`, progress);
 
             try {
-                data = await downloadUrl(`/${filename}${crc}`);
+                data = await downloadUrl(cacheUrl(`/${filename}${crc}`));
 
                 const checksum = Packet.getcrc(data, 0, data.length);
                 if (crc === checksum) {

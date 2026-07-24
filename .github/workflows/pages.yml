@@ -1,0 +1,80 @@
+name: pages
+
+# Publishes this fork's client to GitHub Pages, so a fork can be played from the
+# browser without hosting anything:
+#
+#   main             -> https://<user>.github.io/<repo>/
+#   any other branch -> https://<user>.github.io/<repo>/branch/<name>/
+#
+# One-time setup in your fork: Settings -> Pages -> Build and deployment ->
+# "Deploy from a branch" -> gh-pages / (root). No secrets are involved.
+#
+# Plays on rs2b2t by default. To point a fork at another server, set the repository
+# variable PAGES_GAME_ORIGIN (e.g. https://my.server).
+#
+# The game server must send Access-Control-Allow-Origin on its cache endpoints
+# (/crc and the jag archives) — a client hosted off the game server is cross-origin,
+# so without that header the browser blocks the cache and the client never boots.
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+# every branch publishes into the same gh-pages branch, so never run two at once
+concurrency:
+  group: pages-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GAME_ORIGIN: ${{ vars.PAGES_GAME_ORIGIN || 'https://w1.rs2b2t.com' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: build the client for ${{ env.GAME_ORIGIN }}
+        run: |
+          # the login key is public and gets rotated, so read it back off the client
+          # the server itself serves rather than pinning a copy here
+          mod=$(curl -fsSL --max-time 30 "$GAME_ORIGIN/client/client.js" | grep -oE '[0-9]+' | awk 'length($0) >= 250 { print; exit }')
+          if [ -z "$mod" ]; then
+            echo "could not read the login modulus from $GAME_ORIGIN/client/client.js" >&2
+            exit 1
+          fi
+          TARGET=pages PAGES_GAME_ORIGIN="$GAME_ORIGIN" LIVE_RSAN="$mod" bun run build:bot
+
+      - name: fetch the baked assets from the server
+        run: |
+          # the collision pack is generated from the engine's map cache and the
+          # soundfont lives in the engine repo, so take the ones being served
+          curl -fsSL --max-time 60 "$GAME_ORIGIN/rs2b0t/bot/collision.lcnav.gz" -o out/collision.lcnav.gz
+          curl -fsSL --max-time 180 "$GAME_ORIGIN/rs2b0t/bot/SCC1_Florestan.sf2" -o out/SCC1_Florestan.sf2
+
+      - name: assemble the site
+        run: |
+          mkdir -p site/bot
+          cp public-bot/bot.html public-bot/multibox.html site/
+          cp out/botclient.js out/multibox.js out/ondemandworker.js out/navworker.js site/bot/
+          cp out/botclient.js.map out/multibox.js.map out/navworker.js.map site/bot/
+          cp out/tinymidipcm.wasm out/collision.lcnav.gz out/SCC1_Florestan.sf2 site/bot/
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=multibox.html">\n' > site/index.html
+
+      - name: publish to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sh tools/pages-publish.sh site "$GITHUB_REF_NAME" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

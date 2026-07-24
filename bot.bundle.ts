@@ -32,6 +32,12 @@ const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     prod: {
         rsae: '65537',
         rsan: process.env.PROD_RSAN ?? ''
+    },
+    // pages = hosted off the game server entirely (GitHub Pages), so the cache is
+    // fetched from rs2b2t directly. Same server as live, so the same modulus.
+    pages: {
+        rsae: '65537',
+        rsan: process.env.LIVE_RSAN ?? ''
     }
 };
 
@@ -41,8 +47,8 @@ if (!(TARGET_NAME in TARGET_RSA)) {
 }
 
 const rsa = TARGET_RSA[TARGET_NAME] ?? TARGET_RSA.local;
-if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod') && rsa.rsan === '') {
-    const envVar = TARGET_NAME === 'live' ? 'LIVE_RSAN' : 'PROD_RSAN';
+if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod' || TARGET_NAME === 'pages') && rsa.rsan === '') {
+    const envVar = TARGET_NAME === 'prod' ? 'PROD_RSAN' : 'LIVE_RSAN';
     console.error(`TARGET=${TARGET_NAME} requires ${envVar} (rs2b2t rotated modulus). Aborting.`);
     process.exit(1);
 }
@@ -50,6 +56,7 @@ if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod') && rsa.rsan === '') {
 const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
+    'process.env.PAGES_GAME_ORIGIN': JSON.stringify(process.env.PAGES_GAME_ORIGIN ?? ''),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
     'process.env.LOGIN_RSAN': JSON.stringify(rsa.rsan),
     'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString())
