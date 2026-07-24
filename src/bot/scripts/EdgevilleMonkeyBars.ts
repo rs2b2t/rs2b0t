@@ -5,13 +5,16 @@ import Tile from '../api/Tile.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Skills } from '../api/hud/Skills.js';
+import { Paint } from '../api/hud/Paint.js';
 import { Traversal } from '../api/Traversal.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
-import { reader } from '../adapter/ClientAdapter.js';
+import { actions, reader } from '../adapter/ClientAdapter.js';
+import { depositAllExcept } from '../api/Banking.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 const MONKEYBARS_APPROACH = new Tile(3121, 9964, 0);
+const MIN_AGILITY = 15; // required to swing across the monkey bars
 
 const RESTOCK_DUNGEON = 'Dungeon ladder (out of food)';
 const RESTOCK_DEATH = 'After death only';
@@ -19,14 +22,14 @@ const RESTOCK_DEATH = 'After death only';
 export const EDGEVILLE_MONKEYBARS_SETTINGS: SettingsSchema = {
     food: { type: 'string', default: 'Lobster', label: 'Food' },
     foodAmount: { type: 'number', default: 20, min: 5, max: 28, label: 'Food to withdraw' },
-    eatAtHp: { type: 'number', default: 40, min: 1, max: 100, label: 'Eat below HP %' },
+    eatAtHp: { type: 'number', default: 40, min: 1, max: 100, label: 'Eat below HP %', help: 'HP threshold to start eating (only used when smart eat is off).' },
     eatToHp: {
         type: 'number',
         default: 90,
         min: 1,
         max: 100,
         label: 'Eat up to HP %',
-        help: 'keep eating until HP reaches this value — avoids overheal waste. Damage from skeletons can stack during agility animations; set higher if you die frequently.'
+        help: 'keep eating until HP reaches this value — avoids overheal waste. Damage from mobs can stack during agility animations; set higher if you die frequently.'
     },
     smartEat: {
         type: 'boolean',
@@ -38,7 +41,7 @@ export const EDGEVILLE_MONKEYBARS_SETTINGS: SettingsSchema = {
         type: 'number',
         default: 12,
         min: 1,
-        max: 100,
+        max: 20,
         label: 'Food heal amount',
         help: 'how much HP each food restores (Lobster = 12). Only used when smart eat is enabled.'
     },
@@ -52,30 +55,17 @@ export const EDGEVILLE_MONKEYBARS_SETTINGS: SettingsSchema = {
     },
     restockMode: {
         type: 'string',
-        default: RESTOCK_DUNGEON,
+        default: RESTOCK_DEATH,
         options: [RESTOCK_DUNGEON, RESTOCK_DEATH],
         label: 'Restock mode',
         help: 'Dungeon ladder: climb out near 3096,9868 when food runs out. After death only: stay until death, then bank from surface.'
     } as SettingsSchema[string],
-    monkeybarsApproach: {
-        type: 'tile',
-        // plain {x,z,level} is what the panel serializes; settings.tile() needs a real Tile fallback
-        default: { x: MONKEYBARS_APPROACH.x, z: MONKEYBARS_APPROACH.z, level: MONKEYBARS_APPROACH.level },
-        label: 'Monkey Bars Approach Tile'
+    bankJunk: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank junk items',
+        help: 'deposit anything that isn\'t the selected food (e.g. random event loot) when banking'
     },
-    barsName: {
-        type: 'string',
-        default: 'Monkeybars',
-        label: 'Monkey bars loc name',
-        help: 'exact display name if known; blank/wrong still falls back to swing-like ops nearby'
-    },
-    barsOp: {
-        type: 'string',
-        default: 'Swing across',
-        label: 'Monkey bars op',
-        help: 'preferred op; if missing the bot uses the first swing-like action on the loc'
-    },
-    searchRadius: { type: 'number', default: 15, min: 4, max: 30, label: 'Bars search radius' },
 };
 
 const UNDERGROUND_Z = 6400; // dungeon tiles sit above this; surface below it
@@ -86,40 +76,6 @@ const LADDER = { name: 'Ladder', op: 'Climb-up', stand: new Tile(3096, 9868, 0) 
 const INTERMEDIATE_GATE = new Tile(3103, 9909, 0);
 const WILDERNESS_GATE = new Tile(3130, 9914, 0);
 const EDGEVILLE_BANK = new Tile(3094, 3493, 0);
-
-// chatbox-docked paint
-const PAINT = {
-    x: 8, y: 345, w: 506, h: 150,
-    pad: 8, line: 16, titleH: 20,
-    bg: 'rgba(12, 12, 14, 0.88)',
-    bgTitle: 'rgba(28, 28, 34, 0.95)',
-    fg: '#cdd3da',
-    fgDim: '#8a919a',
-    border: 'rgba(90, 90, 100, 0.8)',
-    accent: '#9be05b',
-};
-
-type PaintApi = {
-    publishRegions(regions: { id: string; x: number; y: number; w: number; h: number; kind: 'panel' | 'widget' }[]): void;
-    consumeClick(id: string): boolean;
-    isHovered(rect: { x: number; y: number; w: number; h: number }): boolean;
-    get(key: string, fallback: string): string;
-    set(key: string, value: string): void;
-};
-
-type Rs2b0tDev = {
-    actions?: { ifButton?: (comId: number) => boolean };
-    paint?: PaintApi;
-};
-
-function paintApi(): PaintApi | null {
-    return (globalThis as { rs2b0t?: Rs2b0tDev }).rs2b0t?.paint ?? null;
-}
-
-function ifButton(comId: number): boolean {
-    const dev = (globalThis as { rs2b0t?: Rs2b0tDev }).rs2b0t;
-    return dev?.actions?.ifButton?.(comId) ?? false;
-}
 
 function fmtDuration(mins: number): string {
     const t = Math.max(0, Math.floor(mins * 60));
@@ -132,7 +88,7 @@ function foodCount(food: string): number {
 }
 
 function restockMode(bot: EdgevilleMonkeyBars): string {
-    return bot.settings.str('restockMode', RESTOCK_DUNGEON);
+    return bot.settings.str('restockMode', RESTOCK_DEATH);
 }
 
 function needsFoodRestock(bot: EdgevilleMonkeyBars): boolean {
@@ -168,24 +124,22 @@ function looksLikeBars(loc: Loc, preferredName?: string): boolean {
 }
 
 function findMonkeyBars(bot: EdgevilleMonkeyBars): Loc | null {
-    const radius = bot.settings.num('searchRadius', 15);
-    const preferredName = bot.settings.str('barsName', 'Monkeybars').trim();
-    const preferredOp = bot.settings.str('barsOp', 'Swing across').trim();
+    const radius = 15;
+    const preferredName = 'Monkeybars';
+    const preferredOp = 'Swing across';
 
     // 1) preferred name + preferred/swing op
-    if (preferredName) {
-        const byName = Locs.query()
-            .name(preferredName)
-            .within(radius)
-            .where(l => swingOp(l.actions(), preferredOp) !== undefined)
-            .nearest();
-        if (byName) {
-            return byName;
-        }
-        const named = Locs.query().name(preferredName).within(radius).where(l => l.actions().length > 0).nearest();
-        if (named) {
-            return named;
-        }
+    const byName = Locs.query()
+        .name(preferredName)
+        .within(radius)
+        .where(l => swingOp(l.actions(), preferredOp) !== undefined)
+        .nearest();
+    if (byName) {
+        return byName;
+    }
+    const named = Locs.query().name(preferredName).within(radius).where(l => l.actions().length > 0).nearest();
+    if (named) {
+        return named;
     }
 
     // 2) any loc offering a swing-like op
@@ -206,45 +160,31 @@ function findMonkeyBars(bot: EdgevilleMonkeyBars): Loc | null {
 
 /** Ensure Auto Retaliate is turned off (prevents fighting back while doing agility). */
 async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
-    type IfEntry = { text?: string; children?: number[] };
-    type IfTypeList = Record<number, IfEntry>;
-
-    const client = reader as { client?: { IfType?: { list: IfTypeList } } };
-    const IfType = client?.client?.IfType?.list;
-    if (!IfType) {
-        log('IfType not accessible — cannot toggle retaliate');
+    const controls = reader.retaliateControls();
+    if (!controls) {
+        log('retaliateControls not available — cannot toggle auto retaliate');
         return;
     }
 
-    // Find the parent group that contains "Auto retaliate" text, then locate the Off button.
-    // The RS3 options combat panel has a consistent structure:
-    //   text "Run" / Off / On / text "Auto retaliate" / Off / On
-    // Retaliate-Off is children[6], Retaliate-On is children[7].
-    for (const rootIdx of Object.keys(IfType)) {
-        const root = IfType[Number(rootIdx)];
-        if (!root?.children || root.children.length < 8) continue;
-        const hasRetaliate = root.children.some((c: number) => IfType[c]?.text === 'Auto retaliate');
-        if (!hasRetaliate) continue;
-        // Retaliate Off is children[6].
-        const retaliateOff = root.children[6];
-        ifButton(retaliateOff);
-        log('Auto Retaliate turned off');
-        break;
-    }
+    const result = actions.ifButton(controls.offComId);
+    log(`Auto Retaliate turned off (comId: ${controls.offComId}, result: ${result})`);
 }
 
 async function openNearestGate(log: (m: string) => void): Promise<void> {
     const gate = Locs.query().name('Gate').within(6).nearest();
     if (!gate) {
+        log('No gate found nearby — may already be open or out of range');
         return;
     }
     const op = gate.actions().find(a => /open/i.test(a));
     if (!op) {
+        log(`Gate found but no "Open" action (actions: [${gate.actions().join(', ')}]) — likely already open`);
         return;
     }
-    log(`Opening gate: ${op}`);
+    log(`Opening gate: ${op} @ ${gate.tile().x},${gate.tile().z}`);
     await gate.interact(op);
-    await Execution.delayTicks(2);
+    // Wait for gate animation to finish before pathing through.
+    await Execution.delayTicks(4);
 }
 
 /** Climb the Edgeville dungeon ladder back to the surface. */
@@ -283,19 +223,45 @@ async function climbDungeonLadder(log: (m: string) => void): Promise<boolean> {
 /**
  * Walk from the wildy monkey-bars side back through the dungeon gates to the ladder,
  * then climb out. Order is reverse of NavigateToMonkeyBars.
+ * Gates may already be open from entry, so we try walking through first.
  */
 async function exitDungeonToSurface(log: (m: string) => void): Promise<boolean> {
     if ((Game.tile()?.z ?? 0) < UNDERGROUND_Z) {
         return true;
     }
 
-    // reverse path: approach → wildy gate → intermediate gate → ladder
-    await Traversal.walkResilient(WILDERNESS_GATE, { radius: 4 });
+    // After a swing the bot may land on the far (wilder) side of the bars (~3121,9969).
+    // The exit path goes through the gates toward lower Z, so we need to be on the
+    // approach side (~3121,9964). If we're past the bars (z > 9967), swing back first.
+    const here = Game.tile();
+    if (here && here.z > 9967) {
+        log('On far side of monkey bars — swinging back toward exit before leaving dungeon');
+        const bars = Locs.query()
+            .within(10)
+            .where(l => swingOp(l.actions()) !== undefined)
+            .nearest();
+        if (bars) {
+            const op = swingOp(bars.actions()) ?? bars.actions()[0];
+            if (op) {
+                log(`Swinging back: ${op} on '${bars.name}' @ ${bars.tile().x},${bars.tile().z}`);
+                await bars.interact(op);
+                // wait for swing animation to settle
+                await Execution.delayUntil(() => false, 12_000);
+            }
+        }
+    }
+
+    // reverse path: wildy gate → intermediate gate → ladder
+    // Gates may already be open; try to open them (harmless if already open), then walk through.
+    log('Exiting dungeon — approaching wilderness gate');
+    await Traversal.walkResilient(WILDERNESS_GATE, { radius: 3 });
     await openNearestGate(log);
 
-    await Traversal.walkResilient(INTERMEDIATE_GATE, { radius: 4 });
+    log('Exiting dungeon — approaching intermediate gate');
+    await Traversal.walkResilient(INTERMEDIATE_GATE, { radius: 3 });
     await openNearestGate(log);
 
+    log('Exiting dungeon — approaching ladder');
     return climbDungeonLadder(log);
 }
 
@@ -303,7 +269,6 @@ class EdgevilleMonkeyBars extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
-    private paintCollapsed = false;
     deaths = 0;
     completions = 0;
     eats = 0;
@@ -313,10 +278,14 @@ class EdgevilleMonkeyBars extends TaskBot {
     override async onStart() {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        const agility = Skills.level('agility');
+        if (agility < MIN_AGILITY) {
+            this.log(`EdgevilleMonkeyBars needs Agility ${MIN_AGILITY} (have ${agility}) — stopping.`);
+            throw new Error(`EdgevilleMonkeyBars: Agility ${MIN_AGILITY} required`);
+        }
+
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('agility');
-        const paint = paintApi();
-        this.paintCollapsed = paint?.get('paint:collapsed', '0') === '1';
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -352,81 +321,24 @@ class EdgevilleMonkeyBars extends TaskBot {
     countFailedSwing() { this.failedSwings++; }
 
     override onPaint(ctx: CanvasRenderingContext2D) {
-        const { x, y, w, h, pad, line, titleH, bg, bgTitle, fg, fgDim, border, accent } = PAINT;
-        const paint = paintApi();
-        const regions: { id: string; x: number; y: number; w: number; h: number; kind: 'panel' | 'widget' }[] = [];
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
+        p.title(`EdgevilleMonkeyBars — ${this.status}`);
 
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 12px monospace';
-
-        // title bar + collapse toggle (same hit-target as internal Paint)
-        ctx.fillStyle = bgTitle;
-        ctx.fillRect(x, y, w, titleH);
-        ctx.strokeStyle = border;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, titleH - 1);
-        ctx.fillStyle = accent;
-        ctx.fillText(`EdgevilleMonkeyBars — ${this.status}`, x + pad, y + titleH / 2 + 1);
-
-        const toggle = { x: x + w - titleH, y, w: titleH, h: titleH };
-        const hovered = paint?.isHovered(toggle) ?? false;
-        ctx.fillStyle = hovered ? fg : fgDim;
-        ctx.fillText(this.paintCollapsed ? '+' : '–', toggle.x + 7, toggle.y + titleH / 2 + 1);
-        regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
-        if (paint?.consumeClick('paint:toggle')) {
-            this.paintCollapsed = !this.paintCollapsed;
-            paint.set('paint:collapsed', this.paintCollapsed ? '1' : '0');
-        }
-
-        if (this.paintCollapsed) {
-            regions.push({ id: 'paint:panel', x, y, w, h: titleH, kind: 'panel' });
-            paint?.publishRegions(regions);
-            return;
-        }
-
-        regions.push({ id: 'paint:panel', x, y, w, h, kind: 'panel' });
-
-        // body
-        ctx.fillStyle = bg;
-        ctx.fillRect(x, y + titleH, w, h - titleH);
-        ctx.strokeStyle = border;
-        ctx.strokeRect(x + 0.5, y + titleH + 0.5, w - 1, h - titleH - 1);
-
-        ctx.font = '12px monospace';
-        ctx.fillStyle = fg;
-        let cy = y + titleH + 4;
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xph = mins > 0.5
             ? `${(((Skills.xp('agility') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k`
             : '—';
         const food = this.settings.str('food', 'Lobster');
-        const colW = (w - pad * 2) / 3;
         const mode = restockMode(this) === RESTOCK_DEATH ? 'death' : 'dungeon';
 
-        const row = (...cols: string[]) => {
-            cols.forEach((c, i) => ctx.fillText(c, x + pad + i * colW, cy + line / 2 + 1));
-            cy += line;
-        };
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Swings: ${this.completions}`, `XP/hr: ${xph}`);
+        p.row(`Food: ${foodCount(food)}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
+        p.row(`Misses: ${this.failedSwings}`, `Restock: ${mode}`);
+        p.bar('HP', Skills.hpFraction());
 
-        row(`Runtime: ${fmtDuration(mins)}`, `Swings: ${this.completions}`, `XP/hr: ${xph}`);
-        row(`Food: ${foodCount(food)}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
-        row(`Misses: ${this.failedSwings}`, `Restock: ${mode}`, `HP: ${Math.round(Skills.hpFraction() * 100)}%`);
-
-        // HP bar
-        const frac = Math.max(0, Math.min(1, Skills.hpFraction()));
-        const labelW = 48;
-        const barX = x + pad + labelW;
-        const barW = w - pad * 2 - labelW - 42;
-        const barY = cy + 3;
-        ctx.fillStyle = fg;
-        ctx.fillText('HP', x + pad, cy + line / 2 + 1);
-        ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(barX, barY, barW, line - 6);
-        ctx.fillStyle = frac < 0.35 ? '#e05b5b' : frac < 0.65 ? '#e8c35b' : '#69c86b';
-        ctx.fillRect(barX, barY, barW * frac, line - 6);
-        ctx.fillStyle = fgDim;
-        ctx.fillText(`${Math.round(frac * 100)}%`, barX + barW + 6, cy + line / 2 + 1);
-
-        paint?.publishRegions(regions);
+        p.gap();
+        ScriptRunner.paintControls(p);
+        p.end();
     }
 }
 
@@ -537,8 +449,12 @@ class BankAndRestock implements Task {
         const opened = (await bankApi.openBooth(EDGEVILLE_BANK, 'Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))
             || (await bankApi.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)));
         if (opened) {
-            await Bank.depositInventory();
             const foodName = this.bot.settings.str('food', 'Lobster');
+            if (this.bot.settings.bool('bankJunk', true)) {
+                await Bank.depositAllMatching(depositAllExcept([foodName]));
+            } else {
+                await Bank.depositInventory();
+            }
             const amt = this.bot.settings.num('foodAmount', 20);
             for (let i = 0; i < amt; i++) {
                 await Bank.withdraw(foodName, 'Withdraw-1');
@@ -584,15 +500,13 @@ class NavigateToMonkeyBars implements Task {
         if (findMonkeyBars(this.bot)) {
             return false;
         }
-        const approach = this.bot.settings.tile('monkeybarsApproach', MONKEYBARS_APPROACH);
-        return new Tile(here.x, here.z, here.level).distanceTo(approach) > 12;
+        return new Tile(here.x, here.z, here.level).distanceTo(MONKEYBARS_APPROACH) > 12;
     }
 
     async execute() {
         this.bot.setStatus('navigating to monkey bars');
         this.bot.log('Starting dungeon navigation sequence');
         const log = (m: string) => this.bot.log(m);
-        const approach = this.bot.settings.tile('monkeybarsApproach', MONKEYBARS_APPROACH);
 
         // 1. Surface trapdoor → dungeon (Open, then Climb-down)
         if ((Game.tile()?.z ?? 0) < UNDERGROUND_Z) {
@@ -635,7 +549,7 @@ class NavigateToMonkeyBars implements Task {
         await openNearestGate(log);
 
         // Final approach
-        await Traversal.walkResilient(approach, { radius: 3 });
+        await Traversal.walkResilient(MONKEYBARS_APPROACH, { radius: 3 });
         this.bot.log('Reached monkey bars area');
     }
 }
@@ -655,7 +569,7 @@ class RepeatMonkeyBars implements Task {
 
     async execute() {
         this.bot.setStatus('swinging on monkey bars');
-        const preferredOp = this.bot.settings.str('barsOp', 'Swing across').trim();
+        const preferredOp = 'Swing across';
         const bars = findMonkeyBars(this.bot);
 
         if (!bars) {
@@ -664,7 +578,7 @@ class RepeatMonkeyBars implements Task {
             if (now - this.lastScanLog > 8000) {
                 this.lastScanLog = now;
                 const nearby = Locs.query()
-                    .within(this.bot.settings.num('searchRadius', 15))
+                    .within(15)
                     .where(l => l.actions().length > 0)
                     .results()
                     .slice(0, 8)
@@ -673,10 +587,9 @@ class RepeatMonkeyBars implements Task {
             }
             this.bot.setStatus('waiting: no monkey bars in range');
             // nudge toward approach so we don't idle off-angle
-            const approach = this.bot.settings.tile('monkeybarsApproach', MONKEYBARS_APPROACH);
             const here = Game.tile();
-            if (here && new Tile(here.x, here.z, here.level).distanceTo(approach) > 4) {
-                await Traversal.walkResilient(approach, { radius: 2 });
+            if (here && new Tile(here.x, here.z, here.level).distanceTo(MONKEYBARS_APPROACH) > 4) {
+                await Traversal.walkResilient(MONKEYBARS_APPROACH, { radius: 2 });
             } else {
                 await Execution.delayTicks(2);
             }
