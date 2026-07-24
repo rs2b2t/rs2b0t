@@ -2,12 +2,41 @@ import type { Account, RenderMode, SlotHandle, SlotOps, SlotStatus } from './typ
 
 const LOGICAL_W = 1100;
 const LOGICAL_H = 620;
-const THUMB_W = 300;
+
+// Must match multibox.html: #mbx-rail width and .mbx-clip size.
+const RAIL_W = 264;
+const TILE_W = 236;
+const TILE_H = 155;
+
+// bot.html geometry: #rs2b0t-root is a flex row [game-wrap | 8px gap | 330px panel];
+// #game-stage is the largest 765:503 box centered in game-wrap. We derive where the
+// game canvas sits inside the 1100x620 client so a thumbnail can crop to just the game.
+const PANEL_W = 330;
+const ROOT_GAP = 8;
+const STAGE_W = 765;
+const STAGE_H = 503;
+const WRAP_W = LOGICAL_W - PANEL_W - ROOT_GAP;
+const STAGE_K = Math.min(WRAP_W / STAGE_W, LOGICAL_H / STAGE_H);
+const GAME_W = STAGE_W * STAGE_K;
+const GAME_H = STAGE_H * STAGE_K;
+const GAME_X = (WRAP_W - GAME_W) / 2;
+const GAME_Y = (LOGICAL_H - GAME_H) / 2;
+
+// cover-fit that game region into a rail tile (scaler transform-origin is top-left)
+const CROP_K = Math.max(TILE_W / GAME_W, TILE_H / GAME_H);
+const CROP_TX = TILE_W / 2 - (GAME_X + GAME_W / 2) * CROP_K;
+const CROP_TY = TILE_H / 2 - (GAME_Y + GAME_H / 2) * CROP_K;
+const CROP_TRANSFORM = `translate(${CROP_TX}px, ${CROP_TY}px) scale(${CROP_K})`;
+
+// Rail (background) slots paint at ~1fps so many bots stay cheap on a laptop; the
+// focused slot ignores this and draws every frame. Set per-iframe at runtime — the
+// standalone single-instance client keeps its own RenderGate default.
+const RAIL_BACKGROUND_INTERVAL_MS = 1000;
 
 interface Lcb {
     client: { constructor: { loopCycle: number } };
-    reader: { ingame(): boolean };
-    renderGate: { drawn: number };
+    reader: { ingame(): boolean; localPlayerName(): string | null };
+    renderGate: { drawn: number; backgroundIntervalMs: number };
     runner: { state: string };
     setRenderMode(mode: RenderMode): void;
     setCredentials(u: string, p: string): void;
@@ -20,6 +49,8 @@ class DomSlotHandle implements SlotHandle {
 
     private scaler: HTMLDivElement;
     private iframe: HTMLIFrameElement;
+    private mirror: HTMLCanvasElement;
+    private mirrorTimer: number;
     private win: LcbWindow | null = null;
     private pending: Array<(l: Lcb) => void> = [];
     private destroyed = false;
@@ -29,6 +60,20 @@ class DomSlotHandle implements SlotHandle {
     constructor(account: Account) {
         this.el = document.createElement('div');
         this.el.className = 'mbx-slot';
+
+        const cap = document.createElement('div');
+        cap.className = 'mbx-cap';
+        const dot = document.createElement('span');
+        dot.className = 'mbx-dot';
+        const name = document.createElement('span');
+        name.className = 'mbx-name';
+        name.textContent = account.username;
+        cap.append(dot, name);
+
+        const body = document.createElement('div');
+        body.className = 'mbx-body';
+        const clip = document.createElement('div');
+        clip.className = 'mbx-clip';
         this.scaler = document.createElement('div');
         this.scaler.className = 'mbx-scaler';
         this.iframe = document.createElement('iframe');
@@ -45,16 +90,35 @@ class DomSlotHandle implements SlotHandle {
         // even though same-origin iframes share one sessionStorage (see box.ts)
         forwarded.set('box', account.username);
         const qs = forwarded.toString();
-        this.iframe.src = qs ? `/bot.html?${qs}` : '/bot.html';
+        this.iframe.src = new URL('bot.html' + (qs ? `?${qs}` : ''), document.baseURI).href;
         this.scaler.appendChild(this.iframe);
-        this.el.appendChild(this.scaler);
+        clip.appendChild(this.scaler);
+
+        // The focused bot's live iframe is lifted over the main pane, so its rail
+        // tile mirrors that canvas instead — every bot stays visible in the rail.
+        this.mirror = document.createElement('canvas');
+        this.mirror.className = 'mbx-mirror';
+        this.mirror.width = TILE_W;
+        this.mirror.height = TILE_H;
+
+        // An iframe swallows clicks, so the rail would never see them; this overlay
+        // sits above it and lets a tile click switch which bot is active.
+        const hit = document.createElement('div');
+        hit.className = 'mbx-hit';
+
+        body.append(clip, this.mirror, hit);
+        this.el.append(cap, body);
+        this.mirrorTimer = window.setInterval(this.paintMirror, 1000);
         this.applyLayout();
         this.poll();
     }
 
     setRenderMode(mode: RenderMode): void {
         this.mode = mode;
-        this.whenReady(l => l.setRenderMode(mode));
+        this.whenReady(l => {
+            l.renderGate.backgroundIntervalMs = RAIL_BACKGROUND_INTERVAL_MS;
+            l.setRenderMode(mode);
+        });
         this.applyLayout();
     }
 
@@ -69,16 +133,28 @@ class DomSlotHandle implements SlotHandle {
     status(): SlotStatus {
         const l = this.win?.rs2b0t;
         if (!l) {
-            return { ready: false, ingame: false, loopCycle: 0, drawn: 0, scriptState: 'idle' };
+            return { ready: false, ingame: false, player: null, loopCycle: 0, drawn: 0, scriptState: 'idle' };
         }
-        return { ready: true, ingame: l.reader.ingame(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state };
+        return { ready: true, ingame: l.reader.ingame(), player: l.reader.localPlayerName(), loopCycle: l.client.constructor.loopCycle, drawn: l.renderGate.drawn, scriptState: l.runner.state };
     }
 
     destroy(): void {
         this.destroyed = true;
+        window.clearInterval(this.mirrorTimer);
         window.removeEventListener('resize', this.onResize);
         this.el.remove();
     }
+
+    private paintMirror = (): void => {
+        if (this.mode !== 'focused') {
+            return;
+        }
+        const src = this.iframe.contentDocument?.getElementById('canvas') as HTMLCanvasElement | null;
+        if (!src || src.width === 0) {
+            return;
+        }
+        this.mirror.getContext('2d')!.drawImage(src, 0, 0, src.width, src.height, 0, 0, TILE_W, TILE_H);
+    };
 
     private poll = (): void => {
         if (this.destroyed) {
@@ -106,26 +182,29 @@ class DomSlotHandle implements SlotHandle {
     private applyLayout(): void {
         const focused = this.mode === 'focused';
         this.el.classList.toggle('is-focused', focused);
-        this.el.classList.toggle('is-hidden', this.mode === 'hidden');
         if (focused) {
-            const k = Math.min(window.innerWidth / LOGICAL_W, window.innerHeight / LOGICAL_H);
-            const dx = (window.innerWidth - LOGICAL_W * k) / 2;
-            const dy = (window.innerHeight - LOGICAL_H * k) / 2;
+            // fill the main pane (viewport minus the rail), centered, whole client visible
+            const mainW = window.innerWidth - RAIL_W;
+            const mainH = window.innerHeight;
+            const k = Math.min(mainW / LOGICAL_W, mainH / LOGICAL_H);
+            const dx = (mainW - LOGICAL_W * k) / 2;
+            const dy = (mainH - LOGICAL_H * k) / 2;
             this.scaler.style.transform = `translate(${dx}px, ${dy}px) scale(${k})`;
             window.addEventListener('resize', this.onResize);
         } else {
-            this.scaler.style.transform = `scale(${THUMB_W / LOGICAL_W})`;
+            // rail thumbnail: crop the client to just the game viewport
+            this.scaler.style.transform = CROP_TRANSFORM;
             window.removeEventListener('resize', this.onResize);
         }
     }
 }
 
 export class DomSlotOps implements SlotOps {
-    constructor(private wallEl: HTMLElement, private beforeEl: HTMLElement) {}
+    constructor(private railEl: HTMLElement, private beforeEl: HTMLElement) {}
 
     spawn(account: Account): SlotHandle {
         const handle = new DomSlotHandle(account);
-        this.wallEl.insertBefore(handle.el, this.beforeEl);
+        this.railEl.insertBefore(handle.el, this.beforeEl);
         return handle;
     }
 }

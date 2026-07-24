@@ -228,8 +228,12 @@ export default class BotPanel {
             status.className = 'rs2b0t-load-status rs2b0t-load-ok';
         });
         button(buttons, 'Log in', () => {
+            // Log in as whoever is typed here. Without this the button used only the
+            // last Saved account, so a freshly typed login silently did nothing (or
+            // logged in as the wrong bot) until you pressed Save first.
+            AutoRelogin.setCredentials(userInput.value.trim(), passInput.value);
             const ok = AutoRelogin.loginNow();
-            status.textContent = ok ? 'logging in…' : 'save creds first / already ingame';
+            status.textContent = ok ? 'logging in…' : 'enter a username / already ingame';
             status.className = `rs2b0t-load-status ${ok ? 'rs2b0t-load-ok' : 'rs2b0t-load-error'}`;
         });
         button(buttons, 'Clear', () => {
