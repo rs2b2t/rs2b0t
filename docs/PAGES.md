@@ -12,11 +12,10 @@ The client is static; the game itself still runs on rs2b2t. Pushing to a branch
 republishes just that branch's folder, so `main` and every feature branch keep
 their own URL side by side.
 
-## Setup (once per fork)
+## Setup
 
-1. **Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `(root)`.**
-2. Push anything. The `pages` workflow builds and publishes; the first run creates
-   `gh-pages` for you.
+None. Push anything: the workflow builds, publishes, creates the `gh-pages` branch
+and turns Pages on for you. The URL is printed at the end of the run.
 
 No secrets. The login key is public and rotates, so the build reads it back off the
 client the server itself serves rather than pinning a copy.

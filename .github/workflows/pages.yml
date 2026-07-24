@@ -6,8 +6,8 @@ name: pages
 #   main             -> https://<user>.github.io/<repo>/
 #   any other branch -> https://<user>.github.io/<repo>/branch/<name>/
 #
-# One-time setup in your fork: Settings -> Pages -> Build and deployment ->
-# "Deploy from a branch" -> gh-pages / (root). No secrets are involved.
+# Fork it and push — there is nothing to set up. The first run creates the gh-pages
+# branch and turns Pages on for you. No secrets are involved.
 #
 # Plays on rs2b2t by default. To point a fork at another server, set the repository
 # variable PAGES_GAME_ORIGIN (e.g. https://my.server).
@@ -28,6 +28,7 @@ concurrency:
 
 permissions:
   contents: write
+  pages: write
 
 jobs:
   publish:
@@ -78,3 +79,17 @@ jobs:
         run: |
           sh tools/pages-publish.sh site "$GITHUB_REF_NAME" \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: turn Pages on if it is not already
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # so a fork is playable by pushing, with no trip through Settings
+          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
+            echo "Pages is already on"
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/pages" \
+              -f 'source[branch]=gh-pages' -f 'source[path]=/'
+            echo "enabled Pages from the gh-pages branch"
+          fi
+          echo "site: $(gh api "repos/$GITHUB_REPOSITORY/pages" -q .html_url)"
