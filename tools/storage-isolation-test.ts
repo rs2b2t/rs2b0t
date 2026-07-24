@@ -145,6 +145,26 @@ try {
     check(readBeta === SHRIMP, `beta keeps its own fishMethod (got "${readBeta}")`);
     await ctxB.close();
 
+    // ---- Test C: last script + params survive a relaunch (fresh sessionStorage) ----
+    console.log('\n[C] last script + params must survive a client relaunch');
+    const ctxC = await browser.newContext();
+    const pC = await ctxC.newPage();
+    await pC.goto(`${base}/bot.html?box=gamma`);
+    await waitRs2b0t(pC);
+    await pC.getByRole('button', { name: 'Browse…' }).click();
+    await pC.locator('.rs2b0t-library-card', { hasText: 'MossGiant' }).first().click();
+    await pC.evaluate(v => (globalThis as unknown as SettHook).rs2b0t.settings.save('MossGiant', 'combatStyle', v), 'range');
+    // relaunch = new process: sessionStorage is gone, localStorage survives
+    await pC.evaluate(() => sessionStorage.clear());
+    await pC.reload();
+    await waitRs2b0t(pC);
+    const scriptAfter = (await pC.textContent('.rs2b0t-current-script'))?.trim();
+    const styleAfter = await pC.evaluate(() => (globalThis as unknown as SettHook).rs2b0t.settings.saved('MossGiant', 'combatStyle'));
+    console.log(`  after relaunch: script "${scriptAfter}" (want "MossGiant"), combatStyle "${styleAfter}" (want "range")`);
+    check(scriptAfter === 'MossGiant', `last script restored after relaunch (got "${scriptAfter}")`);
+    check(styleAfter === 'range', `saved params restored after relaunch (got "${styleAfter}")`);
+    await ctxC.close();
+
     if (failures > 0) fail(`${failures} isolation check(s) failed`);
     console.log('\nPASS');
 } finally {

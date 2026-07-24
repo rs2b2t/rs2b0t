@@ -60,7 +60,8 @@ export default class BotPanel {
         script.appendChild(sectionTitle('script'));
 
         this.library = new ScriptLibrary(name => this.selectScript(name));
-        const remembered = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SELECTED_SCRIPT_KEY) : null;
+        const remembered = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SELECTED_SCRIPT_KEY) : null)
+            ?? (typeof localStorage !== 'undefined' ? localStorage.getItem(SELECTED_SCRIPT_KEY) : null);
         this.selectedScript = remembered && ScriptRegistry.get(remembered) ? remembered : (ScriptRegistry.list()[0]?.name ?? '');
 
         const pick = el('div', 'rs2b0t-buttons');
@@ -168,6 +169,9 @@ export default class BotPanel {
         this.selectedScript = name;
         if (typeof sessionStorage !== 'undefined') {
             sessionStorage.setItem(SELECTED_SCRIPT_KEY, name);
+        }
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(SELECTED_SCRIPT_KEY, name);
         }
         this.scriptName.textContent = name;
         this.renderSettings();

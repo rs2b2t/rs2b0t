@@ -126,9 +126,10 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
 };
 
 const hasSession = typeof sessionStorage !== 'undefined';
+const hasLocal = typeof localStorage !== 'undefined';
 
-// Per-instance, box-scoped (see box.ts): sessionStorage only. No localStorage
-// fallback — that shared a single value across every tab.
+// Two box-scoped layers (see box.ts): sessionStorage is the live-tab authority,
+// localStorage the durable copy a fresh instance of the same box reloads.
 function storageKey(name: string, key: string): string {
     return boxKey(`set:${name}:${key}`);
 }
@@ -156,6 +157,12 @@ class SettingsStoreImpl {
                 return v;
             }
         }
+        if (hasLocal) {
+            const v = localStorage.getItem(storageKey(name, key));
+            if (v !== null) {
+                return v;
+            }
+        }
         return undefined;
     }
 
@@ -163,11 +170,17 @@ class SettingsStoreImpl {
         if (hasSession) {
             sessionStorage.setItem(storageKey(name, key), rawString);
         }
+        if (hasLocal) {
+            localStorage.setItem(storageKey(name, key), rawString);
+        }
     }
 
     clear(name: string, key: string): void {
         if (hasSession) {
             sessionStorage.removeItem(storageKey(name, key));
+        }
+        if (hasLocal) {
+            localStorage.removeItem(storageKey(name, key));
         }
     }
 
