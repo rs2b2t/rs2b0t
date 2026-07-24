@@ -23,7 +23,6 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
 
 export const SETTINGS: SettingsSchema = {
-    gatherFeathers: { type: 'boolean', default: false, label: 'Gather feathers?', help: 'Also pick up the feathers chickens drop' },
     leashRadius: { type: 'number', default: 12, min: 3, max: 30, label: 'Leash radius (tiles)' },
     fightHpGate: { type: 'number', default: 45, min: 0, max: 100, label: 'Stop fighting below HP%' },
     restUntilHp: { type: 'number', default: 70, min: 0, max: 100, label: 'Rest until HP%' },
@@ -46,7 +45,6 @@ export default class ChickenKiller extends TaskBot {
     private anchor: Tile | null = null;
     private buried = 0;
     private kills = 0;
-    private feathers = 0;
     private deaths = 0;
     private status = 'starting';
     private startedAt = Date.now();
@@ -54,7 +52,6 @@ export default class ChickenKiller extends TaskBot {
     died = false;
 
     private leash = 12;
-    private gatherFeathers = false;
     private fightHpGate = 0.45;
     private restHp = 0.7;
     private target = 'Chicken';
@@ -66,7 +63,6 @@ export default class ChickenKiller extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         this.leash = this.settings.num('leashRadius', 12);
-        this.gatherFeathers = this.settings.bool('gatherFeathers', false);
         this.fightHpGate = this.settings.num('fightHpGate', 45) / 100;
         this.restHp = this.settings.num('restUntilHp', 70) / 100;
         this.target = this.settings.str('targetName', 'Chicken');
@@ -83,7 +79,7 @@ export default class ChickenKiller extends TaskBot {
         }
         this.startedAt = Date.now();
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.log(`anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}${this.gatherFeathers ? ', gathering feathers' : ''}`);
+        this.log(`anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -118,7 +114,6 @@ export default class ChickenKiller extends TaskBot {
             }),
             new BuryBones(this),
             new LootDrops(this),
-            new LootFeathers(this),
             new Rest(this),
             new SetCombatStyle(this),
             new Fight(this),
@@ -136,9 +131,6 @@ export default class ChickenKiller extends TaskBot {
 
     leashRadius(): number {
         return this.leash;
-    }
-    wantsFeathers(): boolean {
-        return this.gatherFeathers;
     }
     hpGate(): number {
         return this.fightHpGate;
@@ -169,9 +161,6 @@ export default class ChickenKiller extends TaskBot {
     shouldBury(): boolean {
         return this.buryEnabled;
     }
-    countFeathers(): void {
-        this.feathers++;
-    }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#5be05b' });
@@ -181,11 +170,7 @@ export default class ChickenKiller extends TaskBot {
         const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
         const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
-        if (this.gatherFeathers) {
-            p.row(`Buried: ${this.buried}`, `Feathers: ${this.feathers}`, `Deaths: ${this.deaths}`);
-        } else {
-            p.row(`Buried: ${this.buried}`, `Deaths: ${this.deaths}`);
-        }
+        p.row(`Buried: ${this.buried}`, `Deaths: ${this.deaths}`);
         p.bar('HP', Skills.hpFraction());
 
         p.gap();
@@ -300,36 +285,6 @@ class LootDrops implements Task {
             .where(g => terms.some(t => t.length > 0 && (g.name?.toLowerCase() ?? '').includes(t)))
             .within(this.bot.leashRadius() + 4)
             .nearest();
-    }
-}
-
-class LootFeathers implements Task {
-    constructor(private bot: ChickenKiller) {}
-
-    private find() {
-        return GroundItems.query()
-            .name('Feather')
-            .within(this.bot.leashRadius() + 4)
-            .nearest();
-    }
-
-    validate(): boolean {
-        return this.bot.wantsFeathers() && !Game.inCombat() && !Inventory.isFull() && this.find() !== null;
-    }
-
-    async execute(): Promise<void> {
-        const drop = this.find();
-        if (!drop) {
-            return;
-        }
-
-        this.bot.setStatus(`looting feathers at ${drop.tile()}`);
-        const before = Inventory.first('Feather')?.count ?? 0;
-        await drop.interact('Take');
-        if (await Execution.delayUntil(() => (Inventory.first('Feather')?.count ?? 0) > before, 5000)) {
-            this.bot.countFeathers();
-            this.bot.log('looted feathers');
-        }
     }
 }
 

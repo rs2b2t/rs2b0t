@@ -84,7 +84,7 @@ ScriptRegistry.register({
     description: 'Kills cows in the Lumbridge field, loots cow hides + bones (anchor = start tile)',
     category: 'Combat',
     tags: ['lumbridge', 'cowhide', 'bones', 'afk'],
-    settingsSchema: chickenPreset({ targetName: 'Cow', lootMatch: 'cow hide|bones', buryBones: false, gatherFeathers: false }),
+    settingsSchema: chickenPreset({ targetName: 'Cow', lootMatch: 'cow hide|bones', buryBones: false }),
     create: () => new ChickenKiller()
 });
 
