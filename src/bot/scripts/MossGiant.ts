@@ -11,6 +11,7 @@ import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
@@ -23,6 +24,7 @@ import { depositAllExcept, matchesCommonBankLoot } from '../api/Banking.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -33,6 +35,8 @@ const FIELD_RADIUS = 10;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
+
+const XP_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer'];
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -59,6 +63,7 @@ export const SETTINGS: SettingsSchema = {
 
     loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the moss giant drop table; ticked drops get grabbed. Everything picked up is banked — the bank keeps only food/runes/ammo/weapon.' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
+    buryBones: { type: 'boolean', default: false, label: 'Bury big bones', group: 'Banking & loot', help: 'bury Big bones for Prayer xp instead of banking them (always looted when on)' },
     safespotTile: { type: 'tile', default: DEFAULT_SAFESPOT, label: 'Safespot / field tile', group: 'Location' },
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Ardougne N)', group: 'Location' }
 };
@@ -77,6 +82,7 @@ let AMMO_WITHDRAW = 500;
 let FOOD_WITHDRAW = 20;
 let LOOT_SET = new Set<string>();
 let BANK_COMMON = true;
+let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let BANK_TILE = DEFAULT_BANK;
 
@@ -149,6 +155,17 @@ async function eatOnce(bot: MossGiant): Promise<boolean> {
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
 }
 
+async function quickReturnToSafespot(bot: MossGiant): Promise<boolean> {
+    bot.setStatus('returning to the safespot');
+    for (let i = 0; i < 3 && !atSafespot() && !EventSignal.pending(); i++) {
+        DirectNavigator.walk(SAFESPOT);
+        if (await Execution.delayUntil(() => atSafespot(), 4000)) {
+            break;
+        }
+    }
+    return atSafespot();
+}
+
 async function lootOnce(bot: MossGiant): Promise<boolean> {
     const drop = findLoot();
     if (!drop) {
@@ -158,7 +175,7 @@ async function lootOnce(bot: MossGiant): Promise<boolean> {
     const before = Inventory.used();
     await drop.interact('Take');
     if (await Execution.delayUntil(() => Inventory.used() > before, 4000)) {
-        bot.countLoot();
+        bot.countLoot(drop.name);
         bot.log(`looted ${drop.name}`);
         return true;
     }
@@ -366,6 +383,29 @@ class PanicBank implements Task {
     }
 }
 
+class BuryBones implements Task {
+    constructor(private bot: MossGiant) {}
+    validate(): boolean {
+        return BURY_BONES && Inventory.contains('Big bones');
+    }
+    async execute(): Promise<void> {
+        const bones = Inventory.first('Big bones');
+        if (!bones) {
+            return;
+        }
+        this.bot.setStatus('burying big bones');
+        const before = Inventory.used();
+        if (!(await bones.interact('Bury'))) {
+            this.bot.log(`no Bury op on big bones? ops=[${bones.actions().join(', ')}]`);
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+            this.bot.countBurial();
+        }
+    }
+}
+
 class BankRun implements Task {
     constructor(private bot: MossGiant) {}
     validate(): boolean {
@@ -445,13 +485,13 @@ class Fight implements Task {
 
             if (!Inventory.isFull() && findLoot() !== null) {
                 await lootOnce(this.bot);
-                if (usesSafespot() && !atSafespot()) {
-                    return;
-                }
                 continue;
             }
             if (usesSafespot() && !atSafespot()) {
-                return;
+                if (!(await quickReturnToSafespot(this.bot))) {
+                    return;
+                }
+                continue;
             }
 
             if (Game.inCombat()) {
@@ -474,7 +514,7 @@ class Fight implements Task {
             if (usesSafespot() && !atSafespot()) {
                 this.skip.set(target.index, now + 8000);
                 this.targetIdx = null;
-                return;
+                continue;
             }
         }
     }
@@ -486,7 +526,11 @@ export default class MossGiant extends TaskBot {
     private status = 'starting';
     private killsTotal = 0;
     private looted = 0;
+    private buriedTotal = 0;
     private bankTrips = 0;
+    private startedAt = Date.now();
+    private xpAtStart = 0;
+    private lootCounts = new Map<string, number>();
     private supplyEmpty = false;
     private bankEmpty = false;
 
@@ -510,12 +554,19 @@ export default class MossGiant extends TaskBot {
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+        BURY_BONES = this.settings.bool('buryBones', false);
+        if (BURY_BONES) {
+            LOOT_SET.add('big bones');
+        }
         SAFESPOT = this.settings.tile('safespotTile', DEFAULT_SAFESPOT);
         BANK_TILE = this.settings.tile('bankTile', DEFAULT_BANK);
 
         this.on('chat.message', e => { if (/oh dear.*you are dead/i.test(e.text)) { this.died = true; } });
 
-        this.log(`MossGiant — style ${STYLE}${STYLE !== 'melee' ? ` w/ ${WEAPON}` : ''}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), safespot ${SAFESPOT}, bank ${BANK_TILE}`);
+        this.startedAt = Date.now();
+        this.xpAtStart = XP_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
+
+        this.log(`MossGiant — style ${STYLE}${STYLE !== 'melee' ? ` w/ ${WEAPON}` : ''}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), safespot ${SAFESPOT}, bank ${BANK_TILE}${BURY_BONES ? ', burying big bones' : ''}`);
 
         this.add(
             new ContinueDialog(),
@@ -530,6 +581,7 @@ export default class MossGiant extends TaskBot {
             new SetAttackStyle(this),
             new ArmAutocast(this),
             new PanicBank(this),
+            new BuryBones(this),
             new BankRun(this),
             new LootCorpse(this),
             new ReturnToSafespot(this),
@@ -553,8 +605,14 @@ export default class MossGiant extends TaskBot {
     kills(): number {
         return this.killsTotal;
     }
-    countLoot(): void {
+    countLoot(name?: string | null): void {
         this.looted++;
+        if (name) {
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
+        }
+    }
+    countBurial(): void {
+        this.buriedTotal++;
     }
     countBankTrip(): void {
         this.bankTrips++;
@@ -575,9 +633,26 @@ export default class MossGiant extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ec8a0' });
         p.title(`MossGiant — ${this.status}`);
-        p.row(`Style: ${STYLE}`, `HP: ${Math.round(hpFrac() * 100)}%`);
-        p.row(`Kills: ${this.killsTotal}`, `Looted: ${this.looted}`);
-        p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${Inventory.count(AMMO)}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
+
+        const tab = p.tabs('mg', ['Overview', 'Loot']);
+        if (tab === 'Overview') {
+            const mins = (Date.now() - this.startedAt) / 60_000;
+            const xpGained = XP_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+            const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.killsTotal}`, `XP/hr: ${xph}`);
+            p.row(`Style: ${STYLE}`, STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${Inventory.count(AMMO)}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
+            p.bar('HP', hpFrac());
+        } else {
+            p.row(`Looted: ${this.looted}`, ...(BURY_BONES ? [`Buried: ${this.buriedTotal}`] : []), `Bank trips: ${this.bankTrips}`);
+            const top = [...this.lootCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (top.length === 0) {
+                p.text('nothing yet', '#8a919a');
+            }
+            for (let i = 0; i < top.length; i += 2) {
+                p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
+            }
+        }
+
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
