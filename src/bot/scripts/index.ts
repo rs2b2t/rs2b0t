@@ -3,6 +3,7 @@ import { GATHERING_SETTINGS } from './GatheringBot.js';
 import { LOCATION_OPTIONS } from './FishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from './FishingMethods.js';
 import { ROCK_OPTIONS } from './MiningRocks.js';
+import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
 import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
@@ -324,6 +325,15 @@ ScriptRegistry.register({
     tags: ['course', 'wilderness', 'food', 'death-recovery'],
     settingsSchema: WILDY_AGILITY_SETTINGS,
     create: () => new WildyAgility()
+});
+
+ScriptRegistry.register({
+    name: 'EdgevilleMonkeyBars',
+    description: 'Edgeville dungeon monkey bars — restock via dungeon ladder or after death. NOT RECOMMENDED FOR 10HP ACCOUNTS.',
+    category: 'Agility',
+    tags: ['edgeville', 'dungeon', 'monkey-bars', 'wilderness', 'banking'],
+    settingsSchema: EDGEVILLE_MONKEYBARS_SETTINGS,
+    create: () => new EdgevilleMonkeyBars()
 });
 
 ScriptRegistry.register({
