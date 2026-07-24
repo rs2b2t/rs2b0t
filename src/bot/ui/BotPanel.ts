@@ -127,13 +127,12 @@ export default class BotPanel {
             () => isActiveState(ScriptRunner.state),
             () => this.renderSettings()
         );
+        this.paramsModal.setGlobalExtra(this.buildCredentials());
 
         ScriptRegistry.onChange(() => {
             this.ensureSelection();
             this.renderSettings();
         });
-
-        root.appendChild(this.buildCredentials());
 
         const status = el('div', 'rs2b0t-section');
         status.appendChild(sectionTitle('status'));
