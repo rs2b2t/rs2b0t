@@ -9,6 +9,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
+import DebugModal from './DebugModal.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
@@ -31,15 +32,8 @@ export default class BotPanel {
     private paramsModal!: ParamsModal;
 
     private banner: HTMLElement;
-    private stateCell: HTMLElement;
-    private playerCell: HTMLElement;
-    private tileCell: HTMLElement;
-    private energyCell: HTMLElement;
-    private countsCell: HTMLElement;
-    private modalsCell: HTMLElement;
-    private tickCell: HTMLElement;
     private statsGrid: HTMLElement;
-    private chatList: HTMLElement;
+    private debugModal!: DebugModal;
 
     private statCells: { level: HTMLElement; cell: HTMLElement }[] = [];
     private lastRender = 0;
@@ -91,6 +85,13 @@ export default class BotPanel {
         globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS));
         settings.appendChild(globalBtn);
 
+        const debugBtn = document.createElement('button');
+        debugBtn.className = 'rs2b0t-button rs2b0t-param-edit';
+        debugBtn.textContent = 'Debug';
+        debugBtn.title = 'Live debug tool — nearby npc/object ids, open widgets, position';
+        debugBtn.addEventListener('click', () => this.debugModal.open());
+        settings.appendChild(debugBtn);
+
         root.appendChild(settings);
 
         this.paramsModal = new ParamsModal(
@@ -98,34 +99,18 @@ export default class BotPanel {
             () => this.renderSettings()
         );
         this.paramsModal.setGlobalExtra(this.buildCredentials());
+        this.debugModal = new DebugModal(() => ({ count: this.host.tickCount, meanMs: this.host.tickMeanMs }));
 
         ScriptRegistry.onChange(() => {
             this.ensureSelection();
             this.renderSettings();
         });
 
-        const status = el('div', 'rs2b0t-section');
-        status.appendChild(sectionTitle('status'));
-        this.stateCell = row(status, 'state');
-        this.playerCell = row(status, 'player');
-        this.tileCell = row(status, 'tile');
-        this.energyCell = row(status, 'energy');
-        this.countsCell = row(status, 'nearby');
-        this.modalsCell = row(status, 'modals');
-        this.tickCell = row(status, 'tick');
-        root.appendChild(status);
-
         const stats = el('div', 'rs2b0t-section');
         stats.appendChild(sectionTitle('stats'));
         this.statsGrid = el('div', 'rs2b0t-stats');
         stats.appendChild(this.statsGrid);
         root.appendChild(stats);
-
-        const chat = el('div', 'rs2b0t-section');
-        chat.appendChild(sectionTitle('chat'));
-        this.chatList = el('div', 'rs2b0t-chat');
-        chat.appendChild(this.chatList);
-        root.appendChild(chat);
 
         const logSection = el('div', 'rs2b0t-section');
         logSection.appendChild(sectionTitle('log'));
@@ -377,21 +362,6 @@ export default class BotPanel {
         }
 
         const ingame = reader.ingame();
-        this.stateCell.textContent = ingame ? 'ingame' : 'title screen';
-
-        this.playerCell.textContent = reader.localPlayerName() ?? '-';
-
-        const tile = reader.worldTile();
-        this.tileCell.textContent = tile ? `${tile.x}, ${tile.z}, ${tile.level}` : '-';
-
-        this.energyCell.textContent = ingame ? `${reader.energy()}% / ${reader.weight()} kg` : '-';
-        this.countsCell.textContent = ingame ? `${reader.playerCount()} players, ${reader.npcCount()} npcs` : '-';
-
-        const modals = reader.modals();
-        this.modalsCell.textContent = `main ${modals.main} / side ${modals.side} / chat ${modals.chat}`;
-
-        const mean = this.host.tickMeanMs;
-        this.tickCell.textContent = `${this.host.tickCount}${mean > 0 ? ` (${mean.toFixed(0)}ms)` : ''}`;
 
         for (let i = 0; i < reader.skillCount(); i++) {
             if (!reader.skillUsed(i)) {
@@ -404,18 +374,7 @@ export default class BotPanel {
             target.cell.title = `${stat.name}: ${stat.xp} xp`;
         }
 
-        const lines = reader.chat(6);
-        this.chatList.replaceChildren();
-        for (const line of lines) {
-            const div = el('div', 'rs2b0t-chat-line');
-            div.textContent = line.username ? `${line.username}: ${line.text}` : line.text;
-            this.chatList.appendChild(div);
-        }
-        if (lines.length === 0) {
-            const div = el('div', 'rs2b0t-chat-line rs2b0t-dim');
-            div.textContent = '(no messages)';
-            this.chatList.appendChild(div);
-        }
+        this.debugModal.update();
 
         this.renderScriptControls();
     }
