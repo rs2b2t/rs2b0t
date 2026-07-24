@@ -24,6 +24,7 @@ import { depositAllExcept, matchesCommonBankLoot } from '../api/Banking.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -152,6 +153,17 @@ async function eatOnce(bot: MossGiant): Promise<boolean> {
     const before = Skills.effective('hitpoints');
     await food.interact('Eat');
     return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+}
+
+async function quickReturnToSafespot(bot: MossGiant): Promise<boolean> {
+    bot.setStatus('returning to the safespot');
+    for (let i = 0; i < 3 && !atSafespot() && !EventSignal.pending(); i++) {
+        DirectNavigator.walk(SAFESPOT);
+        if (await Execution.delayUntil(() => atSafespot(), 4000)) {
+            break;
+        }
+    }
+    return atSafespot();
 }
 
 async function lootOnce(bot: MossGiant): Promise<boolean> {
@@ -473,13 +485,13 @@ class Fight implements Task {
 
             if (!Inventory.isFull() && findLoot() !== null) {
                 await lootOnce(this.bot);
-                if (usesSafespot() && !atSafespot()) {
-                    return;
-                }
                 continue;
             }
             if (usesSafespot() && !atSafespot()) {
-                return;
+                if (!(await quickReturnToSafespot(this.bot))) {
+                    return;
+                }
+                continue;
             }
 
             if (Game.inCombat()) {
@@ -502,7 +514,7 @@ class Fight implements Task {
             if (usesSafespot() && !atSafespot()) {
                 this.skip.set(target.index, now + 8000);
                 this.targetIdx = null;
-                return;
+                continue;
             }
         }
     }
