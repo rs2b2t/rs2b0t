@@ -13,6 +13,7 @@ import { WelcomeDismisser } from './runtime/WelcomeScreen.js';
 import { Scheduler } from './runtime/Scheduler.js';
 import { ScriptRegistry } from './runtime/ScriptRegistry.js';
 import { ScriptRunner } from './runtime/ScriptRunner.js';
+import { SettingsStore } from './runtime/Settings.js';
 import { StallGuard } from './runtime/StallGuard.js';
 import BotPanel from './ui/BotPanel.js';
 import Overlay from './ui/Overlay.js';
@@ -75,6 +76,10 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),
         clueProgress: () => ClueExecutor.current,
         paint: paintState,
-        clueTraces: () => readTraceRing(localStorage, TRACE_STORAGE_KEY)
+        clueTraces: () => readTraceRing(localStorage, TRACE_STORAGE_KEY),
+        settings: {
+            save: (name: string, key: string, raw: string) => SettingsStore.save(name, key, raw),
+            saved: (name: string, key: string) => SettingsStore.saved(name, key)
+        }
     };
 }

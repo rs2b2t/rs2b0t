@@ -70,9 +70,9 @@ try {
     await cheatQuiet(pageM, '~clearinv');
     await cheatQuiet(pageM, '~item nature_talisman 1');
     await pageM.evaluate(n => {
-        localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
-        localStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
-        localStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '400'); // never bank natures during the smoke
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Master');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:bankAt', '400'); // never bank natures during the smoke
     }, R_USER);
 
     // runner needs 99 hp — dangerous monsters on the Karamja route
@@ -82,8 +82,8 @@ try {
     await cheatQuiet(pageR, '~bankitem blankrune 27'); // 27 = 26 + 1 -> leaves a "note of 1" (the finding-#1 wedge case)
     await cheatQuiet(pageR, '~bankitem coins 100000');
     await pageR.evaluate(n => {
-        localStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
-        localStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:mode', 'Runner');
+        sessionStorage.setItem('rs2b0t:set:NatureCrafter:partner', n);
     }, M_USER);
     await pageM.waitForTimeout(600);
 

@@ -28,8 +28,8 @@ await cheat(page, '~bankitem coins 100000');
 await cheat(page, 'tele 0,50,53,51,28');
 
 await page.evaluate(() => {
-    localStorage.setItem('rs2b0t:set:ShopRunner:route', 'smoke-varrock');
-    localStorage.setItem('rs2b0t:set:ShopRunner:maxGpPerLeg', '30000');
+    sessionStorage.setItem('rs2b0t:set:ShopRunner:route', 'smoke-varrock');
+    sessionStorage.setItem('rs2b0t:set:ShopRunner:maxGpPerLeg', '30000');
 });
 
 interface R { rs2b0t: { runner: { start(m: unknown): void; ctx?: { log: { msg: string }[] } }; registry: { get(n: string): unknown } } }

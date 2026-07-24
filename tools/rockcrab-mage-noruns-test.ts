@@ -45,11 +45,11 @@ try {
     if (!atField) fail('no rock crabs in scene after teleport');
 
     await page.evaluate(() => {
-        localStorage.setItem('rs2b0t:set:RockCrab:combatStyle', 'mage');
-        localStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'false');
-        localStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Staff of air');
-        localStorage.setItem('rs2b0t:set:RockCrab:spell', 'Wind Strike');
-        localStorage.setItem('rs2b0t:set:RockCrab:food', 'Lobster');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:combatStyle', 'mage');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'false');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:weapon', 'Staff of air');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:spell', 'Wind Strike');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:food', 'Lobster');
     });
 
     const runes = await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.reader.inventory().filter(i => i.name === 'Mind rune').reduce((n, i) => n + i.count, 0));

@@ -35,7 +35,7 @@ try {
     console.log(`seeded coins — pack now holds ${packCoins} (walks from the Lumbridge spawn)`);
     if (packCoins < 1000) { fail(`coin seed did not land (pack has ${packCoins})`); }
 
-    await page.evaluate(() => localStorage.setItem('rs2b0t:set:AIOQuester:quests', 'hetty'));
+    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'hetty'));
     await startScript(page, 'AIOQuester');
     console.log("started AIOQuester — watching Witch's Potion");
 

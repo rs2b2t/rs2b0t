@@ -41,6 +41,9 @@ class DomSlotHandle implements SlotHandle {
                 forwarded.set(k, q.get(k)!);
             }
         }
+        // per-account storage namespace — isolates each iframe's creds/settings
+        // even though same-origin iframes share one sessionStorage (see box.ts)
+        forwarded.set('box', account.username);
         const qs = forwarded.toString();
         this.iframe.src = qs ? `/bot.html?${qs}` : '/bot.html';
         this.scaler.appendChild(this.iframe);

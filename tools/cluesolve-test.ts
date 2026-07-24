@@ -57,8 +57,8 @@ async function seedAndStart(clueObj: string, clueId: number, bankTileStr: string
     await cheat(page, 'setstat hitpoints 30');
 
     await page.evaluate(bt => {
-        localStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'true');
-        localStorage.setItem('rs2b0t:set:RockCrab:bankTile', bt);
+        sessionStorage.setItem('rs2b0t:set:RockCrab:solveClues', 'true');
+        sessionStorage.setItem('rs2b0t:set:RockCrab:bankTile', bt);
     }, bankTileStr);
 
     await cheat(page, teleCmd);

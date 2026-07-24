@@ -56,7 +56,7 @@ try {
     });
 
     await page.goto(`${base}/bot.html`);
-    await page.evaluate((t: string) => localStorage.setItem('rs2b0t:set:Thiever:target', t), TARGET);
+    await page.evaluate((t: string) => sessionStorage.setItem('rs2b0t:set:Thiever:target', t), TARGET);
     await boot();
     for (let i = 0; i < 6 && !(await login()); i++) { await page.waitForTimeout(3000); }
     await type('::tele 0,50,50,20,20');

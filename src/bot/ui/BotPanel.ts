@@ -2,6 +2,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../BotHost.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
+import { boxKey } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { loadFromFile, loadFromUrl, type LoadResult } from '../runtime/loader.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
@@ -12,7 +13,7 @@ import ParamsModal from './ParamsModal.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
 
-const SELECTED_SCRIPT_KEY = 'rs2b0t:selectedScript';
+const SELECTED_SCRIPT_KEY = boxKey('selectedScript');
 
 export default class BotPanel {
     private host: BotHostImpl;
