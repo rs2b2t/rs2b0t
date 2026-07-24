@@ -11,6 +11,7 @@ import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
+import { fmtDuration } from '../api/hud/paintLogic.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
@@ -33,6 +34,8 @@ const FIELD_RADIUS = 10;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
+
+const XP_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer'];
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -160,7 +163,7 @@ async function lootOnce(bot: MossGiant): Promise<boolean> {
     const before = Inventory.used();
     await drop.interact('Take');
     if (await Execution.delayUntil(() => Inventory.used() > before, 4000)) {
-        bot.countLoot();
+        bot.countLoot(drop.name);
         bot.log(`looted ${drop.name}`);
         return true;
     }
@@ -513,6 +516,9 @@ export default class MossGiant extends TaskBot {
     private looted = 0;
     private buriedTotal = 0;
     private bankTrips = 0;
+    private startedAt = Date.now();
+    private xpAtStart = 0;
+    private lootCounts = new Map<string, number>();
     private supplyEmpty = false;
     private bankEmpty = false;
 
@@ -544,6 +550,9 @@ export default class MossGiant extends TaskBot {
         BANK_TILE = this.settings.tile('bankTile', DEFAULT_BANK);
 
         this.on('chat.message', e => { if (/oh dear.*you are dead/i.test(e.text)) { this.died = true; } });
+
+        this.startedAt = Date.now();
+        this.xpAtStart = XP_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
 
         this.log(`MossGiant — style ${STYLE}${STYLE !== 'melee' ? ` w/ ${WEAPON}` : ''}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), safespot ${SAFESPOT}, bank ${BANK_TILE}${BURY_BONES ? ', burying big bones' : ''}`);
 
@@ -584,8 +593,11 @@ export default class MossGiant extends TaskBot {
     kills(): number {
         return this.killsTotal;
     }
-    countLoot(): void {
+    countLoot(name?: string | null): void {
         this.looted++;
+        if (name) {
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
+        }
     }
     countBurial(): void {
         this.buriedTotal++;
@@ -609,9 +621,26 @@ export default class MossGiant extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ec8a0' });
         p.title(`MossGiant — ${this.status}`);
-        p.row(`Style: ${STYLE}`, `HP: ${Math.round(hpFrac() * 100)}%`);
-        p.row(`Kills: ${this.killsTotal}`, BURY_BONES ? `Looted: ${this.looted} / Buried: ${this.buriedTotal}` : `Looted: ${this.looted}`);
-        p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${Inventory.count(AMMO)}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
+
+        const tab = p.tabs('mg', ['Overview', 'Loot']);
+        if (tab === 'Overview') {
+            const mins = (Date.now() - this.startedAt) / 60_000;
+            const xpGained = XP_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
+            const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.killsTotal}`, `XP/hr: ${xph}`);
+            p.row(`Style: ${STYLE}`, STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${Inventory.count(AMMO)}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
+            p.bar('HP', hpFrac());
+        } else {
+            p.row(`Looted: ${this.looted}`, ...(BURY_BONES ? [`Buried: ${this.buriedTotal}`] : []), `Bank trips: ${this.bankTrips}`);
+            const top = [...this.lootCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (top.length === 0) {
+                p.text('nothing yet', '#8a919a');
+            }
+            for (let i = 0; i < top.length; i += 2) {
+                p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
+            }
+        }
+
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
