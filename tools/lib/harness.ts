@@ -27,14 +27,18 @@ export function parseArgs(argv: string[], defaults?: { base?: string; minutes?: 
 }
 
 export async function launchBrowser(opts?: { swiftshader?: boolean }): Promise<Browser> {
+    // HEADED=1 opens a visible window (slowed down) so a human can watch/diagnose.
+    const headed = !!process.env.HEADED;
+    const slowMo = headed ? Number(process.env.SLOWMO ?? 200) : 0;
     if (opts?.swiftshader) {
         return chromium.launch({
             executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-            headless: true,
+            headless: !headed,
+            slowMo,
             args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
         });
     }
-    return chromium.launch({ channel: 'chrome', headless: true });
+    return chromium.launch({ channel: 'chrome', headless: !headed, slowMo });
 }
 
 export function boot(page: Page): Promise<unknown> {

@@ -576,6 +576,32 @@ export const reader = {
         return readInvComponent(comId, () => IfType.list[comId].iop ?? []);
     },
 
+    // Two-party trade (interface_trade). First screen = main modal 3323 (offers)
+    // with your pack in side modal 3321; second screen = main modal 3443 (confirm).
+    tradeOfferOpen(): boolean {
+        return raw?.mainModalId === 3323;
+    },
+
+    tradeConfirmOpen(): boolean {
+        return raw?.mainModalId === 3443;
+    },
+
+    tradeMyOffer(): InvItemSnapshot[] {
+        return readInvComponent(3415, () => IfType.list[3415]?.iop ?? []); // trademain:inv
+    },
+
+    tradeTheirOffer(): InvItemSnapshot[] {
+        return readInvComponent(3416, () => IfType.list[3416]?.iop ?? []); // trademain:otherinv
+    },
+
+    tradeSidePack(): InvItemSnapshot[] {
+        return readInvComponent(3322, () => IfType.list[3322]?.iop ?? []); // tradeside:inv — your pack while trading
+    },
+
+    tradePartner(): string | null {
+        return IfType.list[3417]?.text ?? null; // trademain:otherplayer — "Trading With: <name>"
+    },
+
     closeButtonComId(rootComId: number): number {
         if (!raw || rootComId === -1) {
             return -1;

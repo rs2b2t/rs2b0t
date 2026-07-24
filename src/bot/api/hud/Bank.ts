@@ -15,6 +15,16 @@ export const Bank = {
         return reader.bankComId() !== -1;
     },
 
+    // Toggle withdrawal mode. bank_main:com_93 = Note, com_94 = Item. Opening the
+    // bank resets to Item mode, so set Note mode after opening, before withdrawing.
+    async setNoteMode(on: boolean): Promise<void> {
+        if (!Bank.isOpen()) {
+            return;
+        }
+        actions.ifButton(on ? 5386 : 5387);
+        await Execution.delayTicks(1);
+    },
+
     items(): InvItemSnapshot[] {
         return reader.bankItems();
     },
