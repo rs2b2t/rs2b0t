@@ -6,8 +6,10 @@ name: pages
 #   main             -> https://<user>.github.io/<repo>/
 #   any other branch -> https://<user>.github.io/<repo>/branch/<name>/
 #
-# Fork it and push — there is nothing to set up. The first run creates the gh-pages
-# branch and turns Pages on for you. No secrets are involved.
+# Fork it and push. The first run creates the gh-pages branch for you; switching
+# Pages on is admin-level and a workflow token is not admin, so that is one click,
+# once: Settings -> Pages -> Deploy from a branch -> gh-pages / (root).
+# No secrets are involved.
 #
 # Plays on rs2b2t by default. To point a fork at another server, set the repository
 # variable PAGES_GAME_ORIGIN (e.g. https://my.server).
@@ -28,15 +30,10 @@ concurrency:
 
 permissions:
   contents: write   # gh-pages holds every branch's build
-  pages: write      # publishing, and switching Pages on for a fresh fork
-  id-token: write   # required to deploy
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     env:
       GAME_ORIGIN: ${{ vars.PAGES_GAME_ORIGIN || 'https://w1.rs2b2t.com' }}
     steps:
@@ -84,25 +81,16 @@ jobs:
           sh tools/pages-publish.sh site "$GITHUB_REF_NAME" \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      # gh-pages accumulates one folder per branch; the whole tree is what gets
-      # served, so every branch's build stays reachable after any single push.
-      - name: collect every branch's build
+      - name: where it will be served
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git clone -q --depth 1 --branch gh-pages \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" published
-          rm -rf published/.git
-
-      # enablement:true switches Pages on for a fork that has never used it, so
-      # there is no manual trip through Settings
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: published
-
-      - uses: actions/deploy-pages@v4
-        id: deploy
+          # Switching Pages on is an admin-level setting and the token a workflow
+          # gets deliberately is not admin (Create Pages site answers 403), so a
+          # fork that has never used Pages needs one click, once.
+          if url=$(gh api "repos/$GITHUB_REPOSITORY/pages" -q .html_url 2>/dev/null); then
+            echo "published: $url"
+          else
+            echo "Pages is not on for this repo yet — the build is waiting on gh-pages."
+            echo "Turn it on once: Settings -> Pages -> Deploy from a branch -> gh-pages / (root)."
+          fi

@@ -14,8 +14,14 @@ their own URL side by side.
 
 ## Setup
 
-None. Push anything: the workflow builds, publishes, creates the `gh-pages` branch
-and turns Pages on for you. The URL is printed at the end of the run.
+Push anything — the workflow builds, publishes, and creates the `gh-pages` branch
+for you. Then, once: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**.
+
+That click cannot be automated: turning Pages on is an admin-level setting and the
+token a workflow gets deliberately is not admin, so both the API and
+`actions/configure-pages` answer `403 Resource not accessible by integration`. The
+only way around it is handing the workflow an admin PAT, which is more setup than
+the click. After it, every later push publishes on its own.
 
 No secrets. The login key is public and rotates, so the build reads it back off the
 client the server itself serves rather than pinning a copy.
