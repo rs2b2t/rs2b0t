@@ -38,10 +38,8 @@ export default class BotPanel {
     private countsCell: HTMLElement;
     private modalsCell: HTMLElement;
     private tickCell: HTMLElement;
-    private statsGrid: HTMLElement;
     private chatList: HTMLElement;
 
-    private statCells: { level: HTMLElement; cell: HTMLElement }[] = [];
     private lastRender = 0;
 
     constructor(root: HTMLElement, host: BotHostImpl) {
@@ -115,12 +113,6 @@ export default class BotPanel {
         this.tickCell = row(status, 'tick');
         root.appendChild(status);
 
-        const stats = el('div', 'rs2b0t-section');
-        stats.appendChild(sectionTitle('stats'));
-        this.statsGrid = el('div', 'rs2b0t-stats');
-        stats.appendChild(this.statsGrid);
-        root.appendChild(stats);
-
         const chat = el('div', 'rs2b0t-section');
         chat.appendChild(sectionTitle('chat'));
         this.chatList = el('div', 'rs2b0t-chat');
@@ -138,22 +130,6 @@ export default class BotPanel {
             this.renderLog();
             this.renderSettings();
         });
-
-        for (let i = 0; i < reader.skillCount(); i++) {
-            if (!reader.skillUsed(i)) {
-                continue;
-            }
-
-            const cell = el('div', 'rs2b0t-stat');
-            const name = el('span', 'rs2b0t-stat-name');
-            name.textContent = reader.stat(i).name.slice(0, 3);
-            const level = el('span', 'rs2b0t-stat-level');
-            level.textContent = '-';
-            cell.appendChild(name);
-            cell.appendChild(level);
-            this.statsGrid.appendChild(cell);
-            this.statCells[i] = { level, cell };
-        }
 
         host.addDrawListener(() => this.maybeRender());
         this.render();
@@ -392,17 +368,6 @@ export default class BotPanel {
 
         const mean = this.host.tickMeanMs;
         this.tickCell.textContent = `${this.host.tickCount}${mean > 0 ? ` (${mean.toFixed(0)}ms)` : ''}`;
-
-        for (let i = 0; i < reader.skillCount(); i++) {
-            if (!reader.skillUsed(i)) {
-                continue;
-            }
-
-            const stat = reader.stat(i);
-            const target = this.statCells[i];
-            target.level.textContent = ingame ? `${stat.effective}/${stat.base}` : '-';
-            target.cell.title = `${stat.name}: ${stat.xp} xp`;
-        }
 
         const lines = reader.chat(6);
         this.chatList.replaceChildren();
