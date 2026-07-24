@@ -361,10 +361,19 @@
 
         .rs2b0t-library-list {
             overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             gap: 6px;
             padding-right: 4px;
+        }
+
+        /* external-script loader pinned under the list */
+        .rs2b0t-library-load {
+            flex: 0 0 auto;
+            border-top: 1px solid #2a2a2a;
+            padding-top: 8px;
         }
 
         .rs2b0t-library-card {

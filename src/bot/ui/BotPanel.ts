@@ -4,7 +4,6 @@ import { ActionRouter } from '../input/ActionRouter.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
 import { boxKey } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
-import { loadFromFile, loadFromUrl, type LoadResult } from '../runtime/loader.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
@@ -28,8 +27,6 @@ export default class BotPanel {
     private scriptStatus: HTMLElement;
     private logBox: HTMLElement;
     private unsubLog: (() => void) | null = null;
-    private loadUrlInput: HTMLInputElement;
-    private loadStatus: HTMLElement;
     private settingsBox: HTMLElement;
     private paramsModal!: ParamsModal;
 
@@ -79,34 +76,6 @@ export default class BotPanel {
         script.appendChild(buttons);
 
         this.scriptStatus = row(script, 'status');
-
-        const loadRow = el('div', 'rs2b0t-buttons');
-        this.loadUrlInput = document.createElement('input');
-        this.loadUrlInput.className = 'rs2b0t-input';
-        this.loadUrlInput.type = 'text';
-        this.loadUrlInput.placeholder = 'script URL (dist/bot.js)';
-        loadRow.appendChild(this.loadUrlInput);
-        button(loadRow, 'Load URL', () => void this.handleLoad(loadFromUrl(this.loadUrlInput.value.trim())));
-        script.appendChild(loadRow);
-
-        const fileRow = el('div', 'rs2b0t-buttons');
-        const filePick = document.createElement('input');
-        filePick.type = 'file';
-        filePick.accept = '.js,.mjs';
-        filePick.style.display = 'none';
-        filePick.addEventListener('change', () => {
-            const file = filePick.files?.[0];
-            if (file) {
-                void this.handleLoad(loadFromFile(file));
-            }
-            filePick.value = '';
-        });
-        button(fileRow, 'Load file…', () => filePick.click());
-        fileRow.appendChild(filePick);
-        script.appendChild(fileRow);
-
-        this.loadStatus = el('div', 'rs2b0t-load-status');
-        script.appendChild(this.loadStatus);
         root.appendChild(script);
 
         const settings = el('div', 'rs2b0t-section');
@@ -191,23 +160,6 @@ export default class BotPanel {
         this.ensureSelection();
         this.renderScriptControls();
         this.renderSettings();
-    }
-
-    private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
-        this.loadStatus.textContent = 'loading…';
-        this.loadStatus.className = 'rs2b0t-load-status';
-
-        const result = await pending;
-        if (result.ok) {
-            this.loadStatus.textContent = `loaded '${result.name}'`;
-            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
-            if (result.name && !isActiveState(ScriptRunner.state)) {
-                this.selectScript(result.name);
-            }
-        } else {
-            this.loadStatus.textContent = `load failed: ${result.error}`;
-            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
-        }
     }
 
     private selectScript(name: string): void {
