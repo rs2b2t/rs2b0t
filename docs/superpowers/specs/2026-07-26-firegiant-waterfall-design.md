@@ -210,10 +210,15 @@ here. Startup failure is a clear log plus park, matching how EssMiner gates on R
 tile through the `Large door` at 2565,9881, and killed a fire giant for 521 ranged xp with
 **zero** `returning to the safespot` events, **zero** food eaten, and no deaths.
 
-**`2568,9892` was tried and rejected.** One tile south sees a second west giant (2562,9886 at d=6
-as well as 2568,9889 at d=3), which is tempting for kill rate — but unlike 9893 a 2x2 footprint
-fits with its **origin on that tile**, so a giant can reach you there. The safespot stays at 9893.
-Anything moved south of it trades the whole point of the tile for throughput.
+**The safespot is two-tier.** `2568,9892` is the forward spot: it sees two west giants
+(2568,9889 at d=3 and 2562,9886 at d=6) so it kills faster, but unlike 9893 a 2x2 footprint fits
+with its **origin on that tile**, so a giant can occasionally reach it. The bot holds 9892 and drops
+to `2568,9893` — the melee-proof nook — for `RETREAT_MS` (60s) whenever a giant is adjacent and
+targeting the player, then tries the forward spot again.
+
+Both tiers are in the west room, so room-gated targeting is unaffected by a retreat, and both keep
+west giants inside bow range. Detection uses `Npc.targetsMe()` (faceEntity resolving to our own
+slot) plus distance ≤ 2 — a 2x2 giant's origin can be two tiles out and still be swinging.
 
 ### Leashing stage
 

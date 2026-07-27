@@ -30,7 +30,7 @@ import { actions } from '../adapter/ClientAdapter.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Locs } from '../api/queries/Locs.js';
 import {
-    AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
+    AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, RETREAT_MS, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
     attackRangeFor, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
@@ -75,7 +75,8 @@ export const SETTINGS: SettingsSchema = {
     loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the fire giant drop table; ticked drops get grabbed. Everything picked up is banked — the bank keeps only food/runes/ammo/weapon plus the amulet, rope, and escape runes.' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
     buryBones: { type: 'boolean', default: false, label: 'Bury big bones', group: 'Banking & loot', help: 'bury Big bones for Prayer xp instead of banking them (always looted when on)' },
-    safespotTile: { type: 'tile', default: DEFAULT_SAFESPOT, label: 'Safespot tile (west room)', group: 'Location', showIf: SHOW_SAFESPOT, help: 'north nook of the west room; giants are 2x2 and leash 5 tiles from spawn, so they cannot reach it' },
+    safespotTile: { type: 'tile', default: DEFAULT_SAFESPOT, label: 'Safespot tile (west room)', group: 'Location', showIf: SHOW_SAFESPOT, help: 'preferred spot in the west room — sees two giants. If one reaches it the bot drops to the fallback tile for a minute' },
+    safespotFallbackTile: { type: 'tile', default: DEFAULT_SAFESPOT_FALLBACK, label: 'Safespot fallback tile', group: 'Location', showIf: SHOW_SAFESPOT, help: 'retreat tile used for a minute whenever a giant reaches the main safespot; must be somewhere no giant can path to' },
     meleeTile: { type: 'tile', default: DEFAULT_MELEE_TILE, label: 'Melee anchor tile (centre room)', group: 'Location', showIf: SHOW_MELEE, help: 'centre of the east chamber — 7 giants within 6 tiles' },
     escapeTele: { type: 'string', default: 'Camelot', options: ESCAPE_TELE_OPTIONS, label: 'Escape teleport', group: 'Location', help: 'the dungeon has no walk-out, so banking always teleports. Walk back to the raft: Camelot 352 tiles, Ardougne 274, Falador 771, Varrock 910' },
     teleStock: { type: 'number', default: 2, min: 1, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
@@ -98,6 +99,8 @@ let LOOT_SET = new Set<string>();
 let BANK_COMMON = true;
 let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
+let SAFESPOT_FALLBACK = DEFAULT_SAFESPOT_FALLBACK;
+let retreatUntil = 0;
 let MELEE_TILE = DEFAULT_MELEE_TILE;
 let BANK_TILE = ESCAPE_TELES.Camelot.bank;
 let TELE: EscapeTele = ESCAPE_TELES.Camelot;
@@ -137,15 +140,33 @@ function needStyleSupplies(): boolean {
 function usesSafespot(): boolean {
     return STYLE === 'mage' || STYLE === 'range';
 }
+function activeSafespot(): Tile {
+    return performance.now() < retreatUntil ? SAFESPOT_FALLBACK : SAFESPOT;
+}
 function anchor(): Tile {
-    return usesSafespot() ? SAFESPOT : MELEE_TILE;
+    return usesSafespot() ? activeSafespot() : MELEE_TILE;
+}
+// The forward spot trades safety for a second giant in view, so a giant landing on
+// us there is expected, not a bug — drop to the melee-proof nook and try again later.
+function checkRetreat(bot: FireGiant): boolean {
+    if (!usesSafespot() || performance.now() < retreatUntil) {
+        return false;
+    }
+    const onUs = Npcs.query().name(TARGET).where(n => n.targetsMe() && n.distance() <= 2).exists();
+    if (!onUs) {
+        return false;
+    }
+    retreatUntil = performance.now() + RETREAT_MS;
+    bot.log(`a fire giant reached ${SAFESPOT} — falling back to ${SAFESPOT_FALLBACK} for ${Math.round(RETREAT_MS / 1000)}s`);
+    return true;
 }
 function inField(tile: Tile): boolean {
     return anchor().distanceTo(tile) <= FIELD_RADIUS;
 }
 function atSafespot(): boolean {
     const here = Game.tile();
-    return here !== null && SAFESPOT.x === here.x && SAFESPOT.z === here.z && SAFESPOT.level === here.level;
+    const spot = activeSafespot();
+    return here !== null && spot.x === here.x && spot.z === here.z && spot.level === here.level;
 }
 function inDungeon(): boolean {
     const here = Game.tile();
@@ -757,6 +778,9 @@ class Fight implements Task {
             if (hpFrac() < PANIC_HP) {
                 return;
             }
+            if (checkRetreat(this.bot)) {
+                continue;
+            }
 
             const giants = fieldGiants();
             if (this.targetIdx !== null && !giants.some(g => g.index === this.targetIdx)) {
@@ -821,6 +845,9 @@ class Fight implements Task {
             if (hpFrac() < EAT_HP && hasFood()) {
                 await eatOnce(this.bot);
                 continue;
+            }
+            if (checkRetreat(this.bot)) {
+                return true;
             }
             if (!atSafespot()) {
                 if (!(await quickReturnToSafespot(this.bot))) {
@@ -892,6 +919,8 @@ export default class FireGiant extends TaskBot {
             LOOT_SET.add('big bones');
         }
         SAFESPOT = this.settings.tile('safespotTile', DEFAULT_SAFESPOT);
+        SAFESPOT_FALLBACK = this.settings.tile('safespotFallbackTile', DEFAULT_SAFESPOT_FALLBACK);
+        retreatUntil = 0;
         MELEE_TILE = this.settings.tile('meleeTile', DEFAULT_MELEE_TILE);
         TELE = ESCAPE_TELES[this.settings.str('escapeTele', 'Camelot')] ?? ESCAPE_TELES.Camelot;
         TELE_STOCK = this.settings.num('teleStock', 2);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, RETREAT_MS, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -102,11 +102,28 @@ describe('roomOf', () => {
     });
 });
 
-describe('DEFAULT_SAFESPOT', () => {
-    // 9892 sees a second giant but a 2x2 footprint fits with its origin on that tile,
-    // so a giant can reach it. 9893 is the live-verified melee-proof nook.
-    test('is 2568,9893, not the reachable tile one south', () => {
-        expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9893, 0]);
+// Two-tier: hold the forward tile for the extra giant, drop to the melee-proof nook
+// whenever one actually reaches us.
+describe('safespot tiers', () => {
+    test('the forward spot is 2568,9892 and the fallback is 2568,9893', () => {
+        expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9892, 0]);
+        expect([DEFAULT_SAFESPOT_FALLBACK.x, DEFAULT_SAFESPOT_FALLBACK.z, DEFAULT_SAFESPOT_FALLBACK.level]).toEqual([2568, 9893, 0]);
+    });
+    test('they are distinct tiles, or the retreat is a no-op', () => {
+        expect(DEFAULT_SAFESPOT.x === DEFAULT_SAFESPOT_FALLBACK.x && DEFAULT_SAFESPOT.z === DEFAULT_SAFESPOT_FALLBACK.z).toBe(false);
+    });
+    test('both tiers sit in the west room, so room-gated targeting survives a retreat', () => {
+        expect(roomOf(DEFAULT_SAFESPOT)).toBe('west');
+        expect(roomOf(DEFAULT_SAFESPOT_FALLBACK)).toBe('west');
+    });
+    test('the fallback keeps the west giants inside bow range', () => {
+        const west = [[2562, 9886], [2565, 9887], [2568, 9889]] as const;
+        const inRange = west.filter(([x, z]) => Math.max(Math.abs(x - DEFAULT_SAFESPOT_FALLBACK.x), Math.abs(z - DEFAULT_SAFESPOT_FALLBACK.z)) <= attackRangeFor('range'));
+        expect(inRange.length).toBeGreaterThan(0);
+    });
+    test('the retreat lasts long enough to outlast a giant leash, but re-tries', () => {
+        expect(RETREAT_MS).toBeGreaterThanOrEqual(30_000);
+        expect(Number.isFinite(RETREAT_MS)).toBe(true);
     });
 });
 
