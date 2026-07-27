@@ -70,6 +70,7 @@ export const SETTINGS: SettingsSchema = {
     staff: { type: 'string', default: 'Staff of air', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE, help: 'wielded staff, withdrawn from bank when missing' },
     spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 2000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
+    runeBuffer: { type: 'number', default: 500, min: 0, max: 2000, label: 'Spare runes per type', group: 'Combat', showIf: SHOW_MAGE, help: 'withdrawn on top of the cast budget. Looted runes (fire giants drop chaos) let the trip cast past its planned count and drain whichever rune is scarcest — if that rune is also the escape teleport\'s, the bot cannot leave. Runes stack, so this costs no extra slots' },
     bow: { type: 'string', default: 'Maple shortbow', options: BOWS, label: 'Bow', group: 'Combat', showIf: SHOW_RANGE, help: 'wielded bow, withdrawn from bank when missing' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
     ammo: { type: 'string', default: 'Iron arrow', options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow'], label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
@@ -101,6 +102,7 @@ let FOOD_NAME = 'Lobster';
 let EAT_HP = 0.5;
 let PANIC_HP = 0.25;
 let RUNES_WITHDRAW = 150;
+let RUNE_BUFFER = 500;
 let AMMO_WITHDRAW = 500;
 let FOOD_WITHDRAW = 20;
 let LOOT_SET = new Set<string>();
@@ -653,10 +655,16 @@ async function withdrawStyleSupplies(bot: FireGiant): Promise<void> {
     }
     if (STYLE === 'mage') {
         bot.setStatus('withdrawing runes');
+        // Looted runes let the trip outrun its cast budget — fire giants drop chaos,
+        // so the spell keeps firing until the scarcest rune runs dry. When that rune
+        // is also the escape teleport's (Camelot burns air, so does most of the
+        // standard book) the bot ends up unable to leave. Runes stack, so a spare
+        // few hundred costs one slot.
         for (const { rune, count } of runeWithdrawList(SPELL, wieldedNames(), RUNES_WITHDRAW)) {
-            if (Inventory.count(rune) < count) {
-                const got = await withdrawTo(rune, count);
-                bot.log(`withdrew ${got} ${rune} (${Inventory.count(rune)}/${count})`);
+            const target = count + RUNE_BUFFER;
+            if (Inventory.count(rune) < target) {
+                const got = await withdrawTo(rune, target);
+                bot.log(`withdrew ${got} ${rune} (${Inventory.count(rune)}/${target})`);
             }
         }
         if (castsLeft() < 1) {
@@ -1118,6 +1126,7 @@ export default class FireGiant extends TaskBot {
         EAT_HP = this.settings.num('eatHp', 50) / 100;
         PANIC_HP = this.settings.num('panicHp', 25) / 100;
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
+        RUNE_BUFFER = this.settings.num('runeBuffer', 500);
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));

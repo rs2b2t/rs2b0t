@@ -144,6 +144,7 @@ MossGiant's schema verbatim — `combatStyle`, `meleeStyle`, `staff`, `spell`, `
 | `safespotFallbackTile` | tile | `2568,9893` | melee-proof retreat, `showIf` range/mage |
 | `meleeTile` | tile | `2575,9893` | `showIf` melee |
 | `escapeTele` | string | `Barrel (free)` | Barrel / Camelot / Ardougne / Falador / Varrock |
+| `runeBuffer` | number | 500 | spare runes per type on top of the cast budget, `showIf` mage |
 | `bankTile` | tile | `2725,3491` | Seers; the default tracks `escapeTele` (below) |
 | `teleStock` | number | 2 | escape casts carried **in addition to** the one needed to leave, so a failed cast is not fatal |
 
@@ -244,6 +245,18 @@ forward spot is worth retrying — no timer, so it neither gives up early nor su
 
 Both tiers are in the west room, so room-gated targeting is unaffected by a retreat, and both keep
 west giants inside bow range.
+
+### Rune budgets have to allow for looted runes
+
+The cast budget (`runesWithdraw`, in casts) assumes the trip only spends what it carried in. It
+does not: fire giants drop chaos, air, blood, law and death runes, so a lucky trip keeps casting
+well past its planned count and drains whichever rune is scarcest. With Camelot as the way out
+that rune is air — the teleport's — and the bot ends up unable to leave. `runeBuffer` (default
+500) is withdrawn on top of the computed requirement for each rune the spell needs; runes stack,
+so it costs no extra inventory slots.
+
+This is mitigation rather than a guarantee. The robust fix is the barrel: it needs no runes at
+all, which is why it is the default way out.
 
 ### Looting is a burst
 
