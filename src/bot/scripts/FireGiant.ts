@@ -40,6 +40,8 @@ const FIELD_RADIUS = 10;
 
 const BANK_HEAL_TO = 0.9;
 
+const RE_ENGAGE_MS = 10_000;
+
 const LOOT_TAKE_MS = 1200;
 const LOOT_BURST_MAX = 8;
 
@@ -820,6 +822,7 @@ class WalkToSpot implements Task {
 
 class Fight implements Task {
     private targetIdx: number | null = null;
+    private engagedAt = 0;
     private skip = new Map<number, number>();
     constructor(private bot: FireGiant) {}
     validate(): boolean {
@@ -869,7 +872,12 @@ class Fight implements Task {
                 continue;
             }
 
-            if (Game.inCombat()) {
+            // You stay in combat with a giant until one of you dies, so re-clicking a
+            // live target is pure noise. Game.inCombat() reads our OWN combat bar,
+            // which never lights up while safespotting, so it is useless here — track
+            // the target instead and only re-issue if it somehow stalls.
+            const engaged = this.targetIdx !== null && giants.some(g => g.index === this.targetIdx);
+            if (engaged && performance.now() - this.engagedAt < RE_ENGAGE_MS) {
                 await Execution.delayTicks(2);
                 continue;
             }
@@ -892,11 +900,16 @@ class Fight implements Task {
             }
 
             const tierBefore = retreated;
-            this.bot.log(`engaging fire giant ${target.index} at ${target.tile().x},${target.tile().z} (d=${target.distance()})`);
+            if (target.index !== this.targetIdx) {
+                this.bot.log(`engaging fire giant ${target.index} at ${target.tile().x},${target.tile().z} (d=${target.distance()})`);
+            } else {
+                this.bot.log(`giant ${target.index} stalled — re-issuing the attack`);
+            }
             await target.interact('Attack');
             this.targetIdx = target.index;
             this.bot.targetIdx = target.index;
-            await Execution.delayUntil(() => Game.inCombat() || (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 3000);
+            this.engagedAt = performance.now();
+            await Execution.delayUntil(() => (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 1200);
             if (usesSafespot() && !atSafespot()) {
                 // A tier switch moves us one tile on purpose; that is not the giant
                 // dragging us, and dropping the target here is what looked like the
