@@ -36,6 +36,9 @@ const ENTRY_RADIUS = 10;
 const SEARCH_RADIUS = 20;
 const RIDGE_NAME = 'Door';
 const RIDGE_OP = 'Open';
+const GATE_TILE: WorldTile = { x: 2998, z: 3931, level: 0 };
+const GATE_NAME = 'Gate';
+const GATE_OP = 'Open';
 const PIT_LADDER_NAME = '';
 const PIT_LADDER_OP = 'Climb-up';
 const BANK_TILE: WorldTile = EDGEVILLE;
@@ -62,6 +65,10 @@ const WRONG_SIDE = /^(?:you cannot do that from here|you can't? enter the pipe f
 // scene change — it just knocks the player back, so it's handled as a reposition.
 const PIT_FALL = /(?:you slip and fall into the pit below|you lose your footing and fall into the lava|you slip and fall onto the spikes below)/i;
 
+// Chat messages for the ridge crossing when entering the course.
+const RIDGE_SUCCESS = /you reach the top/i;
+const RIDGE_FAIL = /you lose your footing and fall into the wolf pit/i;
+
 function getStartTile(obstacleName: string): WorldTile | null {
     return OBSTACLE_START[obstacleName.toLowerCase()] ?? null;
 }
@@ -77,6 +84,7 @@ function reactionMs(): number {
 }
 
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
+    testRidge: { type: 'boolean', default: false, label: 'Test ridge loop', help: 'only enter and exit the course repeatedly — ignores obstacles, food, and banking' },
     food: {
         type: 'string',
         default: 'Lobster',
@@ -94,6 +102,7 @@ let EAT_AT = 0.5;
 let EAT_TO = 0.9;
 let FOOD_WITHDRAW = 20;
 let OBSTACLE_TIMEOUT_TICKS = 24;
+let TEST_RIDGE = false;
 
 export function parseObstacles(csv: string): string[] {
     return csv
@@ -156,6 +165,7 @@ export default class WildyAgility extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        TEST_RIDGE = this.settings.bool('testRidge', false);
         FOOD = this.settings.str('food', 'Lobster').toLowerCase();
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
@@ -173,8 +183,6 @@ export default class WildyAgility extends TaskBot {
         this.xpAtStart = Skills.xp('agility');
         this.lastClearedTick = Game.tick();
 
-        this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`);
-
         const here = Game.tile()!;
         this.entered = insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
 
@@ -191,33 +199,56 @@ export default class WildyAgility extends TaskBot {
         // time attacking them back.
         await ensureRetaliateOff(m => this.log(m));
 
-        this.add(
-            new ContinueDialog(),
-            new DeathRecovery(this, {
-                anchor: COURSE_ENTRANCE,
-                radius: 6,
-                onDeath: () => {
-                    this.deaths++;
-                    this.entered = false;
-                    this.justEscapedPit = false;
-                    this.lastClearedTick = Game.tick();
-                    this.setStatus('died — recovering');
-                    this.log('died in the wilderness — escaping pit if needed, then banking (food-only) and returning');
-                    // After death, ensure Auto Retaliate is off again.
-                    ensureRetaliateOff(m => this.log(m));
-                },
-                onRecovered: () => {
-                    this.died = false;
-                    this.setStatus('recovered — re-entering the course');
-                },
-                walkBack: () => this.recoverAndReturn()
-            }),
-            new EatFood(this),
-            new PitEscape(this),
-            new TravelToCourse(this),
-            new EnterCourse(this),
-            new RunLap(this)
-        );
+        if (TEST_RIDGE) {
+            this.log(`WildyAgility ridge test mode — enter/exit loop only, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}`);
+            this.add(
+                new ContinueDialog(),
+                new DeathRecovery(this, {
+                    anchor: COURSE_ENTRANCE,
+                    radius: 6,
+                    onDeath: () => {
+                        this.deaths++;
+                        this.entered = false;
+                        this.setStatus('died — recovering');
+                    },
+                    onRecovered: () => {
+                        this.died = false;
+                        this.setStatus('recovered');
+                    },
+                    walkBack: () => this.recoverAndReturn()
+                }),
+                new RidgeTestLoop(this)
+            );
+        } else {
+            this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`);
+            this.add(
+                new ContinueDialog(),
+                new DeathRecovery(this, {
+                    anchor: COURSE_ENTRANCE,
+                    radius: 6,
+                    onDeath: () => {
+                        this.deaths++;
+                        this.entered = false;
+                        this.justEscapedPit = false;
+                        this.lastClearedTick = Game.tick();
+                        this.setStatus('died — recovering');
+                        this.log('died in the wilderness — banking (food-only) and returning');
+                        // After death, ensure Auto Retaliate is off again.
+                        ensureRetaliateOff(m => this.log(m));
+                    },
+                    onRecovered: () => {
+                        this.died = false;
+                        this.setStatus('recovered — re-entering the course');
+                    },
+                    walkBack: () => this.recoverAndReturn()
+                }),
+                new EatFood(this),
+                new PitEscape(this),
+                new TravelToCourse(this),
+                new EnterCourse(this),
+                new RunLap(this)
+            );
+        }
     }
 
     override recoveryAnchor(): Tile {
@@ -508,8 +539,7 @@ class EnterCourse implements Task {
         const here = Game.tile();
         if (here && COURSE_ENTRANCE.level === here.level && Math.max(Math.abs(here.x - COURSE_ENTRANCE.x), Math.abs(here.z - COURSE_ENTRANCE.z)) > 2) {
             this.bot.setStatus('walking to the course entrance');
-            // Same scene as the course — simple walkTo is sufficient.
-            await Traversal.walkTo(COURSE_ENTRANCE, { radius: 1 });
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
         }
 
         const ridge = this.findRidge();
@@ -519,6 +549,7 @@ class EnterCourse implements Task {
             return;
         }
 
+        const mark = GameMessages.mark();
         this.bot.setStatus(`crossing the ridge (${RIDGE_OP} ${ridge.name})`);
         const before = Skills.xp('agility');
         const clicked = await ridge.interact(RIDGE_OP);
@@ -527,19 +558,34 @@ class EnterCourse implements Task {
             return;
         }
 
+        // Wait for the ridge outcome: success message, failure message, XP gain,
+        // or the player physically moving inside the course region.
         await Execution.delayUntil(() => {
             const t = Game.tile();
-            return Skills.xp('agility') > before || (!!t && insideCourseProper(t, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS)) || EventSignal.pending();
+            return GameMessages.sawSince(mark, RIDGE_SUCCESS)
+                || GameMessages.sawSince(mark, RIDGE_FAIL)
+                || Skills.xp('agility') > before
+                || (!!t && insideCourseProper(t, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS))
+                || EventSignal.pending();
         }, 15_000);
 
         const after = Game.tile();
-        if (Skills.xp('agility') > before || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS))) {
+        const success = GameMessages.sawSince(mark, RIDGE_SUCCESS)
+            || Skills.xp('agility') > before
+            || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS));
+
+        if (success) {
             this.bot.markEntered();
             // The ridge crossing awards agility XP that arrives asynchronously and may
             // still be pending when RunLap captures its XP baseline on the next loop.
             // Update lastClearedTick now so RunLap doesn't attribute the ridge XP to
             // the first obstacle (false "cleared" on obstacle pipe).
             this.bot.lastClearedTick = Game.tick();
+        } else if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
+            // Ridge failure drops us into the wolf pit — same scene, outside the course.
+            // Walk back to the entrance and retry the ridge on the next loop.
+            this.bot.log('failed ridge crossing — fell into wolf pit, walking back to entrance');
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
         }
     }
 }
@@ -793,5 +839,125 @@ class RunLap implements Task {
             return false;
         }
         return true;
+    }
+}
+
+class RidgeTestLoop implements Task {
+    constructor(private bot: WildyAgility) {}
+
+    validate(): boolean {
+        return TEST_RIDGE;
+    }
+
+    async execute(): Promise<void> {
+        const here = Game.tile();
+        if (here === null) {
+            await Execution.delayTicks(1);
+            return;
+        }
+
+        const onCourse = this.bot.isEntered() || inRegion(here, COURSE_CENTRE, COURSE_RADIUS);
+
+        if (onCourse) {
+            // Inside course — exit via the gate
+            await this.exitCourse();
+        } else {
+            // Outside course — enter via the ridge
+            await this.enterCourse();
+        }
+    }
+
+    private async enterCourse(): Promise<void> {
+        const here = Game.tile();
+        if (here && Math.max(Math.abs(here.x - COURSE_ENTRANCE.x), Math.abs(here.z - COURSE_ENTRANCE.z)) > 2) {
+            this.bot.setStatus('ridge test: walking to entrance');
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+        }
+
+        const ridge = Locs.query()
+            .name(RIDGE_NAME)
+            .action(RIDGE_OP)
+            .where(l => l.distance() <= SEARCH_RADIUS)
+            .nearest();
+
+        if (!ridge) {
+            this.bot.setStatus(`ridge test: no '${RIDGE_NAME}' within ${SEARCH_RADIUS} tiles`);
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        const mark = GameMessages.mark();
+        this.bot.setStatus(`ridge test: crossing ridge (${RIDGE_OP} ${ridge.name})`);
+        const before = Skills.xp('agility');
+        const clicked = await ridge.interact(RIDGE_OP);
+        if (!clicked) {
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        await Execution.delayUntil(() => {
+            const t = Game.tile();
+            return GameMessages.sawSince(mark, RIDGE_SUCCESS)
+                || GameMessages.sawSince(mark, RIDGE_FAIL)
+                || Skills.xp('agility') > before
+                || (!!t && insideCourseProper(t, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS))
+                || EventSignal.pending();
+        }, 15_000);
+
+        const after = Game.tile();
+        const success = GameMessages.sawSince(mark, RIDGE_SUCCESS)
+            || Skills.xp('agility') > before
+            || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS));
+
+        if (success) {
+            this.bot.markEntered();
+            this.bot.lastClearedTick = Game.tick();
+            this.bot.log('ridge test: entered course ✓');
+        } else if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
+            this.bot.log('ridge test: failed ridge — fell into wolf pit, recovering');
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
+        }
+
+        await Execution.delay(reactionMs());
+    }
+
+    private async exitCourse(): Promise<void> {
+        const here = Game.tile();
+        if (here && Math.max(Math.abs(here.x - GATE_TILE.x), Math.abs(here.z - GATE_TILE.z)) > 2) {
+            this.bot.setStatus('ridge test: walking to gate');
+            await Traversal.walkTo(GATE_TILE, { radius: 1 });
+        }
+
+        const gate = Locs.query()
+            .name(GATE_NAME)
+            .action(GATE_OP)
+            .where(l => l.distance() <= 5)
+            .nearest();
+
+        if (!gate) {
+            this.bot.setStatus(`ridge test: no '${GATE_NAME}' nearby`);
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        this.bot.setStatus(`ridge test: exiting via gate (${GATE_OP} ${gate.name})`);
+        const clicked = await gate.interact(GATE_OP);
+        if (!clicked) {
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        await Execution.delayUntil(() => {
+            const t = Game.tile();
+            return t !== null && !inRegion(t, COURSE_CENTRE, COURSE_RADIUS) || EventSignal.pending();
+        }, 15_000);
+
+        const after = Game.tile();
+        if (after !== null && !inRegion(after, COURSE_CENTRE, COURSE_RADIUS)) {
+            this.bot.markLeft();
+            this.bot.log('ridge test: exited course ✓');
+        }
+
+        await Execution.delay(reactionMs());
     }
 }
