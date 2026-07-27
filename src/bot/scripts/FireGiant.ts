@@ -32,7 +32,7 @@ import { Locs } from '../api/queries/Locs.js';
 import {
     AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    attackRangeFor, eastFirst, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    attackRangeFor, eastFirst, ROCK_LOC, roomOf, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
@@ -41,6 +41,7 @@ const FIELD_RADIUS = 10;
 const BANK_HEAL_TO = 0.9;
 
 const RE_ENGAGE_MS = 4000;
+const TAKEN_SKIP_MS = 15_000;
 
 const LOOT_TAKE_MS = 1200;
 const LOOT_BURST_MAX = 8;
@@ -107,6 +108,7 @@ let BANK_COMMON = true;
 let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let SAFESPOT_FALLBACK = DEFAULT_SAFESPOT_FALLBACK;
+let engagedIdx: number | null = null;
 let retreated = false;
 let lastHp = -1;
 let MELEE_TILE = DEFAULT_MELEE_TILE;
@@ -206,7 +208,14 @@ function sameRoomAsAnchor(tile: Tile): boolean {
 function fieldGiants(): Npc[] {
     return Npcs.query()
         .name(TARGET)
-        .where(n => inField(n.tile()) && !n.targetsAnotherPlayer() && (!usesSafespot() || sameRoomAsAnchor(n.tile())))
+        .where(n => inField(n.tile())
+            && !takenByAnother({
+                isOurs: n.index === engagedIdx,
+                inCombat: n.snap.inCombat,
+                targetsMe: n.targetsMe(),
+                targetsAnother: n.targetsAnotherPlayer()
+            })
+            && (!usesSafespot() || sameRoomAsAnchor(n.tile())))
         .results();
 }
 
@@ -864,6 +873,7 @@ class Fight implements Task {
                 this.bot.log(`fire giant down — ${this.bot.kills()} kills`);
                 this.targetIdx = null;
                 this.bot.targetIdx = null;
+                engagedIdx = null;
                 clearRetreat(this.bot);
             }
 
@@ -885,6 +895,14 @@ class Fight implements Task {
             // situation moved: a random event, a hit landing on us, or the giant's
             // health changing (which proves we are connecting and resets the clock).
             const live = this.targetIdx === null ? undefined : giants.find(g => g.index === this.targetIdx);
+            if (live && live.targetsAnotherPlayer()) {
+                this.bot.log(`giant ${live.index} was taken by another player — finding another`);
+                this.skip.set(live.index, performance.now() + TAKEN_SKIP_MS);
+                this.targetIdx = null;
+                this.bot.targetIdx = null;
+                engagedIdx = null;
+                continue;
+            }
             if (live) {
                 if (live.snap.health !== this.engagedHealth) {
                     this.engagedHealth = live.snap.health;
@@ -922,6 +940,7 @@ class Fight implements Task {
             await target.interact('Attack');
             this.targetIdx = target.index;
             this.bot.targetIdx = target.index;
+            engagedIdx = target.index;
             this.engagedAt = performance.now();
             this.engagedHealth = -1;
             await Execution.delayUntil(() => (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 1200);
@@ -937,6 +956,7 @@ class Fight implements Task {
                 this.bot.log(`giant ${target.index} pulled us off the safespot — skipping it for 8s`);
                 this.targetIdx = null;
                 this.bot.targetIdx = null;
+                engagedIdx = null;
                 continue;
             }
         }

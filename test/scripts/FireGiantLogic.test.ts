@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, eastFirst, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -167,6 +167,30 @@ describe('eastFirst', () => {
     test('is a stable total order — sorting twice is idempotent', () => {
         const gs = [{ x: 2565, distance: 4 }, { x: 2568, distance: 6 }, { x: 2562, distance: 1 }];
         expect(order(order(gs).map(x => gs.find(g => g.x === x)!))).toEqual([2568, 2565, 2562]);
+    });
+});
+
+// A giant another player is fighting is not ours to take: its loot and kill go to
+// them, and diving on it wastes the trip.
+describe('takenByAnother', () => {
+    const e = (o: Partial<Parameters<typeof takenByAnother>[0]>) =>
+        takenByAnother({ isOurs: false, inCombat: false, targetsMe: false, targetsAnother: false, ...o });
+
+    test('a giant facing another player is taken', () => {
+        expect(e({ targetsAnother: true })).toBe(true);
+    });
+    test('a giant in combat with nobody visible is taken — faceEntity clears between attacks', () => {
+        expect(e({ inCombat: true })).toBe(true);
+    });
+    test('a giant in combat with US is not taken', () => {
+        expect(e({ inCombat: true, targetsMe: true })).toBe(false);
+    });
+    test('an idle giant is free', () => {
+        expect(e({})).toBe(false);
+    });
+    test('our own target is never taken, however its faceEntity flickers', () => {
+        expect(e({ isOurs: true, inCombat: true, targetsAnother: true })).toBe(false);
+        expect(e({ isOurs: true, inCombat: true, targetsMe: false })).toBe(false);
     });
 });
 

@@ -43,6 +43,29 @@ export function eastFirst(a: TargetLike, b: TargetLike): number {
 // The chambers split cleanly on x: west spawns top out at 2568, east ones start at
 // 2573. Distance cannot separate them — from the safespot the nearest east giant is
 // closer than two of the three west ones — so targeting is gated on room, not range.
+/**
+ * Whether a giant already belongs to someone else's fight.
+ *
+ * `targetsAnotherPlayer` alone is not enough: an NPC's faceEntity clears between its
+ * attacks, so a giant another player is mid-fight with reads as free for a tick and
+ * the bot dives on it. Treating "in combat but not with us" as taken closes that gap.
+ * Our own target is always exempt, because its faceEntity flickers the same way and
+ * dropping it on that would churn targets every few ticks.
+ */
+export interface Engagement {
+    isOurs: boolean;
+    inCombat: boolean;
+    targetsMe: boolean;
+    targetsAnother: boolean;
+}
+
+export function takenByAnother(e: Engagement): boolean {
+    if (e.isOurs) {
+        return false;
+    }
+    return e.targetsAnother || (e.inCombat && !e.targetsMe);
+}
+
 export type Room = 'west' | 'east';
 export const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
 export const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };
