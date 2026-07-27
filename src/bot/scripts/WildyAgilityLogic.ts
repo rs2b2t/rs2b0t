@@ -4,8 +4,6 @@ import Tile from '../api/Tile.js';
 /** Course geometry — known-good wilderness agility course layout. */
 export const COURSE_OBSTACLES = ['obstacle pipe', 'ropeswing', 'stepping stone', 'log balance', 'rocks'] as const;
 export const COURSE_CENTRE = new Tile(2998, 3945, 0);
-/** North of the ridge door — used for region math only. Never walk here from the south. */
-export const COURSE_ENTRANCE = new Tile(2998, 3924, 0);
 /**
  * Ridge Door tile. Pathfinder treats this as a multi-tile door transport; walking
  * to any destination north of it from the south will Open the door automatically.
@@ -35,8 +33,6 @@ export const GATE_TILE = new Tile(2998, 3931, 0);
 
 export const RIDGE_NAME = 'Door';
 export const RIDGE_OP = 'Open';
-export const GATE_NAME = 'Gate';
-export const GATE_OP = 'Open';
 export const PIT_LADDER_OP = 'Climb-up';
 
 /** Starting-side tiles used when recovering from a failed / wrong-side attempt. */
@@ -143,13 +139,6 @@ export function classifyObstacle(s: ObstacleSignals): ObstacleSettleReason {
     return 'timeout';
 }
 
-export function parseObstacles(csv: string): string[] {
-    return csv
-        .split(',')
-        .map(s => s.trim().toLowerCase())
-        .filter(Boolean);
-}
-
 export function getStartTile(obstacleName: string): WorldTile | null {
     return OBSTACLE_START[obstacleName.toLowerCase()] ?? null;
 }
@@ -192,11 +181,6 @@ export function nearCourseEntry(
 /** Far from both the lap zone and the ridge entry corridor (e.g. bank, death spawn). */
 export function awayFromCourse(here: WorldTile): boolean {
     return !onCourse(here) && !nearCourseEntry(here);
-}
-
-/** Alias: the lap zone is everything onCourse (north of the Gate). */
-export function insideCourseProper(here: WorldTile): boolean {
-    return onCourse(here);
 }
 
 /**

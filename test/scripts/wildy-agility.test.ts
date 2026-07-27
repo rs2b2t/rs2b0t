@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 import {
+    COURSE_OBSTACLES,
     COURSE_X_RADIUS,
     GATE_TILE,
     RIDGE_APPROACH,
@@ -16,22 +17,14 @@ import {
     classifyRidge,
     inPit,
     inRegion,
-    insideCourseProper,
     nearCourseEntry,
     onCourse,
-    parseObstacles,
     reactionMs,
     southOfRidge
-} from '#/bot/scripts/WildyAgility.js';
-
-test('parseObstacles trims, lowercases and drops empties', () => {
-    expect(parseObstacles('  Obstacle pipe , Ropeswing ,, Rocks ')).toEqual(['obstacle pipe', 'ropeswing', 'rocks']);
-    expect(parseObstacles('')).toEqual([]);
-    expect(parseObstacles(' , , ')).toEqual([]);
-});
+} from '#/bot/scripts/WildyAgilityLogic.js';
 
 test('the default lap is the five wilderness obstacles in order', () => {
-    expect(parseObstacles('Obstacle pipe,Ropeswing,Stepping stone,Log balance,Rocks')).toEqual([
+    expect([...COURSE_OBSTACLES]).toEqual([
         'obstacle pipe',
         'ropeswing',
         'stepping stone',
@@ -95,13 +88,6 @@ test('awayFromCourse: travel only when outside BOTH lap zone and entry corridor'
     expect(awayFromCourse(new Tile(2998, 3945, 1))).toBe(true); // wrong plane
 });
 
-test('insideCourseProper is the lap zone (north of gate)', () => {
-    expect(insideCourseProper(new Tile(2998, 3937, 0))).toBe(true);
-    expect(insideCourseProper(new Tile(2998, 3924, 0))).toBe(false);
-    expect(insideCourseProper(new Tile(3094, 3493, 0))).toBe(false);
-    expect(insideCourseProper(new Tile(2998, 3916, 0))).toBe(false);
-});
-
 test('inPit: obstacle pits sit far above the course in world-z (not ridge wolf pit)', () => {
     const centre = new Tile(2998, 3945, 0);
     // ropeswing / log balance obstacle pits
@@ -115,11 +101,11 @@ test('inPit: obstacle pits sit far above the course in world-z (not ridge wolf p
     expect(inPit(new Tile(2998, 4736, 0), centre, 2000)).toBe(false);
 });
 
-test('ridge approach is south of the Door; COURSE_ENTRANCE is north', () => {
+test('ridge approach is south of the Door; corridor north of the Door is not approach', () => {
     expect(RIDGE_APPROACH.z).toBeLessThan(RIDGE_DOOR.z);
     expect(RIDGE_DOOR.z).toBe(3917);
-    // COURSE_ENTRANCE (3924) is north of the door — walking there from the south
-    // makes the pathfinder Open the Door as a transport.
+    // A tile north of the door (e.g. 3924) is not approach — walking there from
+    // the south makes the pathfinder Open the Door as a transport.
     expect(new Tile(2998, 3924, 0).z).toBeGreaterThan(RIDGE_DOOR.z);
 
     expect(southOfRidge(new Tile(2998, 3916, 0))).toBe(true);
@@ -244,6 +230,32 @@ test('classifyObstacle priority matches RunLap branch order', () => {
             settled: true
         })
     ).toBe('xp');
+
+    expect(
+        classifyObstacle({
+            xpGained: false,
+            inPit: true,
+            cantReach: false,
+            wrongSide: false,
+            pitFallMessage: true,
+            interrupted: false,
+            lowHp: false,
+            settled: true
+        })
+    ).toBe('pit');
+
+    expect(
+        classifyObstacle({
+            xpGained: false,
+            inPit: false,
+            cantReach: false,
+            wrongSide: false,
+            pitFallMessage: false,
+            interrupted: true,
+            lowHp: true,
+            settled: true
+        })
+    ).toBe('interrupted');
 
     expect(
         classifyObstacle({

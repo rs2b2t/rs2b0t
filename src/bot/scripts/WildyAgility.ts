@@ -39,37 +39,12 @@ import {
     classifyRidge,
     getStartTile,
     inPit,
-    insideCourseProper,
     nearCourseEntry,
     nearTile,
     onCourse,
     reactionMs,
     southOfRidge,
     type RidgeOutcome
-} from './WildyAgilityLogic.js';
-
-// Re-export pure helpers so existing tests keep importing from this module.
-export {
-    awayFromCourse,
-    atRidgeApproach,
-    inPit,
-    inRegion,
-    insideCourseProper,
-    nearCourseEntry,
-    onCourse,
-    parseObstacles,
-    reactionMs,
-    classifyObstacle,
-    classifyRidge,
-    southOfRidge,
-    COURSE_X_RADIUS,
-    GATE_TILE,
-    RIDGE_APPROACH,
-    RIDGE_DOOR,
-    RIDGE_SUCCESS,
-    RIDGE_FAIL,
-    PIT_FALL,
-    WRONG_SIDE
 } from './WildyAgilityLogic.js';
 
 // Lowered because the default wait is 24 ticks and obstacle clears can take ~20.
@@ -152,8 +127,8 @@ function findRidge(): Loc | null {
 
 /**
  * Walk to the south stand of the ridge Door without pathfinding through it.
- * Targeting COURSE_ENTRANCE (north of the door) makes WalkExecutor Open the Door
- * as a multi-tile transport — that steals the ridge attempt from the script.
+ * Targeting a tile north of the door makes WalkExecutor Open the Door as a
+ * multi-tile transport — that steals the ridge attempt from the script.
  */
 async function walkToRidgeApproach(bot: WildyAgility, label: string, attempts = 4, timeoutMs = 60_000): Promise<void> {
     const here = Game.tile();
@@ -246,7 +221,7 @@ async function attemptRidgeCrossing(bot: WildyAgility, label: string): Promise<R
     }
 
     // Fail / timeout: recover to the south stand and let the next loop retry immediately.
-    // Do NOT walk to COURSE_ENTRANCE — that re-opens the Door via the pathfinder.
+    // Do NOT walk north of the Door — that re-opens it via the pathfinder.
     bot.log(
         outcome === 'fail'
             ? `${label}fell into the wolf pit — walking back to ridge approach`
@@ -296,7 +271,7 @@ export default class WildyAgility extends TaskBot {
         this.lastClearedTick = Game.tick();
 
         const here = Game.tile()!;
-        this.entered = insideCourseProper(here);
+        this.entered = onCourse(here);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -810,6 +785,8 @@ class RunLap implements Task {
         // Timeout starts at the click, not at task entry / approach.
         // Hard wall-clock bound: idle-only counting can stall forever if the
         // client keeps reporting animation/movement (combat, pathing jitter).
+        // waitedTicks is diagnostic / low-HP gate only — the wall clock already
+        // bounds total wait before a 2× tick counter could fire.
         const clickTick = Game.tick();
         const waitDeadline = performance.now() + OBSTACLE_TIMEOUT_TICKS * 600 + 3_000;
         let idleTicks = 0;
@@ -817,7 +794,7 @@ class RunLap implements Task {
         let lowHp = false;
         let settled = false;
         let lastTile = Game.tile();
-        while (idleTicks < OBSTACLE_TIMEOUT_TICKS && waitedTicks < OBSTACLE_TIMEOUT_TICKS * 2) {
+        while (idleTicks < OBSTACLE_TIMEOUT_TICKS) {
             if (performance.now() >= waitDeadline) {
                 break;
             }
@@ -859,8 +836,7 @@ class RunLap implements Task {
             await Execution.delayTicks(1);
             waitedTicks++;
 
-            // Prefer idle time for timeout, but always advance waitedTicks so a
-            // perpetual anim/move cannot hang the task with no log output.
+            // Prefer idle time for timeout; wall clock covers perpetual anim/move.
             const now = Game.tile();
             const moved =
                 !!now && !!lastTile && (now.x !== lastTile.x || now.z !== lastTile.z || now.level !== lastTile.level);
@@ -870,35 +846,33 @@ class RunLap implements Task {
             lastTile = now ?? lastTile;
         }
 
-        if (EventSignal.pending()) {
-            this.bot.setStatus('random event — handling');
-            return;
-        }
-
-        // Position-only pit check: PIT_FALL also fires for stepping stone (no scene change).
-        {
-            const t = Game.tile();
-            if (t !== null && inPit(t, COURSE_CENTRE, PIT_Z_GAP)) {
-                this.bot.log(`fell into the pit during '${this.bot.currentName()}' — escaping`);
-                this.bot.setStatus('in the pit — escaping');
-                // Fall is a real outcome, not a stuck click — reset so recovery
-                // does not inherit a half-spent retry counter.
-                this.stuck = 0;
-                return;
-            }
-        }
-
+        const hereAfter = Game.tile();
         const reason = classifyObstacle({
             xpGained: Skills.xp('agility') > before,
-            inPit: false,
+            // Position-only pit: PIT_FALL also fires for stepping stone (no scene change).
+            inPit: hereAfter !== null && inPit(hereAfter, COURSE_CENTRE, PIT_Z_GAP),
             cantReach: GameMessages.sawSince(mark, CANT_REACH),
             wrongSide: GameMessages.sawSince(mark, WRONG_SIDE),
             // Stepping-stone fall: PIT_FALL message without scene change.
             pitFallMessage: GameMessages.sawSince(mark, PIT_FALL),
-            interrupted: false,
+            interrupted: EventSignal.pending() || ChatDialog.canContinue(),
             lowHp,
             settled
         });
+
+        if (reason === 'interrupted') {
+            this.bot.setStatus('random event — handling');
+            return;
+        }
+
+        if (reason === 'pit') {
+            this.bot.log(`fell into the pit during '${this.bot.currentName()}' — escaping`);
+            this.bot.setStatus('in the pit — escaping');
+            // Fall is a real outcome, not a stuck click — reset so recovery
+            // does not inherit a half-spent retry counter.
+            this.stuck = 0;
+            return;
+        }
 
         if (reason === 'timeout') {
             this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle / ${waitedTicks} total ticks)`);
@@ -952,7 +926,9 @@ class RunLap implements Task {
             this.bot.log(`'${this.bot.currentName()}' can't reach — retrying`);
         }
 
-        if (++this.stuck >= LAP_RETRY_LIMIT) {
+        // stuck=1: in-place retry; stuck=2: walk back to start; stuck>limit: skip.
+        // Use > so the walk-back branch is reachable ( >= limit would skip it).
+        if (++this.stuck > LAP_RETRY_LIMIT) {
             const skipped = this.bot.currentName();
             this.bot.log(
                 `'${skipped}' isn't completing from here after ${this.stuck} tries — moving on to the next obstacle`
@@ -975,6 +951,7 @@ class RunLap implements Task {
             const walked = await this.walkToStartTile(obstacle.name?.toLowerCase() ?? this.bot.currentName());
             if (!walked) {
                 this.bot.log(`'${this.bot.currentName()}' starting side unreachable — advancing to next obstacle`);
+                this.stuck = 0;
                 this.bot.advance();
             }
         } else {
