@@ -40,7 +40,8 @@ const FIELD_RADIUS = 10;
 
 const BANK_HEAL_TO = 0.9;
 
-const RE_ENGAGE_MS = 10_000;
+const RE_ENGAGE_MS = 4000;
+const HURT_RECENT_MS = 1500;
 
 const LOOT_TAKE_MS = 1200;
 const LOOT_BURST_MAX = 8;
@@ -109,6 +110,7 @@ let SAFESPOT = DEFAULT_SAFESPOT;
 let SAFESPOT_FALLBACK = DEFAULT_SAFESPOT_FALLBACK;
 let retreated = false;
 let lastHp = -1;
+let lastDamageAt = 0;
 let MELEE_TILE = DEFAULT_MELEE_TILE;
 let BANK_TILE = ESCAPE_TELES.Camelot.bank;
 let TELE: EscapeTele = ESCAPE_TELES.Camelot;
@@ -161,6 +163,9 @@ function checkRetreat(bot: FireGiant): boolean {
     const hp = Skills.effective('hitpoints');
     const hurt = lastHp >= 0 && hp < lastHp;
     lastHp = hp;
+    if (hurt) {
+        lastDamageAt = performance.now();
+    }
     if (!usesSafespot() || retreated || !hurt) {
         return false;
     }
@@ -823,6 +828,7 @@ class WalkToSpot implements Task {
 class Fight implements Task {
     private targetIdx: number | null = null;
     private engagedAt = 0;
+    private engagedHealth = -1;
     private skip = new Map<number, number>();
     constructor(private bot: FireGiant) {}
     validate(): boolean {
@@ -874,12 +880,21 @@ class Fight implements Task {
 
             // You stay in combat with a giant until one of you dies, so re-clicking a
             // live target is pure noise. Game.inCombat() reads our OWN combat bar,
-            // which never lights up while safespotting, so it is useless here — track
-            // the target instead and only re-issue if it somehow stalls.
-            const engaged = this.targetIdx !== null && giants.some(g => g.index === this.targetIdx);
-            if (engaged && performance.now() - this.engagedAt < RE_ENGAGE_MS) {
-                await Execution.delayTicks(2);
-                continue;
+            // which never lights up while safespotting, so it is useless here — hold
+            // the target instead. The hold breaks early on anything that means the
+            // situation moved: a random event, a hit landing on us, or the giant's
+            // health changing (which proves we are connecting and resets the clock).
+            const live = this.targetIdx === null ? undefined : giants.find(g => g.index === this.targetIdx);
+            if (live) {
+                if (live.snap.health !== this.engagedHealth) {
+                    this.engagedHealth = live.snap.health;
+                    this.engagedAt = performance.now();
+                }
+                const shaken = EventSignal.pending() || performance.now() - lastDamageAt < HURT_RECENT_MS;
+                if (!shaken && performance.now() - this.engagedAt < RE_ENGAGE_MS) {
+                    await Execution.delayTicks(2);
+                    continue;
+                }
             }
 
             const now = performance.now();
@@ -909,6 +924,7 @@ class Fight implements Task {
             this.targetIdx = target.index;
             this.bot.targetIdx = target.index;
             this.engagedAt = performance.now();
+            this.engagedHealth = -1;
             await Execution.delayUntil(() => (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 1200);
             if (usesSafespot() && !atSafespot()) {
                 // A tier switch moves us one tile on purpose; that is not the giant
