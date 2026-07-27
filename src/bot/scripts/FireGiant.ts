@@ -211,6 +211,26 @@ async function lootOnce(bot: FireGiant): Promise<boolean> {
     return false;
 }
 
+function ledgeDoor() {
+    return Locs.query()
+        .name(LEDGE_LOC)
+        .action(LEDGE_OP)
+        .where(l => l.tile().x === LEDGE_DOOR.x && l.tile().z === LEDGE_DOOR.z)
+        .first();
+}
+
+async function useRopeOn(locName: string): Promise<boolean> {
+    const rope = Inventory.first(ROPE);
+    if (rope === null) {
+        return false;
+    }
+    const target = Locs.query().name(locName).nearest();
+    if (target === null) {
+        return false;
+    }
+    return Boolean(await rope.useOn(target));
+}
+
 class Eat implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
@@ -517,7 +537,7 @@ class BankRun implements Task {
 class LootCorpse implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        return !Inventory.isFull() && findLoot() !== null;
+        return inDungeon() && !Inventory.isFull() && findLoot() !== null;
     }
     async execute(): Promise<void> {
         await lootOnce(this.bot);
@@ -527,11 +547,125 @@ class LootCorpse implements Task {
 class ReturnToSafespot implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        return usesSafespot() && !atSafespot() && hpFrac() >= PANIC_HP;
+        return inDungeon() && usesSafespot() && !atSafespot() && hpFrac() >= PANIC_HP;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to the safespot');
         await Traversal.walkResilient(SAFESPOT, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+    }
+}
+
+class EnterDungeon implements Task {
+    constructor(private bot: FireGiant) {}
+    validate(): boolean {
+        return !inDungeon() && hasAmulet() && hasRope() && !this.bot.parked;
+    }
+    async execute(): Promise<void> {
+        switch (legFor(Game.tile())) {
+            case 'AtLedge':
+                await this.openLedge();
+                return;
+            case 'PastRock':
+                await this.ropeTree();
+                return;
+            case 'AtLanding':
+                await this.ropeRock();
+                return;
+            case 'AtRaft':
+                await this.boardRaft();
+                return;
+            case 'WashedOut':
+                this.bot.log('washed downstream — walking back to the raft');
+                await this.walkToRaft();
+                return;
+            default:
+                await this.walkToRaft();
+        }
+    }
+
+    private async walkToRaft(): Promise<void> {
+        this.bot.setStatus('walking to the log raft');
+        await Traversal.walkResilient(RAFT_STAND, { radius: 2, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+    }
+
+    private async boardRaft(): Promise<void> {
+        const raft = Locs.query().name(RAFT_LOC).action(RAFT_OP).nearest();
+        if (raft === null) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        this.bot.setStatus('boarding the log raft');
+        if (!(await raft.interact(RAFT_OP))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => legFor(Game.tile()) === 'AtLanding', 12_000)) {
+            this.bot.log('rafted down to the landing');
+        }
+    }
+
+    private async ropeRock(): Promise<void> {
+        this.bot.setStatus('roping across to the rock');
+        if (!(await useRopeOn(ROCK_LOC))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => legFor(Game.tile()) === 'PastRock', 12_000)) {
+            this.bot.log('crossed to the rock');
+        }
+    }
+
+    private async ropeTree(): Promise<void> {
+        const here = Game.tile();
+        if (here === null || here.x !== TREE_STAND.x || here.z !== TREE_STAND.z) {
+            this.bot.setStatus('walking to the dead tree');
+            await Traversal.walkResilient(TREE_STAND, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+            return;
+        }
+        this.bot.setStatus('roping down the dead tree');
+        if (!(await useRopeOn(TREE_LOC))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => legFor(Game.tile()) === 'AtLedge', 12_000)) {
+            this.bot.log('down on the ledge');
+        }
+    }
+
+    private async openLedge(): Promise<void> {
+        if (!hasAmulet()) {
+            return;
+        }
+        // locs read empty for a tick after the p_teleport onto the ledge
+        let door = ledgeDoor();
+        for (let i = 0; i < 5 && door === null; i++) {
+            await Execution.delayTicks(1);
+            door = ledgeDoor();
+        }
+        if (door === null) {
+            this.bot.log('the ledge door is not in the scene yet — retrying');
+            return;
+        }
+        this.bot.setStatus('opening the ledge door');
+        if (!(await door.interact(LEDGE_OP))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (await Execution.delayUntil(() => inDungeon(), 12_000)) {
+            this.bot.log('inside the Waterfall Dungeon');
+        }
+    }
+}
+
+class WalkToSpot implements Task {
+    constructor(private bot: FireGiant) {}
+    validate(): boolean {
+        const here = Game.tile();
+        return inDungeon() && here !== null && anchor().distanceTo(here) > FIELD_RADIUS;
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('walking to the fight spot');
+        await Traversal.walkResilient(anchor(), { radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
@@ -540,7 +674,7 @@ class Fight implements Task {
     private skip = new Map<number, number>();
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        if (hpFrac() < PANIC_HP) {
+        if (!inDungeon() || hpFrac() < PANIC_HP) {
             return false;
         }
         if (usesSafespot() && !atSafespot()) {
