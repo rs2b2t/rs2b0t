@@ -67,7 +67,7 @@ const PIT_FALL = /(?:you slip and fall into the pit below|you lose your footing 
 
 // Chat messages for the ridge crossing when entering the course.
 const RIDGE_SUCCESS = /you reach the top/i;
-const RIDGE_FAIL = /you lose your footing and fall into the wolf pit/i;
+const RIDGE_FAIL = /wolf pit/i;  // broad match — "You lose your footing and fall into the wolf pit."
 
 function getStartTile(obstacleName: string): WorldTile | null {
     return OBSTACLE_START[obstacleName.toLowerCase()] ?? null;
@@ -560,7 +560,7 @@ class EnterCourse implements Task {
 
         // Wait for the ridge outcome: success message, failure message, XP gain,
         // or the player physically moving inside the course region.
-        await Execution.delayUntil(() => {
+        const settled = await Execution.delayUntil(() => {
             const t = Game.tile();
             return GameMessages.sawSince(mark, RIDGE_SUCCESS)
                 || GameMessages.sawSince(mark, RIDGE_FAIL)
@@ -570,21 +570,27 @@ class EnterCourse implements Task {
         }, 15_000);
 
         const after = Game.tile();
-        const success = GameMessages.sawSince(mark, RIDGE_SUCCESS)
-            || Skills.xp('agility') > before
-            || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS));
+        const sawSuccess = GameMessages.sawSince(mark, RIDGE_SUCCESS);
+        const sawFail = GameMessages.sawSince(mark, RIDGE_FAIL);
+        const gainedXp = Skills.xp('agility') > before;
+        const movedInside = after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
 
-        if (success) {
+        if (sawSuccess || gainedXp || movedInside) {
             this.bot.markEntered();
             // The ridge crossing awards agility XP that arrives asynchronously and may
             // still be pending when RunLap captures its XP baseline on the next loop.
             // Update lastClearedTick now so RunLap doesn't attribute the ridge XP to
             // the first obstacle (false "cleared" on obstacle pipe).
             this.bot.lastClearedTick = Game.tick();
-        } else if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
+        } else if (sawFail) {
             // Ridge failure drops us into the wolf pit — same scene, outside the course.
             // Walk back to the entrance and retry the ridge on the next loop.
             this.bot.log('failed ridge crossing — fell into wolf pit, walking back to entrance');
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
+        } else if (!settled) {
+            // Timeout with no clear outcome — the click may have been swallowed or
+            // the messages didn't match. Reset to entrance and retry.
+            this.bot.log('ridge crossing timed out with no clear outcome, walking back to entrance');
             await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
         }
     }
@@ -905,16 +911,20 @@ class RidgeTestLoop implements Task {
         }, 15_000);
 
         const after = Game.tile();
-        const success = GameMessages.sawSince(mark, RIDGE_SUCCESS)
-            || Skills.xp('agility') > before
-            || (after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS));
+        const sawSuccess = GameMessages.sawSince(mark, RIDGE_SUCCESS);
+        const sawFail = GameMessages.sawSince(mark, RIDGE_FAIL);
+        const gainedXp = Skills.xp('agility') > before;
+        const movedInside = after !== null && insideCourseProper(after, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
 
-        if (success) {
+        if (sawSuccess || gainedXp || movedInside) {
             this.bot.markEntered();
             this.bot.lastClearedTick = Game.tick();
             this.bot.log('ridge test: entered course ✓');
-        } else if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
+        } else if (sawFail) {
             this.bot.log('ridge test: failed ridge — fell into wolf pit, recovering');
+            await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
+        } else {
+            this.bot.log('ridge test: ridge crossing timed out with no clear outcome, recovering');
             await Traversal.walkResilient(COURSE_ENTRANCE, { radius: 1, attempts: 3, timeoutMs: 30_000, log: m => this.bot.log(`  ${m}`) });
         }
 
