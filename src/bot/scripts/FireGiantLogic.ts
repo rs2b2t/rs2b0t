@@ -10,7 +10,10 @@ export const LEDGE_DOOR = new Tile(2511, 3464, 0);
 export const DUNGEON_ENTRY = new Tile(2575, 9861, 0);
 export const WASHED_OUT = new Tile(2527, 3413, 0);
 
-export const DEFAULT_SAFESPOT = new Tile(2568, 9892, 0);
+// 9893, not 9892: one tile south sees a second giant, but a 2x2 footprint fits
+// with its origin on it, so a giant can reach you there. Live-verified at 9893 —
+// zero pull-offs, zero food eaten. Do not "optimise" this south for kill rate.
+export const DEFAULT_SAFESPOT = new Tile(2568, 9893, 0);
 export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
 
 // The giant chambers split cleanly on x: west spawns top out at 2568, east ones

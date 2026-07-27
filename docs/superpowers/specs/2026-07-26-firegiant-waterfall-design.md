@@ -210,10 +210,10 @@ here. Startup failure is a clear log plus park, matching how EssMiner gates on R
 tile through the `Large door` at 2565,9881, and killed a fire giant for 521 ranged xp with
 **zero** `returning to the safespot` events, **zero** food eaten, and no deaths.
 
-**The default was later changed to `2568,9892` by request.** It trades safety margin for throughput:
-it has line of sight to two west giants (2568,9889 at d=3 and 2562,9886 at d=6) instead of one, but
-unlike 9893 a 2x2 footprint fits with its origin on the tile, so the static model says a giant can
-reach it. Re-verify live after any change here; `2568,9893` is the conservative fallback.
+**`2568,9892` was tried and rejected.** One tile south sees a second west giant (2562,9886 at d=6
+as well as 2568,9889 at d=3), which is tempting for kill rate — but unlike 9893 a 2x2 footprint
+fits with its **origin on that tile**, so a giant can reach you there. The safespot stays at 9893.
+Anything moved south of it trades the whole point of the tile for throughput.
 
 ### Room-gated targeting
 

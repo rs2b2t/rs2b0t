@@ -103,8 +103,10 @@ describe('roomOf', () => {
 });
 
 describe('DEFAULT_SAFESPOT', () => {
-    test('is 2568,9892', () => {
-        expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9892, 0]);
+    // 9892 sees a second giant but a 2x2 footprint fits with its origin on that tile,
+    // so a giant can reach it. 9893 is the live-verified melee-proof nook.
+    test('is 2568,9893, not the reachable tile one south', () => {
+        expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9893, 0]);
     });
 });
 
