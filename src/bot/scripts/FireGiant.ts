@@ -38,6 +38,8 @@ import {
 const TARGET = 'Fire giant';
 const FIELD_RADIUS = 10;
 
+const BANK_HEAL_TO = 0.9;
+
 const LOOT_TAKE_MS = 1200;
 const LOOT_BURST_MAX = 8;
 
@@ -471,29 +473,55 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     await Bank.depositAllMatching(depositAllExcept(keepNames()), m => bot.log(`  ${m}`));
 
     if (withdrawFood) {
-        bot.setStatus(`withdrawing ${FOOD_NAME}`);
-        for (let guard = 0; guard < 12 && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
-            const need = FOOD_WITHDRAW - foodCount();
-            const before = foodCount();
-            await Bank.withdraw(FOOD_NAME, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-            if (!(await Execution.delayUntil(() => foodCount() > before, 2500))) {
-                break;
-            }
-        }
-        if (foodCount() === 0) {
-            bot.noteBankEmpty(true);
-            bot.log(`WARNING: no '${FOOD_NAME}' in the bank — carrying on without food. Deposit food (or fix the name) to resume eating.`);
-        } else {
-            bot.noteBankEmpty(false);
-        }
+        await withdrawFoodTo(bot);
     }
 
     await withdrawStyleSupplies(bot);
     await withdrawEscapeRunes(bot);
     await withdrawEntryKit(bot);
 
+    // Heal at the booth, not on the way in — the trip back is long and the first
+    // giant should not meet a half-health bot. Top the food back up afterwards so
+    // eating here does not come out of the trip's supplies.
+    if (await healUp(bot) && withdrawFood) {
+        await withdrawFoodTo(bot);
+    }
+
     bot.countBankTrip();
     bot.setStatus('restocked — heading back to the waterfall');
+}
+
+async function withdrawFoodTo(bot: FireGiant): Promise<void> {
+    bot.setStatus(`withdrawing ${FOOD_NAME}`);
+    for (let guard = 0; guard < 12 && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
+        const need = FOOD_WITHDRAW - foodCount();
+        const before = foodCount();
+        await Bank.withdraw(FOOD_NAME, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
+        if (!(await Execution.delayUntil(() => foodCount() > before, 2500))) {
+            break;
+        }
+    }
+    if (foodCount() === 0) {
+        bot.noteBankEmpty(true);
+        bot.log(`WARNING: no '${FOOD_NAME}' in the bank — carrying on without food. Deposit food (or fix the name) to resume eating.`);
+    } else {
+        bot.noteBankEmpty(false);
+    }
+}
+
+async function healUp(bot: FireGiant): Promise<boolean> {
+    if (hpFrac() >= BANK_HEAL_TO || !hasFood()) {
+        return false;
+    }
+    bot.setStatus('eating up before the trip back');
+    const from = Math.round(hpFrac() * 100);
+    for (let i = 0; i < 24 && hpFrac() < BANK_HEAL_TO && hasFood(); i++) {
+        if (!(await eatOnce(bot))) {
+            break;
+        }
+    }
+    bot.log(`healed ${from}% -> ${Math.round(hpFrac() * 100)}% before heading back`);
+    return true;
 }
 
 async function withdrawEscapeRunes(bot: FireGiant): Promise<void> {
@@ -863,12 +891,22 @@ class Fight implements Task {
                 continue;
             }
 
+            const tierBefore = retreated;
+            this.bot.log(`engaging fire giant ${target.index} at ${target.tile().x},${target.tile().z} (d=${target.distance()})`);
             await target.interact('Attack');
             this.targetIdx = target.index;
             this.bot.targetIdx = target.index;
             await Execution.delayUntil(() => Game.inCombat() || (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 3000);
             if (usesSafespot() && !atSafespot()) {
+                // A tier switch moves us one tile on purpose; that is not the giant
+                // dragging us, and dropping the target here is what looked like the
+                // bot losing aggro and running mid-fight.
+                if (retreated !== tierBefore) {
+                    this.bot.log(`safespot tier changed mid-fight — keeping giant ${target.index}`);
+                    continue;
+                }
                 this.skip.set(target.index, now + 8000);
+                this.bot.log(`giant ${target.index} pulled us off the safespot — skipping it for 8s`);
                 this.targetIdx = null;
                 this.bot.targetIdx = null;
                 continue;
