@@ -14,8 +14,18 @@ function argVal(name: string): string | undefined {
     return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-const engine = argVal('--engine') ?? process.env.ENGINE_DIR ?? path.join(homedir(), 'code', 'rs2b2t-engine');
-const content = argVal('--content') ?? process.env.CONTENT_DIR ?? path.join(homedir(), 'code', 'rs2b2t-content');
+const engineDir = process.env.ENGINE_DIR;
+const contentDir = process.env.CONTENT_DIR;
+if (!engineDir) {
+    console.error('ENGINE_DIR not set. Set it in .env (path to lostcity engine folder)');
+    process.exit(1);
+}
+if (!contentDir) {
+    console.error('CONTENT_DIR not set. Set it in .env (path to lostcity content folder)');
+    process.exit(1);
+}
+const engine = argVal('--engine') ?? engineDir;
+const content = argVal('--content') ?? contentDir;
 const out = argVal('--out') ?? 'src/bot/nav/data/stairEdges.json';
 const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 

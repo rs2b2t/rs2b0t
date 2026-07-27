@@ -21,15 +21,12 @@ const TARGET_NAME = process.env.TARGET ?? 'local';
 const TARGET_RSA: Record<string, { rsae: string; rsan: string }> = {
     local: {
         rsae: process.env.LOCAL_RSAE ?? '65537',
-        rsan: process.env.LOCAL_RSAN ?? '135523076496100112838368820296627333081299340012903560093710594598681655098748405760144616526347126272127045237860467661349157596468705435014708178676542187051745346055229544524388140867808854007219907874939518784380039390430841371837588073879981616508242779530473286487605800927487856120184640386127488369021'
+        rsan: process.env.LOCAL_RSAN ?? ''
     },
     live: {
         rsae: '65537',
         rsan: process.env.LIVE_RSAN ?? ''
     },
-    // prod = the client hosted ON the game server (same-origin, no proxy). Same
-    // prod modulus as live, injected via PROD_RSAN at build time (ops/scripts/
-    // build.sh extracts it from the served client.js).
     prod: {
         rsae: '65537',
         rsan: process.env.PROD_RSAN ?? ''

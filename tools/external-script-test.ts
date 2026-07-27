@@ -3,7 +3,11 @@ import fs from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:8888';
 const username = process.argv[3] ?? `ext${Date.now().toString(36).slice(-7)}`;
-const engineDir = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine`;
+const engineDir = process.env.ENGINE_DIR;
+if (!engineDir) {
+    console.error('ENGINE_DIR not set. Set it in .env (path to lostcity engine folder)');
+    process.exit(1);
+}
 
 const TELE = '::tele 0,50,50,20,20';
 

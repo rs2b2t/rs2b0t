@@ -3,8 +3,24 @@
 # public/ (see docs/DEV.md). Players: /rs2.cgi untouched; bot: /bot.html.
 set -e
 
-ENGINE="${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
+SCRIPT_DIR="$(dirname "$0")"
+PROJECT_ROOT="$SCRIPT_DIR/.."
 
+# Auto-extract RSA keys from engine's client.js
+echo "→ Extracting RSA keys from engine..."
+ENGINE_DIR="${ENGINE_DIR}" sh "$SCRIPT_DIR/extract-rsa.sh"
+
+# Source .env for ENGINE_DIR
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+fi
+
+if [ -z "${ENGINE_DIR}" ]; then
+    echo "ENGINE_DIR not set. Set it in .env (path to lostcity engine folder)" >&2
+    exit 1
+fi
+ENGINE="${ENGINE_DIR}"
+echo "deploying to $ENGINE/public/"
 if [ ! -d "$ENGINE/public" ]; then
     echo "engine public/ not found at $ENGINE (set ENGINE_DIR)" >&2
     exit 1

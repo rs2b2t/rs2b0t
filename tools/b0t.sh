@@ -239,7 +239,11 @@ echo "  built live client (login key fetched from $HOST)."
 # like deploy-local.sh does.
 if [ ! -f out/collision.lcnav.gz ]; then
     echo "→ collision pack missing — baking it from the engine map cache…"
-    bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
+    if [ -z "${ENGINE_DIR}" ]; then
+        echo "ENGINE_DIR not set. Set it in .env (path to lostcity engine folder)" >&2
+        exit 1
+    fi
+    bun tools/nav/build-collision.ts --engine "${ENGINE_DIR}"
 fi
 
 RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rs2b0t.XXXXXX")
