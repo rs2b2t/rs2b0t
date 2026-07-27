@@ -82,7 +82,7 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         type: 'string',
         default: 'Lobster',
         label: 'Food (name contains)',
-        help: 'carried food eaten while running; also the ONLY thing re-withdrawn after a death, so a wilderness death costs nothing else'
+        help: 'carried food eaten while running. Running out mid-course is expected — keep lapping until death; death recovery banks and re-withdraws this food only (nothing else is restocked)'
     },
     eatAtHp: { type: 'number', default: 50, min: 1, max: 100, label: 'Eat below HP%' },
     eatToHp: {
@@ -617,6 +617,7 @@ class EnterCourse implements Task {
 
 class RunLap implements Task {
     private stuck = 0;
+    private loggedOutOfFood = false;
 
     constructor(private bot: WildyAgility) {}
 
@@ -644,6 +645,17 @@ class RunLap implements Task {
     async execute(): Promise<void> {
         const name = this.bot.currentName();
 
+        // Food is expected to run out mid-session; restock is death-only. Keep
+        // running obstacles and only yield the wait loop when EatFood can act.
+        if (foodCount() === 0) {
+            if (!this.loggedOutOfFood) {
+                this.loggedOutOfFood = true;
+                this.bot.log(`out of '${FOOD}' — continuing course until death (death recovery restocks)`);
+            }
+        } else {
+            this.loggedOutOfFood = false;
+        }
+
         // Approach BEFORE finding/clicking/timing. Pit ladder exits and lap wraps
         // (rocks → pipe) are far from the next start tile; counting that walk against
         // OBSTACLE_TIMEOUT_TICKS caused false "no progress" retries and inflated
@@ -654,20 +666,36 @@ class RunLap implements Task {
             this.bot.log(`just escaped pit — walking to '${name}' starting side before clicking`);
         }
         if (escapedPit || !this.nearStart(name, 2)) {
-            this.bot.log(`walking to '${name}' starting side`);
-            const walked = await this.walkToStartTile(name);
-            if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
-                return;
-            }
-            // Still in a high-z pit (failed climb / re-fell) — let PitEscape own it.
-            const here = Game.tile();
-            if (here !== null && inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
-                return;
-            }
-            if (!walked && !this.nearStart(name, 2)) {
-                this.bot.log(`could not reach '${name}' start — will retry`);
-                await Execution.delayTicks(2);
-                return;
+            // Mid-obstacle after an aborted wait (e.g. old low-HP yield) can leave us
+            // on an unpathable tile. If the loc is still interactable, click from here
+            // instead of spinning on walkTo(start) failures.
+            const alreadyHere = !escapedPit && this.find(name);
+            if (!alreadyHere) {
+                this.bot.log(`walking to '${name}' starting side`);
+                const walked = await this.walkToStartTile(name);
+                if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
+                    return;
+                }
+                // Still in a high-z pit (failed climb / re-fell) — let PitEscape own it.
+                const here = Game.tile();
+                if (here !== null && inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
+                    return;
+                }
+                if (!walked && !this.nearStart(name, 2) && !this.find(name)) {
+                    if (++this.stuck >= LAP_RETRY_LIMIT) {
+                        this.bot.log(
+                            `'${name}' start unreachable after ${this.stuck} tries — moving on to the next obstacle`
+                        );
+                        this.stuck = 0;
+                        this.bot.advance();
+                    } else {
+                        this.bot.log(
+                            `could not reach '${name}' start — will retry (${this.stuck}/${LAP_RETRY_LIMIT})`
+                        );
+                        await Execution.delayTicks(2);
+                    }
+                    return;
+                }
             }
         }
 
@@ -756,7 +784,9 @@ class RunLap implements Task {
             }
             // Yield so EatFood can run while skeletons near rocks hit us.
             // Only after a few ticks so we don't abort the click on residual damage.
-            if (waitedTicks >= 3 && Skills.hpFraction() < EAT_AT) {
+            // Never yield when inventory is empty — EatFood won't validate, and
+            // aborting mid-obstacle leaves us on unpathable tiles (log/pipe).
+            if (waitedTicks >= 3 && Skills.hpFraction() < EAT_AT && foodCount() > 0) {
                 lowHp = true;
                 settled = true;
                 break;
@@ -831,9 +861,11 @@ class RunLap implements Task {
         }
 
         // low_hp: yield to EatFood without burning a retry — combat damage is not
-        // an obstacle failure. Log so a long eat cycle is visible.
+        // an obstacle failure. Only reached when foodCount() > 0 (see wait loop).
         if (reason === 'low_hp') {
-            this.bot.log(`yielding '${this.bot.currentName()}' for food (${Math.round(Skills.hpFraction() * 100)}% hp)`);
+            this.bot.log(
+                `yielding '${this.bot.currentName()}' for food (${Math.round(Skills.hpFraction() * 100)}% hp, ${foodCount()} left)`
+            );
             return;
         }
 
