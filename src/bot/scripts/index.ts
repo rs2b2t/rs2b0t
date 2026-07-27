@@ -123,7 +123,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'FireGiant',
-    description: 'Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + rope + Glarial\'s amulet, teleports out to bank',
+    description: 'Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + rope + Glarial\'s amulet, rides the barrel out to bank',
     category: 'Combat',
     tags: ['waterfall', 'safespot', 'members', 'banking'],
     settingsSchema: FIREGIANT_SETTINGS,
