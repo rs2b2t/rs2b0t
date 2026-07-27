@@ -75,6 +75,8 @@ export interface RawClient {
 
     redrawSide: boolean;
     redrawIcons: boolean;
+
+    overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
 }
 
 export const SELF_TEST = [
@@ -128,7 +130,8 @@ export const SELF_TEST = [
     'login',
     'activeIcon',
     'redrawSide',
-    'redrawIcons'
+    'redrawIcons',
+    'overlayPos'
 ] as const satisfies readonly (keyof RawClient)[];
 
 type AssertNever<T extends never> = T;

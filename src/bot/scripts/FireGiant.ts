@@ -26,7 +26,7 @@ import { Traversal } from '../api/Traversal.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { actions } from '../adapter/ClientAdapter.js';
+import { actions, reader } from '../adapter/ClientAdapter.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Locs } from '../api/queries/Locs.js';
 import {
@@ -225,7 +225,7 @@ async function eatOnce(bot: FireGiant): Promise<boolean> {
 async function quickReturnToSafespot(bot: FireGiant): Promise<boolean> {
     bot.setStatus('returning to the safespot');
     for (let i = 0; i < 3 && !atSafespot() && !EventSignal.pending(); i++) {
-        DirectNavigator.walk(SAFESPOT);
+        DirectNavigator.walk(activeSafespot());
         if (await Execution.delayUntil(() => atSafespot(), 4000)) {
             break;
         }
@@ -619,7 +619,7 @@ class ReturnToSafespot implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to the safespot');
-        await Traversal.walkResilient(SAFESPOT, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(activeSafespot(), { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
@@ -787,6 +787,7 @@ class Fight implements Task {
                 this.bot.countKill();
                 this.bot.log(`fire giant down — ${this.bot.kills()} kills`);
                 this.targetIdx = null;
+                this.bot.targetIdx = null;
             }
 
             if (!Inventory.isFull() && findLoot() !== null) {
@@ -824,10 +825,12 @@ class Fight implements Task {
 
             await target.interact('Attack');
             this.targetIdx = target.index;
+            this.bot.targetIdx = target.index;
             await Execution.delayUntil(() => Game.inCombat() || (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 3000);
             if (usesSafespot() && !atSafespot()) {
                 this.skip.set(target.index, now + 8000);
                 this.targetIdx = null;
+                this.bot.targetIdx = null;
                 continue;
             }
         }
@@ -838,6 +841,7 @@ class Fight implements Task {
     // shot leaves, which is the back-and-forth this replaces. False = it never came.
     private async leash(idx: number): Promise<boolean> {
         this.bot.setStatus('leashing fire giant');
+        this.bot.targetIdx = idx;
         const deadline = performance.now() + LEASH_WAIT_MS;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue()) {
@@ -885,6 +889,7 @@ export default class FireGiant extends TaskBot {
 
     died = false;
     parked = false;
+    targetIdx: number | null = null;
     private parkReason = '';
 
     parkFor(reason: string): void {
@@ -1003,7 +1008,34 @@ export default class FireGiant extends TaskBot {
         return this.bankEmpty;
     }
 
+    private outlineTarget(ctx: CanvasRenderingContext2D): void {
+        if (this.targetIdx === null) {
+            return;
+        }
+        const box = reader.npcBox(this.targetIdx);
+        if (!box) {
+            return;
+        }
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 224, 64, 0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        const edge = (a: number, b: number): void => {
+            ctx.beginPath();
+            ctx.moveTo(box[a].x, box[a].y);
+            ctx.lineTo(box[b].x, box[b].y);
+            ctx.stroke();
+        };
+        for (let i = 0; i < 4; i++) {
+            edge(i, (i + 1) % 4);
+            edge(4 + i, 4 + ((i + 1) % 4));
+            edge(i, 4 + i);
+        }
+        ctx.restore();
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
+        this.outlineTarget(ctx);
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#e08b5a' });
         p.title(`FireGiant — ${this.status}`);
         if (this.parked) {
@@ -1016,7 +1048,7 @@ export default class FireGiant extends TaskBot {
             const xpGained = XP_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
             const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
             p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.killsTotal}`, `XP/hr: ${xph}`);
-            p.row(`Style: ${STYLE}`, STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${Inventory.count(AMMO)}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
+            p.row(`Style: ${STYLE}`, STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Ammo: ${ammoLeft()}` : `Food: ${foodCount()}`, `Bank trips: ${this.bankTrips}`);
             p.bar('HP', hpFrac());
         } else {
             p.row(`Looted: ${this.looted}`, ...(BURY_BONES ? [`Buried: ${this.buriedTotal}`] : []), `Bank trips: ${this.bankTrips}`);

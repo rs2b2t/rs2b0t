@@ -194,6 +194,31 @@ export const reader = {
         return raw?.npcCount ?? 0;
     },
 
+    /**
+     * The eight corners of an NPC's bounding box in overlay-canvas pixels, ground
+     * ring first then the top ring in the same winding, so edges are 0-1-2-3-0,
+     * 4-5-6-7-4 and 0-4, 1-5, 2-6, 3-7. Null when the NPC is gone or off-screen.
+     */
+    npcBox(index: number): { x: number; y: number }[] | null {
+        const npc = raw?.npc[index];
+        if (!raw || !npc) {
+            return null;
+        }
+        const half = npc.size * 64; // scene units are 128 per tile
+        const corners: [number, number][] = [[-half, -half], [half, -half], [half, half], [-half, half]];
+        const out: { x: number; y: number }[] = [];
+        for (const height of [0, npc.height]) {
+            for (const [dx, dz] of corners) {
+                const p = raw.overlayPos(npc.x + dx, npc.z + dz, height);
+                if (!p) {
+                    return null;
+                }
+                out.push(p);
+            }
+        }
+        return out;
+    },
+
     npcs(): NpcSnapshot[] {
         const out: NpcSnapshot[] = [];
         if (!raw || !raw.localPlayer) {
