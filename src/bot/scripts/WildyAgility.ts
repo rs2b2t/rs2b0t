@@ -16,16 +16,12 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
-import { DirectNavigator } from '../nav/DirectNavigator.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
     COURSE_CENTRE,
     COURSE_OBSTACLES,
     EDGEVILLE_BANK,
-    GATE_NAME,
-    GATE_OP,
-    GATE_TILE,
     PIT_FALL,
     PIT_LADDER_OP,
     PIT_Z_GAP,
@@ -82,12 +78,6 @@ const RIDGE_TIMEOUT_MS = 10_000;
 const BANK_TILE: WorldTile = EDGEVILLE_BANK;
 
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
-    testRidge: {
-        type: 'boolean',
-        default: false,
-        label: 'Test ridge loop',
-        help: 'only enter and exit the course repeatedly — ignores obstacles, food, and banking'
-    },
     food: {
         type: 'string',
         default: 'Lobster',
@@ -119,7 +109,6 @@ let EAT_AT = 0.5;
 let EAT_TO = 0.9;
 let FOOD_WITHDRAW = 20;
 let OBSTACLE_TIMEOUT_TICKS = 24;
-let TEST_RIDGE = false;
 
 /** Ensure Auto Retaliate is off so skeletons near rocks don't pull us into combat. */
 async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
@@ -142,14 +131,6 @@ function findRidge(): Loc | null {
         .name(RIDGE_NAME)
         .action(RIDGE_OP)
         .where(l => l.distance() <= SEARCH_RADIUS)
-        .nearest();
-}
-
-function findGate(): Loc | null {
-    return Locs.query()
-        .name(GATE_NAME)
-        .action(GATE_OP)
-        .where(l => l.distance() <= 5)
         .nearest();
 }
 
@@ -280,7 +261,6 @@ export default class WildyAgility extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        TEST_RIDGE = this.settings.bool('testRidge', false);
         FOOD = this.settings.str('food', 'Lobster').toLowerCase();
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
@@ -310,31 +290,6 @@ export default class WildyAgility extends TaskBot {
         });
 
         await ensureRetaliateOff(m => this.log(m));
-
-        if (TEST_RIDGE) {
-            this.log(
-                `WildyAgility ridge test mode — enter/exit loop only, approach ${RIDGE_APPROACH.x},${RIDGE_APPROACH.z}`
-            );
-            this.add(
-                new ContinueDialog(),
-                new DeathRecovery(this, {
-                    anchor: RIDGE_APPROACH,
-                    radius: 6,
-                    onDeath: () => {
-                        this.deaths++;
-                        this.entered = false;
-                        this.setStatus('died — recovering');
-                    },
-                    onRecovered: () => {
-                        this.died = false;
-                        this.setStatus('recovered');
-                    },
-                    walkBack: () => this.recoverAndReturn()
-                }),
-                new RidgeTestLoop(this)
-            );
-            return;
-        }
 
         this.log(
             `WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, approach ${RIDGE_APPROACH.x},${RIDGE_APPROACH.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`
@@ -680,6 +635,11 @@ class RunLap implements Task {
             return false;
         }
         // Lap zone is north of the Gate. entered flag covers brief post-ridge settle.
+        // Stay active after a pit climb so we can walk to the next start tile even
+        // if the ladder exit briefly reads outside onCourse.
+        if (this.bot.justEscapedPit) {
+            return true;
+        }
         return this.bot.isEntered() || onCourse(here);
     }
 
@@ -696,13 +656,19 @@ class RunLap implements Task {
             this.bot.log(`just escaped pit — walking to '${name}' starting side before clicking`);
         }
         if (escapedPit || !this.nearStart(name, 2)) {
-            await this.walkToStartTile(name);
+            this.bot.log(`walking to '${name}' starting side`);
+            const walked = await this.walkToStartTile(name);
             if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
                 return;
             }
             // Still in a high-z pit (failed climb / re-fell) — let PitEscape own it.
             const here = Game.tile();
             if (here !== null && inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
+                return;
+            }
+            if (!walked && !this.nearStart(name, 2)) {
+                this.bot.log(`could not reach '${name}' start — will retry`);
+                await Execution.delayTicks(2);
                 return;
             }
         }
@@ -721,12 +687,15 @@ class RunLap implements Task {
         }
         if (!obstacle) {
             this.bot.setStatus(`waiting: no ${this.bot.currentName()} within ${this.bot.searchRadius()} tiles`);
+            this.bot.log(`waiting: no '${this.bot.currentName()}' within ${this.bot.searchRadius()} tiles`);
             await Execution.delayTicks(2);
             return;
         }
 
         const op = obstacle.actions()[0];
         if (!op) {
+            this.bot.log(`'${obstacle.name}' has no actions — retrying`);
+            await Execution.delayTicks(2);
             return;
         }
 
@@ -738,20 +707,30 @@ class RunLap implements Task {
 
         const mark = GameMessages.mark();
         const before = Skills.xp('agility');
-        this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
+        const ot = obstacle.tile();
+        this.bot.setStatus(`${op} ${obstacle.name} at ${ot.x},${ot.z}`);
+        this.bot.log(`${op} '${this.bot.currentName()}' @ ${ot.x},${ot.z}`);
 
         if (!(await obstacle.interact(op))) {
+            this.bot.log(`interact('${op}') on '${this.bot.currentName()}' failed — retrying`);
             await Execution.delayTicks(2);
             return;
         }
 
         // Timeout starts at the click, not at task entry / approach.
+        // Hard wall-clock bound: idle-only counting can stall forever if the
+        // client keeps reporting animation/movement (combat, pathing jitter).
         const clickTick = Game.tick();
+        const waitDeadline = performance.now() + OBSTACLE_TIMEOUT_TICKS * 600 + 3_000;
         let idleTicks = 0;
+        let waitedTicks = 0;
         let lowHp = false;
         let settled = false;
         let lastTile = Game.tile();
-        while (idleTicks < OBSTACLE_TIMEOUT_TICKS) {
+        while (idleTicks < OBSTACLE_TIMEOUT_TICKS && waitedTicks < OBSTACLE_TIMEOUT_TICKS * 2) {
+            if (performance.now() >= waitDeadline) {
+                break;
+            }
             const t = Game.tile();
             if (Skills.xp('agility') > before) {
                 settled = true;
@@ -778,16 +757,18 @@ class RunLap implements Task {
                 break;
             }
             // Yield so EatFood can run while skeletons near rocks hit us.
-            if (Skills.hpFraction() < EAT_AT) {
+            // Only after a few ticks so we don't abort the click on residual damage.
+            if (waitedTicks >= 3 && Skills.hpFraction() < EAT_AT) {
                 lowHp = true;
                 settled = true;
                 break;
             }
 
             await Execution.delayTicks(1);
+            waitedTicks++;
 
-            // Only idle time counts toward timeout. Walking onto the obstacle or
-            // mid-agility animation is still progress — do not premature-retry.
+            // Prefer idle time for timeout, but always advance waitedTicks so a
+            // perpetual anim/move cannot hang the task with no log output.
             const now = Game.tile();
             const moved =
                 !!now && !!lastTile && (now.x !== lastTile.x || now.z !== lastTile.z || now.level !== lastTile.level);
@@ -828,7 +809,10 @@ class RunLap implements Task {
         });
 
         if (reason === 'timeout') {
-            this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle ticks)`);
+            this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle / ${waitedTicks} total ticks)`);
+            this.bot.log(
+                `'${this.bot.currentName()}' timed out after ${waitedTicks} ticks (${idleTicks} idle) — no xp/chat`
+            );
         }
 
         if (reason === 'xp') {
@@ -842,14 +826,16 @@ class RunLap implements Task {
             }
             this.bot.lastClearedTick = Game.tick();
             this.bot.advance();
-            // Animation-aware settle so the next obstacle is not clicked mid-finish.
-            await this.settleAfterObstacle();
+            // Short humanized pause only — do not block on animation (combat/path
+            // jitter can keep animating and previously hung the next lap silently).
+            await Execution.delay(reactionMs());
             return;
         }
 
         // low_hp: yield to EatFood without burning a retry — combat damage is not
-        // an obstacle failure.
+        // an obstacle failure. Log so a long eat cycle is visible.
         if (reason === 'low_hp') {
+            this.bot.log(`yielding '${this.bot.currentName()}' for food (${Math.round(Skills.hpFraction() * 100)}% hp)`);
             return;
         }
 
@@ -869,6 +855,7 @@ class RunLap implements Task {
         // Don't web-walk at the obstacle: its tile is deliberately unpathable.
         if (reason === 'cant_reach') {
             this.bot.setStatus(`out of range for ${obstacle.name} — retrying`);
+            this.bot.log(`'${this.bot.currentName()}' can't reach — retrying`);
         }
 
         if (++this.stuck >= LAP_RETRY_LIMIT) {
@@ -909,29 +896,6 @@ class RunLap implements Task {
         return !!start && !!here && nearTile(here, start, radius);
     }
 
-    /** Wait until the player stops moving/animating after a successful clear. */
-    private async settleAfterObstacle(): Promise<void> {
-        // Keep a small humanized pause, then ensure the client is actually idle.
-        await Execution.delay(reactionMs());
-        let last = Game.tile();
-        for (let i = 0; i < 12; i++) {
-            if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
-                return;
-            }
-            if (Skills.hpFraction() < EAT_AT) {
-                return;
-            }
-            await Execution.delayTicks(1);
-            const now = Game.tile();
-            const moved =
-                !!now && !!last && (now.x !== last.x || now.z !== last.z || now.level !== last.level);
-            if (!moved && !Game.animating()) {
-                return;
-            }
-            last = now ?? last;
-        }
-    }
-
     private async walkToStartTile(obstacleName: string): Promise<boolean> {
         const start = getStartTile(obstacleName);
         if (!start) {
@@ -947,146 +911,12 @@ class RunLap implements Task {
             await Execution.delayTicks(1);
             return true;
         }
-        const result = await Traversal.walkTo(start, { radius: 1 });
+        // Bound the walk so a bad path cannot hang the lap with no further logs.
+        const result = await Traversal.walkTo(start, { radius: 1, timeoutMs: 45_000 });
         if (!result) {
             this.bot.log(`could not reach starting side for '${obstacleName}' — path unreachable`);
             return false;
         }
         return true;
-    }
-}
-
-class RidgeTestLoop implements Task {
-    constructor(private bot: WildyAgility) {}
-
-    validate(): boolean {
-        return TEST_RIDGE;
-    }
-
-    async execute(): Promise<void> {
-        const here = Game.tile();
-        if (here === null) {
-            await Execution.delayTicks(1);
-            return;
-        }
-
-        const inside = this.bot.isEntered() || onCourse(here);
-        if (inside) {
-            await this.exitCourse();
-        } else {
-            await attemptRidgeCrossing(this.bot, 'ridge test: ');
-            await Execution.delay(reactionMs());
-        }
-    }
-
-    private async exitCourse(): Promise<void> {
-        const here = Game.tile();
-        if (here && !nearTile(here, GATE_TILE, 2)) {
-            this.bot.setStatus('ridge test: walking to gate');
-            await Traversal.walkTo(GATE_TILE, { radius: 1 });
-        }
-
-        const gate = findGate();
-        if (!gate) {
-            this.bot.setStatus(`ridge test: no '${GATE_NAME}' nearby`);
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        this.bot.setStatus(`ridge test: exiting via gate (${GATE_OP} ${gate.name})`);
-        if (!(await gate.interact(GATE_OP))) {
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        await Execution.delayUntil(() => {
-            const t = Game.tile();
-            return (t !== null && !onCourse(t)) || EventSignal.pending();
-        }, 15_000);
-
-        const after = Game.tile();
-        if (after !== null && !onCourse(after)) {
-            this.bot.markLeft();
-            this.bot.log('ridge test: exited course');
-        }
-
-        // Gate leaves us in the ridge corridor (north of Door). The next enter's
-        // walkResilient(RIDGE_APPROACH) would Open the Door as a pathfinder
-        // transport — chat/XP fire before attemptRidgeCrossing's mark, so falls
-        // look like silent timeouts. Finish south under script control instead.
-        // (Production never gate-exits; this is test-loop only.)
-        await Execution.delayTicks(2);
-        const corridor = Game.tile();
-        if (corridor && !southOfRidge(corridor)) {
-            await this.returnSouthOfRidge();
-        }
-    }
-
-    /**
-     * Test-loop only: cross the ridge Door southbound with the same chat/XP
-     * detection as enter, then stand on RIDGE_APPROACH without WalkExecutor.
-     */
-    private async returnSouthOfRidge(): Promise<void> {
-        const ridge = findRidge();
-        if (!ridge) {
-            this.bot.setStatus(`ridge test: no '${RIDGE_NAME}' to return south`);
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        const mark = GameMessages.mark();
-        const beforeXp = Skills.xp('agility');
-        this.bot.setStatus(`ridge test: crossing ridge south (${RIDGE_OP} ${ridge.name})`);
-        if (!(await ridge.interact(RIDGE_OP))) {
-            await Execution.delayTicks(2);
-            return;
-        }
-
-        await Execution.delayUntil(() => {
-            if (EventSignal.pending()) {
-                return true;
-            }
-            if (Skills.xp('agility') > beforeXp) {
-                return true;
-            }
-            if (GameMessages.sawSince(mark, RIDGE_SUCCESS)) {
-                return true;
-            }
-            if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
-                return true;
-            }
-            const t = Game.tile();
-            return t !== null && southOfRidge(t);
-        }, RIDGE_TIMEOUT_MS);
-
-        const sawFail = GameMessages.sawSince(mark, RIDGE_FAIL);
-        const outcome = classifyRidge({
-            xpGained: Skills.xp('agility') > beforeXp,
-            successMessage: GameMessages.sawSince(mark, RIDGE_SUCCESS),
-            failMessage: sawFail,
-            inWolfPit: sawFail,
-            interrupted: EventSignal.pending(),
-            settled: true
-        });
-
-        if (outcome === 'interrupted') {
-            this.bot.setStatus('random event — handling');
-            return;
-        }
-
-        if (outcome === 'fail') {
-            this.bot.log('ridge test: fell into the wolf pit on return — recovering to approach');
-        } else if (outcome === 'timeout') {
-            this.bot.log('ridge test: southbound ridge timed out — recovering to approach');
-        } else {
-            this.bot.log('ridge test: back south of ridge');
-        }
-
-        // Already south of the Door (or in the wolf pit beside it): scene-walk only.
-        // walkResilient here would still be safe, but DirectNavigator cannot re-open Door.
-        const stand = Game.tile();
-        if (stand && southOfRidge(stand) && !atRidgeApproach(stand)) {
-            await DirectNavigator.walkTo(RIDGE_APPROACH, 1, 15_000);
-        }
     }
 }
