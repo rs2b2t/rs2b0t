@@ -29,3 +29,6 @@ dist/
 
 # recovered farm logins — plaintext, never commit
 multibox-accounts.recovered.json
+
+# bot wall lockfiles — local state, never commit
+.b0t-launch.lock/
