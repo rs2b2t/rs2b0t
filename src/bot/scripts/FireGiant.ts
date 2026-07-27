@@ -41,7 +41,6 @@ const FIELD_RADIUS = 10;
 const BANK_HEAL_TO = 0.9;
 
 const RE_ENGAGE_MS = 4000;
-const HURT_RECENT_MS = 1500;
 
 const LOOT_TAKE_MS = 1200;
 const LOOT_BURST_MAX = 8;
@@ -110,7 +109,6 @@ let SAFESPOT = DEFAULT_SAFESPOT;
 let SAFESPOT_FALLBACK = DEFAULT_SAFESPOT_FALLBACK;
 let retreated = false;
 let lastHp = -1;
-let lastDamageAt = 0;
 let MELEE_TILE = DEFAULT_MELEE_TILE;
 let BANK_TILE = ESCAPE_TELES.Camelot.bank;
 let TELE: EscapeTele = ESCAPE_TELES.Camelot;
@@ -163,9 +161,6 @@ function checkRetreat(bot: FireGiant): boolean {
     const hp = Skills.effective('hitpoints');
     const hurt = lastHp >= 0 && hp < lastHp;
     lastHp = hp;
-    if (hurt) {
-        lastDamageAt = performance.now();
-    }
     if (!usesSafespot() || retreated || !hurt) {
         return false;
     }
@@ -245,9 +240,11 @@ async function eatOnce(bot: FireGiant): Promise<boolean> {
 
 async function quickReturnToSafespot(bot: FireGiant): Promise<boolean> {
     bot.setStatus('returning to the safespot');
-    for (let i = 0; i < 3 && !atSafespot() && !EventSignal.pending(); i++) {
+    // a tier switch is a one-tile hop, so a long per-attempt window just adds
+    // latency while something is hitting us — retry sooner instead
+    for (let i = 0; i < 4 && !atSafespot() && !EventSignal.pending(); i++) {
         DirectNavigator.walk(activeSafespot());
-        if (await Execution.delayUntil(() => atSafespot(), 4000)) {
+        if (await Execution.delayUntil(() => atSafespot(), 2000)) {
             break;
         }
     }
@@ -855,6 +852,9 @@ class Fight implements Task {
                 return;
             }
             if (checkRetreat(this.bot)) {
+                // reposition on the spot: falling through would loot or re-attack
+                // first, and hopping out to ReturnToSafespot costs another task hop
+                await quickReturnToSafespot(this.bot);
                 continue;
             }
 
@@ -867,14 +867,14 @@ class Fight implements Task {
                 clearRetreat(this.bot);
             }
 
-            if (!Inventory.isFull() && findLoot() !== null) {
-                await lootBurst(this.bot);
-                continue;
-            }
             if (usesSafespot() && !atSafespot()) {
                 if (!(await quickReturnToSafespot(this.bot))) {
                     return;
                 }
+                continue;
+            }
+            if (!Inventory.isFull() && findLoot() !== null) {
+                await lootBurst(this.bot);
                 continue;
             }
 
@@ -890,9 +890,8 @@ class Fight implements Task {
                     this.engagedHealth = live.snap.health;
                     this.engagedAt = performance.now();
                 }
-                const shaken = EventSignal.pending() || performance.now() - lastDamageAt < HURT_RECENT_MS;
-                if (!shaken && performance.now() - this.engagedAt < RE_ENGAGE_MS) {
-                    await Execution.delayTicks(2);
+                if (performance.now() - this.engagedAt < RE_ENGAGE_MS) {
+                    await Execution.delayTicks(1);
                     continue;
                 }
             }
