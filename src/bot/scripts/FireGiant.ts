@@ -32,7 +32,7 @@ import { Locs } from '../api/queries/Locs.js';
 import {
     AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    ROCK_LOC, ROPE, TREE_LOC, TREE_STAND, type EscapeTele
+    ROCK_LOC, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
@@ -633,14 +633,23 @@ class EnterDungeon implements Task {
     }
 
     private async ropeRock(): Promise<void> {
+        const here = Game.tile();
+        if (here === null || here.x !== ROPE_THROW_STAND.x || here.z !== ROPE_THROW_STAND.z) {
+            this.bot.setStatus('walking to the rope-throw stand');
+            await Traversal.walkResilient(ROPE_THROW_STAND, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+            return;
+        }
         this.bot.setStatus('roping across to the rock');
         if (!(await useRopeOn(ROCK_LOC))) {
+            this.bot.log(`could not use the rope on the ${ROCK_LOC} — retrying`);
             await Execution.delayTicks(2);
             return;
         }
         if (await Execution.delayUntil(() => legFor(Game.tile()) === 'PastRock', 12_000)) {
             this.bot.log('crossed to the rock');
+            return;
         }
+        this.bot.log('rope throw did not cross — retrying');
     }
 
     private async ropeTree(): Promise<void> {
@@ -652,12 +661,15 @@ class EnterDungeon implements Task {
         }
         this.bot.setStatus('roping down the dead tree');
         if (!(await useRopeOn(TREE_LOC))) {
+            this.bot.log(`could not use the rope on the ${TREE_LOC} — retrying`);
             await Execution.delayTicks(2);
             return;
         }
         if (await Execution.delayUntil(() => legFor(Game.tile()) === 'AtLedge', 12_000)) {
             this.bot.log('down on the ledge');
+            return;
         }
+        this.bot.log('rope-down did not land on the ledge — retrying');
     }
 
     private async openLedge(): Promise<void> {
@@ -681,7 +693,9 @@ class EnterDungeon implements Task {
         }
         if (await Execution.delayUntil(() => inDungeon(), 12_000)) {
             this.bot.log('inside the Waterfall Dungeon');
+            return;
         }
+        this.bot.log('the ledge door did not let us through — retrying');
     }
 }
 

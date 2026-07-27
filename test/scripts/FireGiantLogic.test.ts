@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -36,6 +36,33 @@ describe('legFor', () => {
     });
     test('AtLedge wins over PastRock even though the ledge is close to the rock', () => {
         expect(legFor(at(2511, 3463))).toBe('AtLedge');
+    });
+});
+
+// the landing tile satisfies the engine's inzone check but sits 13 tiles from the
+// rock, past the aplocu range, and the rock is across water — the server answers
+// "I can't reach that!" and the player never moves. The throw stand must satisfy
+// BOTH the zone check and op reachability.
+describe('ROPE_THROW_STAND', () => {
+    test('is inside the engine throw zone', () => {
+        expect(ROPE_THROW_STAND.x).toBeGreaterThanOrEqual(THROW_ZONE.minX);
+        expect(ROPE_THROW_STAND.x).toBeLessThanOrEqual(THROW_ZONE.maxX);
+        expect(ROPE_THROW_STAND.z).toBeGreaterThanOrEqual(THROW_ZONE.minZ);
+        expect(ROPE_THROW_STAND.z).toBeLessThanOrEqual(THROW_ZONE.maxZ);
+    });
+    test('is north of the rock — the engine refuses coordz(you) <= coordz(rock)', () => {
+        expect(ROPE_THROW_STAND.z).toBeGreaterThan(ROCK_TILE.z);
+    });
+    test('is within aplocu range of the rock', () => {
+        const d = Math.max(Math.abs(ROPE_THROW_STAND.x - ROCK_TILE.x), Math.abs(ROPE_THROW_STAND.z - ROCK_TILE.z));
+        expect(d).toBeLessThanOrEqual(AP_RANGE);
+    });
+    test('the raft landing is NOT a legal throw stand — it is out of ap range', () => {
+        const d = Math.max(Math.abs(2512 - ROCK_TILE.x), Math.abs(3481 - ROCK_TILE.z));
+        expect(d).toBeGreaterThan(AP_RANGE);
+    });
+    test('standing on it still resolves to the AtLanding leg', () => {
+        expect(legFor({ x: ROPE_THROW_STAND.x, z: ROPE_THROW_STAND.z, level: 0 })).toBe('AtLanding');
     });
 });
 

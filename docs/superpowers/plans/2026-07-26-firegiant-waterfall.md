@@ -959,7 +959,24 @@ git commit -m "feat(firegiant): prerequisite checks, parking, and death handling
 
 - [ ] **Step 1: Write the smoke**
 
-Create `tools/firegiant-test.ts`:
+Three seeding/instrumentation traps, all hit during implementation. The committed
+`tools/firegiant-test.ts` is the corrected reference — prefer it over the sketch below:
+
+1. **`~completequests` does nothing.** `complete_all_quests` opens two blocking `p_choice2`
+   dialogs and waits for clicks that never arrive, so no quest completes *and* the pending
+   modal swallows every cheat sent after it. Use `setvar waterfall_quest 10` instead.
+2. **The client never receives varp 65.** `reader.varp(65)` reads 0 even when the server holds
+   10 — do not use it to verify. `Quests.status()` reads the quest journal colour, which the
+   server pushes **only at login**, so the setvar must be followed by `relog()`. Verified: the
+   colour flips `f80000` → `f800` and the status becomes `complete` only after the relog.
+   Seed items *after* that final relog, or they are rolled back.
+3. **`Bot.log()` never reaches the console.** `ScriptRunner.ts:52` calls
+   `bot.bindLog(msg => ctx.addLog('info', msg))`, so a `page.on('console')` filter for `[bot]`
+   matches nothing and the smoke is blind. Poll `rs2b0t.runner.ctx.log` and print new entries,
+   and abort on the first `PARKED:` line or a `crashed`/`stopped` runner rather than running
+   out the clock. (The same dead filter exists in `tools/runecrafter-test.ts`.)
+
+Sketch:
 
 ```ts
 // Live smoke for FireGiant. Mainland account -> complete quests (the raft refuses
@@ -1066,7 +1083,20 @@ grep -n "glarials_amulet_waterfall_quest\|^[0-9]*=rope$" ~/code/rs2b2t-content/p
 ```
 Expected: all four debugprocs found, and both obj debugnames present. If a name differs, fix the smoke to match the content — the content is authoritative.
 
-- [ ] **Step 4: Run the smoke**
+- [ ] **Step 4: Deploy the bot bundle**
+
+The sim serves a prebuilt `botclient.js`; a newly registered script is invisible to
+`startScript` until the bundle is rebuilt and copied into the engine's `public/`. Skipping this
+fails with `TypeError: Cannot read properties of undefined (reading 'create')` inside
+`ScriptRegistry`, which reads like a registry bug but is a stale-bundle problem.
+
+Run: `sh tools/deploy-local.sh`
+Expected: `deployed: …/public/bot.html (+ /bot, /client refreshed)`
+
+This **overwrites the bundle any running bot session is using**. Check for one first
+(`cat .b0t-launch.lock/owner.pid` and `ps -p <pid>`) and confirm before clobbering it.
+
+- [ ] **Step 5: Run the smoke**
 
 Start the sim first if it is not already up, then:
 
@@ -1077,7 +1107,7 @@ If it hangs on a leg, the `[bot]` log lines name the leg. The two most likely fa
 - stuck on the ledge → the door query picked an outer `Ledge` leaf; confirm the `.where()` tile filter is present
 - stuck at the landing → the throw zone check; confirm the player is inside x2510-2514 / z3476-3481
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add tools/firegiant-test.ts

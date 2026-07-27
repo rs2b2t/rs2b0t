@@ -25,6 +25,11 @@ export const ROPE = 'Rope';
 // engine: inzone(0_39_54_14_20, 0_39_54_18_25) — the rope throw is refused outside it
 export const THROW_ZONE = { minX: 2510, maxX: 2514, minZ: 3476, maxZ: 3481 };
 
+// the rock is across water, so the op only lands from inside aplocu range; from the
+// raft landing (13 tiles) the server answers "I can't reach that!" and nothing happens
+export const AP_RANGE = 10;
+export const ROPE_THROW_STAND = new Tile(2512, 3477, 0);
+
 export const DUNGEON_MIN_Z = 9000;
 
 export interface PointLike {
