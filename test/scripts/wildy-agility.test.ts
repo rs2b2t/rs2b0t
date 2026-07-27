@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
-import { atCourseEntranceSide, awayFromCourse, courseStepForProgress, inPit, inRegion, insideCourseProper, nextApproachableCourseStep, parseObstacles } from '#/bot/scripts/WildyAgility.js';
+import { awayFromCourse, inPit, inRegion, insideCourseProper, parseObstacles } from '#/bot/scripts/WildyAgility.js';
 
 test('parseObstacles trims, lowercases and drops empties', () => {
     expect(parseObstacles('  Obstacle pipe , Ropeswing ,, Rocks ')).toEqual(['obstacle pipe', 'ropeswing', 'rocks']);
@@ -58,27 +58,6 @@ test('insideCourseProper: in the course but past the entrance region (the lap zo
     expect(insideCourseProper(new Tile(2998, 3937, 0), centre, 25, entrance, 10)).toBe(true);
     expect(insideCourseProper(new Tile(2998, 3924, 0), centre, 25, entrance, 10)).toBe(false);
     expect(insideCourseProper(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(false);
-    expect(insideCourseProper(new Tile(3001, 3923, 0), centre, 25, entrance, 10)).toBe(false);
-});
-
-test('failed ridge landing retries entry instead of running the lap', () => {
-    const entrance = new Tile(2998, 3924, 0);
-    expect(atCourseEntranceSide(new Tile(3001, 3923, 0), entrance, 10)).toBe(true);
-    expect(atCourseEntranceSide(new Tile(2998, 3937, 0), entrance, 10)).toBe(false);
-});
-
-test('server course progress identifies the next obstacle', () => {
-    expect([0, 1, 2, 3, 4].map(progress => courseStepForProgress(progress, 5))).toEqual([0, 1, 2, 3, 4]);
-    expect(courseStepForProgress(5, 5)).toBe(0);
-    expect(courseStepForProgress(99, 5)).toBe(0);
-});
-
-test('one-way obstacle recovery skips pipe and rope only when already north of them', () => {
-    const course = ['obstacle pipe', 'ropeswing', 'stepping stone', 'log balance', 'rocks'];
-    expect(nextApproachableCourseStep(course, 0, new Tile(3004, 3937, 0))).toBe(0);
-    expect(nextApproachableCourseStep(course, 0, new Tile(3004, 3950, 0))).toBe(1);
-    expect(nextApproachableCourseStep(course, 0, new Tile(3002, 3960, 0))).toBe(2);
-    expect(nextApproachableCourseStep(course, 2, new Tile(3002, 3960, 0))).toBe(2);
 });
 
 test('inPit: the wolf pit sits far above the course in world-z', () => {

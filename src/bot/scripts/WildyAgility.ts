@@ -24,7 +24,6 @@ const DEFAULT_ENTRANCE = new Tile(2998, 3924, 0);
 const EDGEVILLE = new Tile(3094, 3493, 0);
 const RIDGE_MIN_AGILITY = 52;
 const PIT_Z_GAP = 2000;
-const WILDERNESS_COURSE_PROGRESS_VARP = 266;
 // Lowered this because the default wait is now 24 ticks, since obstacle clears can take up to 20 ticks.
 const LAP_RETRY_LIMIT = 2;
 
@@ -115,41 +114,8 @@ export function insideCourseProper(here: WorldTile, centre: WorldTile, courseRad
     return inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
 }
 
-export function atCourseEntranceSide(here: WorldTile, entrance: WorldTile, entryRadius: number): boolean {
-    return inRegion(here, entrance, entryRadius) && here.z <= entrance.z;
-}
-
 export function inPit(here: WorldTile, courseCentre: WorldTile, zGap: number): boolean {
     return here.level === courseCentre.level && here.z - courseCentre.z > zGap;
-}
-
-export function courseStepForProgress(progress: number, obstacleCount: number): number {
-    if (!Number.isSafeInteger(progress) || !Number.isSafeInteger(obstacleCount) || obstacleCount <= 0 || progress < 0 || progress > obstacleCount) {
-        return 0;
-    }
-    // The server resets progress from obstacleCount to zero after awarding the
-    // lap bonus. Accept the transient terminal value defensively.
-    return progress % obstacleCount;
-}
-
-export function nextApproachableCourseStep(course: readonly string[], currentStep: number, here: WorldTile): number {
-    if (course.length === 0) {
-        return 0;
-    }
-    let step = Math.max(0, Math.min(course.length - 1, currentStep));
-    // These are the exact one-way checks in wilderness_course.rs2. If the
-    // player is already north of either obstacle, clicking it can only fail;
-    // advance to the first obstacle that can still be approached from here.
-    for (let checked = 0; checked < course.length; checked++) {
-        const name = course[step];
-        const alreadyPast = (name === 'obstacle pipe' && here.z >= 3939)
-            || (name === 'ropeswing' && here.z > 3953);
-        if (!alreadyPast) {
-            return step;
-        }
-        step = (step + 1) % course.length;
-    }
-    return currentStep;
 }
 
 /** Ensure Auto Retaliate is turned off (prevents fighting back while doing agility). */
@@ -194,9 +160,8 @@ export default class WildyAgility extends TaskBot {
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
+        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 18);
         this.course = COURSE_OBSTACLES;
-        this.step = courseStepForProgress(reader.varp(WILDERNESS_COURSE_PROGRESS_VARP), this.course.length);
 
         const agility = Skills.level('agility');
         if (agility < RIDGE_MIN_AGILITY) {
@@ -208,7 +173,7 @@ export default class WildyAgility extends TaskBot {
         this.xpAtStart = Skills.xp('agility');
         this.lastClearedTick = Game.tick();
 
-        this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], server step ${this.step} (${this.currentName()}), food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`);
+        this.log(`WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, entrance ${COURSE_ENTRANCE.x},${COURSE_ENTRANCE.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`);
 
         const here = Game.tile()!;
         this.entered = insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
@@ -518,10 +483,25 @@ class EnterCourse implements Task {
         if (here === null) {
             return false;
         }
-        // The broad course radius overlaps the failed-ridge landing at 3001,3923.
-        // Classify that south-side pocket from the entrance itself, not the course
-        // centre, so a failed entry retries the ridge instead of clicking the pipe.
-        return atCourseEntranceSide(here, COURSE_ENTRANCE, ENTRY_RADIUS);
+        // Once inside the course region, never validate — the bot should stay on
+        // the course. The gate at the top of the ridge exits back to the entrance,
+        // and clicking it from inside derails the entire script. If the player dies
+        // or the operator moves them, DeathRecovery / TravelToCourse will handle it.
+        if (inRegion(here, COURSE_CENTRE, COURSE_RADIUS)) {
+            return false;
+        }
+        // Only fire when near the entrance AND outside the course (south of the ridge).
+        // The entrance region overlaps with the rocks obstacle (~2994,3932), so a player
+        // standing on the rocks would otherwise trigger this task unnecessarily.
+        // "Outside" means the player's Z is south of (<=) the entrance Z.
+        if (!inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS)) {
+            return false;
+        }
+        if (here.z <= COURSE_ENTRANCE.z) {
+            return true;
+        }
+        // Player is north of the entrance (already on the course side) — don't trigger.
+        return false;
     }
 
     async execute(): Promise<void> {
@@ -581,40 +561,32 @@ class RunLap implements Task {
         if (here === null || this.bot.courseNames().length === 0) {
             return false;
         }
-        return insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
+        // Accept being on the course if either the entered flag is set OR the player
+        // is physically within the course region (handles starting on the course
+        // without crossing the ridge).
+        const onCourse = this.bot.isEntered() || inRegion(here, COURSE_CENTRE, COURSE_RADIUS);
+        return onCourse && (inRegion(here, COURSE_CENTRE, COURSE_RADIUS) || inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS));
     }
 
     async execute(): Promise<void> {
-        const here = Game.tile();
-        if (here === null) {
-            return;
-        }
-        const approachableStep = nextApproachableCourseStep(this.bot.courseNames(), this.bot.courseNames().indexOf(this.bot.currentName()), here);
-        const approachableName = this.bot.courseNames()[approachableStep];
-        if (approachableName && approachableName !== this.bot.currentName()) {
-            this.bot.log(`course position is already past '${this.bot.currentName()}' — continuing at '${approachableName}'`);
-            this.bot.resyncTo(approachableName);
-            this.stuck = 0;
-        }
-
         let obstacle = this.find(this.bot.currentName());
         if (!obstacle) {
-            const expected = this.bot.currentName();
-            this.bot.log(`'${expected}' is not visible — walking to its starting side`);
-            await this.walkToStartTile(expected);
-            obstacle = this.find(expected);
-            if (!obstacle) {
-                if (++this.stuck >= LAP_RETRY_LIMIT) {
-                    this.bot.log(`'${expected}' is still unavailable at its starting side — continuing forward once`);
+            // Search in course order (first → last) so we resync to the earliest
+            // visible obstacle rather than the nearest one — after a death recovery
+            // the bot is near the entrance where later obstacles (e.g. rocks) live,
+            // and we want to start from the beginning of the lap.
+            for (const name of this.bot.courseNames()) {
+                if (this.find(name) && this.bot.resyncTo(name)) {
+                    obstacle = this.find(name);
                     this.stuck = 0;
-                    this.bot.advance();
-                } else {
-                    this.bot.setStatus(`waiting for ${expected} to enter the scene`);
-                    await Execution.delayTicks(1);
+                    break;
                 }
-                return;
             }
-            this.stuck = 0;
+        }
+        if (!obstacle) {
+            this.bot.setStatus(`waiting: no ${this.bot.currentName()} within ${this.bot.searchRadius()} tiles`);
+            await Execution.delayTicks(2);
+            return;
         }
 
         const op = obstacle.actions()[0];
@@ -763,12 +735,9 @@ class RunLap implements Task {
             this.bot.setStatus(`out of range for ${obstacle.name} — retrying`);
         }
 
-        const attempt = ++this.stuck;
-        this.bot.log(`'${this.bot.currentName()}' no progress — returning to its starting side (${attempt}/${LAP_RETRY_LIMIT})`);
-        const repositioned = await this.walkToStartTile(obstacle.name?.toLowerCase() ?? this.bot.currentName());
-        if (attempt >= LAP_RETRY_LIMIT) {
+        if (++this.stuck >= LAP_RETRY_LIMIT) {
             const skipped = this.bot.currentName();
-            this.bot.log(`'${skipped}' isn't completing after ${attempt} positioned tries — continuing forward once`);
+            this.bot.log(`'${skipped}' isn't completing from here after ${this.stuck} tries — moving on to the next obstacle`);
             this.stuck = 0;
             this.bot.advance();
             // If advancing wrapped us to the next lap and the resync would immediately
@@ -783,12 +752,20 @@ class RunLap implements Task {
                     await this.walkToStartTile(this.bot.courseNames()[0]);
                 }
             }
+        } else if (this.stuck >= 2) {
+            // After repeated "no progress" (likely wrong position, e.g. already past
+            // the obstacle or standing on the wrong side), walk back to the starting
+            // side before retrying.
+            this.bot.log(`'${this.bot.currentName()}' no progress — walking back to starting side (${this.stuck}/${LAP_RETRY_LIMIT})`);
+            const walked = await this.walkToStartTile(obstacle.name?.toLowerCase() ?? this.bot.currentName());
+            if (!walked) {
+                this.bot.log(`'${this.bot.currentName()}' starting side unreachable — advancing to next obstacle`);
+                this.bot.advance();
+            }
         } else {
             this.bot.setStatus(`retrying ${obstacle.name}`);
-            if (!repositioned) {
-                this.bot.log(`'${this.bot.currentName()}' starting side is unreachable; the next bounded attempt will move forward`);
-            }
-            await Execution.delayTicks(1);
+            this.bot.log(`'${this.bot.currentName()}' no progress — retrying (${this.stuck}/${LAP_RETRY_LIMIT})`);
+            await Execution.delayTicks(2);
         }
     }
 
