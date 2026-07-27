@@ -32,6 +32,18 @@ export function attackRangeFor(style: string): number {
     return ATTACK_RANGE[style] ?? 1;
 }
 
+// Distance is the wrong ordering in the west room. The giants wander up to 3 tiles,
+// so the westmost one often reads as nearest while a wall blocks line of sight — the
+// bot picks it, cannot hit it, and dances. Engage east-to-west, nearest breaking ties.
+export interface TargetLike {
+    x: number;
+    distance: number;
+}
+
+export function eastFirst(a: TargetLike, b: TargetLike): number {
+    return b.x - a.x || a.distance - b.distance;
+}
+
 export type Room = 'west' | 'east';
 export const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
 export const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, RETREAT_MS, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, eastFirst, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, RETREAT_MS, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -146,6 +146,31 @@ describe('attackRangeFor', () => {
         const west = [[2562, 9886], [2565, 9887], [2568, 9889]] as const;
         const inRange = west.filter(([x, z]) => Math.max(Math.abs(x - DEFAULT_SAFESPOT.x), Math.abs(z - DEFAULT_SAFESPOT.z)) <= attackRangeFor('range'));
         expect(inRange.length).toBe(west.length);
+    });
+});
+
+// The west giants wander up to 3 tiles, so the westmost can read as nearest while a
+// wall blocks LoS. Distance ordering picks it, cannot hit it, and the bot dances.
+describe('eastFirst', () => {
+    const order = (gs: { x: number; distance: number }[]) => [...gs].sort(eastFirst).map(g => g.x);
+
+    test('orders the three west giants east to west regardless of distance', () => {
+        expect(order([
+            { x: 2562, distance: 2 },
+            { x: 2568, distance: 9 },
+            { x: 2565, distance: 5 }
+        ])).toEqual([2568, 2565, 2562]);
+    });
+    test('the westmost giant is never picked first even when it is closest', () => {
+        expect(order([{ x: 2562, distance: 1 }, { x: 2568, distance: 8 }])[0]).toBe(2568);
+    });
+    test('equal x falls back to nearest', () => {
+        const sorted = [{ x: 2568, distance: 7 }, { x: 2568, distance: 3 }].sort(eastFirst);
+        expect(sorted[0].distance).toBe(3);
+    });
+    test('is a stable total order — sorting twice is idempotent', () => {
+        const gs = [{ x: 2565, distance: 4 }, { x: 2568, distance: 6 }, { x: 2562, distance: 1 }];
+        expect(order(order(gs).map(x => gs.find(g => g.x === x)!))).toEqual([2568, 2565, 2562]);
     });
 });
 

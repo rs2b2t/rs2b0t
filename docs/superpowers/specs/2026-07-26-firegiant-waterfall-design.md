@@ -117,7 +117,8 @@ MossGiant's schema verbatim — `combatStyle`, `meleeStyle`, `staff`, `spell`, `
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `safespotTile` | tile | `2568,9893` | `showIf` range/mage |
+| `safespotTile` | tile | `2568,9892` | forward spot, `showIf` range/mage |
+| `safespotFallbackTile` | tile | `2568,9893` | melee-proof retreat, `showIf` range/mage |
 | `meleeTile` | tile | `2575,9893` | `showIf` melee |
 | `escapeTele` | string | `Camelot` | Camelot / Ardougne / Falador / Varrock |
 | `bankTile` | tile | `2725,3491` | Seers; the default tracks `escapeTele` (below) |
@@ -231,6 +232,13 @@ Safespotting therefore engages a giant only once it is already within weapon ran
 **`leashing fire giant`** stage: hold the tile, keep eating if needed, and poll until the giant
 closes. If it never arrives inside `LEASH_WAIT_MS` (15s) it is skipped for 20s and the bot picks
 another. Melee is unaffected — it walks to its targets by design.
+
+### Target order: east to west
+
+Distance is the wrong ordering in the west room. The giants wander up to 3 tiles, so the westmost
+one frequently reads as nearest while a wall blocks line of sight — the bot picks it, cannot hit it,
+and dances. Safespotting sorts by **x descending** (`eastFirst`), nearest breaking ties, so the
+three west giants are engaged 2568 → 2565 → 2562. Melee keeps the plain nearest-first sort.
 
 ### Room-gated targeting
 

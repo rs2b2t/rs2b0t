@@ -32,7 +32,7 @@ import { Locs } from '../api/queries/Locs.js';
 import {
     AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, RETREAT_MS, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    attackRangeFor, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    attackRangeFor, eastFirst, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
@@ -806,9 +806,10 @@ class Fight implements Task {
             }
 
             const now = performance.now();
-            const target = giants
-                .filter(g => !usesSafespot() || (this.skip.get(g.index) ?? 0) < now)
-                .sort((a, b) => a.distance() - b.distance())[0];
+            const candidates = giants.filter(g => !usesSafespot() || (this.skip.get(g.index) ?? 0) < now);
+            const target = usesSafespot()
+                ? candidates.sort((a, b) => eastFirst({ x: a.tile().x, distance: a.distance() }, { x: b.tile().x, distance: b.distance() }))[0]
+                : candidates.sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
                 await Execution.delayTicks(2);
                 return;
