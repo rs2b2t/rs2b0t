@@ -31,11 +31,34 @@ const HOSTILE_EVENT_NPC_IDS = new Set<number>([
 ]);
 
 const GAS_CHEST_LOC_ID = 2141;
-const WHIRLPOOL_NPC_IDS = [403, 404, 405];
+/** Whirlpool fishing-spot variants (macro). 406 is the fourth changetype id. */
+const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
 const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fly fishing rod', 'harpoon', 'lobster pot'];
 const GEAR_LOSS_WINDOW_MS = 90_000;
+/** Hostile fishing/mining randoms (river troll, rock golem, …) often open from a
+ *  few tiles out. Detect by id within this range when they face/attack us, not
+ *  only when already adjacent — fishers were dying before distance<=1 fired. */
+const HOSTILE_ENGAGE_DISTANCE = 8;
+
+export function isHostileEventNpc(npc: {
+    id: number;
+    inCombat: boolean;
+    distance: number;
+    faceEntity: number;
+}, selfSlot: number, playerInCombat: boolean): boolean {
+    if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
+        return false;
+    }
+    if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
+        return false;
+    }
+    const targetsMe = selfSlot >= 0 && npc.faceEntity >= 32768 && npc.faceEntity - 32768 === selfSlot;
+    // Swarm may never flip our combat flag (0 damage); key on the NPC attacking,
+    // facing us, standing on us, or us already being in combat near one.
+    return npc.inCombat || targetsMe || npc.distance <= 1 || playerInCombat;
+}
 
 export class GearLossTracker {
     private held = new Set<string>();
@@ -183,8 +206,10 @@ class RandomEventsImpl {
             }
         }
 
+        const selfSlot = reader.selfSlot();
+        const playerInCombat = Game.inCombat();
         for (const npc of reader.npcs()) {
-            if (HOSTILE_EVENT_NPC_IDS.has(npc.id) && (npc.inCombat || npc.distance <= 1)) {
+            if (isHostileEventNpc(npc, selfSlot, playerInCombat)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
         }

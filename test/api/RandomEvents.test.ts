@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { GearLossTracker, handleLocation, pickSacrificial } from '#/bot/api/RandomEvents.js';
+import { GearLossTracker, handleLocation, isHostileEventNpc, pickSacrificial } from '#/bot/api/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -62,5 +62,44 @@ describe('GearLossTracker', () => {
         t.update([], false, 0);
         t.update([], false, 1000);
         expect(t.recentlyLost('big fishing net', 1500)).toBe(false);
+    });
+});
+
+describe('isHostileEventNpc', () => {
+    // River troll level-1 id = 391; faceEntity player encoding = 32768 + slot
+    const riverTroll = (over: Partial<{ id: number; inCombat: boolean; distance: number; faceEntity: number }> = {}) => ({
+        id: 391,
+        inCombat: false,
+        distance: 4,
+        faceEntity: -1,
+        ...over
+    });
+
+    test('adjacent hostile is always an event', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 1 }), 3, false)).toBe(true);
+    });
+
+    test('hostile facing the local player within engage range is an event', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: 32768 + 3 }), 3, false)).toBe(true);
+    });
+
+    test('hostile already in combat within engage range is an event', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 6, inCombat: true }), 3, false)).toBe(true);
+    });
+
+    test('player already in combat near a hostile is an event (swarm 0-dmg case)', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 3 }), 3, true)).toBe(true);
+    });
+
+    test('hostile far away is ignored until it closes', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 12, faceEntity: 32768 + 3 }), 3, false)).toBe(false);
+    });
+
+    test('non-hostile id is never an event', () => {
+        expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
+    });
+
+    test('hostile not facing us and not adjacent is ignored when we are calm', () => {
+        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1 }), 3, false)).toBe(false);
     });
 });

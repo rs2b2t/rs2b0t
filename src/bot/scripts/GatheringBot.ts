@@ -18,7 +18,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, bestPickaxe, resolveRockIds } from './MiningRocks.js';
-import { FISHING_METHOD_OPTIONS, WHIRLPOOL_IDS, resolveFishMethod } from './FishingMethods.js';
+import { FISHING_METHOD_OPTIONS, WHIRLPOOL_IDS, resolveFishMethod, spotMatchesMethod } from './FishingMethods.js';
 import { Banking } from '../api/Banking.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
@@ -30,8 +30,40 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 10, min: 2, max: 30, label: 'Leash radius (tiles)' }
 };
 
-export function shouldYieldGathering(eventPending: boolean, inventoryFull: boolean, dialogPending: boolean, targetMissing: boolean): boolean {
-    return eventPending || inventoryFull || dialogPending || targetMissing;
+/** Interrupt an active gather wait so the Supervisor / bank / dialog tasks can run. */
+export function shouldYieldGathering(
+    eventPending: boolean,
+    inventoryFull: boolean,
+    dialogPending: boolean,
+    targetGone: boolean,
+    inCombat = false
+): boolean {
+    return eventPending || inventoryFull || dialogPending || targetGone || inCombat;
+}
+
+/**
+ * Fishing-session end conditions while we believe we are still on a spot.
+ * Spot hop / whirlpool swap / combat / event must break the wait even if the
+ * player anim is still playing (harpoon anims linger between catches).
+ */
+export function fishingSessionBroken(opts: {
+    eventPending: boolean;
+    inventoryFull: boolean;
+    dialogPending: boolean;
+    inCombat: boolean;
+    spotGone: boolean;
+    spotMoved: boolean;
+    becameWhirlpool: boolean;
+}): boolean {
+    return (
+        opts.eventPending ||
+        opts.inventoryFull ||
+        opts.dialogPending ||
+        opts.inCombat ||
+        opts.spotGone ||
+        opts.spotMoved ||
+        opts.becameWhirlpool
+    );
 }
 
 export default class GatheringBot extends TaskBot {
@@ -56,7 +88,7 @@ export default class GatheringBot extends TaskBot {
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
     private gearKeep: string[] = [];
-    private fishSpotIds: number[] = [];
+    private fishing = false;
 
     private rejected = new Set<string>();
     private cooldownUntil = new Map<string, number>();
@@ -84,9 +116,9 @@ export default class GatheringBot extends TaskBot {
             this.targetType = 'npc';
             this.target = 'Fishing spot';
             this.action = method.op;
-            this.pairOp = method.pair ?? '';
+            this.pairOp = method.pair;
             this.gearKeep = method.gear;
-            this.fishSpotIds = method.spotIds ?? [];
+            this.fishing = true;
             this.productKeywords = ['raw'];
         } else {
             this.productKeywords = [this.dropMatch];
@@ -107,7 +139,8 @@ export default class GatheringBot extends TaskBot {
         } else if (!powerMode) {
             this.log('no preset location — will web-walk to the nearest bank');
         }
-        this.log(`gathering '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.productLabel()}* when full`);
+        const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
+        this.log(`gathering '${this.target}' (${this.action}${pairNote}) within ${this.leash} of ${this.anchor}, ${powerMode ? 'dropping' : 'banking'} *${this.productLabel()}* when full`);
 
         this.on('inventory.changed', e => {
             if (e.id === -1) {
@@ -121,7 +154,17 @@ export default class GatheringBot extends TaskBot {
             }
         });
 
-        this.add(new ContinueDialog(), ...(this.mining() ? [new ReplacePickaxe(this)] : []), powerMode ? new DropProduct(this) : new BankCatch(this), new Gather(this), new ReturnToAnchor(this));
+        this.add(
+            new ContinueDialog(),
+            ...(this.mining() ? [new ReplacePickaxe(this)] : []),
+            powerMode ? new DropProduct(this) : new BankCatch(this),
+            new Gather(this),
+            new ReturnToAnchor(this)
+        );
+    }
+
+    override recoveryAnchor(): Tile | null {
+        return this.anchor;
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -166,6 +209,9 @@ export default class GatheringBot extends TaskBot {
     isNpc(): boolean {
         return this.targetType === 'npc';
     }
+    isFishing(): boolean {
+        return this.fishing;
+    }
     pairAction(): string {
         return this.pairOp;
     }
@@ -180,8 +226,21 @@ export default class GatheringBot extends TaskBot {
     mining(): boolean {
         return this.rockIds.size > 0;
     }
-    matchesSpot(id: number): boolean {
-        return this.fishSpotIds.length === 0 || this.fishSpotIds.includes(id);
+    /** Spot must offer both the primary op and its pair (Cage/Harpoon vs Net/Harpoon). */
+    matchesSpot(actions: readonly string[]): boolean {
+        if (!this.pairOp) {
+            return actions.some(a => a.toLowerCase() === this.action.toLowerCase());
+        }
+        return spotMatchesMethod(actions, { op: this.action, pair: this.pairOp });
+    }
+    hasGear(): boolean {
+        if (this.gearKeep.length === 0) {
+            return true;
+        }
+        return this.gearKeep.every(g => Inventory.contains(g));
+    }
+    gearLabel(): string {
+        return this.gearKeep.join(' + ');
     }
 
     shouldDeposit(name: string): boolean {
@@ -349,44 +408,96 @@ class ReplacePickaxe implements Task {
 class Gather implements Task {
     constructor(private bot: GatheringBot) {}
 
-    private find() {
+    private findSpot() {
         const anchor = this.bot.getAnchor();
         const within = this.bot.leashRadius();
-        if (this.bot.isNpc()) {
-            const pair = this.bot.pairAction().toLowerCase();
-            return Npcs.query()
-                .name(this.bot.targetName())
-                .action(this.bot.actionName())
-                .where(n => n.tile().distanceTo(anchor) <= within && this.bot.usable(keyOf(n.tile())) && !WHIRLPOOL_IDS.has(n.id) && this.bot.matchesSpot(n.id) && (pair === '' || n.actions().some(a => a.toLowerCase() === pair)))
-                .nearest();
-        }
+        return Npcs.query()
+            .name(this.bot.targetName())
+            .where(
+                n =>
+                    n.tile().distanceTo(anchor) <= within &&
+                    this.bot.usable(keyOf(n.tile())) &&
+                    !WHIRLPOOL_IDS.has(n.id) &&
+                    this.bot.matchesSpot(n.actions())
+            )
+            .nearest();
+    }
+
+    private findRock() {
+        const anchor = this.bot.getAnchor();
+        const within = this.bot.leashRadius();
         return Locs.query()
             .name(this.bot.targetName())
             .action(this.bot.actionName())
-            .where(l => l.distance() >= 1 && l.tile().distanceTo(anchor) <= within && this.bot.matchesRock(l.id) && !GAS_ROCK_IDS.has(l.id) && this.bot.usable(keyOf(l.tile())))
+            .where(
+                l =>
+                    l.distance() >= 1 &&
+                    l.tile().distanceTo(anchor) <= within &&
+                    this.bot.matchesRock(l.id) &&
+                    !GAS_ROCK_IDS.has(l.id) &&
+                    this.bot.usable(keyOf(l.tile()))
+            )
             .nearest();
     }
 
     validate(): boolean {
-        return !Inventory.isFull() && this.find() !== null;
+        if (Inventory.isFull() || Game.inCombat() || EventSignal.pending()) {
+            return false;
+        }
+        // Missing gear still validates so execute can surface a status (big fish / banked tool).
+        if (this.bot.isFishing() && !this.bot.hasGear()) {
+            return true;
+        }
+        // Already mid-action (e.g. harpoon anim between catches) — keep the session
+        // alive without re-clicking, which is what stuck tuna/swordfish on a dead spot.
+        if (this.bot.isFishing() && Game.animating()) {
+            return true;
+        }
+        return this.bot.isNpc() ? this.findSpot() !== null : this.findRock() !== null;
     }
 
     private gasAt(t: Tile): boolean {
-        return Locs.query()
-            .where(l => {
-                const lt = l.tile();
-                return lt.x === t.x && lt.z === t.z && GAS_ROCK_IDS.has(l.id);
-            })
-            .nearest() !== null;
+        return (
+            Locs.query()
+                .where(l => {
+                    const lt = l.tile();
+                    return lt.x === t.x && lt.z === t.z && GAS_ROCK_IDS.has(l.id);
+                })
+                .nearest() !== null
+        );
     }
 
-    private activeSpotMoved(from: Tile): boolean {
-        const s = this.find();
-        return s !== null && !s.tile().equals(from);
+    /** Live snapshot of the NPC we clicked, by index (survives tile hops of other spots). */
+    private spotByIndex(index: number) {
+        return Npcs.query()
+            .where(n => n.index === index)
+            .nearest();
     }
 
-    private shouldYield(): boolean {
-        return shouldYieldGathering(EventSignal.pending(), Inventory.isFull(), ChatDialog.canContinue(), this.find() === null);
+    private fishingBroken(index: number, startTile: Tile): boolean {
+        const live = this.spotByIndex(index);
+        const spotGone = live === null;
+        const spotMoved = live !== null && !live.tile().equals(startTile);
+        const becameWhirlpool = live !== null && WHIRLPOOL_IDS.has(live.id);
+        return fishingSessionBroken({
+            eventPending: EventSignal.pending(),
+            inventoryFull: Inventory.isFull(),
+            dialogPending: ChatDialog.canContinue(),
+            inCombat: Game.inCombat(),
+            spotGone,
+            spotMoved,
+            becameWhirlpool
+        });
+    }
+
+    private shouldYieldMine(tile: Tile): boolean {
+        return shouldYieldGathering(
+            EventSignal.pending(),
+            Inventory.isFull(),
+            ChatDialog.canContinue(),
+            this.findRock() === null || this.gasAt(tile),
+            Game.inCombat()
+        );
     }
 
     private async fleeGas(key: string, tile: Tile): Promise<void> {
@@ -397,17 +508,130 @@ class Gather implements Task {
         await Execution.delayTicks(2);
     }
 
+    private async fleeWhirlpool(tile: Tile): Promise<void> {
+        this.bot.log(`whirlpool at ${tile} — stepping off (do not re-click)`);
+        this.bot.setStatus('whirlpool — stepping away');
+        this.bot.cooldown(keyOf(tile), 70);
+        DirectNavigator.walk(this.bot.getAnchor());
+        await Execution.delayTicks(2);
+    }
+
     async execute(): Promise<void> {
-        const target = this.find();
+        if (this.bot.isFishing() && !this.bot.hasGear()) {
+            this.bot.setStatus(`missing gear: ${this.bot.gearLabel()}`);
+            this.bot.log(`can't fish — missing ${this.bot.gearLabel()} (big fish / bank?)`);
+            await Execution.delayTicks(5);
+            return;
+        }
+
+        if (Game.inCombat() || EventSignal.pending()) {
+            return;
+        }
+
+        if (this.bot.isFishing()) {
+            await this.executeFish();
+            return;
+        }
+        await this.executeMine();
+    }
+
+    private async executeFish(): Promise<void> {
+        // Resume an in-progress session only if we can still identify the spot under us.
+        // Otherwise click a fresh matching Cage/Harpoon or Net/Harpoon spot.
+        const target = this.findSpot();
+        if (!target && Game.animating()) {
+            // Animating with no matching spot nearby — wait for anim to end rather than thrash.
+            this.bot.setStatus('waiting for fishing anim to finish');
+            await Execution.delayUntil(
+                () => !Game.animating() || EventSignal.pending() || Inventory.isFull() || Game.inCombat() || ChatDialog.canContinue(),
+                8000
+            );
+            return;
+        }
         if (!target) {
             return;
         }
-        const key = keyOf(target.tile());
 
-        const npc = this.bot.isNpc();
+        const index = target.index;
+        const startTile = target.tile();
+        const key = keyOf(startTile);
 
         if (!Game.animating()) {
-            this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${target.tile()}`);
+            this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${startTile}`);
+            const before = Inventory.used();
+            if (!(await target.interact(this.bot.actionName()))) {
+                this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
+                await Execution.delayTicks(2);
+                return;
+            }
+
+            // Wait for the first swing / catch / interrupt. Do NOT treat "another
+            // matching spot exists elsewhere" as success — that was the tuna stuck loop.
+            await Execution.delayUntil(
+                () => Inventory.used() > before || Game.animating() || this.fishingBroken(index, startTile),
+                12000
+            );
+
+            const live = this.spotByIndex(index);
+            if (live && WHIRLPOOL_IDS.has(live.id)) {
+                await this.fleeWhirlpool(live.tile());
+                return;
+            }
+            if (this.fishingBroken(index, startTile) && Inventory.used() === before && !Game.animating()) {
+                if (ChatDialog.canContinue()) {
+                    this.bot.reject(key);
+                }
+                return;
+            }
+            if (Inventory.used() === before && !Game.animating()) {
+                // Click did nothing (pathing fail / level / no bait). Brief cooldown.
+                this.bot.cooldown(key, 4);
+                return;
+            }
+        }
+
+        // Hold the session while animating / catching. Break on hop, whirlpool,
+        // combat, event, full pack, or a long silent gap with no anim.
+        for (let guard = 0; guard < 200; guard++) {
+            if (this.fishingBroken(index, startTile)) {
+                const live = this.spotByIndex(index);
+                if (live && WHIRLPOOL_IDS.has(live.id)) {
+                    await this.fleeWhirlpool(live.tile());
+                }
+                return;
+            }
+            const mark = Inventory.used();
+            await Execution.delayUntil(
+                () => Inventory.used() > mark || !Game.animating() || this.fishingBroken(index, startTile),
+                8000
+            );
+            if (this.fishingBroken(index, startTile)) {
+                const live = this.spotByIndex(index);
+                if (live && WHIRLPOOL_IDS.has(live.id)) {
+                    await this.fleeWhirlpool(live.tile());
+                }
+                return;
+            }
+            if (Inventory.used() > mark) {
+                continue;
+            }
+            if (!Game.animating()) {
+                // Idle gap — session over; next loop will re-find.
+                return;
+            }
+        }
+    }
+
+    private async executeMine(): Promise<void> {
+        const target = this.findRock();
+        if (!target) {
+            return;
+        }
+        const tile = target.tile();
+        const key = keyOf(tile);
+
+        if (!Game.animating()) {
+            this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${tile}`);
             const before = Inventory.used();
             if (!(await target.interact(this.bot.actionName()))) {
                 this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
@@ -416,18 +640,17 @@ class Gather implements Task {
             }
 
             await Execution.delayUntil(
-                () => Inventory.used() > before || Game.animating() || this.shouldYield() || this.gasAt(target.tile()) || (npc && this.activeSpotMoved(target.tile())),
+                () => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile),
                 12000
             );
-            if (this.gasAt(target.tile())) {
-                await this.fleeGas(key, target.tile());
+            if (this.gasAt(tile)) {
+                await this.fleeGas(key, tile);
                 return;
             }
-
             if (Inventory.used() === before && !Game.animating()) {
                 if (ChatDialog.canContinue()) {
                     this.bot.reject(key);
-                } else if (!npc && this.find() !== null) {
+                } else if (this.findRock() !== null) {
                     this.bot.cooldown(key);
                 }
                 return;
@@ -435,23 +658,26 @@ class Gather implements Task {
         }
 
         for (let guard = 0; guard < 200; guard++) {
-            if (this.shouldYield()) {
+            if (this.shouldYieldMine(tile)) {
+                if (this.gasAt(tile)) {
+                    await this.fleeGas(key, tile);
+                }
                 return;
             }
             const mark = Inventory.used();
             await Execution.delayUntil(
-                () => Inventory.used() > mark || !Game.animating() || this.shouldYield() || this.gasAt(target.tile()),
+                () => Inventory.used() > mark || !Game.animating() || this.shouldYieldMine(tile),
                 8000
             );
-            if (this.gasAt(target.tile())) {
-                await this.fleeGas(key, target.tile());
+            if (this.gasAt(tile)) {
+                await this.fleeGas(key, tile);
                 return;
             }
             if (Inventory.used() > mark) {
                 continue;
             }
             if (!Game.animating()) {
-                if (!npc && this.find() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
+                if (this.findRock() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
                     this.bot.cooldown(key);
                 }
                 return;
