@@ -19,6 +19,16 @@ export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
 // The giant chambers split cleanly on x: west spawns top out at 2568, east ones
 // start at 2573. Distance cannot separate them — from the safespot the nearest east
 // giant is closer than two of the three west ones — so targeting is gated on room.
+// Clicking Attack on a giant beyond weapon range makes the server walk you into
+// range, which steps off the safespot — so a target is only engaged once it is
+// already close enough to hit from where you stand. Bow figure is the short-bow
+// one, which is safe for long bows too; melee just needs adjacency.
+export const ATTACK_RANGE: Record<string, number> = { melee: 1, range: 7, mage: 10 };
+
+export function attackRangeFor(style: string): number {
+    return ATTACK_RANGE[style] ?? 1;
+}
+
 export type Room = 'west' | 'east';
 export const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
 export const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };

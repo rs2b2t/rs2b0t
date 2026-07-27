@@ -215,6 +215,18 @@ as well as 2568,9889 at d=3), which is tempting for kill rate — but unlike 989
 fits with its **origin on that tile**, so a giant can reach you there. The safespot stays at 9893.
 Anything moved south of it trades the whole point of the tile for throughput.
 
+### Leashing stage
+
+`interact('Attack')` on a giant beyond weapon range makes the **server walk you into range**, which
+steps off the safespot; `ReturnToSafespot` then drags you back before the shot leaves, the giant is
+marked skipped for 8s, and the bot ping-pongs without ever attacking.
+
+Safespotting therefore engages a giant only once it is already within weapon range — bow 7, magic
+10 (`attackRangeFor`), both shorter than `FIELD_RADIUS` 10. Anything further puts the bot in a
+**`leashing fire giant`** stage: hold the tile, keep eating if needed, and poll until the giant
+closes. If it never arrives inside `LEASH_WAIT_MS` (15s) it is skipped for 20s and the bot picks
+another. Melee is unaffected — it walks to its targets by design.
+
 ### Room-gated targeting
 
 The chambers overlap inside `FIELD_RADIUS`: from the safespot, 8 of the 10 spawns are within 10

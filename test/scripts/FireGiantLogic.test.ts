@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -107,6 +107,28 @@ describe('DEFAULT_SAFESPOT', () => {
     // so a giant can reach it. 9893 is the live-verified melee-proof nook.
     test('is 2568,9893, not the reachable tile one south', () => {
         expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9893, 0]);
+    });
+});
+
+// Clicking a giant beyond weapon range makes the server walk you into range, which
+// steps off the safespot; ReturnToSafespot then drags you back before the shot
+// leaves, and the bot ping-pongs without ever attacking. Engage only within range.
+describe('attackRangeFor', () => {
+    test('bow reaches 7, magic 10, melee 1', () => {
+        expect(attackRangeFor('range')).toBe(7);
+        expect(attackRangeFor('mage')).toBe(10);
+        expect(attackRangeFor('melee')).toBe(1);
+    });
+    test('an unknown style falls back to adjacency rather than a long walk', () => {
+        expect(attackRangeFor('sailing')).toBe(1);
+    });
+    test('is shorter than FIELD_RADIUS, so some in-field giants must be leashed first', () => {
+        expect(attackRangeFor('range')).toBeLessThan(10);
+    });
+    test('the west giants sit inside bow range of the safespot', () => {
+        const west = [[2562, 9886], [2565, 9887], [2568, 9889]] as const;
+        const inRange = west.filter(([x, z]) => Math.max(Math.abs(x - DEFAULT_SAFESPOT.x), Math.abs(z - DEFAULT_SAFESPOT.z)) <= attackRangeFor('range'));
+        expect(inRange.length).toBe(west.length);
     });
 });
 

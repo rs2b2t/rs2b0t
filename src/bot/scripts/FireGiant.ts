@@ -32,11 +32,14 @@ import { Locs } from '../api/queries/Locs.js';
 import {
     AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    attackRangeFor, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
 const FIELD_RADIUS = 10;
+
+const LEASH_WAIT_MS = 15_000;
+const LEASH_SKIP_MS = 20_000;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
@@ -787,6 +790,13 @@ class Fight implements Task {
                 return;
             }
 
+            if (usesSafespot() && target.distance() > attackRangeFor(STYLE)) {
+                if (!(await this.leash(target.index))) {
+                    this.skip.set(target.index, performance.now() + LEASH_SKIP_MS);
+                }
+                continue;
+            }
+
             await target.interact('Attack');
             this.targetIdx = target.index;
             await Execution.delayUntil(() => Game.inCombat() || (usesSafespot() && !atSafespot()) || fieldGiants().length === 0, 3000);
@@ -796,6 +806,38 @@ class Fight implements Task {
                 continue;
             }
         }
+    }
+
+    // Hold the tile while the giant closes. Clicking it from here would make the
+    // server walk us into range and ReturnToSafespot would drag us back before the
+    // shot leaves, which is the back-and-forth this replaces. False = it never came.
+    private async leash(idx: number): Promise<boolean> {
+        this.bot.setStatus('leashing fire giant');
+        const deadline = performance.now() + LEASH_WAIT_MS;
+        while (performance.now() < deadline) {
+            if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue()) {
+                return true;
+            }
+            if (hpFrac() < EAT_HP && hasFood()) {
+                await eatOnce(this.bot);
+                continue;
+            }
+            if (!atSafespot()) {
+                if (!(await quickReturnToSafespot(this.bot))) {
+                    return true;
+                }
+                continue;
+            }
+            const giant = fieldGiants().find(g => g.index === idx);
+            if (!giant) {
+                return true;
+            }
+            if (giant.distance() <= attackRangeFor(STYLE)) {
+                return true;
+            }
+            await Execution.delayTicks(1);
+        }
+        return false;
     }
 }
 
