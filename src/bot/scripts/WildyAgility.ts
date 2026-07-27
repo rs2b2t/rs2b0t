@@ -459,6 +459,9 @@ export default class WildyAgility extends TaskBot {
     }
     markEscapedPit(): void {
         this.justEscapedPit = true;
+        // Escape/climb time is not "idle between obstacles" — stamp so gap
+        // diagnostics and any residual timeout math start from recovery, not the fall.
+        this.lastClearedTick = Game.tick();
     }
     clearEscapedPit(): void {
         this.justEscapedPit = false;
@@ -680,13 +683,36 @@ class RunLap implements Task {
     }
 
     async execute(): Promise<void> {
-        let obstacle = this.find(this.bot.currentName());
+        const name = this.bot.currentName();
+
+        // Approach BEFORE finding/clicking/timing. Pit ladder exits and lap wraps
+        // (rocks → pipe) are far from the next start tile; counting that walk against
+        // OBSTACLE_TIMEOUT_TICKS caused false "no progress" retries and inflated
+        // "cleared in N ticks" / gap logs mid-recovery.
+        const escapedPit = this.bot.justEscapedPit;
+        if (escapedPit) {
+            this.bot.clearEscapedPit();
+            this.bot.log(`just escaped pit — walking to '${name}' starting side before clicking`);
+        }
+        if (escapedPit || !this.nearStart(name, 2)) {
+            await this.walkToStartTile(name);
+            if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
+                return;
+            }
+            // Still in a high-z pit (failed climb / re-fell) — let PitEscape own it.
+            const here = Game.tile();
+            if (here !== null && inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
+                return;
+            }
+        }
+
+        let obstacle = this.find(name);
         if (!obstacle) {
             // Resync earliest-visible obstacle in course order (not nearest) so
             // death recovery near the entrance doesn't jump to rocks.
-            for (const name of this.bot.courseNames()) {
-                if (this.find(name) && this.bot.resyncTo(name)) {
-                    obstacle = this.find(name);
+            for (const courseName of this.bot.courseNames()) {
+                if (this.find(courseName) && this.bot.resyncTo(courseName)) {
+                    obstacle = this.find(courseName);
                     this.stuck = 0;
                     break;
                 }
@@ -703,35 +729,28 @@ class RunLap implements Task {
             return;
         }
 
-        const mark = GameMessages.mark();
-        const startTick = Game.tick();
-        this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
-        const gapTicks = startTick - this.bot.lastClearedTick;
-        if (gapTicks > OBSTACLE_TIMEOUT_TICKS) {
+        // Soft diagnostic only — never delay the click for a gap after recovery walks.
+        const gapTicks = Game.tick() - this.bot.lastClearedTick;
+        if (!escapedPit && gapTicks > OBSTACLE_TIMEOUT_TICKS * 2) {
             this.bot.log(`gap ${gapTicks} ticks since last obstacle`);
-            // After a long gap (ridge / pit escape), let pending XP settle first.
-            await Execution.delayTicks(1);
         }
-        const before = Skills.xp('agility');
 
-        // After pit escape the ladder exit is far from the failed obstacle.
-        // Clear the flag immediately so it cannot stick across a failed walk/death.
-        if (this.bot.justEscapedPit) {
-            this.bot.clearEscapedPit();
-            this.bot.log(`just escaped pit — walking to '${this.bot.currentName()}' starting side before clicking`);
-            await this.walkToStartTile(obstacle.name?.toLowerCase() ?? this.bot.currentName());
-        }
+        const mark = GameMessages.mark();
+        const before = Skills.xp('agility');
+        this.bot.setStatus(`${op} ${obstacle.name} at ${obstacle.tile()}`);
 
         if (!(await obstacle.interact(op))) {
             await Execution.delayTicks(2);
             return;
         }
 
-        // Tick-based wait: XP, pit entry, or known chat lines settle the attempt.
-        let ticksWaited = 0;
+        // Timeout starts at the click, not at task entry / approach.
+        const clickTick = Game.tick();
+        let idleTicks = 0;
         let lowHp = false;
         let settled = false;
-        while (ticksWaited < OBSTACLE_TIMEOUT_TICKS) {
+        let lastTile = Game.tile();
+        while (idleTicks < OBSTACLE_TIMEOUT_TICKS) {
             const t = Game.tile();
             if (Skills.xp('agility') > before) {
                 settled = true;
@@ -763,8 +782,18 @@ class RunLap implements Task {
                 settled = true;
                 break;
             }
+
             await Execution.delayTicks(1);
-            ticksWaited++;
+
+            // Only idle time counts toward timeout. Walking onto the obstacle or
+            // mid-agility animation is still progress — do not premature-retry.
+            const now = Game.tile();
+            const moved =
+                !!now && !!lastTile && (now.x !== lastTile.x || now.z !== lastTile.z || now.level !== lastTile.level);
+            if (!Game.animating() && !moved) {
+                idleTicks++;
+            }
+            lastTile = now ?? lastTile;
         }
 
         if (EventSignal.pending()) {
@@ -778,6 +807,9 @@ class RunLap implements Task {
             if (t !== null && inPit(t, COURSE_CENTRE, PIT_Z_GAP)) {
                 this.bot.log(`fell into the pit during '${this.bot.currentName()}' — escaping`);
                 this.bot.setStatus('in the pit — escaping');
+                // Fall is a real outcome, not a stuck click — reset so recovery
+                // does not inherit a half-spent retry counter.
+                this.stuck = 0;
                 return;
             }
         }
@@ -795,13 +827,13 @@ class RunLap implements Task {
         });
 
         if (reason === 'timeout') {
-            this.bot.setStatus(`timeout waiting for ${obstacle.name} (${ticksWaited} ticks)`);
+            this.bot.setStatus(`timeout waiting for ${obstacle.name} (${idleTicks} idle ticks)`);
         }
 
         if (reason === 'xp') {
             this.stuck = 0;
             this.bot.countCleared();
-            const elapsed = Game.tick() - startTick;
+            const elapsed = Game.tick() - clickTick;
             this.bot.log(`cleared '${this.bot.currentName()}' in ${elapsed} ticks`);
             this.bot.obstacleTimes.push(elapsed);
             if (this.bot.obstacleTimes.length > 20) {
@@ -809,12 +841,16 @@ class RunLap implements Task {
             }
             this.bot.lastClearedTick = Game.tick();
             this.bot.advance();
-            await Execution.delay(reactionMs());
+            // Animation-aware settle so the next obstacle is not clicked mid-finish.
+            await this.settleAfterObstacle();
             return;
         }
 
-        // low_hp intentionally falls through: the wait yields so EatFood can run on
-        // the next scheduler pass, matching the previous stuck/retry path.
+        // low_hp: yield to EatFood without burning a retry — combat damage is not
+        // an obstacle failure.
+        if (reason === 'low_hp') {
+            return;
+        }
 
         if (reason === 'wrong_side') {
             this.bot.log(`'${this.bot.currentName()}' wrong side error — walking to starting side`);
@@ -824,6 +860,7 @@ class RunLap implements Task {
 
         if (reason === 'pit_fall_msg') {
             this.bot.log(`'${this.bot.currentName()}' fell (no pit) — retrying`);
+            this.stuck = 0;
             await Execution.delayTicks(1);
             return;
         }
@@ -862,6 +899,35 @@ class RunLap implements Task {
             this.bot.setStatus(`retrying ${obstacle.name}`);
             this.bot.log(`'${this.bot.currentName()}' no progress — retrying (${this.stuck}/${LAP_RETRY_LIMIT})`);
             await Execution.delayTicks(2);
+        }
+    }
+
+    private nearStart(obstacleName: string, radius: number): boolean {
+        const start = getStartTile(obstacleName);
+        const here = Game.tile();
+        return !!start && !!here && nearTile(here, start, radius);
+    }
+
+    /** Wait until the player stops moving/animating after a successful clear. */
+    private async settleAfterObstacle(): Promise<void> {
+        // Keep a small humanized pause, then ensure the client is actually idle.
+        await Execution.delay(reactionMs());
+        let last = Game.tile();
+        for (let i = 0; i < 12; i++) {
+            if (this.bot.died || EventSignal.pending() || ChatDialog.canContinue()) {
+                return;
+            }
+            if (Skills.hpFraction() < EAT_AT) {
+                return;
+            }
+            await Execution.delayTicks(1);
+            const now = Game.tile();
+            const moved =
+                !!now && !!last && (now.x !== last.x || now.z !== last.z || now.level !== last.level);
+            if (!moved && !Game.animating()) {
+                return;
+            }
+            last = now ?? last;
         }
     }
 
