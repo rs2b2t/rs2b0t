@@ -3,7 +3,6 @@ import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
-import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
@@ -211,6 +210,18 @@ async function lootOnce(bot: FireGiant): Promise<boolean> {
     return false;
 }
 
+function checkPrereqs(bot: FireGiant): boolean {
+    if (Quests.status('Waterfall Quest') === 'notStarted') {
+        bot.parkFor('the Waterfall Quest is not started — the log raft refuses to launch. Talk to Almera at 2515,3495, then restart.');
+        return false;
+    }
+    if (!hasAmulet() && Inventory.isFull()) {
+        bot.parkFor(`no ${AMULET} and the pack is full — free a slot so it can be withdrawn.`);
+        return false;
+    }
+    return true;
+}
+
 function ledgeDoor() {
     return Locs.query()
         .name(LEDGE_LOC)
@@ -229,6 +240,16 @@ async function useRopeOn(locName: string): Promise<boolean> {
         return false;
     }
     return Boolean(await rope.useOn(target));
+}
+
+class Parked implements Task {
+    constructor(private bot: FireGiant) {}
+    validate(): boolean {
+        return this.bot.parked;
+    }
+    async execute(): Promise<void> {
+        await Execution.delayTicks(10);
+    }
 }
 
 class Eat implements Task {
@@ -415,6 +436,13 @@ async function withdrawEntryKit(bot: FireGiant): Promise<void> {
     }
     if (!hasRope()) {
         await withdrawTo(ROPE, 1);
+    }
+    if (!hasAmulet()) {
+        bot.parkFor(`no ${AMULET} in the bank or on the player — it is required to open the ledge door and cannot be re-obtained without redoing the Waterfall Quest chain.`);
+        return;
+    }
+    if (!hasRope()) {
+        bot.parkFor('no Rope in the bank or on the player — it is required for both the rock and the dead tree. Bank a rope and restart.');
     }
 }
 
@@ -799,7 +827,13 @@ export default class FireGiant extends TaskBot {
         const bankIsDefault = chosenBank.x === ESCAPE_TELES.Camelot.bank.x && chosenBank.z === ESCAPE_TELES.Camelot.bank.z;
         BANK_TILE = bankIsDefault ? TELE.bank : chosenBank;
 
-        this.on('chat.message', e => { if (/oh dear.*you are dead/i.test(e.text)) { this.died = true; } });
+        this.on('chat.message', e => {
+            if (/oh dear.*you are dead/i.test(e.text)) {
+                this.died = true;
+                const where = Game.tile();
+                this.parkFor(`died${where ? ` at ${where.x},${where.z}` : ''}. Gear is on the death pile in the Waterfall Dungeon and ${AMULET} may be with it — re-entry is impossible without it, so the bot stopped rather than burn bank stock.`);
+            }
+        });
 
         this.startedAt = Date.now();
         this.xpAtStart = XP_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
@@ -807,13 +841,8 @@ export default class FireGiant extends TaskBot {
         this.log(`FireGiant — style ${STYLE}${STYLE !== 'melee' ? ` w/ ${WEAPON}` : ''}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), spot ${anchor()}, escape ${TELE.name} tele, bank ${BANK_TILE}${BURY_BONES ? ', burying big bones' : ''}`);
 
         this.add(
+            new Parked(this),
             new ContinueDialog(),
-            new DeathRecovery(this, {
-                anchor: SAFESPOT,
-                radius: 6,
-                onDeath: () => { this.setStatus('died — recovering'); this.log('died! recovering'); },
-                onRecovered: () => { this.died = false; }
-            }),
             new Eat(this),
             new GearEquip(this),
             new SetAttackStyle(this),
@@ -822,9 +851,13 @@ export default class FireGiant extends TaskBot {
             new BuryBones(this),
             new BankRun(this),
             new LootCorpse(this),
+            new EnterDungeon(this),
+            new WalkToSpot(this),
             new ReturnToSafespot(this),
             new Fight(this)
         );
+
+        checkPrereqs(this);
     }
 
     override recoveryAnchor(): Tile | null {
@@ -871,6 +904,9 @@ export default class FireGiant extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#e08b5a' });
         p.title(`FireGiant — ${this.status}`);
+        if (this.parked) {
+            p.text(this.parkReason, '#e0705a');
+        }
 
         const tab = p.tabs('fg', ['Overview', 'Loot']);
         if (tab === 'Overview') {
