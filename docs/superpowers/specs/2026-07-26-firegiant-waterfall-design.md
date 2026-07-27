@@ -20,8 +20,18 @@ All verified against `lostcity-dev/content`, not from memory. Sources:
 |---|---|---|---|
 | 1 | `Log raft` | loc origin 2509,3493 | `op1` Board, from the stand tile 2510,3493. **Refuses unless Waterfall Quest is started** (`%waterfall_quest > 0`). Teleports to 2512,3481. |
 | 2 | `Rock` | 2512,3468 | `Use rope` on it. Requires `inzone(2510,3476 .. 2514,3481)` **and** your z > 3468. Force-moves you to 2513,3468. |
-| 3 | `Overhanging tree` | 2512,3465 | `Use rope` on it, standing 2512,3466. Teleports to the ledge 2511,3463. |
-| 4 | `Door` | 2511,3464 | `op1`. Amulet check is `inv_total(worn,…) > 0 \| inv_total(inv,…) > 0` — **inventory or worn, either works**. Teleports to 2575,9861. |
+| 3 | `Dead tree` | 2512,3465 | `Use rope` on it, standing 2512,3466. Teleports to the ledge 2511,3463. |
+| 4 | `Ledge` | 2511,3464 | `op1` "Open". Amulet check is `inv_total(worn,…) > 0 \| inv_total(inv,…) > 0` — **inventory or worn, either works**. Teleports to 2575,9861. |
+
+Loc names are the engine's, not the wiki's: the tree is **`Dead tree`** (op1 `Climb`) and the door
+is **`Ledge`** (op1 `Open`). The rock keeps the name `Rock` in both its unroped (1996) and roped
+(1997) forms, so a name query matches either.
+
+**Three locs named `Ledge` are spawned side by side** — 2011 at 2510,3464, 2010 at 2511,3464,
+2012 at 2512,3464 — and all three carry `op1=Open`, but **only the middle one (2010) has an
+`oploc1` script**. Clicking either outer leaf silently does nothing. A `nearest()` query from the
+ledge tile can pick an outer leaf and wedge the bot forever, so the door must be selected by
+tile: `.where(l => l.tile().x === 2511 && l.tile().z === 3464)`.
 
 Consequences the bot must respect:
 
@@ -64,7 +74,7 @@ hunting means they are barely aggressive, so unsafespotted melee is also viable.
 ## Architecture
 
 - **`src/bot/scripts/FireGiant.ts`** — the bot. `TaskBot`, MossGiant-shaped.
-- **`src/bot/scripts/WaterfallEntryLogic.ts`** — sibling pure module (`NatureRunnerLogic`
+- **`src/bot/scripts/FireGiantLogic.ts`** — sibling pure module (`NatureRunnerLogic`
   convention): coords, the leg table, and `legFor(tile)`. No client imports, unit-testable.
 - **`src/bot/scripts/index.ts`** — registry entry, category `Combat`.
 - **`tools/firegiant-test.ts`** — live smoke.
@@ -189,7 +199,7 @@ here. Startup failure is a clear log plus park, matching how EssMiner gates on R
 
 ## Testing
 
-- **Unit** — `WaterfallEntryLogic.legFor()`: feed tiles, assert the leg, including the zone
+- **Unit** — `FireGiantLogic.legFor()`: feed tiles, assert the leg, including the zone
   boundaries and the washed-out radius. Pure, no client.
 - **Live smoke** `tools/firegiant-test.ts` — seed with cheats (amulet, rope, quest varp), run
   the chain, assert arrival at 2575,9861, assert a kill, force a bank trip, assert re-entry.
