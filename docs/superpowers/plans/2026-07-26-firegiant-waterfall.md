@@ -14,7 +14,8 @@
 
 - Branch is `firegiant`, already cut from `main` at `a186a4c`. Do not create another.
 - No new dependencies.
-- `bun test` must stay green after every task. `bunx tsc --noEmit` must not gain new errors.
+- `bun test` must not gain failures. **Baseline measured on `main` at `a186a4c`: 953 pass, 1 skip, 1 fail.** The one failure is `test/clues/AcquireTools.test.ts › ensureSpade › walks to the NEARER spawn and takes the spade`, which passes in isolation and only fails in a full run — the known `bun mock.module` cross-file ordering gotcha. Pre-existing and out of scope here. Any task that sees a *second* failure has broken something.
+- `bunx tsc --noEmit` must not gain new errors.
 - `bunx eslint <changed files>` must add zero new warnings.
 - Comments are terse. The repo is deliberately near-comment-free: no rationale, history, or citations in code. A comment earns its place only when the line would otherwise read as a bug.
 - Never use `op1` on `Dead tree` or `Ledge` without first asserting the required item. Both misfires cost 8 HP and teleport the player to 2527,3413.

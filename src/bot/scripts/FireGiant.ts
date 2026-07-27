@@ -167,7 +167,10 @@ function findLoot() {
 }
 
 function keepNames(): string[] {
-    return combatKeepNames({ food: FOOD_NAME, style: STYLE, spell: SPELL, ammo: AMMO, weapon: WEAPON, extra: ['Coins'] });
+    return combatKeepNames({
+        food: FOOD_NAME, style: STYLE, spell: SPELL, ammo: AMMO, weapon: WEAPON,
+        extra: ['Coins', AMULET, ROPE, ...TELE.runes.map(r => r.rune)]
+    });
 }
 
 async function eatOnce(bot: FireGiant): Promise<boolean> {
@@ -301,7 +304,43 @@ class ArmAutocast implements Task {
     }
 }
 
+const MAGIC_TAB = 6;
+
+function hasEscapeRunes(): boolean {
+    return TELE.runes.every(r => Inventory.count(r.rune) >= r.count);
+}
+
+async function castEscape(bot: FireGiant): Promise<boolean> {
+    if (!hasEscapeRunes()) {
+        bot.log(`no ${TELE.name}-teleport runes — cannot leave the dungeon`);
+        return false;
+    }
+    if (Skills.level('magic') < TELE.level) {
+        bot.log(`magic ${Skills.level('magic')} is below the ${TELE.level} needed for the ${TELE.name} teleport`);
+        return false;
+    }
+    bot.setStatus(`teleporting to ${TELE.name}`);
+    if (!(await Game.openSideTab(MAGIC_TAB))) {
+        return false;
+    }
+    actions.ifButton(TELE.com);
+    return Execution.delayUntil(() => !inDungeon(), 8000);
+}
+
 async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void> {
+    if (inDungeon()) {
+        for (let i = 0; i < 3 && inDungeon(); i++) {
+            if (await castEscape(bot)) {
+                bot.log(`teleported out to ${TELE.name}`);
+                break;
+            }
+            await Execution.delayTicks(3);
+        }
+        if (inDungeon()) {
+            bot.parkFor(`stuck in the dungeon: the ${TELE.name} teleport will not fire. Bank ${TELE.runes.map(r => `${r.count} ${r.rune}`).join(' + ')} and check magic level ${TELE.level}.`);
+            return;
+        }
+    }
     if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
         return;
@@ -331,10 +370,32 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     }
 
     await withdrawStyleSupplies(bot);
+    await withdrawEscapeRunes(bot);
+    await withdrawEntryKit(bot);
 
     bot.countBankTrip();
-    bot.setStatus('restocked — walking back to the safespot');
-    await Traversal.walkResilient(SAFESPOT, { radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) });
+    bot.setStatus('restocked — heading back to the waterfall');
+}
+
+async function withdrawEscapeRunes(bot: FireGiant): Promise<void> {
+    for (const { rune, count } of TELE.runes) {
+        const target = count * (TELE_STOCK + 1);
+        if (Inventory.count(rune) < target) {
+            await withdrawTo(rune, target);
+        }
+    }
+    if (!hasEscapeRunes()) {
+        bot.log(`WARNING: bank is short of ${TELE.name}-teleport runes — the next trip cannot leave the dungeon.`);
+    }
+}
+
+async function withdrawEntryKit(bot: FireGiant): Promise<void> {
+    if (!hasAmulet()) {
+        await withdrawTo(AMULET, 1);
+    }
+    if (!hasRope()) {
+        await withdrawTo(ROPE, 1);
+    }
 }
 
 async function withdrawStyleSupplies(bot: FireGiant): Promise<void> {
