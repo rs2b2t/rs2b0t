@@ -16,6 +16,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
@@ -1009,7 +1010,83 @@ class RidgeTestLoop implements Task {
             this.bot.log('ridge test: exited course');
         }
 
-        // Gate open/close is 6 ticks; 12 ticks gives a wide settle margin.
-        await Execution.delayTicks(12);
+        // Gate leaves us in the ridge corridor (north of Door). The next enter's
+        // walkResilient(RIDGE_APPROACH) would Open the Door as a pathfinder
+        // transport — chat/XP fire before attemptRidgeCrossing's mark, so falls
+        // look like silent timeouts. Finish south under script control instead.
+        // (Production never gate-exits; this is test-loop only.)
+        await Execution.delayTicks(2);
+        const corridor = Game.tile();
+        if (corridor && !southOfRidge(corridor)) {
+            await this.returnSouthOfRidge();
+        }
+    }
+
+    /**
+     * Test-loop only: cross the ridge Door southbound with the same chat/XP
+     * detection as enter, then stand on RIDGE_APPROACH without WalkExecutor.
+     */
+    private async returnSouthOfRidge(): Promise<void> {
+        const ridge = findRidge();
+        if (!ridge) {
+            this.bot.setStatus(`ridge test: no '${RIDGE_NAME}' to return south`);
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        const mark = GameMessages.mark();
+        const beforeXp = Skills.xp('agility');
+        this.bot.setStatus(`ridge test: crossing ridge south (${RIDGE_OP} ${ridge.name})`);
+        if (!(await ridge.interact(RIDGE_OP))) {
+            await Execution.delayTicks(2);
+            return;
+        }
+
+        await Execution.delayUntil(() => {
+            if (EventSignal.pending()) {
+                return true;
+            }
+            if (Skills.xp('agility') > beforeXp) {
+                return true;
+            }
+            if (GameMessages.sawSince(mark, RIDGE_SUCCESS)) {
+                return true;
+            }
+            if (GameMessages.sawSince(mark, RIDGE_FAIL)) {
+                return true;
+            }
+            const t = Game.tile();
+            return t !== null && southOfRidge(t);
+        }, RIDGE_TIMEOUT_MS);
+
+        const sawFail = GameMessages.sawSince(mark, RIDGE_FAIL);
+        const outcome = classifyRidge({
+            xpGained: Skills.xp('agility') > beforeXp,
+            successMessage: GameMessages.sawSince(mark, RIDGE_SUCCESS),
+            failMessage: sawFail,
+            inWolfPit: sawFail,
+            interrupted: EventSignal.pending(),
+            settled: true
+        });
+
+        if (outcome === 'interrupted') {
+            this.bot.setStatus('random event — handling');
+            return;
+        }
+
+        if (outcome === 'fail') {
+            this.bot.log('ridge test: fell into the wolf pit on return — recovering to approach');
+        } else if (outcome === 'timeout') {
+            this.bot.log('ridge test: southbound ridge timed out — recovering to approach');
+        } else {
+            this.bot.log('ridge test: back south of ridge');
+        }
+
+        // Already south of the Door (or in the wolf pit beside it): scene-walk only.
+        // walkResilient here would still be safe, but DirectNavigator cannot re-open Door.
+        const stand = Game.tile();
+        if (stand && southOfRidge(stand) && !atRidgeApproach(stand)) {
+            await DirectNavigator.walkTo(RIDGE_APPROACH, 1, 15_000);
+        }
     }
 }
