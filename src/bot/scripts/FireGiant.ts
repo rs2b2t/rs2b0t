@@ -32,7 +32,7 @@ import { Locs } from '../api/queries/Locs.js';
 import {
     AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
-    ROCK_LOC, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
+    ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
@@ -155,10 +155,18 @@ function hasRope(): boolean {
     return Inventory.count(ROPE) > 0;
 }
 
+// Safespotting only ever engages giants sharing the anchor's chamber: the rooms
+// overlap inside FIELD_RADIUS, and the nearest east giant is closer to the west
+// safespot than two of the west ones, so a radius alone drags the bot next door.
+function sameRoomAsAnchor(tile: Tile): boolean {
+    const room = roomOf(anchor());
+    return room === null || roomOf(tile) === room;
+}
+
 function fieldGiants(): Npc[] {
     return Npcs.query()
         .name(TARGET)
-        .where(n => inField(n.tile()) && !n.targetsAnotherPlayer())
+        .where(n => inField(n.tile()) && !n.targetsAnotherPlayer() && (!usesSafespot() || sameRoomAsAnchor(n.tile())))
         .results();
 }
 

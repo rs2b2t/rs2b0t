@@ -206,10 +206,23 @@ here. Startup failure is a clear log plus park, matching how EssMiner gates on R
 
 ## Live verification (2026-07-27)
 
-**The `2568,9893` safespot holds.** Range smoke on the local sim: the bot entered, walked to the
+**`2568,9893` holds as a safespot.** Range smoke on the local sim: the bot entered, walked to the
 tile through the `Large door` at 2565,9881, and killed a fire giant for 521 ranged xp with
-**zero** `returning to the safespot` events, **zero** food eaten, and no deaths. The computed
-default stands; the `2568,9884` fallback was not needed.
+**zero** `returning to the safespot` events, **zero** food eaten, and no deaths.
+
+**The default was later changed to `2568,9892` by request.** It trades safety margin for throughput:
+it has line of sight to two west giants (2568,9889 at d=3 and 2562,9886 at d=6) instead of one, but
+unlike 9893 a 2x2 footprint fits with its origin on the tile, so the static model says a giant can
+reach it. Re-verify live after any change here; `2568,9893` is the conservative fallback.
+
+### Room-gated targeting
+
+The chambers overlap inside `FIELD_RADIUS`: from the safespot, 8 of the 10 spawns are within 10
+tiles and the nearest **east** giant (2573,9895, d=5) is closer than two of the three west ones. A
+radius therefore cannot keep a safespotting bot in its own room. Targeting is gated on
+`roomOf()` instead — west is x ≤ 2571, east is x ≥ 2572, which splits the spawns cleanly (west tops
+out at 2568, east starts at 2573). The gate applies only when safespotting; melee still uses the
+plain radius, and an anchor outside both boxes falls back to radius-only.
 
 Melee passed the same way from `2575,9893` (542 combat xp). Both styles reached the dungeon in
 ~10 minutes from a fresh Lumbridge spawn, the bulk of which is the Seers walk.

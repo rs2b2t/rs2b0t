@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -63,6 +63,48 @@ describe('ROPE_THROW_STAND', () => {
     });
     test('standing on it still resolves to the AtLanding leg', () => {
         expect(legFor({ x: ROPE_THROW_STAND.x, z: ROPE_THROW_STAND.z, level: 0 })).toBe('AtLanding');
+    });
+});
+
+// From the safespot, 8 of the 10 spawns fall inside FIELD_RADIUS and the nearest
+// EAST-room giant (2573,9895, d=5) is closer than two of the three WEST-room ones,
+// so distance alone cannot keep the bot in its own room.
+describe('roomOf', () => {
+    const WEST_SPAWNS = [[2562, 9886], [2565, 9887], [2568, 9889]] as const;
+    const EAST_SPAWNS = [[2573, 9895], [2575, 9891], [2577, 9890], [2577, 9897], [2578, 9895], [2580, 9890], [2581, 9895]] as const;
+
+    test('the three west-room spawns are west', () => {
+        for (const [x, z] of WEST_SPAWNS) {
+            expect(roomOf({ x, z, level: 0 })).toBe('west');
+        }
+    });
+    test('the seven east-room spawns are east', () => {
+        for (const [x, z] of EAST_SPAWNS) {
+            expect(roomOf({ x, z, level: 0 })).toBe('east');
+        }
+    });
+    test('the default safespot is in the west room with its giants', () => {
+        expect(roomOf(DEFAULT_SAFESPOT)).toBe('west');
+    });
+    test('the default melee anchor is in the east room', () => {
+        expect(roomOf(DEFAULT_MELEE_TILE)).toBe('east');
+    });
+    test('tiles outside both rooms are null, so the caller falls back to radius', () => {
+        expect(roomOf({ x: 2575, z: 9861, level: 0 })).toBeNull();
+        expect(roomOf(null)).toBeNull();
+    });
+    test('no east spawn is within the safespot room, however close', () => {
+        const near = EAST_SPAWNS.filter(([x, z]) => Math.max(Math.abs(x - DEFAULT_SAFESPOT.x), Math.abs(z - DEFAULT_SAFESPOT.z)) <= 10);
+        expect(near.length).toBeGreaterThan(0);
+        for (const [x, z] of near) {
+            expect(roomOf({ x, z, level: 0 })).not.toBe(roomOf(DEFAULT_SAFESPOT));
+        }
+    });
+});
+
+describe('DEFAULT_SAFESPOT', () => {
+    test('is 2568,9892', () => {
+        expect([DEFAULT_SAFESPOT.x, DEFAULT_SAFESPOT.z, DEFAULT_SAFESPOT.level]).toEqual([2568, 9892, 0]);
     });
 });
 

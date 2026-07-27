@@ -10,8 +10,29 @@ export const LEDGE_DOOR = new Tile(2511, 3464, 0);
 export const DUNGEON_ENTRY = new Tile(2575, 9861, 0);
 export const WASHED_OUT = new Tile(2527, 3413, 0);
 
-export const DEFAULT_SAFESPOT = new Tile(2568, 9893, 0);
+export const DEFAULT_SAFESPOT = new Tile(2568, 9892, 0);
 export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
+
+// The giant chambers split cleanly on x: west spawns top out at 2568, east ones
+// start at 2573. Distance cannot separate them — from the safespot the nearest east
+// giant is closer than two of the three west ones — so targeting is gated on room.
+export type Room = 'west' | 'east';
+export const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
+export const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };
+
+function inBox(t: PointLike, b: { minX: number; maxX: number; minZ: number; maxZ: number }): boolean {
+    return t.x >= b.minX && t.x <= b.maxX && t.z >= b.minZ && t.z <= b.maxZ;
+}
+
+export function roomOf(t: PointLike | null): Room | null {
+    if (t === null) {
+        return null;
+    }
+    if (inBox(t, WEST_ROOM)) {
+        return 'west';
+    }
+    return inBox(t, EAST_ROOM) ? 'east' : null;
+}
 
 export const RAFT_LOC = 'Log raft';
 export const RAFT_OP = 'Board';
