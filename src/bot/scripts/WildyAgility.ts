@@ -265,9 +265,7 @@ export default class WildyAgility extends TaskBot {
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        // Keep previous runtime default of 18 when the setting key is absent in older configs,
-        // while the schema default remains 24 for new installs.
-        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 18);
+        OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
         this.course = [...COURSE_OBSTACLES];
 
         const agility = Skills.level('agility');
