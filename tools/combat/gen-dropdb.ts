@@ -80,6 +80,9 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
     const tokens: string[] = [];
     for (const m of block.body.matchAll(/obj_add\s*\(\s*npc_coord\s*,\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
     for (const m of block.body.matchAll(/return\s*\(\s*(~?[a-z0-9_]+)/g)) { tokens.push(m[1]); }
+    // megararetable stages its drop in a local ($drop = rune_spear; ... return ($drop, 1)),
+    // so the literal never appears after `return (`. Non-obj tokens are filtered below.
+    for (const m of block.body.matchAll(/=\s*([a-z][a-z0-9_]*)\s*;/g)) { tokens.push(m[1]); }
     for (const tok of tokens) {
         if (tok.startsWith('~')) {
             for (const it of itemsIn(`proc:${tok.slice(1)}`, deathDrop, seen)) { out.add(it); }
@@ -87,6 +90,9 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
             if (deathDrop) { out.add(deathDrop); }
         } else if (objNames.has(tok)) {
             out.add(tok);
+        } else if (tok.startsWith('cert_') && objNames.has(tok.slice('cert_'.length))) {
+            // noted forms are generated, so cert_<x> has no [cert_<x>] block to look up
+            out.add(tok.slice('cert_'.length));
         }
     }
     return out;

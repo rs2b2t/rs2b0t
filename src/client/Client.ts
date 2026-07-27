@@ -5120,6 +5120,27 @@ export class Client extends GameShell {
         this.getOverlayPos(entity.x, entity.z, height);
     }
 
+    // Scene point -> canvas pixel, for overlays drawn on the layer above the client.
+    // areaGame is a 512x334 surface blitted at (4,4), and getOverlayPos projects into
+    // that surface, so the viewport origin is the only correction needed.
+    overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null {
+        // originX/originY belong to whichever surface was last bound, so outside the
+        // scene pass they are wrong; pin them to the game viewport and put them back.
+        const originX: number = Pix3D.originX;
+        const originY: number = Pix3D.originY;
+        Pix3D.originX = 256;
+        Pix3D.originY = 167;
+        this.getOverlayPos(sceneX, sceneZ, height);
+        Pix3D.originX = originX;
+        Pix3D.originY = originY;
+        // -1/-1 is getOverlayPos's off-scene sentinel; a real projection may still be
+        // negative when the point sits above or left of the viewport, which is fine
+        if (this.projectX === -1 && this.projectY === -1) {
+            return null;
+        }
+        return { x: this.projectX + 4, y: this.projectY + 4 };
+    }
+
     private getOverlayPos(x: number, z: number, height: number): void {
         if (x < 128 || z < 128 || x > 13056 || z > 13056) {
             this.projectX = -1;

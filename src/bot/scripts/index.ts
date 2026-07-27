@@ -20,6 +20,7 @@ import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon.js';
+import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
 import TutorialBot from './TutorialBot.js';
@@ -118,6 +119,15 @@ ScriptRegistry.register({
     tags: ['wilderness', 'dragons', 'hides'],
     settingsSchema: GREENDRAGON_SETTINGS,
     create: () => new GreenDragon()
+});
+
+ScriptRegistry.register({
+    name: 'FireGiant',
+    description: 'Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + rope + Glarial\'s amulet, rides the barrel out to bank',
+    category: 'Combat',
+    tags: ['waterfall', 'safespot', 'members', 'banking'],
+    settingsSchema: FIREGIANT_SETTINGS,
+    create: () => new FireGiant()
 });
 
 ScriptRegistry.register({
