@@ -20,11 +20,8 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
     COURSE_CENTRE,
-    COURSE_ENTRANCE,
     COURSE_OBSTACLES,
-    COURSE_RADIUS,
     EDGEVILLE_BANK,
-    ENTRY_RADIUS,
     GATE_NAME,
     GATE_OP,
     GATE_TILE,
@@ -45,9 +42,10 @@ import {
     classifyRidge,
     getStartTile,
     inPit,
-    inRegion,
     insideCourseProper,
+    nearCourseEntry,
     nearTile,
+    onCourse,
     reactionMs,
     southOfRidge,
     type RidgeOutcome
@@ -60,11 +58,15 @@ export {
     inPit,
     inRegion,
     insideCourseProper,
+    nearCourseEntry,
+    onCourse,
     parseObstacles,
     reactionMs,
     classifyObstacle,
     classifyRidge,
     southOfRidge,
+    COURSE_X_RADIUS,
+    GATE_TILE,
     RIDGE_APPROACH,
     RIDGE_DOOR,
     RIDGE_SUCCESS,
@@ -298,7 +300,7 @@ export default class WildyAgility extends TaskBot {
         this.lastClearedTick = Game.tick();
 
         const here = Game.tile()!;
-        this.entered = insideCourseProper(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
+        this.entered = insideCourseProper(here);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -614,13 +616,13 @@ class TravelToCourse implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        return here !== null && awayFromCourse(here, COURSE_CENTRE, COURSE_RADIUS, COURSE_ENTRANCE, ENTRY_RADIUS);
+        return here !== null && awayFromCourse(here);
     }
 
     async execute(): Promise<void> {
         this.bot.markLeft();
         this.bot.setStatus('walking to the wilderness agility course');
-        // Approach south of the ridge Door — never COURSE_ENTRANCE (north of door).
+        // Approach south of the ridge Door — never north of it (pathfinder Opens Door).
         await Traversal.walkResilient(RIDGE_APPROACH, {
             radius: 2,
             attempts: 6,
@@ -638,16 +640,14 @@ class EnterCourse implements Task {
         if (here === null) {
             return false;
         }
-        // Once inside the course region, never validate — the gate at the top of
-        // the ridge exits back to the entrance and clicking it from inside derails
-        // the script. DeathRecovery / TravelToCourse handle forced exits.
-        if (inRegion(here, COURSE_CENTRE, COURSE_RADIUS)) {
+        // Once north of the Gate, never validate — the gate exits back south and
+        // clicking the ridge from inside derails the script.
+        if (onCourse(here)) {
             return false;
         }
-        // Near the entrance region and still south of the ridge Door.
-        // Entrance region overlaps rocks (~2994,3932); southOfRidge keeps us from
-        // re-entering while standing on the rocks / north of the door.
-        if (!inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS) && !atRidgeApproach(here, RIDGE_APPROACH, 4)) {
+        // Ridge approach / gate corridor, still south of the ridge Door.
+        // southOfRidge keeps us from re-entering while standing on rocks / north of door.
+        if (!nearCourseEntry(here) && !atRidgeApproach(here, RIDGE_APPROACH, 4)) {
             return false;
         }
         return southOfRidge(here);
@@ -675,9 +675,8 @@ class RunLap implements Task {
         if (here === null || this.bot.courseNames().length === 0) {
             return false;
         }
-        // entered flag OR physically in the course region (start already on course).
-        const onCourse = this.bot.isEntered() || inRegion(here, COURSE_CENTRE, COURSE_RADIUS);
-        return onCourse && (inRegion(here, COURSE_CENTRE, COURSE_RADIUS) || inRegion(here, COURSE_ENTRANCE, ENTRY_RADIUS));
+        // Lap zone is north of the Gate. entered flag covers brief post-ridge settle.
+        return this.bot.isEntered() || onCourse(here);
     }
 
     async execute(): Promise<void> {
@@ -904,8 +903,8 @@ class RidgeTestLoop implements Task {
             return;
         }
 
-        const onCourse = this.bot.isEntered() || inRegion(here, COURSE_CENTRE, COURSE_RADIUS);
-        if (onCourse) {
+        const inside = this.bot.isEntered() || onCourse(here);
+        if (inside) {
             await this.exitCourse();
         } else {
             await attemptRidgeCrossing(this.bot, 'ridge test: ');
@@ -935,11 +934,11 @@ class RidgeTestLoop implements Task {
 
         await Execution.delayUntil(() => {
             const t = Game.tile();
-            return (t !== null && !inRegion(t, COURSE_CENTRE, COURSE_RADIUS)) || EventSignal.pending();
+            return (t !== null && !onCourse(t)) || EventSignal.pending();
         }, 15_000);
 
         const after = Game.tile();
-        if (after !== null && !inRegion(after, COURSE_CENTRE, COURSE_RADIUS)) {
+        if (after !== null && !onCourse(after)) {
             this.bot.markLeft();
             this.bot.log('ridge test: exited course');
         }

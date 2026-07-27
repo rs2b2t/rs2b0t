@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 import {
+    COURSE_X_RADIUS,
+    GATE_TILE,
     RIDGE_APPROACH,
     RIDGE_DOOR,
     RIDGE_FAIL,
@@ -15,6 +17,8 @@ import {
     inPit,
     inRegion,
     insideCourseProper,
+    nearCourseEntry,
+    onCourse,
     parseObstacles,
     reactionMs,
     southOfRidge
@@ -45,36 +49,57 @@ test('inRegion is Chebyshev distance on the same level', () => {
     expect(inRegion(new Tile(2998, 3945, 1), centre, 25)).toBe(false);
 });
 
-test('the ridge hop crosses from the entrance region into the course region', () => {
-    const centre = new Tile(2998, 3945, 0);
-    const entrance = new Tile(2998, 3924, 0);
-    const postRidge = new Tile(2998, 3937, 0);
-    const ENTRY_RADIUS = 10;
-    const COURSE_RADIUS = 25;
+test('onCourse is everything north of the Gate within the lateral band', () => {
+    expect(GATE_TILE.z).toBe(3931);
+    expect(COURSE_X_RADIUS).toBeGreaterThanOrEqual(16);
 
-    expect(inRegion(entrance, entrance, ENTRY_RADIUS)).toBe(true);
-    expect(inRegion(entrance, centre, COURSE_RADIUS)).toBe(true);
+    // Lap-zone tiles (obstacles / pit ladder exits)
+    expect(onCourse(new Tile(2998, 3932, 0))).toBe(true); // just north of gate
+    expect(onCourse(new Tile(2998, 3937, 0))).toBe(true); // post-ridge / rocks area
+    expect(onCourse(new Tile(3004, 3937, 0))).toBe(true); // pipe start
+    expect(onCourse(new Tile(3005, 3952, 0))).toBe(true); // ropeswing
+    expect(onCourse(new Tile(3002, 3960, 0))).toBe(true); // stepping stone
+    expect(onCourse(new Tile(3002, 3945, 0))).toBe(true); // log balance
+    expect(onCourse(new Tile(2994, 3937, 0))).toBe(true); // rocks
+    // Far-north pit ladder exits that a tight radius=16 would miss
+    expect(onCourse(new Tile(3005, 3963, 0))).toBe(true);
+    expect(onCourse(new Tile(3010, 3960, 0))).toBe(true);
 
-    expect(inRegion(postRidge, entrance, ENTRY_RADIUS)).toBe(false);
-    expect(inRegion(postRidge, centre, COURSE_RADIUS)).toBe(true);
+    // Gate tile itself and everything south of it are NOT on course
+    expect(onCourse(new Tile(2998, 3931, 0))).toBe(false); // gate
+    expect(onCourse(new Tile(2998, 3924, 0))).toBe(false); // ridge corridor
+    expect(onCourse(new Tile(2998, 3917, 0))).toBe(false); // ridge door
+    expect(onCourse(new Tile(2998, 3916, 0))).toBe(false); // approach / wolf pit side
+    expect(onCourse(new Tile(3094, 3493, 0))).toBe(false); // bank
+    expect(onCourse(new Tile(2998, 3945, 1))).toBe(false); // wrong plane
+
+    // Lateral band keeps random wilderness out
+    expect(onCourse(new Tile(2998 + COURSE_X_RADIUS + 1, 3950, 0))).toBe(false);
 });
 
-test('awayFromCourse: travel only when outside BOTH the course and entrance regions', () => {
-    const centre = new Tile(2998, 3945, 0);
-    const entrance = new Tile(2998, 3924, 0);
-
-    expect(awayFromCourse(new Tile(2998, 3950, 0), centre, 25, entrance, 10)).toBe(false);
-    expect(awayFromCourse(new Tile(2998, 3924, 0), centre, 5, entrance, 10)).toBe(false);
-    expect(awayFromCourse(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(true);
-    expect(awayFromCourse(new Tile(2998, 3945, 1), centre, 25, entrance, 10)).toBe(true);
+test('nearCourseEntry covers the ridge→gate corridor only', () => {
+    expect(nearCourseEntry(new Tile(2998, 3916, 0))).toBe(true);
+    expect(nearCourseEntry(new Tile(2998, 3917, 0))).toBe(true);
+    expect(nearCourseEntry(new Tile(2998, 3924, 0))).toBe(true);
+    expect(nearCourseEntry(new Tile(2998, 3931, 0))).toBe(true); // on the gate
+    expect(nearCourseEntry(new Tile(2998, 3932, 0))).toBe(false); // north of gate = on course
+    expect(nearCourseEntry(new Tile(3094, 3493, 0))).toBe(false);
+    expect(nearCourseEntry(new Tile(2998, 3900, 0))).toBe(false); // too far south
 });
 
-test('insideCourseProper: in the course but past the entrance region (the lap zone)', () => {
-    const centre = new Tile(2998, 3945, 0);
-    const entrance = new Tile(2998, 3924, 0);
-    expect(insideCourseProper(new Tile(2998, 3937, 0), centre, 25, entrance, 10)).toBe(true);
-    expect(insideCourseProper(new Tile(2998, 3924, 0), centre, 25, entrance, 10)).toBe(false);
-    expect(insideCourseProper(new Tile(3094, 3493, 0), centre, 25, entrance, 10)).toBe(false);
+test('awayFromCourse: travel only when outside BOTH lap zone and entry corridor', () => {
+    expect(awayFromCourse(new Tile(2998, 3950, 0))).toBe(false); // on course
+    expect(awayFromCourse(new Tile(2998, 3924, 0))).toBe(false); // entry corridor
+    expect(awayFromCourse(new Tile(2998, 3916, 0))).toBe(false); // approach
+    expect(awayFromCourse(new Tile(3094, 3493, 0))).toBe(true); // bank
+    expect(awayFromCourse(new Tile(2998, 3945, 1))).toBe(true); // wrong plane
+});
+
+test('insideCourseProper is the lap zone (north of gate)', () => {
+    expect(insideCourseProper(new Tile(2998, 3937, 0))).toBe(true);
+    expect(insideCourseProper(new Tile(2998, 3924, 0))).toBe(false);
+    expect(insideCourseProper(new Tile(3094, 3493, 0))).toBe(false);
+    expect(insideCourseProper(new Tile(2998, 3916, 0))).toBe(false);
 });
 
 test('inPit: obstacle pits sit far above the course in world-z (not ridge wolf pit)', () => {

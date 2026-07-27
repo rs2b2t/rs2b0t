@@ -16,13 +16,21 @@ export const RIDGE_DOOR = new Tile(2998, 3917, 0);
  * must target this (or further south) so only the script's ridge.interact crosses.
  */
 export const RIDGE_APPROACH = new Tile(2998, 3916, 0);
-export const COURSE_RADIUS = 16; // gate at 2998,3931 is ~14 tiles from centre
+/**
+ * Course membership is gate-based, not a Chebyshev blob:
+ *   on course  = same plane, strictly north of the Gate (z > 3931), within COURSE_X_RADIUS.
+ * That keeps the wolf pit / ridge approach out, and keeps pit-ladder exits in —
+ * a tight COURSE_RADIUS=16 treated ladder exits as "away" and pathfindered out the Gate/Door.
+ */
+export const COURSE_X_RADIUS = 24;
+/** Lateral width of the ridge→gate entry corridor (approach / EnterCourse). */
 export const ENTRY_RADIUS = 10;
 export const SEARCH_RADIUS = 20;
 /** Obstacle pits (ropeswing / log) teleport far above the course in world-z. */
 export const PIT_Z_GAP = 2000;
 export const RIDGE_MIN_AGILITY = 52;
 export const EDGEVILLE_BANK = new Tile(3094, 3493, 0);
+/** Inner gate at the south end of the course. North of this tile is the lap zone. */
 export const GATE_TILE = new Tile(2998, 3931, 0);
 
 export const RIDGE_NAME = 'Door';
@@ -151,24 +159,44 @@ export function inRegion(here: WorldTile, centre: WorldTile, radius: number): bo
     return here.level === centre.level && Math.max(Math.abs(here.x - centre.x), Math.abs(here.z - centre.z)) <= radius;
 }
 
-export function awayFromCourse(
-    here: WorldTile,
-    centre: WorldTile,
-    courseRadius: number,
-    entrance: WorldTile,
-    entryRadius: number
-): boolean {
-    return !inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
+/**
+ * Lap zone: strictly north of the inner Gate, same plane, within a lateral band.
+ * Wolf pit / ridge approach (z ≤ 3917) and the ridge→gate corridor (z ≤ 3931) are outside.
+ */
+export function onCourse(here: WorldTile, gate: WorldTile = GATE_TILE, xRadius: number = COURSE_X_RADIUS): boolean {
+    return here.level === gate.level && here.z > gate.z && Math.abs(here.x - gate.x) <= xRadius;
 }
 
-export function insideCourseProper(
+/**
+ * Ridge approach through the Gate corridor — south of / on the Gate, near the path.
+ * TravelToCourse must not yank the player out of this zone; EnterCourse owns it.
+ */
+export function nearCourseEntry(
     here: WorldTile,
-    centre: WorldTile,
-    courseRadius: number,
-    entrance: WorldTile,
-    entryRadius: number
+    gate: WorldTile = GATE_TILE,
+    approach: WorldTile = RIDGE_APPROACH,
+    entryRadius: number = ENTRY_RADIUS
 ): boolean {
-    return inRegion(here, centre, courseRadius) && !inRegion(here, entrance, entryRadius);
+    if (here.level !== gate.level) {
+        return false;
+    }
+    if (here.z > gate.z) {
+        return false;
+    }
+    if (here.z < approach.z - 2) {
+        return false;
+    }
+    return Math.abs(here.x - gate.x) <= entryRadius;
+}
+
+/** Far from both the lap zone and the ridge entry corridor (e.g. bank, death spawn). */
+export function awayFromCourse(here: WorldTile): boolean {
+    return !onCourse(here) && !nearCourseEntry(here);
+}
+
+/** Alias: the lap zone is everything onCourse (north of the Gate). */
+export function insideCourseProper(here: WorldTile): boolean {
+    return onCourse(here);
 }
 
 /**
