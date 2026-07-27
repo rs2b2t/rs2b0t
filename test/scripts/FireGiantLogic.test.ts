@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, BARREL_EXIT, EXIT_OPTIONS, eastFirst, takenByAnother, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -194,6 +194,19 @@ describe('takenByAnother', () => {
     });
 });
 
+// The dungeon DOES have a walk-out — exit door to the ledge, then the barrel. It
+// needs no runes, magic level or quest, so it is the default.
+describe('EXIT_OPTIONS', () => {
+    test('the free barrel walk-out is first and is the default', () => {
+        expect(EXIT_OPTIONS[0]).toBe(BARREL_EXIT);
+    });
+    test('the teleports remain selectable alongside it', () => {
+        expect(EXIT_OPTIONS).toContain('Camelot');
+        expect(EXIT_OPTIONS).toContain('Ardougne');
+        expect(EXIT_OPTIONS.length).toBe(5);
+    });
+});
+
 describe('ESCAPE_TELES', () => {
     test('every entry carries a component, a level, runes, and a paired bank', () => {
         for (const [key, tele] of Object.entries(ESCAPE_TELES)) {
@@ -223,7 +236,7 @@ describe('registry', () => {
         await import('#/bot/scripts/index.js');
         const entry = ScriptRegistry.get('FireGiant');
         expect(entry?.category).toBe('Combat');
-        expect(entry?.settingsSchema?.escapeTele?.default).toBe('Camelot');
+        expect(entry?.settingsSchema?.escapeTele?.default).toBe(BARREL_EXIT);
         expect(entry?.settingsSchema?.combatStyle?.options).toEqual(['melee', 'mage', 'range']);
     });
 });

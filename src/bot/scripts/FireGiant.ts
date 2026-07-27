@@ -30,7 +30,7 @@ import { actions, reader } from '../adapter/ClientAdapter.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Locs } from '../api/queries/Locs.js';
 import {
-    AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
+    AMULET, BARREL_BANK, BARREL_EXIT, BARREL_LOC, BARREL_OP, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, EXIT_DOOR, EXIT_DOOR_LOC, EXIT_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
     attackRangeFor, eastFirst, ROCK_LOC, roomOf, takenByAnother, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
@@ -86,7 +86,7 @@ export const SETTINGS: SettingsSchema = {
     safespotTile: { type: 'tile', default: DEFAULT_SAFESPOT, label: 'Safespot tile (west room)', group: 'Location', showIf: SHOW_SAFESPOT, help: 'preferred spot in the west room — sees two giants. If one reaches it the bot drops to the fallback tile for a minute' },
     safespotFallbackTile: { type: 'tile', default: DEFAULT_SAFESPOT_FALLBACK, label: 'Safespot fallback tile', group: 'Location', showIf: SHOW_SAFESPOT, help: 'retreat tile used for a minute whenever a giant reaches the main safespot; must be somewhere no giant can path to' },
     meleeTile: { type: 'tile', default: DEFAULT_MELEE_TILE, label: 'Melee anchor tile (centre room)', group: 'Location', showIf: SHOW_MELEE, help: 'centre of the east chamber — 7 giants within 6 tiles' },
-    escapeTele: { type: 'string', default: 'Camelot', options: ESCAPE_TELE_OPTIONS, label: 'Escape teleport', group: 'Location', help: 'the dungeon has no walk-out, so banking always teleports. Walk back to the raft: Camelot 352 tiles, Ardougne 274, Falador 771, Varrock 910' },
+    escapeTele: { type: 'string', default: BARREL_EXIT, options: EXIT_OPTIONS, label: 'Way out', group: 'Location', help: 'Barrel walks out through the dungeon door and rides the barrel off the ledge to 2527,3413 — free, no runes or magic level, 118 tiles from Ardougne West. A teleport only saves the walk back to the exit door' },
     teleStock: { type: 'number', default: 2, min: 1, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
     bankTile: { type: 'tile', default: ESCAPE_TELES.Camelot.bank, label: 'Bank stand tile', group: 'Location', help: 'left at the Seers default, this follows the escape teleport' }
 };
@@ -115,6 +115,7 @@ let MELEE_TILE = DEFAULT_MELEE_TILE;
 let BANK_TILE = ESCAPE_TELES.Camelot.bank;
 let TELE: EscapeTele = ESCAPE_TELES.Camelot;
 let TELE_STOCK = 2;
+let USE_BARREL = true;
 
 function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
@@ -442,7 +443,7 @@ class ArmAutocast implements Task {
 const MAGIC_TAB = 6;
 
 function hasEscapeRunes(): boolean {
-    return TELE.runes.every(r => Inventory.count(r.rune) >= r.count);
+    return USE_BARREL || TELE.runes.every(r => Inventory.count(r.rune) >= r.count);
 }
 
 async function castEscape(bot: FireGiant): Promise<boolean> {
@@ -462,19 +463,74 @@ async function castEscape(bot: FireGiant): Promise<boolean> {
     return Execution.delayUntil(() => !inDungeon(), 8000);
 }
 
-async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void> {
+// Walk out: the exit door sits on the dungeon entry tile and drops us on the ledge,
+// where the barrel washes us to 2527,3413. Free, and the only route that works with
+// no runes at all. The teleport modes skip the walk back to the door.
+async function exitViaBarrel(bot: FireGiant): Promise<boolean> {
     if (inDungeon()) {
-        for (let i = 0; i < 3 && inDungeon(); i++) {
-            if (await castEscape(bot)) {
-                bot.log(`teleported out to ${TELE.name}`);
-                break;
-            }
-            await Execution.delayTicks(3);
+        bot.setStatus('walking to the dungeon door');
+        await Traversal.walkResilient(EXIT_DOOR, { radius: 1, attempts: 5, timeoutMs: 180_000, log: m => bot.log(`  ${m}`) });
+        const door = Locs.query().name(EXIT_DOOR_LOC).where(l => l.tile().x === EXIT_DOOR.x && l.tile().z === EXIT_DOOR.z).first();
+        if (door === null) {
+            bot.log('the dungeon door is not in the scene yet — retrying');
+            return false;
         }
-        if (inDungeon()) {
-            bot.parkFor(`stuck in the dungeon: the ${TELE.name} teleport will not fire. Bank ${TELE.runes.map(r => `${r.count} ${r.rune}`).join(' + ')} and check magic level ${TELE.level}.`);
-            return;
+        bot.setStatus('leaving through the dungeon door');
+        await door.interact('Open');
+        if (!(await Execution.delayUntil(() => legFor(Game.tile()) === 'AtLedge', 12_000))) {
+            bot.log('the dungeon door did not put us on the ledge — retrying');
+            return false;
         }
+        bot.log('out on the ledge');
+    }
+    if (legFor(Game.tile()) !== 'AtLedge') {
+        return true;
+    }
+    // locs read empty for a tick after the p_teleport onto the ledge
+    let barrel = Locs.query().name(BARREL_LOC).action(BARREL_OP).nearest();
+    for (let i = 0; i < 5 && barrel === null; i++) {
+        await Execution.delayTicks(1);
+        barrel = Locs.query().name(BARREL_LOC).action(BARREL_OP).nearest();
+    }
+    if (barrel === null) {
+        bot.log('the barrel is not in the scene yet — retrying');
+        return false;
+    }
+    bot.setStatus('riding the barrel off the ledge');
+    await barrel.interact(BARREL_OP);
+    if (!(await Execution.delayUntil(() => legFor(Game.tile()) === 'WashedOut', 12_000))) {
+        bot.log('the barrel did not wash us downstream — retrying');
+        return false;
+    }
+    bot.log('washed up downstream — walking to the bank');
+    return true;
+}
+
+async function leaveDungeon(bot: FireGiant): Promise<boolean> {
+    if (!inDungeon() && legFor(Game.tile()) !== 'AtLedge') {
+        return true;
+    }
+    if (USE_BARREL) {
+        return exitViaBarrel(bot);
+    }
+    for (let i = 0; i < 3 && inDungeon(); i++) {
+        if (await castEscape(bot)) {
+            bot.log(`teleported out to ${TELE.name}`);
+            return true;
+        }
+        await Execution.delayTicks(3);
+    }
+    if (!inDungeon()) {
+        return true;
+    }
+    // the barrel always works, so a dud teleport is a detour rather than a dead end
+    bot.log(`the ${TELE.name} teleport will not fire — walking out through the barrel instead`);
+    return exitViaBarrel(bot);
+}
+
+async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void> {
+    if (!(await leaveDungeon(bot))) {
+        return;
     }
     if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
@@ -552,11 +608,12 @@ async function withdrawEscapeRunes(bot: FireGiant): Promise<void> {
     }
 }
 
-// The dungeon has no walk-out, so leaving the bank without a teleport is a trap.
-// Retry the withdrawal while the bank still holds the runes — a failed click is
-// transient and EnterDungeon refuses to start the trip meanwhile — and only park
-// when the bank is genuinely out, which no amount of retrying will fix.
+// Never fatal: the barrel walks out for free, so missing teleport runes cost a
+// detour to the dungeon door rather than stranding anything.
 async function ensureEscapeRunes(bot: FireGiant): Promise<void> {
+    if (USE_BARREL) {
+        return;
+    }
     for (let attempt = 0; attempt < 3 && !hasEscapeRunes(); attempt++) {
         await withdrawEscapeRunes(bot);
     }
@@ -564,11 +621,8 @@ async function ensureEscapeRunes(bot: FireGiant): Promise<void> {
         return;
     }
     const short = TELE.runes.filter(r => Inventory.count(r.rune) + Bank.count(r.rune) < r.count);
-    if (short.length > 0) {
-        bot.parkFor(`the bank is out of ${short.map(r => r.rune).join(' and ')} — the ${TELE.name} teleport is the only way out of the dungeon, so the trip cannot start. Bank the runes to resume.`);
-        return;
-    }
-    bot.log(`could not withdraw the ${TELE.name}-teleport runes although the bank has them — staying at the bank and retrying`);
+    const why = short.length > 0 ? `the bank is out of ${short.map(r => r.rune).join(' and ')}` : 'the withdrawal would not stick';
+    bot.log(`WARNING: no ${TELE.name}-teleport runes — ${why}. Walking out through the barrel instead.`);
 }
 
 async function withdrawEntryKit(bot: FireGiant): Promise<void> {
@@ -686,9 +740,6 @@ class BuryBones implements Task {
 class BankRun implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        if (!inDungeon() && !hasEscapeRunes()) {
-            return true;
-        }
         if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
             return true;
         }
@@ -731,9 +782,7 @@ class ReturnToSafespot implements Task {
 class EnterDungeon implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        // no walk-out down there, so the escape runes are as much a prerequisite
-        // as the amulet and the rope
-        return !inDungeon() && hasAmulet() && hasRope() && hasEscapeRunes() && !this.bot.parked;
+        return !inDungeon() && hasAmulet() && hasRope() && !this.bot.parked;
     }
     async execute(): Promise<void> {
         switch (legFor(Game.tile())) {
@@ -1082,11 +1131,13 @@ export default class FireGiant extends TaskBot {
         retreated = false;
         lastHp = -1;
         MELEE_TILE = this.settings.tile('meleeTile', DEFAULT_MELEE_TILE);
-        TELE = ESCAPE_TELES[this.settings.str('escapeTele', 'Camelot')] ?? ESCAPE_TELES.Camelot;
+        const exit = this.settings.str('escapeTele', BARREL_EXIT);
+        USE_BARREL = exit === BARREL_EXIT;
+        TELE = ESCAPE_TELES[exit] ?? ESCAPE_TELES.Camelot;
         TELE_STOCK = this.settings.num('teleStock', 2);
         const chosenBank = this.settings.tile('bankTile', ESCAPE_TELES.Camelot.bank);
         const bankIsDefault = chosenBank.x === ESCAPE_TELES.Camelot.bank.x && chosenBank.z === ESCAPE_TELES.Camelot.bank.z;
-        BANK_TILE = bankIsDefault ? TELE.bank : chosenBank;
+        BANK_TILE = bankIsDefault ? (USE_BARREL ? BARREL_BANK : TELE.bank) : chosenBank;
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {

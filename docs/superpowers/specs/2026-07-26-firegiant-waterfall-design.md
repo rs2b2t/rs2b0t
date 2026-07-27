@@ -5,8 +5,8 @@ giants in the Waterfall Dungeon with melee, range, or magic, and banks by telepo
 out and re-running the raft/rope/amulet entry chain.
 
 Third clone in the MossGiant lineage (`MossGiant` → `GreenDragon` → `FireGiant`): same
-settings vocabulary, same task list, same paint. What is new is the entry chain and the
-fact that the dungeon has no walk-out.
+settings vocabulary, same task list, same paint. What is new is the scripted entry chain
+and a two-step exit (dungeon door, then the barrel off the ledge).
 
 ## Engine facts this design is built on
 
@@ -44,15 +44,38 @@ Consequences the bot must respect:
 - Both failure paths land on the **same tile**, `^waterfall_fail_coord` = 2527,3413, which is
   on solid ground 127 tiles from the raft. That makes it a clean self-healing signal.
 
-### There is no walk-out
+### The way out is the barrel (corrected 2026-07-27)
 
-Flood-filling the collision pack from the ledge tile 2511,3463 returns **one tile**. The door
-tile north of it is solid scenery; the barrel that dumps you downstream is on level 1 and
-unreachable from the level-0 ledge. The in-dungeon `Door` (`baxtorian_door_waterfall_quest`)
-just teleports back to that same one-tile ledge.
+**An earlier version of this spec claimed there was no walk-out. That was wrong**, and it was
+wrong because it trusted a map file over the running game. The `.jm2` LOC line for the barrel
+parsed as level 1, which put it out of reach of the level-0 ledge, and flood-filling the collision
+pack from 2511,3463 returns one tile — so "teleport or nothing" looked proven.
 
-**Banking therefore requires casting a teleport.** This is the single fact that makes FireGiant
-structurally different from MossGiant.
+Standing on the ledge in a live client says otherwise:
+
+```
+Barrel@2512,3463,lvl0 d=1 ops=[Get in]
+```
+
+Level 0, one tile away, directly clickable, and its description reads *"A wooden barrel, maybe a
+way off this rock."* The route out is:
+
+| Step | Loc | Coord | Result |
+|---|---|---|---|
+| 1 | `Door` | 2575,9861 (the entry tile) | `op1` → ledge 2511,3463 |
+| 2 | `Barrel` | 2512,3463 | `op1` "Get in" → 2527,3413 |
+
+2527,3413 is 118 tiles from Ardougne West and 127 from the raft, so the barrel loop is roughly the
+same length as the Camelot one (328 vs 352) while costing **no runes, no magic level and no
+quest**. It is therefore the default `Way out`; the teleports stay selectable and only save the
+walk back to the exit door.
+
+Because the barrel always works, missing teleport runes are a detour and never a trap: a teleport
+that will not fire falls back to walking out, and nothing parks for want of runes.
+
+**The lesson, which cost real time twice:** the collision pack and the map files are derived data.
+When they disagree with the running client about what exists, the client wins. The same mistake in
+the other direction produced the rope-throw stand bug.
 
 ### The giants
 
@@ -120,7 +143,7 @@ MossGiant's schema verbatim — `combatStyle`, `meleeStyle`, `staff`, `spell`, `
 | `safespotTile` | tile | `2568,9892` | forward spot, `showIf` range/mage |
 | `safespotFallbackTile` | tile | `2568,9893` | melee-proof retreat, `showIf` range/mage |
 | `meleeTile` | tile | `2575,9893` | `showIf` melee |
-| `escapeTele` | string | `Camelot` | Camelot / Ardougne / Falador / Varrock |
+| `escapeTele` | string | `Barrel (free)` | Barrel / Camelot / Ardougne / Falador / Varrock |
 | `bankTile` | tile | `2725,3491` | Seers; the default tracks `escapeTele` (below) |
 | `teleStock` | number | 2 | escape casts carried **in addition to** the one needed to leave, so a failed cast is not fatal |
 
@@ -138,8 +161,8 @@ nav pack:
 | Falador | 37 | 1 water, 3 air, 1 law | 2965,3378 | Fally W 25 | 746 | 771 |
 | Varrock | 25 | 1 fire, 3 air, 1 law | 3213,3424 | Varrock W 40 | 870 | 910 |
 
-Falador and Varrock stay in the list because a melee account with 25 Magic has no other way
-out, but their help text states the walk-back cost.
+The barrel needs nothing at all, so the teleports are purely a convenience — they skip the walk
+back to the exit door. Their help text states the walk-back cost.
 
 Cast via the magic-tab component (`GreenDragon`'s `castVarrockTele` pattern): Varrock 1164,
 Lumbridge 1167, Falador 1170, Camelot 1174, Ardougne 1540.

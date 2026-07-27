@@ -84,6 +84,16 @@ export function roomOf(t: PointLike | null): Room | null {
     return inBox(t, EAST_ROOM) ? 'east' : null;
 }
 
+// The dungeon DOES have a walk-out. The exit door sits on the entry tile and drops
+// you on the ledge, where the barrel ("A wooden barrel, maybe a way off this rock.")
+// washes you to 2527,3413 — 118 tiles from Ardougne West. No runes, no magic level,
+// no quest. A teleport only saves the walk back to the exit door.
+export const EXIT_DOOR = new Tile(2575, 9861, 0);
+export const EXIT_DOOR_LOC = 'Door';
+export const BARREL_LOC = 'Barrel';
+export const BARREL_OP = 'Get in';
+export const BARREL_TILE = new Tile(2512, 3463, 0);
+
 export const RAFT_LOC = 'Log raft';
 export const RAFT_OP = 'Board';
 export const ROCK_LOC = 'Rock';
@@ -172,4 +182,7 @@ export const ESCAPE_TELES: Record<string, EscapeTele> = {
     }
 };
 
+export const BARREL_EXIT = 'Barrel (free)';
+export const EXIT_OPTIONS = [BARREL_EXIT, ...Object.keys(ESCAPE_TELES)];
+export const BARREL_BANK = new Tile(2616, 3332, 0); // Ardougne West, 118 tiles from the wash-up
 export const ESCAPE_TELE_OPTIONS = Object.keys(ESCAPE_TELES);
