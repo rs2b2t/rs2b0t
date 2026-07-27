@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_RANGE, attackRangeFor, eastFirst, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, RETREAT_MS, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
+import { AP_RANGE, attackRangeFor, eastFirst, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, ESCAPE_TELES, legFor, LEDGE, POST_ROCK, RAFT_STAND, ROCK_TILE, roomOf, ROPE_THROW_STAND, THROW_ZONE, WASHED_OUT } from '#/bot/scripts/FireGiantLogic.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -120,10 +120,6 @@ describe('safespot tiers', () => {
         const west = [[2562, 9886], [2565, 9887], [2568, 9889]] as const;
         const inRange = west.filter(([x, z]) => Math.max(Math.abs(x - DEFAULT_SAFESPOT_FALLBACK.x), Math.abs(z - DEFAULT_SAFESPOT_FALLBACK.z)) <= attackRangeFor('range'));
         expect(inRange.length).toBeGreaterThan(0);
-    });
-    test('the retreat lasts long enough to outlast a giant leash, but re-tries', () => {
-        expect(RETREAT_MS).toBeGreaterThanOrEqual(30_000);
-        expect(Number.isFinite(RETREAT_MS)).toBe(true);
     });
 });
 

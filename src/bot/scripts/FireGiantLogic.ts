@@ -16,12 +16,8 @@ export const WASHED_OUT = new Tile(2527, 3413, 0);
 // sees one giant. Hold 9892, drop back to 9893 whenever a giant actually lands on us.
 export const DEFAULT_SAFESPOT = new Tile(2568, 9892, 0);
 export const DEFAULT_SAFESPOT_FALLBACK = new Tile(2568, 9893, 0);
-export const RETREAT_MS = 60_000;
 export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
 
-// The giant chambers split cleanly on x: west spawns top out at 2568, east ones
-// start at 2573. Distance cannot separate them — from the safespot the nearest east
-// giant is closer than two of the three west ones — so targeting is gated on room.
 // Clicking Attack on a giant beyond weapon range makes the server walk you into
 // range, which steps off the safespot — so a target is only engaged once it is
 // already close enough to hit from where you stand. Bow figure is the short-bow
@@ -44,6 +40,9 @@ export function eastFirst(a: TargetLike, b: TargetLike): number {
     return b.x - a.x || a.distance - b.distance;
 }
 
+// The chambers split cleanly on x: west spawns top out at 2568, east ones start at
+// 2573. Distance cannot separate them — from the safespot the nearest east giant is
+// closer than two of the three west ones — so targeting is gated on room, not range.
 export type Room = 'west' | 'east';
 export const WEST_ROOM = { minX: 2556, maxX: 2571, minZ: 9880, maxZ: 9902 };
 export const EAST_ROOM = { minX: 2572, maxX: 2586, minZ: 9880, maxZ: 9902 };

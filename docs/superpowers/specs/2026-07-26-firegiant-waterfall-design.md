@@ -214,12 +214,23 @@ tile through the `Large door` at 2565,9881, and killed a fire giant for 521 rang
 **The safespot is two-tier.** `2568,9892` is the forward spot: it sees two west giants
 (2568,9889 at d=3 and 2562,9886 at d=6) so it kills faster, but unlike 9893 a 2x2 footprint fits
 with its **origin on that tile**, so a giant can occasionally reach it. The bot holds 9892 and drops
-to `2568,9893` — the melee-proof nook — for `RETREAT_MS` (60s) whenever a giant is adjacent and
-targeting the player, then tries the forward spot again.
+to `2568,9893` — the melee-proof nook — the moment it **takes a hit**, and returns to the forward
+spot on the **next kill**. Damage is the honest trigger: a giant walking past is harmless, and only
+something connecting means the tile has failed. A kill means whatever reached us is gone, so the
+forward spot is worth retrying — no timer, so it neither gives up early nor sulks in the nook.
 
 Both tiers are in the west room, so room-gated targeting is unaffected by a retreat, and both keep
-west giants inside bow range. Detection uses `Npc.targetsMe()` (faceEntity resolving to our own
-slot) plus distance ≤ 2 — a 2x2 giant's origin can be two tiles out and still be swinging.
+west giants inside bow range.
+
+### Looting is a burst
+
+Loot lands on the corpse tile, so collecting it means leaving the safespot and tanking. Three
+things made that slow, all fixed: `LootCorpse` grabbed one item per task hop (~600ms each), a
+failed Take blocked 4s with `interact()`'s result ignored, and — the big one — success was measured
+as `Inventory.used() > before`, which **never moves for a stackable drop** merging into an existing
+slot. Coins, runes and arrows are most of this table, so each one burned the full timeout and
+reported failure. Looting now drains the pile in one pass (`lootBurst`), counts a stack increase as
+success, and breaks off to eat rather than finishing the pile at low HP.
 
 ### Leashing stage
 

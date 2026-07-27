@@ -30,13 +30,16 @@ import { actions, reader } from '../adapter/ClientAdapter.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Locs } from '../api/queries/Locs.js';
 import {
-    AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, RETREAT_MS, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
+    AMULET, DEFAULT_MELEE_TILE, DEFAULT_SAFESPOT, DEFAULT_SAFESPOT_FALLBACK, DUNGEON_MIN_Z, ESCAPE_TELE_OPTIONS, ESCAPE_TELES,
     LEDGE_DOOR, LEDGE_LOC, LEDGE_OP, legFor, RAFT_LOC, RAFT_OP, RAFT_STAND,
     attackRangeFor, eastFirst, ROCK_LOC, roomOf, ROPE, ROPE_THROW_STAND, TREE_LOC, TREE_STAND, type EscapeTele
 } from './FireGiantLogic.js';
 
 const TARGET = 'Fire giant';
 const FIELD_RADIUS = 10;
+
+const LOOT_TAKE_MS = 1200;
+const LOOT_BURST_MAX = 8;
 
 const LEASH_WAIT_MS = 15_000;
 const LEASH_SKIP_MS = 20_000;
@@ -100,7 +103,8 @@ let BANK_COMMON = true;
 let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let SAFESPOT_FALLBACK = DEFAULT_SAFESPOT_FALLBACK;
-let retreatUntil = 0;
+let retreated = false;
+let lastHp = -1;
 let MELEE_TILE = DEFAULT_MELEE_TILE;
 let BANK_TILE = ESCAPE_TELES.Camelot.bank;
 let TELE: EscapeTele = ESCAPE_TELES.Camelot;
@@ -141,24 +145,32 @@ function usesSafespot(): boolean {
     return STYLE === 'mage' || STYLE === 'range';
 }
 function activeSafespot(): Tile {
-    return performance.now() < retreatUntil ? SAFESPOT_FALLBACK : SAFESPOT;
+    return retreated ? SAFESPOT_FALLBACK : SAFESPOT;
 }
 function anchor(): Tile {
     return usesSafespot() ? activeSafespot() : MELEE_TILE;
 }
-// The forward spot trades safety for a second giant in view, so a giant landing on
-// us there is expected, not a bug — drop to the melee-proof nook and try again later.
+// The forward spot trades safety for a second giant in view, so taking a hit there is
+// expected rather than a fault. Damage is the honest trigger — a giant walking past
+// is harmless, and only something actually connecting means the tile has failed.
 function checkRetreat(bot: FireGiant): boolean {
-    if (!usesSafespot() || performance.now() < retreatUntil) {
+    const hp = Skills.effective('hitpoints');
+    const hurt = lastHp >= 0 && hp < lastHp;
+    lastHp = hp;
+    if (!usesSafespot() || retreated || !hurt) {
         return false;
     }
-    const onUs = Npcs.query().name(TARGET).where(n => n.targetsMe() && n.distance() <= 2).exists();
-    if (!onUs) {
-        return false;
-    }
-    retreatUntil = performance.now() + RETREAT_MS;
-    bot.log(`a fire giant reached ${SAFESPOT} — falling back to ${SAFESPOT_FALLBACK} for ${Math.round(RETREAT_MS / 1000)}s`);
+    retreated = true;
+    bot.log(`took a hit at ${SAFESPOT} — falling back to ${SAFESPOT_FALLBACK} until the next kill`);
     return true;
+}
+
+// A kill means whatever reached us is gone, so the forward spot is worth retrying.
+function clearRetreat(bot: FireGiant): void {
+    if (retreated) {
+        retreated = false;
+        bot.log(`giant down — back to ${SAFESPOT}`);
+    }
 }
 function inField(tile: Tile): boolean {
     return anchor().distanceTo(tile) <= FIELD_RADIUS;
@@ -235,18 +247,45 @@ async function quickReturnToSafespot(bot: FireGiant): Promise<boolean> {
 
 async function lootOnce(bot: FireGiant): Promise<boolean> {
     const drop = findLoot();
-    if (!drop) {
+    if (drop === null) {
         return false;
     }
-    bot.setStatus(`looting ${drop.name}`);
-    const before = Inventory.used();
-    await drop.interact('Take');
-    if (await Execution.delayUntil(() => Inventory.used() > before, 4000)) {
-        bot.countLoot(drop.name);
-        bot.log(`looted ${drop.name}`);
-        return true;
+    const name = drop.name ?? '';
+    bot.setStatus(`looting ${name}`);
+    const usedBefore = Inventory.used();
+    const countBefore = Inventory.count(name);
+    if (!(await drop.interact('Take'))) {
+        return false;
     }
-    return false;
+    // a stackable drop merges into an existing slot, so used() alone never moves for
+    // coins, runes or arrows — the bulk of this table — and every one of them would
+    // burn the full timeout and report failure
+    const took = await Execution.delayUntil(
+        () => Inventory.used() > usedBefore || Inventory.count(name) > countBefore,
+        LOOT_TAKE_MS
+    );
+    if (took) {
+        bot.countLoot(name);
+        bot.log(`looted ${name}`);
+    }
+    return took;
+}
+
+// Loot lands on the corpse tile, so collecting it means leaving the safespot and
+// tanking. Drain the pile in one pass instead of one item per task hop, and break
+// off to eat rather than finishing the pile at low HP.
+async function lootBurst(bot: FireGiant): Promise<void> {
+    for (let i = 0; i < LOOT_BURST_MAX; i++) {
+        if (EventSignal.pending() || bot.died || Inventory.isFull()) {
+            return;
+        }
+        if (hpFrac() < EAT_HP && hasFood()) {
+            return;
+        }
+        if (!(await lootOnce(bot))) {
+            return;
+        }
+    }
 }
 
 function checkPrereqs(bot: FireGiant): boolean {
@@ -608,7 +647,7 @@ class LootCorpse implements Task {
         return inDungeon() && !Inventory.isFull() && findLoot() !== null;
     }
     async execute(): Promise<void> {
-        await lootOnce(this.bot);
+        await lootBurst(this.bot);
     }
 }
 
@@ -788,10 +827,11 @@ class Fight implements Task {
                 this.bot.log(`fire giant down — ${this.bot.kills()} kills`);
                 this.targetIdx = null;
                 this.bot.targetIdx = null;
+                clearRetreat(this.bot);
             }
 
             if (!Inventory.isFull() && findLoot() !== null) {
-                await lootOnce(this.bot);
+                await lootBurst(this.bot);
                 continue;
             }
             if (usesSafespot() && !atSafespot()) {
@@ -926,7 +966,8 @@ export default class FireGiant extends TaskBot {
         }
         SAFESPOT = this.settings.tile('safespotTile', DEFAULT_SAFESPOT);
         SAFESPOT_FALLBACK = this.settings.tile('safespotFallbackTile', DEFAULT_SAFESPOT_FALLBACK);
-        retreatUntil = 0;
+        retreated = false;
+        lastHp = -1;
         MELEE_TILE = this.settings.tile('meleeTile', DEFAULT_MELEE_TILE);
         TELE = ESCAPE_TELES[this.settings.str('escapeTele', 'Camelot')] ?? ESCAPE_TELES.Camelot;
         TELE_STOCK = this.settings.num('teleStock', 2);
