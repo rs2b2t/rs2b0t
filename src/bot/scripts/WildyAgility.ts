@@ -93,7 +93,22 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         label: 'Eat up to HP%',
         help: 'keep eating until HP reaches this % — 90 avoids the overheal wasted by eating to full'
     },
-    foodWithdraw: { type: 'number', default: 20, min: 1, max: 28, label: 'Food to withdraw after death' },
+    foodWithdraw: {
+        type: 'number',
+        default: 20,
+        min: 1,
+        max: 28,
+        label: 'Food to withdraw',
+        help: 'how many to withdraw at startup restock and after death'
+    },
+    minFood: {
+        type: 'number',
+        default: 1,
+        min: 0,
+        max: 28,
+        label: 'Bank below food count',
+        help: 'at script start (and after death), bank if carrying fewer than this many; 0 = skip the startup food check'
+    },
     obstacleTimeoutTicks: {
         type: 'number',
         default: 24,
@@ -108,6 +123,7 @@ let FOOD = 'lobster';
 let EAT_AT = 0.5;
 let EAT_TO = 0.9;
 let FOOD_WITHDRAW = 20;
+let MIN_FOOD = 1;
 let OBSTACLE_TIMEOUT_TICKS = 24;
 
 /** Ensure Auto Retaliate is off so skeletons near rocks don't pull us into combat. */
@@ -265,6 +281,7 @@ export default class WildyAgility extends TaskBot {
         EAT_AT = this.settings.num('eatAtHp', 50) / 100;
         EAT_TO = this.settings.num('eatToHp', 90) / 100;
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
+        MIN_FOOD = this.settings.num('minFood', 1);
         OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
         this.course = [...COURSE_OBSTACLES];
 
@@ -289,8 +306,43 @@ export default class WildyAgility extends TaskBot {
 
         await ensureRetaliateOff(m => this.log(m));
 
+        // Startup food check (EdgevilleMonkeyBars-style): bank before walking to wildy
+        // when inventory is below minFood. Skip if already on the course / in a pit —
+        // mid-session restock is death-only (no safe gate exit from the lap zone).
+        const startingFood = foodCount();
+        if (MIN_FOOD > 0 && startingFood < MIN_FOOD) {
+            if (this.entered || inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
+                this.log(
+                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) but already on course — continuing until death`
+                );
+            } else {
+                this.log(
+                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) — banking before heading to the course`
+                );
+                // Retry bank-open failures; only stop once the bank opened and still
+                // has fewer than minFood (empty / wrong food name).
+                let opened = false;
+                for (let attempt = 0; attempt < 6 && foodCount() < MIN_FOOD; attempt++) {
+                    opened = await this.bankForFood('startup');
+                    if (opened) {
+                        break;
+                    }
+                    this.log(`startup bank open failed (attempt ${attempt + 1}/6) — retrying`);
+                    await Execution.delayTicks(2);
+                }
+                if (!opened || foodCount() < MIN_FOOD) {
+                    this.log(
+                        `only ${foodCount()} '${FOOD}' after bank (need ${MIN_FOOD}) — stopping`
+                    );
+                    this.setStatus(`out of '${FOOD}' in bank — stopped`);
+                    ScriptRunner.stop();
+                    return;
+                }
+            }
+        }
+
         this.log(
-            `WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}', bank ${BANK_TILE.x},${BANK_TILE.z}, approach ${RIDGE_APPROACH.x},${RIDGE_APPROACH.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`
+            `WildyAgility starting — lap [${this.course.join(' -> ')}], food '${FOOD}' x${foodCount()} (min ${MIN_FOOD}, withdraw ${FOOD_WITHDRAW}), bank ${BANK_TILE.x},${BANK_TILE.z}, approach ${RIDGE_APPROACH.x},${RIDGE_APPROACH.z}, timeout ${OBSTACLE_TIMEOUT_TICKS} ticks`
         );
         this.add(
             new ContinueDialog(),
@@ -354,21 +406,7 @@ export default class WildyAgility extends TaskBot {
     }
 
     private async recoverAndReturn(): Promise<boolean> {
-        this.setStatus('recovering: walking to the bank');
-        await Traversal.walkResilient(BANK_TILE, {
-            radius: 4,
-            attempts: 4,
-            timeoutMs: 120_000,
-            log: m => this.log(`  ${m}`)
-        });
-
-        if (await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`))) {
-            await Bank.depositInventory();
-            await Execution.delayTicks(1);
-            await this.withdrawFood();
-            this.log(`restocked ${foodCount()} '${FOOD}'`);
-        } else {
-            this.log('could not open the bank — will retry next loop');
+        if (!(await this.bankForFood('death'))) {
             return false;
         }
 
@@ -380,6 +418,32 @@ export default class WildyAgility extends TaskBot {
             timeoutMs: 120_000,
             log: m => this.log(`  ${m}`)
         });
+    }
+
+    /**
+     * Walk to Edgeville bank, deposit inventory, withdraw FOOD_WITHDRAW of FOOD.
+     * Used at startup (when below minFood off-course) and after wilderness death.
+     * @returns false if the bank could not be opened
+     */
+    private async bankForFood(reason: 'startup' | 'death'): Promise<boolean> {
+        this.setStatus(`${reason}: walking to the bank`);
+        await Traversal.walkResilient(BANK_TILE, {
+            radius: 4,
+            attempts: 4,
+            timeoutMs: 120_000,
+            log: m => this.log(`  ${m}`)
+        });
+
+        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.log(`  ${m}`)))) {
+            this.log('could not open the bank — will retry next loop');
+            return false;
+        }
+
+        await Bank.depositInventory();
+        await Execution.delayTicks(1);
+        await this.withdrawFood();
+        this.log(`${reason}: restocked ${foodCount()} '${FOOD}'`);
+        return true;
     }
 
     private async withdrawFood(): Promise<void> {
