@@ -494,10 +494,7 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     await withdrawEscapeRunes(bot);
     await withdrawEntryKit(bot);
 
-    if (!hasEscapeRunes()) {
-        bot.parkFor(`no ${TELE.name}-teleport runes (need ${TELE.runes.map(r => `${r.count} ${r.rune}`).join(' + ')}) — going back in without them would strand the bot underground with no way out.`);
-        return;
-    }
+    await ensureEscapeRunes(bot);
 
     // Heal at the booth, not on the way in — the trip back is long and the first
     // giant should not meet a half-health bot. Top the food back up afterwards so
@@ -553,6 +550,25 @@ async function withdrawEscapeRunes(bot: FireGiant): Promise<void> {
     if (!hasEscapeRunes()) {
         bot.log(`WARNING: bank is short of ${TELE.name}-teleport runes — the next trip cannot leave the dungeon.`);
     }
+}
+
+// The dungeon has no walk-out, so leaving the bank without a teleport is a trap.
+// Retry the withdrawal while the bank still holds the runes — a failed click is
+// transient and EnterDungeon refuses to start the trip meanwhile — and only park
+// when the bank is genuinely out, which no amount of retrying will fix.
+async function ensureEscapeRunes(bot: FireGiant): Promise<void> {
+    for (let attempt = 0; attempt < 3 && !hasEscapeRunes(); attempt++) {
+        await withdrawEscapeRunes(bot);
+    }
+    if (hasEscapeRunes()) {
+        return;
+    }
+    const short = TELE.runes.filter(r => Inventory.count(r.rune) + Bank.count(r.rune) < r.count);
+    if (short.length > 0) {
+        bot.parkFor(`the bank is out of ${short.map(r => r.rune).join(' and ')} — the ${TELE.name} teleport is the only way out of the dungeon, so the trip cannot start. Bank the runes to resume.`);
+        return;
+    }
+    bot.log(`could not withdraw the ${TELE.name}-teleport runes although the bank has them — staying at the bank and retrying`);
 }
 
 async function withdrawEntryKit(bot: FireGiant): Promise<void> {
@@ -670,6 +686,9 @@ class BuryBones implements Task {
 class BankRun implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
+        if (!inDungeon() && !hasEscapeRunes()) {
+            return true;
+        }
         if (needStyleSupplies() && !this.bot.supplyKnownEmpty()) {
             return true;
         }
@@ -712,7 +731,9 @@ class ReturnToSafespot implements Task {
 class EnterDungeon implements Task {
     constructor(private bot: FireGiant) {}
     validate(): boolean {
-        return !inDungeon() && hasAmulet() && hasRope() && !this.bot.parked;
+        // no walk-out down there, so the escape runes are as much a prerequisite
+        // as the amulet and the rope
+        return !inDungeon() && hasAmulet() && hasRope() && hasEscapeRunes() && !this.bot.parked;
     }
     async execute(): Promise<void> {
         switch (legFor(Game.tile())) {
