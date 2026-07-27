@@ -229,11 +229,12 @@ function findLoot() {
         .nearest();
 }
 
+// Everything the next trip does not need goes in the bank. Looted runes and coins
+// would otherwise pile up in the pack forever, and the spell/escape runes are
+// deliberately NOT kept — the withdrawals put back exactly the configured amount,
+// so a trip always leaves with a known quantity instead of a growing heap.
 function keepNames(): string[] {
-    return combatKeepNames({
-        food: FOOD_NAME, style: STYLE, spell: SPELL, ammo: AMMO, weapon: WEAPON,
-        extra: ['Coins', AMULET, ROPE, ...TELE.runes.map(r => r.rune)]
-    });
+    return combatKeepNames({ food: FOOD_NAME, style: STYLE, ammo: AMMO, weapon: WEAPON, extra: [AMULET, ROPE] });
 }
 
 async function eatOnce(bot: FireGiant): Promise<boolean> {
@@ -492,6 +493,11 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     await withdrawStyleSupplies(bot);
     await withdrawEscapeRunes(bot);
     await withdrawEntryKit(bot);
+
+    if (!hasEscapeRunes()) {
+        bot.parkFor(`no ${TELE.name}-teleport runes (need ${TELE.runes.map(r => `${r.count} ${r.rune}`).join(' + ')}) — going back in without them would strand the bot underground with no way out.`);
+        return;
+    }
 
     // Heal at the booth, not on the way in — the trip back is long and the first
     // giant should not meet a half-health bot. Top the food back up afterwards so
