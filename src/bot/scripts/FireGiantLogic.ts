@@ -1,0 +1,99 @@
+import Tile from '../api/Tile.js';
+
+export const RAFT_STAND = new Tile(2510, 3493, 0);
+export const RAFT_LANDING = new Tile(2512, 3481, 0);
+export const ROCK_TILE = new Tile(2512, 3468, 0);
+export const POST_ROCK = new Tile(2513, 3468, 0);
+export const TREE_STAND = new Tile(2512, 3466, 0);
+export const LEDGE = new Tile(2511, 3463, 0);
+export const LEDGE_DOOR = new Tile(2511, 3464, 0);
+export const DUNGEON_ENTRY = new Tile(2575, 9861, 0);
+export const WASHED_OUT = new Tile(2527, 3413, 0);
+
+export const DEFAULT_SAFESPOT = new Tile(2568, 9893, 0);
+export const DEFAULT_MELEE_TILE = new Tile(2575, 9893, 0);
+
+export const RAFT_LOC = 'Log raft';
+export const RAFT_OP = 'Board';
+export const ROCK_LOC = 'Rock';
+export const TREE_LOC = 'Dead tree';
+export const LEDGE_LOC = 'Ledge';
+export const LEDGE_OP = 'Open';
+export const AMULET = "Glarial's amulet";
+export const ROPE = 'Rope';
+
+// engine: inzone(0_39_54_14_20, 0_39_54_18_25) — the rope throw is refused outside it
+export const THROW_ZONE = { minX: 2510, maxX: 2514, minZ: 3476, maxZ: 3481 };
+
+export const DUNGEON_MIN_Z = 9000;
+
+export interface PointLike {
+    x: number;
+    z: number;
+    level: number;
+}
+
+export type Leg = 'InDungeon' | 'AtLedge' | 'PastRock' | 'AtLanding' | 'WashedOut' | 'AtRaft' | 'Surface';
+
+function cheb(a: PointLike, b: Tile): number {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+
+export function legFor(t: PointLike | null): Leg {
+    if (t === null) {
+        return 'Surface';
+    }
+    if (t.z > DUNGEON_MIN_Z) {
+        return 'InDungeon';
+    }
+    if (t.x === LEDGE.x && t.z === LEDGE.z) {
+        return 'AtLedge';
+    }
+    if (cheb(t, POST_ROCK) <= 3) {
+        return 'PastRock';
+    }
+    if (t.x >= THROW_ZONE.minX && t.x <= THROW_ZONE.maxX && t.z >= THROW_ZONE.minZ && t.z <= THROW_ZONE.maxZ) {
+        return 'AtLanding';
+    }
+    if (cheb(t, WASHED_OUT) <= 6) {
+        return 'WashedOut';
+    }
+    if (cheb(t, RAFT_STAND) <= 5) {
+        return 'AtRaft';
+    }
+    return 'Surface';
+}
+
+export interface EscapeTele {
+    name: string;
+    com: number;
+    level: number;
+    runes: { rune: string; count: number }[];
+    lands: Tile;
+    bank: Tile;
+}
+
+export const ESCAPE_TELES: Record<string, EscapeTele> = {
+    Camelot: {
+        name: 'Camelot', com: 1174, level: 45,
+        runes: [{ rune: 'Air rune', count: 5 }, { rune: 'Law rune', count: 1 }],
+        lands: new Tile(2757, 3478, 0), bank: new Tile(2725, 3491, 0)
+    },
+    Ardougne: {
+        name: 'Ardougne', com: 1540, level: 51,
+        runes: [{ rune: 'Water rune', count: 2 }, { rune: 'Law rune', count: 2 }],
+        lands: new Tile(2661, 3301, 0), bank: new Tile(2616, 3332, 0)
+    },
+    Falador: {
+        name: 'Falador', com: 1170, level: 37,
+        runes: [{ rune: 'Water rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }],
+        lands: new Tile(2965, 3378, 0), bank: new Tile(2946, 3369, 0)
+    },
+    Varrock: {
+        name: 'Varrock', com: 1164, level: 25,
+        runes: [{ rune: 'Fire rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }],
+        lands: new Tile(3213, 3424, 0), bank: new Tile(3185, 3440, 0)
+    }
+};
+
+export const ESCAPE_TELE_OPTIONS = Object.keys(ESCAPE_TELES);
