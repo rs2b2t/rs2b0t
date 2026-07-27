@@ -61,3 +61,14 @@ describe('ESCAPE_TELES', () => {
         expect(runes['Water rune']).toBe(2);
     });
 });
+
+describe('registry', () => {
+    test('FireGiant registers under Combat with its settings schema', async () => {
+        const { ScriptRegistry } = await import('#/bot/runtime/ScriptRegistry.js');
+        await import('#/bot/scripts/index.js');
+        const entry = ScriptRegistry.get('FireGiant');
+        expect(entry?.category).toBe('Combat');
+        expect(entry?.settingsSchema?.escapeTele?.default).toBe('Camelot');
+        expect(entry?.settingsSchema?.combatStyle?.options).toEqual(['melee', 'mage', 'range']);
+    });
+});
