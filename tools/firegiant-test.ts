@@ -4,13 +4,16 @@
 // open the ledge door, and fight. PASS when it reaches the dungeon (z > 9000)
 // and lands a kill (combat XP gained).
 //
-// Seeding notes, both learned the hard way:
+// Seeding notes, all learned the hard way:
 //   - `~completequests` is useless here: complete_all_quests opens two blocking
 //     p_choice2 dialogs and waits, so nothing completes and the pending modal
 //     swallows the cheats that follow. Set the varp directly instead.
 //   - the client never receives varp 65, and the quest journal colour (what
 //     Quests.status reads) is only pushed at login — so the setvar MUST be
 //     followed by a relog or the bot correctly reports "quest not started".
+//   - `~item`/`~bankitem` guard on p_finduid and return SILENTLY when the player
+//     is busy. `~maxme` locks the player through a flood of level-ups, so any seed
+//     sent after it is dropped at random. Seed first, max last, verify.
 //
 // Usage: bun tools/firegiant-test.ts [base] [user] [budget-min] [style]
 
@@ -28,7 +31,8 @@ function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(
 type R = {
     __rs2b0t: {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
-        Skills: { xp(n: string): number };
+        Skills: { xp(n: string): number; level(n: string): number };
+        Inventory: { count(n: string): number };
         Quests: { status(n: string): string };
     };
     rs2b0t: { runner: { state: string; ctx?: { log?: { level: string; msg: string }[] } } };
@@ -56,19 +60,43 @@ try {
     if (qs === 'notStarted') { fail('quest journal still reports notStarted after setvar + relog'); }
     console.log(`waterfall quest seeded (server=10, journal=${qs})`);
 
-    // seed items only after the final relog — a pre-relog seed is rolled back
-    for (const c of [
-        '~maxme',
-        '~bankitem glarials_amulet_waterfall_quest 1',
-        '~bankitem rope 1',
-        '~bankitem lobster 200',
-        '~bankitem airrune 1000',
-        '~bankitem lawrune 200',
-        ...(style === 'range' ? ['~bankitem maple_shortbow 1', '~bankitem iron_arrow 2000'] : ['~bankitem rune_scimitar 1'])
-    ]) {
-        await cheatQuiet(page, c);
+    // Seed only after the final relog — a pre-relog seed is rolled back. Order
+    // matters: ~item/~bankitem both guard on p_finduid and SILENTLY return when the
+    // player is busy, and ~maxme's 23 stat_advance calls keep them locked through a
+    // flood of level-ups. Seed everything first, max the account last.
+    const held = (n: string) => page.evaluate(x => (globalThis as never as R).__rs2b0t.Inventory.count(x), n);
+
+    // Everything that fits in a stack goes to the inventory, where the count is
+    // readable and the seed can be retried until it sticks. ~bankitem drops are
+    // silent AND unverifiable from outside a script context, so only bulk food
+    // (200 slots) relies on it.
+    for (const [cmd, item] of [
+        ['~item glarials_amulet_waterfall_quest 1', "Glarial's amulet"],
+        ['~item rope 1', 'Rope'],
+        ['~item airrune 1000', 'Air rune'],
+        ['~item lawrune 200', 'Law rune'],
+        ...(style === 'range'
+            ? [['~item maple_shortbow 1', 'Maple shortbow'], ['~item iron_arrow 2000', 'Iron arrow']] as const
+            : [['~item rune_scimitar 1', 'Rune scimitar']] as const)
+    ] as readonly (readonly [string, string])[]) {
+        let ok = false;
+        for (let i = 0; i < 5 && !ok; i++) {
+            await cheatQuiet(page, cmd);
+            ok = (await held(item)) > 0;
+        }
+        if (!ok) { fail(`could not seed ${item} into the inventory after 5 attempts`); }
     }
-    console.log(`seeded: maxed stats, amulet + rope + food + Camelot runes + ${style} gear`);
+    console.log('seeded (verified, held): amulet, rope, Camelot runes, and gear');
+
+    for (let i = 0; i < 3; i++) {
+        await cheatQuiet(page, '~bankitem lobster 200');
+    }
+
+    await cheatQuiet(page, '~maxme');
+    await page.waitForTimeout(5000);
+    await page.waitForFunction(() => (globalThis as never as R).__rs2b0t.Skills.level('ranged') >= 99, undefined, { timeout: 30_000 })
+        .catch(() => console.log('WARNING: ranged did not reach 99 — maxme may not have applied'));
+    console.log(`seeded: bulk food banked, ${style} kit held, stats maxed`);
 
     await page.evaluate(s => {
         sessionStorage.setItem('rs2b0t:set:FireGiant:combatStyle', s);

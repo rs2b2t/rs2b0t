@@ -204,9 +204,33 @@ here. Startup failure is a clear log plus park, matching how EssMiner gates on R
 - **Live smoke** `tools/firegiant-test.ts` — seed with cheats (amulet, rope, quest varp), run
   the chain, assert arrival at 2575,9861, assert a kill, force a bank trip, assert re-entry.
 
-## Open question for live verification
+## Live verification (2026-07-27)
 
-Whether `2568,9893` holds as a safespot in a real fight. The leash and footprint maths say yes,
-but engine line-of-sight has corner rules that the static Bresenham approximation used here does
-not model. The smoke confirms it; it is a setting either way, and `2568,9884` (2 giants in LoS,
-nearest at 3, on the south approach) is the fallback.
+**The `2568,9893` safespot holds.** Range smoke on the local sim: the bot entered, walked to the
+tile through the `Large door` at 2565,9881, and killed a fire giant for 521 ranged xp with
+**zero** `returning to the safespot` events, **zero** food eaten, and no deaths. The computed
+default stands; the `2568,9884` fallback was not needed.
+
+Melee passed the same way from `2575,9893` (542 combat xp). Both styles reached the dungeon in
+~10 minutes from a fresh Lumbridge spawn, the bulk of which is the Seers walk.
+
+Entry-chain timings from the melee run:
+
+```
+[578s] rafted down to the landing
+[598s] crossed to the rock
+[598s] down on the ledge
+[608s] inside the Waterfall Dungeon
+```
+
+### What live testing changed
+
+- **`ROPE_THROW_STAND` (2512,3477) was added.** The raft landing satisfies the engine's `inzone`
+  check but sits 13 tiles from the rock across water — past `aplocu` range — so the server
+  answers "I can't reach that!" and nothing happens. Zone membership and op reachability are two
+  separate constraints; the rock leg now walks to the stand first.
+- **Every entry leg now logs on its timeout path.** All four previously swallowed failure, so a
+  wedge surfaced only as a 10-minute watchdog hit with no explanation.
+- **The ranged ammo check now counts the quiver.** `withdrawStyleSupplies` compared only the
+  pack, so once `GearEquip` moved the arrows into the quiver it declared the bank empty and set
+  `supplyKnownEmpty`, which would have suppressed the ammo bank trip once the quiver ran dry.

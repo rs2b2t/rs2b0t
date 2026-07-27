@@ -113,13 +113,18 @@ function hasFood(): boolean {
 function castsLeft(): number {
     return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
 }
+function quiverCount(): number {
+    return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
+}
+function ammoLeft(): number {
+    return quiverCount() + Inventory.count(AMMO);
+}
 function needStyleSupplies(): boolean {
     if (STYLE === 'mage') {
         return castsLeft() < 1;
     }
     if (STYLE === 'range') {
-        const quiver = Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
-        return quiver === 0 && Inventory.count(AMMO) === 0;
+        return ammoLeft() === 0;
     }
     return false;
 }
@@ -477,7 +482,8 @@ async function withdrawStyleSupplies(bot: FireGiant): Promise<void> {
             await Equipment.equip(AMMO);
             bot.log(`withdrew ${got} ${AMMO}`);
             bot.noteSupplyEmpty(false);
-        } else if (Inventory.count(AMMO) === 0) {
+        } else if (ammoLeft() === 0) {
+            // an empty bank is only a problem when the quiver is empty too
             bot.noteSupplyEmpty(true);
             bot.log(`WARNING: no '${AMMO}' in the bank — deposit ammo to resume.`);
         }
