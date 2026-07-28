@@ -108,6 +108,21 @@ public path is [Running locally](RUNNING.md).
 The headless harness ABI and the end-to-end smoke are documented in
 [Testing](TESTING.md#live-harnesses).
 
+### Gathering location seed coords
+
+Fisher / Miner / Woodcutter camps live in `src/bot/scripts/*Locations.ts`. Most
+entries ship with `verified: false` seed tiles from the gathering CSV. After a
+local engine is up:
+
+```bash
+bun run verify:gather-locs                 # all skills
+bun run verify:gather-locs -- fishing      # one skill
+```
+
+The helper teles to each camp, samples rocks/trees/fish in scene, and prints
+PASS/FAIL only — it never edits the tables. Flip `verified: true` by hand once
+the spot and bank stand look right.
+
 
 ### Hosting the single client (prod)
 

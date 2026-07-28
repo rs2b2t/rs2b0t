@@ -2,6 +2,7 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import { BURN_MODE_OPTIONS, FIRE_SPOT_OPTIONS } from './FiremakingLogic.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
+import { WOODCUTTING_LOCATION_OPTIONS } from './WoodcuttingLocations.js';
 
 /**
  * Woodcutter — GatheringBot preset for trees + optional chop-then-burn.
@@ -23,10 +24,10 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
     location: {
         type: 'string',
         default: 'Auto',
-        options: ['Auto', 'None'],
-        label: 'Full inventory',
+        options: WOODCUTTING_LOCATION_OPTIONS,
+        label: 'Location / full inventory',
         help:
-            'What to do when the pack is full of logs. Auto = bank-path mode: bank the logs (if burn is Off) and restock axe/tinderbox from the bank. None = power-chop (drop logs; no bank). Burn mode requires Auto — it is forced off under None.'
+            'Chop camp + full-pack behaviour. Auto = nearest known tree camp (Euclidean) and bank at that camp\'s bank stand. Named camps pin trees + bank. None = power-chop (drop logs; no bank). Burn mode requires a non-None location — it is forced off under None. Fire spots stay separate from chop camps.'
     },
     burnMode: {
         type: 'string',

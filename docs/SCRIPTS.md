@@ -414,17 +414,24 @@ Tags: `firemaking`, `banking`, `varrock`, `draynor`, `seers`, `afk`
 
 ### Fisher
 
-Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch at the nearest bank, or drops it (location: None). Buy/repair uses Harry in Catherby when closer (lobster pot, bait, nets, harpoon); Gerrant only when needed for feathers/fly rod or when nearer (Port Sarim / Draynor).
+Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity. Optional Buy/repair buys missing gear from the nearest fishing shop (Harry at Catherby, Gerrant for feathers/fly rod) and can buy bait/feathers up to Bait qty.
 
-Tags: `gathering`, `drop`, `banking`
+Tags: `gathering`, `drop`, `banking`, `cooking`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `fishMethod` | string | `"Small net — shrimp/anchovy"` | Fishing method — one of: Small net — shrimp/anchovy, Bait rod — sardine/herring, Fly fishing — trout/salmon, Bait rod — pike, Big net — mackerel/cod/bass, Lobster cage — lobster, Harpoon — tuna/swordfish, Harpoon — sharks, Oily rod — lava eel |
-| `baitQty` | number (≥1) | `1000` | Bait/feathers buy+withdraw target when the method needs them (hidden for cage/net/harpoon; no upper bound) |
+| `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–40) | `18` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Fishing location — one of: Auto, Draynor Village, Catherby, Fishing Guild, Taverley Dungeon (lava eels), None |
-| `toolAcquire` | string | `"Off"` | Off or Buy / repair — shops Harry/Gerrant for missing gear + bait up to baitQty |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), None |
+| `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
+| `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
+| `cookFishCustom` | string | `""` | Custom cook filter |
+| `burntPolicy` | string | `"Drop"` | Burnt fish — one of: Drop, Bank |
+| `bankRawBeforeCook` | number (1–) | `56` | Bank N raw before cook |
+| `afterCookCycle` | string | `"Stop"` | After cook cycle — one of: Stop, Continue |
+| `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
+| `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 
 ## Fletching
 
@@ -457,7 +464,7 @@ Tags: `varrock`, `mining`, `banking`, `afk`
 
 ### Miner
 
-Mines the selected rock types and banks the ore at the nearest bank (auto-detected), or drops it. Needs a pickaxe.
+Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).
 
 Tags: `gathering`, `banking`, `drop`
 
@@ -465,7 +472,9 @@ Tags: `gathering`, `banking`, `drop`
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
 | `leashRadius` | number (2–30) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Banking — one of: Auto, None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, None |
+| `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
+| `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 
 ## Money making
 
@@ -477,11 +486,11 @@ Tags: `wilderness`, `shopping`, `banking`, `runes`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `shop` | string | `"Mage Arena runes — Lundail (Gundai bank)"` | Shop — one of: Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's feathers — Catherby (Catherby bank) |
+| `shop` | string | `"Mage Arena runes — Lundail (Gundai bank)"` | Shop — one of: Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank) |
 | `budgetGp` | number (100–) | `250000` | Total gp to spend |
 | `perTripGp` | number (100–) | `100000` | Gp per bank trip |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
-| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Air rune, Big fishing net, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Chaos rune, Cosmic rune, Crossbow, Death rune, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Law rune, Lobster pot, Longbow, Mind rune, Mithril arrow, Mithril arrowtips, Nature rune, Oak longbow, Oak shortbow, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rune arrow, Rune arrowtips, Shortbow, Small fishing net, Steel arrow, Steel arrowtips, Studded body, Studded chaps, Water rune, Wizards hat |
+| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Adamant pickaxe, Air rune, Big fishing net, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Bronze axe, Bronze pickaxe, Chaos rune, Cosmic rune, Crossbow, Death rune, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Iron axe, Iron battleaxe, Iron pickaxe, Law rune, Lobster pot, Longbow, Mind rune, Mithril arrow, Mithril arrowtips, Mithril battleaxe, Mithril pickaxe, Nature rune, Oak longbow, Oak shortbow, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rune arrow, Rune arrowtips, Rune pickaxe, Shortbow, Small fishing net, Steel arrow, Steel arrowtips, Steel axe, Steel battleaxe, Steel pickaxe, Studded body, Studded chaps, Water rune, Wizards hat |
 | `recheckSeconds` | number (5–600) | `60` | Restock recheck (s) |
 
 ### ShopRunner
@@ -694,16 +703,19 @@ Tags: `tutorial`, `onboarding`
 
 ### Woodcutter
 
-Chops trees and drops logs (anchor = start tile, needs an axe)
+Chops the chosen tree type, then banks logs, drops them, or burns a full load (chop-then-burn). Needs an axe; burn mode also needs a tinderbox (both restock from the bank when Full inventory is Auto). Optional Buy/repair acquires axes from Bob or smiths mith+ from bars.
 
-Tags: `gathering`, `drop`
+Tags: `gathering`, `banking`, `drop`, `firemaking`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `treeName` | string | `"Tree"` | Tree name |
-| `leashRadius` | number (3–30) | `15` | Leash radius (tiles) |
-| `bankName` | string | `"Bank booth"` | Bank object name |
-| `bankOp` | string | `"Use-quickly"` | Bank object action |
+| `treeName` | string | `"Tree"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
+| `leashRadius` | number (2–30) | `10` | Leash radius (tiles) |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, None |
+| `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
+| `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |
+| `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
+| `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 
 ## See also
 

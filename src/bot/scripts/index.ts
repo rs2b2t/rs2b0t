@@ -1,6 +1,7 @@
 import { AGILITY_SETTINGS } from './AgilityBot.js';
-import { LOCATION_OPTIONS } from './FishingLocations.js';
+import { FISHING_LOCATION_OPTIONS } from './FishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from './FishingMethods.js';
+import { MINING_LOCATION_OPTIONS } from './MiningLocations.js';
 import {
     AFTER_COOK_OPTIONS,
     BURNT_POLICY_OPTIONS,
@@ -210,10 +211,10 @@ ScriptRegistry.register({
         location: {
             type: 'string',
             default: 'Auto',
-            options: ['Auto', 'None'],
-            label: 'Full inventory',
+            options: MINING_LOCATION_OPTIONS,
+            label: 'Location / full inventory',
             help:
-                'What to do when the pack is full of ore. Auto = bank the ore at the nearest bank and restock a pickaxe if needed. None = power-mine (drop ore; no bank).'
+                'Mine camp + full-pack behaviour. Auto = nearest known mine camp (Euclidean) and bank at that camp\'s bank stand. Named camps pin spot + bank. None = power-mine (drop ore; bank only for missing tools).'
         },
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
@@ -293,10 +294,10 @@ ScriptRegistry.register({
         location: {
             type: 'string',
             default: 'Auto',
-            options: LOCATION_OPTIONS,
+            options: FISHING_LOCATION_OPTIONS,
             label: 'Location / full inventory',
             help:
-                'Where you are fishing and what happens when the pack is full. Auto = use a known spot if you started in one, else nearest bank in the scene; banks the catch when cook is Off. Named spots (Catherby, …) pin bank/range presets. None = power-fish (always drop; cook is disabled).'
+                'Fishing camp + full-pack behaviour. Auto = nearest known camp (Euclidean) and bank there. Named camps pin pier + bank (and range for Catherby cook). None = power-fish (always drop; cook is disabled).'
         },
         cookMode: {
             type: 'string',

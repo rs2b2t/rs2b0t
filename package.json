@@ -21,7 +21,8 @@
         "gen:shopdb": "bun tools/shops/gen-shopdb.ts",
         "gen:cluedb": "bun tools/clues/gen-cluedb.ts",
         "gen:dropdb": "bun tools/combat/gen-dropdb.ts",
-        "gen:scriptdocs": "bun tools/gen-scriptdocs.ts"
+        "gen:scriptdocs": "bun tools/gen-scriptdocs.ts",
+        "verify:gather-locs": "bun tools/verify-gathering-locations.ts"
     },
     "dependencies": {
         "fflate": "^0.8.2"

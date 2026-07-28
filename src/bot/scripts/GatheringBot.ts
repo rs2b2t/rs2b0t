@@ -18,7 +18,10 @@ import { walkOpening } from '../api/walkOpening.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { resolveLocation, type FishingLocation } from './FishingLocations.js';
+import { resolveFishingLocation, type FishingLocation } from './FishingLocations.js';
+import { type GatheringLocation } from './GatheringLocations.js';
+import { resolveMiningLocation } from './MiningLocations.js';
+import { resolveWoodcuttingLocation } from './WoodcuttingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
 import {
     TINDERBOX,
@@ -155,7 +158,7 @@ export default class GatheringBot extends TaskBot {
     private cooked = 0;
     private burnt = 0;
     private status = 'starting';
-    private location: FishingLocation | null = null;
+    private location: GatheringLocation | null = null;
     private banked = 0;
     private trips = 0;
     private startedAt = Date.now();
@@ -293,13 +296,21 @@ export default class GatheringBot extends TaskBot {
 
         const here = Game.tile()!;
         const locSetting = this.settings.str('location', 'None');
-        this.location = resolveLocation(locSetting, here);
-
-        // Fishing presets pin a pier spot as the gather anchor. Miner/Woodcutter only
-        // reuse those presets for bankStand — always leash from the live start tile so
-        // Auto at Draynor does not yank oaks toward the fishing pier (3086,3231).
+        // Skill-branched location tables — Miner/WC must not resolve fishing piers.
         if (this.fishing) {
-            this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location?.spot ?? null);
+            this.location = resolveFishingLocation(locSetting, here);
+        } else if (this.mining()) {
+            this.location = resolveMiningLocation(locSetting, here);
+        } else if (this.woodcutting()) {
+            this.location = resolveWoodcuttingLocation(locSetting, here);
+        } else {
+            this.location = null;
+        }
+
+        // Named/Auto camps pin the gather leash to the camp spot. Power mode (None)
+        // and unresolved settings leash from the live start tile.
+        if (this.location?.spot) {
+            this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
         }
@@ -1072,10 +1083,11 @@ export default class GatheringBot extends TaskBot {
     }
 
     private resolveCookScene(): void {
-        if (this.location?.rangeStand) {
-            this.rangeStand = this.location.rangeStand;
-            this.rangeName = this.location.rangeName ?? 'Range';
-            this.cookObstacles = this.location.obstacles ?? ['door', 'gate'];
+        const fishLoc = this.fishingLocation();
+        if (fishLoc?.rangeStand) {
+            this.rangeStand = fishLoc.rangeStand;
+            this.rangeName = fishLoc.rangeName ?? 'Range';
+            this.cookObstacles = fishLoc.obstacles ?? ['door', 'gate'];
             return;
         }
 
@@ -1086,6 +1098,14 @@ export default class GatheringBot extends TaskBot {
             this.cookObstacles = this.location?.obstacles ?? ['door', 'gate'];
             this.log(`cook: found ${this.rangeName} @ ${this.rangeStand}`);
         }
+    }
+
+    /** Narrow location to fishing camp when cook presets (rangeStand) are needed. */
+    private fishingLocation(): FishingLocation | null {
+        if (!this.fishing || !this.location) {
+            return null;
+        }
+        return this.location as FishingLocation;
     }
 
     override recoveryAnchor(): Tile | null {
@@ -2006,7 +2026,7 @@ export default class GatheringBot extends TaskBot {
     hasDepositable(): boolean {
         return Inventory.items().some(i => this.shouldDeposit(i.name ?? ''));
     }
-    getLocation(): FishingLocation | null {
+    getLocation(): GatheringLocation | null {
         return this.location;
     }
     countTrip(n: number): void {
