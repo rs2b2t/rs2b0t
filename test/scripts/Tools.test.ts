@@ -76,6 +76,21 @@ describe('Tools kit', () => {
         expect(toolRestockPlan(reqs, lvl, inv, bank(['Rune axe', TINDERBOX]))).toEqual([]);
     });
 
+    test('toolRestockPlan withdraws better bank tier when worse is held', () => {
+        const reqs = [axeReq(true), tinderboxReq()];
+        // Bronze equipped/held, steel + tinderbox in bank — must pull steel (and tinderbox if missing).
+        const inv = (n: string) => (n === 'Bronze axe' ? 1 : 0);
+        const plan = toolRestockPlan(reqs, lvl, inv, bank(['Steel axe', 'Bronze axe', TINDERBOX]));
+        expect(plan.map(p => p.name)).toEqual(['Steel axe', TINDERBOX]);
+        expect(plan[0].equip).toBe(true);
+    });
+
+    test('toolRestockPlan skips same-tier bank duplicate when best is already held', () => {
+        const reqs = [axeReq(true)];
+        const inv = (n: string) => (n === 'Steel axe' ? 1 : 0);
+        expect(toolRestockPlan(reqs, lvl, inv, bank(['Steel axe', 'Bronze axe']))).toEqual([]);
+    });
+
     test('toolsNeedingEquip when best tier held but not worn', () => {
         const reqs = [axeReq(true), tinderboxReq()];
         const count = (n: string) => (n === 'Rune axe' || n === TINDERBOX ? 1 : 0);

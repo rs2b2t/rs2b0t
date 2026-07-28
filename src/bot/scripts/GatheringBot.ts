@@ -206,6 +206,12 @@ export default class GatheringBot extends TaskBot {
     /** Off | Buy/repair — shop/repair/smith missing gather tools. */
     private toolAcquire: ToolAcquireMode = 'off';
     private acquireBackoffUntil = 0;
+    /**
+     * One-shot bank trip at run start when Buy/repair is on (withdraw better banked
+     * axe/pick, then optional shop upgrade). Needed for chop-then-burn which never
+     * hits BankCatch, and for cold starts with bronze equipped + steel in bank.
+     */
+    private startupToolBankSyncPending = false;
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
 
@@ -283,7 +289,14 @@ export default class GatheringBot extends TaskBot {
         const locSetting = this.settings.str('location', 'None');
         this.location = resolveLocation(locSetting, here);
 
-        this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location?.spot ?? null);
+        // Fishing presets pin a pier spot as the gather anchor. Miner/Woodcutter only
+        // reuse those presets for bankStand — always leash from the live start tile so
+        // Auto at Draynor does not yank oaks toward the fishing pier (3086,3231).
+        if (this.fishing) {
+            this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location?.spot ?? null);
+        } else {
+            this.anchor = new Tile(here.x, here.z, here.level);
+        }
 
         this.powerMode = locSetting.toLowerCase() === 'none';
         if (this.cookMode !== 'off' && this.powerMode) {
@@ -356,10 +369,17 @@ export default class GatheringBot extends TaskBot {
         }
 
         this.toolAcquire = parseToolAcquireMode(this.settings.str('toolAcquire', 'Off'));
+        this.startupToolBankSyncPending = false;
         if (this.toolAcquire === 'on') {
             this.log('tools: acquire Buy/repair enabled (shops + broken repair + mith+ axe smith when bars ready)');
             if (this.fishing && this.fishMethod?.gear.some(g => isFishingBaitPiece(g))) {
                 this.log(`tools: bait/feather buy-up-to ${this.baitQty} when bank+inv are short`);
+            }
+            // WC/mining: one bank check at start so banked steel beats equipped bronze
+            // even when chop-then-burn never deposits (no BankCatch upgrade hook).
+            if ((this.mining() || this.woodcutting()) && this.toolReqs.length > 0) {
+                this.startupToolBankSyncPending = true;
+                this.log('tools: will check bank once for a better axe/pick before gathering');
             }
         }
 
@@ -1389,37 +1409,144 @@ export default class GatheringBot extends TaskBot {
         return Tile.from(here).distanceTo(stand) <= radius;
     }
 
+    /** Clear the one-shot startup bank tool check (success, fail, or nothing to do). */
+    clearStartupToolBankSync(): void {
+        this.startupToolBankSyncPending = false;
+    }
+
+    startupToolBankSyncNeeded(): boolean {
+        return this.startupToolBankSyncPending && this.toolAcquire === 'on';
+    }
+
     /**
-     * If Buy/repair is on and a better affordable tool exists, buy/smith it now.
-     * Caller must already be banking (bank open preferred so coin/bar counts work).
-     * Returns true when an upgrade trip was attempted (success or fail with backoff).
+     * Withdraw a better banked tiered tool (steel while bronze is held), equip it,
+     * and deposit the worse tier. Bank must already be open/loaded.
+     * Returns true when at least one better tool was withdrawn.
      */
-    async tryUpgradeGatherToolAtBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
-        if (!this.toolAcquireEnabled() || !this.acquireReady()) {
+    async withdrawBetterGatherToolsFromBank(
+        log: (m: string) => void = m => this.log(`  ${m}`)
+    ): Promise<boolean> {
+        if (!Bank.isOpen() || this.toolReqs.length === 0) {
             return false;
         }
-        if (this.isFishing() || this.toolReqs.length === 0) {
-            return false;
-        }
-        if (!this.hasGear() || this.hasBrokenGatherTool()) {
+        const plan = this.gatherToolRestockPlan();
+        const upgrades = plan.filter(step =>
+            this.toolReqs.some(
+                r =>
+                    r.kind === 'tiered' &&
+                    r.tiers.some(t => t.name.toLowerCase() === step.name.toLowerCase())
+            )
+        );
+        if (upgrades.length === 0) {
             return false;
         }
 
-        this.setStatus('acquire: checking tool upgrades');
-        this.log('acquire: checking tool upgrades at bank');
+        for (const step of upgrades) {
+            const before = this.heldCount(step.name);
+            const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === step.name.toLowerCase());
+            if (!item) {
+                continue;
+            }
+            log(`bank: withdraw better ${step.name}`);
+            const one = withdrawOp(item.ops, '1') ?? 'Withdraw-1';
+            await Bank.withdraw(step.name, one);
+            await Execution.delayUntil(
+                () => this.heldCount(step.name) > before || Bank.count(step.name) === 0,
+                4000
+            );
+            await this.bankPace();
+        }
+
+        const toEquip = [
+            ...upgrades.filter(s => s.equip).map(s => s.name),
+            ...this.toolsToEquip()
+        ];
+        if (toEquip.length > 0) {
+            await this.equipTools(toEquip, log);
+        }
+        // Re-open if equip closed the bank — surplus bronze still needs depositing.
         if (!Bank.isOpen()) {
             if (!(await this.openScriptBank(log))) {
+                return true;
+            }
+            if (!(await this.waitBankReady(log))) {
+                return true;
+            }
+        }
+        await this.depositSurplusGatherTools(log);
+        this.log(`tools: using better banked gear (${this.gearLabel()})`);
+        return true;
+    }
+
+    /**
+     * If Buy/repair is on and a better banked or affordable tool exists, take it now.
+     * Prefer bank withdraw (steel in bank + bronze held) before shop/smith.
+     * Caller may already be banking; otherwise opens the script bank.
+     * Returns true when a bank/shop trip was attempted (success or fail with backoff).
+     */
+    async tryUpgradeGatherToolAtBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        const startup = this.startupToolBankSyncNeeded();
+        if (!this.toolAcquireEnabled()) {
+            return false;
+        }
+        // Startup sync may run even during acquire backoff so cold-start bank steel is used.
+        if (!startup && !this.acquireReady()) {
+            return false;
+        }
+        if (this.isFishing() || this.toolReqs.length === 0) {
+            if (startup) {
+                this.clearStartupToolBankSync();
+            }
+            return false;
+        }
+        if (this.hasBrokenGatherTool()) {
+            return false;
+        }
+        // Missing gear is RestockGatherTool's job — except startup still opens bank once.
+        if (!this.hasGear() && !startup) {
+            return false;
+        }
+
+        this.setStatus(startup ? 'tools: startup bank check' : 'acquire: checking tool upgrades');
+        this.log(startup ? 'tools: startup bank check for better axe/pick' : 'acquire: checking tool upgrades at bank');
+        if (!Bank.isOpen()) {
+            if (!(await this.openScriptBank(log))) {
+                if (startup) {
+                    this.clearStartupToolBankSync();
+                }
                 this.markAcquireBackoff(20_000);
                 return true;
             }
         }
         if (!(await this.waitBankReady(log))) {
+            if (startup) {
+                this.clearStartupToolBankSync();
+            }
             this.markAcquireBackoff(20_000);
             return true;
         }
 
-        // While we're here: bank worse tools and only then plan the upgrade (needs bank GP).
-        await this.depositSurplusGatherTools(log);
+        // Banked steel while bronze is held: withdraw + equip + deposit surplus first.
+        const withdrewBetter = await this.withdrawBetterGatherToolsFromBank(log);
+        if (startup) {
+            this.clearStartupToolBankSync();
+        }
+
+        // While we're here: bank worse tools and only then plan the shop upgrade (needs bank GP).
+        if (!withdrewBetter) {
+            await this.depositSurplusGatherTools(log);
+        }
+
+        if (!this.acquireReady()) {
+            if (Bank.isOpen()) {
+                await this.bankPace();
+                await Bank.close();
+            }
+            if (withdrewBetter) {
+                await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+            }
+            return withdrewBetter;
+        }
 
         const plan = planGatherToolAcquire(this.toolReqsList(), this.acquireWorldWithBank(), {
             upgrade: true
@@ -1429,8 +1556,13 @@ export default class GatheringBot extends TaskBot {
                 await this.bankPace();
                 await Bank.close();
             }
-            // Nothing better available — cool down so we do not re-check every bank trip.
+            // Nothing better in shop — cool down so we do not re-check every bank trip.
             this.markAcquireBackoff(120_000);
+            if (withdrewBetter) {
+                this.log('acquire: bank tool upgraded; no better shop tool right now');
+                await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+                return true;
+            }
             this.log('acquire: no better tool affordable right now');
             return false;
         }
@@ -1443,12 +1575,18 @@ export default class GatheringBot extends TaskBot {
                 if (Bank.isOpen()) {
                     await Bank.close();
                 }
+                if (withdrewBetter) {
+                    await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+                }
                 return true;
             }
             if (!(await this.withdrawCoinsFor(plan.cost, log))) {
                 this.markAcquireBackoff(30_000);
                 if (Bank.isOpen()) {
                     await Bank.close();
+                }
+                if (withdrewBetter) {
+                    await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
                 }
                 return true;
             }
@@ -2846,25 +2984,26 @@ class RestockGatherTool implements Task {
 }
 
 /**
- * Optional shop/smith upgrade when Acquire tools is on and a better tier is
- * affordable (or smithable) than what we already own.
+ * Optional bank/shop/smith upgrade when Acquire tools is on.
  *
- * Only runs when already at/near the script bank (or bank UI open). Never
- * walks to bank solely to upgrade — that looked like a hang on cold start
- * (bronze axe → Bob steel) and yanked players off trees. BankCatch also
- * calls tryUpgradeGatherToolAtBank after deposits.
+ * - One-shot startup: walk bank once to withdraw a better banked tier (steel
+ *   while bronze is equipped) even under chop-then-burn (no BankCatch).
+ * - Ongoing: only when already at/near the script bank (or bank UI open).
+ *   Never walks to bank solely for shop upgrades mid-run — that looked like a
+ *   hang on cold start and yanked players off trees. BankCatch also calls
+ *   tryUpgradeGatherToolAtBank after deposits.
  */
 class UpgradeGatherTool implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        if (!this.bot.toolAcquireEnabled() || !this.bot.acquireReady()) {
+        if (!this.bot.toolAcquireEnabled()) {
             return false;
         }
         if (this.bot.isFishing() || this.bot.toolReqsList().length === 0) {
             return false;
         }
-        if (!this.bot.hasGear() || this.bot.hasBrokenGatherTool()) {
+        if (this.bot.hasBrokenGatherTool()) {
             return false;
         }
         if (EventSignal.pending() || Game.inCombat()) {
@@ -2873,7 +3012,17 @@ class UpgradeGatherTool implements Task {
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
-        // Bank-side only — do not open bank from the tree line for upgrades.
+        // Cold start: allow one bank trip from the tree line for banked better tools.
+        if (this.bot.startupToolBankSyncNeeded()) {
+            return this.bot.hasGear() || this.bot.toolAcquireEnabled();
+        }
+        if (!this.bot.acquireReady()) {
+            return false;
+        }
+        if (!this.bot.hasGear()) {
+            return false;
+        }
+        // Bank-side only after startup — do not open bank from the tree line for shop upgrades.
         return this.bot.nearScriptBank();
     }
 

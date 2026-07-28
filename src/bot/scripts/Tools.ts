@@ -183,14 +183,24 @@ export function toolRestockPlan(
     const plan: ToolRestockStep[] = [];
     for (const r of reqs) {
         if (r.kind === 'tiered') {
-            if (hasToolReq(r, skillLevel, invCount)) {
+            const level = skillLevel(r.skill);
+            // Prefer the best usable tier across pack + bank (bronze held + steel banked → withdraw steel).
+            const bestOwned = bestFromTiers(
+                level,
+                r.tiers,
+                n => invCount(n) > 0 || bankCount(n) > 0
+            );
+            if (!bestOwned) {
                 continue;
             }
-            const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => bankCount(n) > 0);
-            if (!best) {
+            if (invCount(bestOwned) > 0) {
+                // Already holding the best we own — nothing to withdraw.
                 continue;
             }
-            plan.push({ name: best, qty: 1, equip: r.equip === true });
+            if (bankCount(bestOwned) <= 0) {
+                continue;
+            }
+            plan.push({ name: bestOwned, qty: 1, equip: r.equip === true });
             continue;
         }
         const min = r.min ?? 1;
@@ -207,6 +217,26 @@ export function toolRestockPlan(
         plan.push({ name: r.name, qty: Math.min(need, available), equip: r.equip === true });
     }
     return plan;
+}
+
+/**
+ * True when the bank holds a strictly better usable tiered tool than the pack/worn set.
+ * Requires bank counts (open/loaded bank). Used to decide a one-shot startup bank trip.
+ */
+export function bankHasBetterGatherTool(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    invCount: (name: string) => number,
+    bankCount: (name: string) => number
+): boolean {
+    return toolRestockPlan(reqs, skillLevel, invCount, bankCount).some(step => {
+        const req = reqs.find(
+            r =>
+                r.kind === 'tiered' &&
+                r.tiers.some(t => t.name.toLowerCase() === step.name.toLowerCase())
+        );
+        return req != null && req.kind === 'tiered';
+    });
 }
 
 /**
