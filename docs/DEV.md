@@ -6,7 +6,7 @@ The rs2b0t bot client has **three canonical run modes**, one command each.
 
 | Mode | Command | Client | Serving / origin | Detail |
 |---|---|---|---|---|
-| **Local dev** | `sh tools/deploy-local.sh` | single (`/bot.html`) or wall (`/multibox.html`) | a local engine | [Running locally](RUNNING.md) |
+| **Local dev** | `sh tools/deploy-local.sh` / `./tools/deploy-local-key.sh <engine>` | single (`/bot.html`) or wall (`/multibox.html`) | a local engine | [Running locally](RUNNING.md) |
 | **Wall vs live** | `bun run b0t` | multibox wall | local client + reverse proxy → `w1.rs2b2t.com` | [MultiBox](MULTIBOX.md) |
 | **Hosted (prod)** | `make deploy` | single (`/rs2b0t`) + wall (`/rs2b0t/wall`) | **same-origin** at `w1.rs2b2t.com/rs2b0t` | [below](#maintainer--private-infrastructure) |
 
@@ -77,7 +77,7 @@ The bundle bakes a server target (`TARGET=…`) that fixes how the client resolv
 game WebSocket host and which RSA login modulus it uses:
 
 - **`local`** (default) — **same-origin**: `wsHost = window.location.host`. Local dev key;
-  set the public `LOCAL_RSAE` and `LOCAL_RSAN` values when using a stock engine key.
+  Use `./tools/deploy-local-key.sh <engine>` to derive the RSA values automatically when deploying against a stock engine.
 - **`live`** — hardcodes `w1.rs2b2t.com` + `wss`. Used with the local reverse proxy
   (`tools/live-proxy.ts`) for running a local client against production. Key via
   `LIVE_RSAN`.
@@ -96,7 +96,8 @@ public path is [Running locally](RUNNING.md).
 ### The maintainer engine
 
 - Engine at `~/code/rs2b2t-engine`: `npm run quickstart` (web `:8890`). Deploy the client
-  with `ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh`.
+  with `ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh` (or
+  `./tools/deploy-local-key.sh ~/code/rs2b2t-engine` for a stock engine key).
 - The engine uses a **rotated 1024-bit RSA login key** (not the upstream 512-bit default);
   the matching modulus is baked into the `local` target. A stock-key client gets login
   code 6 unless `LOCAL_RSAE` and `LOCAL_RSAN` are supplied to `deploy-local.sh`.

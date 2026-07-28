@@ -11,8 +11,8 @@ ENGINE_DIR="$1"
 PRIVATE_KEY="$ENGINE_DIR/data/config/private.pem"
 
 if [ ! -f "$PRIVATE_KEY" ]; then
-    echo "ERROR: RSA private key not found:"
-    echo "  $PRIVATE_KEY"
+    echo "ERROR: RSA private key not found:" >&2
+    echo "  $PRIVATE_KEY" >&2
     exit 1
 fi
 
@@ -48,46 +48,33 @@ LOCAL_RSAN="$(
 )"
 
 # Extract public exponent.
-#
-# This engine/OpenSSL version prints:
-#
-#   publicExponent:
-#       <hex bytes>
-#
-# rather than putting the value on the same line.
-E_HEX="$(
-    openssl rsa \
-        -in "$PRIVATE_KEY" \
-        -noout \
-        -text |
-    awk '
-        /^publicExponent:/ {
-            found=1
-            next
-        }
-
-        found {
-            line=$0
-            gsub(/[ :]/, "", line)
-
-            # Stop at the next named OpenSSL field.
-            if ($0 ~ /^[[:space:]]*[a-zA-Z][a-zA-Z ]*:/) {
-                exit
-            }
-
-            # Keep hexadecimal data only.
-            if (line ~ /^[0-9A-Fa-f]+$/) {
-                printf "%s", line
-            }
-        }
-
-        END {
-            print ""
-        }
-    '
+# OpenSSL 3.x prints:  publicExponent: 65537 (0x10001)         (single line)
+# Older / LibreSSL:    publicExponent:\n    <hex bytes>        (multi line)
+LOCAL_RSAE="$(
+    openssl rsa -in "$PRIVATE_KEY" -noout -text \
+    | sed -n 's/^publicExponent: \([0-9][0-9]*\).*/\1/p'
 )"
 
-if [ -z "$E_HEX" ]; then
+if [ -z "$LOCAL_RSAE" ]; then
+    # Fallback: multi-line hex format (older OpenSSL / LibreSSL)
+    E_HEX="$(
+        openssl rsa -in "$PRIVATE_KEY" -noout -text |
+        awk '
+            /^publicExponent:/ { found=1; next }
+            found {
+                line=$0; gsub(/[ :]/, "", line)
+                if ($0 ~ /^[[:space:]]*[a-zA-Z][a-zA-Z ]*:/) exit
+                if (line ~ /^[0-9A-Fa-f]+$/) printf "%s", line
+            }
+            END { print "" }
+        '
+    )"
+    if [ -n "$E_HEX" ]; then
+        LOCAL_RSAE="$(bun -e "console.log(BigInt('0x$E_HEX').toString())")"
+    fi
+fi
+
+if [ -z "$LOCAL_RSAE" ]; then
     echo "ERROR: Could not extract RSA public exponent." >&2
     echo "Relevant OpenSSL output:" >&2
 
@@ -99,10 +86,6 @@ if [ -z "$E_HEX" ]; then
 
     exit 1
 fi
-
-LOCAL_RSAE="$(
-    bun -e "console.log(BigInt('0x$E_HEX').toString())"
-)"
 
 if [ -z "$LOCAL_RSAE" ] || [ -z "$LOCAL_RSAN" ]; then
     echo "ERROR: Failed to convert RSA parameters." >&2

@@ -107,6 +107,8 @@ bun install
 ENGINE_DIR=/path/to/engine sh tools/deploy-local.sh
 ```
 
+Or use `./tools/deploy-local-key.sh /path/to/engine` to derive both RSA values automatically (see [The login key](#the-login-key)).
+
 `tools/deploy-local.sh` requires `$ENGINE_DIR/public` to exist (a fresh engine has
 it), and then:
 
@@ -139,11 +141,12 @@ to decimal:
 HEX=$(openssl rsa -in data/config/private.pem -noout -modulus | sed 's/^Modulus=//')
 bun -e "console.log(BigInt('0x$HEX').toString())"
 
-# public exponent
+# public exponent (handles OpenSSL 3.x single-line and older multi-line formats)
 openssl rsa -in data/config/private.pem -noout -text \
-  | awk '/^publicExponent:/{g=1;next} /^[a-zA-Z]/{g=0} g{gsub(/[: ]/,"");printf "%s",$0}' > /tmp/e.hex
-bun -e "console.log(BigInt('0x' + require('fs').readFileSync('/tmp/e.hex','utf8').trim()).toString())"
+  | sed -n 's/^publicExponent: \([0-9][0-9]*\).*/\1/p'
 ```
+
+Or use `./tools/deploy-local-key.sh /path/to/engine` to derive both values automatically.
 
 Pass both when deploying:
 

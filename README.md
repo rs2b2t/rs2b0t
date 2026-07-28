@@ -49,7 +49,7 @@ into.
 
 ```bash
 bun install
-sh tools/deploy-local-key.sh /path/to/engine
+./tools/deploy-local-key.sh /path/to/engine
 ```
 
 Then open that engine's `/bot.html`, log in, and pick a script from the library.
