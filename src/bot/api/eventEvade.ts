@@ -27,6 +27,7 @@ const RING_STEP = 2;
  * Dungeon safespot only 2 of 8 at distance 12 are even walkable, against 6-7 of 8 a
  * few tiles nearer. A single ring therefore makes the bot give up and stand there
  * being hit while somewhere perfectly good sits just inside it.
+ * @see docs/API.md#events
  */
 export function fleeCandidates(from: Pt, threat: { x: number; z: number }, dist: number): Pt[] {
     const seen = new Set<string>();

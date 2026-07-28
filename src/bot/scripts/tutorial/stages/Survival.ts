@@ -121,7 +121,7 @@ class LightFire extends StageTask {
             return;
         }
 
-        await logs.useOn(box);
+        await box.useOn(logs);
         await Execution.delayUntil(() => !Inventory.contains('Logs'), 15000);
     }
 }
@@ -194,7 +194,8 @@ class CookShrimp extends StageTask {
 
             const box = Inventory.first('Tinderbox');
             if (box) {
-                await logs.useOn(box);
+                // Tinderbox → logs (logs → tinderbox is a no-op).
+                await box.useOn(logs);
                 await Execution.delayUntil(() => Locs.query().name('Fire').within(10).exists(), 15000);
             }
             return;

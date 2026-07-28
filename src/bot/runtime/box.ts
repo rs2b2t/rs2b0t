@@ -1,3 +1,4 @@
+// docs/ARCHITECTURE.md#per-instance-storage
 // Per-instance storage namespace. Every bot instance keeps its own credentials
 // and settings under a "box" id so nothing bleeds between instances:
 //   - a standalone bot.html tab -> box '' , isolated by its own sessionStorage

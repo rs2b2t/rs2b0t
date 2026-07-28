@@ -2,6 +2,10 @@ import { bus, type EventMap } from '../events/EventBus.js';
 import { SettingsBag } from '../runtime/Settings.js';
 import type Tile from './Tile.js';
 
+/**
+ * Base class for every bot.
+ * @see docs/API.md#bot-base-classes
+ */
 export abstract class AbstractBot {
     loopDelay = 600;
 
@@ -47,15 +51,28 @@ export abstract class AbstractBot {
     }
 }
 
+/**
+ * Implement `loop()`; it runs repeatedly with `loopDelay` between iterations.
+ * @see docs/API.md#loopingbot
+ */
 export abstract class LoopingBot extends AbstractBot {
     abstract loop(): number | void | Promise<number | void>;
 }
 
+/**
+ * A guard and the action it guards.
+ * @see docs/API.md#taskbot
+ */
 export interface Task {
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
 }
 
+/**
+ * Runs the first task whose `validate()` passes, once per loop. Order is
+ * priority.
+ * @see docs/API.md#taskbot
+ */
 export abstract class TaskBot extends LoopingBot {
     private readonly tasks: Task[] = [];
 
@@ -73,12 +90,20 @@ export abstract class TaskBot extends LoopingBot {
     }
 }
 
+/**
+ * A decision node in a behaviour tree.
+ * @see docs/API.md#treebot
+ */
 export abstract class BranchTask {
     abstract validate(): boolean;
     abstract success(): TreeNode;
     abstract failure(): TreeNode;
 }
 
+/**
+ * An action node in a behaviour tree.
+ * @see docs/API.md#treebot
+ */
 export abstract class LeafTask {
     abstract execute(): void | Promise<void>;
 }

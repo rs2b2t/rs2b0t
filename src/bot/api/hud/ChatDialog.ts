@@ -2,6 +2,12 @@ import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
 
+/**
+ * Chat modals: dialogue pages, option lists, and make-x menus. Server-driven
+ * chains must be driven to completion.
+ * @see docs/API.md#chatdialog
+ * @see docs/QUESTS.md#exec-primitives
+ */
 export const ChatDialog = {
     isOpen(): boolean {
         return reader.modals().chat !== -1;

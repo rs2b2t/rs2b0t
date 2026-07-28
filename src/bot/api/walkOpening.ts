@@ -24,6 +24,10 @@ export function towardDest(door: WorldTile, here: WorldTile, dest: WorldTile): b
     return cheb(door, dest) <= cheb(here, dest) + TOWARD_SLACK;
 }
 
+/**
+ * Walk toward a destination, opening obstacles that block the way.
+ * @see docs/NAV.md#doors
+ */
 export async function walkOpening(dest: Tile, radius: number, obstacles: string[], log?: (m: string) => void): Promise<boolean> {
     for (let seg = 0; seg < 8; seg++) {
         const here = Game.tile();

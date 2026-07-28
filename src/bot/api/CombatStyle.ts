@@ -8,6 +8,11 @@ const COMBAT_STYLE_MODE: Record<string, number> = {
     defensive: 2
 };
 
+/**
+ * Melee styles a script may train. Re-applied on every login, because the
+ * combat-mode varp is not persisted.
+ * @see docs/API.md#game
+ */
 export const COMBAT_STYLE_OPTIONS = ['attack', 'strength', 'defence'];
 
 export function parseCombatStyle(name: string): number {

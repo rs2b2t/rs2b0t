@@ -1,39 +1,29 @@
+[Manual](README.md) › Dev & deploy
+
 # rs2b0t — Dev & Deploy
 
 The rs2b0t bot client has **three canonical run modes**, one command each.
 
-| Mode | Command | Client | Serving / origin |
-|---|---|---|---|
-| **Local dev** | `sh tools/deploy-local.sh` | single (`/bot.html`) or wall (`/multibox.html`) | local engine at `localhost:8890` |
-| **Wall vs live** | `bun run b0t` | multibox wall | local client + reverse proxy → `w1.rs2b2t.com` |
-| **Hosted (prod)** | `make deploy` *(in `~/code/rs2b2t`)* | single (`/rs2b0t`) + wall (`/rs2b0t/wall`) | **same-origin** at `w1.rs2b2t.com/rs2b0t` |
+| Mode | Command | Client | Serving / origin | Detail |
+|---|---|---|---|---|
+| **Local dev** | `sh tools/deploy-local.sh` | single (`/bot.html`) or wall (`/multibox.html`) | a local engine | [Running locally](RUNNING.md) |
+| **Wall vs live** | `bun run b0t` | multibox wall | local client + reverse proxy → `w1.rs2b2t.com` | [MultiBox](MULTIBOX.md) |
+| **Hosted (prod)** | `make deploy` | single (`/rs2b0t`) + wall (`/rs2b0t/wall`) | **same-origin** at `w1.rs2b2t.com/rs2b0t` | [below](#maintainer--private-infrastructure) |
 
-## Live wall viewers and resource telemetry
+## Contents
 
-The multibox rail shows current bot count, CPU, RAM, and bot traffic. On Linux, every
-managed viewer is launched in its own transient systemd cgroup-v2 scope: CPU is the
-delta of cumulative `cpu.stat usage_usec`, and RAM is `memory.current`. Those counters cover every browser
-thread/process and remain valid when Firefox/Chrome creates or exits content processes.
-On macOS, the monitor uses the dedicated viewer's process tree instead. Each bot client
-and cache worker counts its actual WebSocket application payload in both directions and
-publishes deltas to the wall, which means direct production sockets are included even
-when they bypass the local proxy. HTTP assets, headers, and transport overhead are not
-counted. The card updates once per second by changing its own text only — it never reloads
-or reparents a bot iframe.
+- [Live wall viewers and the launcher](#live-wall-viewers-and-the-launcher)
+- [Build targets](#build-targets-botbundlets-srcconfigtargetts)
+- [Maintainer / private infrastructure](#maintainer--private-infrastructure)
+  - [The maintainer engine](#the-maintainer-engine)
+  - [Hosting the single client (prod)](#hosting-the-single-client-prod)
 
-Bot count and traffic are measured inside the browser, so they work on any wall. CPU and
-RAM come from the local proxy's `/__rs2b0t/resources`; a wall served straight from an
-engine (hosted, or `deploy-local.sh`) has no such endpoint, and those two rows are hidden
-rather than shown as permanently `offline`. A monitor that answers but misbehaves is a
-different case and still reports loudly on every row.
+## Live wall viewers and the launcher
 
-The card never substitutes guessed or zero values for missing telemetry. `measuring…`
-means a real second sample is still pending; `unavailable` identifies
-a metric whose source cannot currently be measured; `offline` means the resource
-endpoint cannot be reached; and `monitor error` means its response was invalid. Traffic
-shows numeric `0 B/s` after two unchanged browser-counter samples while at least one bot
-publisher is present. An empty wall reports that no publisher appeared. There are no
-last-known values, host/headroom estimates, or zero-value substitutes for missing data.
+The multibox rail reports bot count, CPU, RAM, and bot traffic. What those readings
+mean — and the rule that no missing metric is ever replaced by a guess or a zero —
+is documented in [MultiBox](MULTIBOX.md#resource-telemetry). This section covers the
+viewers that produce them and the launcher that supervises both.
 
 ```bash
 bun run b0t                         # dedicated Electron viewer (default)
@@ -96,7 +86,30 @@ game WebSocket host and which RSA login modulus it uses:
   because it is served from the game origin, `/crc` + the cache/game WebSockets are all
   same-origin and **no proxy is involved**. The build aborts if `PROD_RSAN` is unset.
 
-## Hosting the single client (prod)
+## Maintainer / private infrastructure
+
+Everything in this section depends on repositories that are **not published**
+alongside this one — the rs2b2t engine mirror (`~/code/rs2b2t-engine`) and the ops
+repo (`~/code/rs2b2t`). If you are working from a public clone, the equivalent
+public path is [Running locally](RUNNING.md).
+
+### The maintainer engine
+
+- Engine at `~/code/rs2b2t-engine`: `npm run quickstart` (web `:8890`). Deploy the client
+  with `ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh`.
+- The engine uses a **rotated 1024-bit RSA login key** (not the upstream 512-bit default);
+  the matching modulus is baked into the `local` target. A stock-key client gets login
+  code 6 unless `LOCAL_RSAE` and `LOCAL_RSAN` are supplied to `deploy-local.sh`.
+- Cheats/debugprocs (staffModLevel 4 locally): `::tele 0,mx,mz,lx,lz`, `::~maxme`,
+  `::~item <objname> <count>`, `::~bankitem`, `::~spawnloc <locname>`. `::~maxme`'s
+  level-up dialogs swallow the next typed command — do cheats on the clean post-relogin
+  state, or clear dialogs first.
+
+The headless harness ABI and the end-to-end smoke are documented in
+[Testing](TESTING.md#live-harnesses).
+
+
+### Hosting the single client (prod)
 
 The single-instance client is served same-origin from the engine at
 `w1.rs2b2t.com/rs2b0t`. It is baked into the **engine image** at build time (in
@@ -132,21 +145,10 @@ one is starved. It does **not** survive being backgrounded: the game loop is
 all of it. For unattended running use `bun run b0t`, whose Electron shell disables
 background throttling.
 
-## Local-engine test tricks
+## See also
 
-- Engine at `~/code/rs2b2t-engine`: `npm run quickstart` (web `:8890`). Deploy the client
-  with `ENGINE_DIR=~/code/rs2b2t-engine sh tools/deploy-local.sh`.
-- The engine uses a **rotated 1024-bit RSA login key** (not the upstream 512-bit default);
-  the matching modulus is baked into the `local` target. A stock-key client gets login
-  code 6 unless `LOCAL_RSAE` and `LOCAL_RSAN` are supplied to `deploy-local.sh`.
-- Cheats/debugprocs (staffModLevel 4 locally): `::tele 0,mx,mz,lx,lz`, `::~maxme`,
-  `::~item <objname> <count>`, `::~bankitem`, `::~spawnloc <locname>`. `::~maxme`'s
-  level-up dialogs swallow the next typed command — do cheats on the clean post-relogin
-  state, or clear dialogs first.
-- Headless harness ABI: `globalThis.rs2b0t` (`.client`, `.runner`, `.reader`, `.registry`,
-  `.actions`). Boot when `rs2b0t.client.constructor.loopCycle > 10`; login auto-creates a
-  local account. See `tools/*-test.ts` for the pattern.
-- `bun run smoke` — the full live smoke fleet against the local engine (deploys once,
-  then every `tools/*-test.ts` sequentially, hours; per-smoke logs in `out/smoke-logs/`).
-  `--list` / `--only <substr>` / `--skip <substr>` subset it; SPECIAL-environment smokes
-  (desktop/hosted/multibox/e2e/rendergate + dev harnesses) are excluded automatically.
+- [Manual index](README.md)
+- [Running locally](RUNNING.md) — the from-scratch local setup
+- [Scripting API](API.md)
+- [Testing](TESTING.md) — unit tests and live harnesses
+- [MultiBox](MULTIBOX.md) — the wall itself, and what the telemetry readings mean

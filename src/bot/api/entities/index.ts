@@ -3,11 +3,19 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import Tile from '../Tile.js';
 
+/**
+ * Something with right-click actions that can be operated by name.
+ * @see docs/API.md#entities--queries
+ */
 export interface Interactable {
     actions(): string[];
     interact(action: string): boolean | Promise<boolean>;
 }
 
+/**
+ * Something with a world position and a distance from the local player.
+ * @see docs/API.md#entities--queries
+ */
 export interface Locatable {
     tile(): Tile;
     distance(): number;
@@ -28,6 +36,10 @@ function presentOps(ops: (string | null)[]): string[] {
     return ops.filter((op): op is string => op !== null && op !== 'hidden');
 }
 
+/**
+ * A non-player character in the loaded scene.
+ * @see docs/API.md#entity-shapes
+ */
 export class Npc implements Interactable, Locatable {
     constructor(readonly snap: NpcSnapshot) {}
 
@@ -89,6 +101,11 @@ export class Npc implements Interactable, Locatable {
     }
 }
 
+/**
+ * Another player in the loaded scene. Players never block navigation.
+ * @see docs/API.md#entity-shapes
+ * @see docs/NAV.md#corridor-snap
+ */
 export class Player implements Locatable {
     constructor(readonly snap: PlayerSnapshot) {}
 
@@ -117,6 +134,10 @@ export class Player implements Locatable {
     }
 }
 
+/**
+ * A scenery object — door, tree, rock, booth, altar.
+ * @see docs/API.md#entity-shapes
+ */
 export class Loc implements Interactable, Locatable {
     constructor(readonly snap: LocSnapshot) {}
 
@@ -155,6 +176,10 @@ export class Loc implements Interactable, Locatable {
     }
 }
 
+/**
+ * An item lying on the ground.
+ * @see docs/API.md#entity-shapes
+ */
 export class GroundItem implements Interactable, Locatable {
     constructor(readonly snap: GroundItemSnapshot) {}
 

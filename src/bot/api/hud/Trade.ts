@@ -22,6 +22,11 @@ function toItem(s: { id: number; name: string | null; count: number }): TradeIte
 }
 
 // Two-party: both players must "Trade with" each other to open the screen, then both accept offer + confirm.
+/**
+ * Player-to-player trading. Any movement or combat closes the modal, so a
+ * trade needs a dedicated task to own the loop while it is open.
+ * @see docs/API.md#item-acquisition
+ */
 export const Trade = {
     onOfferScreen(): boolean {
         return reader.tradeOfferOpen();

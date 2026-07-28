@@ -15,11 +15,19 @@ export interface RunState {
     inCombat: boolean;
     energy: number;
     energyMin: number;
+    modalOpen: boolean;
 }
 
 // under attack the regen floor is ignored: walking away from a fight never loses it
 export function shouldEnableRun(s: RunState): boolean {
     if (s.runOn) {
+        return false;
+    }
+    // Toggling run clicks a component in the controls tab, and the server closes the
+    // open modal to service it — enough to shut a bank mid-trip and leave the script
+    // reading an empty bank (#117). Nothing needs run while a modal is up, so wait
+    // for it to close. Being attacked still overrides: getting away beats the modal.
+    if (s.modalOpen && !s.inCombat) {
         return false;
     }
     return s.energy >= (s.inCombat ? ENERGY_MIN_ATTACKED : s.energyMin);
@@ -57,7 +65,8 @@ class RunManagerImpl {
             runOn: Game.runEnabled(),
             inCombat: Game.inCombat(),
             energy: Game.energy(),
-            energyMin: globals.num('runEnergyMin', ENERGY_MIN_DEFAULT)
+            energyMin: globals.num('runEnergyMin', ENERGY_MIN_DEFAULT),
+            modalOpen: reader.modals().main !== -1
         };
         if (shouldEnableRun(state)) {
             actions.setRun(true);

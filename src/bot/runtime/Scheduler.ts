@@ -5,6 +5,7 @@ const WATCHDOG_MS = 10000;
 const FRAME_GAP_MS = 1500;
 const NOMINAL_FRAME_MS = 20;
 
+// docs/ARCHITECTURE.md#frame-gap-insurance
 class SchedulerImpl {
     active: ScriptContext | null = null;
 

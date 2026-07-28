@@ -1,5 +1,9 @@
 import { paintState, resolveDock, type Dock, type Rect, type Region } from '#/bot/api/hud/paintLogic.js';
 
+/**
+ * Layout and behaviour of an overlay HUD.
+ * @see docs/API.md#bot-base-classes
+ */
 export interface PaintOptions {
     dock?: Dock;
     accent?: string;
@@ -205,6 +209,11 @@ export class PaintFrame {
     }
 }
 
+/**
+ * Immediate-mode overlay HUD — tabs, buttons, bars — redrawn every frame from
+ * `onPaint`.
+ * @see docs/API.md#bot-base-classes
+ */
 export const Paint = {
     begin(ctx: CanvasRenderingContext2D, opts: PaintOptions = {}): PaintFrame {
         return new PaintFrame(ctx, opts);

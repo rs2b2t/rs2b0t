@@ -17,6 +17,10 @@ export interface BankObjectAccess {
     };
 }
 
+/**
+ * A bank, its stand tile, and how to open it.
+ * @see docs/API.md#bank
+ */
 export interface BankLocation {
     name: string;
     tile: Tile;
@@ -24,6 +28,11 @@ export interface BankLocation {
     access?: BankObjectAccess;
 }
 
+/**
+ * Every known bank. Some stands are sealed collision islands, so reaching one
+ * is a data problem rather than a walker problem.
+ * @see docs/NAV.md#arrival
+ */
 export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Varrock East', tile: new Tile(3253, 3420, 0) },
     { name: 'Varrock West', tile: new Tile(3185, 3440, 0) },

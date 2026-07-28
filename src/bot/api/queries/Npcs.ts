@@ -2,6 +2,10 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { Npc } from '../entities/index.js';
 import EntityQuery from './Query.js';
 
+/**
+ * NPC queries.
+ * @see docs/API.md#entities--queries
+ */
 export const Npcs = {
     query(): EntityQuery<Npc> {
         return new EntityQuery(() => reader.npcs().map(s => new Npc(s)));

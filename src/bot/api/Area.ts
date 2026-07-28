@@ -1,6 +1,10 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from './Tile.js';
 
+/**
+ * A region of the map — rectangular or circular.
+ * @see docs/API.md#world-primitives
+ */
 export abstract class Area {
     abstract contains(tile: WorldTile): boolean;
     abstract getRandomTile(): Tile;

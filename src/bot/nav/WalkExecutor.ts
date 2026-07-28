@@ -22,6 +22,7 @@ const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
 const ARRIVE_RADIUS = 4;
 const PROGRESS_WINDOW = 26;
+// docs/NAV.md#corridor-snap
 const CORRIDOR = 3;
 const OFF_CORRIDOR_STRIKES = 2;
 const STALL_TICKS = 6;
@@ -482,6 +483,7 @@ class WalkExecutorImpl {
             }
             if (crossed) {
                 if (transport.toLevel !== undefined) {
+                    // docs/NAV.md#level-change-loc-lag
                     await Execution.delayTicks(2);
                 }
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);

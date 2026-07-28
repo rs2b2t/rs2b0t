@@ -1,12 +1,21 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../Execution.js';
 
+/**
+ * A quest's journal colour. `unknown` means not yet loaded — it is not
+ * `notStarted`.
+ * @see docs/QUESTS.md#quest-state
+ */
 export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 
 const COLOUR_NOT_STARTED = 0xf80000;
 const COLOUR_IN_PROGRESS = 0xf8f800;
 const COLOUR_COMPLETE = 0x00f800;
 
+/**
+ * The quest tab — the authoritative source of quest progress.
+ * @see docs/QUESTS.md#quest-state
+ */
 export const Quests = {
     all(): { name: string; status: QuestStatus }[] {
         return reader.questStatuses().map(q => ({ name: q.name, status: toStatus(q.colour) }));

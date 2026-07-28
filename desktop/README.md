@@ -1,3 +1,5 @@
+[Manual](../docs/README.md) › Desktop shell
+
 # rs2b0t desktop client (Electron)
 
 Runs the bot client as a standalone desktop window instead of a browser tab.
@@ -42,3 +44,8 @@ bun run package        # electron-builder --dir -> desktop/dist/
 - The bot is also hardened independent of the shell: the Scheduler shifts
   pending `Execution` deadlines across any large frame gap (system sleep,
   throttling that slips through), so waits never falsely expire.
+
+## See also
+
+- [Running locally](../docs/RUNNING.md)
+- [Manual index](../docs/README.md)

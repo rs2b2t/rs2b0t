@@ -1,3 +1,4 @@
+// docs/MULTIBOX.md#login-coordination
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
 
 export const LOGIN_BATCH_SIZE = 4;

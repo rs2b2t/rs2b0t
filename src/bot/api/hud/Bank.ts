@@ -11,6 +11,12 @@ import { Inventory } from './Inventory.js';
 
 export { withdrawOp } from './bankOps.js';
 
+/**
+ * The bank interface. `isOpen()` only means the component exists — the item
+ * list fills a beat later, and the deposit side view lags the main modal by a
+ * tick, so a count of zero is not proof of an empty bank.
+ * @see docs/API.md#bank
+ */
 export const Bank = {
     isOpen(): boolean {
         return reader.bankComId() !== -1;

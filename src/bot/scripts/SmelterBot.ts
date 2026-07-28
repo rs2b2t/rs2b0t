@@ -17,6 +17,8 @@ import {
     BAR_OPTIONS,
     recipeForBar,
     withdrawPlan,
+    withdrawFor,
+    canSmelt,
     countPrimary,
     type Recipe
 } from './SmelterBotLogic.js';
@@ -25,6 +27,10 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 const DEFAULT_BANK_STAND = new Tile(3269, 3167, 0);
 const DEFAULT_FURNACE_STAND = new Tile(3275, 3185, 0);
 const BOOTH = { op: 'Use-quickly' };
+// A pack holds 28, so 30 always clears it in one go and the engine caps the rest.
+// Sending the measured ore count instead would make a momentarily stale pack read
+// smelt short.
+const SMELT_X = 30;
 
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: [...BAR_OPTIONS], label: 'Bar to smelt', help: 'withdraw plan + coal ratio are derived from this' },
@@ -98,11 +104,14 @@ export default class SmelterBot extends TaskBot {
     furnaceTile(): Tile { return this.furnaceStand; }
     boothLocName(): string { return this.boothName; }
     primaryCount(): number { return countPrimary(Inventory.items(), this.recipe); }
+    canSmelt(): boolean { return canSmelt(Inventory.items(), this.recipe); }
 }
 
 class BankTrip implements Task {
     constructor(private bot: SmelterBot) {}
-    validate(): boolean { return this.bot.primaryCount() === 0; }
+    // anything the pack cannot make a bar from means go and restock, not just an
+    // empty primary ore — iron without coal is equally unsmeltable
+    validate(): boolean { return !this.bot.canSmelt(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
@@ -111,31 +120,49 @@ class BankTrip implements Task {
             return;
         }
         await Bank.depositInventory();
-        await Execution.delayTicks(1);
+
+        // Two different empties look identical through Bank.count: the list refills
+        // asynchronously after a deposit, and the window can be closed outright (the run
+        // toggle clicks a controls-tab component and the server shuts the modal to serve
+        // it). Either way every ore reads 0, which is what produced "'Coal' vanished from
+        // the bank mid-trip" (#117). Ore does not vanish — so establish the window is
+        // open AND filled before believing anything it says, and say which one failed.
+        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+            this.bot.log(Bank.isOpen()
+                ? 'the bank list has not filled in yet — retrying this trip'
+                : 'the bank window closed — reopening and retrying this trip');
+            return;
+        }
         this.bot.countTrip();
 
         const recipe = this.bot.activeRecipe();
-        const plan = withdrawPlan(recipe);
+        const bankNameFor = (ore: string): string | null =>
+            Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(ore.toLowerCase()))?.name ?? null;
+        const stock = (ore: string): number => {
+            const name = bankNameFor(ore);
+            return name === null ? 0 : Bank.count(name);
+        };
 
-        for (const step of plan) {
-            const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(step.ore.toLowerCase()));
-            const have = bankItem?.name ? Bank.count(bankItem.name) : 0;
-            if (!bankItem || bankItem.name === null || have < step.count) {
-                this.bot.log(`out of '${step.ore}' — bank has ${have}, need ${step.count} for a full trip of ${recipe.bar}. Stopping.`);
-                this.bot.setStatus(`out of ${step.ore} — stopped`);
-                ScriptRunner.stop();
-                return;
-            }
+        const plan = withdrawFor(recipe, stock);
+        if (plan.length === 0) {
+            const short = recipe.ingredients.map(i => `${i.ore} ${stock(i.ore)}`).join(', ');
+            this.bot.log(`the bank cannot supply even one ${recipe.bar} bar (${short}) — stopping.`);
+            this.bot.setStatus('out of ore — stopped');
+            ScriptRunner.stop();
+            return;
         }
 
         for (const step of plan) {
-            const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(step.ore.toLowerCase()));
-            if (!bankItem || bankItem.name === null) {
-                this.bot.log(`'${step.ore}' vanished from the bank mid-trip — stopping.`);
-                ScriptRunner.stop();
+            // re-checked per step: the window can shut between withdrawals too
+            if (!Bank.isOpen() || !Bank.loaded()) {
+                this.bot.log('the bank window closed mid-withdrawal — reopening and retrying this trip');
                 return;
             }
-            const bankName = bankItem.name;
+            const bankName = bankNameFor(step.ore);
+            if (bankName === null) {
+                this.bot.log(`'${step.ore}' is not in the bank list — retrying this trip`);
+                return;
+            }
             this.bot.setStatus(`withdrawing ${step.count} ${bankName}`);
             if (!(await Bank.withdrawX(bankName, step.count))) {
                 this.bot.log(`could not withdraw ${step.count} ${bankName} — retrying next trip`);
@@ -147,7 +174,7 @@ class BankTrip implements Task {
 
 class SmeltTrip implements Task {
     constructor(private bot: SmelterBot) {}
-    validate(): boolean { return this.bot.primaryCount() > 0 && !ChatDialog.canContinue(); }
+    validate(): boolean { return this.bot.canSmelt() && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
         const furnace = () => Locs.query().name(this.bot.furnaceLocName()).action('Smelt').where(l => l.tile().distanceTo(this.bot.furnaceTile()) <= this.bot.leashRadius()).nearest();
         const here = Game.tile();
@@ -184,7 +211,7 @@ class SmeltTrip implements Task {
         const barKeyword = ({ Adamant: 'Adamantite', Rune: 'Runite' } as Record<string, string>)[recipe.bar] ?? recipe.bar;
         const before = this.bot.primaryCount();
         this.bot.setStatus(`smelting ${recipe.bar}`);
-        if (await ChatDialog.makeX(barKeyword, before)) {
+        if (await ChatDialog.makeX(barKeyword, SMELT_X)) {
             await Execution.delayUntil(() => this.bot.primaryCount() === 0 || ChatDialog.canContinue(), 120000);
             if (this.bot.primaryCount() < before) { this.bot.recordSmelt(before - this.bot.primaryCount()); }
         } else {

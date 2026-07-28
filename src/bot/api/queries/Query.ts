@@ -10,6 +10,11 @@ export function matchesEntityName(actual: string | null, configured: string): bo
     return actual !== null && actual.trim().toLowerCase() === configured.trim().toLowerCase();
 }
 
+/**
+ * Chainable filter over scene entities; a terminal evaluates it against the
+ * current scene.
+ * @see docs/API.md#entityquery
+ */
 export default class EntityQuery<E extends QueryableEntity> {
     private filters: ((e: E) => boolean)[] = [];
 

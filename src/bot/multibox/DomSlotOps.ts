@@ -30,6 +30,7 @@ const CROP_TX = TILE_W / 2 - (GAME_X + GAME_W / 2) * CROP_K;
 const CROP_TY = TILE_H / 2 - (GAME_Y + GAME_H / 2) * CROP_K;
 const CROP_TRANSFORM = `translate(${CROP_TX}px, ${CROP_TY}px) scale(${CROP_K})`;
 
+// docs/MULTIBOX.md#slots-and-iframes
 // Rail (background) slots paint at ~1fps so many bots stay cheap on a laptop; the
 // focused slot ignores this and draws every frame. Set per-iframe at runtime — the
 // standalone single-instance client keeps its own RenderGate default.

@@ -4,7 +4,9 @@ import Tile from '../api/Tile.js';
 export { TINDERBOX } from './Tools.js';
 export const CANT_LIGHT = /can't light a fire here/i;
 
-export const FIRE_START_MS = 2_400;
+/** How long to wait for the light attempt to start (log leaves pack / anim / blocked). */
+export const FIRE_START_MS = 8_000;
+/** How long to wait for FM XP after a light attempt has started. */
 export const FIRE_LIGHT_MS = 90_000;
 
 export interface FirePlot {

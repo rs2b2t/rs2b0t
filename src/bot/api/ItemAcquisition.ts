@@ -8,6 +8,10 @@ import { GroundItems } from './queries/GroundItems.js';
 
 type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
 
+/**
+ * A quantity of an item, and where to get it.
+ * @see docs/API.md#item-acquisition
+ */
 export type ItemNeed = { name: string; count: number; source: ItemSource };
 
 export function held(name: string): number {
@@ -18,6 +22,10 @@ export function hasAll(needs: ItemNeed[]): boolean {
     return needs.every(n => held(n.name) >= n.count);
 }
 
+/**
+ * Acquires the first unmet need — a shop trip or a ground pickup.
+ * @see docs/API.md#item-acquisition
+ */
 export class AcquireTask implements Task {
     constructor(
         private bot: AbstractBot,

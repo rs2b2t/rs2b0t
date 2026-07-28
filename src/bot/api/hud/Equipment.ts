@@ -3,6 +3,10 @@ import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
 import { Inventory, InvItem } from './Inventory.js';
 
+/**
+ * Worn equipment.
+ * @see docs/API.md#inventory--equipment
+ */
 export const Equipment = {
     items(): InvItem[] {
         return reader.equipment().map(s => new InvItem(s));

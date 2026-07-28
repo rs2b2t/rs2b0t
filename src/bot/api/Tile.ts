@@ -1,5 +1,9 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 
+/**
+ * A world tile. Distances are Chebyshev, the game's movement metric.
+ * @see docs/API.md#world-primitives
+ */
 export default class Tile implements WorldTile {
     constructor(
         readonly x: number,

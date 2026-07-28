@@ -1,3 +1,4 @@
+// docs/QUESTS.md#provisioning
 import type { QuestItem } from '../types.js';
 
 export interface ProvisionPlan {

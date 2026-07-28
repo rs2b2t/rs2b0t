@@ -1,5 +1,9 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 
+/**
+ * Skill levels and experience.
+ * @see docs/API.md#skills
+ */
 export const Skills = {
     index(name: string): number {
         const wanted = name.toLowerCase();

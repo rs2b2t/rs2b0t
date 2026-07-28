@@ -1,3 +1,4 @@
+// docs/QUESTS.md#exec-primitives
 import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';

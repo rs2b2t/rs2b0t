@@ -1,3 +1,4 @@
+// docs/MULTIBOX.md#resource-telemetry
 import type { CpuPayload, MemoryPayload, ResourcePayload, TrafficPayload, TrafficTotals } from './ResourcePayload.js';
 import type { TrafficSnapshot } from '../adapter/TrafficAdapter.js';
 

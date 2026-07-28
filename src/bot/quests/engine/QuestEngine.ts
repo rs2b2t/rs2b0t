@@ -1,3 +1,4 @@
+// docs/QUESTS.md#quest-state
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { type Task } from '../../api/Bot.js';
 import { EventSignal } from '../../api/EventSignal.js';

@@ -33,6 +33,10 @@ tab visible; a backgrounded tab is throttled by the browser).
 
 ## Documentation
 
+**[The manual](docs/README.md)** is the entry point. The pages you probably want:
+
+- **[Running locally](docs/RUNNING.md)** — getting an engine, deploying the client,
+  tests, lint, smoke harnesses.
 - **[Writing scripts — API reference](docs/API.md)** — the full `@rs2b0t/api`
   surface with examples.
 - **[Development & run modes](docs/DEV.md)** — build targets, running against a
@@ -40,17 +44,19 @@ tab visible; a backgrounded tab is throttled by the browser).
 
 ## Quick start (local development)
 
-Requires [Bun](https://bun.sh) and a local rs2b2t engine.
+Requires [Bun](https://bun.sh), Node 24+, and a Lost City game engine to deploy
+into.
 
 ```bash
 bun install
-bun run build:bot         # build the bot client bundle
-sh tools/deploy-local.sh  # deploy the client into a local engine's public/
+ENGINE_DIR=/path/to/engine sh tools/deploy-local.sh
 ```
 
-Then open the local engine's `/bot.html`, log in, and pick a script from the
-library. See **[docs/DEV.md](docs/DEV.md)** for the three run modes (local,
-against-live via proxy, and the hosted prod build).
+Then open that engine's `/bot.html`, log in, and pick a script from the library.
+
+**[docs/RUNNING.md](docs/RUNNING.md)** walks the whole path from a cold clone —
+including getting an engine, the login-key mismatch that otherwise ends in login
+code 6, and how to run the tests.
 
 ## Writing a bot
 
@@ -94,14 +100,12 @@ See the **[API reference](docs/API.md)** for the complete surface.
 
 ## Bundled scripts
 
-`src/bot/scripts/` ships example bots across combat (ChickenKiller, RockCrab,
-MossGiant, GreenDragon, ArdyFighter, AutoFighter), thieving (ArdyThiever,
-ArdyCakes, stall/pickpocket), skilling (gathering presets for mining, fishing,
-woodcutting; cooking, smelting, smithing, bank-standing fletching, flax,
-rune-essence mining, agility), shop running, clue solving (easy + medium
-trails), and quests (the AIOQuester quest engine + QuestDashboard, tutorial),
-plus navigation and banking utilities. They double as worked examples of the
-API.
+`src/bot/scripts/` ships 38 bots across combat, thieving, skilling, shop running,
+clue solving, and quests, plus navigation and banking utilities. They double as
+worked examples of the API.
+
+**[docs/SCRIPTS.md](docs/SCRIPTS.md)** is the full catalog with every script's
+settings — it is generated from the registry, so it cannot drift.
 
 ## Project structure
 

@@ -1,6 +1,12 @@
 import { BotHost } from '../BotHost.js';
 import { Scheduler } from '../runtime/Scheduler.js';
 
+/**
+ * The only legal way to sleep. Waits are settled from the client's frame
+ * callback, so they follow game time and unwind cleanly on Stop.
+ * @see docs/API.md#execution
+ * @see docs/ARCHITECTURE.md#frame-gap-insurance
+ */
 export const Execution = {
     async delay(ms: number): Promise<void> {
         await Scheduler.enqueue({ kind: 'time', dueAt: performance.now() + ms });

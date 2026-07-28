@@ -1,3 +1,4 @@
+// docs/NAV.md#the-collision-pack
 import { gunzipSync } from 'fflate';
 
 import doors from './data/doors.json';

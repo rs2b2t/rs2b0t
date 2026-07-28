@@ -6,6 +6,8 @@ import {
     primaryOre,
     setsPerTrip,
     withdrawPlan,
+    withdrawFor,
+    canSmelt,
     countPrimary,
     type PackItem
 } from '#/bot/scripts/SmelterBotLogic.js';
@@ -123,5 +125,62 @@ describe('countPrimary', () => {
         const steel = recipeForBar('Steel')!;
         const items = pack('Steel bar', 'Coal', 'Coal');
         expect(countPrimary(items, steel)).toBe(0);
+    });
+});
+
+// Issue #117: the bot demanded a FULL trip's worth and stopped otherwise, so a bank
+// holding less than 28 slots of ore killed the run. It should smelt what it has.
+describe('withdrawFor', () => {
+    const steel = recipeForBar('Steel')!;
+    const bronze = recipeForBar('Bronze')!;
+
+    test('a stocked bank yields the full trip', () => {
+        expect(withdrawFor(steel, () => 1000)).toEqual([{ ore: 'Iron ore', count: 9 }, { ore: 'Coal', count: 18 }]);
+    });
+    test('a short bank yields a partial trip rather than nothing', () => {
+        expect(withdrawFor(steel, o => (o === 'Coal' ? 10 : 1000))).toEqual([{ ore: 'Iron ore', count: 5 }, { ore: 'Coal', count: 10 }]);
+    });
+    test('the scarcest ingredient sets the trip size', () => {
+        expect(withdrawFor(bronze, o => (o === 'Tin ore' ? 3 : 1000))).toEqual([{ ore: 'Copper ore', count: 3 }, { ore: 'Tin ore', count: 3 }]);
+    });
+    test('a missing ingredient means nothing is smeltable', () => {
+        expect(withdrawFor(steel, o => (o === 'Coal' ? 0 : 1000))).toEqual([]);
+    });
+    test('not enough for even one bar is nothing, not a zero-count withdrawal', () => {
+        expect(withdrawFor(steel, o => (o === 'Coal' ? 1 : 1000))).toEqual([]);
+    });
+    test('never exceeds one trip however full the bank is', () => {
+        const plan = withdrawFor(steel, () => 100000);
+        expect(plan.reduce((n, s) => n + s.count, 0)).toBeLessThanOrEqual(28);
+    });
+});
+
+// Both trips gated on the PRIMARY ore alone, so a pack holding iron but no coal
+// never banked and the smelt trip span forever making nothing.
+describe('canSmelt', () => {
+    const steel = recipeForBar('Steel')!;
+    const iron = recipeForBar('Iron')!;
+    const pack = (...names: string[]): PackItem[] => names.map(name => ({ name }));
+
+    test('a full set of ingredients can smelt', () => {
+        expect(canSmelt(pack('Iron ore', 'Coal', 'Coal'), steel)).toBe(true);
+    });
+    test('the primary ore alone cannot — this is the case that span', () => {
+        expect(canSmelt(pack('Iron ore', 'Iron ore'), steel)).toBe(false);
+    });
+    test('the secondary ore alone cannot either', () => {
+        expect(canSmelt(pack('Coal', 'Coal', 'Coal'), steel)).toBe(false);
+    });
+    test('too little of a secondary for even one bar cannot', () => {
+        expect(canSmelt(pack('Iron ore', 'Coal'), steel)).toBe(false);
+    });
+    test('a single-ingredient bar needs only its own ore', () => {
+        expect(canSmelt(pack('Iron ore'), iron)).toBe(true);
+    });
+    test('a pack of finished bars cannot, so the bot banks', () => {
+        expect(canSmelt(pack('Steel bar', 'Steel bar'), steel)).toBe(false);
+    });
+    test('an empty pack cannot', () => {
+        expect(canSmelt([], steel)).toBe(false);
     });
 });

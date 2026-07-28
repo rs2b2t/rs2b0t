@@ -1,3 +1,4 @@
+// docs/NAV.md#pathfinding
 export interface NavPoint {
     x: number;
     z: number;

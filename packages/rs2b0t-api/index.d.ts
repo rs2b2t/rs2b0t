@@ -4,16 +4,29 @@
 // driver resolves synchronously) — always await, and verify outcomes with
 // Execution.delayUntil on game state.
 
+/**
+ * ABI version this shim is built for. The client refuses a bundle whose
+ * version does not match the one it installs.
+ * @see docs/ARCHITECTURE.md#the-abi-boundary
+ */
 export const apiVersion: number;
 
 // ---- world primitives ----
 
+/**
+ * A world position. Anything positional accepts this shape.
+ * @see docs/API.md#world-primitives
+ */
 export interface WorldTile {
     x: number;
     z: number;
     level: number;
 }
 
+/**
+ * A concrete world tile with distance and translation helpers.
+ * @see docs/API.md#world-primitives
+ */
 export class Tile implements WorldTile {
     readonly x: number;
     readonly z: number;
@@ -27,6 +40,11 @@ export class Tile implements WorldTile {
     toString(): string;
 }
 
+/**
+ * A region of the map — rectangular or circular — for containment tests and
+ * random-tile picks.
+ * @see docs/API.md#world-primitives
+ */
 export abstract class Area {
     static rectangular(a: WorldTile, b: WorldTile): Area;
     static circular(center: WorldTile, radius: number): Area;
@@ -36,6 +54,13 @@ export abstract class Area {
 
 // ---- execution (the only legal way to sleep) ----
 
+/**
+ * The only legal way to sleep. These waits are settled from the client's frame
+ * callback, so bot time is game time and Stop can unwind them; a bare
+ * `setTimeout` escapes the runtime and trips the watchdog.
+ * @see docs/API.md#execution
+ * @see docs/ARCHITECTURE.md#frame-gap-insurance
+ */
 export const Execution: {
     /** Resolve after at least `ms` wall-clock milliseconds. */
     delay(ms: number): Promise<void>;
@@ -52,6 +77,10 @@ export const Execution: {
 
 // ---- game state ----
 
+/**
+ * Local player and world state — position, energy, combat, animation, ticks.
+ * @see docs/API.md#game
+ */
 export const Game: {
     ingame(): boolean;
     /** Local player's world tile, or null before login/scene load. */
@@ -77,16 +106,28 @@ export const Game: {
 
 // ---- entities + queries ----
 
+/**
+ * Something with right-click actions that can be operated by name.
+ * @see docs/API.md#entities--queries
+ */
 export interface Interactable {
     actions(): string[];
     interact(action: string): boolean | Promise<boolean>;
 }
 
+/**
+ * Something with a world position and a distance from the local player.
+ * @see docs/API.md#entities--queries
+ */
 export interface Locatable {
     tile(): Tile;
     distance(): number;
 }
 
+/**
+ * A non-player character in the loaded scene.
+ * @see docs/API.md#entity-shapes
+ */
 export class Npc implements Interactable, Locatable {
     readonly name: string | null;
     readonly level: number;
@@ -100,6 +141,10 @@ export class Npc implements Interactable, Locatable {
     interact(action: string): boolean | Promise<boolean>;
 }
 
+/**
+ * Another player in the loaded scene.
+ * @see docs/API.md#entity-shapes
+ */
 export class Player implements Locatable {
     readonly name: string | null;
     readonly inCombat: boolean;
@@ -108,6 +153,10 @@ export class Player implements Locatable {
     actions(): string[];
 }
 
+/**
+ * A scenery object — door, tree, rock, bank booth, altar.
+ * @see docs/API.md#entity-shapes
+ */
 export class Loc implements Interactable, Locatable {
     readonly name: string | null;
     readonly id: number;
@@ -117,6 +166,10 @@ export class Loc implements Interactable, Locatable {
     interact(action: string): boolean | Promise<boolean>;
 }
 
+/**
+ * An item lying on the ground in the loaded scene.
+ * @see docs/API.md#entity-shapes
+ */
 export class GroundItem implements Interactable, Locatable {
     readonly name: string | null;
     readonly id: number;
@@ -127,11 +180,20 @@ export class GroundItem implements Interactable, Locatable {
     interact(action: string): boolean | Promise<boolean>;
 }
 
+/**
+ * The shape `EntityQuery` filters over.
+ * @see docs/API.md#entityquery
+ */
 interface QueryableEntity extends Locatable {
     name: string | null;
     actions(): string[];
 }
 
+/**
+ * Chainable filter over scene entities. Filters compose, then a terminal
+ * (`nearest`, `results`, `exists`, ...) evaluates against the current scene.
+ * @see docs/API.md#entityquery
+ */
 export class EntityQuery<E extends QueryableEntity> {
     /** Case-insensitive exact name match against any of the given names. */
     name(...names: string[]): this;
@@ -149,17 +211,39 @@ export class EntityQuery<E extends QueryableEntity> {
     count(): number;
 }
 
+/**
+ * NPC queries.
+ * @see docs/API.md#entities--queries
+ */
 export const Npcs: {
     query(): EntityQuery<Npc>;
     all(): Npc[];
     nearest(count?: number): Npc[];
 };
+/**
+ * Player queries.
+ * @see docs/API.md#entities--queries
+ */
 export const Players: { query(): EntityQuery<Player> };
+/**
+ * Scenery queries. A loc query is empty for about a tick after a level change —
+ * blank does not mean absent.
+ * @see docs/API.md#entities--queries
+ * @see docs/NAV.md#level-change-loc-lag
+ */
 export const Locs: { query(): EntityQuery<Loc> };
+/**
+ * Ground-item queries.
+ * @see docs/API.md#entities--queries
+ */
 export const GroundItems: { query(): EntityQuery<GroundItem> };
 
 // ---- hud ----
 
+/**
+ * One backpack slot.
+ * @see docs/API.md#invitem
+ */
 export class InvItem {
     readonly name: string | null;
     readonly id: number;
@@ -176,6 +260,10 @@ export class InvItem {
     useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean>;
 }
 
+/**
+ * The backpack.
+ * @see docs/API.md#inventory--equipment
+ */
 export const Inventory: {
     items(): InvItem[];
     first(name: string): InvItem | null;
@@ -187,6 +275,10 @@ export const Inventory: {
     isFull(): boolean;
 };
 
+/**
+ * Worn equipment.
+ * @see docs/API.md#inventory--equipment
+ */
 export const Equipment: {
     items(): InvItem[];
     contains(name: string): boolean;
@@ -196,6 +288,10 @@ export const Equipment: {
     unequip(name: string): Promise<boolean>;
 };
 
+/**
+ * Skill levels and experience.
+ * @see docs/API.md#skills
+ */
 export const Skills: {
     /** Skill index by lowercase name ('woodcutting', ...), -1 if unknown. */
     index(name: string): number;
@@ -208,6 +304,10 @@ export const Skills: {
     hpFraction(): number;
 };
 
+/**
+ * One row of the open bank.
+ * @see docs/API.md#bank
+ */
 export interface BankItemSnapshot {
     slot: number;
     id: number;
@@ -233,6 +333,12 @@ export function withdrawOp(
     amount: 'all' | '10' | '1' | 'any'
 ): string | null;
 
+/**
+ * The bank interface. `isOpen()` only says the component exists — its item list
+ * fills a beat later, and again after a deposit, so verify before trusting a
+ * count of zero.
+ * @see docs/API.md#bank
+ */
 export const Bank: {
     isOpen(): boolean;
     /**
@@ -386,6 +492,10 @@ export const Banking: {
     }): Promise<boolean>;
 };
 
+/**
+ * A shop interface. Nothing here walks; be near the keeper first.
+ * @see docs/API.md#registering-a-bot
+ */
 export const Shop: {
     isOpen(): boolean;
     /** Trade with `npcName` — walks nothing, the caller must already be near. */
@@ -399,8 +509,17 @@ export const Shop: {
     close(): Promise<void>;
 };
 
+/**
+ * A quest's journal colour.
+ * @see docs/QUESTS.md#quest-state
+ */
 export type QuestStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
 
+/**
+ * The quest tab. This is the authoritative source of quest progress — never
+ * infer it from varps.
+ * @see docs/QUESTS.md#quest-state
+ */
 export const Quests: {
     /** Every quest on the quest tab with its journal-colour status. */
     all(): { name: string; status: QuestStatus }[];
@@ -409,6 +528,10 @@ export const Quests: {
     points(): number;
 };
 
+/**
+ * Chat modals: dialogue pages, option lists, and make-x menus.
+ * @see docs/API.md#chatdialog
+ */
 export const ChatDialog: {
     /** A chat modal is open (dialog, make-x, ...). */
     isOpen(): boolean;
@@ -471,6 +594,10 @@ export const Trade: {
 
 // ---- movement ----
 
+/**
+ * Options for a single web-walk.
+ * @see docs/API.md#movement
+ */
 export interface WalkOptions {
     /** Arrive within this many tiles of dest (default 2). */
     radius?: number;
@@ -478,6 +605,10 @@ export interface WalkOptions {
     log?: (msg: string) => void;
 }
 
+/**
+ * Options for a walk behind the escalation ladder.
+ * @see docs/NAV.md#when-it-gets-stuck
+ */
 export interface WalkResilientOptions {
     /** Arrive when within this Chebyshev distance of dest. */
     radius: number;
@@ -492,6 +623,12 @@ export interface WalkResilientOptions {
     log?: (msg: string) => void;
 }
 
+/**
+ * World-scale movement: A* over the baked collision pack plus the door and
+ * transport graph, opening doors and recovering from stuck.
+ * @see docs/API.md#movement
+ * @see docs/NAV.md
+ */
 export const Traversal: {
     /**
      * Web-walk across the world (A* over the baked collision pack + door/
@@ -512,6 +649,11 @@ export const Traversal: {
     remaining(): number;
 };
 
+/**
+ * Same-scene walking only. Prefer `Traversal` unless you specifically want a
+ * single click within the loaded scene.
+ * @see docs/NAV.md#following-a-path
+ */
 export const DirectNavigator: {
     /** One same-scene walk click toward the tile (clamped into the scene). */
     walk(dest: WorldTile): boolean | Promise<boolean>;
@@ -521,12 +663,20 @@ export const DirectNavigator: {
 
 // ---- events ----
 
+/**
+ * One line of game chat.
+ * @see docs/API.md#events
+ */
 export interface ChatLine {
     type: number;
     username: string | null;
     text: string;
 }
 
+/**
+ * Every event a bot can subscribe to, with its payload.
+ * @see docs/API.md#events
+ */
 export interface EventMap {
     tick: { tick: number };
     'chat.message': ChatLine;
@@ -536,6 +686,10 @@ export interface EventMap {
     'varp.changed': { index: number; value: number; previous: number };
 }
 
+/**
+ * Global event bus. Inside a bot prefer `this.on()`, which unsubscribes on stop.
+ * @see docs/API.md#events
+ */
 export const events: {
     /** Subscribe; returns the unsubscriber. Inside a bot prefer this.on(). */
     on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): () => void;
@@ -555,6 +709,11 @@ export interface SettingsBag {
     raw(): Record<string, unknown>;
 }
 
+/**
+ * Base class for every bot. Usually extended via `LoopingBot`, `TaskBot`, or
+ * `TreeBot` rather than directly.
+ * @see docs/API.md#bot-base-classes
+ */
 export abstract class AbstractBot {
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
@@ -585,11 +744,19 @@ export abstract class AbstractBot {
     protected on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
 }
 
+/**
+ * The common shape: implement `loop()` and it is called repeatedly.
+ * @see docs/API.md#loopingbot
+ */
 export abstract class LoopingBot extends AbstractBot {
     /** Return a number to override loopDelay for the next iteration. */
     abstract loop(): number | void | Promise<number | void>;
 }
 
+/**
+ * A unit of work for `TaskBot`: a guard and the action it guards.
+ * @see docs/API.md#taskbot
+ */
 export interface Task {
     validate(): boolean | Promise<boolean>;
     execute(): void | Promise<void>;
@@ -597,8 +764,16 @@ export interface Task {
 
 // ---- item acquisition ----
 
+/**
+ * Where an item can be obtained from.
+ * @see docs/API.md#item-acquisition
+ */
 export type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
 
+/**
+ * A quantity of an item, and where to get it.
+ * @see docs/API.md#item-acquisition
+ */
 export type ItemNeed = { name: string; count: number; source: ItemSource };
 
 /** Held count of `name` across every matching backpack slot (case-insensitive). */
@@ -624,16 +799,28 @@ export abstract class TaskBot extends LoopingBot {
     loop(): Promise<number | void>;
 }
 
+/**
+ * A decision node in a `TreeBot`.
+ * @see docs/API.md#treebot
+ */
 export abstract class BranchTask {
     abstract validate(): boolean;
     abstract success(): TreeNode;
     abstract failure(): TreeNode;
 }
 
+/**
+ * An action node in a `TreeBot`.
+ * @see docs/API.md#treebot
+ */
 export abstract class LeafTask {
     abstract execute(): void | Promise<void>;
 }
 
+/**
+ * Either node kind in a behaviour tree.
+ * @see docs/API.md#treebot
+ */
 export type TreeNode = BranchTask | LeafTask;
 
 /** Walks branches by validate() until a leaf, executes it, once per loop. */
@@ -644,8 +831,16 @@ export abstract class TreeBot extends LoopingBot {
 
 // ---- manifest ----
 
+/**
+ * The parameter types the panel can render.
+ * @see docs/API.md#settings
+ */
 export type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
+/**
+ * One declared parameter: its type, default, and presentation.
+ * @see docs/API.md#settings
+ */
 export interface SettingDef {
     type: SettingType;
     default: unknown;
@@ -659,6 +854,11 @@ export interface SettingDef {
  *  ?ScriptName.key=value. Read at runtime with this.settings. */
 export type SettingsSchema = Record<string, SettingDef>;
 
+/**
+ * What a script declares about itself: name, description, category, tags, and
+ * its parameter schema.
+ * @see docs/API.md#registering-a-bot
+ */
 export interface BotManifestInput {
     name: string;
     description?: string;
@@ -672,6 +872,10 @@ export interface BotManifestInput {
     create(): AbstractBot;
 }
 
+/**
+ * A validated manifest, as returned by `defineBot`.
+ * @see docs/API.md#registering-a-bot
+ */
 export interface BotManifest extends BotManifestInput {
     __rs2b0tManifest: 1;
 }

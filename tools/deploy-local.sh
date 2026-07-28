@@ -1,6 +1,7 @@
 #!/bin/sh
 # Build the stock client + bot client and deploy both into a local Engine's
-# public/ (see docs/DEV.md). Players: /rs2.cgi untouched; bot: /bot.html.
+# public/ (see docs/RUNNING.md#deploying-the-client). Players: /rs2.cgi
+# untouched; bot: /bot.html.
 set -e
 
 ENGINE="${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"

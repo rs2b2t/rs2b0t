@@ -8,6 +8,10 @@ const COM_MODE_VARP = 43;
 
 const RUN_VARP = 173;
 
+/**
+ * Local player and world state.
+ * @see docs/API.md#game
+ */
 export const Game = {
     ingame(): boolean {
         return reader.ingame();

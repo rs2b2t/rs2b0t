@@ -1,3 +1,4 @@
+// docs/CLUES.md#yielding-to-the-host-loop
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/Execution.js';
 import { EventSignal } from '#/bot/api/EventSignal.js';

@@ -1,3 +1,4 @@
+// docs/NAV.md#corridor-snap
 export interface PathTileLike {
     x: number;
     z: number;

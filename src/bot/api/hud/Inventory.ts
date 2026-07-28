@@ -3,6 +3,10 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Loc, Npc } from '../entities/index.js';
 
+/**
+ * One backpack slot.
+ * @see docs/API.md#invitem
+ */
 export class InvItem {
     constructor(readonly snap: InvItemSnapshot) {}
 
@@ -53,6 +57,10 @@ export class InvItem {
     }
 }
 
+/**
+ * The backpack.
+ * @see docs/API.md#inventory--equipment
+ */
 export const Inventory = {
     items(): InvItem[] {
         return reader.inventory().map(s => new InvItem(s));

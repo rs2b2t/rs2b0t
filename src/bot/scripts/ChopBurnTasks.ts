@@ -174,8 +174,11 @@ class ChopBurnLoad implements Task {
         const lit = (): boolean => Skills.xp('firemaking') > xp;
         const blocked = (): boolean => GameMessages.sawSince(mark, CANT_LIGHT);
 
-        await logs.useOn(tinder);
-        if (!(await Execution.delayUntil(() => this.bot.logCount() < held || blocked(), FIRE_START_MS))) {
+        // Use tinderbox → logs (same order as working quest/FM paths). Logs→tinderbox is a no-op.
+        if (!(await tinder.useOn(logs))) {
+            return 'stalled';
+        }
+        if (!(await Execution.delayUntil(() => this.bot.logCount() < held || blocked() || Game.animating(), FIRE_START_MS))) {
             return 'stalled';
         }
         if (!(await Execution.delayUntil(() => lit() || blocked() || EventSignal.pending(), FIRE_LIGHT_MS))) {

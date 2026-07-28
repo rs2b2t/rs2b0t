@@ -11,6 +11,10 @@ import { EventSignal } from './EventSignal.js';
 import { Execution } from './Execution.js';
 import { Sustain } from './Sustain.js';
 
+/**
+ * Options for a walk behind the escalation ladder.
+ * @see docs/NAV.md#when-it-gets-stuck
+ */
 export interface WalkResilientOptions {
     radius: number;
     attempts?: number;
@@ -24,6 +28,12 @@ const SCENE_TIMEOUT_MS = 6000;
 const DEFAULT_MAX_BUDGET = 1_200_000;
 const PROGRESS_LOG_MS = 15_000;
 
+/**
+ * World-scale movement over the baked collision pack and the door/transport
+ * graph.
+ * @see docs/API.md#movement
+ * @see docs/NAV.md
+ */
 export const Traversal = {
     walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         return WalkExecutor.walkTo(dest, opts);

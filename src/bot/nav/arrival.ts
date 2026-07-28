@@ -1,3 +1,4 @@
+// docs/NAV.md#arrival
 import type { NavPoint } from './PathFinder.js';
 import { chebyshev } from './followMath.js';
 

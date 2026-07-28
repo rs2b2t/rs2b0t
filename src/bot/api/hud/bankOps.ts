@@ -1,3 +1,8 @@
+/**
+ * The withdraw op for an amount, read off the item's own op list — the label
+ * uses a space ("Withdraw 1"), not a hyphen.
+ * @see docs/API.md#bank
+ */
 export function withdrawOp(ops: readonly (string | null)[], amount: 'all' | '10' | '1' | 'any'): string | null {
     const named = ops.filter((o): o is string => o !== null);
     switch (amount) {
