@@ -1163,6 +1163,85 @@ export default class GatheringBot extends TaskBot {
     }
 
     /**
+     * True when already at/near the script bank (or bank UI open). Used so tool
+     * upgrades never pull the player off trees/rocks on a cold start.
+     * Draynor bank is only ~12 tiles from the willow anchor — inside ReturnToAnchor
+     * slack — so "away from spot" alone is not a safe upgrade gate.
+     */
+    nearScriptBank(radius = 8): boolean {
+        if (Bank.isOpen()) {
+            return true;
+        }
+        const stand = this.location?.bankStand;
+        const here = Game.tile();
+        if (!stand || !here) {
+            return false;
+        }
+        // Keep tight: Draynor willows are ~12 from the bank stand — must not count as "at bank".
+        return Tile.from(here).distanceTo(stand) <= radius;
+    }
+
+    /**
+     * If Buy/repair is on and a better affordable tool exists, buy/smith it now.
+     * Caller must already be banking (bank open preferred so coin/bar counts work).
+     * Returns true when an upgrade trip was attempted (success or fail with backoff).
+     */
+    async tryUpgradeGatherToolAtBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        if (!this.toolAcquireEnabled() || !this.acquireReady()) {
+            return false;
+        }
+        if (this.isFishing() || this.toolReqs.length === 0) {
+            return false;
+        }
+        if (!this.hasGear() || this.hasBrokenGatherTool()) {
+            return false;
+        }
+        if (EventSignal.pending() || Game.inCombat()) {
+            return false;
+        }
+        if (this.burnEnabled() && this.isBurningLoad()) {
+            return false;
+        }
+
+        if (!Bank.isOpen()) {
+            this.setStatus('acquire: checking tool upgrades');
+            this.log('acquire: checking tool upgrades at bank');
+            if (!(await this.openScriptBank(log))) {
+                this.markAcquireBackoff(20_000);
+                return true;
+            }
+            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        } else {
+            this.setStatus('acquire: checking tool upgrades');
+            this.log('acquire: checking tool upgrades at bank');
+            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 2000);
+        }
+
+        const plan = planGatherToolAcquire(this.toolReqsList(), this.acquireWorldWithBank(), {
+            upgrade: true
+        });
+        if (!plan || plan.kind === 'repair') {
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+            // Nothing better available — cool down so we do not re-check every bank trip.
+            this.markAcquireBackoff(120_000);
+            this.log('acquire: no better tool affordable right now');
+            return false;
+        }
+
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+        this.log(`acquire: upgrade opportunity — ${plan.reason}`);
+        const ok = await this.executeToolAcquirePlan(plan, log);
+        this.markAcquireBackoff(ok ? 90_000 : 45_000);
+        // Always head home after an upgrade attempt so BankCatch early-return is safe.
+        await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+        return true;
+    }
+
+    /**
      * Power-mode tool trips clear the pack first (keep only gear names), then withdraw.
      * Bank mode keeps the same deposit-except-gear behaviour.
      */
@@ -1664,13 +1743,20 @@ class BankCatch implements Task {
             await refreshRaw();
         }
 
+        this.bot.countTrip(had);
+        this.bot.log(`bank: deposited ${had} ${this.bot.productLabel()}`);
 
+        // Opportunistic tool upgrade while already banking — never yank mid-chop.
+        if (await this.bot.tryUpgradeGatherToolAtBank(log)) {
+            return;
+        }
+
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
         if (!this.bot.isCookBatchReady()) {
             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
         }
-
-        this.bot.countTrip(had);
-        this.bot.log(`bank: deposited ${had} ${this.bot.productLabel()}`);
     }
 }
 
@@ -2422,8 +2508,12 @@ class RestockGatherTool implements Task {
 
 /**
  * Optional shop/smith upgrade when Acquire tools is on and a better tier is
- * affordable (or smithable) than what we already own. Runs only near bank /
- * away from the spot so we do not abandon a full mining session mid-rock.
+ * affordable (or smithable) than what we already own.
+ *
+ * Only runs when already at/near the script bank (or bank UI open). Never
+ * walks to bank solely to upgrade — that looked like a hang on cold start
+ * (bronze axe → Bob steel) and yanked players off trees. BankCatch also
+ * calls tryUpgradeGatherToolAtBank after deposits.
  */
 class UpgradeGatherTool implements Task {
     constructor(private bot: GatheringBot) {}
@@ -2444,45 +2534,13 @@ class UpgradeGatherTool implements Task {
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
-        // Only leave the spot when already banking / away, or at script start far from anchor.
-        if (!this.bot.awayFromGatherSpot(6) && !Bank.isOpen()) {
-            return false;
-        }
-        return true;
+        // Bank-side only — do not open bank from the tree line for upgrades.
+        return this.bot.nearScriptBank();
     }
 
     async execute(): Promise<void> {
         const log = (m: string) => this.bot.log(`  ${m}`);
-        if (!Bank.isOpen()) {
-            if (!(await this.bot.openScriptBank(log))) {
-                this.bot.markAcquireBackoff(20_000);
-                return;
-            }
-            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
-        }
-        const plan = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
-            upgrade: true
-        });
-        if (!plan || plan.kind === 'repair') {
-            if (Bank.isOpen()) {
-                await Bank.close();
-            }
-            // Nothing better available — do not re-check every tick.
-            this.bot.markAcquireBackoff(120_000);
-            return;
-        }
-        if (Bank.isOpen()) {
-            await Bank.close();
-        }
-        this.bot.log(`acquire: upgrade opportunity — ${plan.reason}`);
-        const ok = await this.bot.executeToolAcquirePlan(plan, log);
-        if (!ok) {
-            this.bot.markAcquireBackoff(45_000);
-            return;
-        }
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
-        // After a successful upgrade, cool down so we do not chain shop trips.
-        this.bot.markAcquireBackoff(90_000);
+        await this.bot.tryUpgradeGatherToolAtBank(log);
     }
 }
 
@@ -2537,7 +2595,7 @@ class Gather implements Task {
             .action(this.bot.actionName())
             .where(
                 l =>
-                    l.distance() >= 1 &&
+                    // Allow distance 0 (standing on multi-tile tree/rock footprint).
                     tileWithinLeash(this.bot, l.tile()) &&
                     this.bot.matchesRock(l.id) &&
                     !GAS_ROCK_IDS.has(l.id) &&
@@ -2559,11 +2617,9 @@ class Gather implements Task {
             return false;
         }
 
-
         if (!this.bot.hasGear()) {
             return this.bot.isPowerMode();
         }
-
 
         if (this.bot.isFishing() && Game.animating()) {
             return true;
@@ -2577,7 +2633,13 @@ class Gather implements Task {
             // to ReturnToAnchor when we've wandered off (e.g. after bank / whirlpool flee).
             return !beyondLeash(this.bot, Game.tile(), 4);
         }
-        return this.findRock() !== null;
+        // Loc gather (mine/chop): stay active while near the anchor so we log
+        // "no trees/rocks" instead of silent idle. Yield past leash+slack so
+        // ReturnToAnchor can pull us back (Draynor bank is only ~12 from willows).
+        if (this.findRock() !== null) {
+            return true;
+        }
+        return !beyondLeash(this.bot, Game.tile(), 4);
     }
 
     private gasAt(t: Tile): boolean {
@@ -2590,7 +2652,6 @@ class Gather implements Task {
                 .nearest() !== null
         );
     }
-
 
     private spotByIndex(index: number) {
         return Npcs.query()
@@ -2793,6 +2854,27 @@ class Gather implements Task {
     private async executeMine(): Promise<void> {
         const target = this.findRock();
         if (!target) {
+            // Keep-alive when near anchor with no matching loc — surface why we idle.
+            if (Game.animating()) {
+                this.bot.setStatus(`${this.bot.actionName()}: finishing`);
+                await Execution.delayUntil(
+                    () =>
+                        !Game.animating() ||
+                        this.findRock() !== null ||
+                        EventSignal.pending() ||
+                        Inventory.isFull() ||
+                        Game.inCombat() ||
+                        ChatDialog.canContinue(),
+                    2500
+                );
+                return;
+            }
+            const kind = this.bot.woodcutting() ? 'trees' : 'rocks';
+            this.bot.setStatus(`gather: no ${this.bot.targetName()} in leash`);
+            this.bot.log(
+                `gather: no '${this.bot.targetName()}' (${this.bot.actionName()}) ${kind} within leash ${this.bot.leashRadius()} of ${this.bot.getAnchor()}`
+            );
+            await Execution.delayTicks(3);
             return;
         }
         const tile = target.tile();
