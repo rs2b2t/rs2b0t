@@ -148,8 +148,12 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             }
             let ok = true;
             for (const it of step.items) {
-                if (!(await Bank.withdrawX(it.name, it.qty))) {
-                    log(`withdraw: '${it.name}' x${it.qty} failed`);
+                const withdrawn = it.id === undefined
+                    ? await Bank.withdrawX(it.name, it.qty)
+                    : await Bank.withdrawXById(it.id, it.qty);
+                if (!withdrawn) {
+                    const exact = it.id === undefined ? '' : ` (id ${it.id})`;
+                    log(`withdraw: '${it.name}'${exact} x${it.qty} failed`);
                     ok = false;
                 }
             }
@@ -162,11 +166,15 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             if (!(await openBankLeg('deposit: no known bank', step.bank, log))) {
                 return false;
             }
-            const kept = (name: string): boolean => {
+            const keepIds = new Set(step.keepIds ?? []);
+            const kept = (name: string, id: number): boolean => {
+                if (keepIds.has(id)) {
+                    return true;
+                }
                 const n = name.toLowerCase();
-                return step.keep.some(k => step.exactKeep ? n === k : n.includes(k));
+                return step.keep.some(k => step.exactKeep ? n === k.toLowerCase() : n.includes(k.toLowerCase()));
             };
-            await Bank.depositAllMatching(name => !kept(name));
+            await Bank.depositAllMatching((name, id) => !kept(name, id));
             if (!step.leaveOpen) {
                 actions.closeModal();
             }

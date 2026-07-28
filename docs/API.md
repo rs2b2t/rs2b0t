@@ -276,8 +276,11 @@ Bank.loaded(): boolean                    // item list populated (wait after ope
 Bank.setNoteMode(on: boolean): Promise<void>
 Bank.items(): BankItemSnapshot[]          // { slot, id, name, count, ops, comId }
 Bank.count(name: string): number          // exact name, case-insensitive
+Bank.countById(id: number): number        // when two objects share a display name
 Bank.withdraw(name: string, op?: string): boolean | Promise<boolean>
+Bank.withdrawById(id: number, op?: string): boolean | Promise<boolean>
 Bank.withdrawX(name: string, count: number): Promise<boolean>   // Withdraw-X + dialog
+Bank.withdrawXById(id: number, count: number): Promise<boolean>
 Bank.deposit(name: string, op?: string): boolean | Promise<boolean>
 Bank.depositInventory(): Promise<void>
 Bank.depositAllMatching(match: (name, id) => boolean, log?): Promise<void>
@@ -297,6 +300,8 @@ withdrawOp(ops, amount: 'all' | '10' | '1' | 'any'): string | null
 - `withdraw`/`deposit`/`count` match names **exactly** (case-insensitive).
   `op` is the context-menu label; use `withdrawOp(item.ops, 'all')` rather than
   hard-coding `'Withdraw-All'`.
+- Prefer `countById` / `withdrawById` / `withdrawXById` when two objects share a
+  display name.
 - Do **not** hand-roll walk + booth click in new scripts — use `Banking.open`.
 
 ```ts
@@ -308,6 +313,8 @@ const op = bait ? withdrawOp(bait.ops, 'all') : null;
 if (op) await Bank.withdraw('Fishing bait', op);
 // or exact qty:
 await Bank.withdrawX('Feather', 100);
+// or by id when names collide:
+// await Bank.withdrawById(someId, op);
 ```
 
 ## Banking

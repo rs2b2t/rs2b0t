@@ -33,6 +33,14 @@ describe('progressSignature', () => {
         expect(first).toBe(reordered);
         expect(first).not.toBe(empty);
     });
+    test('same-named exact item changes count as progress and ID ordering is stable', () => {
+        const base = snap('inProgress', [['a key', 1]]);
+        const golrie = progressSignature({ ...base, invIds: new Map([[293, 1], [954, 1]]), wornIds: new Set([295, 100]) });
+        const reordered = progressSignature({ ...base, invIds: new Map([[954, 1], [293, 1]]), wornIds: new Set([100, 295]) });
+        const baxtorian = progressSignature({ ...base, invIds: new Map([[298, 1], [954, 1]]), wornIds: new Set([295, 100]) });
+        expect(golrie).toBe(reordered);
+        expect(golrie).not.toBe(baxtorian);
+    });
     test('travel between quest areas counts as progress', () => {
         const base = snap('inProgress', [['knife', 1]]);
         expect(progressSignature({ ...base, tile: { x: 3046, z: 3235, level: 0 } }))

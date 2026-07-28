@@ -15,6 +15,7 @@ import { QuestFood } from '../quests/food.js';
 import type { QueueRow, QueueStatus } from '../quests/engine/queue.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { resolveConsumeAction, resolveSustainPolicy, type ResolvedSustainPolicy } from './AIOQuesterLogic.js';
 
 const DEATH_RE = /oh dear.*you are dead/i;
 
@@ -39,7 +40,7 @@ export const AIO_SETTINGS: SettingsSchema = {
         type: 'string',
         default: 'Trout',
         label: 'Food item',
-        help: 'display name of the food to withdraw for quests that ask for it (e.g. Waterfall) and to eat when HP dips; blank = no food'
+        help: 'general food to withdraw and consume when HP dips; quest-specific survival items are added automatically; blank disables only the general food'
     },
     eatAtHp: {
         type: 'number',
@@ -98,20 +99,26 @@ export default class AIOQuester extends TaskBot {
         return f.length > 0 ? f : null;
     }
 
+    sustainPolicy(): ResolvedSustainPolicy {
+        const quest = this.runningId ? defById(this.runningId) : undefined;
+        return resolveSustainPolicy(this.foodItem(), this.eatAt, quest?.sustain);
+    }
+
     shouldEat(): boolean {
-        const f = this.foodItem();
-        return f !== null && Skills.hpFraction() < this.eatAt
-            && Inventory.items().some(i => i.name?.toLowerCase() === f.toLowerCase());
+        const policy = this.sustainPolicy();
+        return Skills.hpFraction() < policy.eatBelowHp
+            && Inventory.items().some(i => policy.foods.some(food => i.name?.toLowerCase() === food.toLowerCase()));
     }
 
     async eatOnce(): Promise<void> {
-        const f = this.foodItem();
-        if (!f) { return; }
-        const food = Inventory.items().find(i => i.name?.toLowerCase() === f.toLowerCase());
+        const policy = this.sustainPolicy();
+        const food = Inventory.items().find(i => policy.foods.some(candidate => i.name?.toLowerCase() === candidate.toLowerCase()));
         if (!food) { return; }
-        this.status = `eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`;
+        const action = resolveConsumeAction(food.actions());
+        if (!action) { return; }
+        this.status = `consuming ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`;
         const before = Skills.effective('hitpoints');
-        if (!(await food.interact('Eat'))) { return; }
+        if (!(await food.interact(action))) { return; }
         await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
     }
 

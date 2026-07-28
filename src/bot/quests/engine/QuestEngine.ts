@@ -69,6 +69,7 @@ export class QuestEngine implements Task {
     private readonly blocked = new Map<string, string[]>();
 
     private lastBankCounts = new Map<string, number>();
+    private lastBankIdCounts = new Map<number, number>();
     private bankKnown = false;
 
     private runningId: string | null = null;
@@ -357,26 +358,33 @@ export class QuestEngine implements Task {
 
     private buildSnapshot(module: QuestModule, stage?: number): QuestSnapshot {
         const inv = new Map<string, number>();
+        const invIds = new Map<number, number>();
         for (const it of Inventory.items()) {
             if (it.name) {
                 const key = it.name.toLowerCase();
                 inv.set(key, (inv.get(key) ?? 0) + it.count);
             }
+            invIds.set(it.id, (invIds.get(it.id) ?? 0) + it.count);
         }
         const worn = new Set<string>();
+        const wornIds = new Set<number>();
         for (const it of Equipment.items()) {
             if (it.name) {
                 worn.add(it.name.toLowerCase());
             }
+            wornIds.add(it.id);
         }
         return {
             journal: Quests.status(module.record.name),
             inv,
+            invIds,
             worn,
+            wornIds,
             noProgress: this.noProgressCount,
             bankCoins: this.lastBankCounts.get('coins') ?? 0,
             stage,
             bank: new Map(this.lastBankCounts),
+            bankIds: new Map(this.lastBankIdCounts),
             bankKnown: this.bankKnown,
             tile: Game.tile(),
             freeSlots: Inventory.free()
@@ -423,13 +431,16 @@ export class QuestEngine implements Task {
             return;
         }
         const next = new Map<string, number>();
+        const nextIds = new Map<number, number>();
         for (const item of Bank.items()) {
             if (item.name) {
                 const key = item.name.toLowerCase();
                 next.set(key, (next.get(key) ?? 0) + item.count);
             }
+            nextIds.set(item.id, (nextIds.get(item.id) ?? 0) + item.count);
         }
         this.lastBankCounts = next;
+        this.lastBankIdCounts = nextIds;
         this.bankKnown = true;
     }
 }

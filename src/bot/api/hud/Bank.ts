@@ -49,8 +49,19 @@ export const Bank = {
             .reduce((sum, i) => sum + i.count, 0);
     },
 
+    countById(id: number): number {
+        return reader
+            .bankItems()
+            .filter(i => i.id === id)
+            .reduce((sum, i) => sum + i.count, 0);
+    },
+
     withdraw(name: string, op: string = 'Withdraw-1'): boolean | Promise<boolean> {
         return clickInvButton(reader.bankItems(), name, op);
+    },
+
+    withdrawById(id: number, op: string = 'Withdraw-1'): boolean | Promise<boolean> {
+        return clickInvButtonById(reader.bankItems(), id, op);
     },
 
     async withdrawX(name: string, count: number): Promise<boolean> {
@@ -72,6 +83,35 @@ export const Bank = {
         actions.answerCountDialog(count);
         return Execution.delayUntil(
             () => invCount() >= target || Bank.count(name) === 0 || reader.inventory().length >= reader.inventorySize(),
+            4000
+        );
+    },
+
+    async withdrawXById(id: number, count: number): Promise<boolean> {
+        if (count <= 0) {
+            return true;
+        }
+        const invCount = (): number => reader
+            .inventory()
+            .filter(i => i.id === id)
+            .reduce((sum, i) => sum + i.count, 0);
+        const item = reader.bankItems().find(i => i.id === id);
+        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
+        if (!xOp) {
+            return false;
+        }
+        const target = invCount() + count;
+        if (!(await clickInvButtonById(reader.bankItems(), id, xOp))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+            return false;
+        }
+        if (!actions.answerCountDialog(count)) {
+            return false;
+        }
+        return Execution.delayUntil(
+            () => invCount() >= target || Bank.countById(id) === 0 || reader.inventory().length >= reader.inventorySize(),
             4000
         );
     },
@@ -263,7 +303,19 @@ function bankStand(booth: WorldTile): WorldTile | null {
 
 function clickInvButton(items: InvItemSnapshot[], name: string, opLabel: string): boolean | Promise<boolean> {
     const wanted = name.toLowerCase();
-    const item = items.find(i => i.name?.toLowerCase() === wanted);
+    return clickInvButtonMatching(items, i => i.name?.toLowerCase() === wanted, opLabel);
+}
+
+function clickInvButtonById(items: InvItemSnapshot[], id: number, opLabel: string): boolean | Promise<boolean> {
+    return clickInvButtonMatching(items, i => i.id === id, opLabel);
+}
+
+function clickInvButtonMatching(
+    items: InvItemSnapshot[],
+    matches: (item: InvItemSnapshot) => boolean,
+    opLabel: string
+): boolean | Promise<boolean> {
+    const item = items.find(matches);
     if (!item) {
         return false;
     }

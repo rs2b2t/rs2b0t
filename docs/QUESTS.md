@@ -30,6 +30,11 @@ Three directories, three jobs:
 A module declares what it needs and how to decide:
 
 ```ts
+export interface QuestSustain {
+    foods: readonly string[];
+    eatBelowHp: number;
+}
+
 export interface QuestModule {
     record: QuestRecord;                       // id, name, QP, requirements, items
     hops?: LadderHop[];                        // level changes this quest needs
@@ -38,6 +43,9 @@ export interface QuestModule {
     food?: number;
     gather?: Record<string, (snap, need) => QuestStep>;
     tools?: string[];
+    ownsInventory?: boolean;                  // module manages every loadout itself
+    readStage?: () => number | undefined | Promise<number | undefined>;
+    sustain?: QuestSustain;                   // quest-specific food and eat threshold
     decide(snap: QuestSnapshot): QuestStep;
 }
 ```
@@ -72,21 +80,34 @@ That is the whole of Cook's Assistant. The snapshot the engine hands it:
 export interface QuestSnapshot {
     journal: QuestStatus;        // notStarted | started | complete | unknown
     inv: Map<string, number>;
+    invIds?: ReadonlyMap<number, number>;
     worn: Set<string>;
+    wornIds?: ReadonlySet<number>;
     noProgress: number;
     bankCoins: number;
+    stage?: number;              // exact journal stage from module.readStage()
+    bank?: ReadonlyMap<string, number>;
+    bankIds?: ReadonlyMap<number, number>;
+    bankKnown?: boolean;
+    tile?: WorldTile | null;
+    freeSlots?: number;
 }
 ```
+
+The name maps remain convenient for ordinary items. Use the ID maps for objects
+whose display names collide. A `withdraw` item can include `id`, and a `deposit`
+step can include `keepIds`; ID keeps are combined with, rather than replacing,
+the step's name-based `keep` list.
 
 Two consequences worth stating plainly:
 
 - **`'unknown'` is not `'notStarted'`.** The journal is not loaded for the first
   moments after login, and treating that as "not started" restarts a finished quest.
   Every module returns `wait` for it.
-- Progress *within* a started quest is inferred from what the player is carrying.
-  A held quest item is the state machine's memory, which is why a step that hands an
-  item over and a step that acquires it must never both be reachable from the same
-  snapshot.
+- Progress *within* a started quest is inferred from its rendered journal stage and
+  what the player is carrying. A held quest item is part of the state machine's
+  memory, which is why a step that hands an item over and a step that acquires it
+  must never both be reachable from the same snapshot.
 
 A held item can also route the bot into a wedge: carrying an item whose delivery is
 gated behind something else loops forever at the gate. When an oracle refuses, the
