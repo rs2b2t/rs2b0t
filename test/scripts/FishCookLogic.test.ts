@@ -102,9 +102,12 @@ describe('fish name classifiers', () => {
         expect(isCookedFishName('Lobster')).toBe(true);
         expect(isCookedFishName('Swordfish')).toBe(true);
         expect(isCookedFishName('Shrimps')).toBe(true);
+        expect(isCookedFishName('Cooked swordfish')).toBe(true);
         expect(isCookedFishName('Raw lobster')).toBe(false);
         expect(isCookedFishName('Burnt fish')).toBe(false);
         expect(isCookedFishName('Coins')).toBe(false);
+        expect(isCookedFishName('Cooked meat')).toBe(false);
+        expect(isCookedFishName('Meat')).toBe(false);
     });
 
     test('cookedNameFromRaw strips Raw prefix', () => {

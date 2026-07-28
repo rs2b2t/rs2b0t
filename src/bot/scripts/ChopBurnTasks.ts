@@ -1,7 +1,4 @@
-/**
- * Chop → burn tasks for GatheringBot / Woodcutter.
- * Lives outside GatheringBot so the gather engine stays a thin composer.
- */
+
 import type { Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
@@ -26,7 +23,6 @@ import {
     type FirePlot
 } from './FiremakingLogic.js';
 
-/** Minimal surface ChopBurn tasks need from GatheringBot. */
 export interface ChopBurnHost {
     log(msg: string): void;
     setStatus(s: string): void;
@@ -76,13 +72,13 @@ class ChopBurnLoad implements Task {
     async execute(): Promise<void> {
         const plot = this.bot.burnPlotOrNull();
         if (!plot) {
-            this.bot.log('burn mode on but no fire plot resolved — skipping burn');
+            this.bot.log('burn: no fire plot — skipping');
             this.bot.endBurningLoad();
             return;
         }
         if (!this.bot.hasTinderbox()) {
-            this.bot.setStatus('need tinderbox to burn');
-            this.bot.log('chop-then-burn needs a tinderbox — restock will fetch one');
+            this.bot.setStatus('burn: need tinderbox');
+            this.bot.log('burn: need tinderbox — restock will fetch');
             this.bot.endBurningLoad();
             return;
         }
@@ -95,13 +91,13 @@ class ChopBurnLoad implements Task {
                 return;
             }
             if (this.bot.burnLaneLeft() <= 0 && !(await this.gotoLane(plot))) {
-                // No lane — wait briefly then give up this load (BankCatch can bank logs).
-                this.bot.log('no clear burn lane — will bank logs instead');
+
+                this.bot.log('burn: no clear lane — banking logs');
                 this.bot.endBurningLoad();
                 return;
             }
 
-            this.bot.setStatus(`burning ${this.bot.logCount()} ${this.bot.burnLogName()} (lane ${this.bot.burnLaneLeft()})`);
+            this.bot.setStatus(`burn: ${this.bot.logCount()} ${this.bot.burnLogName()} (lane ${this.bot.burnLaneLeft()})`);
             const outcome = await this.lightOne();
             if (outcome === 'lit') {
                 this.bot.recordFire(1);
@@ -115,14 +111,14 @@ class ChopBurnLoad implements Task {
                 continue;
             }
             if (++stalls >= 3) {
-                this.bot.log('three lighting attempts stalled — ending burn load');
+                this.bot.log('burn: three stalls — ending load');
                 this.bot.endBurningLoad();
                 return;
             }
         }
 
         this.bot.endBurningLoad();
-        this.bot.log('burn load finished');
+        this.bot.log('burn: load finished');
     }
 
     private async gotoLane(plot: FirePlot): Promise<boolean> {
@@ -141,11 +137,11 @@ class ChopBurnLoad implements Task {
                 (a, b) => Reachability.canStep(a, b)
             );
             if (!found) {
-                this.bot.setStatus('waiting for a clear burn lane');
+                this.bot.setStatus('burn: waiting for clear lane');
                 await Execution.delayTicks(15);
                 continue;
             }
-            this.bot.setStatus(`walking to burn lane ${found.start.x},${found.start.z}`);
+            this.bot.setStatus(`burn: walk to lane ${found.start.x},${found.start.z}`);
             await Traversal.walkResilient(found.start, {
                 radius: 0,
                 attempts: 2,
@@ -159,7 +155,7 @@ class ChopBurnLoad implements Task {
                 : 0;
             this.bot.setBurnLaneLeft(lane);
             if (lane > 0) {
-                this.bot.log(`burn lane ${at!.x},${at!.z} west x${lane}`);
+                this.bot.log(`burn: lane ${at!.x},${at!.z} west x${lane}`);
                 return true;
             }
         }

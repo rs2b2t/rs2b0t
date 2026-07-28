@@ -89,7 +89,6 @@ export const GATHERING_SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 10, min: 2, max: 30, label: 'Leash radius (tiles)' }
 };
 
-/** Interrupt an active gather wait so the Supervisor / bank / dialog tasks can run. */
 export function shouldYieldGathering(
     eventPending: boolean,
     inventoryFull: boolean,
@@ -100,11 +99,6 @@ export function shouldYieldGathering(
     return eventPending || inventoryFull || dialogPending || targetGone || inCombat;
 }
 
-/**
- * Fishing-session end conditions while we believe we are still on a spot.
- * Spot hop / whirlpool swap / combat / event must break the wait even if the
- * player anim is still playing (harpoon anims linger between catches).
- */
 export function fishingSessionBroken(opts: {
     eventPending: boolean;
     inventoryFull: boolean;
@@ -151,29 +145,20 @@ export default class GatheringBot extends TaskBot {
     private fishMethod: FishingMethod | null = null;
     private fishing = false;
     private chopping = false;
-    /** Declared tools for this run (ladders + exact). gearKeep is derived. */
+
     private toolReqs: ToolReq[] = [];
 
     private cookMode: CookMode = 'off';
     private burntPolicy: BurntPolicy = 'drop';
     private afterCook: AfterCookCycle = 'stop';
     private bankRawTarget = 56;
-    /**
-     * Live bank total of cook-filter raw fish (Bank API after deposit/withdraw).
-     * Painted as Bank raw: X/N when bank-raw-then-cook is on.
-     */
+
     private bankRawInBank = 0;
-    /** Contains-filter for which raw fish to cook (empty = all raw). */
+
     private cookFishFilter = '';
-    /** True while a cook load is in progress (raw still on person). */
+
     private cookingLoad = false;
-    /**
-     * Sticky cook-batch phase for bank-raw-then-cook.
-     * Armed when bank raw ≥ N; stays true through every withdraw/cook/bank
-     * load until the bank is drained of cookable raw (even if total drops
-     * below N after the first 28). Prevents thrash: withdraw tools → cook 28
-     * → see bank &lt; N → fish again with tools.
-     */
+
     private inCookBatch = false;
     private rangeStand: Tile | null = null;
     private rangeName = 'Range';
@@ -232,7 +217,7 @@ export default class GatheringBot extends TaskBot {
                 this.settings.str('cookFishCustom', '')
             );
         } else if ('treeName' in this.settings.raw()) {
-            // Woodcutter facade — same engine as Miner/Fisher.
+
             this.chopping = true;
             this.targetType = 'loc';
             this.target = this.settings.str('treeName', 'Tree');
@@ -265,13 +250,13 @@ export default class GatheringBot extends TaskBot {
 
         this.powerMode = locSetting.toLowerCase() === 'none';
         if (this.cookMode !== 'off' && this.powerMode) {
-            this.log('cook mode needs a bank — location None forces drop-only; cook disabled');
+            this.log('cook: disabled under location None (drop-only)');
             this.cookMode = 'off';
         }
         if (this.cookMode !== 'off' && this.fishing) {
             this.resolveCookScene();
             if (!this.rangeStand) {
-                this.log('cook mode on but no Range found in the scene / location — cook disabled until a range is nearby');
+                this.log('cook: no Range in scene/location — disabled until one is nearby');
             } else {
                 const filterNote = `; cook ${cookFilterLabel(this.cookFishFilter)}`;
                 const batchNote =
@@ -279,24 +264,24 @@ export default class GatheringBot extends TaskBot {
                         ? `; bank ${this.bankRawTarget} raw then cook; after=${this.afterCook}`
                         : '';
                 this.log(
-                    `cook: ${this.cookMode} @ range ${this.rangeStand} (${this.rangeName}); burnt=${this.burntPolicy}${filterNote}${batchNote}`
+                    `cook: ${this.cookMode} @ ${this.rangeName} ${this.rangeStand}; burnt=${this.burntPolicy}${filterNote}${batchNote}`
                 );
             }
         }
 
-        // Chop → burn (Woodcutter): like cook extends fishing, but FM lives in ChopBurnTasks.
+
         if (this.chopping && 'burnMode' in this.settings.raw()) {
             this.burnMode = parseBurnMode(this.settings.str('burnMode', 'Off'));
             this.burnLogs = logsForTree(this.target);
             if (this.burnMode !== 'off' && this.powerMode) {
-                this.log('burn mode needs a bank path / fire plot — location None forces drop-only; burn disabled');
+                this.log('burn: disabled under location None (drop-only)');
                 this.burnMode = 'off';
             }
             if (this.burnMode !== 'off') {
                 const needFm = firemakingLevelForLogs(this.burnLogs) ?? 1;
                 const haveFm = Skills.level('firemaking');
                 if (haveFm < needFm) {
-                    this.log(`${this.burnLogs} need Firemaking ${needFm}, you have ${haveFm} — burn disabled`);
+                    this.log(`burn: ${this.burnLogs} need FM ${needFm} (have ${haveFm}) — disabled`);
                     this.burnMode = 'off';
                 } else {
                     const spotSetting = this.settings.str('fireSpot', 'Auto');
@@ -305,7 +290,7 @@ export default class GatheringBot extends TaskBot {
                             ? nearestFireSpot(here)
                             : resolveFireSpot(spotSetting);
                     if (!resolved) {
-                        this.log(`unknown fire spot '${spotSetting}' — burn disabled`);
+                        this.log(`burn: unknown fire spot '${spotSetting}' — disabled`);
                         this.burnMode = 'off';
                     } else {
                         this.burnSpotName = resolved.name;
@@ -321,16 +306,17 @@ export default class GatheringBot extends TaskBot {
             }
         }
 
-        // Derive deposit keep-list from tool kit + fishing gear names.
+
         this.gearKeep = this.rebuildGearKeep();
 
         if (this.location) {
-            this.log(`location: ${this.location.name}${locSetting.toLowerCase() === 'auto' ? ' (auto-detected)' : ''} — banking the catch at ${this.location.bankStand}`);
+            const auto = locSetting.toLowerCase() === 'auto' ? ' (auto)' : '';
+            this.log(`location: ${this.location.name}${auto}; bank ${this.location.bankStand}`);
             if (!this.location.verified) {
-                this.log(`warning: ${this.location.name} coordinates are UNVERIFIED — watch the first bank run`);
+                this.log(`location: ${this.location.name} coords unverified — watch first bank run`);
             }
         } else if (!this.powerMode) {
-            this.log('no preset location — will web-walk to the nearest bank');
+            this.log('location: no preset — nearest bank');
         }
         const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
         const fullNote =
@@ -340,7 +326,7 @@ export default class GatheringBot extends TaskBot {
                   ? 'dropping'
                   : 'banking';
         this.log(
-            `gathering '${this.target}' (${this.action}${pairNote}) within ${this.leash} of ${this.anchor}, ${fullNote} *${this.productLabel()}* when full`
+            `gather: '${this.target}' (${this.action}${pairNote}) leash ${this.leash} @ ${this.anchor}; ${fullNote} ${this.productLabel()} when full`
         );
 
         this.on('inventory.changed', e => {
@@ -351,7 +337,7 @@ export default class GatheringBot extends TaskBot {
                 this.gathered++;
             } else if (this.mining() && (e.name ?? '').toLowerCase().startsWith('uncut ')) {
                 this.gems++;
-                this.log(`gem! ${e.name} (${this.gems} this run)`);
+                this.log(`gem: ${e.name} (${this.gems} this run)`);
             }
         });
 
@@ -368,7 +354,7 @@ export default class GatheringBot extends TaskBot {
             ...(burnOn ? createChopBurnTasks(this) : []),
             this.powerMode ? new DropProduct(this) : new BankCatch(this),
             new Gather(this),
-            // Shared anchor task — suppress while burning off-leash at a fire plot.
+
             createReturnToAnchorTask(this, {
                 slack: 4,
                 suppress: () => this.burnEnabled() && this.isBurningLoad()
@@ -376,7 +362,7 @@ export default class GatheringBot extends TaskBot {
         );
     }
 
-    /** Keep-list for depositAllExcept: tool kit names ∪ fishing gear names. */
+
     private rebuildGearKeep(): string[] {
         const names = new Set<string>(toolKeepNames(this.toolReqs));
         if (this.fishMethod) {
@@ -387,15 +373,15 @@ export default class GatheringBot extends TaskBot {
         return [...names];
     }
 
-    /** Open the location bank (or nearest) — single path for all bank tasks. */
+
     async openScriptBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
         const loc = this.location;
         return Banking.open({
             stand: loc?.bankStand ?? null,
             boothName: loc?.boothName,
             boothOp: loc?.boothOp,
-            // Cook scenes often put a door between range and bank; fishing-only
-            // locations usually have a clear path (empty obstacles → walkResilient).
+
+
             obstacles: this.cookEnabled() ? this.cookObstacles : (loc?.obstacles ?? []),
             log
         });
@@ -408,13 +394,13 @@ export default class GatheringBot extends TaskBot {
             this.cookObstacles = this.location.obstacles ?? ['door', 'gate'];
             return;
         }
-        // Auto-discover a Range (or Fire) in the loaded scene near the player / bank.
+
         const range = Locs.query().name('Range', 'Cooking range', 'Fire').nearest();
         if (range) {
             this.rangeStand = range.tile();
             this.rangeName = range.name ?? 'Range';
             this.cookObstacles = this.location?.obstacles ?? ['door', 'gate'];
-            this.log(`auto-found cook surface '${this.rangeName}' at ${this.rangeStand}`);
+            this.log(`cook: found ${this.rangeName} @ ${this.rangeStand}`);
         }
     }
 
@@ -422,38 +408,83 @@ export default class GatheringBot extends TaskBot {
         return this.anchor;
     }
 
+    private paintKind(): string {
+        if (this.fishing) {
+            return 'Fisher';
+        }
+        if (this.mining()) {
+            return 'Miner';
+        }
+        if (this.woodcutting()) {
+            return 'Woodcutter';
+        }
+        return 'Gathering';
+    }
+
+    private paintProductLabel(): string {
+        if (this.mining()) {
+            return 'Ore';
+        }
+        if (this.woodcutting()) {
+            return 'Logs';
+        }
+        if (this.fishing) {
+            return 'Fish';
+        }
+        return this.productLabel() || this.target;
+    }
+
+    private paintCookMode(): string {
+        if (this.cookMode === 'cook-then-bank') {
+            return 'cook→bank';
+        }
+        if (this.cookMode === 'bank-raw-then-cook') {
+            return 'bank→cook';
+        }
+        return this.cookMode;
+    }
+
+    private paintStatusLine(): string {
+        const s = this.status.trim();
+        if (s.length <= 58) {
+            return s;
+        }
+        return `${s.slice(0, 55)}…`;
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
-        p.title(`Gathering — ${this.status}`);
+        p.title(this.paintKind());
+        p.text(this.paintStatusLine(), '#8a919a');
 
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const label = this.mining() ? 'Ore' : this.woodcutting() ? 'Logs' : this.target;
-        const perHr = mins > 0.5 ? ` (${Math.round((this.gathered / mins) * 60)}/hr)` : '';
-        p.row(`Runtime: ${fmtDuration(mins)}`, `${label}: ${this.gathered}${perHr}`, `Inv: ${Inventory.used()}/28`);
-        const extras: string[] = [];
-        if (this.mining()) {
-            extras.push(`Gems: ${this.gems}`);
+        const perHr = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
+        p.row(`Runtime ${fmtDuration(mins)}`, `Inv ${Inventory.used()}/28`, perHr);
+        p.row(`${this.paintProductLabel()} ${this.gathered}`, `Banked ${this.banked}`, `Trips ${this.trips}`);
+
+        if (this.mining() && this.gems > 0) {
+            p.row(`Gems ${this.gems}`);
         }
+
         if (this.location) {
-            extras.push(`Loc: ${this.location.name}`, `Banked: ${this.banked} (${this.trips} trips)`);
-        } else if (!this.powerMode && (this.mining() || this.woodcutting() || this.fishing)) {
-            extras.push(`Banked: ${this.banked} (${this.trips} trips)`);
+            p.row(`Loc ${this.location.name}`, this.powerMode ? 'Mode drop' : 'Mode bank');
+        } else if (this.powerMode) {
+            p.row('Mode drop');
+        } else if (this.mining() || this.woodcutting() || this.fishing) {
+            p.row('Mode bank (nearest)');
         }
+
         if (this.cookMode !== 'off' && this.fishing) {
-            extras.push(`Cooked: ${this.cooked}`, `Mode: ${this.cookMode}`);
-            if (this.cookFishFilter) {
-                extras.push(`Cook: ${this.cookFishFilter}`);
-            }
+            const filter = this.cookFishFilter || 'all raw';
+            p.row(`Cook ${this.paintCookMode()}`, `Cooked ${this.cooked}`, `Filter ${filter}`);
             if (this.cookMode === 'bank-raw-then-cook') {
                 const phase = this.inCookBatch ? (this.cookingLoad ? 'cooking' : 'draining') : 'fishing';
-                extras.push(`Bank raw: ${this.bankRawInBank}/${this.bankRawTarget}`, `Batch: ${phase}`);
+                p.row(`Raw bank ${this.bankRawInBank}/${this.bankRawTarget}`, `Batch ${phase}`);
             }
         }
+
         if (this.burnMode !== 'off' && this.chopping) {
-            extras.push(`Fires: ${this.firesLit}`, `Burn: ${this.burnSpotName || this.burnMode}`);
-        }
-        if (extras.length > 0) {
-            p.row(...extras);
+            p.row(`Fires ${this.firesLit}`, `Spot ${this.burnSpotName || '—'}`);
         }
 
         p.gap();
@@ -496,7 +527,7 @@ export default class GatheringBot extends TaskBot {
     mining(): boolean {
         return this.rockIds.size > 0;
     }
-    /** Spot must offer the primary op (+ pair when the method declares one). */
+
     matchesSpot(actions: readonly string[]): boolean {
         return spotMatchesMethod(actions, { op: this.action, pair: this.pairOp });
     }
@@ -506,7 +537,7 @@ export default class GatheringBot extends TaskBot {
     isPowerMode(): boolean {
         return this.powerMode;
     }
-    /** Names held in pack or worn (tools can be equipped). */
+
     heldItemNames(): string[] {
         return [...Equipment.items(), ...Inventory.items()].map(i => i.name ?? '').filter(n => n.length > 0);
     }
@@ -518,7 +549,7 @@ export default class GatheringBot extends TaskBot {
         return this.chopping;
     }
     private skillLevel = (skill: string): number => Skills.level(skill);
-    /** Count held in pack or worn (tools can be equipped). */
+
     private heldCount = (name: string): number => {
         const want = name.toLowerCase();
         let n = 0;
@@ -564,11 +595,11 @@ export default class GatheringBot extends TaskBot {
         }
         return this.gearKeep.filter(g => !this.heldHas(g));
     }
-    /** Exact keep-list names for depositAllExcept / restock. */
+
     gearKeepNamesList(): string[] {
         return this.rebuildGearKeep();
     }
-    /** Restock plan for declared toolReqs (pick/axe/tinderbox/…). Bank must be open. */
+
     gatherToolRestockPlan() {
         return toolRestockPlan(this.toolReqs, this.skillLevel, this.heldCount, name => Bank.count(name));
     }
@@ -624,31 +655,27 @@ export default class GatheringBot extends TaskBot {
     getCookFishFilter(): string {
         return this.cookFishFilter;
     }
-    /**
-     * Refresh live bank raw total from Bank API (must be called while bank is open
-     * and after Bank.loaded() settles). Arms a sticky cook batch when threshold is met.
-     * Does NOT clear an in-progress batch when total drops below N after a withdraw.
-     */
+
     refreshBankRawTotal(): number {
         if (this.cookMode !== 'bank-raw-then-cook') {
             return this.bankRawInBank;
         }
         const total = countRawInBank(Bank.items(), this.cookFishFilter);
         this.bankRawInBank = total;
-        // Only arm from fishing→threshold. Once inCookBatch, we drain to 0 regardless of N.
+
         if (!this.inCookBatch && shouldStartBankRawCookBatch(this.cookMode, total, this.bankRawTarget)) {
             this.inCookBatch = true;
             this.log(
-                `bank holds ${total} ${cookFilterLabel(this.cookFishFilter)} (target ${this.bankRawTarget}) — entering cook batch (drain all)`
+                `cook: bank holds ${total} ${cookFilterLabel(this.cookFishFilter)} (target ${this.bankRawTarget}) — starting batch`
             );
         }
         return total;
     }
-    /** Force paint/total to 0 when withdraw finds nothing (avoids drain-more thrash). */
+
     forceBankRawEmpty(): void {
         this.bankRawInBank = 0;
     }
-    /** Sticky batch phase: withdraw/cook until bank cookable raw is empty. */
+
     isCookBatchReady(): boolean {
         return this.inCookBatch;
     }
@@ -669,37 +696,32 @@ export default class GatheringBot extends TaskBot {
             this.cooked += n;
         }
     }
-    /**
-     * After banking one cooked inventory load (bank-raw-then-cook).
-     * Batch is sticky: keep withdrawing while ANY cookable raw remains in bank
-     * (N is only the entry threshold — not re-checked per load).
-     * When drained: Stop ends the script; Continue returns to fishing for +N more.
-     */
+
     finishCookCycle(): void {
         this.cookingLoad = false;
         const outcome = cookBatchAfterLoad(this.bankRawInBank, this.afterCook);
         if (outcome === 'drain-more') {
-            // Stay in batch — next task is another withdraw. Do NOT clear inCookBatch.
+
             this.inCookBatch = true;
             this.log(
-                `cook load done — bank still holds ${this.bankRawInBank} ${cookFilterLabel(this.cookFishFilter)} — withdrawing another load (batch drain)`
+                `cook: load done; bank still has ${this.bankRawInBank} ${cookFilterLabel(this.cookFishFilter)} — withdraw next`
             );
-            this.setStatus('cook batch continues — withdrawing');
+            this.setStatus('cook: withdrawing next load');
             return;
         }
         this.inCookBatch = false;
         if (outcome === 'stop') {
             this.log(
-                `cook batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget}) — stopping (after cook = Stop)`
+                `cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget}) — stop`
             );
-            this.setStatus('cook batch complete — stopped');
+            this.setStatus('cook: batch complete — stopped');
             ScriptRunner.stop();
             return;
         }
         this.log(
-            `cook batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget}) — fishing for next +${this.bankRawTarget}`
+            `cook: batch drained (bank raw ${this.bankRawInBank}/${this.bankRawTarget}) — fish for next +${this.bankRawTarget}`
         );
-        this.setStatus('cook batch done — fishing again');
+        this.setStatus('cook: batch done — fishing');
     }
     rangeTile(): Tile | null {
         return this.rangeStand;
@@ -713,15 +735,15 @@ export default class GatheringBot extends TaskBot {
     rangeLeash(): number {
         return this.rangeSearchRadius;
     }
-    /** All raw fish in inventory (any species). */
+
     rawFishCount(): number {
         return Inventory.items().filter(i => isRawFishName(i.name)).length;
     }
-    /** Raw fish that match the cook filter (what we actually cook). */
+
     cookableRawCount(): number {
         return Inventory.items().filter(i => rawMatchesCookFilter(i.name, this.cookFishFilter)).length;
     }
-    /** Raw fish that should stay raw / be banked without cooking. */
+
     bankOnlyRawCount(): number {
         return Inventory.items().filter(i => isRawFishName(i.name) && !rawMatchesCookFilter(i.name, this.cookFishFilter)).length;
     }
@@ -731,7 +753,7 @@ export default class GatheringBot extends TaskBot {
     burntFishCount(): number {
         return Inventory.items().filter(i => isBurntFishName(i.name)).length;
     }
-    /** Last cookable raw (for use-on-range). Falls back to any raw if filter empty. */
+
     lastRawFish() {
         const items = Inventory.items();
         const idx = lastMatchingIndex(items, n => rawMatchesCookFilter(n, this.cookFishFilter));
@@ -740,13 +762,13 @@ export default class GatheringBot extends TaskBot {
     isCookableRaw(name: string | null | undefined): boolean {
         return rawMatchesCookFilter(name, this.cookFishFilter);
     }
-    /** Deposit cooked (+ burnt if banking burnt); keep gear and leftover raw during cook. */
+
     shouldDepositCookResult(name: string): boolean {
         if (this.gearKeep.length > 0 && !depositAllExcept(this.gearKeep)(name)) {
             return false;
         }
         if (isRawFishName(name)) {
-            // Bank non-cook raw (e.g. keep tuna raw while cooking swordfish)
+
             return !rawMatchesCookFilter(name, this.cookFishFilter);
         }
         if (isBurntFishName(name)) {
@@ -760,10 +782,7 @@ export default class GatheringBot extends TaskBot {
         }
         return isRawFishName(name);
     }
-    /**
-     * When cook is active, BankCatch must wait for cook loads / cookable full packs.
-     * Non-cookable raw (filter split) can still bank while cookable raw is cooking.
-     */
+
     bankCatchBlockedByCook(): boolean {
         if (!this.cookEnabled()) {
             return false;
@@ -780,7 +799,7 @@ export default class GatheringBot extends TaskBot {
         return false;
     }
 
-    // ── Chop → burn surface (ChopBurnTasks) ──────────────────────────────────
+
     burnEnabled(): boolean {
         return this.chopping && this.burnMode === 'chop-then-burn' && this.burnPlot !== null;
     }
@@ -817,7 +836,7 @@ export default class GatheringBot extends TaskBot {
     logCount(): number {
         return Inventory.count(this.burnLogs);
     }
-    /** BankCatch waits while a burn load is in progress (or pack is full of logs to burn). */
+
     bankCatchBlockedByBurn(): boolean {
         if (!this.burnEnabled()) {
             return false;
@@ -873,7 +892,7 @@ async function dropAll(bot: GatheringBot): Promise<void> {
         await item.interact('Drop');
         await Execution.delayUntil(() => Inventory.used() < before, 3000);
     }
-    bot.log('dropped the haul');
+    bot.log('drop: haul cleared');
 }
 
 class BankCatch implements Task {
@@ -894,17 +913,17 @@ class BankCatch implements Task {
             if (!(this.bot.isFishing() && this.bot.getCookMode() === 'bank-raw-then-cook')) {
                 return;
             }
-            // Bank API truth after deposit settles — not an inventory tally.
+
             await Execution.delayUntil(() => Bank.loaded(), 3000);
             await Execution.delayTicks(1);
             const total = this.bot.refreshBankRawTotal();
-            this.bot.log(`bank raw (${cookFilterLabel(this.bot.getCookFishFilter())}): ${total}/${this.bot.getBankRawTarget()}`);
+            this.bot.log(`bank: raw ${cookFilterLabel(this.bot.getCookFishFilter())} ${total}/${this.bot.getBankRawTarget()}`);
         };
 
-        this.bot.setStatus('banking: heading to the bank');
+        this.bot.setStatus('bank: heading to bank');
         if (!(await this.bot.openScriptBank(log))) {
-            // No preset location and no booth in scene — try nearest known bank + deposit.
-            this.bot.setStatus('banking: heading to the nearest bank');
+
+            this.bot.setStatus('bank: nearest bank');
             const banked = await Banking.bankNearest({
                 deposit,
                 log,
@@ -913,8 +932,8 @@ class BankCatch implements Task {
                 }
             });
             if (!banked) {
-                this.bot.setStatus('no bank reachable — dropping the haul');
-                this.bot.log('no bank reachable — dropping instead');
+                this.bot.setStatus('bank: unreachable — dropping');
+                this.bot.log('bank: unreachable — dropping');
                 await dropAll(this.bot);
                 return;
             }
@@ -925,17 +944,15 @@ class BankCatch implements Task {
             await refreshRaw();
         }
 
-        // Stay at bank if a cook batch is ready so withdraw can run next tick
+
         if (!this.bot.isCookBatchReady()) {
             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
         }
 
         this.bot.countTrip(had);
-        this.bot.log(`banked ${had} *${this.bot.productLabel()}*`);
+        this.bot.log(`bank: deposited ${had} ${this.bot.productLabel()}`);
     }
 }
-
-// ─── Fish → cook pipeline (CookBot patterns, any bank+range scene) ───────────
 
 class FishCookDialog implements Task {
     constructor(private bot: GatheringBot) {}
@@ -943,8 +960,8 @@ class FishCookDialog implements Task {
         return this.bot.cookEnabled() && ChatDialog.isMakeMenu();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('choosing cook product');
-        // Prefer the raw fish name so multi-product menus pick the right one
+        this.bot.setStatus('cook: choosing product');
+
         const raw = this.bot.lastRawFish();
         const hint = raw?.name ?? undefined;
         if (!(await ChatDialog.make(hint))) {
@@ -965,18 +982,18 @@ class FishCookLoad implements Task {
         if (cookable <= 0) {
             return false;
         }
-        // Mid-load: keep cooking remaining cookable raw
+
         if (this.bot.isCookingLoad()) {
             return true;
         }
-        // Cook-then-bank: start when pack is full and has cookable raw
+
         if (
             this.bot.getCookMode() === 'cook-then-bank' &&
             shouldCookThenBank(this.bot.getCookMode(), Inventory.isFull(), cookable)
         ) {
             return true;
         }
-        // Bank-raw-then-cook: after withdraw, inv has cookable raw and batch was armed
+
         if (this.bot.getCookMode() === 'bank-raw-then-cook' && this.bot.isCookBatchReady() && cookable > 0) {
             return true;
         }
@@ -1001,7 +1018,7 @@ class FishCookLoad implements Task {
 
         const here = Game.tile();
         if (!here || rangeTile.distanceTo(here) > 1 || !findRange()) {
-            this.bot.setStatus('walking to the range');
+            this.bot.setStatus('cook: walking to range');
             await walkOpening(rangeTile, 0, this.bot.cookObstacleList(), m => this.bot.log(m));
         }
 
@@ -1018,7 +1035,7 @@ class FishCookLoad implements Task {
                 await Execution.delayTicks(2);
                 return;
             }
-            this.bot.setStatus(`cooking ${raw.name}`);
+            this.bot.setStatus(`cook: ${raw.name}`);
             const before = this.bot.cookableRawCount();
             if (!(await raw.useOn(oven))) {
                 await Execution.delayTicks(2);
@@ -1038,11 +1055,11 @@ class FishCookLoad implements Task {
         }
 
         if (this.bot.cookableRawCount() === 0) {
-            // Drop burnt before banking cooked (default human-ish: clear the ash first)
+
             if (this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
                 await dropBurnt(this.bot);
             }
-            // cookingLoad stays true until FishBankCooked finishes depositing
+
         }
     }
 }
@@ -1054,7 +1071,7 @@ class FishBankCooked implements Task {
         if (!this.bot.cookEnabled() || EventSignal.pending() || Game.inCombat()) {
             return false;
         }
-        // After a cook load finishes (no cookable raw left) bank cooked / burnt / bank-only raw
+
         if (!this.bot.isCookingLoad()) {
             return false;
         }
@@ -1062,7 +1079,7 @@ class FishBankCooked implements Task {
     }
 
     async execute(): Promise<void> {
-        // Safety: drop burnt if still holding and policy is drop
+
         if (this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
             await dropBurnt(this.bot);
         }
@@ -1073,37 +1090,37 @@ class FishBankCooked implements Task {
         const deposit = (name: string) => this.bot.shouldDepositCookResult(name);
 
         if (hasDeposit) {
-            this.bot.setStatus('banking cooked fish');
+            this.bot.setStatus('bank: cooked fish');
             if (!(await this.bot.openScriptBank(log))) {
-                this.bot.log('could not open bank for cooked fish — will retry');
+                this.bot.log('bank: could not open for cooked — will retry');
                 return;
             }
             await Execution.delay(bankHumanDelayMs());
             await Bank.depositAllMatching(deposit);
             await Execution.delayUntil(() => Bank.loaded(), 3000);
             await Execution.delayTicks(1);
-            // Keep paint total honest after depositing cooked / leftover raw
+
             if (this.bot.getCookMode() === 'bank-raw-then-cook') {
                 this.bot.refreshBankRawTotal();
             }
             this.bot.countTrip(cooked);
-            this.bot.log(`banked ${cooked} cooked fish (burnt policy: ${this.bot.getBurntPolicy()})`);
+            this.bot.log(`bank: deposited ${cooked} cooked (burnt=${this.bot.getBurntPolicy()})`);
         } else {
-            this.bot.log('cook load finished with nothing to bank');
+            this.bot.log('cook: load finished, nothing to bank');
         }
 
-        // bank-raw-then-cook: drain more / stop / fish again (sticky batch — N not re-checked)
+
         if (this.bot.getCookMode() === 'bank-raw-then-cook') {
             this.bot.finishCookCycle();
             if (this.bot.isCookBatchReady()) {
-                // Still draining — stay near bank for the next withdraw.
+
                 return;
             }
             if (this.bot.getAfterCook() === 'stop') {
-                // ScriptRunner.stop already called inside finishCookCycle.
+
                 return;
             }
-            // fish-again
+
         } else {
             this.bot.endCookingLoad();
         }
@@ -1121,30 +1138,30 @@ class FishWithdrawCookBatch implements Task {
         if (!this.bot.isCookBatchReady() || this.bot.isCookingLoad()) {
             return false;
         }
-        // Need no cookable raw in inv so we can withdraw a full cook load
+
         return this.bot.cookableRawCount() === 0 && !EventSignal.pending() && !Game.inCombat();
     }
 
     async execute(): Promise<void> {
         const log = (m: string) => this.bot.log(`  ${m}`);
-        this.bot.setStatus('withdrawing raw for cook batch');
+        this.bot.setStatus('cook: withdrawing raw');
 
         if (!(await this.bot.openScriptBank(log))) {
-            this.bot.log('could not open bank for cook withdraw — will retry');
+            this.bot.log('cook: could not open bank for withdraw — will retry');
             return;
         }
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         await Execution.delayTicks(1);
-        // Update paint total only — does NOT exit the sticky batch when total < N.
+
         this.bot.refreshBankRawTotal();
 
-        // Only withdraw cook-filter raw (e.g. swordfish while tuna stays banked)
+
         const rawItem = Bank.items().find(i => i.name !== null && this.bot.isCookableRaw(i.name));
         if (!rawItem || rawItem.name === null) {
             this.bot.log(
-                `no ${cookFilterLabel(this.bot.getCookFishFilter())} left in bank — ending cook batch`
+                `cook: no ${cookFilterLabel(this.bot.getCookFishFilter())} left in bank — ending batch`
             );
-            // Force remaining=0 so finishCookCycle cannot re-arm drain-more on a stale total.
+
             this.bot.forceBankRawEmpty();
             this.bot.finishCookCycle();
             if (!this.bot.isCookBatchReady() && this.bot.getAfterCook() === 'continue') {
@@ -1155,7 +1172,7 @@ class FishWithdrawCookBatch implements Task {
         const bankName = rawItem.name;
         const allOp = withdrawOp(rawItem.ops, 'all');
         if (allOp) {
-            this.bot.log(`withdrawing all ${bankName} (batch drain; bank had ${this.bot.getBankRawInBank()})`);
+            this.bot.log(`cook: withdraw all ${bankName} (bank had ${this.bot.getBankRawInBank()})`);
             await Bank.withdraw(bankName, allOp);
             await Execution.delayUntil(() => this.bot.cookableRawCount() > 0 || Bank.count(bankName) === 0, 4000);
         } else {
@@ -1170,13 +1187,13 @@ class FishWithdrawCookBatch implements Task {
             }
         }
 
-        // Paint: remaining bank raw after this withdraw (may be << N — batch stays armed).
+
         await Execution.delayUntil(() => Bank.loaded(), 2000);
         this.bot.refreshBankRawTotal();
 
         if (this.bot.cookableRawCount() === 0) {
-            this.bot.log('withdraw landed empty — ending cook batch');
-            // Re-count; if still nothing withdrawable, treat bank as drained for this filter.
+            this.bot.log('cook: withdraw empty — ending batch');
+
             this.bot.refreshBankRawTotal();
             if (this.bot.getBankRawInBank() === 0 || !Bank.items().some(i => i.name !== null && this.bot.isCookableRaw(i.name))) {
                 this.bot.forceBankRawEmpty();
@@ -1188,16 +1205,16 @@ class FishWithdrawCookBatch implements Task {
             return;
         }
 
-        // Stay in sticky batch; cook this load next. Bank may already be < N — that is fine.
+
         this.bot.beginCookingLoad();
         this.bot.log(
-            `withdrew ${this.bot.cookableRawCount()} ${bankName} (bank left ${this.bot.getBankRawInBank()}) — heading to range`
+            `cook: withdrew ${this.bot.cookableRawCount()} ${bankName} (bank left ${this.bot.getBankRawInBank()})`
         );
     }
 }
 
 async function dropBurnt(bot: GatheringBot): Promise<void> {
-    bot.setStatus('dropping burnt fish');
+    bot.setStatus('cook: dropping burnt');
     for (let guard = 0; guard < 30; guard++) {
         const item = Inventory.items().find(i => isBurntFishName(i.name));
         if (!item) {
@@ -1208,9 +1225,8 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
         await Execution.delayUntil(() => Inventory.used() < before, 3000);
         await Execution.delay(80 + Math.floor(Math.random() * 160));
     }
-    bot.log('dropped burnt fish');
+    bot.log('cook: dropped burnt');
 }
-
 
 class ReplacePickaxe implements Task {
     constructor(private bot: GatheringBot) {}
@@ -1220,8 +1236,14 @@ class ReplacePickaxe implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus('pickaxe broke — fetching a replacement');
-        this.bot.log('pickaxe is broken — banking for the best replacement');
+        if (this.bot.isPowerMode()) {
+            this.bot.setStatus('pickaxe broke — power mode has no bank');
+            this.bot.log('pickaxe: broken under power mode — stopping (switch Full inventory to Auto to restock)');
+            ScriptRunner.stop();
+            return;
+        }
+        this.bot.setStatus('pickaxe: fetching replacement');
+        this.bot.log('pickaxe: broken — banking for best replacement');
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (Equipment.contains(BROKEN_PICKAXE) && !Inventory.isFull()) {
@@ -1229,7 +1251,7 @@ class ReplacePickaxe implements Task {
         }
 
         if (!(await this.bot.openScriptBank(log))) {
-            this.bot.log('could not open a bank — will retry');
+            this.bot.log('pickaxe: could not open bank — will retry');
             return;
         }
 
@@ -1237,7 +1259,7 @@ class ReplacePickaxe implements Task {
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
         if (!pick) {
-            this.bot.log('WARNING: no usable pickaxe in the bank — stopping. Deposit one and restart.');
+            this.bot.log('pickaxe: no usable pick in bank — stopping');
             ScriptRunner.stop();
             return;
         }
@@ -1245,30 +1267,26 @@ class ReplacePickaxe implements Task {
         const one = item ? withdrawOp(item.ops, '1') ?? 'Withdraw-1' : 'Withdraw-1';
         await Bank.withdraw(pick, one);
         if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
-            this.bot.log('withdraw did not land — will retry');
+            this.bot.log('pickaxe: withdraw did not land — will retry');
             return;
         }
-        this.bot.log(`replaced the broken pickaxe with a ${pick}`);
+        this.bot.log(`pickaxe: replaced with ${pick}`);
         await Equipment.equip(pick);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
 
-/**
- * Restock fishing tools/bait from the bank when the pack is missing required gear.
- * Runs above Gather so missing-gear no longer just stalls with a status message.
- */
 class RestockFishingGear implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        if (!this.bot.isFishing() || this.bot.hasGear()) {
+        if (!this.bot.isFishing() || this.bot.hasGear() || this.bot.isPowerMode()) {
             return false;
         }
         if (EventSignal.pending() || Game.inCombat()) {
             return false;
         }
-        // Don't interrupt an active cook load / withdraw cycle.
+
         if (this.bot.cookEnabled() && (this.bot.isCookingLoad() || this.bot.isCookBatchReady())) {
             return false;
         }
@@ -1281,19 +1299,19 @@ class RestockFishingGear implements Task {
             return;
         }
         const missing = this.bot.missingGearNames();
-        this.bot.setStatus(`restocking gear: ${missing.join(' + ') || this.bot.gearLabel()}`);
-        this.bot.log(`missing fishing gear (${missing.join(', ') || this.bot.gearLabel()}) — banking to restock`);
+        this.bot.setStatus(`restock: ${missing.join(' + ') || this.bot.gearLabel()}`);
+        this.bot.log(`restock: missing ${missing.join(', ') || this.bot.gearLabel()}`);
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (!(await this.bot.openScriptBank(log))) {
-            this.bot.log('could not open bank to restock gear — will retry');
+            this.bot.log('restock: could not open bank — will retry');
             await Execution.delayTicks(3);
             return;
         }
         await Execution.delay(bankHumanDelayMs());
         await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
 
-        // Free pack space while keeping tools/bait already held.
+
         await Bank.depositAllMatching(depositAllExcept(this.bot.gearKeepNamesList()));
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         await Execution.delayTicks(1);
@@ -1307,11 +1325,11 @@ class RestockFishingGear implements Task {
             const still = this.bot.missingGearNames();
             this.bot.log(
                 still.length > 0
-                    ? `WARNING: bank has no ${still.join(' / ')} — deposit gear and restart, or switch method`
-                    : 'gear already topped up after deposit'
+                    ? `restock: bank has no ${still.join(' / ')} — deposit gear or switch method`
+                    : 'restock: gear already topped up'
             );
             if (still.length > 0) {
-                this.bot.setStatus(`missing gear in bank: ${still.join(' + ')}`);
+                this.bot.setStatus(`restock: missing in bank ${still.join(' + ')}`);
                 await Execution.delayTicks(8);
             }
             return;
@@ -1325,20 +1343,20 @@ class RestockFishingGear implements Task {
             }
             if (step.qty === 1) {
                 const one = withdrawOp(item.ops, '1') ?? 'Withdraw-1';
-                this.bot.log(`withdrawing 1× ${step.name}`);
+                this.bot.log(`restock: withdraw 1× ${step.name}`);
                 await Bank.withdraw(step.name, one);
             } else if (step.qty >= 50) {
-                // Bait/feathers: prefer Withdraw-All when topping a large stack.
+
                 const all = withdrawOp(item.ops, 'all');
                 if (all && Bank.count(step.name) <= step.qty) {
-                    this.bot.log(`withdrawing all ${step.name} (${Bank.count(step.name)})`);
+                    this.bot.log(`restock: withdraw all ${step.name} (${Bank.count(step.name)})`);
                     await Bank.withdraw(step.name, all);
                 } else {
-                    this.bot.log(`withdrawing ${step.qty}× ${step.name}`);
+                    this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                     await Bank.withdrawX(step.name, step.qty);
                 }
             } else {
-                this.bot.log(`withdrawing ${step.qty}× ${step.name}`);
+                this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
             await Execution.delayUntil(
@@ -1350,26 +1368,22 @@ class RestockFishingGear implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
-            this.bot.setStatus(`still missing: ${still.join(' + ')}`);
-            this.bot.log(`restock incomplete — still need ${still.join(', ')}`);
+            this.bot.setStatus(`restock: still missing ${still.join(' + ')}`);
+            this.bot.log(`restock: incomplete — need ${still.join(', ')}`);
             await Execution.delayTicks(5);
             return;
         }
 
-        this.bot.log(`restocked fishing gear: ${this.bot.gearLabel()}`);
+        this.bot.log(`restock: fishing gear ok (${this.bot.gearLabel()})`);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
 
-/**
- * Restock declared tool kit (pickaxe / axe / tinderbox / …) via Tools.toolRestockPlan.
- * Broken pickaxes are handled by ReplacePickaxe first.
- */
 class RestockGatherTool implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        if (this.bot.isFishing() || this.bot.hasGear()) {
+        if (this.bot.isFishing() || this.bot.hasGear() || this.bot.isPowerMode()) {
             return false;
         }
         if (this.bot.toolReqsList().length === 0) {
@@ -1378,11 +1392,11 @@ class RestockGatherTool implements Task {
         if (EventSignal.pending() || Game.inCombat()) {
             return false;
         }
-        // Broken pick takes ReplacePickaxe instead.
+
         if (this.bot.mining() && (Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null)) {
             return false;
         }
-        // Don't interrupt an active burn load.
+
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
@@ -1392,19 +1406,19 @@ class RestockGatherTool implements Task {
     async execute(): Promise<void> {
         const missing = this.bot.missingGearNames();
         const label = missing.join(' + ') || this.bot.gearLabel();
-        this.bot.setStatus(`restocking ${label}`);
-        this.bot.log(`missing tools (${label}) — banking to restock`);
+        this.bot.setStatus(`restock: ${label}`);
+        this.bot.log(`restock: missing ${label}`);
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (!(await this.bot.openScriptBank(log))) {
-            this.bot.log(`could not open bank to restock ${label} — will retry`);
+            this.bot.log(`restock: could not open bank for ${label} — will retry`);
             await Execution.delayTicks(3);
             return;
         }
         await Execution.delay(bankHumanDelayMs());
         await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
 
-        // Keep any tools already in the pack; dump ore/logs/etc.
+
         await Bank.depositAllMatching(depositAllExcept(this.bot.gearKeepNamesList()));
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         await Execution.delayTicks(1);
@@ -1412,11 +1426,11 @@ class RestockGatherTool implements Task {
         const plan = this.bot.gatherToolRestockPlan();
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
-            this.bot.setStatus(`no ${still.join(' / ') || label} in bank`);
+            this.bot.setStatus(`restock: no ${still.join(' / ') || label} in bank`);
             this.bot.log(
                 still.length > 0
-                    ? `WARNING: bank has no ${still.join(' / ')} — deposit tools and restart`
-                    : 'tools already topped up after deposit'
+                    ? `restock: bank has no ${still.join(' / ')} — deposit tools and restart`
+                    : 'restock: tools already topped up'
             );
             await Execution.delayTicks(8);
             return;
@@ -1430,10 +1444,10 @@ class RestockGatherTool implements Task {
             }
             if (step.qty === 1) {
                 const one = withdrawOp(item.ops, '1') ?? 'Withdraw-1';
-                this.bot.log(`withdrawing 1× ${step.name}`);
+                this.bot.log(`restock: withdraw 1× ${step.name}`);
                 await Bank.withdraw(step.name, one);
             } else {
-                this.bot.log(`withdrawing ${step.qty}× ${step.name}`);
+                this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
             await Execution.delayUntil(
@@ -1448,13 +1462,13 @@ class RestockGatherTool implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
-            this.bot.setStatus(`still missing: ${still.join(' + ')}`);
-            this.bot.log(`restock incomplete — still need ${still.join(', ')}`);
+            this.bot.setStatus(`restock: still missing ${still.join(' + ')}`);
+            this.bot.log(`restock: incomplete — need ${still.join(', ')}`);
             await Execution.delayTicks(5);
             return;
         }
 
-        this.bot.log(`restocked tools: ${this.bot.gearLabel()}`);
+        this.bot.log(`restock: tools ok (${this.bot.gearLabel()})`);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
@@ -1494,21 +1508,21 @@ class Gather implements Task {
         if (Inventory.isFull() || Game.inCombat() || EventSignal.pending()) {
             return false;
         }
-        // Don't start a new fish session while a cook load / withdraw is in flight.
+
         if (this.bot.cookEnabled() && (this.bot.isCookingLoad() || this.bot.isCookBatchReady())) {
             return false;
         }
-        // Don't chop while burning a full load.
+
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
-        // Missing gear/tool: Restock* tasks handle bank mode; power-mode still
-        // validates so execute can surface a status (tool lost / banked).
+
+
         if (!this.bot.hasGear()) {
             return this.bot.isPowerMode();
         }
-        // Already mid-action (e.g. harpoon anim between catches) — keep the session
-        // alive without re-clicking, which is what stuck tuna/swordfish on a dead spot.
+
+
         if (this.bot.isFishing() && Game.animating()) {
             return true;
         }
@@ -1526,7 +1540,7 @@ class Gather implements Task {
         );
     }
 
-    /** Live snapshot of the NPC we clicked, by index (survives tile hops of other spots). */
+
     private spotByIndex(index: number) {
         return Npcs.query()
             .where(n => n.index === index)
@@ -1560,16 +1574,16 @@ class Gather implements Task {
     }
 
     private async fleeGas(key: string, tile: Tile): Promise<void> {
-        this.bot.log(`rock at ${tile} is smoking — backing off before it blows`);
-        this.bot.setStatus('smoking rock — backing off');
+        this.bot.log(`mine: smoking rock @ ${tile} — backing off`);
+        this.bot.setStatus('mine: smoking rock');
         this.bot.cooldown(key, GAS_ROCK_TICKS + 10);
         DirectNavigator.walk(this.bot.getAnchor());
         await Execution.delayTicks(2);
     }
 
     private async fleeWhirlpool(tile: Tile): Promise<void> {
-        this.bot.log(`whirlpool at ${tile} — stepping off (do not re-click)`);
-        this.bot.setStatus('whirlpool — stepping away');
+        this.bot.log(`fish: whirlpool @ ${tile} — stepping off`);
+        this.bot.setStatus('fish: whirlpool');
         this.bot.cooldown(keyOf(tile), 70);
         DirectNavigator.walk(this.bot.getAnchor());
         await Execution.delayTicks(2);
@@ -1577,8 +1591,8 @@ class Gather implements Task {
 
     async execute(): Promise<void> {
         if (!this.bot.hasGear()) {
-            this.bot.setStatus(`missing gear: ${this.bot.gearLabel()}`);
-            this.bot.log(`can't gather — missing ${this.bot.gearLabel()} (bank / whirlpool?)`);
+            this.bot.setStatus(`gather: missing ${this.bot.gearLabel()}`);
+            this.bot.log(`gather: missing ${this.bot.gearLabel()}`);
             await Execution.delayTicks(5);
             return;
         }
@@ -1595,11 +1609,11 @@ class Gather implements Task {
     }
 
     private async executeFish(): Promise<void> {
-        // Resume an in-progress session only if we can still identify the spot under us.
-        // Otherwise click a fresh matching Cage/Harpoon or Net/Harpoon spot.
+
+
         const target = this.findSpot();
         if (!target && Game.animating()) {
-            // Animating with no matching spot nearby — wait for anim to end rather than thrash.
+
             this.bot.setStatus('waiting for fishing anim to finish');
             await Execution.delayUntil(
                 () => !Game.animating() || EventSignal.pending() || Inventory.isFull() || Game.inCombat() || ChatDialog.canContinue(),
@@ -1624,8 +1638,8 @@ class Gather implements Task {
                 return;
             }
 
-            // Wait for the first swing / catch / interrupt. Do NOT treat "another
-            // matching spot exists elsewhere" as success — that was the tuna stuck loop.
+
+
             await Execution.delayUntil(
                 () => Inventory.used() > before || Game.animating() || this.fishingBroken(index, startTile),
                 12000
@@ -1643,14 +1657,14 @@ class Gather implements Task {
                 return;
             }
             if (Inventory.used() === before && !Game.animating()) {
-                // Click did nothing (pathing fail / level / no bait). Brief cooldown.
+
                 this.bot.cooldown(key, 4);
                 return;
             }
         }
 
-        // Hold the session while animating / catching. Break on hop, whirlpool,
-        // combat, event, full pack, or a long silent gap with no anim.
+
+
         for (let guard = 0; guard < 200; guard++) {
             if (this.fishingBroken(index, startTile)) {
                 const live = this.spotByIndex(index);
@@ -1675,7 +1689,7 @@ class Gather implements Task {
                 continue;
             }
             if (!Game.animating()) {
-                // Idle gap — session over; next loop will re-find.
+
                 return;
             }
         }

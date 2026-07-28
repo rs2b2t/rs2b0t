@@ -1,46 +1,27 @@
 export interface FishingGearPiece {
-    /** Exact inventory / bank item name. */
+
     name: string;
-    /** Minimum count required to start/continue fishing. */
+
     min: number;
-    /**
-     * Target count when restocking from the bank.
-     * Tools stay at 1; bait/feathers top up to a stack so bank trips are rare.
-     */
+
     restock: number;
 }
 
 export interface FishingMethod {
     name: string;
-    /** Primary right-click op on the fishing spot. */
+
     op: string;
-    /**
-     * The OTHER op on the same spot. Every multi-op fishing spot offers a pair;
-     * matching both picks the right spot type when ops collide
-     * (Harpoon alone is ambiguous: Cage/Harpoon = tuna/swordfish, Net/Harpoon = sharks).
-     * Empty string = primary op only (lava-eel bait spots).
-     */
+
     pair: string;
-    /** Tools + consumables kept on deposit and restocked when missing. */
+
     gear: FishingGearPiece[];
 }
 
-/** Whirlpool spot variants (fishing anti-macro). The worked spot is swapped into
- *  one of these for ~60 ticks; re-clicking swallows the fishing equipment. Same
- *  "Fishing spot" name/ops as the real thing — refuse by id. */
 export const WHIRLPOOL_IDS: Set<number> = new Set([403, 404, 405, 406]);
 
 const tool = (name: string): FishingGearPiece => ({ name, min: 1, restock: 1 });
 const bait = (name: string, restock = 100): FishingGearPiece => ({ name, min: 1, restock });
 
-/**
- * Spot op pairs (2004scape):
- *   Net/Bait     — small net (shrimp/anchovy) or bait rod (sardine/herring)
- *   Lure/Bait    — fly fishing (trout/salmon) or bait rod (pike)
- *   Net/Harpoon  — big net (mackerel/cod/bass) or harpoon (sharks)
- *   Cage/Harpoon — cage (lobster) or harpoon (tuna/swordfish)
- *   Bait only    — oily rod lava eels (Taverley dungeon)
- */
 export const FISHING_METHODS: FishingMethod[] = [
     {
         name: 'Small net — shrimp/anchovy',
@@ -91,8 +72,8 @@ export const FISHING_METHODS: FishingMethod[] = [
         gear: [tool('Harpoon')]
     },
     {
-        // Members: Taverley dungeon lava fishing spots. Oily rod is quest-made;
-        // still uses Fishing bait. Spots are typically Bait-only (no pair op).
+
+
         name: 'Oily rod — lava eel',
         op: 'Bait',
         pair: '',
@@ -102,7 +83,6 @@ export const FISHING_METHODS: FishingMethod[] = [
 
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);
 
-/** Canonical tool/consumable names used across methods (for random-event keep lists, etc.). */
 export const ALL_FISHING_GEAR_NAMES: string[] = [
     ...new Set(FISHING_METHODS.flatMap(m => m.gear.map(g => g.name)))
 ];
@@ -111,7 +91,6 @@ export function resolveFishMethod(name: string): FishingMethod {
     return FISHING_METHODS.find(m => m.name === name) ?? FISHING_METHODS[0];
 }
 
-/** Exact item names to keep when depositing the catch. */
 export function gearKeepNames(method: Pick<FishingMethod, 'gear'>): string[] {
     return method.gear.map(g => g.name);
 }
@@ -134,10 +113,6 @@ export function gearLabel(method: Pick<FishingMethod, 'gear'>): string {
     return method.gear.map(g => g.name).join(' + ');
 }
 
-/**
- * What to withdraw after opening the bank so inv meets restock targets.
- * Skips pieces already at target or with nothing in the bank.
- */
 export function fishingRestockPlan(
     method: Pick<FishingMethod, 'gear'>,
     invCount: (name: string) => number,
@@ -159,7 +134,6 @@ export function fishingRestockPlan(
     return plan;
 }
 
-/** True when a spot's action list matches the method's primary op (+ pair when set). */
 export function spotMatchesMethod(actions: readonly string[], method: Pick<FishingMethod, 'op' | 'pair'>): boolean {
     const ops = actions.map(a => a.toLowerCase());
     const primary = method.op.toLowerCase();
@@ -168,7 +142,7 @@ export function spotMatchesMethod(actions: readonly string[], method: Pick<Fishi
     }
     const pair = method.pair.trim().toLowerCase();
     if (!pair || pair === primary) {
-        // Bait-only (lava eel) and any future single-op spots.
+
         return true;
     }
     return ops.includes(pair);

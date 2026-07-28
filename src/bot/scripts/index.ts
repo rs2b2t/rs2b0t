@@ -8,6 +8,7 @@ import {
     COOK_FISH_OPTIONS,
     COOK_MODE_OPTIONS
 } from './FishCookLogic.js';
+import { BURN_MODE_OPTIONS, FIRE_SPOT_OPTIONS } from './FiremakingLogic.js';
 import { ROCK_OPTIONS } from './MiningRocks.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
@@ -212,7 +213,7 @@ ScriptRegistry.register({
         burnMode: {
             type: 'string',
             default: 'Off',
-            options: ['Off', 'Chop then burn'],
+            options: [...BURN_MODE_OPTIONS],
             label: 'Burn mode',
             group: 'Firemaking',
             help:
@@ -221,7 +222,7 @@ ScriptRegistry.register({
         fireSpot: {
             type: 'string',
             default: 'Auto',
-            options: ['Auto', 'Varrock East', 'Varrock West', 'Draynor', 'Seers'],
+            options: ['Auto', ...FIRE_SPOT_OPTIONS],
             label: 'Fire spot',
             group: 'Firemaking',
             showIf: { key: 'burnMode', anyOf: ['Chop then burn'] },

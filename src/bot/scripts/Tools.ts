@@ -1,38 +1,27 @@
-/**
- * Shared tool kit for scripts — ladders (bronze→rune) and simple tools
- * (tinderbox, hammer, knife, …). Scripts declare a ToolReq[] once; has /
- * missing / keep / restock all flow from that list so GatheringBot and
- * friends don't grow a special-case per item.
- */
 
-/** One rung on a metal ladder (best-first, level-descending). */
+
 export interface ToolTier {
     name: string;
     level: number;
 }
 
-/**
- * A required tool or consumable.
- * - ladder: any one tier the player can use (pickaxe, axe)
- * - exact: a named item (tinderbox, hammer, bait stack)
- */
 export type ToolReq =
     | {
           kind: 'ladder';
-          /** Skill whose level gates the ladder (mining / woodcutting). */
+
           skill: string;
           ladder: readonly ToolTier[];
-          /** Human label when nothing is held ("pickaxe", "axe"). */
+
           label: string;
-          /** Try to equip after withdraw (picks/axes). */
+
           equip?: boolean;
       }
     | {
           kind: 'exact';
           name: string;
-          /** Minimum count required to continue. Default 1. */
+
           min?: number;
-          /** Target count when restocking. Default = min (tools) or a stack. */
+
           restock?: number;
           equip?: boolean;
       };
@@ -46,7 +35,6 @@ export const PICKAXES: readonly ToolTier[] = [
     { name: 'Bronze pickaxe', level: 1 }
 ];
 
-/** Classic bronze→rune woodcutting axes (same level gates as pickaxes in this era). */
 export const AXES: readonly ToolTier[] = [
     { name: 'Rune axe', level: 41 },
     { name: 'Adamant axe', level: 31 },
@@ -56,7 +44,6 @@ export const AXES: readonly ToolTier[] = [
     { name: 'Bronze axe', level: 1 }
 ];
 
-/** Common exact tools — import these instead of stringly-typed literals. */
 export const TINDERBOX = 'Tinderbox';
 export const HAMMER = 'Hammer';
 export const KNIFE = 'Knife';
@@ -89,7 +76,6 @@ export const exactTool = (name: string, opts: { min?: number; restock?: number; 
 
 export const tinderboxReq = (): ToolReq => exactTool(TINDERBOX);
 
-/** Best tier the player can use from those currently available. */
 export function bestFromLadder(
     level: number,
     ladder: readonly ToolTier[],
@@ -111,7 +97,6 @@ export function bestAxe(woodcuttingLevel: number, available: (name: string) => b
     return bestFromLadder(woodcuttingLevel, AXES, available);
 }
 
-/** Every concrete item name a req might keep (full ladder or the exact name). */
 export function toolKeepNames(reqs: readonly ToolReq[]): string[] {
     const names: string[] = [];
     for (const r of reqs) {
@@ -129,7 +114,7 @@ export function toolKeepNames(reqs: readonly ToolReq[]): string[] {
 export function hasToolReq(
     req: ToolReq,
     skillLevel: (skill: string) => number,
-    /** Count held in pack (and worn, if the caller folds equipment in). */
+
     count: (name: string) => number
 ): boolean {
     if (req.kind === 'ladder') {
@@ -146,7 +131,6 @@ export function hasAllTools(
     return reqs.every(r => hasToolReq(r, skillLevel, count));
 }
 
-/** Short labels / names still missing (for status paint). */
 export function missingToolLabels(
     reqs: readonly ToolReq[],
     skillLevel: (skill: string) => number,
@@ -162,7 +146,6 @@ export function missingToolLabels(
     return out;
 }
 
-/** Human-readable gear line: held best tier, or "label (bronze→rune)" / exact name. */
 export function toolKitLabel(
     reqs: readonly ToolReq[],
     skillLevel: (skill: string) => number,
@@ -188,10 +171,6 @@ export interface ToolRestockStep {
     equip: boolean;
 }
 
-/**
- * What to withdraw so the kit is satisfied.
- * Ladders pick the best banked tier the skill allows; exact tools top up to restock.
- */
 export function toolRestockPlan(
     reqs: readonly ToolReq[],
     skillLevel: (skill: string) => number,
@@ -227,7 +206,6 @@ export function toolRestockPlan(
     return plan;
 }
 
-/** Best banked ladder tool for a kit (first ladder req only — mining/wc restock). */
 export function bestBankedLadderTool(
     reqs: readonly ToolReq[],
     skillLevel: (skill: string) => number,

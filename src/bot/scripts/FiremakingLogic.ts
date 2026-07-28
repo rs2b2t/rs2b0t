@@ -1,22 +1,12 @@
-/**
- * Pure / portable firemaking helpers shared by Firemaker and any chop→burn
- * extension. Keep lane geometry and log gates here so scripts stay thin.
- */
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../api/Tile.js';
 
-export const TINDERBOX = 'Tinderbox';
+export { TINDERBOX } from './Tools.js';
 export const CANT_LIGHT = /can't light a fire here/i;
 
-// neither of these is a throughput knob. START_MS is "did the click reach the
-// server"; LIGHT_MS has to outlast the roll tail, and the roll only becomes a
-// certainty at Firemaking 43 — at level 1 it is 65/256 every 4 ticks, so 90s of
-// rolls is the difference between a one-in-a-hundred false stall and a
-// one-in-a-hundred-thousand one
 export const FIRE_START_MS = 2_400;
 export const FIRE_LIGHT_MS = 90_000;
 
-/** A burn lane is a west-running strip next to a bank (lighting teleports one west). */
 export interface FirePlot {
     bank: Tile;
     x0: number;
@@ -53,7 +43,6 @@ export function parseBurnMode(label: string): BurnMode {
     return label.trim().toLowerCase() === 'chop then burn' ? 'chop-then-burn' : 'off';
 }
 
-/** Map a tree scenery name to the log item Firemaker burns. */
 export function logsForTree(treeName: string): string {
     const t = treeName.trim().toLowerCase();
     if (t === 'tree' || t === 'dead tree' || t === 'evergreen') {
@@ -74,7 +63,6 @@ export function logsForTree(treeName: string): string {
     if (t.includes('magic')) {
         return 'Magic logs';
     }
-    // Generic "logs" product match still works for unknown trees.
     return 'Logs';
 }
 
@@ -90,10 +78,6 @@ export function resolveFireSpot(name: string): { name: string; plot: FirePlot } 
     return { name: key, plot: FIRE_SPOTS[key] };
 }
 
-/**
- * Nearest known fire plot by bank tile (chebyshev). Used when Woodcutter
- * burn mode is Auto rather than a fixed spot.
- */
 export function nearestFireSpot(from: WorldTile): { name: string; plot: FirePlot } | null {
     let best: { name: string; plot: FirePlot; d: number } | null = null;
     for (const [name, plot] of Object.entries(FIRE_SPOTS)) {
@@ -109,7 +93,6 @@ export function tileKey(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
 }
 
-/** How many fires a west-running lane yields before scenery / wall / cap. */
 export function runWest(
     from: WorldTile,
     plot: FirePlot,
@@ -138,10 +121,6 @@ export function inFirePlot(t: WorldTile, plot: FirePlot): boolean {
     return t.x >= plot.x0 && t.x <= plot.x1 && t.z >= plot.z0 && t.z <= plot.z1 && t.level === plot.bank.level;
 }
 
-/**
- * Shortest walk to a lane that can absorb `want` lights (or the longest
- * available). Pure scan — caller supplies occupancy + reachability.
- */
 export function findBurnLane(
     plot: FirePlot,
     here: WorldTile,
@@ -167,7 +146,6 @@ export function findBurnLane(
     return best ? { start: best.start, run: best.run } : null;
 }
 
-/** Server gates fires 4 ticks apart — human-sized pause inside that window. */
 export function fireReactionMs(): number {
     return 180 + Math.random() * 420;
 }
