@@ -183,7 +183,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Woodcutter',
     description:
-        'Chops the chosen tree type and banks logs at the nearest bank (auto-detected), drops them, or burns a full load (chop-then-burn). Needs an axe; burn mode also needs a tinderbox (both restock from the bank).',
+        'Chops the chosen tree type, then banks logs, drops them, or burns a full load (chop-then-burn). Needs an axe; burn mode also needs a tinderbox (both restock from the bank when Full inventory is Auto).',
     category: 'Woodcutting',
     tags: ['gathering', 'banking', 'drop', 'firemaking'],
     settingsSchema: {
@@ -192,35 +192,41 @@ ScriptRegistry.register({
             default: 'Tree',
             options: ['Tree', 'Oak', 'Willow', 'Maple tree', 'Yew', 'Magic tree'],
             label: 'Tree name',
-            help: 'in-game scenery name to chop (exact match). Common labels listed; type a custom name if needed.'
+            help: 'In-game scenery name to chop (exact match). Pick a common tree from the list.'
         },
         chopAction: {
             type: 'string',
             default: 'Chop down',
             label: 'Chop action',
-            help: 'right-click op on the tree (usually Chop down)'
+            help: 'Right-click op on the tree (usually Chop down).'
         },
         leashRadius: GATHERING_SETTINGS.leashRadius,
         location: {
             type: 'string',
             default: 'Auto',
             options: ['Auto', 'None'],
-            label: 'Banking',
-            help: 'Auto = web-walk to the nearest bank; None = drop logs (power-chopping). Burn mode is disabled when None.'
+            label: 'Full inventory',
+            help:
+                'What to do when the pack is full of logs. Auto = bank-path mode: bank the logs (if burn is Off) and restock axe/tinderbox from the bank. None = power-chop (drop logs; no bank). Burn mode requires Auto — it is forced off under None.'
         },
         burnMode: {
             type: 'string',
             default: 'Off',
             options: ['Off', 'Chop then burn'],
             label: 'Burn mode',
-            help: 'Chop then burn = when the pack is full of logs, walk to a fire plot and light them (needs tinderbox). Like cook extends fishing.'
+            group: 'Firemaking',
+            help:
+                'Off = keep/bank logs (see Full inventory). Chop then burn = when the pack is full, walk to a fire plot and light the logs instead of banking them (needs tinderbox + Full inventory Auto). Choosing Chop then burn reveals Fire spot below.'
         },
         fireSpot: {
             type: 'string',
             default: 'Auto',
             options: ['Auto', 'Varrock East', 'Varrock West', 'Draynor', 'Seers'],
             label: 'Fire spot',
-            help: 'Where to burn when burn mode is on. Auto = nearest known bank-side burn plot.'
+            group: 'Firemaking',
+            showIf: { key: 'burnMode', anyOf: ['Chop then burn'] },
+            help:
+                'Shown only when Burn mode is Chop then burn. Where to light fires. Auto = nearest known bank-side burn plot from your start tile.'
         }
     },
     create: () => new GatheringBot()
@@ -228,7 +234,8 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Miner',
-    description: 'Mines the selected rock types and banks the ore at the nearest bank (auto-detected), or drops it. Needs a pickaxe.',
+    description:
+        'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto).',
     category: 'Mining',
     tags: ['gathering', 'banking', 'drop'],
     settingsSchema: {
@@ -237,15 +244,17 @@ ScriptRegistry.register({
             default: ['Iron'],
             options: ROCK_OPTIONS,
             label: 'Rock types',
-            help: 'which rocks to mine — every rock is named "Rocks" in-game, so pick the ore types here (multi-select). Empty = mine any rock.'
+            help:
+                'Which rocks to mine — every rock is named "Rocks" in-game, so pick the ore types here (multi-select). Empty = mine any rock.'
         },
         leashRadius: GATHERING_SETTINGS.leashRadius,
         location: {
             type: 'string',
             default: 'Auto',
             options: ['Auto', 'None'],
-            label: 'Banking',
-            help: 'Auto = web-walk to the nearest bank; None = drop it (power-mining).'
+            label: 'Full inventory',
+            help:
+                'What to do when the pack is full of ore. Auto = bank the ore at the nearest bank and restock a pickaxe if needed. None = power-mine (drop ore; no bank).'
         }
     },
     create: () => new GatheringBot()
@@ -280,7 +289,8 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Fisher',
-    description: 'Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch, optionally cooks at a nearby range (cook-then-bank or bank-X-raw-then-cook), or drops it (location: None)',
+    description:
+        'Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity.',
     category: 'Fishing',
     tags: ['gathering', 'drop', 'banking', 'cooking'],
     settingsSchema: {
@@ -289,15 +299,24 @@ ScriptRegistry.register({
             default: FISHING_METHOD_OPTIONS[0],
             options: FISHING_METHOD_OPTIONS,
             label: 'Fishing method',
-            help: 'what to fish — picks the right spot (each spot offers a PAIR of ops) and the correct op of the two, e.g. small net (shrimp) vs big net (mackerel)'
+            help:
+                'What to fish — picks the right spot (each spot offers a PAIR of ops) and the correct op of the two, e.g. small net (shrimp) vs big net (mackerel).'
         },
-        leashRadius: { type: 'number', default: 12, min: 2, max: 30, label: 'Leash radius (tiles)' },
+        leashRadius: {
+            type: 'number',
+            default: 12,
+            min: 2,
+            max: 30,
+            label: 'Leash radius (tiles)',
+            help: 'How far from the start/anchor tile to look for fishing spots.'
+        },
         location: {
             type: 'string',
             default: 'Auto',
             options: LOCATION_OPTIONS,
-            label: 'Fishing location',
-            help: 'Auto = bank the catch at the nearest bank (a known location if started at one, else the nearest booth in the scene); None = always drop (power-fishing)'
+            label: 'Location / full inventory',
+            help:
+                'Where you are fishing and what happens when the pack is full. Auto = use a known spot if you started in one, else nearest bank in the scene; banks the catch when cook is Off. Named spots (Catherby, …) pin bank/range presets. None = power-fish (always drop; cook is disabled).'
         },
         cookMode: {
             type: 'string',
@@ -305,7 +324,8 @@ ScriptRegistry.register({
             options: [...COOK_MODE_OPTIONS],
             label: 'Cook mode',
             group: 'Cooking',
-            help: 'Off = bank/drop raw only. Cook then bank = fill inv fishing, cook the load, bank cooked. Bank raw then cook = fish+bank raw until bank holds N (live Bank API count), withdraw a load, cook, bank cooked. Needs a Range near the bank (Catherby has a preset).'
+            help:
+                'More options appear below when you leave Off. Off = bank or drop raw only (see Location). Cook then bank = fish a full pack, cook it, bank cooked — reveals Fish to cook + Burnt fish. Bank raw then cook = fish+bank raw until the bank holds N of the cook filter, then withdraw/cook/bank — also reveals Bank N raw before cook + After cook cycle. Needs a Range near the bank (Catherby preset works well). Cook requires Location not None.'
         },
         cookFish: {
             type: 'string',
@@ -314,7 +334,8 @@ ScriptRegistry.register({
             label: 'Fish to cook',
             group: 'Cooking',
             showIf: { key: 'cookMode', anyOf: ['Cook then bank', 'Bank raw then cook'] },
-            help: 'Which raw fish to cook. Other raw species are banked as-is (e.g. cook Swordfish, bank Tuna raw). Custom = free-text contains match.'
+            help:
+                'Shown when Cook mode is on. Which raw fish to cook; other raw species are banked as-is (e.g. cook Swordfish, bank Tuna raw). Choose Custom to reveal a free-text filter.'
         },
         cookFishCustom: {
             type: 'string',
@@ -322,7 +343,8 @@ ScriptRegistry.register({
             label: 'Custom cook filter',
             group: 'Cooking',
             showIf: { key: 'cookFish', anyOf: ['Custom'] },
-            help: 'Contains match against raw names, e.g. "swordfish" or "Raw tuna". Empty = all raw. Only used when Fish to cook = Custom.'
+            help:
+                'Shown when Fish to cook is Custom. Contains-match against raw names, e.g. "swordfish" or "Raw tuna". Empty = all raw.'
         },
         burntPolicy: {
             type: 'string',
@@ -331,7 +353,7 @@ ScriptRegistry.register({
             label: 'Burnt fish',
             group: 'Cooking',
             showIf: { key: 'cookMode', anyOf: ['Cook then bank', 'Bank raw then cook'] },
-            help: 'Drop (default) or bank burnt fish after cooking'
+            help: 'Shown when Cook mode is on. Drop (default) or bank burnt fish after cooking.'
         },
         bankRawBeforeCook: {
             type: 'number',
@@ -340,7 +362,8 @@ ScriptRegistry.register({
             label: 'Bank N raw before cook',
             group: 'Cooking',
             showIf: { key: 'cookMode', anyOf: ['Bank raw then cook'] },
-            help: 'Live bank total (Bank API after each deposit) of the cook-filter raw. When bank holds ≥ N, withdraw a load and cook. No artificial max — type any amount.'
+            help:
+                'Shown only for Bank raw then cook. Live bank total of the cook-filter raw (after each deposit). When the bank holds ≥ N, withdraw a load and cook. Type any amount (no artificial max).'
         },
         afterCookCycle: {
             type: 'string',
@@ -349,7 +372,8 @@ ScriptRegistry.register({
             label: 'After cook cycle',
             group: 'Cooking',
             showIf: { key: 'cookMode', anyOf: ['Bank raw then cook'] },
-            help: 'Stop (default) = end script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N forever.'
+            help:
+                'Shown only for Bank raw then cook. Stop = end the script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N.'
         }
     },
     create: () => new GatheringBot()
