@@ -596,6 +596,26 @@ export default class GatheringBot extends TaskBot {
         return `banking ${this.productLabel()} when full`;
     }
 
+    /** Compact full-pack policy for the chatbox paint (must stay ≤ ~48 chars). */
+    private paintFullNote(): string {
+        if (this.burnMode === 'chop-then-burn') {
+            return `Full: burn ${this.burnLogs}`;
+        }
+        if (this.powerMode) {
+            return `Full: drop ${this.productLabel()}`;
+        }
+        if (this.fishing && this.cookMode === 'cook-then-bank') {
+            if (this.cookFishFilter) {
+                return `Full: cook ${cookFilterLabel(this.cookFishFilter)} → bank`;
+            }
+            return 'Full: cook → bank';
+        }
+        if (this.fishing && this.cookMode === 'bank-raw-then-cook') {
+            return `Full: bank ${cookFilterLabel(this.cookFishFilter)}→${this.bankRawTarget} cook`;
+        }
+        return `Full: bank ${this.productLabel()}`;
+    }
+
     private paintClip(text: string, max = 52): string {
         const s = text.trim();
         if (s.length <= max) {
@@ -703,19 +723,16 @@ export default class GatheringBot extends TaskBot {
             p.row(`Mode: ${this.burnMode}`, `Fires: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
             p.row(`Spot: ${this.burnSpotName || '—'}`, `FM XP/hr: ${this.fmtXpHr('firemaking', mins)}`);
             p.row(this.fmtXpGained('firemaking'), this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing');
-            p.text(this.paintClip(this.fullInventoryNote()), '#8a919a');
+            p.text(this.paintFullNote(), '#8a919a');
         } else {
-            // Setup
-            p.row(`Loc: ${this.paintLocLabel()}`, `Mode: ${this.paintModeLabel()}`);
-            p.row(`Action: ${this.action}`, `Target: ${this.target}`);
-            p.row(`Leash: ${this.leash}`, `Gear: ${this.paintClip(this.gearLabel(), 22)}`);
-            if (this.anchor) {
-                p.text(
-                    `Anchor: (${this.anchor.x}, ${this.anchor.z}, ${this.anchor.level})`,
-                    '#8a919a'
-                );
-            }
-            p.text(this.paintClip(this.fullInventoryNote()), '#8a919a');
+            // Setup — keep ≤4 content lines so the note clears paintControls in the chatbox dock.
+            const loc = this.anchor
+                ? `${this.paintLocLabel()} (${this.anchor.x},${this.anchor.z})`
+                : this.paintLocLabel();
+            p.row(`Loc: ${this.paintClip(loc, 28)}`, `Mode: ${this.paintModeLabel()}`);
+            p.row(`Action: ${this.action}`, `Target: ${this.paintClip(this.target, 22)}`);
+            p.row(`Leash: ${this.leash}`, `Gear: ${this.paintClip(this.gearLabel(), 24)}`);
+            p.text(this.paintFullNote(), '#8a919a');
         }
 
         p.gap();
