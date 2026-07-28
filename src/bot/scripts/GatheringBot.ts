@@ -126,6 +126,7 @@ export default class GatheringBot extends TaskBot {
     private gathered = 0;
     private gems = 0;
     private cooked = 0;
+    private burnt = 0;
     private status = 'starting';
     private location: FishingLocation | null = null;
     private banked = 0;
@@ -330,13 +331,30 @@ export default class GatheringBot extends TaskBot {
         );
 
         this.on('inventory.changed', e => {
-            if (e.id === -1) {
+            if (e.id === -1 || Bank.isOpen()) {
+                return;
+            }
+            // Count gains only (new stack or count up). Bank open is ignored so withdraws don't inflate stats.
+            const gained =
+                e.previousId !== e.id
+                    ? Math.max(1, e.count)
+                    : Math.max(0, e.count - e.previousCount);
+            if (gained <= 0) {
+                return;
+            }
+            if (this.cookEnabled() && isBurntFishName(e.name)) {
+                this.burnt += gained;
+                this.log(`burnt: ${e.name} (+${gained}, ${this.burnt} this run)`);
+                return;
+            }
+            if (this.cookEnabled() && isCookedFishName(e.name)) {
+                this.cooked += gained;
                 return;
             }
             if (this.isProduct(e.name)) {
-                this.gathered++;
+                this.gathered += gained;
             } else if (this.mining() && (e.name ?? '').toLowerCase().startsWith('uncut ')) {
-                this.gems++;
+                this.gems += gained;
                 this.log(`gem: ${e.name} (${this.gems} this run)`);
             }
         });
@@ -661,9 +679,9 @@ export default class GatheringBot extends TaskBot {
                 this.mining() && this.gems > 0
                     ? `Gems: ${this.gems}`
                     : cookOn
-                      ? `Cooked: ${this.cooked}`
+                      ? `Ok ${this.cooked} · Burnt ${this.burnt}`
                       : burnOn
-                        ? `Fires: ${this.firesLit}`
+                        ? `Burned: ${this.firesLit}`
                         : `Inv: ${Inventory.used()}/28`;
             p.row(`Banked: ${this.banked}`, `Trips: ${this.trips}`, third);
             p.bar('Pack', Inventory.used() / 28);
@@ -698,29 +716,26 @@ export default class GatheringBot extends TaskBot {
             }
             p.text(this.paintClip(`session ${fmtDuration(mins)} · ${product} ${this.gathered} (${rate})`), '#8a919a');
         } else if (tab === 'Cook') {
-            p.row(`Mode: ${this.paintCookMode()}`, `Cooked: ${this.cooked}`, `Filter: ${this.cookFishFilter || 'all raw'}`);
+            p.row(`Mode: ${this.paintCookMode()}`, `Cooked: ${this.cooked}`, `Burnt: ${this.burnt}`);
             if (this.cookMode === 'bank-raw-then-cook') {
                 p.row(
                     `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}`,
                     `Phase: ${this.cookPhaseLabel()}`,
                     `After: ${this.afterCook}`
                 );
+                p.row(`Filter: ${this.cookFishFilter || 'all raw'}`, `Policy: ${this.burntPolicy}`);
             } else {
-                p.row(`Phase: ${this.cookPhaseLabel()}`, `Burnt: ${this.burntPolicy}`);
+                p.row(`Phase: ${this.cookPhaseLabel()}`, `Policy: ${this.burntPolicy}`, `Filter: ${this.cookFishFilter || 'all raw'}`);
             }
             p.row(`Cook XP/hr: ${this.fmtXpHr('cooking', mins)}`, this.fmtXpGained('cooking'));
-            if (this.rangeStand) {
-                p.text(
-                    this.paintClip(
-                        `Range: ${this.rangeName} @ (${this.rangeStand.x}, ${this.rangeStand.z}, ${this.rangeStand.level})`
-                    ),
-                    '#8a919a'
-                );
-            } else {
-                p.text('Range: not resolved', '#8a919a');
-            }
+            p.text(
+                this.rangeStand
+                    ? this.paintClip(`Range: ${this.rangeName} @ (${this.rangeStand.x}, ${this.rangeStand.z})`)
+                    : 'Range: not resolved',
+                '#8a919a'
+            );
         } else if (tab === 'Burn') {
-            p.row(`Mode: ${this.burnMode}`, `Fires: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
+            p.row(`Mode: ${this.burnMode}`, `Burned: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
             p.row(`Spot: ${this.burnSpotName || '—'}`, `FM XP/hr: ${this.fmtXpHr('firemaking', mins)}`);
             p.row(this.fmtXpGained('firemaking'), this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing');
             p.text(this.paintFullNote(), '#8a919a');
@@ -959,10 +974,17 @@ export default class GatheringBot extends TaskBot {
     endCookingLoad(): void {
         this.cookingLoad = false;
     }
-    recordCook(n: number): void {
-        if (n > 0) {
-            this.cooked += n;
-        }
+    /** @deprecated cooked/burnt now tracked via inventory.changed (raw→product). */
+    recordCook(_n: number): void {
+        // no-op — kept so cook tasks still compile; counts come from inventory gains
+    }
+
+    burntTotal(): number {
+        return this.burnt;
+    }
+
+    cookedTotal(): number {
+        return this.cooked;
     }
 
     finishCookCycle(): void {
@@ -1084,6 +1106,7 @@ export default class GatheringBot extends TaskBot {
     recordFire(n = 1): void {
         if (n > 0) {
             this.firesLit += n;
+            this.log(`burn: lit fire (+${n}, ${this.firesLit} this run)`);
         }
     }
     burnPlotOrNull(): FirePlot | null {
@@ -1316,7 +1339,7 @@ class FishCookLoad implements Task {
                 )
             ) {
                 if (this.bot.cookableRawCount() < before) {
-                    this.bot.recordCook(before - this.bot.cookableRawCount());
+                    // cooked/burnt counters update from inventory.changed
                     await Execution.delay(cookHumanDelayMs());
                 }
             }
@@ -1483,6 +1506,7 @@ class FishWithdrawCookBatch implements Task {
 
 async function dropBurnt(bot: GatheringBot): Promise<void> {
     bot.setStatus('cook: dropping burnt');
+    let dropped = 0;
     for (let guard = 0; guard < 30; guard++) {
         const item = Inventory.items().find(i => isBurntFishName(i.name));
         if (!item) {
@@ -1490,10 +1514,14 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
         }
         const before = Inventory.used();
         await item.interact('Drop');
-        await Execution.delayUntil(() => Inventory.used() < before, 3000);
+        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+            dropped += before - Inventory.used();
+        }
         await Execution.delay(80 + Math.floor(Math.random() * 160));
     }
-    bot.log('cook: dropped burnt');
+    if (dropped > 0) {
+        bot.log(`cook: dropped ${dropped} burnt (session ${bot.burntTotal()})`);
+    }
 }
 
 class ReplacePickaxe implements Task {
