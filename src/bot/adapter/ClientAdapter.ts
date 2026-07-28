@@ -816,6 +816,16 @@ export const actions = {
         return actions.ifButton(on ? controls.onComId : controls.offComId);
     },
 
+    /** Toggle Auto Retaliate on the combat tab (same panel as run). */
+    setRetaliate(on: boolean): boolean {
+        const controls = reader.retaliateControls();
+        if (!controls) {
+            return false;
+        }
+
+        return actions.ifButton(on ? controls.onComId : controls.offComId);
+    },
+
     clickSideTab(tab: number): boolean {
         if (!raw || (raw.sideIcon[tab] ?? -1) === -1) {
             return false;

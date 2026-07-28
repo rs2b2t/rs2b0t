@@ -4,6 +4,7 @@ import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
+import type { Npc } from '../api/entities/index.js';
 import { Bank, withdrawOp } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
@@ -39,11 +40,13 @@ import {
     axeReq,
     bestHeldToolNames,
     bestPickaxe,
+    canWieldTool,
     hasAllTools,
     missingToolLabels,
     pickaxeReq,
     surplusHeldToolNames,
     tinderboxReq,
+    toolAttackLevel,
     toolKeepNames,
     toolKitLabel,
     toolRestockPlan,
@@ -111,12 +114,25 @@ import {
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
 
+/** Floor when leash is measured from the live start tile (location None / no camp). */
+export const START_TILE_LEASH_FLOOR = 40;
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
     action: { type: 'string', default: 'Mine', label: 'Action', help: 'right-click op, e.g. Mine / Chop down / Net' },
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
-    leashRadius: { type: 'number', default: 10, min: 2, max: 30, label: 'Leash radius (tiles)' }
+    // Named camps pin the leash to the camp spot (modest radius is fine).
+    // Start-tile modes (location None) floor up to START_TILE_LEASH_FLOOR at runtime.
+    leashRadius: {
+        type: 'number',
+        default: 10,
+        min: 2,
+        max: 40,
+        label: 'Leash radius (tiles)',
+        help:
+            'How far from the camp/start anchor to hunt targets. Named locations pin the anchor to the camp spot. Location None measures from your start tile and floors this to 40 so a nearby spawn still sees the whole cluster.'
+    }
 };
 
 export function shouldYieldGathering(
@@ -314,11 +330,15 @@ export default class GatheringBot extends TaskBot {
         }
 
         // Named/Auto camps pin the gather leash to the camp spot. Power mode (None)
-        // and unresolved settings leash from the live start tile.
+        // and unresolved settings leash from the live start tile — that radius must
+        // be wide (floor 40) or a slightly-off spawn only sees one rock/tree.
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
+            if (this.leash < START_TILE_LEASH_FLOOR) {
+                this.leash = START_TILE_LEASH_FLOOR;
+            }
         }
 
         // After ::tele / zone load, Locs+Npcs are empty for a beat (docs/NAV.md
@@ -422,6 +442,14 @@ export default class GatheringBot extends TaskBot {
         this.gearKeep = this.rebuildGearKeep();
         this.captureXpStart();
 
+        // Multi-combat pests (lava-maze spiders, etc.) pin a retaliating miner forever.
+        // Off at start so a hit only stuns briefly — FleeCombat walks it off.
+        if (Game.setAutoRetaliate(false)) {
+            this.log('combat: Auto Retaliate off (gather — flee, do not fight)');
+        } else {
+            this.log('combat: could not toggle Auto Retaliate (controls missing?)');
+        }
+
         if (this.location) {
             const auto = locSetting.toLowerCase() === 'auto' ? ' (auto)' : '';
             this.log(`location: ${this.location.name}${auto}; bank ${this.location.bankStand}`);
@@ -473,6 +501,8 @@ export default class GatheringBot extends TaskBot {
         const gatherTools = (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
         this.add(
             new ContinueDialog(),
+            // Before gather/bank: break multi-combat pulls (wildy spiders) by walking off.
+            new FleeCombat(this),
             ...(this.mining() || this.woodcutting() ? [new RepairBrokenGatherTool(this)] : []),
             ...(this.fishing ? [new RestockFishingGear(this)] : []),
             ...(gatherTools
@@ -984,10 +1014,13 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
         this.log(`acquire: bought ${bought || Inventory.count(plan.name) - before}× ${plan.name}`);
-        if (plan.equip) {
+        if (plan.equip && canWieldTool(plan.name, Skills.level('attack'))) {
             // Shop floor: equip offline. Do not walk back to bank just to stash a
             // displaced bronze tool — next BankCatch / restock deposits surplus.
+            // Skip when Attack is too low — tool still works from the pack.
             await this.equipTools([plan.name], log, { bankDisplaced: false });
+        } else if (plan.equip) {
+            log(`equip: skip ${plan.name} (need Attack ${toolAttackLevel(plan.name)})`);
         }
         return true;
     }
@@ -1071,9 +1104,11 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
         this.log(`acquire: smithed ${plan.name}`);
-        if (plan.equip) {
+        if (plan.equip && canWieldTool(plan.name, Skills.level('attack'))) {
             // Anvil floor: same as shop — don't bank-trip solely for displaced tools.
             await this.equipTools([plan.name], log, { bankDisplaced: false });
+        } else if (plan.equip) {
+            log(`equip: skip ${plan.name} (need Attack ${toolAttackLevel(plan.name)})`);
         }
         return true;
     }
@@ -1636,8 +1671,9 @@ export default class GatheringBot extends TaskBot {
         await this.prepareWornSurplusForDeposit(log);
         await this.depositSurplusGatherTools(log);
 
+        const attack = Skills.level('attack');
         const toEquip = [
-            ...upgrades.filter(s => s.equip).map(s => s.name),
+            ...upgrades.filter(s => s.equip && canWieldTool(s.name, attack)).map(s => s.name),
             ...this.toolsToEquip()
         ];
         this.log(`tools: banked better gear ready (${this.gearLabel()})`);
@@ -1936,7 +1972,22 @@ export default class GatheringBot extends TaskBot {
         log: (m: string) => void = m => this.log(`  ${m}`),
         opts: { bankDisplaced?: boolean } = {}
     ): Promise<boolean> {
-        const unique = [...new Set(names.filter(n => n.length > 0))];
+        const attack = Skills.level('attack');
+        // Drop tools we cannot wield — backpack use is still valid for mining/wc.
+        const unique = [
+            ...new Set(
+                names.filter(n => {
+                    if (!n || n.length === 0) {
+                        return false;
+                    }
+                    if (!canWieldTool(n, attack)) {
+                        log(`equip: skip ${n} (need Attack ${toolAttackLevel(n)}, have ${attack})`);
+                        return false;
+                    }
+                    return true;
+                })
+            )
+        ];
         if (unique.length === 0) {
             return true;
         }
@@ -2292,6 +2343,82 @@ export default class GatheringBot extends TaskBot {
 
 function keyOf(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
+}
+
+/** Step size when kiting away from an attacker that is already on the anchor. */
+const FLEE_STEP = 8;
+
+/**
+ * Break multi-combat pulls (lava-maze spiders, random events, etc.).
+ * Auto Retaliate is off at start — walking away ends the fight instead of trading hits.
+ */
+class FleeCombat implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        return Game.inCombat();
+    }
+
+    private attacker(): Npc | null {
+        return (
+            Npcs.query()
+                .where(n => n.inCombat && n.targetsMe() && n.actions().includes('Attack'))
+                .nearest() ??
+            Npcs.query()
+                .where(n => n.inCombat && !n.targetsAnotherPlayer() && n.actions().includes('Attack') && n.distance() <= 2)
+                .nearest()
+        );
+    }
+
+    private fleeTile(here: { x: number; z: number; level: number }, attacker: Npc | null): Tile {
+        const anchor = this.bot.getAnchor();
+        // Prefer the camp/start anchor when we're not already on it — gets us back to rocks.
+        if (anchor.distanceTo(here) > 2) {
+            return anchor;
+        }
+        if (!attacker) {
+            // No face target — step south of anchor (typical wildy approach).
+            return new Tile(here.x, here.z - FLEE_STEP, here.level);
+        }
+        const at = attacker.tile();
+        const dx = here.x - at.x;
+        const dz = here.z - at.z;
+        const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+        const sz = dz === 0 ? 0 : dz > 0 ? 1 : -1;
+        // If stacked on the attacker, pick a cardinal step.
+        const ox = sx === 0 && sz === 0 ? 0 : sx;
+        const oz = sx === 0 && sz === 0 ? -1 : sz;
+        return new Tile(here.x + ox * FLEE_STEP, here.z + oz * FLEE_STEP, here.level);
+    }
+
+    async execute(): Promise<void> {
+        // Re-assert off in case a death/relog restored the default.
+        Game.setAutoRetaliate(false);
+
+        const here = Game.tile();
+        if (!here) {
+            await Execution.delayTicks(1);
+            return;
+        }
+        const attacker = this.attacker();
+        const dest = this.fleeTile(here, attacker);
+        const who = attacker?.name ?? 'attacker';
+        this.bot.setStatus(`combat: fleeing ${who} → ${dest.x},${dest.z}`);
+        this.bot.log(`combat: under attack by ${who} — walking off to ${dest.x},${dest.z}`);
+
+        await Traversal.walkTo(dest, { radius: 2, timeoutMs: 20_000 });
+        await Execution.delayUntil(() => !Game.inCombat(), 12_000);
+        if (Game.inCombat()) {
+            // Still stuck — try a second step away from whoever is on us.
+            const still = Game.tile();
+            if (still) {
+                const again = this.fleeTile(still, this.attacker());
+                this.bot.log(`combat: still in combat — second kite to ${again.x},${again.z}`);
+                await Traversal.walkTo(again, { radius: 2, timeoutMs: 15_000 });
+                await Execution.delayUntil(() => !Game.inCombat(), 10_000);
+            }
+        }
+    }
 }
 
 class DropProduct implements Task {

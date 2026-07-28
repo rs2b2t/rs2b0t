@@ -8,11 +8,13 @@ import {
     bestAxe,
     bestFromTiers,
     bestPickaxe,
+    canWieldTool,
     exactTool,
     hasAllTools,
     missingToolLabels,
     pickaxeReq,
     tinderboxReq,
+    toolAttackLevel,
     toolKeepNames,
     toolKitLabel,
     toolRestockPlan,
@@ -21,7 +23,9 @@ import {
 
 describe('Tools kit', () => {
     const bank = (names: string[]) => (name: string) => (names.includes(name) ? 1 : 0);
-    const lvl = (skill: string) => (skill === 'mining' || skill === 'woodcutting' ? 41 : 1);
+    // Attack 40 so rune tools are wieldable in the default kit tests.
+    const lvl = (skill: string) =>
+        skill === 'mining' || skill === 'woodcutting' ? 41 : skill === 'attack' ? 40 : 1;
 
     test('tiers are best-first', () => {
         for (let i = 1; i < PICKAXES.length; i++) {
@@ -103,5 +107,26 @@ describe('Tools kit', () => {
         const reqs = [axeReq(false), tinderboxReq()];
         const count = (n: string) => (n === 'Rune axe' || n === TINDERBOX ? 1 : 0);
         expect(toolsNeedingEquip(reqs, lvl, count, () => false)).toEqual([]);
+    });
+
+    test('toolAttackLevel / canWieldTool follow classic metal Attack gates', () => {
+        expect(toolAttackLevel('Rune pickaxe')).toBe(40);
+        expect(toolAttackLevel('Adamant axe')).toBe(30);
+        expect(toolAttackLevel('Steel pickaxe')).toBe(5);
+        expect(toolAttackLevel('Bronze axe')).toBe(1);
+        expect(canWieldTool('Rune pickaxe', 39)).toBe(false);
+        expect(canWieldTool('Rune pickaxe', 40)).toBe(true);
+        expect(canWieldTool('Mithril axe', 19)).toBe(false);
+        expect(canWieldTool('Mithril axe', 20)).toBe(true);
+    });
+
+    test('toolsNeedingEquip skips wield when Attack is too low (backpack use still ok)', () => {
+        const reqs = [pickaxeReq(true)];
+        const count = (n: string) => (n === 'Rune pickaxe' ? 1 : 0);
+        // Mining 90 can *use* rune pick; Attack 1 cannot *wield* it.
+        const lowAtk = (skill: string) => (skill === 'mining' ? 90 : skill === 'attack' ? 1 : 1);
+        expect(toolsNeedingEquip(reqs, lowAtk, count, () => false)).toEqual([]);
+        const highAtk = (skill: string) => (skill === 'mining' ? 90 : skill === 'attack' ? 40 : 1);
+        expect(toolsNeedingEquip(reqs, highAtk, count, () => false)).toEqual(['Rune pickaxe']);
     });
 });

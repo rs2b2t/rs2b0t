@@ -1,13 +1,18 @@
 /**
  * Live verification for GatheringBot (Miner / Fisher / Woodcutter).
  *
- * Boots a mainland account against a local engine, seeds skills/items (or coins
- * only for tool-buy paths), starts each script with camp settings, and asserts
- * on game state — XP, held products/tools, bank trips — not log lines alone.
+ * Boots one mainland account against a local engine, reuses it across scenarios
+ * (grant levels / seed items between tests), and asserts on real user flows:
+ *
+ *   - early-game gather at named camps (start a short walk off the resource)
+ *   - end-game pathing (wildy runite, Fishing Guild sharks from Ardougne bank)
+ *   - tool acquire with bank isolation (no leftover bank tools → false PASS)
+ *   - smith rune axe when bar + hammer + levels are ready
  *
  * Item seed uses engine cheat `give <obj> <qty>` (not maintainer-content
  * `~item` / `~bankitem`, which this Server tree does not ship). Inventory wipe
- * is `~clearinv` (debugproc).
+ * is `~clearinv` (debugproc). Bank tool purge walks a booth and withdraws
+ * matching gear so acquire tests cannot withdraw leftovers.
  *
  * Requires a deployed bot client and a running engine (default http://localhost:8890).
  * Redeploy the client yourself when GatheringBot changes — this tree does not
@@ -17,7 +22,8 @@
  *   bun tools/gatheringbot-test.ts
  *   bun tools/gatheringbot-test.ts mining fishing
  *   bun tools/gatheringbot-test.ts acquire
- *   bun tools/gatheringbot-test.ts mine-bank wc-burn
+ *   bun tools/gatheringbot-test.ts endgame
+ *   bun tools/gatheringbot-test.ts mine-bank fish-path-shark
  *   BASE=http://localhost:8888 bun tools/gatheringbot-test.ts
  *   HEADED=1 SLOWMO=200 bun tools/gatheringbot-test.ts mine-bank
  *   BUDGET_S=180 bun tools/gatheringbot-test.ts   # per-scenario seconds (default 150)
@@ -62,15 +68,62 @@ type Abi = {
             used(): number;
             free(): number;
         };
-        Equipment: { contains(n: string): boolean; items(): { name: string | null }[] };
+        Equipment: {
+            contains(n: string): boolean;
+            items(): { name: string | null }[];
+            unequip(n: string): Promise<boolean>;
+        };
+        Bank: {
+            isOpen(): boolean;
+            loaded(): boolean;
+            items(): { name: string | null; count: number; ops: (string | null)[] }[];
+            count(n: string): number;
+            openBooth(stand: Tile, boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
+            openNearest(boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
+            withdraw(name: string, op?: string): boolean | Promise<boolean>;
+            close(timeoutMs?: number): Promise<boolean>;
+        };
+        Traversal: {
+            walkResilient(
+                dest: Tile,
+                opts?: { radius?: number; timeoutMs?: number; log?: (m: string) => void }
+            ): Promise<boolean>;
+        };
+        Execution: {
+            delay(ms: number): Promise<void>;
+            delayTicks(n: number): Promise<void>;
+            delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
+        };
+        LoopingBot: new () => { loop(): Promise<number | void> };
+        registerScript(m: { name: string; create(): unknown }): void;
     };
     rs2b0t: {
         runner: {
             state: string;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
+            start(meta: unknown): void;
             stop(): void;
         };
         registry: { get(name: string): unknown };
+        reader: {
+            worldTile(): Tile | null;
+            modals(): { main: number; side: number; chat: number };
+            chatContinueComId(): number;
+            chatOptions(): { text: string; comId: number }[];
+        };
+        actions: {
+            continueDialog(): boolean;
+            ifButton(comId: number): boolean;
+            closeModal(): boolean;
+        };
+    };
+    /** One-shot probe result for harness helpers that spin a temporary script. */
+    __gbProbe?: {
+        done: boolean;
+        ok: boolean;
+        reason: string;
+        withdrew: number;
+        unequipped?: number;
     };
 };
 
@@ -82,6 +135,11 @@ function teleCheat(t: Tile): string {
 
 function chebyshev(a: Tile, b: Tile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+}
+
+/** Offset a camp tile so the bot must path a short distance before gathering. */
+function offsetTile(t: Tile, dx: number, dz: number): Tile {
+    return { x: t.x + dx, z: t.z + dz, level: t.level };
 }
 
 async function snap(page: Page): Promise<Snap> {
@@ -110,7 +168,7 @@ async function snap(page: Page): Promise<Snap> {
             worn,
             used: g.__rs2b0t.Inventory.used(),
             free: g.__rs2b0t.Inventory.free(),
-            logs: ring.slice(-80).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
+            logs: ring.slice(-120).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
         };
     });
 }
@@ -139,6 +197,10 @@ function hasAnyPick(s: Snap): boolean {
 function hasAnyAxe(s: Snap): boolean {
     return s.worn.some(w => /\baxe\b/i.test(w) && !/pickaxe/i.test(w))
         || s.inv.some(i => /\baxe\b/i.test(i.name) && !/pickaxe/i.test(i.name));
+}
+
+function logHas(s: Snap, re: RegExp): boolean {
+    return s.logs.some(l => re.test(l.msg));
 }
 
 async function stopScript(page: Page): Promise<void> {
@@ -197,39 +259,272 @@ async function seedItem(page: Page, debugName: string, displayName: string, qty 
     throw new Error(`could not seed ${displayName} via '${cmd}' (inv=${inv || 'empty'})`);
 }
 
-async function advanceStat(page: Page, skill: string, level: number): Promise<void> {
+async function skillLevel(page: Page, skill: string): Promise<number> {
+    return page.evaluate(s => (globalThis as never as Abi).__rs2b0t.Skills.level(s), skill);
+}
+
+/** Advance only when below target — never re-flood skills already granted. */
+async function advanceStat(page: Page, skill: string, level: number): Promise<boolean> {
     if (level <= 1) {
-        return;
+        return false;
+    }
+    const before = await skillLevel(page, skill);
+    if (before >= level) {
+        return false;
     }
     for (let i = 0; i < 4; i++) {
         const sent = await cheatQuiet(page, `advancestat ${skill} ${level}`);
         if (!sent) {
             throw new Error(`advancestat not sent (not ingame?) for ${skill}`);
         }
-        const have = await page.evaluate(s => (globalThis as never as Abi).__rs2b0t.Skills.level(s), skill);
+        const have = await skillLevel(page, skill);
         if (have >= level) {
-            return;
+            return true;
         }
         await page.waitForTimeout(500);
     }
-    const have = await page.evaluate(s => (globalThis as never as Abi).__rs2b0t.Skills.level(s), skill);
+    const have = await skillLevel(page, skill);
     if (have < level) {
         throw new Error(`advancestat ${skill} ${level} stuck at ${have}`);
     }
+    return true;
+}
+
+/** Grant skills that are still below target; skip (and don't log) already-met levels. */
+async function grantStats(page: Page, stats: { skill: string; level: number }[]): Promise<void> {
+    let raised = 0;
+    for (const st of stats) {
+        const changed = await advanceStat(page, st.skill, st.level);
+        if (changed) {
+            console.log(`  ${st.skill} → ${st.level}`);
+            raised++;
+        }
+    }
+    if (raised > 0) {
+        await page.waitForTimeout(800);
+    }
+}
+
+/**
+ * One-shot after mainland login: max everything so early-zone mobs (Draynor
+ * jail guard, etc.) stop shredding the bot and gather/acquire floors are free.
+ * ~maxme floods level-up chat — clearChatDialogs must run before any seed/start.
+ * Per-scenario stats are kept as no-ops when already 99.
+ */
+const BASE_STATS: { skill: string; level: number }[] = [
+    { skill: 'attack', level: 99 },
+    { skill: 'strength', level: 99 },
+    { skill: 'defence', level: 99 },
+    { skill: 'hitpoints', level: 99 },
+    { skill: 'mining', level: 99 },
+    { skill: 'woodcutting', level: 99 },
+    { skill: 'fishing', level: 99 },
+    { skill: 'cooking', level: 99 },
+    { skill: 'firemaking', level: 99 },
+    { skill: 'smithing', level: 99 }
+];
+
+/**
+ * Click through level-up / chat continues until the chat modal stays closed.
+ * ~maxme (and bulk advancestat) queue a long chain of "Congratulations..." pages
+ * that otherwise block movement and leave the bot standing in danger.
+ */
+async function clearChatDialogs(page: Page, label = 'dialogs'): Promise<void> {
+    const clicked = await page.evaluate(async () => {
+        const g = globalThis as never as Abi;
+        const { actions, reader } = g.rs2b0t;
+        let n = 0;
+        let quiet = 0;
+        for (let i = 0; i < 120; i++) {
+            const chatOpen = reader.modals().chat !== -1;
+            const canContinue = reader.chatContinueComId() !== -1;
+            const opts = reader.chatOptions();
+            if (!chatOpen && !canContinue && opts.length === 0) {
+                quiet++;
+                if (quiet >= 4) {
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 200));
+                continue;
+            }
+            quiet = 0;
+            if (canContinue) {
+                if (actions.continueDialog()) {
+                    n++;
+                }
+            } else if (opts.length > 0) {
+                // Level-up chains are continues; if an option list appears, pick first.
+                if (actions.ifButton(opts[0]!.comId)) {
+                    n++;
+                }
+            }
+            await new Promise(r => setTimeout(r, 250));
+        }
+        return n;
+    });
+    if (clicked > 0) {
+        console.log(`  cleared ${clicked} ${label}`);
+    }
+}
+
+/** Max combat + gather skills, then drain every level-up chat page. */
+async function maxAccountAndClearDialogs(page: Page): Promise<void> {
+    // Prefer ~maxme (one cheat, all skills). Fall back to per-skill advancestat.
+    const sent = await cheatQuiet(page, '~maxme');
+    if (sent) {
+        await page
+            .waitForFunction(
+                () => {
+                    const s = (globalThis as never as Abi).__rs2b0t.Skills;
+                    return s.level('attack') >= 99 && s.level('hitpoints') >= 99 && s.level('mining') >= 99;
+                },
+                undefined,
+                { timeout: 45_000 }
+            )
+            .catch(() => undefined);
+    }
+    // Ensure the skills this suite cares about are 99 even if maxme was partial.
+    await grantStats(page, BASE_STATS);
+    // Level-ups keep arriving for a few seconds after the last advance — keep
+    // clicking until the chat stays quiet, then one more pass for stragglers.
+    await clearChatDialogs(page, 'level-up dialog(s)');
+    await page.waitForTimeout(1500);
+    await clearChatDialogs(page, 'straggler dialog(s)');
+    const levels = await page.evaluate(() => {
+        const s = (globalThis as never as Abi).__rs2b0t.Skills;
+        return {
+            atk: s.level('attack'),
+            str: s.level('strength'),
+            def: s.level('defence'),
+            hp: s.level('hitpoints'),
+            mine: s.level('mining'),
+            fish: s.level('fishing'),
+            wc: s.level('woodcutting')
+        };
+    });
+    console.log(
+        `  stats atk/str/def/hp=${levels.atk}/${levels.str}/${levels.def}/${levels.hp} ` +
+            `m/f/w=${levels.mine}/${levels.fish}/${levels.wc}`
+    );
+}
+
+/**
+ * Unequip worn gear into the pack, then ~clearinv.
+ * clearinv alone leaves the weapon slot — next scenario's seed then stacks a
+ * second pick/axe on top of the still-equipped one.
+ *
+ * Equipment.unequip uses Execution.delayUntil, which needs an active script
+ * context — same one-shot LoopingBot pattern as purgeBankTools.
+ */
+async function unequipAllWorn(page: Page): Promise<number> {
+    const wornBefore = await page.evaluate(() => {
+        const eq = (globalThis as never as Abi).__rs2b0t.Equipment;
+        return eq
+            .items()
+            .map(i => i.name)
+            .filter((n): n is string => !!n);
+    });
+    if (wornBefore.length === 0) {
+        return 0;
+    }
+
+    await stopScript(page);
+    await page.evaluate(scriptName => {
+        const g = globalThis as never as Abi;
+        const abi = g.__rs2b0t;
+        g.__gbProbe = { done: false, ok: false, reason: '', withdrew: 0, unequipped: 0 };
+
+        class UnequipBot extends abi.LoopingBot {
+            private ran = false;
+            override async loop(): Promise<number> {
+                if (this.ran) {
+                    return 5000;
+                }
+                this.ran = true;
+                const res = g.__gbProbe!;
+                try {
+                    let n = 0;
+                    // Re-read each pass — slots shift as items leave.
+                    for (let guard = 0; guard < 12; guard++) {
+                        const names = abi.Equipment.items()
+                            .map(i => i.name)
+                            .filter((name): name is string => !!name);
+                        if (names.length === 0) {
+                            break;
+                        }
+                        const name = names[0]!;
+                        const ok = await abi.Equipment.unequip(name);
+                        if (!ok) {
+                            res.ok = false;
+                            res.reason = `could not unequip ${name}`;
+                            res.unequipped = n;
+                            res.done = true;
+                            return 5000;
+                        }
+                        n++;
+                        await abi.Execution.delayTicks(1);
+                    }
+                    res.ok = true;
+                    res.reason = '';
+                    res.unequipped = n;
+                } catch (e) {
+                    res.ok = false;
+                    res.reason = e instanceof Error ? e.message : String(e);
+                }
+                res.done = true;
+                return 5000;
+            }
+        }
+
+        abi.registerScript({ name: scriptName, create: () => new UnequipBot() });
+        g.rs2b0t.runner.start(g.rs2b0t.registry.get(scriptName));
+    }, `GbUnequip_${Date.now().toString(36)}`);
+
+    await page
+        .waitForFunction(() => (globalThis as never as Abi).__gbProbe?.done === true, undefined, {
+            timeout: 20_000
+        })
+        .catch(() => undefined);
+
+    const result = await page.evaluate(() => {
+        const p = (globalThis as never as Abi).__gbProbe;
+        return p ?? { done: true, ok: false, reason: 'no probe result', withdrew: 0, unequipped: 0 };
+    });
+    await stopScript(page);
+
+    if (!result.ok) {
+        console.log(`  warn: unequip soft-fail (${result.reason})`);
+    } else if ((result.unequipped ?? 0) > 0) {
+        console.log(`  unequipped ${result.unequipped} worn item(s)`);
+    }
+    return result.unequipped ?? 0;
 }
 
 async function clearInv(page: Page): Promise<void> {
+    await unequipAllWorn(page);
+
     // debugproc clearinv — works on inv without p_finduid; still wait a tick.
     const sent = await cheatQuiet(page, '~clearinv');
     if (!sent) {
         throw new Error('~clearinv not sent (not ingame?)');
     }
     await page.waitForTimeout(700);
-    // Confirm empty (ignore worn).
+    // Confirm pack empty and nothing still worn (tools would leak into next seed).
     for (let i = 0; i < 6; i++) {
-        const used = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Inventory.used());
-        if (used === 0) {
+        const state = await page.evaluate(() => {
+            const g = globalThis as never as Abi;
+            return {
+                used: g.__rs2b0t.Inventory.used(),
+                worn: g.__rs2b0t.Equipment.items()
+                    .map(it => it.name)
+                    .filter((n): n is string => !!n)
+            };
+        });
+        if (state.used === 0 && state.worn.length === 0) {
             return;
+        }
+        if (state.worn.length > 0) {
+            await unequipAllWorn(page);
         }
         await cheatQuiet(page, '~clearinv');
         await page.waitForTimeout(400);
@@ -255,7 +550,7 @@ async function teleArrive(page: Page, spot: Tile, maxDist = 18): Promise<boolean
     return false;
 }
 
-type SceneExpect = 'rocks' | 'trees' | 'fish' | 'any-loc' | 'shop';
+type SceneExpect = 'rocks' | 'trees' | 'fish' | 'any-loc' | 'shop' | 'bank' | 'skip';
 
 /**
  * After ::tele the player tile updates before scenery/NPCs rebuild. Starting
@@ -268,6 +563,10 @@ async function waitSceneReady(
     expect: SceneExpect,
     opts: { radius?: number; timeoutMs?: number; label?: string } = {}
 ): Promise<void> {
+    if (expect === 'skip') {
+        await page.waitForTimeout(500);
+        return;
+    }
     const radius = opts.radius ?? 14;
     const timeoutMs = opts.timeoutMs ?? 12000;
     const label = opts.label ?? expect;
@@ -326,6 +625,9 @@ async function waitSceneReady(
                     // Shopkeeper / tool seller nearby is enough for buy paths.
                     return npcs.length > 0 || locs.length > 0;
                 }
+                if (kind === 'bank') {
+                    return locs.some(l => /bank booth|bank chest/i.test(l.name ?? ''));
+                }
                 return locs.length > 0 || npcs.length > 0;
             },
             [expect, radius] as const
@@ -340,17 +642,143 @@ async function waitSceneReady(
     throw new Error(`scene not ready for ${label} within ${timeoutMs}ms (post-tele loc lag?)`);
 }
 
-function sceneExpectFor(sc: { id: string; script: Scenario['script'] }): SceneExpect {
-    if (sc.id.startsWith('buy-')) {
-        return 'shop';
+/**
+ * Open a bank booth, withdraw every item whose name matches `match`, close,
+ * then ~clearinv. Used so acquire scenarios cannot withdraw leftover tools
+ * from earlier tests on the same account.
+ *
+ * Bank/Execution APIs require an active script context (Scheduler), so this
+ * spins a one-shot LoopingBot — same pattern as tools/clues/live-clue-sweep.
+ */
+async function purgeBankTools(
+    page: Page,
+    bankStand: Tile,
+    match: RegExp,
+    label: string,
+    pass = 0
+): Promise<void> {
+    if (pass > 2) {
+        console.log(`  purge ${label}: giving up after ${pass} passes`);
+        await clearInv(page);
+        return;
     }
-    if (sc.script === 'Miner') {
-        return 'rocks';
+
+    const arrived = await teleArrive(page, bankStand, 12);
+    if (!arrived) {
+        throw new Error(`purge ${label}: tele to bank ${bankStand.x},${bankStand.z} failed`);
     }
-    if (sc.script === 'Woodcutter') {
-        return 'trees';
+    await waitSceneReady(page, 'bank', { radius: 10, label: `purge-${label}/bank`, timeoutMs: 15_000 });
+
+    await stopScript(page);
+    await page.evaluate(
+        ([stand, patternSource, patternFlags, scriptName]) => {
+            const g = globalThis as never as Abi;
+            const abi = g.__rs2b0t;
+            const re = new RegExp(patternSource, patternFlags);
+            g.__gbProbe = { done: false, ok: false, reason: '', withdrew: 0 };
+
+            class PurgeBankBot extends abi.LoopingBot {
+                private ran = false;
+                override async loop(): Promise<number> {
+                    if (this.ran) {
+                        return 5000;
+                    }
+                    this.ran = true;
+                    const res = g.__gbProbe!;
+                    const log = (_m: string) => {
+                        /* quiet */
+                    };
+                    try {
+                        if (!abi.Bank.isOpen()) {
+                            const opened =
+                                (await abi.Bank.openBooth(stand, 'Bank booth', 'Use-quickly', log))
+                                || (await abi.Bank.openNearest('Bank booth', 'Use-quickly', log));
+                            if (!opened) {
+                                res.ok = false;
+                                res.reason = 'could not open bank';
+                                res.done = true;
+                                return 5000;
+                            }
+                        }
+                        await abi.Execution.delayUntil(() => abi.Bank.loaded() || !abi.Bank.isOpen(), 4000);
+                        if (!abi.Bank.isOpen()) {
+                            res.ok = false;
+                            res.reason = 'bank closed before load';
+                            res.done = true;
+                            return 5000;
+                        }
+                        // Empty bank is fine — loaded() is false when truly empty; still try a beat.
+                        await abi.Execution.delayTicks(1);
+
+                        let withdrew = 0;
+                        for (let guard = 0; guard < 24; guard++) {
+                            const hit = abi.Bank.items().find(i => i.name && re.test(i.name));
+                            if (!hit?.name) {
+                                break;
+                            }
+                            const allOp = hit.ops.find(o => o && /withdraw[\s-]*all/i.test(o)) ?? 'Withdraw-All';
+                            const before = abi.Inventory.used();
+                            await abi.Bank.withdraw(hit.name, allOp);
+                            await abi.Execution.delayUntil(
+                                () => abi.Inventory.used() > before || abi.Bank.count(hit.name!) === 0,
+                                3000
+                            );
+                            withdrew++;
+                            if (abi.Inventory.free() <= 0) {
+                                // Pack full — caller will clearinv and reopen if needed.
+                                break;
+                            }
+                        }
+                        if (abi.Bank.isOpen()) {
+                            await abi.Bank.close();
+                        }
+                        res.ok = true;
+                        res.reason = '';
+                        res.withdrew = withdrew;
+                    } catch (e) {
+                        res.ok = false;
+                        res.reason = e instanceof Error ? e.message : String(e);
+                    }
+                    res.done = true;
+                    return 5000;
+                }
+            }
+
+            abi.registerScript({ name: scriptName, create: () => new PurgeBankBot() });
+            g.rs2b0t.runner.start(g.rs2b0t.registry.get(scriptName));
+        },
+        [bankStand, match.source, match.flags, `GbPurge_${label.replace(/[^a-zA-Z0-9_]/g, '_')}_${pass}`] as const
+    );
+
+    await page
+        .waitForFunction(() => (globalThis as never as Abi).__gbProbe?.done === true, undefined, { timeout: 45_000 })
+        .catch(() => undefined);
+
+    const result = await page.evaluate(() => {
+        const p = (globalThis as never as Abi).__gbProbe;
+        return p ?? { done: true, ok: false, reason: 'no probe result', withdrew: 0 };
+    });
+    await stopScript(page);
+
+    if (!result.ok) {
+        // Soft: empty bank / booth lag — clear inv anyway and continue.
+        console.log(`  purge ${label}: bank open soft-fail (${result.reason}) — continuing`);
+    } else if (result.withdrew > 0) {
+        console.log(`  purge ${label}: withdrew ${result.withdrew} bank stack(s) matching ${match}`);
+    } else {
+        console.log(`  purge ${label}: bank clean (no ${match} stacks)`);
     }
-    return 'fish';
+
+    await clearInv(page);
+
+    // Second pass if pack filled mid-withdraw (probe left matching stacks).
+    if (result.ok && result.withdrew > 0) {
+        // Re-check bank under another short script if we hit pack-full mid-loop.
+        // Heuristic: if we withdrew a lot, there may still be stacks — one more pass is cheap.
+        if (result.withdrew >= 8) {
+            await purgeBankTools(page, bankStand, match, `${label}-pass2`, pass + 1);
+        }
+    }
 }
 
 function printNewLogs(s: Snap, lastTime: number, stamp: () => string): number {
@@ -370,15 +798,24 @@ function printNewLogs(s: Snap, lastTime: number, stamp: () => string): number {
 
 type Scenario = {
     id: string;
-    /** Group tags for CLI filters: mining, fishing, wc, acquire, all */
+    /** Group tags for CLI filters: mining, fishing, wc, acquire, endgame, path, all */
     tags: string[];
     script: 'Miner' | 'Fisher' | 'Woodcutter';
-    spot: Tile;
+    /** Teleport start — usually offset from the camp so pathing is exercised. */
+    start: Tile;
+    /** Named camp anchor (for path-distance checks). */
+    camp?: Tile;
+    /** Bank stand for bank-loop scenarios (must walk here and clear product). */
+    bank?: Tile;
     settings: Record<string, string | number | boolean>;
-    /** Held items to seed via `give` (debug name → display name, qty). No tools for acquire tests. */
+    /** Held items to seed via `give` (debug name → display name, qty). */
     seed?: { debug: string; name: string; qty?: number }[];
-    /** Skill levels to advance before start. */
+    /** Skill levels to advance before start. End-game uses ~90 for success rolls. */
     stats?: { skill: string; level: number }[];
+    /** Before seed: open this bank and withdraw matching tools, then clearinv. */
+    purgeBank?: { stand: Tile; match: RegExp; label: string };
+    /** Scene readiness after tele. Path-from-bank uses 'bank' or 'skip'. */
+    scene?: SceneExpect;
     budgetMs?: number;
     check: (ctx: {
         start: Snap;
@@ -386,9 +823,23 @@ type Scenario = {
         elapsedMs: number;
         sawProduct: boolean;
         productPeak: number;
+        /** Product count dropped after gather XP (deposit or drop). */
         bankedHint: boolean;
+        /** True once player was within bankRadius of sc.bank while product was high. */
+        sawNearBank: boolean;
+        minDistToCamp: number;
+        minDistToBank: number;
+        startDistToCamp: number;
     }) => 'pass' | 'wait' | 'fail';
-    failMsg?: (ctx: { start: Snap; cur: Snap }) => string;
+    failMsg?: (ctx: {
+        start: Snap;
+        cur: Snap;
+        minDistToCamp: number;
+        minDistToBank?: number;
+        productPeak?: number;
+        bankedHint?: boolean;
+        sawNearBank?: boolean;
+    }) => string;
 };
 
 const SPOT = {
@@ -397,22 +848,42 @@ const SPOT = {
     draynorFish: { x: 3086, z: 3231, level: 0 },
     catherbyFish: { x: 2845, z: 3431, level: 0 },
     draynorTrees: { x: 3098, z: 3242, level: 0 },
-    draynorWillows: { x: 3087, z: 3234, level: 0 },
-    /** Near Bob (Lumbridge axes) — tool-buy axe. */
+    /** Lava Maze runite rocks (wildy). */
+    lavaRunite: { x: 3058, z: 3884, level: 0 },
+    /** Fishing Guild dock walkway. */
+    fishingGuild: { x: 2604, z: 3420, level: 0 },
+    /** Ardougne West / north bank — path start for guild sharks. */
+    ardougneWestBank: { x: 2616, z: 3332, level: 0 },
+    /** Near Bob (Lumbridge axes). */
     bob: { x: 3231, z: 3203, level: 0 },
     /** Near Gerrant (Port Sarim fishing). */
     gerrant: { x: 3013, z: 3224, level: 0 },
     /** Surface hop for Nurmof (dwarven mine picks). */
     nurmofHop: { x: 3019, z: 3449, level: 0 },
-    faladorEast: { x: 3013, z: 3355, level: 0 }
+    faladorEast: { x: 3013, z: 3355, level: 0 },
+    draynorBank: { x: 3093, z: 3243, level: 0 },
+    varrockWestBank: { x: 3185, z: 3440, level: 0 },
+    varrockAnvil: { x: 3188, z: 3425, level: 0 },
+    edgevilleBank: { x: 3094, z: 3493, level: 0 }
+} as const;
+
+const TOOL_RE = {
+    pick: /pickaxe/i,
+    axe: /\baxe\b/i,
+    fishGear: /fishing net|harpoon|lobster pot|fishing rod|fly fishing rod|feather|fishing bait/i,
+    gatherTools: /pickaxe|\baxe\b|fishing net|harpoon|lobster pot|fishing rod/i
 } as const;
 
 const SCENARIOS: Scenario[] = [
+    // ── early-game gather (short path into camp) ─────────────────────────────
     {
         id: 'mine-bank',
-        tags: ['mining', 'mine', 'bank'],
+        tags: ['mining', 'mine', 'bank', 'early'],
         script: 'Miner',
-        spot: SPOT.swVarrockMine,
+        start: offsetTile(SPOT.swVarrockMine, -10, 4),
+        camp: SPOT.swVarrockMine,
+        // SW Varrock mine banks at Varrock West.
+        bank: SPOT.varrockWestBank,
         settings: {
             // SW Varrock seed has tin in leash — not copper (and Miner default is Iron).
             rocks: 'Tin',
@@ -421,62 +892,85 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
-        seed: [{ debug: 'bronze_pickaxe', name: 'Bronze pickaxe', qty: 1 }],
-        stats: [{ skill: 'mining', level: 5 }],
-        check: ({ start, cur, sawProduct, productPeak, bankedHint }) => {
+        // Pick + 26 tin = near-full pack; mine the last ore(s), walk to bank, deposit.
+        seed: [
+            { debug: 'adamant_pickaxe', name: 'Adamant pickaxe', qty: 1 },
+            { debug: 'tin_ore', name: 'Tin ore', qty: 26 }
+        ],
+        // Stats already 99 from BASE_STATS — no per-scenario re-grant.
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
             const xpGain = cur.xp.mining - start.xp.mining;
+            const ore = invMatch(cur, /ore/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Gathered ore and either still holding it or already banked a load.
-            if (xpGain >= 35 && (sawProduct || productPeak > 0)) {
-                return 'pass';
-            }
-            // Strong bank signal: product peaked then left pack after XP gain.
-            if (xpGain > 0 && bankedHint) {
+            // Real bank loop: mine last → walk to bank → deposit (not just fill pack).
+            if (
+                xpGain > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && ore <= 2
+                && minDistToBank <= 10
+            ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur }) =>
-            `mining xp ${start.xp.mining}→${cur.xp.mining}, inv=${cur.inv.map(i => `${i.count}x ${i.name}`).join(', ') || 'empty'}`
+        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `mining xp ${start.xp.mining}→${cur.xp.mining}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, ore=${invMatch(cur, /ore/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
     },
     {
         id: 'mine-power',
-        tags: ['mining', 'mine', 'power', 'drop'],
+        tags: ['mining', 'mine', 'power', 'drop', 'early'],
         script: 'Miner',
-        spot: SPOT.swVarrockMine,
+        start: offsetTile(SPOT.swVarrockMine, 8, -6),
+        camp: SPOT.swVarrockMine,
         settings: {
             rocks: 'Tin',
+            // location None = power-mine: drop ore when full (no bank loop).
+            // Leash is from the live start tile (not camp) — product floors to 40.
             location: 'None',
             toolAcquire: 'Off',
             forgetfulBank: false,
-            leashRadius: 10
+            leashRadius: 40
         },
-        seed: [{ debug: 'bronze_pickaxe', name: 'Bronze pickaxe', qty: 1 }],
-        stats: [{ skill: 'mining', level: 5 }],
-        check: ({ start, cur, sawProduct, productPeak }) => {
+        // Pick + 26 tin = near-full pack; mine the last ore(s), then drop.
+        // Distinct from mine-bank: same seed shape, but must clear via drop not bank.
+        seed: [
+            { debug: 'adamant_pickaxe', name: 'Adamant pickaxe', qty: 1 },
+            { debug: 'tin_ore', name: 'Tin ore', qty: 26 }
+        ],
+        scene: 'rocks',
+        budgetMs: 180_000,
+        check: ({ start, cur, productPeak, bankedHint }) => {
             const xpGain = cur.xp.mining - start.xp.mining;
+            const ore = invMatch(cur, /ore/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Power-mine: XP up and product was seen (and ideally dropped — peak then lower).
-            if (xpGain >= 50 && sawProduct) {
+            // bankedHint here = product count dropped after gather XP (drop, not bank).
+            if (xpGain > 0 && bankedHint && productPeak >= 26) {
                 return 'pass';
             }
-            if (xpGain >= 70 && productPeak >= 1) {
+            // Fallback: mined into a full pack then cleared most of it.
+            if (xpGain > 0 && productPeak >= 27 && ore <= productPeak - 3) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur }) =>
-            `power-mine xp ${start.xp.mining}→${cur.xp.mining}, product=${invMatch(cur, /ore/i)}`
+        failMsg: ({ start, cur, productPeak, bankedHint }) =>
+            `power-mine xp ${start.xp.mining}→${cur.xp.mining}, ore=${invMatch(cur, /ore/i)}, peak=${productPeak}, dropped=${bankedHint}`
     },
     {
         id: 'fish-bank',
-        tags: ['fishing', 'fish', 'bank'],
+        tags: ['fishing', 'fish', 'bank', 'early'],
         script: 'Fisher',
-        spot: SPOT.draynorFish,
+        start: offsetTile(SPOT.draynorFish, 8, 6),
+        camp: SPOT.draynorFish,
+        bank: SPOT.draynorBank,
         settings: {
             fishMethod: 'Small net — shrimp/anchovy',
             location: 'Draynor Village',
@@ -485,29 +979,43 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 18
         },
-        seed: [{ debug: 'net', name: 'Small fishing net', qty: 1 }],
-        stats: [{ skill: 'fishing', level: 5 }],
-        check: ({ start, cur, sawProduct, bankedHint }) => {
+        // Net + 26 raw = 27 slots; one free so it must fish the last catch,
+        // then walk to bank and deposit the pack.
+        seed: [
+            { debug: 'net', name: 'Small fishing net', qty: 1 },
+            { debug: 'raw_shrimp', name: 'Raw shrimps', qty: 26 }
+        ],
+        // Fishing 99 from BASE_STATS.
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
             const xpGain = cur.xp.fishing - start.xp.fishing;
+            const raw = invMatch(cur, /^raw /i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            if (xpGain >= 30 && (sawProduct || bankedHint)) {
-                return 'pass';
-            }
-            if (xpGain >= 50) {
+            // Real bank loop: fish last → walk to bank → deposit.
+            if (
+                xpGain > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && raw <= 2
+                && minDistToBank <= 10
+            ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur }) =>
-            `fishing xp ${start.xp.fishing}→${cur.xp.fishing}, raw=${invMatch(cur, /^raw /i)}`
+        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `fishing xp ${start.xp.fishing}->${cur.xp.fishing}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, raw=${invMatch(cur, /^raw /i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
     },
     {
         id: 'fish-cook',
-        tags: ['fishing', 'fish', 'cook'],
+        tags: ['fishing', 'fish', 'cook', 'early'],
         script: 'Fisher',
-        spot: SPOT.catherbyFish,
+        start: offsetTile(SPOT.catherbyFish, -6, 4),
+        camp: SPOT.catherbyFish,
         settings: {
             fishMethod: 'Lobster cage — lobster',
             location: 'Catherby',
@@ -518,40 +1026,38 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 18
         },
-        // Full pack of raw lobster so cook-then-bank fires immediately (no 20+ min fish).
+        // Pot + 26 raw = 27 slots; one free so it must fish the last lobster,
+        // then cook-then-bank the pack (not cook a pre-filled inventory only).
         seed: [
             { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
-            { debug: 'raw_lobster', name: 'Raw lobster', qty: 27 }
+            { debug: 'raw_lobster', name: 'Raw lobster', qty: 26 }
         ],
-        stats: [
-            { skill: 'fishing', level: 40 },
-            { skill: 'cooking', level: 40 }
-        ],
+        // Cooking/fishing already 99 from BASE_STATS.
+        scene: 'skip',
         budgetMs: 180_000,
         check: ({ start, cur }) => {
+            const fishXp = cur.xp.fishing - start.xp.fishing;
             const cookXp = cur.xp.cooking - start.xp.cooking;
             const cooked = invMatch(cur, /^lobster$/i);
-            const rawLeft = invMatch(cur, /^raw lobster$/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            if (cookXp > 0 || cooked > 0) {
+            // Must catch the last lobster, then start cooking the pack.
+            if (fishXp > 0 && (cookXp > 0 || cooked > 0)) {
                 return 'pass';
-            }
-            // Raw count dropped without cooking XP can mean banked raw — still wait.
-            if (rawLeft < 27 && cookXp === 0) {
-                return 'wait';
             }
             return 'wait';
         },
         failMsg: ({ start, cur }) =>
-            `cook xp ${start.xp.cooking}→${cur.xp.cooking}, rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)}`
+            `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking}, rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)}`
     },
     {
         id: 'wc-bank',
-        tags: ['woodcutting', 'wc', 'bank'],
+        tags: ['woodcutting', 'wc', 'bank', 'early'],
         script: 'Woodcutter',
-        spot: SPOT.draynorTrees,
+        start: offsetTile(SPOT.draynorTrees, -8, 5),
+        camp: SPOT.draynorTrees,
+        bank: SPOT.draynorBank,
         settings: {
             treeName: 'Tree',
             location: 'Draynor (trees)',
@@ -560,29 +1066,41 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
-        seed: [{ debug: 'bronze_axe', name: 'Bronze axe', qty: 1 }],
-        stats: [{ skill: 'woodcutting', level: 5 }],
-        check: ({ start, cur, sawProduct, bankedHint }) => {
+        // Axe + 26 logs = near-full pack; chop the last log(s), walk to bank, deposit.
+        seed: [
+            { debug: 'adamant_axe', name: 'Adamant axe', qty: 1 },
+            { debug: 'logs', name: 'Logs', qty: 26 }
+        ],
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
             const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
+            const logs = invMatch(cur, /logs/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            if (xpGain >= 40 && (sawProduct || bankedHint || invMatch(cur, /logs/i) > 0)) {
-                return 'pass';
-            }
-            if (xpGain >= 60) {
+            // Real bank loop: chop last → walk to bank → deposit.
+            if (
+                xpGain > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && logs <= 2
+                && minDistToBank <= 10
+            ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur }) =>
-            `wc xp ${start.xp.woodcutting}→${cur.xp.woodcutting}, logs=${invMatch(cur, /logs/i)}`
+        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `wc xp ${start.xp.woodcutting}->${cur.xp.woodcutting}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, logs=${invMatch(cur, /logs/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
     },
     {
         id: 'wc-burn',
-        tags: ['woodcutting', 'wc', 'burn', 'firemaking'],
+        tags: ['woodcutting', 'wc', 'burn', 'firemaking', 'early'],
         script: 'Woodcutter',
-        spot: SPOT.draynorTrees,
+        start: offsetTile(SPOT.draynorTrees, 6, -4),
+        camp: SPOT.draynorTrees,
         settings: {
             treeName: 'Tree',
             location: 'Draynor (trees)',
@@ -592,40 +1110,118 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
-        // Near-full logs so chop-then-burn starts lighting without a long chop first.
         seed: [
-            { debug: 'bronze_axe', name: 'Bronze axe', qty: 1 },
+            { debug: 'adamant_axe', name: 'Adamant axe', qty: 1 },
             { debug: 'tinderbox', name: 'Tinderbox', qty: 1 },
             { debug: 'logs', name: 'Logs', qty: 26 }
         ],
-        stats: [
-            { skill: 'woodcutting', level: 5 },
-            { skill: 'firemaking', level: 5 }
-        ],
+        scene: 'skip',
         budgetMs: 150_000,
         check: ({ start, cur }) => {
             const fmXp = cur.xp.firemaking - start.xp.firemaking;
-            const logs = invMatch(cur, /^logs$/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
             if (fmXp > 0) {
                 return 'pass';
             }
-            if (logs < 26 && fmXp === 0) {
-                return 'wait';
-            }
             return 'wait';
         },
         failMsg: ({ start, cur }) =>
             `fm xp ${start.xp.firemaking}→${cur.xp.firemaking}, logs=${invMatch(cur, /^logs$/i)}`
     },
+
+    // ── end-game pathing ─────────────────────────────────────────────────────
+    {
+        id: 'mine-path-runite',
+        tags: ['mining', 'mine', 'endgame', 'path', 'wildy'],
+        script: 'Miner',
+        // Brief walk into the lava-maze runite pocket (not standing on the rocks).
+        start: offsetTile(SPOT.lavaRunite, -14, -10),
+        camp: SPOT.lavaRunite,
+        settings: {
+            rocks: 'Runite',
+            location: 'Lava Maze Runite Mine',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 16
+        },
+        seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
+        // Mining/Attack already 99 from BASE_STATS (wields rune).
+        stats: [{ skill: 'mining', level: 90 }],
+        scene: 'skip',
+        budgetMs: 120_000,
+        check: ({ start, cur, sawProduct, minDistToCamp, startDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const xpGain = cur.xp.mining - start.xp.mining;
+            const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 5;
+            const nearCamp = minDistToCamp <= 10;
+            // Wildy: pass on solid approach + optional brief mine attempt (PK risk).
+            if (pathed && nearCamp && (xpGain > 0 || sawProduct || elapsedMs >= 55_000)) {
+                return 'pass';
+            }
+            if (xpGain > 0 && nearCamp) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `runite path xp ${start.xp.mining}→${cur.xp.mining}, distCamp=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    {
+        id: 'fish-path-shark',
+        tags: ['fishing', 'fish', 'endgame', 'path', 'guild'],
+        script: 'Fisher',
+        // Real flow: leave Ardougne north/west bank and walk into the Fishing Guild.
+        start: SPOT.ardougneWestBank,
+        camp: SPOT.fishingGuild,
+        settings: {
+            fishMethod: 'Harpoon — sharks',
+            location: 'Fishing Guild',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        seed: [{ debug: 'harpoon', name: 'Harpoon', qty: 1 }],
+        // Fishing 99 from BASE_STATS covers sharks — no mid-suite raise.
+        scene: 'bank',
+        budgetMs: 210_000,
+        check: ({ start, cur, sawProduct, minDistToCamp, startDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const xpGain = cur.xp.fishing - start.xp.fishing;
+            const pathed = startDistToCamp >= 20 && minDistToCamp <= startDistToCamp - 12;
+            const nearGuild = minDistToCamp <= 14;
+            const shark = invMatch(cur, /shark/i);
+            // Path into guild + either XP/product or long enough dwell near spots.
+            if (pathed && nearGuild && (xpGain > 0 || sawProduct || shark > 0)) {
+                return 'pass';
+            }
+            if (xpGain > 0 && nearGuild) {
+                return 'pass';
+            }
+            // Approached guild docks and stayed — pathing proved even if shark roll is cold.
+            if (pathed && nearGuild && elapsedMs >= 90_000) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `shark path xp ${start.xp.fishing}→${cur.xp.fishing}, distGuild=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}, raw=${invMatch(cur, /^raw /i)}`
+    },
+
+    // ── tool acquire (bank-isolated; assert shop/smith not leftover withdraw) ─
     {
         id: 'buy-pick',
         tags: ['acquire', 'buy', 'mining', 'tools'],
         script: 'Miner',
-        // Start at surface hop so Buy/repair can enter Nurmof; camp is Dwarven Mine.
-        spot: SPOT.nurmofHop,
+        // Real flow: missing tool + 32k → Fally East bank, then Nurmof for Rune pickaxe.
+        start: SPOT.faladorEast,
+        camp: SPOT.nurmofHop,
         settings: {
             rocks: 'Copper',
             location: 'Dwarven Mine',
@@ -633,34 +1229,36 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 14
         },
-        // Coins only — no pick. Optional bars/smithing not required for bronze.
-        // Held stack (no ~bankitem on this engine); enough for Nurmof hop + buy.
-        seed: [{ debug: 'coins', name: 'Coins', qty: 2500 }],
-        stats: [{ skill: 'mining', level: 5 }],
-        budgetMs: 180_000,
-        check: ({ start, cur, elapsedMs }) => {
+        purgeBank: { stand: SPOT.faladorEast, match: TOOL_RE.pick, label: 'picks@fally-e' },
+        seed: [{ debug: 'coins', name: 'Coins', qty: 32_000 }],
+        stats: [{ skill: 'mining', level: 90 }],
+        scene: 'bank',
+        budgetMs: 200_000,
+        check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            const gotPick = hasAnyPick(cur);
-            const xpGain = cur.xp.mining - start.xp.mining;
-            if (gotPick && xpGain > 0) {
+            // Best affordable with 32k + mining 90 is Rune pickaxe @ Nurmof.
+            const boughtRune = logHas(cur, /acquire:\s*bought\s+\d+×\s*Rune pickaxe/i);
+            const gotRune = hasTool(cur, 'Rune pickaxe');
+            if (boughtRune && gotRune) {
                 return 'pass';
             }
-            // Tool alone after ~45s proves the buy path (gather may still path underground).
-            if (gotPick && elapsedMs >= 45_000) {
+            if (boughtRune && elapsedMs >= 30_000) {
                 return 'pass';
             }
             return 'wait';
         },
         failMsg: ({ cur }) =>
-            `pick=${hasAnyPick(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
+            `boughtRune=${logHas(cur, /acquire:\s*bought\s+\d+×\s*Rune pickaxe/i)} runePick=${hasTool(cur, 'Rune pickaxe')} anyPick=${hasAnyPick(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
     {
         id: 'buy-axe',
         tags: ['acquire', 'buy', 'woodcutting', 'wc', 'tools'],
         script: 'Woodcutter',
-        spot: SPOT.bob,
+        // Missing axe → Draynor bank (location bank) then Bob.
+        start: SPOT.draynorBank,
+        camp: SPOT.bob,
         settings: {
             treeName: 'Tree',
             location: 'Draynor (trees)',
@@ -669,31 +1267,35 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
+        purgeBank: { stand: SPOT.draynorBank, match: TOOL_RE.axe, label: 'axes@draynor' },
         seed: [{ debug: 'coins', name: 'Coins', qty: 2500 }],
-        stats: [{ skill: 'woodcutting', level: 5 }],
-        budgetMs: 180_000,
-        check: ({ start, cur, elapsedMs }) => {
+        stats: [{ skill: 'woodcutting', level: 90 }],
+        scene: 'bank',
+        budgetMs: 200_000,
+        check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
+            const bought = logHas(cur, /acquire:\s*bought\s+\d+×\s*.*axe/i);
             const gotAxe = hasAnyAxe(cur);
-            const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
-            if (gotAxe && xpGain > 0) {
+            if (bought && gotAxe) {
                 return 'pass';
             }
-            if (gotAxe && elapsedMs >= 45_000) {
+            if (bought && elapsedMs >= 30_000) {
                 return 'pass';
             }
             return 'wait';
         },
         failMsg: ({ cur }) =>
-            `axe=${hasAnyAxe(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
+            `boughtLog=${logHas(cur, /acquire:\s*bought/i)} axe=${hasAnyAxe(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
     {
         id: 'buy-net',
         tags: ['acquire', 'buy', 'fishing', 'tools'],
         script: 'Fisher',
-        spot: SPOT.gerrant,
+        // Missing net → Draynor bank then Gerrant (or Harry if closer — Gerrant for Draynor).
+        start: SPOT.draynorBank,
+        camp: SPOT.gerrant,
         settings: {
             fishMethod: 'Small net — shrimp/anchovy',
             location: 'Draynor Village',
@@ -702,45 +1304,74 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 18
         },
+        purgeBank: { stand: SPOT.draynorBank, match: TOOL_RE.fishGear, label: 'fishgear@draynor' },
         seed: [{ debug: 'coins', name: 'Coins', qty: 1200 }],
-        stats: [{ skill: 'fishing', level: 5 }],
-        budgetMs: 180_000,
-        check: ({ start, cur, elapsedMs }) => {
+        scene: 'bank',
+        budgetMs: 200_000,
+        check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
+            const bought = logHas(cur, /acquire:\s*bought\s+\d+×\s*Small fishing net/i)
+                || logHas(cur, /acquire:\s*bought\s+\d+×\s*.*net/i);
             const gotNet = invCount(cur, 'Small fishing net') > 0;
-            const xpGain = cur.xp.fishing - start.xp.fishing;
-            if (gotNet && xpGain > 0) {
+            if (bought && gotNet) {
                 return 'pass';
             }
-            if (gotNet && elapsedMs >= 45_000) {
+            if (bought && elapsedMs >= 30_000) {
                 return 'pass';
             }
             return 'wait';
         },
         failMsg: ({ cur }) =>
-            `net=${invCount(cur, 'Small fishing net')} coins=${invCount(cur, 'Coins')}`
+            `boughtLog=${logHas(cur, /acquire:\s*bought/i)} net=${invCount(cur, 'Small fishing net')} coins=${invCount(cur, 'Coins')}`
+    },
+    {
+        id: 'smith-rune-axe',
+        tags: ['acquire', 'smith', 'woodcutting', 'wc', 'tools', 'endgame'],
+        script: 'Woodcutter',
+        // Bar + hammer ready → Varrock west bank / anvil smith path (no shop axe).
+        start: SPOT.varrockWestBank,
+        camp: SPOT.varrockAnvil,
+        settings: {
+            treeName: 'Tree',
+            location: 'Draynor (trees)',
+            burnMode: 'Off',
+            toolAcquire: 'Buy / repair',
+            forgetfulBank: false,
+            leashRadius: 12
+        },
+        purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
+        // Hammer + runite bar; WC/smith already 99 from BASE_STATS.
+        seed: [
+            { debug: 'hammer', name: 'Hammer', qty: 1 },
+            { debug: 'runite_bar', name: 'Runite bar', qty: 1 }
+        ],
+        stats: [
+            { skill: 'woodcutting', level: 90 },
+            { skill: 'smithing', level: 90 }
+        ],
+        scene: 'bank',
+        budgetMs: 210_000,
+        check: ({ cur }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const smithed = logHas(cur, /acquire:\s*smithed\s+Rune axe/i);
+            const gotRune = hasTool(cur, 'Rune axe');
+            if (smithed && gotRune) {
+                return 'pass';
+            }
+            // Smithed log is authoritative even if equip lagged.
+            if (smithed) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ cur }) =>
+            `smithedLog=${logHas(cur, /acquire:\s*smithed/i)} runeAxe=${hasTool(cur, 'Rune axe')} bar=${invCount(cur, 'Runite bar')} hammer=${invCount(cur, 'Hammer')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     }
 ];
-
-// Soft-pass for buy scenarios: tool acquired after enough wall time proves buy path
-// even if gather resume is slow (pathing/hop).
-function buySoftPass(id: string, cur: Snap, elapsedMs: number): boolean {
-    if (elapsedMs < 45_000) {
-        return false;
-    }
-    if (id === 'buy-pick') {
-        return hasAnyPick(cur);
-    }
-    if (id === 'buy-axe') {
-        return hasAnyAxe(cur);
-    }
-    if (id === 'buy-net') {
-        return invCount(cur, 'Small fishing net') > 0;
-    }
-    return false;
-}
 
 function wantScenario(s: Scenario): boolean {
     if (filters.length === 0) {
@@ -779,6 +1410,12 @@ try {
     await mainlandAccount(page, base, USER);
     console.log(`${stamp()} mainland-ready as '${USER}'`);
 
+    // Max everything once, then drain level-up chat before any tele/seed/start.
+    // Early zones (Draynor jail guard, etc.) will otherwise kill a low-HP bot
+    // while it's stuck behind "Congratulations, you just advanced...".
+    console.log(`${stamp()} base stats → 99 (maxme + clear dialogs)`);
+    await maxAccountAndClearDialogs(page);
+
     // Registry sanity — scripts must be present in the deployed client.
     const names = await page.evaluate(() => {
         const r = (globalThis as never as Abi).rs2b0t.registry;
@@ -794,55 +1431,72 @@ try {
         console.log(`\n══ ${sc.id} (${sc.script}) ══`);
         try {
             await stopScript(page);
+            // Drain any leftover level-up / NPC chat before tele into danger zones.
+            await clearChatDialogs(page);
             await clearInv(page);
 
-            // Seed items BEFORE stat floods (same lesson as firegiant-test).
-            // Use engine `give` — `~item`/`~bankitem` are not on this Server tree.
+            // Isolate bank tools so acquire cannot withdraw leftovers from prior runs.
+            if (sc.purgeBank) {
+                await purgeBankTools(page, sc.purgeBank.stand, sc.purgeBank.match, sc.purgeBank.label);
+            }
+
+            // Seed items BEFORE any higher stat bumps (same lesson as firegiant-test).
             for (const it of sc.seed ?? []) {
                 await seedItem(page, it.debug, it.name, it.qty ?? 1);
                 console.log(`  seeded ${it.qty ?? 1}x ${it.name}`);
             }
-            for (const st of sc.stats ?? []) {
-                await advanceStat(page, st.skill, st.level);
-                console.log(`  ${st.skill} → ${st.level}`);
-            }
+            // Already-met levels (99 from BASE_STATS) are skipped.
+            await grantStats(page, sc.stats ?? []);
+            await clearChatDialogs(page);
 
-            // Acquire tests must not already hold the tool.
-            if (sc.id.startsWith('buy-')) {
+            // Acquire tests must not already hold the tool after purge+seed.
+            if (sc.id.startsWith('buy-') || sc.id === 'smith-rune-axe') {
                 const pre = await snap(page);
-                if (sc.id === 'buy-pick' && hasAnyPick(pre)) {
-                    throw new Error('precondition: already holding a pickaxe');
+                if ((sc.id === 'buy-pick') && hasAnyPick(pre)) {
+                    throw new Error('precondition: already holding a pickaxe after purge');
                 }
-                if (sc.id === 'buy-axe' && hasAnyAxe(pre)) {
-                    throw new Error('precondition: already holding an axe');
+                if ((sc.id === 'buy-axe' || sc.id === 'smith-rune-axe') && hasAnyAxe(pre)) {
+                    throw new Error('precondition: already holding an axe after purge');
                 }
                 if (sc.id === 'buy-net' && invCount(pre, 'Small fishing net') > 0) {
-                    throw new Error('precondition: already holding a net');
+                    throw new Error('precondition: already holding a net after purge');
                 }
-                if (invCount(pre, 'Coins') < 1) {
+                if (sc.id === 'buy-pick' && invCount(pre, 'Coins') < 32_000) {
+                    throw new Error(`precondition: need 32000 coins after seed (have ${invCount(pre, 'Coins')})`);
+                }
+                if (sc.id.startsWith('buy-') && sc.id !== 'buy-pick' && invCount(pre, 'Coins') < 1) {
                     throw new Error('precondition: no coins after seed');
                 }
+                if (sc.id === 'smith-rune-axe') {
+                    if (invCount(pre, 'Runite bar') < 1) {
+                        throw new Error('precondition: no Runite bar after seed');
+                    }
+                    if (invCount(pre, 'Hammer') < 1) {
+                        throw new Error('precondition: no Hammer after seed');
+                    }
+                }
             }
 
-            const arrived = await teleArrive(page, sc.spot);
+            const arrived = await teleArrive(page, sc.start);
             if (!arrived) {
                 const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-                throw new Error(`tele to ${sc.spot.x},${sc.spot.z} failed (at ${t ? `${t.x},${t.z},${t.level}` : '?'})`);
+                throw new Error(`tele to ${sc.start.x},${sc.start.z} failed (at ${t ? `${t.x},${t.z},${t.level}` : '?'})`);
             }
-            console.log(`  arrived near ${sc.spot.x},${sc.spot.z}`);
+            console.log(`  arrived near ${sc.start.x},${sc.start.z}${sc.camp ? ` (camp ${sc.camp.x},${sc.camp.z})` : ''}`);
 
-            // Do not start until scenery/NPCs exist in the leash — tele tile lands
-            // a beat before Locs rebuild (same lag as level-change transports).
-            const expect = sceneExpectFor(sc);
-            await waitSceneReady(page, expect, {
-                radius: Math.max(14, Number(sc.settings.leashRadius) || 12),
-                label: `${sc.id}/${expect}`
-            });
-            console.log(`  scene ready (${expect})`);
+            const expect = sc.scene ?? 'skip';
+            if (expect !== 'skip') {
+                await waitSceneReady(page, expect, {
+                    radius: Math.max(14, Number(sc.settings.leashRadius) || 12),
+                    label: `${sc.id}/${expect}`
+                });
+                console.log(`  scene ready (${expect})`);
+            } else {
+                // Brief settle so tele zone finishes streaming before script start.
+                await page.waitForTimeout(700);
+            }
 
             await setSettings(page, sc.script, sc.settings);
-            // Confirm storage keys the runner will resolve (Miner default rocks=Iron
-            // would idle at tin-only SW Varrock if this write missed).
             const applied = await page.evaluate(name => {
                 const keys = ['rocks', 'treeName', 'fishMethod', 'location', 'leashRadius', 'toolAcquire'];
                 const out: Record<string, string | null> = {};
@@ -856,10 +1510,14 @@ try {
             console.log(`  started ${sc.script}`);
 
             const start = await snap(page);
+            const startDistToCamp = start.tile && sc.camp ? chebyshev(start.tile, sc.camp) : 0;
+            let minDistToCamp = startDistToCamp;
+            let minDistToBank = start.tile && sc.bank ? chebyshev(start.tile, sc.bank) : 999;
             let lastLog = 0;
             let sawProduct = false;
             let productPeak = 0;
             let bankedHint = false;
+            let sawNearBank = false;
             let prevProduct = 0;
             const budget = sc.budgetMs ?? PER_SCENARIO_MS;
             let outcome: 'pass' | 'fail' = 'fail';
@@ -869,6 +1527,19 @@ try {
                 await page.waitForTimeout(4000);
                 const cur = await snap(page);
                 lastLog = printNewLogs(cur, lastLog, stamp);
+
+                if (cur.tile && sc.camp) {
+                    const d = chebyshev(cur.tile, sc.camp);
+                    if (d < minDistToCamp) {
+                        minDistToCamp = d;
+                    }
+                }
+                if (cur.tile && sc.bank) {
+                    const dBank = chebyshev(cur.tile, sc.bank);
+                    if (dBank < minDistToBank) {
+                        minDistToBank = dBank;
+                    }
+                }
 
                 const product =
                     sc.script === 'Miner'
@@ -882,48 +1553,112 @@ try {
                 if (product > productPeak) {
                     productPeak = product;
                 }
-                // Product left the pack after we had some + XP moved → likely banked or dropped.
-                if (prevProduct >= 3 && product < prevProduct - 1 && cur.xp.mining + cur.xp.fishing + cur.xp.woodcutting > start.xp.mining + start.xp.fishing + start.xp.woodcutting) {
+                // Near bank with a full-ish pack = actually walked the bank trip
+                // (not a drop at the rocks). Require product still high so we
+                // don't count a later empty return walk alone.
+                if (cur.tile && sc.bank && product >= 10 && chebyshev(cur.tile, sc.bank) <= 8) {
+                    sawNearBank = true;
+                }
+                if (
+                    prevProduct >= 3
+                    && product < prevProduct - 1
+                    && cur.xp.mining + cur.xp.fishing + cur.xp.woodcutting
+                        > start.xp.mining + start.xp.fishing + start.xp.woodcutting
+                ) {
                     bankedHint = true;
                 }
                 prevProduct = product;
 
                 const elapsedMs = Date.now() - scStart;
-                const verdict = sc.check({ start, cur, elapsedMs, sawProduct, productPeak, bankedHint });
-                if (verdict === 'pass' || buySoftPass(sc.id, cur, elapsedMs)) {
+                const verdict = sc.check({
+                    start,
+                    cur,
+                    elapsedMs,
+                    sawProduct,
+                    productPeak,
+                    bankedHint,
+                    sawNearBank,
+                    minDistToCamp,
+                    minDistToBank,
+                    startDistToCamp
+                });
+                if (verdict === 'pass') {
                     outcome = 'pass';
-                    detail = `xpΔ m/f/w/c/fm=${cur.xp.mining - start.xp.mining}/${cur.xp.fishing - start.xp.fishing}/${cur.xp.woodcutting - start.xp.woodcutting}/${cur.xp.cooking - start.xp.cooking}/${cur.xp.firemaking - start.xp.firemaking} productPeak=${productPeak} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`;
+                    detail =
+                        `xpΔ m/f/w/c/fm/sm=${cur.xp.mining - start.xp.mining}/${cur.xp.fishing - start.xp.fishing}/` +
+                        `${cur.xp.woodcutting - start.xp.woodcutting}/${cur.xp.cooking - start.xp.cooking}/` +
+                        `${cur.xp.firemaking - start.xp.firemaking}/${cur.xp.smithing - start.xp.smithing} ` +
+                        `productPeak=${productPeak} distCamp ${startDistToCamp}→${minDistToCamp}` +
+                        (sc.bank ? ` distBank→${minDistToBank} nearBank=${sawNearBank}` : '') +
+                        ` tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`;
                     break;
                 }
                 if (verdict === 'fail') {
                     outcome = 'fail';
-                    detail = sc.failMsg?.({ start, cur }) ?? `runner=${cur.runner}`;
+                    detail =
+                        sc.failMsg?.({
+                            start,
+                            cur,
+                            minDistToCamp,
+                            minDistToBank,
+                            productPeak,
+                            bankedHint,
+                            sawNearBank
+                        }) ?? `runner=${cur.runner}`;
                     break;
                 }
                 if (cur.runner === 'stopped' || cur.runner === 'crashed') {
-                    // Re-check once more for pass conditions after stop.
-                    const again = sc.check({ start, cur, elapsedMs, sawProduct, productPeak, bankedHint });
-                    if (again === 'pass' || buySoftPass(sc.id, cur, elapsedMs)) {
+                    const again = sc.check({
+                        start,
+                        cur,
+                        elapsedMs,
+                        sawProduct,
+                        productPeak,
+                        bankedHint,
+                        sawNearBank,
+                        minDistToCamp,
+                        minDistToBank,
+                        startDistToCamp
+                    });
+                    if (again === 'pass') {
                         outcome = 'pass';
-                        detail = `stopped ok; productPeak=${productPeak}`;
+                        detail =
+                            `stopped ok; productPeak=${productPeak} distCamp→${minDistToCamp}` +
+                            (sc.bank ? ` distBank→${minDistToBank}` : '');
                     } else {
                         outcome = 'fail';
-                        detail = `runner ${cur.runner}; ${sc.failMsg?.({ start, cur }) ?? ''}`;
+                        detail =
+                            `runner ${cur.runner}; ${
+                                sc.failMsg?.({
+                                    start,
+                                    cur,
+                                    minDistToCamp,
+                                    minDistToBank,
+                                    productPeak,
+                                    bankedHint,
+                                    sawNearBank
+                                }) ?? ''
+                            }`;
                     }
                     break;
                 }
             }
 
-            if (outcome !== 'pass' && Date.now() - scStart >= (sc.budgetMs ?? PER_SCENARIO_MS)) {
+            if (outcome !== 'pass' && Date.now() - scStart >= budget) {
                 const cur = await snap(page);
-                // Final soft pass for buy paths.
-                if (buySoftPass(sc.id, cur, Date.now() - scStart)) {
-                    outcome = 'pass';
-                    detail = `tool acquired (soft) after budget; ${sc.failMsg?.({ start, cur }) ?? ''}`;
-                } else {
-                    outcome = 'fail';
-                    detail = `timeout; ${sc.failMsg?.({ start, cur }) ?? ''}`;
-                }
+                outcome = 'fail';
+                detail =
+                    `timeout; ${
+                        sc.failMsg?.({
+                            start,
+                            cur,
+                            minDistToCamp,
+                            minDistToBank,
+                            productPeak,
+                            bankedHint,
+                            sawNearBank
+                        }) ?? ''
+                    }`;
             }
 
             await stopScript(page);
@@ -944,7 +1679,7 @@ try {
 
 console.log('\n── summary ──');
 for (const r of results) {
-    console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.id.padEnd(12)} ${Math.round(r.ms / 1000)}s  ${r.detail}`);
+    console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.id.padEnd(16)} ${Math.round(r.ms / 1000)}s  ${r.detail}`);
 }
 const failed = results.filter(r => !r.ok);
 console.log(`${results.length - failed.length}/${results.length} passed`);

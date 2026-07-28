@@ -59,6 +59,14 @@ export const Game = {
         return btn !== -1 && actions.ifButton(btn);
     },
 
+    /**
+     * Toggle Auto Retaliate. Gathering / agility scripts turn this off so
+     * multi-combat pests (wildy spiders, skeletons) don't pin the bot in a fight.
+     */
+    setAutoRetaliate(on: boolean): boolean {
+        return actions.setRetaliate(on);
+    },
+
     myName(): string | null {
         return reader.localPlayerName();
     },

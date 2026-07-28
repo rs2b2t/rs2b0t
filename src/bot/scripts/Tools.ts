@@ -1,7 +1,14 @@
 
 export interface ToolTier {
     name: string;
+    /** Skill level required to *use* the tool (mining / woodcutting). */
     level: number;
+    /**
+     * Attack level required to *wield* the tool. Classic metal tiers:
+     * bronze/iron 1, steel 5, mithril 20, adamant 30, rune 40.
+     * Tools may still be used from the backpack without meeting this.
+     */
+    attackLevel?: number;
 }
 
 /**
@@ -30,22 +37,43 @@ export type ToolReq =
       };
 
 export const PICKAXES: readonly ToolTier[] = [
-    { name: 'Rune pickaxe', level: 41 },
-    { name: 'Adamant pickaxe', level: 31 },
-    { name: 'Mithril pickaxe', level: 21 },
-    { name: 'Steel pickaxe', level: 6 },
-    { name: 'Iron pickaxe', level: 1 },
-    { name: 'Bronze pickaxe', level: 1 }
+    { name: 'Rune pickaxe', level: 41, attackLevel: 40 },
+    { name: 'Adamant pickaxe', level: 31, attackLevel: 30 },
+    { name: 'Mithril pickaxe', level: 21, attackLevel: 20 },
+    { name: 'Steel pickaxe', level: 6, attackLevel: 5 },
+    { name: 'Iron pickaxe', level: 1, attackLevel: 1 },
+    { name: 'Bronze pickaxe', level: 1, attackLevel: 1 }
 ];
 
 export const AXES: readonly ToolTier[] = [
-    { name: 'Rune axe', level: 41 },
-    { name: 'Adamant axe', level: 31 },
-    { name: 'Mithril axe', level: 21 },
-    { name: 'Steel axe', level: 6 },
-    { name: 'Iron axe', level: 1 },
-    { name: 'Bronze axe', level: 1 }
+    { name: 'Rune axe', level: 41, attackLevel: 40 },
+    { name: 'Adamant axe', level: 31, attackLevel: 30 },
+    { name: 'Mithril axe', level: 21, attackLevel: 20 },
+    { name: 'Steel axe', level: 6, attackLevel: 5 },
+    { name: 'Iron axe', level: 1, attackLevel: 1 },
+    { name: 'Bronze axe', level: 1, attackLevel: 1 }
 ];
+
+/** Attack required to wield a named axe/pick (1 when unknown / non-tiered). */
+export function toolAttackLevel(name: string): number {
+    const want = name.toLowerCase();
+    for (const t of PICKAXES) {
+        if (t.name.toLowerCase() === want) {
+            return t.attackLevel ?? 1;
+        }
+    }
+    for (const t of AXES) {
+        if (t.name.toLowerCase() === want) {
+            return t.attackLevel ?? 1;
+        }
+    }
+    return 1;
+}
+
+/** True when Attack is high enough to wield this tool name. */
+export function canWieldTool(name: string, attackLevel: number): boolean {
+    return attackLevel >= toolAttackLevel(name);
+}
 
 export const TINDERBOX = 'Tinderbox';
 export const HAMMER = 'Hammer';
@@ -242,6 +270,9 @@ export function bankHasBetterGatherTool(
 /**
  * Names of tools that should be worn right now (held in inv/equip, equip flag set, not yet worn).
  * Empty when nothing needs wielding.
+ *
+ * Skips tiers the player cannot wield yet (Attack too low). Classic RS still lets you
+ * mine/chop with the tool in the backpack, so we must not thrash Wield forever.
  */
 export function toolsNeedingEquip(
     reqs: readonly ToolReq[],
@@ -249,6 +280,7 @@ export function toolsNeedingEquip(
     count: (name: string) => number,
     worn: (name: string) => boolean
 ): string[] {
+    const attack = skillLevel('attack');
     const out: string[] = [];
     for (const r of reqs) {
         if (r.equip !== true) {
@@ -256,12 +288,12 @@ export function toolsNeedingEquip(
         }
         if (r.kind === 'tiered') {
             const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => count(n) > 0);
-            if (best && !worn(best)) {
+            if (best && !worn(best) && canWieldTool(best, attack)) {
                 out.push(best);
             }
             continue;
         }
-        if (count(r.name) > 0 && !worn(r.name)) {
+        if (count(r.name) > 0 && !worn(r.name) && canWieldTool(r.name, attack)) {
             out.push(r.name);
         }
     }

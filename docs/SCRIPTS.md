@@ -471,7 +471,7 @@ Tags: `gathering`, `banking`, `drop`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
-| `leashRadius` | number (2–30) | `10` | Leash radius (tiles) |
+| `leashRadius` | number (2–40) | `10` | Leash radius (tiles). Named camps pin the anchor to the camp spot; location None measures from the start tile and floors this to 40. Auto Retaliate is forced off — multi-combat pests are fled, not fought. |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, None |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
@@ -710,7 +710,7 @@ Tags: `gathering`, `banking`, `drop`, `firemaking`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `treeName` | string | `"Tree"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
-| `leashRadius` | number (2–30) | `10` | Leash radius (tiles) |
+| `leashRadius` | number (2–40) | `10` | Leash radius (tiles). Named camps pin the anchor to the camp spot; location None measures from the start tile and floors this to 40. Auto Retaliate is forced off — multi-combat pests are fled, not fought. |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, None |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |
