@@ -1,4 +1,4 @@
-import { createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash } from '../api/Anchor.js';
+import { beyondLeash, createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash } from '../api/Anchor.js';
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
@@ -1790,16 +1790,42 @@ class RestockGatherTool implements Task {
 class Gather implements Task {
     constructor(private bot: GatheringBot) {}
 
+    private spotCandidate(n: { id: number; tile: () => Tile; actions: () => string[] }, maxDist: number): boolean {
+        const t = n.tile();
+        return (
+            this.bot.getAnchor().distanceTo(t) <= maxDist &&
+            this.bot.usable(keyOf(t)) &&
+            !WHIRLPOOL_IDS.has(n.id) &&
+            this.bot.matchesSpot(n.actions())
+        );
+    }
+
+    /** Preferred spots inside the configured leash. */
     private findSpot() {
+        const leash = this.bot.leashRadius();
         return Npcs.query()
             .name(this.bot.targetName())
-            .where(
-                n =>
-                    tileWithinLeash(this.bot, n.tile()) &&
-                    this.bot.usable(keyOf(n.tile())) &&
-                    !WHIRLPOOL_IDS.has(n.id) &&
-                    this.bot.matchesSpot(n.actions())
-            )
+            .where(n => this.spotCandidate(n, leash))
+            .nearest();
+    }
+
+    /**
+     * Spots that hopped just outside the leash (common on long piers).
+     * Hunt radius is wider than leash so we walk to them instead of stalling.
+     */
+    private huntRadius(): number {
+        return Math.min(40, Math.max(this.bot.leashRadius() + 10, 24));
+    }
+
+    private findHuntSpot() {
+        const leash = this.bot.leashRadius();
+        const hunt = this.huntRadius();
+        return Npcs.query()
+            .name(this.bot.targetName())
+            .where(n => {
+                const d = this.bot.getAnchor().distanceTo(n.tile());
+                return d > leash && this.spotCandidate(n, hunt);
+            })
             .nearest();
     }
 
@@ -1840,7 +1866,16 @@ class Gather implements Task {
         if (this.bot.isFishing() && Game.animating()) {
             return true;
         }
-        return this.bot.isNpc() ? this.findSpot() !== null : this.findRock() !== null;
+        if (this.bot.isNpc()) {
+            // Prefer in-leash spots; also stay active for pier-hop hunts just outside leash.
+            if (this.findSpot() !== null || this.findHuntSpot() !== null) {
+                return true;
+            }
+            // No spots in hunt range: keep-alive near the pier so status updates, but yield
+            // to ReturnToAnchor when we've wandered off (e.g. after bank / whirlpool flee).
+            return !beyondLeash(this.bot, Game.tile(), 4);
+        }
+        return this.findRock() !== null;
     }
 
     private gasAt(t: Tile): boolean {
@@ -1923,12 +1958,11 @@ class Gather implements Task {
     }
 
     private async executeFish(): Promise<void> {
-
-
         const target = this.findSpot();
+        // Spot gone/out of leash but primaryAnim still rolling — wait it out before re-click.
+        // (Whirlpool has its own flee path; this is just "anim leftover after hop/despawn".)
         if (!target && Game.animating()) {
-
-            this.bot.setStatus('waiting for fishing anim to finish');
+            this.bot.setStatus('fish: finishing cast (no spot)');
             await Execution.delayUntil(
                 () => !Game.animating() || EventSignal.pending() || Inventory.isFull() || Game.inCombat() || ChatDialog.canContinue(),
                 8000
@@ -1936,6 +1970,16 @@ class Gather implements Task {
             return;
         }
         if (!target) {
+            // Pier hop: spot left the leash but is still nearby — walk to it instead of idling.
+            const hunt = this.findHuntSpot();
+            if (hunt) {
+                const ht = hunt.tile();
+                this.bot.setStatus(`fish: hunting spot @ ${ht}`);
+                await Traversal.walkTo(ht, { radius: 1, timeoutMs: 20_000 });
+                return;
+            }
+            this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of anchor`);
+            await Execution.delayTicks(2);
             return;
         }
 
@@ -1951,8 +1995,6 @@ class Gather implements Task {
                 await Execution.delayTicks(2);
                 return;
             }
-
-
 
             await Execution.delayUntil(
                 () => Inventory.used() > before || Game.animating() || this.fishingBroken(index, startTile),
@@ -1971,13 +2013,10 @@ class Gather implements Task {
                 return;
             }
             if (Inventory.used() === before && !Game.animating()) {
-
                 this.bot.cooldown(key, 4);
                 return;
             }
         }
-
-
 
         for (let guard = 0; guard < 200; guard++) {
             if (this.fishingBroken(index, startTile)) {
@@ -2003,7 +2042,6 @@ class Gather implements Task {
                 continue;
             }
             if (!Game.animating()) {
-
                 return;
             }
         }

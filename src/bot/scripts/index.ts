@@ -305,11 +305,12 @@ ScriptRegistry.register({
         },
         leashRadius: {
             type: 'number',
-            default: 12,
+            default: 18,
             min: 2,
-            max: 30,
+            max: 40,
             label: 'Leash radius (tiles)',
-            help: 'How far from the start/anchor tile to look for fishing spots.'
+            help:
+                'How far from the start/anchor tile to prefer fishing spots. Spots hop along piers (Catherby, etc.) — 18 covers most banks; the bot still hunts a bit farther if the pier empties inside the leash.'
         },
         location: {
             type: 'string',
