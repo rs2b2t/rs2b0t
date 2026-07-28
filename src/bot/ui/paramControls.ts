@@ -1,5 +1,6 @@
 import type { SettingDef, SettingsSchema } from '../runtime/Settings.js';
 import { el } from './dom.js';
+import { WorldMapPicker } from './WorldMapPicker';
 
 export interface SettingGroup {
     name: string;
@@ -237,6 +238,7 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
             const wrap = el('div', 'rs2b0t-ctl-tile');
             const parts = current.split(',').map(s => s.trim());
             const fields: HTMLInputElement[] = [];
+
             (['x', 'z', 'lvl'] as const).forEach((name, i) => {
                 const f = el('label', 'rs2b0t-param-tilef');
                 f.appendChild(document.createTextNode(name));
@@ -249,6 +251,29 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
                 f.appendChild(inp);
                 wrap.appendChild(f);
             });
+
+            if (!disabled) {
+                const pickBtn = document.createElement('button');
+                pickBtn.className = 'rs2b0t-button';
+                pickBtn.type = 'button';
+                pickBtn.textContent = 'Pick on Map';
+                pickBtn.style.marginLeft = '8px';
+                pickBtn.style.alignSelf = 'flex-end';
+
+                pickBtn.addEventListener('click', async () => {
+                    const result = await WorldMapPicker.open();
+                    if (result) {
+                        const { x, z, level } = result;
+                        fields[0].value = String(x);
+                        fields[1].value = String(z);
+                        fields[2].value = String(level);
+                        onChange(`${x},${z},${level}`);
+                    }
+                });
+
+                wrap.appendChild(pickBtn);
+            }
+
             return wrap;
         }
     }
