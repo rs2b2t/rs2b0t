@@ -9,7 +9,6 @@ fi
 
 ENGINE_DIR="$1"
 PRIVATE_KEY="$ENGINE_DIR/data/config/private.pem"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ ! -f "$PRIVATE_KEY" ]; then
     echo "ERROR: RSA private key not found:"
@@ -112,13 +111,14 @@ fi
 
 echo "→ RSA key extracted successfully."
 echo "→ RSA exponent: $LOCAL_RSAE"
-echo "→ RSA modulus:  ${LOCAL_RSAN:0:20}..."
+echo "→ RSA modulus:  $LOCAL_RSAN..."
 
 echo "→ Running deploy-local.sh..."
 
-cd "$SCRIPT_DIR/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 LOCAL_RSAE="$LOCAL_RSAE" \
 LOCAL_RSAN="$LOCAL_RSAN" \
 ENGINE_DIR="$ENGINE_DIR" \
-sh tools/deploy-local.sh
+sh "$PROJECT_ROOT/tools/deploy-local.sh"
