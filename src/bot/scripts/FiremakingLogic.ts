@@ -91,13 +91,55 @@ export function nearestFireSpot(from: WorldTile): { name: string; plot: FirePlot
     return best ? { name: best.name, plot: best.plot } : null;
 }
 
+/**
+ * Local burn plot around a start/anchor tile for Woodcutter Auto.
+ * Chop-then-burn lights near where the script started until the area fills,
+ * then repaths within this box (and can expand — see expandLocalFirePlot).
+ */
+export const LOCAL_FIRE_HALF = 8;
+
+export function localFirePlot(origin: WorldTile, half = LOCAL_FIRE_HALF): FirePlot {
+    const h = Math.max(2, Math.floor(half));
+    return {
+        bank: new Tile(origin.x, origin.z, origin.level),
+        x0: origin.x - h,
+        x1: origin.x + h,
+        z0: origin.z - h,
+        z1: origin.z + h
+    };
+}
+
+/** Grow a local plot outward when the current box has no clear lane left. */
+export function expandLocalFirePlot(plot: FirePlot, growBy = 4, maxHalf = 24): FirePlot | null {
+    const cx = Math.floor((plot.x0 + plot.x1) / 2);
+    const cz = Math.floor((plot.z0 + plot.z1) / 2);
+    const halfX = Math.floor((plot.x1 - plot.x0) / 2);
+    const halfZ = Math.floor((plot.z1 - plot.z0) / 2);
+    const next = Math.max(halfX, halfZ) + Math.max(1, growBy);
+    if (next > maxHalf) {
+        return null;
+    }
+    return localFirePlot({ x: cx, z: cz, level: plot.bank.level }, next);
+}
+
 export function tileKey(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
 }
 
-export function runWest(
+export type BurnDir = { dx: number; dz: number };
+
+/** Cardinal light directions — west-first (classic bank strips), then the rest. */
+export const BURN_DIRS: readonly BurnDir[] = [
+    { dx: -1, dz: 0 },
+    { dx: 1, dz: 0 },
+    { dx: 0, dz: -1 },
+    { dx: 0, dz: 1 }
+];
+
+export function runInDir(
     from: WorldTile,
     plot: FirePlot,
+    dir: BurnDir,
     occupied: ReadonlySet<string>,
     walkable: (t: WorldTile) => boolean,
     canStep: (from: WorldTile, to: WorldTile) => boolean,
@@ -106,17 +148,29 @@ export function runWest(
     let n = 0;
     let cur: WorldTile = from;
     while (n < cap) {
-        if (cur.x < plot.x0 || occupied.has(tileKey(cur)) || !walkable(cur)) {
+        if (!inFirePlot(cur, plot) || occupied.has(tileKey(cur)) || !walkable(cur)) {
             break;
         }
         n++;
-        const next = { x: cur.x - 1, z: cur.z, level: cur.level };
+        const next = { x: cur.x + dir.dx, z: cur.z + dir.dz, level: cur.level };
         if (!canStep(cur, next)) {
             break;
         }
         cur = next;
     }
     return n;
+}
+
+/** @deprecated prefer runInDir — kept for bank-strip callers that always run west. */
+export function runWest(
+    from: WorldTile,
+    plot: FirePlot,
+    occupied: ReadonlySet<string>,
+    walkable: (t: WorldTile) => boolean,
+    canStep: (from: WorldTile, to: WorldTile) => boolean,
+    cap: number
+): number {
+    return runInDir(from, plot, BURN_DIRS[0], occupied, walkable, canStep, cap);
 }
 
 export function inFirePlot(t: WorldTile, plot: FirePlot): boolean {
@@ -129,23 +183,26 @@ export function findBurnLane(
     occupied: ReadonlySet<string>,
     want: number,
     walkable: (t: WorldTile) => boolean,
-    canStep: (from: WorldTile, to: WorldTile) => boolean
-): { start: Tile; run: number } | null {
-    let best: { start: Tile; run: number; d: number } | null = null;
-    for (let z = plot.z0; z <= plot.z1; z++) {
-        for (let x = plot.x0; x <= plot.x1; x++) {
-            const start = new Tile(x, z, plot.bank.level);
-            const run = runWest(start, plot, occupied, walkable, canStep, want);
-            if (run === 0) {
-                continue;
-            }
-            const d = Math.max(Math.abs(x - here.x), Math.abs(z - here.z));
-            if (!best || run > best.run || (run === best.run && d < best.d)) {
-                best = { start, run, d };
+    canStep: (from: WorldTile, to: WorldTile) => boolean,
+    dirs: readonly BurnDir[] = BURN_DIRS
+): { start: Tile; run: number; dir: BurnDir } | null {
+    let best: { start: Tile; run: number; d: number; dir: BurnDir } | null = null;
+    for (const dir of dirs) {
+        for (let z = plot.z0; z <= plot.z1; z++) {
+            for (let x = plot.x0; x <= plot.x1; x++) {
+                const start = new Tile(x, z, plot.bank.level);
+                const run = runInDir(start, plot, dir, occupied, walkable, canStep, want);
+                if (run === 0) {
+                    continue;
+                }
+                const d = Math.max(Math.abs(x - here.x), Math.abs(z - here.z));
+                if (!best || run > best.run || (run === best.run && d < best.d)) {
+                    best = { start, run, d, dir };
+                }
             }
         }
     }
-    return best ? { start: best.start, run: best.run } : null;
+    return best ? { start: best.start, run: best.run, dir: best.dir } : null;
 }
 
 export function fireReactionMs(): number {

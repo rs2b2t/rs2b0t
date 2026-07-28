@@ -55,7 +55,7 @@ describe('bestPickaxe', () => {
         expect(bestPickaxe(99, bank([]))).toBe(null);
     });
 
-    test('ladder is best-first and level-descending', () => {
+    test('tiers are best-first and level-descending', () => {
         for (let i = 1; i < PICKAXES.length; i++) {
             expect(PICKAXES[i - 1].level).toBeGreaterThanOrEqual(PICKAXES[i].level);
         }

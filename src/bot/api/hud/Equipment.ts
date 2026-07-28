@@ -1,6 +1,7 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Execution } from '../Execution.js';
+import { Bank } from './Bank.js';
 import { Inventory, InvItem } from './Inventory.js';
 
 /**
@@ -22,6 +23,13 @@ export const Equipment = {
             return true;
         }
 
+        // Bank side-view swaps backpack ops to Deposit-* — close first so Wield is real.
+        if (Bank.isOpen()) {
+            if (!(await Bank.close())) {
+                return false;
+            }
+        }
+
         const item = Inventory.first(name);
         if (!item) {
             return false;
@@ -32,7 +40,9 @@ export const Equipment = {
             return false;
         }
 
-        await item.interact(op);
+        if (!(await item.interact(op))) {
+            return false;
+        }
         return Execution.delayUntil(() => Equipment.contains(name), 3000);
     },
 

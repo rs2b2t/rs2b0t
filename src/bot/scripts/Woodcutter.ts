@@ -50,7 +50,7 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
         group: 'Firemaking',
         showIf: { key: 'burnMode', anyOf: ['Chop then burn'] },
         help:
-            'Shown only when Burn mode is Chop then burn. Where to light fires. Auto = nearest known bank-side burn plot from your start tile.'
+            'Shown only when Burn mode is Chop then burn. Where to light fires. Auto = burn near where you started the script until the pack is empty (repaths/expands when tiles fill with fires). Named spots = fixed bank-side strips (Varrock East, Draynor, …).'
     }
 };
 

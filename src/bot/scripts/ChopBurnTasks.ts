@@ -17,9 +17,10 @@ import {
     findBurnLane,
     fireReactionMs,
     inFirePlot,
-    runWest,
+    runInDir,
     shouldBurnFullLoad,
     tileKey,
+    type BurnDir,
     type FirePlot
 } from './FiremakingLogic.js';
 
@@ -38,6 +39,9 @@ export interface ChopBurnHost {
     hasTinderbox(): boolean;
     logCount(): number;
     isPowerMode(): boolean;
+    /** Auto start-area burn: repath/expand instead of banking leftover logs. */
+    isLocalBurn?(): boolean;
+    tryExpandBurnPlot?(): boolean;
 }
 
 export function createChopBurnTasks(bot: ChopBurnHost): Task[] {
@@ -49,6 +53,8 @@ function occupied(): Set<string> {
 }
 
 class ChopBurnLoad implements Task {
+    private laneDir: BurnDir = { dx: -1, dz: 0 };
+
     constructor(private bot: ChopBurnHost) {}
 
     validate(): boolean {
@@ -70,7 +76,7 @@ class ChopBurnLoad implements Task {
     }
 
     async execute(): Promise<void> {
-        const plot = this.bot.burnPlotOrNull();
+        let plot = this.bot.burnPlotOrNull();
         if (!plot) {
             this.bot.log('burn: no fire plot — skipping');
             this.bot.endBurningLoad();
@@ -85,14 +91,28 @@ class ChopBurnLoad implements Task {
 
         this.bot.beginBurningLoad();
         let stalls = 0;
+        let laneFails = 0;
+        const local = this.bot.isLocalBurn?.() === true;
 
         while (this.bot.logCount() > 0) {
             if (EventSignal.pending() || Game.inCombat()) {
                 return;
             }
+            plot = this.bot.burnPlotOrNull() ?? plot;
             if (this.bot.burnLaneLeft() <= 0 && !(await this.gotoLane(plot))) {
-
-                this.bot.log('burn: no clear lane — banking logs');
+                if (local && this.bot.tryExpandBurnPlot?.()) {
+                    laneFails = 0;
+                    continue;
+                }
+                if (local && laneFails < 4) {
+                    laneFails++;
+                    this.bot.setStatus('burn: waiting for clear tiles');
+                    this.bot.log(`burn: no clear lane — repath wait (${laneFails}/4)`);
+                    await Execution.delayTicks(20);
+                    continue;
+                }
+                // Named bank strips (or exhausted local): stop burning this load; bank leftover logs.
+                this.bot.log(local ? 'burn: no space left near start — banking leftover logs' : 'burn: no clear lane — banking logs');
                 this.bot.endBurningLoad();
                 return;
             }
@@ -103,6 +123,7 @@ class ChopBurnLoad implements Task {
                 this.bot.recordFire(1);
                 this.bot.setBurnLaneLeft(this.bot.burnLaneLeft() - 1);
                 stalls = 0;
+                laneFails = 0;
                 await Execution.delay(fireReactionMs());
                 continue;
             }
@@ -128,8 +149,9 @@ class ChopBurnLoad implements Task {
         }
         for (let attempt = 0; attempt < 3; attempt++) {
             const want = this.bot.logCount();
+            const live = this.bot.burnPlotOrNull() ?? plot;
             const found = findBurnLane(
-                plot,
+                live,
                 Game.tile()!,
                 occupied(),
                 want,
@@ -141,6 +163,7 @@ class ChopBurnLoad implements Task {
                 await Execution.delayTicks(15);
                 continue;
             }
+            this.laneDir = found.dir;
             this.bot.setStatus(`burn: walk to lane ${found.start.x},${found.start.z}`);
             await Traversal.walkResilient(found.start, {
                 radius: 0,
@@ -149,13 +172,21 @@ class ChopBurnLoad implements Task {
                 log: m => this.bot.log(`  ${m}`)
             });
             const at = Game.tile();
-            const ok = at !== null && inFirePlot(at, plot);
+            const ok = at !== null && inFirePlot(at, live);
             const lane = ok
-                ? runWest(at!, plot, occupied(), t => Reachability.walkable(t), (a, b) => Reachability.canStep(a, b), want)
+                ? runInDir(
+                      at!,
+                      live,
+                      this.laneDir,
+                      occupied(),
+                      t => Reachability.walkable(t),
+                      (a, b) => Reachability.canStep(a, b),
+                      want
+                  )
                 : 0;
             this.bot.setBurnLaneLeft(lane);
             if (lane > 0) {
-                this.bot.log(`burn: lane ${at!.x},${at!.z} west x${lane}`);
+                this.bot.log(`burn: lane ${at!.x},${at!.z} dir ${this.laneDir.dx},${this.laneDir.dz} x${lane}`);
                 return true;
             }
         }

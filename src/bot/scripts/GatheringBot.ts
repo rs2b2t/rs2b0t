@@ -22,9 +22,10 @@ import { resolveLocation, type FishingLocation } from './FishingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
 import {
     TINDERBOX,
+    expandLocalFirePlot,
     firemakingLevelForLogs,
+    localFirePlot,
     logsForTree,
-    nearestFireSpot,
     parseBurnMode,
     resolveFireSpot,
     shouldBurnFullLoad,
@@ -41,6 +42,7 @@ import {
     toolKeepNames,
     toolKitLabel,
     toolRestockPlan,
+    toolsNeedingEquip,
     type ToolReq
 } from './Tools.js';
 import { createChopBurnTasks } from './ChopBurnTasks.js';
@@ -80,6 +82,9 @@ import {
 } from './FishCookLogic.js';
 import { Banking, depositAllExcept } from '../api/Banking.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
+
+/** Default half-size of the Auto (start) burn box around the script start tile. */
+const LOCAL_BURN_HALF = 8;
 
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
@@ -174,6 +179,8 @@ export default class GatheringBot extends TaskBot {
     private burningLoad = false;
     private firesLit = 0;
     private burnLaneRemain = 0;
+    /** True when fireSpot=Auto: burn near start and expand/repath instead of bank strips. */
+    private burnLocal = false;
 
     private xpStart: Record<string, number> = {};
 
@@ -288,22 +295,34 @@ export default class GatheringBot extends TaskBot {
                     this.burnMode = 'off';
                 } else {
                     const spotSetting = this.settings.str('fireSpot', 'Auto');
-                    const resolved =
-                        spotSetting.toLowerCase() === 'auto'
-                            ? nearestFireSpot(here)
-                            : resolveFireSpot(spotSetting);
-                    if (!resolved) {
-                        this.log(`burn: unknown fire spot '${spotSetting}' — disabled`);
-                        this.burnMode = 'off';
-                    } else {
-                        this.burnSpotName = resolved.name;
-                        this.burnPlot = resolved.plot;
+                    if (spotSetting.toLowerCase() === 'auto') {
+                        // Burn near where the script started; repath/expand when tiles fill.
+                        const half = Math.max(LOCAL_BURN_HALF, Math.min(this.leash, 12));
+                        this.burnSpotName = 'Auto (start)';
+                        this.burnPlot = localFirePlot(here, half);
+                        this.burnLocal = true;
                         if (!this.toolReqs.some(r => r.kind === 'exact' && r.name === TINDERBOX)) {
                             this.toolReqs = [...this.toolReqs, tinderboxReq()];
                         }
                         this.log(
-                            `burn: chop-then-burn ${this.burnLogs} @ ${this.burnSpotName} (need tinderbox + FM ${needFm})`
+                            `burn: chop-then-burn ${this.burnLogs} near start ${here.x},${here.z} r=${half} (need tinderbox + FM ${needFm})`
                         );
+                    } else {
+                        const resolved = resolveFireSpot(spotSetting);
+                        if (!resolved) {
+                            this.log(`burn: unknown fire spot '${spotSetting}' — disabled`);
+                            this.burnMode = 'off';
+                        } else {
+                            this.burnSpotName = resolved.name;
+                            this.burnPlot = resolved.plot;
+                            this.burnLocal = false;
+                            if (!this.toolReqs.some(r => r.kind === 'exact' && r.name === TINDERBOX)) {
+                                this.toolReqs = [...this.toolReqs, tinderboxReq()];
+                            }
+                            this.log(
+                                `burn: chop-then-burn ${this.burnLogs} @ ${this.burnSpotName} (need tinderbox + FM ${needFm})`
+                            );
+                        }
                     }
                 }
             }
@@ -366,7 +385,7 @@ export default class GatheringBot extends TaskBot {
             ...(this.mining() ? [new ReplacePickaxe(this)] : []),
             ...(this.fishing ? [new RestockFishingGear(this)] : []),
             ...((this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing
-                ? [new RestockGatherTool(this)]
+                ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this)]
                 : []),
             ...(cookOn ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)] : []),
             ...(burnOn ? createChopBurnTasks(this) : []),
@@ -888,6 +907,79 @@ export default class GatheringBot extends TaskBot {
     }
     toolReqsList(): readonly ToolReq[] {
         return this.toolReqs;
+    }
+
+    /** Axes/picks that are held but not worn (2004scape wieldable tools). */
+    toolsToEquip(): string[] {
+        if (this.toolReqs.length === 0) {
+            return [];
+        }
+        return toolsNeedingEquip(
+            this.toolReqs,
+            this.skillLevel,
+            this.heldCount,
+            name => Equipment.contains(name)
+        );
+    }
+
+    /**
+     * Close bank if open, then Wield each tool. Returns false if any equip failed.
+     * Must not run while bank is open — backpack ops become Deposit-*.
+     */
+    async equipTools(names: readonly string[], log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        const unique = [...new Set(names.filter(n => n.length > 0))];
+        if (unique.length === 0) {
+            return true;
+        }
+        if (Bank.isOpen()) {
+            if (!(await Bank.close())) {
+                log('equip: could not close bank');
+                return false;
+            }
+            await Execution.delayTicks(1);
+        }
+        let ok = true;
+        for (const name of unique) {
+            if (Equipment.contains(name)) {
+                continue;
+            }
+            if (Inventory.first(name) === null) {
+                log(`equip: ${name} not in inventory`);
+                ok = false;
+                continue;
+            }
+            const equipped = await Equipment.equip(name);
+            if (!equipped) {
+                log(`equip failed: ${name}`);
+                ok = false;
+            } else {
+                log(`equipped ${name}`);
+            }
+            await Execution.delay(80 + Math.floor(Math.random() * 120));
+        }
+        return ok;
+    }
+
+    isLocalBurn(): boolean {
+        return this.burnLocal;
+    }
+
+    /**
+     * Expand the Auto start-area burn box when no clear lane remains.
+     * Returns true if the plot grew.
+     */
+    tryExpandBurnPlot(): boolean {
+        if (!this.burnLocal || !this.burnPlot) {
+            return false;
+        }
+        const next = expandLocalFirePlot(this.burnPlot, 4, 24);
+        if (!next) {
+            return false;
+        }
+        this.burnPlot = next;
+        const half = Math.floor((next.x1 - next.x0) / 2);
+        this.log(`burn: expanded local plot to r=${half} around ${next.bank.x},${next.bank.z}`);
+        return true;
     }
 
     shouldDeposit(name: string): boolean {
@@ -1575,8 +1667,36 @@ class ReplacePickaxe implements Task {
             return;
         }
         this.bot.log(`pickaxe: replaced with ${pick}`);
-        await Equipment.equip(pick);
+        await this.bot.equipTools([pick], log);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+    }
+}
+
+/** Wield axes/picks already in the pack (hasGear is true when held unworn). */
+class EnsureGatherToolEquipped implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (this.bot.isFishing() || this.bot.toolReqsList().length === 0) {
+            return false;
+        }
+        if (EventSignal.pending() || Game.inCombat()) {
+            return false;
+        }
+        if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
+            return false;
+        }
+        if (this.bot.mining() && (Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null)) {
+            return false;
+        }
+        return this.bot.toolsToEquip().length > 0;
+    }
+
+    async execute(): Promise<void> {
+        const need = this.bot.toolsToEquip();
+        this.bot.setStatus(`equip: ${need.join(' + ')}`);
+        this.bot.log(`equip: wielding ${need.join(', ')}`);
+        await this.bot.equipTools(need);
     }
 }
 
@@ -1771,6 +1891,13 @@ class RestockGatherTool implements Task {
                 return;
             }
             this.bot.log('restock: tools already topped up');
+            // Still try to equip anything held but unworn, then leave bank.
+            const leftover = this.bot.toolsToEquip();
+            if (leftover.length > 0) {
+                await this.bot.equipTools(leftover, log);
+            } else if (Bank.isOpen()) {
+                await Bank.close();
+            }
             return;
         }
 
@@ -1792,10 +1919,18 @@ class RestockGatherTool implements Task {
                 () => Inventory.count(step.name) > before || Bank.count(step.name) === 0,
                 4000
             );
-            if (step.equip && Inventory.first(step.name)) {
-                await Equipment.equip(step.name);
-            }
             await Execution.delay(bankHumanDelayMs());
+        }
+
+        // Close bank before Wield — bank side-view turns backpack ops into Deposit-*.
+        const toEquip = [
+            ...plan.filter(s => s.equip).map(s => s.name),
+            ...this.bot.toolsToEquip()
+        ];
+        if (toEquip.length > 0) {
+            await this.bot.equipTools(toEquip, log);
+        } else if (Bank.isOpen()) {
+            await Bank.close();
         }
 
         if (!this.bot.hasGear()) {

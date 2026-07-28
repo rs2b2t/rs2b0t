@@ -6,6 +6,7 @@ import {
     TINDERBOX,
     axeReq,
     bestAxe,
+    bestFromTiers,
     bestPickaxe,
     exactTool,
     hasAllTools,
@@ -14,14 +15,15 @@ import {
     tinderboxReq,
     toolKeepNames,
     toolKitLabel,
-    toolRestockPlan
+    toolRestockPlan,
+    toolsNeedingEquip
 } from '#/bot/scripts/Tools.js';
 
 describe('Tools kit', () => {
     const bank = (names: string[]) => (name: string) => (names.includes(name) ? 1 : 0);
     const lvl = (skill: string) => (skill === 'mining' || skill === 'woodcutting' ? 41 : 1);
 
-    test('ladders are best-first', () => {
+    test('tiers are best-first', () => {
         for (let i = 1; i < PICKAXES.length; i++) {
             expect(PICKAXES[i - 1].level).toBeGreaterThanOrEqual(PICKAXES[i].level);
         }
@@ -36,7 +38,12 @@ describe('Tools kit', () => {
         expect(bestAxe(20, n => ['Rune axe', 'Steel axe', 'Bronze axe'].includes(n))).toBe('Steel axe');
     });
 
-    test('toolKeepNames expands ladders + exact', () => {
+    test('bestFromTiers matches bestPickaxe', () => {
+        const avail = (n: string) => n === 'Mithril pickaxe' || n === 'Bronze pickaxe';
+        expect(bestFromTiers(41, PICKAXES, avail)).toBe(bestPickaxe(41, avail));
+    });
+
+    test('toolKeepNames expands tiers + exact', () => {
         const names = toolKeepNames([pickaxeReq(), tinderboxReq()]);
         expect(names).toContain('Rune pickaxe');
         expect(names).toContain('Bronze pickaxe');
@@ -55,7 +62,7 @@ describe('Tools kit', () => {
         expect(toolKitLabel(reqs, lvl, held)).toContain(TINDERBOX);
     });
 
-    test('toolRestockPlan withdraws best banked ladder + missing exact', () => {
+    test('toolRestockPlan withdraws best banked tier + missing exact', () => {
         const reqs = [pickaxeReq(), exactTool(TINDERBOX)];
         const inv = (_: string) => 0;
         const plan = toolRestockPlan(reqs, lvl, inv, bank(['Adamant pickaxe', 'Bronze pickaxe', TINDERBOX]));
@@ -67,5 +74,19 @@ describe('Tools kit', () => {
         const reqs = [axeReq(), tinderboxReq()];
         const inv = (n: string) => (n === 'Rune axe' || n === TINDERBOX ? 1 : 0);
         expect(toolRestockPlan(reqs, lvl, inv, bank(['Rune axe', TINDERBOX]))).toEqual([]);
+    });
+
+    test('toolsNeedingEquip when best tier held but not worn', () => {
+        const reqs = [axeReq(true), tinderboxReq()];
+        const count = (n: string) => (n === 'Rune axe' || n === TINDERBOX ? 1 : 0);
+        const noneWorn = () => false;
+        expect(toolsNeedingEquip(reqs, lvl, count, noneWorn)).toEqual(['Rune axe']);
+        expect(toolsNeedingEquip(reqs, lvl, count, n => n === 'Rune axe')).toEqual([]);
+    });
+
+    test('toolsNeedingEquip skips non-equip reqs', () => {
+        const reqs = [axeReq(false), tinderboxReq()];
+        const count = (n: string) => (n === 'Rune axe' || n === TINDERBOX ? 1 : 0);
+        expect(toolsNeedingEquip(reqs, lvl, count, () => false)).toEqual([]);
     });
 });

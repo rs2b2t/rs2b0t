@@ -1,27 +1,30 @@
 
-
 export interface ToolTier {
     name: string;
     level: number;
 }
 
+/**
+ * Tool requirement for gathering scripts.
+ *
+ * - `tiered`: best usable tool from a level-ordered list (axes, pickaxes).
+ * - `exact`: a named item (tinderbox, hammer, …).
+ *
+ * Fishing gear is handled separately in FishingMethods (not equippable in 2004scape).
+ */
 export type ToolReq =
     | {
-          kind: 'ladder';
-
+          kind: 'tiered';
           skill: string;
-          ladder: readonly ToolTier[];
-
+          tiers: readonly ToolTier[];
           label: string;
-
+          /** When true, restock/ensure will Wield the best held tier. */
           equip?: boolean;
       }
     | {
           kind: 'exact';
           name: string;
-
           min?: number;
-
           restock?: number;
           equip?: boolean;
       };
@@ -51,17 +54,17 @@ export const CHISEL = 'Chisel';
 export const NEEDLE = 'Needle';
 
 export const pickaxeReq = (equip = true): ToolReq => ({
-    kind: 'ladder',
+    kind: 'tiered',
     skill: 'mining',
-    ladder: PICKAXES,
+    tiers: PICKAXES,
     label: 'pickaxe',
     equip
 });
 
 export const axeReq = (equip = true): ToolReq => ({
-    kind: 'ladder',
+    kind: 'tiered',
     skill: 'woodcutting',
-    ladder: AXES,
+    tiers: AXES,
     label: 'axe',
     equip
 });
@@ -76,12 +79,13 @@ export const exactTool = (name: string, opts: { min?: number; restock?: number; 
 
 export const tinderboxReq = (): ToolReq => exactTool(TINDERBOX);
 
-export function bestFromLadder(
+/** Best tier the player can use that is also available (inv/bank/worn). Tiers are best-first. */
+export function bestFromTiers(
     level: number,
-    ladder: readonly ToolTier[],
+    tiers: readonly ToolTier[],
     available: (name: string) => boolean
 ): string | null {
-    for (const t of ladder) {
+    for (const t of tiers) {
         if (level >= t.level && available(t.name)) {
             return t.name;
         }
@@ -90,18 +94,18 @@ export function bestFromLadder(
 }
 
 export function bestPickaxe(miningLevel: number, available: (name: string) => boolean): string | null {
-    return bestFromLadder(miningLevel, PICKAXES, available);
+    return bestFromTiers(miningLevel, PICKAXES, available);
 }
 
 export function bestAxe(woodcuttingLevel: number, available: (name: string) => boolean): string | null {
-    return bestFromLadder(woodcuttingLevel, AXES, available);
+    return bestFromTiers(woodcuttingLevel, AXES, available);
 }
 
 export function toolKeepNames(reqs: readonly ToolReq[]): string[] {
     const names: string[] = [];
     for (const r of reqs) {
-        if (r.kind === 'ladder') {
-            for (const t of r.ladder) {
+        if (r.kind === 'tiered') {
+            for (const t of r.tiers) {
                 names.push(t.name);
             }
         } else {
@@ -114,11 +118,10 @@ export function toolKeepNames(reqs: readonly ToolReq[]): string[] {
 export function hasToolReq(
     req: ToolReq,
     skillLevel: (skill: string) => number,
-
     count: (name: string) => number
 ): boolean {
-    if (req.kind === 'ladder') {
-        return bestFromLadder(skillLevel(req.skill), req.ladder, n => count(n) > 0) !== null;
+    if (req.kind === 'tiered') {
+        return bestFromTiers(skillLevel(req.skill), req.tiers, n => count(n) > 0) !== null;
     }
     return count(req.name) >= (req.min ?? 1);
 }
@@ -141,7 +144,7 @@ export function missingToolLabels(
         if (hasToolReq(r, skillLevel, count)) {
             continue;
         }
-        out.push(r.kind === 'ladder' ? r.label : r.name);
+        out.push(r.kind === 'tiered' ? r.label : r.name);
     }
     return out;
 }
@@ -156,8 +159,8 @@ export function toolKitLabel(
     }
     return reqs
         .map(r => {
-            if (r.kind === 'ladder') {
-                const held = bestFromLadder(skillLevel(r.skill), r.ladder, n => count(n) > 0);
+            if (r.kind === 'tiered') {
+                const held = bestFromTiers(skillLevel(r.skill), r.tiers, n => count(n) > 0);
                 return held ?? `${r.label} (bronze→rune)`;
             }
             return r.name;
@@ -179,11 +182,11 @@ export function toolRestockPlan(
 ): ToolRestockStep[] {
     const plan: ToolRestockStep[] = [];
     for (const r of reqs) {
-        if (r.kind === 'ladder') {
+        if (r.kind === 'tiered') {
             if (hasToolReq(r, skillLevel, invCount)) {
                 continue;
             }
-            const best = bestFromLadder(skillLevel(r.skill), r.ladder, n => bankCount(n) > 0);
+            const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => bankCount(n) > 0);
             if (!best) {
                 continue;
             }
@@ -206,15 +209,31 @@ export function toolRestockPlan(
     return plan;
 }
 
-export function bestBankedLadderTool(
+/**
+ * Names of tools that should be worn right now (held in inv/equip, equip flag set, not yet worn).
+ * Empty when nothing needs wielding.
+ */
+export function toolsNeedingEquip(
     reqs: readonly ToolReq[],
     skillLevel: (skill: string) => number,
-    bankCount: (name: string) => number
-): string | null {
+    count: (name: string) => number,
+    worn: (name: string) => boolean
+): string[] {
+    const out: string[] = [];
     for (const r of reqs) {
-        if (r.kind === 'ladder') {
-            return bestFromLadder(skillLevel(r.skill), r.ladder, n => bankCount(n) > 0);
+        if (r.equip !== true) {
+            continue;
+        }
+        if (r.kind === 'tiered') {
+            const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => count(n) > 0);
+            if (best && !worn(best)) {
+                out.push(best);
+            }
+            continue;
+        }
+        if (count(r.name) > 0 && !worn(r.name)) {
+            out.push(r.name);
         }
     }
-    return null;
+    return out;
 }

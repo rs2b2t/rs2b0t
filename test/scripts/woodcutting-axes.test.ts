@@ -25,7 +25,7 @@ describe('bestAxe', () => {
         expect(bestAxe(99, bank([]))).toBe(null);
     });
 
-    test('ladder is best-first and level-descending', () => {
+    test('tiers are best-first and level-descending', () => {
         for (let i = 1; i < AXES.length; i++) {
             expect(AXES[i - 1].level).toBeGreaterThanOrEqual(AXES[i].level);
         }

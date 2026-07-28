@@ -24,7 +24,7 @@ import {
     findBurnLane,
     fireReactionMs,
     inFirePlot,
-    runWest,
+    runInDir,
     tileKey,
     type FirePlot
 } from './FiremakingLogic.js';
@@ -171,10 +171,10 @@ export default class Firemaker extends LoopingBot {
             const at = Game.tile();
             const ok = at !== null && inFirePlot(at, this.plot);
             this.lane = ok
-                ? runWest(at!, this.plot, this.occupied(), t => Reachability.walkable(t), (a, b) => Reachability.canStep(a, b), want)
+                ? runInDir(at!, this.plot, found.dir, this.occupied(), t => Reachability.walkable(t), (a, b) => Reachability.canStep(a, b), want)
                 : 0;
             if (this.lane > 0) {
-                this.log(`lane ${at!.x},${at!.z} west x${this.lane} (wanted ${found.run} at ${found.start.x},${found.start.z})`);
+                this.log(`lane ${at!.x},${at!.z} dir ${found.dir.dx},${found.dir.dz} x${this.lane} (wanted ${found.run} at ${found.start.x},${found.start.z})`);
                 return true;
             }
             this.log(`stopped at ${at?.x},${at?.z}, which is ${ok ? 'not lightable' : 'outside the plot'} — rescanning`);

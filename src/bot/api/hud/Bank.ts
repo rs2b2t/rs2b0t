@@ -181,6 +181,15 @@ export const Bank = {
         return Bank.isOpen() || Bank.openNearest(access.name, access.op, log);
     },
 
+    /** Close the bank modal so inventory ops (Wield, Use, Bury, …) hit the backpack again. */
+    async close(timeoutMs = 3000): Promise<boolean> {
+        if (!Bank.isOpen()) {
+            return true;
+        }
+        actions.closeModal();
+        return Execution.delayUntil(() => !Bank.isOpen(), timeoutMs);
+    },
+
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {
         const pick = (acts: string[]): string | undefined =>
             acts.find(a => a.toLowerCase() === op.toLowerCase()) ?? acts.find(a => /^use|^bank/i.test(a)) ?? acts[0];
