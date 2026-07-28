@@ -214,7 +214,7 @@ ScriptRegistry.register({
             options: MINING_LOCATION_OPTIONS,
             label: 'Location / full inventory',
             help:
-                'Mine camp + full-pack behaviour. Auto = nearest known mine camp (Euclidean) and bank at that camp\'s bank stand. Named camps pin spot + bank. None = power-mine (drop ore; bank only for missing tools).'
+                'Mine camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known mine camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin spot + bank. None = power-mine (drop ore; bank only for missing tools).'
         },
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
@@ -297,7 +297,7 @@ ScriptRegistry.register({
             options: FISHING_LOCATION_OPTIONS,
             label: 'Location / full inventory',
             help:
-                'Fishing camp + full-pack behaviour. Auto = nearest known camp (Euclidean) and bank there. Named camps pin pier + bank (and range for Catherby cook). None = power-fish (always drop; cook is disabled).'
+                'Fishing camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin pier + bank (and range for Catherby cook). None = power-fish (always drop; cook is disabled).'
         },
         cookMode: {
             type: 'string',

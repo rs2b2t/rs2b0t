@@ -24,14 +24,18 @@ describe('resolveFishingLocation', () => {
         expect(resolveFishingLocation('Auto', new Tile(3092, 3243, 0))?.name).toBe('Draynor Village');
     });
 
-    test('Auto picks Euclidean-nearest camp from Lumbridge (Draynor)', () => {
-        // No radius cutoff — always pick a camp.
-        expect(resolveFishingLocation('Auto', new Tile(3222, 3218, 0))?.name).toBe('Draynor Village');
+    test('Auto freeform from Lumbridge (outside Draynor map square)', () => {
+        // Lumbridge 3222,3218 is map square (50,50); Draynor fish 3086,3231 is (48,50).
+        expect(resolveFishingLocation('Auto', new Tile(3222, 3218, 0))).toBeNull();
     });
 
-    test('Auto prefers same level', () => {
-        // No level-1 camps — falls back to ground pool.
-        expect(resolveFishingLocation('Auto', new Tile(3086, 3231, 1))?.name).toBe('Draynor Village');
+    test('Auto freeform on other level even when xz matches a camp', () => {
+        // sameMapSquare requires level match — level 1 at Draynor coords is freeform.
+        expect(resolveFishingLocation('Auto', new Tile(3086, 3231, 1))).toBeNull();
+    });
+
+    test('Auto freeform at Ardougne river fly (outside every fishing camp chunk)', () => {
+        expect(resolveFishingLocation('Auto', new Tile(2566, 3374, 0))).toBeNull();
     });
 
     test('named locations resolve case-insensitively', () => {

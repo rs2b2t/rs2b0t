@@ -24,6 +24,24 @@ export interface GatheringLocation {
 export const DEFAULT_BOOTH_NAME = 'Bank booth';
 export const DEFAULT_BOOTH_OP = 'Use-quickly';
 
+/**
+ * Engine map-square edge length. Auto only snaps to a preset when the start
+ * tile shares this 64×64 chunk with the camp spot — otherwise freeform
+ * (location null, nearest bank, start-tile leash).
+ */
+export const MAP_SQUARE = 64;
+
+/** True when both tiles sit in the same level + map square (chunk). */
+export function sameMapSquare(a: WorldTile, b: WorldTile): boolean {
+    if (a.level !== b.level) {
+        return false;
+    }
+    return (
+        Math.floor(a.x / MAP_SQUARE) === Math.floor(b.x / MAP_SQUARE)
+        && Math.floor(a.z / MAP_SQUARE) === Math.floor(b.z / MAP_SQUARE)
+    );
+}
+
 export function locationOptions(table: readonly GatheringLocation[]): string[] {
     return ['Auto', ...table.map(l => l.name), 'None'];
 }
@@ -42,7 +60,9 @@ export function boothFields(loc: GatheringLocation | null | undefined): {
  * Resolve a location setting against a skill table.
  * - None → null (power / drop mode)
  * - named → case-insensitive match
- * - Auto → Euclidean-nearest spot (same metric as bankDistance); prefer same level
+ * - Auto → nearest preset whose spot shares the start tile's 64×64 map square
+ *   (prefer same level). Outside every preset chunk → null (freeform: start-tile
+ *   leash + nearest bank). None is the only power/drop mode.
  */
 export function resolveGatheringLocation<T extends GatheringLocation>(
     setting: string,
@@ -60,8 +80,14 @@ export function resolveGatheringLocation<T extends GatheringLocation>(
         return null;
     }
 
-    const sameLevel = table.filter(l => l.spot.level === startTile.level);
-    const pool = sameLevel.length > 0 ? sameLevel : table;
+    // Auto freeform: only snap when standing in a preset's map square.
+    const inChunk = table.filter(l => sameMapSquare(startTile, l.spot));
+    if (inChunk.length === 0) {
+        return null;
+    }
+
+    const sameLevel = inChunk.filter(l => l.spot.level === startTile.level);
+    const pool = sameLevel.length > 0 ? sameLevel : inChunk;
     let best = pool[0]!;
     let bestD = bankDistance(startTile, best.spot);
     for (let i = 1; i < pool.length; i++) {

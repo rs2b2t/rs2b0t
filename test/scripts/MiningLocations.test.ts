@@ -24,6 +24,11 @@ describe('resolveMiningLocation', () => {
         expect(resolveMiningLocation('Auto', new Tile(3080, 3420, 0))?.name).toBe('Barbarian Village');
     });
 
+    test('Auto freeform at wilderness skeleton mine (outside every mine camp chunk)', () => {
+        // 3018,3590 — iron/coal rocks; not same 64×64 as any MINING_LOCATIONS spot.
+        expect(resolveMiningLocation('Auto', new Tile(3018, 3590, 0))).toBeNull();
+    });
+
     test('named match is case-insensitive', () => {
         expect(resolveMiningLocation('rimmington mine', new Tile(0, 0, 0))?.name).toBe('Rimmington Mine');
     });

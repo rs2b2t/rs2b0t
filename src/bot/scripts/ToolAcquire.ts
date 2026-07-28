@@ -488,19 +488,24 @@ export interface PlanFishingGearOpts {
     baitQty?: number;
 }
 
+export type FishingGearBuyPlan = Extract<ToolAcquirePlan, { kind: 'buy' }>;
+
 /**
- * Plan buys for missing fishing gear pieces (tools + bait stacks).
- * Returns the first unmet piece that is buyable and affordable.
+ * Plan buys for every missing fishing gear piece that is buyable and affordable.
+ * Order follows method.gear (tools before bait stacks when listed that way).
  *
  * Tools: buy when held+bank &lt; min (usually 1).
  * Bait/feathers: buy up to baitQty (or gear.restock) when total held+bank is below that target.
  */
-export function planFishingGearAcquire(
+export function planFishingGearBuys(
     method: Pick<FishingMethod, 'gear'>,
     w: AcquireWorld,
     opts: PlanFishingGearOpts = {}
-): ToolAcquirePlan | null {
+): FishingGearBuyPlan[] {
     const gear = withBaitTarget(method, opts.baitQty ?? 1000).gear;
+    const out: FishingGearBuyPlan[] = [];
+    // Coins left after earlier lines in this cart (same bank trip / shop visit).
+    let coinsLeft = totalCoins(w);
     for (const g of gear) {
         const have = w.heldCount(g.name) + w.bankCount(g.name);
         const needAtLeast = isFishingBaitPiece(g) ? g.restock : g.min;
@@ -513,25 +518,19 @@ export function planFishingGearAcquire(
         }
         const needQty = Math.max(1, needAtLeast - w.heldCount(g.name));
         // Bait/feathers: buy the full shortfall up to baitQty (unbounded setting).
-        const qty = isFishingBaitPiece(g) ? Math.max(g.min, needQty) : 1;
-        const cost = unit * qty;
-        const vendor = fishingVendorFor(g.name, opts.near);
-        if (totalCoins(w) < cost) {
-            // Try buying just 1 if stack was too expensive.
-            if (qty > 1 && totalCoins(w) >= unit) {
-                return {
-                    kind: 'buy',
-                    name: g.name,
-                    cost: unit,
-                    qty: 1,
-                    vendor,
-                    equip: false,
-                    reason: `buy 1× ${g.name}`
-                };
+        let qty = isFishingBaitPiece(g) ? Math.max(g.min, needQty) : 1;
+        let cost = unit * qty;
+        if (coinsLeft < cost) {
+            // Partial bait stack if we can still afford at least one.
+            if (qty > 1 && coinsLeft >= unit) {
+                qty = Math.floor(coinsLeft / unit);
+                cost = unit * qty;
+            } else {
+                continue;
             }
-            continue;
         }
-        return {
+        const vendor = fishingVendorFor(g.name, opts.near);
+        out.push({
             kind: 'buy',
             name: g.name,
             cost,
@@ -539,9 +538,44 @@ export function planFishingGearAcquire(
             vendor,
             equip: false,
             reason: `buy ${qty}× ${g.name}`
-        };
+        });
+        coinsLeft -= cost;
     }
-    return null;
+    return out;
+}
+
+/**
+ * First unmet buyable piece (compat / single-item callers).
+ * Prefer {@link fishingGearShopCart} so rod+feathers share one shop visit.
+ */
+export function planFishingGearAcquire(
+    method: Pick<FishingMethod, 'gear'>,
+    w: AcquireWorld,
+    opts: PlanFishingGearOpts = {}
+): ToolAcquirePlan | null {
+    return planFishingGearBuys(method, w, opts)[0] ?? null;
+}
+
+/** Sum of list prices for a multi-buy cart. */
+export function buyPlansCost(plans: readonly Pick<FishingGearBuyPlan, 'cost'>[]): number {
+    return plans.reduce((sum, p) => sum + p.cost, 0);
+}
+
+/**
+ * All affordable missing pieces at the first piece's vendor (same keeper).
+ * Fly rod + feathers → one Gerrant cart; avoids bank-between-buys thrash.
+ */
+export function fishingGearShopCart(
+    method: Pick<FishingMethod, 'gear'>,
+    w: AcquireWorld,
+    opts: PlanFishingGearOpts = {}
+): FishingGearBuyPlan[] {
+    const all = planFishingGearBuys(method, w, opts);
+    if (all.length === 0) {
+        return [];
+    }
+    const keeper = all[0]!.vendor.keeper;
+    return all.filter(p => p.vendor.keeper === keeper);
 }
 
 /**

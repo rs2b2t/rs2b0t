@@ -24,6 +24,11 @@ describe('resolveWoodcuttingLocation', () => {
         expect(resolveWoodcuttingLocation('Auto', new Tile(2728, 3501, 0))?.name).toBe('Seers Maples');
     });
 
+    test('Auto freeform at willows NW of Crafting Guild (outside every WC camp chunk)', () => {
+        // 2910,3328 — not same 64×64 as Crafting Guild mine or any WC preset.
+        expect(resolveWoodcuttingLocation('Auto', new Tile(2910, 3328, 0))).toBeNull();
+    });
+
     test('named match is case-insensitive', () => {
         expect(resolveWoodcuttingLocation('edgeville yews', new Tile(0, 0, 0))?.name).toBe(
             'Edgeville Yews'

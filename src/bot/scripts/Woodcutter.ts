@@ -27,7 +27,7 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
         options: WOODCUTTING_LOCATION_OPTIONS,
         label: 'Location / full inventory',
         help:
-            'Chop camp + full-pack behaviour. Auto = nearest known tree camp (Euclidean) and bank at that camp\'s bank stand. Named camps pin trees + bank. None = power-chop (drop logs; no bank). Burn mode requires a non-None location — it is forced off under None. Fire spots stay separate from chop camps.'
+            'Chop camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known tree camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin trees + bank. None = power-chop (drop logs; no bank). Burn mode requires a non-None location — it is forced off under None. Fire spots stay separate from chop camps.'
     },
     burnMode: {
         type: 'string',

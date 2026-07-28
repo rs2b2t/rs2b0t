@@ -19,7 +19,10 @@ import {
     pickaxeShopOffers,
     planAxeAcquire,
     planBrokenToolRepair,
+    buyPlansCost,
+    fishingGearShopCart,
     planFishingGearAcquire,
+    planFishingGearBuys,
     planGatherToolAcquire,
     planPickaxeAcquire,
     type AcquireWorld
@@ -248,6 +251,47 @@ describe('ToolAcquire fishing', () => {
         });
         const plan = planFishingGearAcquire(method, w, { baitQty: 100 });
         expect(plan).toBeNull();
+    });
+
+    test('planFishingGearBuys lists fly rod then feathers at Gerrant', () => {
+        const method = resolveFishMethod('Fly fishing — trout/salmon');
+        const w = world({ bank: { Coins: 3000 } });
+        const buys = planFishingGearBuys(method, w, { baitQty: 50, near: { x: 3013, z: 3224 } });
+        expect(buys.length).toBe(2);
+        expect(buys[0]!.name).toBe('Fly fishing rod');
+        expect(buys[0]!.qty).toBe(1);
+        expect(buys[0]!.cost).toBe(5);
+        expect(buys[0]!.vendor.keeper).toBe(GERRANT_VENDOR.keeper);
+        expect(buys[1]!.name.toLowerCase()).toBe('feather');
+        expect(buys[1]!.qty).toBe(50);
+        expect(buys[1]!.cost).toBe(100);
+        expect(buys[1]!.vendor.keeper).toBe(GERRANT_VENDOR.keeper);
+        expect(buyPlansCost(buys)).toBe(105);
+    });
+
+    test('fishingGearShopCart keeps same-vendor multi-buy (rod + feathers)', () => {
+        const method = resolveFishMethod('Fly fishing — trout/salmon');
+        const w = world({ bank: { Coins: 3000 } });
+        const cart = fishingGearShopCart(method, w, { baitQty: 50, near: { x: 3013, z: 3224 } });
+        expect(cart.map(p => p.name.toLowerCase())).toEqual(['fly fishing rod', 'feather']);
+        expect(new Set(cart.map(p => p.vendor.keeper)).size).toBe(1);
+        expect(cart[0]!.vendor.keeper).toBe(GERRANT_VENDOR.keeper);
+    });
+
+    test('fishingGearShopCart is empty when coins cannot fund any piece', () => {
+        const method = resolveFishMethod('Fly fishing — trout/salmon');
+        const w = world({ bank: { Coins: 0 } });
+        expect(fishingGearShopCart(method, w, { baitQty: 50 })).toEqual([]);
+    });
+
+    test('planFishingGearAcquire still returns first piece only', () => {
+        const method = resolveFishMethod('Fly fishing — trout/salmon');
+        const w = world({ bank: { Coins: 3000 } });
+        const first = planFishingGearAcquire(method, w, { baitQty: 50 });
+        expect(first?.kind).toBe('buy');
+        if (first?.kind === 'buy') {
+            expect(first.name).toBe('Fly fishing rod');
+        }
     });
 });
 

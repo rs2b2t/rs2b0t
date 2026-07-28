@@ -15,8 +15,12 @@
  * matching gear so acquire tests cannot withdraw leftovers.
  *
  * Requires a deployed bot client and a running engine (default http://localhost:8890).
- * Redeploy the client yourself when GatheringBot changes — this tree does not
- * own the engine public/ tree.
+ * Redeploy the bot client yourself when GatheringBot / Game / adapter change —
+ * do not use tools/deploy-local.sh from this tree for live e2e.
+ *
+ * BASE_STATS maxes combat + gather skills once. Independent gather/path loops
+ * seed rune tools (inv wiped between scenarios). Acquire scenarios purge bank
+ * tools and buy/smith their own — no leftover gear from prior loops.
  *
  * Usage:
  *   bun tools/gatheringbot-test.ts
@@ -864,7 +868,15 @@ const SPOT = {
     draynorBank: { x: 3093, z: 3243, level: 0 },
     varrockWestBank: { x: 3185, z: 3440, level: 0 },
     varrockAnvil: { x: 3188, z: 3425, level: 0 },
-    edgevilleBank: { x: 3094, z: 3493, level: 0 }
+    edgevilleBank: { x: 3094, z: 3493, level: 0 },
+    /** Barbarian Village fly/bait river (location bank = Edgeville). */
+    barbVillageFish: { x: 3104, z: 3430, level: 0 },
+    /** Willows NW of Crafting Guild — Auto freeform WC (outside every WC camp chunk). */
+    willowsNwCg: { x: 2910, z: 3328, level: 0 },
+    /** Wilderness skeleton mine iron/coal — Auto freeform mine. */
+    skelMine: { x: 3018, z: 3590, level: 0 },
+    /** Ardougne river fly fishing — Auto freeform fish. */
+    ardyRiverFly: { x: 2566, z: 3374, level: 0 }
 } as const;
 
 const TOOL_RE = {
@@ -892,12 +904,11 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
-        // Pick + 26 tin = near-full pack; mine the last ore(s), walk to bank, deposit.
+        // Independent loop: grant rune pick (wiped next scenario). Acquire tests buy their own.
         seed: [
-            { debug: 'adamant_pickaxe', name: 'Adamant pickaxe', qty: 1 },
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
             { debug: 'tin_ore', name: 'Tin ore', qty: 26 }
         ],
-        // Stats already 99 from BASE_STATS — no per-scenario re-grant.
         scene: 'skip',
         budgetMs: 180_000,
         check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
@@ -937,10 +948,9 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 40
         },
-        // Pick + 26 tin = near-full pack; mine the last ore(s), then drop.
-        // Distinct from mine-bank: same seed shape, but must clear via drop not bank.
+        // Independent loop: rune pick + near-full pack → mine last → drop.
         seed: [
-            { debug: 'adamant_pickaxe', name: 'Adamant pickaxe', qty: 1 },
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
             { debug: 'tin_ore', name: 'Tin ore', qty: 26 }
         ],
         scene: 'rocks',
@@ -1066,9 +1076,9 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
-        // Axe + 26 logs = near-full pack; chop the last log(s), walk to bank, deposit.
+        // Independent loop: rune axe + near-full pack → chop last → bank.
         seed: [
-            { debug: 'adamant_axe', name: 'Adamant axe', qty: 1 },
+            { debug: 'rune_axe', name: 'Rune axe', qty: 1 },
             { debug: 'logs', name: 'Logs', qty: 26 }
         ],
         scene: 'skip',
@@ -1110,8 +1120,9 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 12
         },
+        // Independent loop: rune axe + tinder + logs → chop-then-burn path.
         seed: [
-            { debug: 'adamant_axe', name: 'Adamant axe', qty: 1 },
+            { debug: 'rune_axe', name: 'Rune axe', qty: 1 },
             { debug: 'tinderbox', name: 'Tinderbox', qty: 1 },
             { debug: 'logs', name: 'Logs', qty: 26 }
         ],
@@ -1122,6 +1133,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
+            // Chop-then-burn: lighting the seeded pack is the product path under test.
             if (fmXp > 0) {
                 return 'pass';
             }
@@ -1146,11 +1158,11 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 16
         },
+        // Independent path loop: rune pick; acquire scenarios wipe/buy separately.
         seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
-        // Mining/Attack already 99 from BASE_STATS (wields rune).
-        stats: [{ skill: 'mining', level: 90 }],
         scene: 'skip',
-        budgetMs: 120_000,
+        // Spiders + flee can eat wall-clock; keep room after redeployed combat fix.
+        budgetMs: 180_000,
         check: ({ start, cur, sawProduct, minDistToCamp, startDistToCamp, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
@@ -1158,7 +1170,7 @@ const SCENARIOS: Scenario[] = [
             const xpGain = cur.xp.mining - start.xp.mining;
             const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 5;
             const nearCamp = minDistToCamp <= 10;
-            // Wildy: pass on solid approach + optional brief mine attempt (PK risk).
+            // Wildy: solid approach into camp; XP/product nice-to-have (PK / depleted rocks).
             if (pathed && nearCamp && (xpGain > 0 || sawProduct || elapsedMs >= 55_000)) {
                 return 'pass';
             }
@@ -1230,15 +1242,15 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 14
         },
         purgeBank: { stand: SPOT.faladorEast, match: TOOL_RE.pick, label: 'picks@fally-e' },
+        // 32k = Nurmof rune list price; mining already 99 from BASE_STATS.
         seed: [{ debug: 'coins', name: 'Coins', qty: 32_000 }],
-        stats: [{ skill: 'mining', level: 90 }],
         scene: 'bank',
         budgetMs: 200_000,
         check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Best affordable with 32k + mining 90 is Rune pickaxe @ Nurmof.
+            // Best affordable with 32k is Rune pickaxe @ Nurmof (shop path, not success tier).
             const boughtRune = logHas(cur, /acquire:\s*bought\s+\d+×\s*Rune pickaxe/i);
             const gotRune = hasTool(cur, 'Rune pickaxe');
             if (boughtRune && gotRune) {
@@ -1268,26 +1280,26 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.draynorBank, match: TOOL_RE.axe, label: 'axes@draynor' },
-        seed: [{ debug: 'coins', name: 'Coins', qty: 2500 }],
-        stats: [{ skill: 'woodcutting', level: 90 }],
+        // Bob tops out at Steel axe (200gp). Enough coins for that shop path only.
+        seed: [{ debug: 'coins', name: 'Coins', qty: 500 }],
         scene: 'bank',
         budgetMs: 200_000,
         check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            const bought = logHas(cur, /acquire:\s*bought\s+\d+×\s*.*axe/i);
-            const gotAxe = hasAnyAxe(cur);
-            if (bought && gotAxe) {
+            const boughtSteel = logHas(cur, /acquire:\s*bought\s+\d+×\s*Steel axe/i);
+            const gotSteel = hasTool(cur, 'Steel axe');
+            if (boughtSteel && gotSteel) {
                 return 'pass';
             }
-            if (bought && elapsedMs >= 30_000) {
+            if (boughtSteel && elapsedMs >= 30_000) {
                 return 'pass';
             }
             return 'wait';
         },
         failMsg: ({ cur }) =>
-            `boughtLog=${logHas(cur, /acquire:\s*bought/i)} axe=${hasAnyAxe(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
+            `boughtSteel=${logHas(cur, /acquire:\s*bought\s+\d+×\s*Steel axe/i)} steelAxe=${hasTool(cur, 'Steel axe')} anyAxe=${hasAnyAxe(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
     {
         id: 'buy-net',
@@ -1327,6 +1339,188 @@ const SCENARIOS: Scenario[] = [
             `boughtLog=${logHas(cur, /acquire:\s*bought/i)} net=${invCount(cur, 'Small fishing net')} coins=${invCount(cur, 'Coins')}`
     },
     {
+        id: 'restock-fly-barb',
+        tags: ['acquire', 'buy', 'fishing', 'bait', 'restock', 'tools'],
+        script: 'Fisher',
+        // Gerrant banks at Draynor — start/purge there so the multi-buy fund trip
+        // is immediate. Missing fly rod + feathers → one Draynor bank open →
+        // Gerrant multi-buy (rod + feathers same shop visit) → barb river.
+        start: SPOT.draynorBank,
+        camp: SPOT.barbVillageFish,
+        bank: SPOT.draynorBank,
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Barbarian Village',
+            cookMode: 'Off',
+            toolAcquire: 'Buy / repair',
+            // Modest target so the feather buy finishes quickly in e2e.
+            baitQty: 50,
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        purgeBank: { stand: SPOT.draynorBank, match: TOOL_RE.fishGear, label: 'fishgear@draynor' },
+        // Fly rod 5gp + 50 feathers @ 2gp = 105gp; pad for path/repair float.
+        seed: [{ debug: 'coins', name: 'Coins', qty: 3000 }],
+        scene: 'bank',
+        budgetMs: 240_000,
+        check: ({ start, cur, minDistToCamp, startDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const boughtRod = logHas(cur, /acquire:\s*bought\s+\d+×\s*Fly fishing rod/i);
+            const boughtFeather = logHas(cur, /acquire:\s*bought\s+\d+×\s*Feather/i);
+            const multiBuy = logHas(cur, /acquire:\s*multi-buy/i);
+            const gotRod = hasTool(cur, 'Fly fishing rod') || invCount(cur, 'Fly fishing rod') > 0;
+            const gotFeather = invCount(cur, 'Feather') > 0;
+            const fishXp = cur.xp.fishing - start.xp.fishing;
+            const troutSalmon = invMatch(cur, /raw (trout|salmon)/i);
+            const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 5;
+            const nearCamp = minDistToCamp <= 14;
+            // Core: Gerrant sold both pieces in one cart (no bank-between-buys).
+            if (boughtRod && boughtFeather && gotRod && gotFeather) {
+                if (nearCamp || fishXp > 0 || troutSalmon > 0 || multiBuy || elapsedMs >= 90_000) {
+                    return 'pass';
+                }
+            }
+            // Bought both pieces and left Draynor toward camp.
+            if (boughtRod && boughtFeather && (pathed || nearCamp)) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `boughtRod=${logHas(cur, /acquire:\s*bought\s+\d+×\s*Fly fishing rod/i)} ` +
+            `boughtFeather=${logHas(cur, /acquire:\s*bought\s+\d+×\s*Feather/i)} ` +
+            `multiBuy=${logHas(cur, /acquire:\s*multi-buy/i)} ` +
+            `rod=${invCount(cur, 'Fly fishing rod')} feather=${invCount(cur, 'Feather')} ` +
+            `coins=${invCount(cur, 'Coins')} fishXpΔ=${cur.xp.fishing - start.xp.fishing} ` +
+            `distCamp=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'} ` +
+            `inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
+    },
+    // ── Auto freeform (start outside every preset 64×64 map square) ──────────
+    {
+        id: 'auto-freeform-wc-willows-cg',
+        tags: ['freeform', 'auto', 'woodcutting', 'wc', 'early'],
+        script: 'Woodcutter',
+        // Willows NW of Crafting Guild — not same chunk as any WOODCUTTING_LOCATIONS spot.
+        start: SPOT.willowsNwCg,
+        camp: SPOT.willowsNwCg,
+        settings: {
+            treeName: 'Willow',
+            location: 'Auto',
+            burnMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 40
+        },
+        seed: [{ debug: 'rune_axe', name: 'Rune axe', qty: 1 }],
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({ start, cur, minDistToCamp }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            // Named Auto snap would log "location: Draynor Willows (auto); bank …"
+            if (logHas(cur, /location:\s*(Draynor|Seers|Edgeville|Gnome|Crafting)/i)) {
+                return 'fail';
+            }
+            const freeform = logHas(cur, /location:\s*no preset\s*—\s*nearest bank/i);
+            const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
+            const logs = invMatch(cur, /logs?/i);
+            // Gather near start (not walking to a distant named camp).
+            if (freeform && (xpGain > 0 || logs > 0) && minDistToCamp <= 40) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `freeform=${logHas(cur, /location:\s*no preset/i)} ` +
+            `namedSnap=${logHas(cur, /location:\s*(Draynor|Seers|Edgeville|Gnome)/i)} ` +
+            `wcXpΔ=${cur.xp.woodcutting - start.xp.woodcutting} logs=${invMatch(cur, /logs?/i)} ` +
+            `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    {
+        id: 'auto-freeform-mine-skel',
+        tags: ['freeform', 'auto', 'mining', 'mine', 'wildy'],
+        script: 'Miner',
+        // Wilderness skeleton mine iron/coal — outside every MINING_LOCATIONS chunk.
+        start: SPOT.skelMine,
+        camp: SPOT.skelMine,
+        settings: {
+            rocks: 'Iron',
+            location: 'Auto',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 40
+        },
+        seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
+        scene: 'skip',
+        budgetMs: 200_000,
+        check: ({ start, cur, minDistToCamp }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (logHas(cur, /location:\s*(Barbarian|Varrock|Dwarven|Lava Maze|Mining Guild)/i)) {
+                return 'fail';
+            }
+            const freeform = logHas(cur, /location:\s*no preset\s*—\s*nearest bank/i);
+            const xpGain = cur.xp.mining - start.xp.mining;
+            const ore = invMatch(cur, /ore/i);
+            if (freeform && (xpGain > 0 || ore > 0) && minDistToCamp <= 50) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `freeform=${logHas(cur, /location:\s*no preset/i)} ` +
+            `namedSnap=${logHas(cur, /location:\s*(Barbarian|Varrock|Dwarven|Lava)/i)} ` +
+            `mineXpΔ=${cur.xp.mining - start.xp.mining} ore=${invMatch(cur, /ore/i)} ` +
+            `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    {
+        id: 'auto-freeform-fish-ardy-river',
+        tags: ['freeform', 'auto', 'fishing', 'fish'],
+        script: 'Fisher',
+        // Ardougne river fly spots — outside every FISHING_LOCATIONS chunk.
+        start: SPOT.ardyRiverFly,
+        camp: SPOT.ardyRiverFly,
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Auto',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            baitQty: 100,
+            forgetfulBank: false,
+            leashRadius: 40
+        },
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'feather', name: 'Feather', qty: 100 }
+        ],
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({ start, cur, minDistToCamp }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (logHas(cur, /location:\s*(Fishing Guild|Barbarian|Catherby|Draynor|Seers)/i)) {
+                return 'fail';
+            }
+            const freeform = logHas(cur, /location:\s*no preset\s*—\s*nearest bank/i);
+            const xpGain = cur.xp.fishing - start.xp.fishing;
+            const fish = invMatch(cur, /raw (trout|salmon)/i);
+            if (freeform && (xpGain > 0 || fish > 0) && minDistToCamp <= 40) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp }) =>
+            `freeform=${logHas(cur, /location:\s*no preset/i)} ` +
+            `namedSnap=${logHas(cur, /location:\s*(Fishing Guild|Barbarian|Catherby|Draynor)/i)} ` +
+            `fishXpΔ=${cur.xp.fishing - start.xp.fishing} raw=${invMatch(cur, /raw (trout|salmon)/i)} ` +
+            `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    {
         id: 'smith-rune-axe',
         tags: ['acquire', 'smith', 'woodcutting', 'wc', 'tools', 'endgame'],
         script: 'Woodcutter',
@@ -1342,14 +1536,10 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
-        // Hammer + runite bar; WC/smith already 99 from BASE_STATS.
+        // Hammer + runite bar; WC/smith already 99 — this is the smith path, not shop tier.
         seed: [
             { debug: 'hammer', name: 'Hammer', qty: 1 },
             { debug: 'runite_bar', name: 'Runite bar', qty: 1 }
-        ],
-        stats: [
-            { skill: 'woodcutting', level: 90 },
-            { skill: 'smithing', level: 90 }
         ],
         scene: 'bank',
         budgetMs: 210_000,
@@ -1450,7 +1640,7 @@ try {
             await clearChatDialogs(page);
 
             // Acquire tests must not already hold the tool after purge+seed.
-            if (sc.id.startsWith('buy-') || sc.id === 'smith-rune-axe') {
+            if (sc.id.startsWith('buy-') || sc.id === 'smith-rune-axe' || sc.id === 'restock-fly-barb') {
                 const pre = await snap(page);
                 if ((sc.id === 'buy-pick') && hasAnyPick(pre)) {
                     throw new Error('precondition: already holding a pickaxe after purge');
@@ -1460,6 +1650,17 @@ try {
                 }
                 if (sc.id === 'buy-net' && invCount(pre, 'Small fishing net') > 0) {
                     throw new Error('precondition: already holding a net after purge');
+                }
+                if (sc.id === 'restock-fly-barb') {
+                    if (invCount(pre, 'Fly fishing rod') > 0 || hasTool(pre, 'Fly fishing rod')) {
+                        throw new Error('precondition: already holding a fly fishing rod after purge');
+                    }
+                    if (invCount(pre, 'Feather') > 0) {
+                        throw new Error('precondition: already holding feathers after purge');
+                    }
+                    if (invCount(pre, 'Coins') < 200) {
+                        throw new Error(`precondition: need coins for rod+feathers (have ${invCount(pre, 'Coins')})`);
+                    }
                 }
                 if (sc.id === 'buy-pick' && invCount(pre, 'Coins') < 32_000) {
                     throw new Error(`precondition: need 32000 coins after seed (have ${invCount(pre, 'Coins')})`);
