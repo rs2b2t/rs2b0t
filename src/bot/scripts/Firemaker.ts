@@ -21,9 +21,11 @@ import {
     FIRE_START_MS,
     LOG_LEVELS,
     TINDERBOX,
+    burnLaneWant,
     findBurnLane,
     fireReactionMs,
     inFirePlot,
+    isBurnWest,
     runInDir,
     tileKey,
     type FirePlot
@@ -150,7 +152,7 @@ export default class Firemaker extends LoopingBot {
 
     private async gotoLane(): Promise<boolean> {
         for (let attempt = 0; attempt < 3; attempt++) {
-            const want = this.logsLeft();
+            const want = burnLaneWant(this.logsLeft());
             const found = findBurnLane(
                 this.plot,
                 Game.tile()!,
@@ -165,16 +167,26 @@ export default class Firemaker extends LoopingBot {
                 await Execution.delayTicks(25);
                 continue;
             }
-            this.setStatus(`walking to lane ${found.start.x},${found.start.z} (${found.run} long)`);
+            const full = found.run >= want && isBurnWest(found.dir);
+            this.setStatus(
+                full
+                    ? `walking to full lane ${found.start.x},${found.start.z} (${found.run} long)`
+                    : `walking to tile ${found.start.x},${found.start.z} (${found.run} long)`
+            );
             await this.walkTo(found.start, `lane ${found.start.x},${found.start.z}`, 0);
 
             const at = Game.tile();
             const ok = at !== null && inFirePlot(at, this.plot);
+            const cap = isBurnWest(found.dir) ? want : 1;
             this.lane = ok
-                ? runInDir(at!, this.plot, found.dir, this.occupied(), t => Reachability.walkable(t), (a, b) => Reachability.canStep(a, b), want)
+                ? runInDir(at!, this.plot, found.dir, this.occupied(), t => Reachability.walkable(t), (a, b) => Reachability.canStep(a, b), cap)
                 : 0;
             if (this.lane > 0) {
-                this.log(`lane ${at!.x},${at!.z} dir ${found.dir.dx},${found.dir.dz} x${this.lane} (wanted ${found.run} at ${found.start.x},${found.start.z})`);
+                this.log(
+                    `lane ${at!.x},${at!.z} dir ${found.dir.dx},${found.dir.dz} x${this.lane}` +
+                        ` (wanted ${want} at ${found.start.x},${found.start.z}` +
+                        (full ? ', full load)' : this.lane < want ? ', tight fallback)' : ')')
+                );
                 return true;
             }
             this.log(`stopped at ${at?.x},${at?.z}, which is ${ok ? 'not lightable' : 'outside the plot'} — rescanning`);

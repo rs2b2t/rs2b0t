@@ -128,13 +128,32 @@ export function tileKey(t: { x: number; z: number }): string {
 
 export type BurnDir = { dx: number; dz: number };
 
-/** Cardinal light directions — west-first (classic bank strips), then the rest. */
+/**
+ * After a successful light the client always steps the player **one tile west**.
+ * Multi-log lanes only chain cleanly west; other cardinals are single-tile fallbacks
+ * for cramped Auto plots.
+ */
+export const BURN_WEST: BurnDir = { dx: -1, dz: 0 };
+
+/** West first (real lanes), then other cardinals for light-wherever fallbacks. */
 export const BURN_DIRS: readonly BurnDir[] = [
-    { dx: -1, dz: 0 },
+    BURN_WEST,
     { dx: 1, dz: 0 },
     { dx: 0, dz: -1 },
     { dx: 0, dz: 1 }
 ];
+
+/** Pack holds at most 27 logs once a tinderbox (and usually an axe) is reserved. */
+export const MAX_BURN_LANE = 27;
+
+/** How many consecutive lights we want from one lane start (1..27). */
+export function burnLaneWant(logCount: number): number {
+    return Math.max(1, Math.min(MAX_BURN_LANE, Math.floor(logCount) || 1));
+}
+
+export function isBurnWest(dir: BurnDir): boolean {
+    return dir.dx === BURN_WEST.dx && dir.dz === BURN_WEST.dz;
+}
 
 export function runInDir(
     from: WorldTile,
@@ -170,13 +189,21 @@ export function runWest(
     canStep: (from: WorldTile, to: WorldTile) => boolean,
     cap: number
 ): number {
-    return runInDir(from, plot, BURN_DIRS[0], occupied, walkable, canStep, cap);
+    return runInDir(from, plot, BURN_WEST, occupied, walkable, canStep, cap);
 }
 
 export function inFirePlot(t: WorldTile, plot: FirePlot): boolean {
     return t.x >= plot.x0 && t.x <= plot.x1 && t.z >= plot.z0 && t.z <= plot.z1 && t.level === plot.bank.level;
 }
 
+/**
+ * Pick a lane start inside `plot`.
+ *
+ * Preference (successful lights always shove the player west):
+ * 1. West-running lane that fits the full load (`run >= want`, want capped at 27)
+ * 2. Longest west-running partial lane
+ * 3. Any other free tile (run ≥ 1) as light-wherever fallback — closest wins
+ */
 export function findBurnLane(
     plot: FirePlot,
     here: WorldTile,
@@ -186,17 +213,53 @@ export function findBurnLane(
     canStep: (from: WorldTile, to: WorldTile) => boolean,
     dirs: readonly BurnDir[] = BURN_DIRS
 ): { start: Tile; run: number; dir: BurnDir } | null {
+    const need = burnLaneWant(want);
     let best: { start: Tile; run: number; d: number; dir: BurnDir } | null = null;
+
+    const better = (
+        run: number,
+        d: number,
+        dir: BurnDir,
+        cur: { run: number; d: number; dir: BurnDir }
+    ): boolean => {
+        const full = run >= need;
+        const curFull = cur.run >= need;
+        const west = isBurnWest(dir);
+        const curWest = isBurnWest(cur.dir);
+
+        // Full west lane beats everything.
+        if (full && west && !(curFull && curWest)) {
+            return true;
+        }
+        if (curFull && curWest && !(full && west)) {
+            return false;
+        }
+        // Other full lanes (rare / test dirs) beat partials.
+        if (full !== curFull) {
+            return full;
+        }
+        // Prefer west so multi-light chains match the client shove.
+        if (west !== curWest) {
+            return west;
+        }
+        if (run !== cur.run) {
+            return run > cur.run;
+        }
+        return d < cur.d;
+    };
+
     for (const dir of dirs) {
         for (let z = plot.z0; z <= plot.z1; z++) {
             for (let x = plot.x0; x <= plot.x1; x++) {
                 const start = new Tile(x, z, plot.bank.level);
-                const run = runInDir(start, plot, dir, occupied, walkable, canStep, want);
+                // Non-west dirs only work as single-tile lights (client shoves west).
+                const cap = isBurnWest(dir) ? need : 1;
+                const run = runInDir(start, plot, dir, occupied, walkable, canStep, cap);
                 if (run === 0) {
                     continue;
                 }
                 const d = Math.max(Math.abs(x - here.x), Math.abs(z - here.z));
-                if (!best || run > best.run || (run === best.run && d < best.d)) {
+                if (!best || better(run, d, dir, best)) {
                     best = { start, run, d, dir };
                 }
             }

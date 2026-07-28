@@ -14,9 +14,11 @@ import {
     FIRE_LIGHT_MS,
     FIRE_START_MS,
     TINDERBOX,
+    burnLaneWant,
     findBurnLane,
     fireReactionMs,
     inFirePlot,
+    isBurnWest,
     runInDir,
     shouldBurnFullLoad,
     tileKey,
@@ -148,7 +150,7 @@ class ChopBurnLoad implements Task {
             return false;
         }
         for (let attempt = 0; attempt < 3; attempt++) {
-            const want = this.bot.logCount();
+            const want = burnLaneWant(this.bot.logCount());
             const live = this.bot.burnPlotOrNull() ?? plot;
             const found = findBurnLane(
                 live,
@@ -164,7 +166,12 @@ class ChopBurnLoad implements Task {
                 continue;
             }
             this.laneDir = found.dir;
-            this.bot.setStatus(`burn: walk to lane ${found.start.x},${found.start.z}`);
+            const full = found.run >= want && isBurnWest(found.dir);
+            this.bot.setStatus(
+                full
+                    ? `burn: walk to full lane ${found.start.x},${found.start.z} x${found.run}`
+                    : `burn: walk to tile ${found.start.x},${found.start.z} (lane x${found.run})`
+            );
             await Traversal.walkResilient(found.start, {
                 radius: 0,
                 attempts: 2,
@@ -173,6 +180,8 @@ class ChopBurnLoad implements Task {
             });
             const at = Game.tile();
             const ok = at !== null && inFirePlot(at, live);
+            // Re-measure from where we stopped. Non-west is single-tile only (client shoves west).
+            const cap = isBurnWest(this.laneDir) ? want : 1;
             const lane = ok
                 ? runInDir(
                       at!,
@@ -181,12 +190,15 @@ class ChopBurnLoad implements Task {
                       occupied(),
                       t => Reachability.walkable(t),
                       (a, b) => Reachability.canStep(a, b),
-                      want
+                      cap
                   )
                 : 0;
             this.bot.setBurnLaneLeft(lane);
             if (lane > 0) {
-                this.bot.log(`burn: lane ${at!.x},${at!.z} dir ${this.laneDir.dx},${this.laneDir.dz} x${lane}`);
+                this.bot.log(
+                    `burn: lane ${at!.x},${at!.z} dir ${this.laneDir.dx},${this.laneDir.dz} x${lane}` +
+                        (full ? ' (full load)' : lane < want ? ' (tight — light wherever)' : '')
+                );
                 return true;
             }
         }

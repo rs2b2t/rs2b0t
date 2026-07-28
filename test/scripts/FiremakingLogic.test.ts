@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 import {
+    BURN_WEST,
     FIRE_SPOTS,
+    burnLaneWant,
     expandLocalFirePlot,
     findBurnLane,
     firemakingLevelForLogs,
@@ -34,6 +36,14 @@ describe('FiremakingLogic', () => {
         expect(firemakingLevelForLogs('Yew logs')).toBe(60);
     });
 
+    test('burnLaneWant caps at 27', () => {
+        expect(burnLaneWant(0)).toBe(1);
+        expect(burnLaneWant(5)).toBe(5);
+        expect(burnLaneWant(27)).toBe(27);
+        expect(burnLaneWant(28)).toBe(27);
+        expect(burnLaneWant(99)).toBe(27);
+    });
+
     test('runWest stops on occupied / cap', () => {
         const plot = FIRE_SPOTS['Varrock East'];
         const from = { x: 3260, z: 3429, level: 0 };
@@ -42,17 +52,46 @@ describe('FiremakingLogic', () => {
         expect(runWest(from, plot, blocked, () => true, () => true, 10)).toBe(2);
     });
 
-    test('findBurnLane prefers longer runs', () => {
-        // Single-row strip: west-only so start.x is deterministic (multi-dir can
-        // pick an east run of equal length from a closer tile).
+    test('findBurnLane prefers longer west runs', () => {
+        // Single-row strip: west-only so start.x is deterministic.
         const plot = { bank: new Tile(0, 0, 0), x0: 10, x1: 14, z0: 5, z1: 5 };
         const here = { x: 12, z: 5, level: 0 };
         const occ = new Set([tileKey({ x: 11, z: 5 })]);
-        const found = findBurnLane(plot, here, occ, 10, () => true, () => true, [{ dx: -1, dz: 0 }]);
+        const found = findBurnLane(plot, here, occ, 10, () => true, () => true, [BURN_WEST]);
         expect(found).not.toBeNull();
         expect(found!.run).toBeGreaterThanOrEqual(3);
         expect(found!.start.x).toBe(14);
-        expect(found!.dir).toEqual({ dx: -1, dz: 0 });
+        expect(found!.dir).toEqual(BURN_WEST);
+    });
+
+    test('findBurnLane prefers a full-load west lane over a longer partial elsewhere', () => {
+        // Narrow plot so geometry is exact:
+        // z=5: free tiles x=11..14 only → max west run 4 (partial for want=5), closer to player.
+        // z=6: free tiles x=11..15 → max west run 5 (full load), farther.
+        const plot = { bank: new Tile(0, 0, 0), x0: 10, x1: 15, z0: 5, z1: 6 };
+        const here = { x: 14, z: 5, level: 0 };
+        const occ = new Set([
+            tileKey({ x: 10, z: 5 }),
+            tileKey({ x: 15, z: 5 }), // blocks z=5 from reaching 5 tiles
+            tileKey({ x: 10, z: 6 })
+        ]);
+        const found = findBurnLane(plot, here, occ, 5, () => true, () => true);
+        expect(found).not.toBeNull();
+        expect(found!.dir).toEqual(BURN_WEST);
+        expect(found!.run).toBe(5);
+        expect(found!.start.z).toBe(6);
+        expect(found!.start.x).toBe(15);
+    });
+
+    test('findBurnLane falls back to a single free tile when no west lane exists', () => {
+        // Only one free tile; west neighbor is occupied so multi-light west fails.
+        const plot = { bank: new Tile(0, 0, 0), x0: 10, x1: 12, z0: 5, z1: 5 };
+        const here = { x: 11, z: 5, level: 0 };
+        const occ = new Set([tileKey({ x: 10, z: 5 }), tileKey({ x: 12, z: 5 })]);
+        const found = findBurnLane(plot, here, occ, 10, () => true, () => true);
+        expect(found).not.toBeNull();
+        expect(found!.start.x).toBe(11);
+        expect(found!.run).toBe(1);
     });
 
     test('nearestFireSpot picks closest bank', () => {
