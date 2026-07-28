@@ -40,6 +40,12 @@ test('nearestBank returns the closest bank on the same level', () => {
     expect(nearestBank({ x: 3090, z: 3245, level: 0 })?.name).toBe('Draynor');
 });
 
+test('Barbarian Village tin/coal banks at Edgeville (not Falador East)', () => {
+    // Chebyshev wrongly picks Falador East; Euclidean walk is shorter to Edgeville.
+    expect(nearestBank({ x: 3080, z: 3420, level: 0 })?.name).toBe('Edgeville');
+    expect(nearestBank({ x: 3078, z: 3415, level: 0 })?.name).toBe('Edgeville');
+});
+
 test('nearestBank returns null when no bank is on the tile level', () => {
     expect(nearestBank({ x: 2612, z: 3092, level: 2 })).toBeNull();
 });

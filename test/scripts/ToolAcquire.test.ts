@@ -169,13 +169,13 @@ describe('ToolAcquire axe', () => {
 });
 
 describe('ToolAcquire fishing', () => {
-    test('feathers route to Gerrant', () => {
+    test('feathers route to Gerrant even from Catherby', () => {
         const method = resolveFishMethod('Fly fishing — trout/salmon');
         const w = world({
             held: { 'Fly fishing rod': 1 },
             bank: { Coins: 500 }
         });
-        const plan = planFishingGearAcquire(method, w);
+        const plan = planFishingGearAcquire(method, w, { near: { x: 2846, z: 3429 } });
         expect(plan?.kind).toBe('buy');
         if (plan?.kind === 'buy') {
             expect(plan.name.toLowerCase()).toBe('feather');
@@ -183,7 +183,7 @@ describe('ToolAcquire fishing', () => {
         }
     });
 
-    test('bait prefers Harry', () => {
+    test('bait prefers Harry without near tile', () => {
         const method = resolveFishMethod('Bait rod — sardine/herring');
         const w = world({
             held: { 'Fishing rod': 1 },
@@ -195,6 +195,59 @@ describe('ToolAcquire fishing', () => {
             expect(plan.name.toLowerCase()).toBe('fishing bait');
             expect(plan.vendor.keeper).toBe(HARRY_VENDOR.keeper);
         }
+    });
+
+    test('Catherby lobster pot buys from Harry not Gerrant', () => {
+        const method = resolveFishMethod('Lobster cage — lobster');
+        const w = world({
+            bank: { Coins: 100 }
+        });
+        const plan = planFishingGearAcquire(method, w, { near: { x: 2846, z: 3429 } });
+        expect(plan?.kind).toBe('buy');
+        if (plan?.kind === 'buy') {
+            expect(plan.name).toBe('Lobster pot');
+            expect(plan.vendor.keeper).toBe(HARRY_VENDOR.keeper);
+            expect(plan.vendor.stand.x).toBe(2833);
+            expect(plan.vendor.stand.z).toBe(3443);
+        }
+    });
+
+    test('Draynor small net still prefers Gerrant by proximity', () => {
+        const method = resolveFishMethod('Small net — shrimp/anchovy');
+        const w = world({ bank: { Coins: 50 } });
+        const plan = planFishingGearAcquire(method, w, { near: { x: 3086, z: 3231 } });
+        expect(plan?.kind).toBe('buy');
+        if (plan?.kind === 'buy') {
+            expect(plan.name).toBe('Small fishing net');
+            expect(plan.vendor.keeper).toBe(GERRANT_VENDOR.keeper);
+        }
+    });
+
+    test('baitQty buys up to target when bank+inv are short', () => {
+        const method = resolveFishMethod('Bait rod — sardine/herring');
+        const w = world({
+            held: { 'Fishing rod': 1, 'Fishing bait': 10 },
+            bank: { Coins: 2000 }
+        });
+        // have 10, target 50 → buy 40
+        const plan = planFishingGearAcquire(method, w, { baitQty: 50, near: { x: 2846, z: 3429 } });
+        expect(plan?.kind).toBe('buy');
+        if (plan?.kind === 'buy') {
+            expect(plan.name).toBe('Fishing bait');
+            expect(plan.qty).toBe(40);
+            expect(plan.cost).toBe(40 * 3);
+            expect(plan.vendor.keeper).toBe(HARRY_VENDOR.keeper);
+        }
+    });
+
+    test('baitQty does not buy when bank already holds enough', () => {
+        const method = resolveFishMethod('Bait rod — sardine/herring');
+        const w = world({
+            held: { 'Fishing rod': 1, 'Fishing bait': 5 },
+            bank: { 'Fishing bait': 200, Coins: 2000 }
+        });
+        const plan = planFishingGearAcquire(method, w, { baitQty: 100 });
+        expect(plan).toBeNull();
     });
 });
 

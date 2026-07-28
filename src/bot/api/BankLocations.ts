@@ -61,6 +61,17 @@ export const BANK_LOCATIONS: BankLocation[] = [
     }
 ];
 
+/**
+ * Straight-line (Euclidean) distance on the same plane.
+ * Chebyshev (king-move) wrongly prefers Falador East over Edgeville from
+ * Barbarian Village tin/coal — the walk is shorter north to Edge.
+ */
+export function bankDistance(from: WorldTile, bank: WorldTile): number {
+    const dx = bank.x - from.x;
+    const dz = bank.z - from.z;
+    return Math.hypot(dx, dz);
+}
+
 export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) => boolean): BankLocation | null {
     let best: BankLocation | null = null;
     let bestD = Infinity;
@@ -68,7 +79,7 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
         if (bank.tile.level !== from.level || !usable(bank)) {
             continue;
         }
-        const d = Math.max(Math.abs(bank.tile.x - from.x), Math.abs(bank.tile.z - from.z));
+        const d = bankDistance(from, bank.tile);
         if (d < bestD) {
             bestD = d;
             best = bank;

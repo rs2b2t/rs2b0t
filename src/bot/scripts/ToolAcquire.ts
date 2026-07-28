@@ -88,9 +88,12 @@ export const GERRANT_VENDOR: ToolVendor = {
 /** Harry — Catherby fishing (bait, tools, big net; no feathers/fly rod). */
 export const HARRY_VENDOR: ToolVendor = {
     keeper: 'Harry',
-    stand: new Tile(2834, 3444, 0),
+    stand: new Tile(2833, 3443, 0),
     bankStand: new Tile(2809, 3441, 0) // Catherby
 };
+
+/** Items only Gerrant stocks (Harry has no fly rod / feathers). */
+export const GERRANT_ONLY_FISHING: ReadonlySet<string> = new Set(['feather', 'fly fishing rod']);
 
 /** Varrock West anvil for mith+ axes. */
 export const VARROCK_ANVIL_STAND = new Tile(3188, 3425, 0);
@@ -407,16 +410,31 @@ export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): Too
     return cands[0]?.plan ?? null;
 }
 
-/** Preferred fishing vendor for a gear piece (feathers/fly → Gerrant; bait prefers Harry). */
-export function fishingVendorFor(name: string): ToolVendor {
+export interface FishingVendorNear {
+    x: number;
+    z: number;
+}
+
+/**
+ * Preferred fishing vendor for a gear piece.
+ * - Feathers / fly fishing rod → Gerrant only (Harry does not stock them).
+ * - Everything else Harry stocks → nearest of Harry vs Gerrant by straight-line
+ *   distance from `near` (Catherby lobster pot → Harry, not Port Sarim).
+ * - No position: bait/big net still prefer Harry; other tools default Gerrant (F2P).
+ */
+export function fishingVendorFor(name: string, near?: FishingVendorNear | null): ToolVendor {
     const n = name.toLowerCase();
-    if (n === 'feather' || n === 'fly fishing rod') {
+    if (GERRANT_ONLY_FISHING.has(n)) {
         return GERRANT_VENDOR;
+    }
+    if (near) {
+        const dHarry = Math.hypot(near.x - HARRY_VENDOR.stand.x, near.z - HARRY_VENDOR.stand.z);
+        const dGerrant = Math.hypot(near.x - GERRANT_VENDOR.stand.x, near.z - GERRANT_VENDOR.stand.z);
+        return dHarry <= dGerrant ? HARRY_VENDOR : GERRANT_VENDOR;
     }
     if (n === 'fishing bait' || n === 'big fishing net') {
         return HARRY_VENDOR;
     }
-    // nets/rods/harpoon/pot — either shop; prefer Harry when Catherby-ish else Gerrant
     return GERRANT_VENDOR;
 }
 
@@ -425,28 +443,64 @@ export function fishingShopCost(name: string): number | null {
     return hit ? hit[1] : null;
 }
 
+/** True when the gear piece is a bait/feather stack (restock target applies). */
+export function isFishingBaitPiece(g: Pick<FishingGearPiece, 'name' | 'restock'>): boolean {
+    if (g.restock <= 1) {
+        return false;
+    }
+    const n = g.name.toLowerCase();
+    return n === 'fishing bait' || n === 'feather';
+}
+
+/**
+ * Apply the script bait/feather target qty to method gear (tools unchanged).
+ * Only used when the method actually requires bait/feathers.
+ */
+export function withBaitTarget(
+    method: Pick<FishingMethod, 'gear'>,
+    baitQty: number
+): { gear: FishingGearPiece[] } {
+    const target = Math.max(1, Math.floor(baitQty));
+    return {
+        gear: method.gear.map(g => (isFishingBaitPiece(g) ? { ...g, restock: target } : g))
+    };
+}
+
+export interface PlanFishingGearOpts {
+    /** Player / spot tile — picks Harry vs Gerrant by proximity. */
+    near?: FishingVendorNear | null;
+    /** Buy/restock target for bait & feathers when the method needs them. */
+    baitQty?: number;
+}
+
 /**
  * Plan buys for missing fishing gear pieces (tools + bait stacks).
  * Returns the first unmet piece that is buyable and affordable.
+ *
+ * Tools: buy when held+bank &lt; min (usually 1).
+ * Bait/feathers: buy up to baitQty (or gear.restock) when total held+bank is below that target.
  */
 export function planFishingGearAcquire(
     method: Pick<FishingMethod, 'gear'>,
-    w: AcquireWorld
+    w: AcquireWorld,
+    opts: PlanFishingGearOpts = {}
 ): ToolAcquirePlan | null {
-    for (const g of method.gear) {
+    const gear = withBaitTarget(method, opts.baitQty ?? 1000).gear;
+    for (const g of gear) {
         const have = w.heldCount(g.name) + w.bankCount(g.name);
-        if (have >= g.min) {
+        const needAtLeast = isFishingBaitPiece(g) ? g.restock : g.min;
+        if (have >= needAtLeast) {
             continue;
         }
         const unit = fishingShopCost(g.name);
         if (unit == null) {
             continue;
         }
-        const want = Math.max(g.min, Math.min(g.restock, g.restock));
-        const needQty = Math.max(1, want - w.heldCount(g.name));
-        // Cap bait/feather buys so we don't drain the bank on one trip.
-        const qty = g.restock > 1 ? Math.min(needQty, Math.max(g.min, Math.min(100, g.restock))) : 1;
+        const needQty = Math.max(1, needAtLeast - w.heldCount(g.name));
+        // Bait/feathers: buy the full shortfall up to baitQty (unbounded setting).
+        const qty = isFishingBaitPiece(g) ? Math.max(g.min, needQty) : 1;
         const cost = unit * qty;
+        const vendor = fishingVendorFor(g.name, opts.near);
         if (totalCoins(w) < cost) {
             // Try buying just 1 if stack was too expensive.
             if (qty > 1 && totalCoins(w) >= unit) {
@@ -455,7 +509,7 @@ export function planFishingGearAcquire(
                     name: g.name,
                     cost: unit,
                     qty: 1,
-                    vendor: fishingVendorFor(g.name),
+                    vendor,
                     equip: false,
                     reason: `buy 1× ${g.name}`
                 };
@@ -467,7 +521,7 @@ export function planFishingGearAcquire(
             name: g.name,
             cost,
             qty,
-            vendor: fishingVendorFor(g.name),
+            vendor,
             equip: false,
             reason: `buy ${qty}× ${g.name}`
         };

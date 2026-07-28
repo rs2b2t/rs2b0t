@@ -237,3 +237,59 @@ export function toolsNeedingEquip(
     }
     return out;
 }
+
+/**
+ * Best usable tier currently held for each tiered req (plus exact tool names when held).
+ * Used as the deposit keep-set so worse axes/picks get banked.
+ */
+export function bestHeldToolNames(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    count: (name: string) => number
+): string[] {
+    const out: string[] = [];
+    for (const r of reqs) {
+        if (r.kind === 'tiered') {
+            const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => count(n) > 0);
+            if (best) {
+                out.push(best);
+            }
+            continue;
+        }
+        if (count(r.name) > 0) {
+            out.push(r.name);
+        }
+    }
+    return out;
+}
+
+/**
+ * Tiered tools held on the player that are worse than the best usable tier we already have.
+ * e.g. bronze axe while holding/wearing steel → bronze is surplus.
+ */
+export function surplusHeldToolNames(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    count: (name: string) => number
+): string[] {
+    const surplus: string[] = [];
+    for (const r of reqs) {
+        if (r.kind !== 'tiered') {
+            continue;
+        }
+        const best = bestFromTiers(skillLevel(r.skill), r.tiers, n => count(n) > 0);
+        if (!best) {
+            continue;
+        }
+        const bestKey = best.toLowerCase();
+        for (const t of r.tiers) {
+            if (t.name.toLowerCase() === bestKey) {
+                continue;
+            }
+            if (count(t.name) > 0) {
+                surplus.push(t.name);
+            }
+        }
+    }
+    return [...new Set(surplus)];
+}

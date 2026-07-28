@@ -414,15 +414,17 @@ Tags: `firemaking`, `banking`, `varrock`, `draynor`, `seers`, `afk`
 
 ### Fisher
 
-Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch at the nearest bank, or drops it (location: None)
+Fishes a chosen method at the spot that offers it (each spot has a pair of ops); banks the catch at the nearest bank, or drops it (location: None). Buy/repair uses Harry in Catherby when closer (lobster pot, bait, nets, harpoon); Gerrant only when needed for feathers/fly rod or when nearer (Port Sarim / Draynor).
 
 Tags: `gathering`, `drop`, `banking`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `fishMethod` | string | `"Small net — shrimp/anchovy"` | Fishing method — one of: Small net — shrimp/anchovy, Bait rod — sardine/herring, Fly fishing — trout/salmon, Bait rod — pike, Big net — mackerel/cod/bass, Lobster cage — lobster, Harpoon — tuna/swordfish, Harpoon — sharks |
-| `leashRadius` | number (2–30) | `12` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Fishing location — one of: Auto, Draynor Village, Catherby, Fishing Guild, None |
+| `fishMethod` | string | `"Small net — shrimp/anchovy"` | Fishing method — one of: Small net — shrimp/anchovy, Bait rod — sardine/herring, Fly fishing — trout/salmon, Bait rod — pike, Big net — mackerel/cod/bass, Lobster cage — lobster, Harpoon — tuna/swordfish, Harpoon — sharks, Oily rod — lava eel |
+| `baitQty` | number (≥1) | `1000` | Bait/feathers buy+withdraw target when the method needs them (hidden for cage/net/harpoon; no upper bound) |
+| `leashRadius` | number (2–40) | `18` | Leash radius (tiles) |
+| `location` | string | `"Auto"` | Fishing location — one of: Auto, Draynor Village, Catherby, Fishing Guild, Taverley Dungeon (lava eels), None |
+| `toolAcquire` | string | `"Off"` | Off or Buy / repair — shops Harry/Gerrant for missing gear + bait up to baitQty |
 
 ## Fletching
 
@@ -699,7 +701,6 @@ Tags: `gathering`, `drop`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `treeName` | string | `"Tree"` | Tree name |
-| `chopAction` | string | `"Chop down"` | Chop action |
 | `leashRadius` | number (3–30) | `15` | Leash radius (tiles) |
 | `bankName` | string | `"Bank booth"` | Bank object name |
 | `bankOp` | string | `"Use-quickly"` | Bank object action |

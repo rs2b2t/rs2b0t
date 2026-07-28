@@ -250,7 +250,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Fisher',
     description:
-        'Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity. Optional Buy/repair buys missing gear/bait/feathers from Gerrant or Harry.',
+        'Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity. Optional Buy/repair buys missing gear from the nearest fishing shop (Harry at Catherby, Gerrant for feathers/fly rod) and can buy bait/feathers up to Bait qty.',
     category: 'Fishing',
     tags: ['gathering', 'drop', 'banking', 'cooking'],
     settingsSchema: {
@@ -261,6 +261,24 @@ ScriptRegistry.register({
             label: 'Fishing method',
             help:
                 'What to fish — picks the right spot (each spot offers a PAIR of ops) and the correct op of the two, e.g. small net (shrimp) vs big net (mackerel).'
+        },
+        baitQty: {
+            type: 'number',
+            default: 1000,
+            min: 1,
+            label: 'Bait / feathers qty',
+            group: 'Tools',
+            showIf: {
+                key: 'fishMethod',
+                anyOf: [
+                    'Bait rod — sardine/herring',
+                    'Fly fishing — trout/salmon',
+                    'Bait rod — pike',
+                    'Oily rod — lava eel'
+                ]
+            },
+            help:
+                'Shown when the method needs bait or feathers. Restock withdraws up to this many from the bank; with Buy/repair, buys up to this many from Harry (bait) or Gerrant (feathers) when bank+inv are short. No upper limit. Ignored for cage/net/harpoon methods.'
         },
         leashRadius: {
             type: 'number',

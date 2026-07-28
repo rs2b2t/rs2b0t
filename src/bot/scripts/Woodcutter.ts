@@ -19,12 +19,6 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
         label: 'Tree name',
         help: 'In-game scenery name to chop (exact match). Pick a common tree from the list.'
     },
-    chopAction: {
-        type: 'string',
-        default: 'Chop down',
-        label: 'Chop action',
-        help: 'Right-click op on the tree (usually Chop down).'
-    },
     leashRadius: GATHERING_SETTINGS.leashRadius,
     location: {
         type: 'string',
