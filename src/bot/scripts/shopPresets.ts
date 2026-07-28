@@ -18,7 +18,9 @@ export const SHOP_PRESETS: ShopPreset[] = [
     { label: "Lowe's arrows — Varrock (Varrock East bank)", keeper: 'Lowe', shopStand: new Tile(3231, 3421, 0), bankStand: new Tile(3251, 3420, 0) },
     { label: "Hickton's arrows — Catherby (Catherby bank)", keeper: 'Hickton', shopStand: new Tile(2821, 3442, 0), bankStand: new Tile(2809, 3441, 0) },
     { label: "Gerrant's feathers — Port Sarim (Draynor bank)", keeper: 'Gerrant', shopStand: new Tile(3013, 3224, 0), bankStand: new Tile(3092, 3243, 0) },
-    { label: "Harry's feathers — Catherby (Catherby bank)", keeper: 'Harry', shopStand: new Tile(2834, 3444, 0), bankStand: new Tile(2809, 3441, 0) }
+    { label: "Harry's fishing — Catherby (Catherby bank)", keeper: 'Harry', shopStand: new Tile(2834, 3444, 0), bankStand: new Tile(2809, 3441, 0) },
+    { label: "Bob's axes — Lumbridge (Draynor bank)", keeper: 'Bob', shopStand: new Tile(3231, 3203, 0), bankStand: new Tile(3093, 3243, 0) },
+    { label: "Nurmof's pickaxes — Dwarven Mine (Falador East bank)", keeper: 'Nurmof', shopStand: new Tile(2997, 9844, 0), bankStand: new Tile(3013, 3355, 0) }
 ];
 
 export function presetByLabel(label: string): ShopPreset | undefined {

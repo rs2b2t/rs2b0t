@@ -22,6 +22,7 @@ import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './Woodcutter.js';
+import { TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
@@ -183,7 +184,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Woodcutter',
     description:
-        'Chops the chosen tree type, then banks logs, drops them, or burns a full load (chop-then-burn). Needs an axe; burn mode also needs a tinderbox (both restock from the bank when Full inventory is Auto).',
+        'Chops the chosen tree type, then banks logs, drops them, or burns a full load (chop-then-burn). Needs an axe; burn mode also needs a tinderbox (both restock from the bank when Full inventory is Auto). Optional Buy/repair acquires axes from Bob or smiths mith+ from bars.',
     category: 'Woodcutting',
     tags: ['gathering', 'banking', 'drop', 'firemaking'],
     settingsSchema: WOODCUTTER_SETTINGS,
@@ -193,7 +194,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Miner',
     description:
-        'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto).',
+        'Mines the selected rock types, then banks the ore at the nearest bank or drops it (power-mining). Needs a pickaxe (best available is restocked from the bank when Full inventory is Auto). Optional Buy/repair acquires picks from Nurmof (and repairs broken picks).',
     category: 'Mining',
     tags: ['gathering', 'banking', 'drop'],
     settingsSchema: {
@@ -213,7 +214,8 @@ ScriptRegistry.register({
             label: 'Full inventory',
             help:
                 'What to do when the pack is full of ore. Auto = bank the ore at the nearest bank and restock a pickaxe if needed. None = power-mine (drop ore; no bank).'
-        }
+        },
+        toolAcquire: TOOL_ACQUIRE_SETTING
     },
     create: () => new GatheringBot()
 });
@@ -248,7 +250,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'Fisher',
     description:
-        'Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity.',
+        'Fishes a chosen method at the spot that offers it; banks the catch, optionally cooks at a nearby range, or drops it. Change Cook mode to reveal fish filter, burnt policy, and (for bank-raw-then-cook) the N quantity. Optional Buy/repair buys missing gear/bait/feathers from Gerrant or Harry.',
     category: 'Fishing',
     tags: ['gathering', 'drop', 'banking', 'cooking'],
     settingsSchema: {
@@ -333,7 +335,8 @@ ScriptRegistry.register({
             showIf: { key: 'cookMode', anyOf: ['Bank raw then cook'] },
             help:
                 'Shown only for Bank raw then cook. Stop = end the script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N.'
-        }
+        },
+        toolAcquire: TOOL_ACQUIRE_SETTING
     },
     create: () => new GatheringBot()
 });

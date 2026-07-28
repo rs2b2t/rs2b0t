@@ -1,0 +1,544 @@
+import Tile from '../api/Tile.js';
+import { AXES, PICKAXES, type ToolReq, type ToolTier } from './Tools.js';
+import type { FishingGearPiece, FishingMethod } from './FishingMethods.js';
+
+/** Coins stack name in inventory/bank. */
+export const COINS = 'Coins';
+
+/** Broken pickaxe (mining random). */
+export const BROKEN_PICKAXE = 'Broken pickaxe';
+
+/**
+ * Broken axe — not always present on every private build, but when it is we
+ * prefer Bob repair over buying another.
+ */
+export const BROKEN_AXE = 'Broken axe';
+
+export const HAMMER = 'Hammer';
+
+export type ToolAcquireMode = 'off' | 'on';
+
+export function parseToolAcquireMode(raw: string | boolean | undefined | null): ToolAcquireMode {
+    if (raw === true) {
+        return 'on';
+    }
+    if (raw === false || raw == null) {
+        return 'off';
+    }
+    const s = String(raw).trim().toLowerCase();
+    if (s === 'on' || s === 'buy / repair' || s === 'buy/repair' || s === 'true' || s === 'yes') {
+        return 'on';
+    }
+    return 'off';
+}
+
+export const TOOL_ACQUIRE_OPTIONS = ['Off', 'Buy / repair'] as const;
+
+/** Shared settings fragment for Miner / Woodcutter / Fisher. */
+export const TOOL_ACQUIRE_SETTING = {
+    type: 'string' as const,
+    default: 'Off',
+    options: [...TOOL_ACQUIRE_OPTIONS],
+    label: 'Acquire tools',
+    group: 'Tools',
+    help:
+        'Off = only use tools already in the bank/pack. Buy / repair = when a usable tool is missing (or a better shop tier is affordable), withdraw coins and buy/repair at Bob (axes), Nurmof (pickaxes), Gerrant/Harry (fishing gear). Broken picks/axes prefer repair at Nurmof/Bob. Mithril+ axes can be smithed when a matching bar + hammer are in the bank.'
+};
+
+export interface ToolVendor {
+    keeper: string;
+    stand: Tile;
+    bankStand: Tile;
+    /** Optional surface hop before underground walk (Nurmof). */
+    hopFrom?: Tile;
+    hopLoc?: string;
+    hopAction?: string;
+}
+
+export interface ShopOffer {
+    name: string;
+    cost: number;
+    vendor: ToolVendor;
+}
+
+/** Bob — Lumbridge axes (bronze–steel) + bronze pick. */
+export const BOB_VENDOR: ToolVendor = {
+    keeper: 'Bob',
+    stand: new Tile(3231, 3203, 0),
+    bankStand: new Tile(3093, 3243, 0) // Draynor
+};
+
+/** Nurmof — dwarven mine pickaxes (bronze–rune). */
+export const NURMOF_VENDOR: ToolVendor = {
+    keeper: 'Nurmof',
+    stand: new Tile(2997, 9844, 0),
+    bankStand: new Tile(3013, 3355, 0), // Falador East
+    hopFrom: new Tile(3019, 3449, 0),
+    hopLoc: 'Trapdoor',
+    hopAction: 'Climb-down'
+};
+
+/** Gerrant — Port Sarim fishing (feathers, fly rod, bait, tools). */
+export const GERRANT_VENDOR: ToolVendor = {
+    keeper: 'Gerrant',
+    stand: new Tile(3013, 3224, 0),
+    bankStand: new Tile(3092, 3243, 0) // Draynor
+};
+
+/** Harry — Catherby fishing (bait, tools, big net; no feathers/fly rod). */
+export const HARRY_VENDOR: ToolVendor = {
+    keeper: 'Harry',
+    stand: new Tile(2834, 3444, 0),
+    bankStand: new Tile(2809, 3441, 0) // Catherby
+};
+
+/** Varrock West anvil for mith+ axes. */
+export const VARROCK_ANVIL_STAND = new Tile(3188, 3425, 0);
+export const VARROCK_ANVIL_BANK = new Tile(3185, 3440, 0);
+
+/** Shop list prices (from shopdb baselines). */
+export const PICKAXE_SHOP_COSTS: Readonly<Record<string, number>> = {
+    'Bronze pickaxe': 1,
+    'Iron pickaxe': 140,
+    'Steel pickaxe': 500,
+    'Mithril pickaxe': 1300,
+    'Adamant pickaxe': 3200,
+    'Rune pickaxe': 32000
+};
+
+export const AXE_SHOP_COSTS: Readonly<Record<string, number>> = {
+    'Bronze axe': 16,
+    'Iron axe': 56,
+    'Steel axe': 200
+};
+
+export const FISHING_SHOP_COSTS: Readonly<Record<string, number>> = {
+    'Small fishing net': 5,
+    'Fishing rod': 5,
+    'Fly fishing rod': 5,
+    Harpoon: 5,
+    'Lobster pot': 20,
+    'Big fishing net': 20,
+    'Fishing bait': 3,
+    Feather: 2
+};
+
+/** Smithing level required to make each axe on an anvil. */
+export const AXE_SMITH_LEVEL: Readonly<Record<string, number>> = {
+    'Bronze axe': 1,
+    'Iron axe': 16,
+    'Steel axe': 31,
+    'Mithril axe': 51,
+    'Adamant axe': 71,
+    'Rune axe': 86
+};
+
+export const AXE_BAR_FOR: Readonly<Record<string, string>> = {
+    'Bronze axe': 'Bronze bar',
+    'Iron axe': 'Iron bar',
+    'Steel axe': 'Steel bar',
+    'Mithril axe': 'Mithril bar',
+    'Adamant axe': 'Adamantite bar',
+    'Rune axe': 'Runite bar'
+};
+
+export type ToolAcquirePlan =
+    | {
+          kind: 'repair';
+          brokenName: string;
+          label: 'pickaxe' | 'axe';
+          vendor: ToolVendor;
+          prefer: string[];
+      }
+    | {
+          kind: 'buy';
+          name: string;
+          cost: number;
+          qty: number;
+          vendor: ToolVendor;
+          equip: boolean;
+          reason: string;
+      }
+    | {
+          kind: 'smith';
+          name: string;
+          bar: string;
+          smithLevel: number;
+          vendorBank: Tile;
+          anvilStand: Tile;
+          equip: boolean;
+          reason: string;
+      };
+
+export interface AcquireWorld {
+    skillLevel: (skill: string) => number;
+    /** Inv + worn count. */
+    heldCount: (name: string) => number;
+    invCount: (name: string) => number;
+    bankCount: (name: string) => number;
+    worn: (name: string) => boolean;
+}
+
+function totalCoins(w: Pick<AcquireWorld, 'invCount' | 'bankCount'>): number {
+    return w.invCount(COINS) + w.bankCount(COINS);
+}
+
+function tierRank(tiers: readonly ToolTier[], name: string): number {
+    const i = tiers.findIndex(t => t.name.toLowerCase() === name.toLowerCase());
+    return i < 0 ? Number.POSITIVE_INFINITY : i;
+}
+
+/** Best tier the player can use that they already own (held or bank). */
+export function bestOwnedTier(
+    level: number,
+    tiers: readonly ToolTier[],
+    count: (name: string) => number
+): string | null {
+    for (const t of tiers) {
+        if (level >= t.level && count(t.name) > 0) {
+            return t.name;
+        }
+    }
+    return null;
+}
+
+export function pickaxeShopOffers(): ShopOffer[] {
+    return Object.entries(PICKAXE_SHOP_COSTS).map(([name, cost]) => ({
+        name,
+        cost,
+        vendor: NURMOF_VENDOR
+    }));
+}
+
+export function axeShopOffers(): ShopOffer[] {
+    return Object.entries(AXE_SHOP_COSTS).map(([name, cost]) => ({
+        name,
+        cost,
+        vendor: BOB_VENDOR
+    }));
+}
+
+/**
+ * Best shop offer the player can use and afford that is strictly better than
+ * `owned` (or any usable tier when owned is null). Tiers are best-first.
+ */
+export function bestAffordableShopTier(
+    level: number,
+    tiers: readonly ToolTier[],
+    offers: readonly ShopOffer[],
+    coins: number,
+    owned: string | null
+): ShopOffer | null {
+    const ownedRank = owned ? tierRank(tiers, owned) : Number.POSITIVE_INFINITY;
+    let best: ShopOffer | null = null;
+    let bestRank = Number.POSITIVE_INFINITY;
+    for (const t of tiers) {
+        if (level < t.level) {
+            continue;
+        }
+        const rank = tierRank(tiers, t.name);
+        if (rank >= ownedRank) {
+            // same or worse than owned
+            continue;
+        }
+        const offer = offers.find(o => o.name.toLowerCase() === t.name.toLowerCase());
+        if (!offer || offer.cost > coins) {
+            continue;
+        }
+        if (rank < bestRank) {
+            best = offer;
+            bestRank = rank;
+        }
+    }
+    return best;
+}
+
+/**
+ * Best axe we can smith from a bar already in bank/inv (mith+ or when Bob is dry).
+ */
+export function bestSmithableAxe(
+    woodcuttingLevel: number,
+    smithingLevel: number,
+    owned: string | null,
+    barCount: (barName: string) => number,
+    hasHammer: boolean
+): { name: string; bar: string; smithLevel: number } | null {
+    if (!hasHammer) {
+        return null;
+    }
+    const ownedRank = owned ? tierRank(AXES, owned) : Number.POSITIVE_INFINITY;
+    for (const t of AXES) {
+        if (woodcuttingLevel < t.level) {
+            continue;
+        }
+        const rank = tierRank(AXES, t.name);
+        if (rank >= ownedRank) {
+            continue;
+        }
+        const needSmith = AXE_SMITH_LEVEL[t.name];
+        const bar = AXE_BAR_FOR[t.name];
+        if (needSmith == null || !bar || smithingLevel < needSmith) {
+            continue;
+        }
+        if (barCount(bar) < 1) {
+            continue;
+        }
+        return { name: t.name, bar, smithLevel: needSmith };
+    }
+    return null;
+}
+
+export function planBrokenToolRepair(
+    heldOrWorn: (name: string) => boolean
+): Extract<ToolAcquirePlan, { kind: 'repair' }> | null {
+    if (heldOrWorn(BROKEN_PICKAXE)) {
+        return {
+            kind: 'repair',
+            brokenName: BROKEN_PICKAXE,
+            label: 'pickaxe',
+            vendor: NURMOF_VENDOR,
+            prefer: ['repair', 'fix', 'fix my', 'yes']
+        };
+    }
+    if (heldOrWorn(BROKEN_AXE)) {
+        return {
+            kind: 'repair',
+            brokenName: BROKEN_AXE,
+            label: 'axe',
+            vendor: BOB_VENDOR,
+            prefer: ['repair', 'fix', 'fix my', 'yes']
+        };
+    }
+    return null;
+}
+
+/**
+ * Plan a pickaxe buy/repair when missing or when a better Nurmof tier is affordable.
+ */
+export function planPickaxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null {
+    const repair = planBrokenToolRepair(n => w.heldCount(n) > 0);
+    if (repair?.label === 'pickaxe') {
+        return repair;
+    }
+
+    const level = w.skillLevel('mining');
+    const owned = bestOwnedTier(level, PICKAXES, n => w.heldCount(n) + w.bankCount(n));
+    if (owned && !opts.upgrade) {
+        return null;
+    }
+    if (!owned || opts.upgrade) {
+        const coins = totalCoins(w);
+        const offer = bestAffordableShopTier(level, PICKAXES, pickaxeShopOffers(), coins, owned);
+        if (offer) {
+            return {
+                kind: 'buy',
+                name: offer.name,
+                cost: offer.cost,
+                qty: 1,
+                vendor: offer.vendor,
+                equip: true,
+                reason: owned ? `upgrade ${owned} → ${offer.name}` : `buy ${offer.name}`
+            };
+        }
+    }
+    return null;
+}
+
+/**
+ * Plan an axe buy/smith when missing or when a better tier is available.
+ * Bob covers bronze–steel; mith+ uses bank bars + hammer at Varrock anvil.
+ */
+export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null {
+    const repair = planBrokenToolRepair(n => w.heldCount(n) > 0);
+    if (repair?.label === 'axe') {
+        return repair;
+    }
+
+    const wc = w.skillLevel('woodcutting');
+    const owned = bestOwnedTier(wc, AXES, n => w.heldCount(n) + w.bankCount(n));
+    if (owned && !opts.upgrade) {
+        return null;
+    }
+
+    const coins = totalCoins(w);
+    const shop = bestAffordableShopTier(wc, AXES, axeShopOffers(), coins, owned);
+
+    const smith = bestSmithableAxe(
+        wc,
+        w.skillLevel('smithing'),
+        owned,
+        bar => w.heldCount(bar) + w.bankCount(bar),
+        w.heldCount(HAMMER) + w.bankCount(HAMMER) > 0
+    );
+
+    // Prefer the better of shop vs smith (lower tier rank = better).
+    type Cand = { rank: number; plan: ToolAcquirePlan };
+    const cands: Cand[] = [];
+    if (shop) {
+        cands.push({
+            rank: tierRank(AXES, shop.name),
+            plan: {
+                kind: 'buy',
+                name: shop.name,
+                cost: shop.cost,
+                qty: 1,
+                vendor: shop.vendor,
+                equip: true,
+                reason: owned ? `upgrade ${owned} → ${shop.name}` : `buy ${shop.name}`
+            }
+        });
+    }
+    if (smith) {
+        cands.push({
+            rank: tierRank(AXES, smith.name),
+            plan: {
+                kind: 'smith',
+                name: smith.name,
+                bar: smith.bar,
+                smithLevel: smith.smithLevel,
+                vendorBank: VARROCK_ANVIL_BANK,
+                anvilStand: VARROCK_ANVIL_STAND,
+                equip: true,
+                reason: owned ? `smith upgrade ${owned} → ${smith.name}` : `smith ${smith.name}`
+            }
+        });
+    }
+    cands.sort((a, b) => a.rank - b.rank);
+    return cands[0]?.plan ?? null;
+}
+
+/** Preferred fishing vendor for a gear piece (feathers/fly → Gerrant; bait prefers Harry). */
+export function fishingVendorFor(name: string): ToolVendor {
+    const n = name.toLowerCase();
+    if (n === 'feather' || n === 'fly fishing rod') {
+        return GERRANT_VENDOR;
+    }
+    if (n === 'fishing bait' || n === 'big fishing net') {
+        return HARRY_VENDOR;
+    }
+    // nets/rods/harpoon/pot — either shop; prefer Harry when Catherby-ish else Gerrant
+    return GERRANT_VENDOR;
+}
+
+export function fishingShopCost(name: string): number | null {
+    const hit = Object.entries(FISHING_SHOP_COSTS).find(([k]) => k.toLowerCase() === name.toLowerCase());
+    return hit ? hit[1] : null;
+}
+
+/**
+ * Plan buys for missing fishing gear pieces (tools + bait stacks).
+ * Returns the first unmet piece that is buyable and affordable.
+ */
+export function planFishingGearAcquire(
+    method: Pick<FishingMethod, 'gear'>,
+    w: AcquireWorld
+): ToolAcquirePlan | null {
+    for (const g of method.gear) {
+        const have = w.heldCount(g.name) + w.bankCount(g.name);
+        if (have >= g.min) {
+            continue;
+        }
+        const unit = fishingShopCost(g.name);
+        if (unit == null) {
+            continue;
+        }
+        const want = Math.max(g.min, Math.min(g.restock, g.restock));
+        const needQty = Math.max(1, want - w.heldCount(g.name));
+        // Cap bait/feather buys so we don't drain the bank on one trip.
+        const qty = g.restock > 1 ? Math.min(needQty, Math.max(g.min, Math.min(100, g.restock))) : 1;
+        const cost = unit * qty;
+        if (totalCoins(w) < cost) {
+            // Try buying just 1 if stack was too expensive.
+            if (qty > 1 && totalCoins(w) >= unit) {
+                return {
+                    kind: 'buy',
+                    name: g.name,
+                    cost: unit,
+                    qty: 1,
+                    vendor: fishingVendorFor(g.name),
+                    equip: false,
+                    reason: `buy 1× ${g.name}`
+                };
+            }
+            continue;
+        }
+        return {
+            kind: 'buy',
+            name: g.name,
+            cost,
+            qty,
+            vendor: fishingVendorFor(g.name),
+            equip: false,
+            reason: `buy ${qty}× ${g.name}`
+        };
+    }
+    return null;
+}
+
+/**
+ * Plan acquire for GatheringBot tool reqs (tiered pick/axe + ignore exact like tinderbox for shop).
+ * `missingOnly` = only when no usable tool owned; otherwise also upgrade.
+ */
+export function planGatherToolAcquire(
+    reqs: readonly ToolReq[],
+    w: AcquireWorld,
+    opts: { upgrade: boolean }
+): ToolAcquirePlan | null {
+    const repair = planBrokenToolRepair(n => w.heldCount(n) > 0);
+    if (repair) {
+        return repair;
+    }
+
+    for (const r of reqs) {
+        if (r.kind !== 'tiered') {
+            continue;
+        }
+        if (r.skill === 'mining') {
+            const plan = planPickaxeAcquire(w, opts);
+            if (plan) {
+                return plan;
+            }
+        }
+        if (r.skill === 'woodcutting') {
+            const plan = planAxeAcquire(w, opts);
+            if (plan) {
+                return plan;
+            }
+        }
+    }
+    return null;
+}
+
+/** Coins to withdraw so inv holds at least `need` (already counting inv coins). */
+export function coinsToWithdraw(need: number, invCoins: number): number {
+    return Math.max(0, need - invCoins);
+}
+
+/** True when bank+inv can cover the plan's coin cost (smith = 0). */
+export function canFundPlan(plan: ToolAcquirePlan, invCoins: number, bankCoins: number): boolean {
+    if (plan.kind === 'repair' || plan.kind === 'smith') {
+        return true;
+    }
+    return invCoins + bankCoins >= plan.cost;
+}
+
+/** Gear names to keep when depositing before a shop/repair trip. */
+export function acquireKeepNames(plan: ToolAcquirePlan, extra: readonly string[] = []): string[] {
+    const keep = new Set<string>([COINS, ...extra]);
+    if (plan.kind === 'repair') {
+        keep.add(plan.brokenName);
+    }
+    if (plan.kind === 'smith') {
+        keep.add(plan.bar);
+        keep.add(HAMMER);
+    }
+    return [...keep];
+}
+
+/** Missing fishing pieces that have a known shop price (for labels). */
+export function shopableMissingFishingGear(
+    gear: readonly FishingGearPiece[],
+    count: (name: string) => number
+): string[] {
+    return gear.filter(g => count(g.name) < g.min && fishingShopCost(g.name) != null).map(g => g.name);
+}

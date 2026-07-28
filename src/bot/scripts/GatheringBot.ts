@@ -81,7 +81,24 @@ import {
     type CookMode
 } from './FishCookLogic.js';
 import { Banking, depositAllExcept } from '../api/Banking.js';
+import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
+import { talkThrough } from '../quests/exec/primitives.js';
+import {
+    BROKEN_AXE,
+    COINS,
+    HAMMER as ACQUIRE_HAMMER,
+    acquireKeepNames,
+    canFundPlan,
+    coinsToWithdraw,
+    parseToolAcquireMode,
+    planFishingGearAcquire,
+    planGatherToolAcquire,
+    type AcquireWorld,
+    type ToolAcquireMode,
+    type ToolAcquirePlan,
+    type ToolVendor
+} from './ToolAcquire.js';
 
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
@@ -181,6 +198,10 @@ export default class GatheringBot extends TaskBot {
     private burnLaneRemain = 0;
     /** True when fireSpot=Auto: burn near start and expand/repath instead of bank strips. */
     private burnLocal = false;
+
+    /** Off | Buy/repair — shop/repair/smith missing gather tools. */
+    private toolAcquire: ToolAcquireMode = 'off';
+    private acquireBackoffUntil = 0;
 
     private xpStart: Record<string, number> = {};
 
@@ -328,6 +349,10 @@ export default class GatheringBot extends TaskBot {
             }
         }
 
+        this.toolAcquire = parseToolAcquireMode(this.settings.str('toolAcquire', 'Off'));
+        if (this.toolAcquire === 'on') {
+            this.log('tools: acquire Buy/repair enabled (shops + broken repair + mith+ axe smith when bars ready)');
+        }
 
         this.gearKeep = this.rebuildGearKeep();
         this.captureXpStart();
@@ -380,12 +405,13 @@ export default class GatheringBot extends TaskBot {
 
         const cookOn = this.fishing && this.cookMode !== 'off' && this.rangeStand !== null;
         const burnOn = this.burnEnabled();
+        const gatherTools = (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
         this.add(
             new ContinueDialog(),
-            ...(this.mining() ? [new ReplacePickaxe(this)] : []),
+            ...(this.mining() || this.woodcutting() ? [new RepairBrokenGatherTool(this)] : []),
             ...(this.fishing ? [new RestockFishingGear(this)] : []),
-            ...((this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing
-                ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this)]
+            ...(gatherTools
+                ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this), new UpgradeGatherTool(this)]
                 : []),
             ...(cookOn ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)] : []),
             ...(burnOn ? createChopBurnTasks(this) : []),
@@ -407,9 +433,322 @@ export default class GatheringBot extends TaskBot {
                 names.add(n);
             }
         }
+        if (this.toolAcquire === 'on') {
+            names.add(COINS);
+            names.add(BROKEN_PICKAXE);
+            names.add(BROKEN_AXE);
+            names.add(ACQUIRE_HAMMER);
+        }
         return [...names];
     }
 
+    toolAcquireEnabled(): boolean {
+        return this.toolAcquire === 'on';
+    }
+
+    acquireWorld(): AcquireWorld {
+        return {
+            skillLevel: this.skillLevel,
+            heldCount: this.heldCount,
+            invCount: name => Inventory.count(name),
+            bankCount: name => (Bank.isOpen() || Bank.loaded() ? Bank.count(name) : 0),
+            worn: name => Equipment.contains(name)
+        };
+    }
+
+    /** Bank counts need an open/loaded bank. Call only after openScriptBank. */
+    acquireWorldWithBank(): AcquireWorld {
+        return {
+            skillLevel: this.skillLevel,
+            heldCount: this.heldCount,
+            invCount: name => Inventory.count(name),
+            bankCount: name => Bank.count(name),
+            worn: name => Equipment.contains(name)
+        };
+    }
+
+    hasBrokenGatherTool(): boolean {
+        return (
+            this.heldCount(BROKEN_PICKAXE) > 0 ||
+            this.heldCount(BROKEN_AXE) > 0 ||
+            Equipment.contains(BROKEN_PICKAXE) ||
+            Equipment.contains(BROKEN_AXE)
+        );
+    }
+
+    markAcquireBackoff(ms = 15_000): void {
+        this.acquireBackoffUntil = Date.now() + ms;
+    }
+
+    acquireReady(): boolean {
+        return this.toolAcquire === 'on' && Date.now() >= this.acquireBackoffUntil;
+    }
+
+    /**
+     * Walk to a tool vendor. Nurmof gets an explicit surface trapdoor hop when
+     * still above ground so pathing does not stall at the mine entrance.
+     */
+    async walkToToolVendor(vendor: ToolVendor, log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        const here = Game.tile();
+        if (
+            vendor.hopFrom &&
+            vendor.hopLoc &&
+            vendor.hopAction &&
+            here &&
+            vendor.stand.z > 9000 &&
+            here.z < 9000 &&
+            Tile.from(here).distanceTo(vendor.stand) > 20
+        ) {
+            log(`acquire: hop ${vendor.hopLoc} @ ${vendor.hopFrom}`);
+            if (!(await Traversal.walkResilient(vendor.hopFrom, { radius: 2, timeoutMs: 90_000, log }))) {
+                return false;
+            }
+            const trap = Locs.query().name(vendor.hopLoc).action(vendor.hopAction).nearest();
+            if (trap) {
+                await trap.interact(vendor.hopAction);
+                await Execution.delayUntil(() => {
+                    const t = Game.tile();
+                    return t !== null && t.z >= 9000;
+                }, 8000);
+            }
+        }
+        return Traversal.walkResilient(vendor.stand, { radius: 4, timeoutMs: 120_000, log });
+    }
+
+    async withdrawCoinsFor(need: number, log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        const inv = Inventory.count(COINS);
+        const take = coinsToWithdraw(need, inv);
+        if (take <= 0) {
+            return true;
+        }
+        if (!Bank.isOpen()) {
+            return false;
+        }
+        const bankGp = Bank.count(COINS);
+        if (bankGp <= 0) {
+            log(`acquire: no coins in bank (need ${need}gp)`);
+            return false;
+        }
+        const amt = Math.min(take, bankGp);
+        log(`acquire: withdraw ${amt}gp`);
+        if (!(await Bank.withdrawX(COINS, amt))) {
+            return false;
+        }
+        return Execution.delayUntil(() => Inventory.count(COINS) >= Math.min(need, inv + amt), 4000);
+    }
+
+    async executeToolAcquirePlan(
+        plan: ToolAcquirePlan,
+        log: (m: string) => void = m => this.log(`  ${m}`)
+    ): Promise<boolean> {
+        if (plan.kind === 'repair') {
+            return this.executeRepairPlan(plan, log);
+        }
+        if (plan.kind === 'buy') {
+            return this.executeBuyPlan(plan, log);
+        }
+        return this.executeSmithPlan(plan, log);
+    }
+
+    private async executeRepairPlan(
+        plan: Extract<ToolAcquirePlan, { kind: 'repair' }>,
+        log: (m: string) => void
+    ): Promise<boolean> {
+        this.setStatus(`repair: ${plan.brokenName} @ ${plan.vendor.keeper}`);
+        this.log(`acquire: repair ${plan.brokenName} via ${plan.vendor.keeper}`);
+
+        if (Equipment.contains(plan.brokenName) && !Inventory.isFull()) {
+            await Equipment.unequip(plan.brokenName);
+        }
+
+        if (!(await this.openBankAt(plan.vendor.bankStand, log))) {
+            log('acquire: could not open bank before repair — trying vendor with what we hold');
+        } else {
+            await Bank.depositAllMatching(name => {
+                const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
+                return name.length > 0 && !keep.has(name.toLowerCase());
+            });
+            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            await this.withdrawCoinsFor(1000, log);
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+        }
+
+        if (this.heldCount(plan.brokenName) <= 0) {
+            log(`acquire: no ${plan.brokenName} held after bank — abort repair`);
+            return false;
+        }
+
+        if (!(await this.walkToToolVendor(plan.vendor, log))) {
+            log(`acquire: could not reach ${plan.vendor.keeper}`);
+            return false;
+        }
+
+        const beforeBroken = this.heldCount(plan.brokenName);
+        if (!(await talkThrough(plan.vendor.keeper, plan.prefer, log))) {
+            log(`acquire: dialogue with ${plan.vendor.keeper} failed — will retry / buy`);
+            return false;
+        }
+        await Execution.delayTicks(2);
+        const afterBroken = this.heldCount(plan.brokenName);
+        if (afterBroken < beforeBroken) {
+            this.log(`acquire: repaired ${plan.brokenName} at ${plan.vendor.keeper}`);
+            return true;
+        }
+        if (plan.label === 'pickaxe' && bestPickaxe(Skills.level('mining'), n => this.heldCount(n) > 0)) {
+            this.log(`acquire: usable pick after ${plan.vendor.keeper} talk`);
+            return true;
+        }
+        log(`acquire: ${plan.vendor.keeper} did not repair — try buy path`);
+        return false;
+    }
+
+    private async executeBuyPlan(
+        plan: Extract<ToolAcquirePlan, { kind: 'buy' }>,
+        log: (m: string) => void
+    ): Promise<boolean> {
+        this.setStatus(`buy: ${plan.qty}× ${plan.name}`);
+        this.log(`acquire: ${plan.reason} @ ${plan.vendor.keeper} (${plan.cost}gp)`);
+
+        if (!(await this.openBankAt(plan.vendor.bankStand, log))) {
+            log('acquire: could not open bank for coins');
+            return false;
+        }
+        await Bank.depositAllMatching(name => {
+            const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
+            return name.length > 0 && !keep.has(name.toLowerCase());
+        });
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+
+        if (!canFundPlan(plan, Inventory.count(COINS), Bank.count(COINS))) {
+            log(`acquire: not enough coins for ${plan.name} (${plan.cost}gp)`);
+            this.markAcquireBackoff(60_000);
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+            return false;
+        }
+        if (!(await this.withdrawCoinsFor(plan.cost, log))) {
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+            return false;
+        }
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+
+        if (!(await this.walkToToolVendor(plan.vendor, log))) {
+            log(`acquire: could not reach ${plan.vendor.keeper}`);
+            return false;
+        }
+        if (!(await Shop.open(plan.vendor.keeper))) {
+            log(`acquire: could not open ${plan.vendor.keeper}'s shop`);
+            return false;
+        }
+        const before = Inventory.count(plan.name);
+        const bought = await Shop.buy(plan.name, plan.qty);
+        await Shop.close();
+        if (bought <= 0 && Inventory.count(plan.name) <= before) {
+            log(`acquire: bought 0× ${plan.name} — stock/coins`);
+            this.markAcquireBackoff(20_000);
+            return false;
+        }
+        this.log(`acquire: bought ${bought || Inventory.count(plan.name) - before}× ${plan.name}`);
+        if (plan.equip) {
+            await this.equipTools([plan.name], log);
+        }
+        return true;
+    }
+
+    private async executeSmithPlan(
+        plan: Extract<ToolAcquirePlan, { kind: 'smith' }>,
+        log: (m: string) => void
+    ): Promise<boolean> {
+        this.setStatus(`smith: ${plan.name}`);
+        this.log(`acquire: ${plan.reason} @ Varrock anvil`);
+
+        if (!(await this.openBankAt(plan.vendorBank, log))) {
+            log('acquire: could not open bank for smith materials');
+            return false;
+        }
+        await Bank.depositAllMatching(name => {
+            const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
+            return name.length > 0 && !keep.has(name.toLowerCase());
+        });
+        await Execution.delayUntil(() => Bank.loaded(), 3000);
+
+        if (Inventory.count(ACQUIRE_HAMMER) < 1) {
+            const h = Bank.items().find(i => (i.name ?? '').toLowerCase() === ACQUIRE_HAMMER.toLowerCase());
+            if (!h) {
+                log('acquire: no hammer for smithing');
+                this.markAcquireBackoff(60_000);
+                await Bank.close();
+                return false;
+            }
+            const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
+            await Bank.withdraw(ACQUIRE_HAMMER, one);
+            await Execution.delayUntil(() => Inventory.count(ACQUIRE_HAMMER) > 0, 3000);
+        }
+        if (Inventory.count(plan.bar) < 1) {
+            const b = Bank.items().find(i => (i.name ?? '').toLowerCase() === plan.bar.toLowerCase());
+            if (!b) {
+                log(`acquire: no ${plan.bar} in bank`);
+                this.markAcquireBackoff(60_000);
+                await Bank.close();
+                return false;
+            }
+            const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
+            await Bank.withdraw(plan.bar, one);
+            await Execution.delayUntil(() => Inventory.count(plan.bar) > 0, 3000);
+        }
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+
+        if (!(await Traversal.walkResilient(plan.anvilStand, { radius: 2, timeoutMs: 90_000, log }))) {
+            log('acquire: could not reach anvil');
+            return false;
+        }
+        const bar = Inventory.first(plan.bar);
+        const anvil = Locs.query().name('Anvil').nearest();
+        if (!bar || !anvil) {
+            log('acquire: missing bar or anvil');
+            return false;
+        }
+        const before = Inventory.count(plan.name);
+        if (!(await bar.useOn(anvil))) {
+            return false;
+        }
+        await Execution.delayUntil(() => ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 6000);
+        if (ChatDialog.isMainMakePanel()) {
+            if (!(await ChatDialog.makeFromPanelMax('Axe'))) {
+                await ChatDialog.makeFromPanelMax(plan.name);
+            }
+        }
+        await Execution.delayUntil(() => Inventory.count(plan.name) > before || !Game.animating(), 12_000);
+        if (Inventory.count(plan.name) <= before) {
+            log(`acquire: smith did not produce ${plan.name}`);
+            this.markAcquireBackoff(20_000);
+            return false;
+        }
+        this.log(`acquire: smithed ${plan.name}`);
+        if (plan.equip) {
+            await this.equipTools([plan.name], log);
+        }
+        return true;
+    }
+
+    async openBankAt(stand: Tile, log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+        return Banking.open({
+            stand,
+            boothName: this.location?.boothName,
+            boothOp: this.location?.boothOp,
+            obstacles: this.cookEnabled() ? this.cookObstacles : (this.location?.obstacles ?? []),
+            log
+        });
+    }
 
     async openScriptBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
         const loc = this.location;
@@ -417,8 +756,6 @@ export default class GatheringBot extends TaskBot {
             stand: loc?.bankStand ?? null,
             boothName: loc?.boothName,
             boothOp: loc?.boothOp,
-
-
             obstacles: this.cookEnabled() ? this.cookObstacles : (loc?.obstacles ?? []),
             log
         });
@@ -1616,59 +1953,116 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
     }
 }
 
-class ReplacePickaxe implements Task {
+/**
+ * Broken pick/axe: prefer Nurmof/Bob repair when Acquire tools is on; else bank
+ * for a replacement pick (legacy). Broken axe without acquire falls through to restock.
+ */
+class RepairBrokenGatherTool implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        return this.bot.mining() && (Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null);
+        if (EventSignal.pending() || Game.inCombat()) {
+            return false;
+        }
+        if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
+            return false;
+        }
+        return this.bot.hasBrokenGatherTool();
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus('pickaxe: fetching replacement');
-        this.bot.log(
-            this.bot.isPowerMode()
-                ? 'pickaxe: broken — power mode nearest-bank replacement'
-                : 'pickaxe: broken — banking for best replacement'
-        );
         const log = (m: string) => this.bot.log(`  ${m}`);
+        const brokenPick = Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null;
+        const brokenAxe = Equipment.contains(BROKEN_AXE) || Inventory.first(BROKEN_AXE) !== null;
 
-        if (Equipment.contains(BROKEN_PICKAXE) && !Inventory.isFull()) {
-            await Equipment.unequip(BROKEN_PICKAXE);
+        if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+            const plan = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorld(), { upgrade: false });
+            if (plan?.kind === 'repair') {
+                const ok = await this.bot.executeToolAcquirePlan(plan, log);
+                if (ok) {
+                    await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                    return;
+                }
+                this.bot.log('acquire: repair failed — falling back to bank/buy');
+            }
         }
 
-        if (!(await this.bot.openScriptBank(log))) {
-            if (this.bot.isPowerMode()) {
-                this.bot.stopMissingGear('could not open nearest bank for pickaxe', ['pickaxe']);
+        // Bank replacement for broken pick (deposit broken, withdraw best).
+        if (brokenPick) {
+            this.bot.setStatus('pickaxe: fetching replacement');
+            this.bot.log(
+                this.bot.isPowerMode()
+                    ? 'pickaxe: broken — power mode nearest-bank replacement'
+                    : 'pickaxe: broken — banking for best replacement'
+            );
+
+            if (Equipment.contains(BROKEN_PICKAXE) && !Inventory.isFull()) {
+                await Equipment.unequip(BROKEN_PICKAXE);
+            }
+
+            if (!(await this.bot.openScriptBank(log))) {
+                if (this.bot.isPowerMode()) {
+                    this.bot.stopMissingGear('could not open nearest bank for pickaxe', ['pickaxe']);
+                    return;
+                }
+                this.bot.log('pickaxe: could not open bank — will retry');
                 return;
             }
-            this.bot.log('pickaxe: could not open bank — will retry');
+
+            await Bank.depositAllMatching(this.bot.restockDepositMatcher());
+            await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
+            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
+            if (!pick) {
+                if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+                    const buy = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
+                        upgrade: false
+                    });
+                    if (buy && buy.kind !== 'repair') {
+                        if (Bank.isOpen()) {
+                            await Bank.close();
+                        }
+                        const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                        if (ok) {
+                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            return;
+                        }
+                    }
+                }
+                this.bot.log('pickaxe: no usable pick in bank — stopping');
+                ScriptRunner.stop();
+                return;
+            }
+            const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === pick.toLowerCase());
+            const one = item ? withdrawOp(item.ops, '1') ?? 'Withdraw-1' : 'Withdraw-1';
+            await Bank.withdraw(pick, one);
+            if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
+                if (this.bot.isPowerMode()) {
+                    this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
+                    return;
+                }
+                this.bot.log('pickaxe: withdraw did not land — will retry');
+                return;
+            }
+            this.bot.log(`pickaxe: replaced with ${pick}`);
+            await this.bot.equipTools([pick], log);
+            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
             return;
         }
 
-        // Clear junk / broken pick; keep other gear names so multi-tool kits survive.
-        await Bank.depositAllMatching(this.bot.restockDepositMatcher());
-        await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
-        const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
-        if (!pick) {
-            this.bot.log('pickaxe: no usable pick in bank — stopping');
-            ScriptRunner.stop();
-            return;
-        }
-        const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === pick.toLowerCase());
-        const one = item ? withdrawOp(item.ops, '1') ?? 'Withdraw-1' : 'Withdraw-1';
-        await Bank.withdraw(pick, one);
-        if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
-            if (this.bot.isPowerMode()) {
-                this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
-                return;
+        if (brokenAxe) {
+            if (Equipment.contains(BROKEN_AXE) && !Inventory.isFull()) {
+                await Equipment.unequip(BROKEN_AXE);
             }
-            this.bot.log('pickaxe: withdraw did not land — will retry');
-            return;
+            if (await this.bot.openScriptBank(log)) {
+                await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_AXE.toLowerCase());
+                await Execution.delayUntil(() => Bank.loaded(), 2000);
+                if (Bank.isOpen()) {
+                    await Bank.close();
+                }
+            }
+            this.bot.log('axe: deposited broken — restock/acquire will fetch a usable axe');
         }
-        this.bot.log(`pickaxe: replaced with ${pick}`);
-        await this.bot.equipTools([pick], log);
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
 
@@ -1686,7 +2080,7 @@ class EnsureGatherToolEquipped implements Task {
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
-        if (this.bot.mining() && (Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null)) {
+        if (this.bot.hasBrokenGatherTool()) {
             return false;
         }
         return this.bot.toolsToEquip().length > 0;
@@ -1710,7 +2104,6 @@ class RestockFishingGear implements Task {
         if (EventSignal.pending() || Game.inCombat()) {
             return false;
         }
-
         if (this.bot.cookEnabled() && (this.bot.isCookingLoad() || this.bot.isCookBatchReady())) {
             return false;
         }
@@ -1762,6 +2155,28 @@ class RestockFishingGear implements Task {
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
             if (still.length > 0) {
+                if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+                    const buy = planFishingGearAcquire(method, this.bot.acquireWorldWithBank());
+                    if (buy) {
+                        if (Bank.isOpen()) {
+                            await Bank.close();
+                        }
+                        const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                        if (ok && this.bot.hasGear()) {
+                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            return;
+                        }
+                        if (ok) {
+                            // Bought one piece; loop will restock again for remaining.
+                            return;
+                        }
+                    } else {
+                        this.bot.log(
+                            `restock: acquire on but cannot fund/shop ${still.join(' / ')} — need coins or stock`
+                        );
+                        this.bot.markAcquireBackoff(30_000);
+                    }
+                }
                 if (power) {
                     this.bot.stopMissingGear('bank has no required fishing gear', still);
                     return;
@@ -1772,6 +2187,9 @@ class RestockFishingGear implements Task {
                 return;
             }
             this.bot.log('restock: gear already topped up');
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
             return;
         }
 
@@ -1807,6 +2225,22 @@ class RestockFishingGear implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
+            if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+                const buy = planFishingGearAcquire(method, this.bot.acquireWorldWithBank());
+                if (buy) {
+                    if (Bank.isOpen()) {
+                        await Bank.close();
+                    }
+                    const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                    if (ok && this.bot.hasGear()) {
+                        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                        return;
+                    }
+                    if (ok) {
+                        return;
+                    }
+                }
+            }
             if (power) {
                 this.bot.stopMissingGear('incomplete after withdraw', still);
                 return;
@@ -1817,7 +2251,10 @@ class RestockFishingGear implements Task {
             return;
         }
 
-        this.bot.log(`restock: fishing gear ok (${this.bot.gearLabel()})`);
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+        this.bot.log(`restock: gear ok (${this.bot.gearLabel()})`);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
     }
 }
@@ -1835,11 +2272,9 @@ class RestockGatherTool implements Task {
         if (EventSignal.pending() || Game.inCombat()) {
             return false;
         }
-
-        if (this.bot.mining() && (Equipment.contains(BROKEN_PICKAXE) || Inventory.first(BROKEN_PICKAXE) !== null)) {
+        if (this.bot.hasBrokenGatherTool()) {
             return false;
         }
-
         if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
             return false;
         }
@@ -1881,6 +2316,26 @@ class RestockGatherTool implements Task {
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
             if (still.length > 0) {
+                if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+                    const buy = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
+                        upgrade: false
+                    });
+                    if (buy) {
+                        if (Bank.isOpen()) {
+                            await Bank.close();
+                        }
+                        const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                        if (ok) {
+                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            return;
+                        }
+                    } else {
+                        this.bot.log(
+                            `restock: acquire on but cannot fund/shop ${still.join(' / ')} — need coins or materials`
+                        );
+                        this.bot.markAcquireBackoff(30_000);
+                    }
+                }
                 if (power) {
                     this.bot.stopMissingGear('bank has no required tools', still);
                     return;
@@ -1935,6 +2390,21 @@ class RestockGatherTool implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
+            if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
+                const buy = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
+                    upgrade: false
+                });
+                if (buy) {
+                    if (Bank.isOpen()) {
+                        await Bank.close();
+                    }
+                    const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                    if (ok) {
+                        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                        return;
+                    }
+                }
+            }
             if (power) {
                 this.bot.stopMissingGear('incomplete after withdraw', still);
                 return;
@@ -1947,6 +2417,72 @@ class RestockGatherTool implements Task {
 
         this.bot.log(`restock: tools ok (${this.bot.gearLabel()})`);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+    }
+}
+
+/**
+ * Optional shop/smith upgrade when Acquire tools is on and a better tier is
+ * affordable (or smithable) than what we already own. Runs only near bank /
+ * away from the spot so we do not abandon a full mining session mid-rock.
+ */
+class UpgradeGatherTool implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (!this.bot.toolAcquireEnabled() || !this.bot.acquireReady()) {
+            return false;
+        }
+        if (this.bot.isFishing() || this.bot.toolReqsList().length === 0) {
+            return false;
+        }
+        if (!this.bot.hasGear() || this.bot.hasBrokenGatherTool()) {
+            return false;
+        }
+        if (EventSignal.pending() || Game.inCombat()) {
+            return false;
+        }
+        if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
+            return false;
+        }
+        // Only leave the spot when already banking / away, or at script start far from anchor.
+        if (!this.bot.awayFromGatherSpot(6) && !Bank.isOpen()) {
+            return false;
+        }
+        return true;
+    }
+
+    async execute(): Promise<void> {
+        const log = (m: string) => this.bot.log(`  ${m}`);
+        if (!Bank.isOpen()) {
+            if (!(await this.bot.openScriptBank(log))) {
+                this.bot.markAcquireBackoff(20_000);
+                return;
+            }
+            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        }
+        const plan = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
+            upgrade: true
+        });
+        if (!plan || plan.kind === 'repair') {
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+            // Nothing better available — do not re-check every tick.
+            this.bot.markAcquireBackoff(120_000);
+            return;
+        }
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+        this.bot.log(`acquire: upgrade opportunity — ${plan.reason}`);
+        const ok = await this.bot.executeToolAcquirePlan(plan, log);
+        if (!ok) {
+            this.bot.markAcquireBackoff(45_000);
+            return;
+        }
+        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+        // After a successful upgrade, cool down so we do not chain shop trips.
+        this.bot.markAcquireBackoff(90_000);
     }
 }
 
