@@ -46,8 +46,8 @@ describe('MINING_LOCATIONS table', () => {
         }
     });
 
-    test('seed catalog starts unverified', () => {
-        expect(MINING_LOCATIONS.every(l => l.verified === false)).toBe(true);
+    test('catalog entries are verified', () => {
+        expect(MINING_LOCATIONS.every(l => l.verified === true)).toBe(true);
     });
 
     test('has CSV core camps', () => {

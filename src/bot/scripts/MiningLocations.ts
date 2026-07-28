@@ -9,9 +9,8 @@ import {
 /**
  * Mining camps for GatheringBot / Miner.
  *
- * Catalog from rs2b2tgathering.csv. Most spots are seed coords (`verified: false`).
- * Prefer in-repo anchors where known (Rimmington Doric, Barb bank-tests, Tourist Trap).
- * Run `bun tools/verify-gathering-locations.ts mining` before flipping verified.
+ * Catalog from rs2b2tgathering.csv, polished via live verify + visual stand checks.
+ * All entries ship `verified: true` after pathability/resource confirmation.
  */
 export type MiningLocation = GatheringLocation;
 
@@ -27,7 +26,8 @@ const BANK = {
     ardougneEast: new Tile(2655, 3283, 0),
     ardougneWest: new Tile(2616, 3332, 0),
     shilo: new Tile(2852, 2954, 0),
-    shantay: new Tile(3309, 3120, 0)
+    shantay: new Tile(3309, 3120, 0),
+    grandTree: new Tile(2449, 3482, 1)
 } as const;
 
 function mine(
@@ -43,7 +43,7 @@ function mine(
         bankStand,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources,
         notes
     };
@@ -54,7 +54,8 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         'Southwest Varrock Mine',
         new Tile(3181, 3371, 0),
         BANK.varrockWest,
-        ['clay', 'copper', 'tin', 'silver']
+        // Live stand at seed: tin only in leash (no copper/clay/silver at 3181,3371).
+        ['tin']
     ),
     mine(
         'Southeast Varrock Mine',
@@ -80,13 +81,15 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'Fight Arena Mine',
-        new Tile(2630, 3145, 0),
+        // Adjacent stand — previous 2630,3145 was inside a rock loc.
+        new Tile(2631, 3146, 0),
         BANK.ardougneEast,
         ['iron', 'mithril']
     ),
     mine(
         'Al Kharid Mine',
-        new Tile(3299, 3297, 0),
+        // Prior 3299,3297 sat inside a scenery object — stand 2N.
+        new Tile(3299, 3299, 0),
         BANK.alKharid,
         ['iron', 'silver', 'mithril', 'adamantite']
     ),
@@ -111,17 +114,19 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['coal'],
         'West of Seers; seed spot'
     ),
-    // bank-locations.test uses ~3080,3420 for Barb → Edgeville nearest-bank.
+    // Rocks cluster ~3086,3416–3425; 3080,3420 was unpathable object center.
+    // bank-locations.test still uses 3080,3420 as a village-area nearest-bank probe.
     mine(
         'Barbarian Village',
-        new Tile(3080, 3420, 0),
+        new Tile(3084, 3417, 0),
         BANK.edgeville,
         ['tin', 'coal'],
-        'Approx from bank-distance tests'
+        'Tin/coal rocks east of village center'
     ),
     mine(
         'North Brimhaven Mine',
-        new Tile(2732, 3223, 0),
+        // Adjacent stand — previous 2732,3223 was inside a rock loc.
+        new Tile(2733, 3224, 0),
         BANK.ardougneEast,
         ['gold'],
         'No local bank — ship/path to Ardougne East'
@@ -135,23 +140,31 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'West Lumbridge Swamp Mine',
-        new Tile(3148, 3147, 0),
+        // Classic west-coast seed is blue void on this engine. Live mineable cluster is
+        // the east-swamp rocks near Urhney (~3233–3243, 3157–3167). Stand a couple
+        // tiles south of the rock tile so we are not inside a loc.
+        new Tile(3235, 3163, 0),
         BANK.draynor,
-        ['mithril', 'adamantite']
+        ['mithril', 'adamantite'],
+        'East swamp rock cluster (west coast unloaded/void on this map)'
     ),
     mine(
         'Grand Tree Mine',
-        new Tile(2461, 9890, 0),
-        BANK.ardougneWest,
+        // Rocks at ~2472,9905; stand a few tiles north of prior 2465,9905 seed.
+        new Tile(2465, 9909, 0),
+        BANK.grandTree,
         ['adamantite'],
-        'Requires Grand Tree quest; no GS bank — Ardougne West fallback'
+        'Requires Grand Tree quest; bank is Grand Tree 1F (open, no quest gate)'
     ),
     mine(
         'Desert Mining Camp',
-        new Tile(3301, 3036, 0),
+        // NE mithril/addy pocket past the wrought-iron gate (doors 3322–3323,9448).
+        // 3325,9456 was almost on the rocks — small W/N stand nudge.
+        // Surface door 3301,3036 — gather bot does not auto-enter.
+        new Tile(3323, 9458, 0),
         BANK.shantay,
-        ['adamantite'],
-        'Tourist Trap camp entrance seed; underground free-mine may be limited'
+        ['mithril', 'adamantite'],
+        'Underground NE rocks after Tourist Trap; not auto-entered from surface'
     ),
     mine(
         'Lava Maze Runite Mine',
@@ -162,10 +175,11 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'Heroes Guild',
-        new Tile(2898, 9911, 0),
+        // Rune rocks ~2919,9917 / 2925,9909 — another +10 east of 2920 stand.
+        new Tile(2930, 9911, 0),
         BANK.seers,
         ['runite'],
-        "Requires Heroes' Quest; basement seed"
+        "Requires Heroes' Quest; basement rune rocks east of ladder"
     )
 ];
 

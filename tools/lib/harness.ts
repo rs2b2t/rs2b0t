@@ -42,13 +42,56 @@ export async function launchBrowser(opts?: { swiftshader?: boolean }): Promise<B
     return chromium.launch({ channel: 'chrome', headless: !headed, slowMo });
 }
 
+/** Cold Playwright profile often spends minutes downloading jag/ondemand assets. */
+const BOOT_MS = Number(process.env.BOOT_MS) || 180_000;
+const LOGIN_MS = Number(process.env.LOGIN_MS) || 120_000;
+
 export function boot(page: Page): Promise<unknown> {
-    return page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60000 });
+    return page.waitForFunction(
+        () =>
+            ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client
+                .constructor.loopCycle ?? 0) > 10,
+        undefined,
+        { timeout: BOOT_MS }
+    );
 }
 
 export async function login(page: Page, user: string, pass = 'test'): Promise<boolean> {
-    await page.evaluate(([u, p]) => { const c = (globalThis as never as Rs2b0t).rs2b0t.client; c.loginUser = u; c.loginPass = p; void c.login(u, p, false); }, [user, pass]);
-    return page.waitForFunction(() => (globalThis as never as Rs2b0t).rs2b0t.client.ingame && (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2, undefined, { timeout: 12000 }).then(() => true).catch(() => false);
+    await page.evaluate(([u, p]) => {
+        const c = (globalThis as never as Rs2b0t).rs2b0t.client;
+        c.loginUser = u;
+        c.loginPass = p;
+        void c.login(u, p, false);
+    }, [user, pass]);
+    return page
+        .waitForFunction(
+            () =>
+                (globalThis as never as Rs2b0t).rs2b0t.client.ingame &&
+                (globalThis as never as Rs2b0t).rs2b0t.client.sceneState === 2,
+            undefined,
+            { timeout: LOGIN_MS }
+        )
+        .then(() => true)
+        .catch(() => false);
+}
+
+/**
+ * Send a client cheat packet (CLIENT_CHEAT / op 224) without keyboard focus.
+ * `command` is the text after `::` — e.g. `tele 0,50,50,20,20`.
+ */
+export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
+    const sent = await page.evaluate(c => {
+        const client = (globalThis as never as Rs2b0t).rs2b0t?.client;
+        if (!client?.ingame || !client.out) {
+            return false;
+        }
+        client.out.p1Enc(224); // ClientProt.CLIENT_CHEAT
+        client.out.p1(c.length + 1);
+        client.out.pjstr(c);
+        return true;
+    }, command);
+    await page.waitForTimeout(waitMs);
+    return sent;
 }
 
 export async function type(page: Page, text: string, waitMs?: number): Promise<void> {
@@ -87,8 +130,10 @@ export type Rs2b0t = {
             loginPass: string;
             sideIcon: number[];
             loginMessage?: string;
+            stream?: { close(): void } | null;
             out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } | null;
             login(u: string, p: string, r: boolean): Promise<void>;
+            logout?(): Promise<void>;
         };
         host: { tickCount: number };
         runner: {

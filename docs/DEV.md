@@ -117,11 +117,39 @@ local engine is up:
 ```bash
 bun run verify:gather-locs                 # all skills
 bun run verify:gather-locs -- fishing      # one skill
+HEADED=1 bun run verify:gather-locs -- fishing   # visible Chrome window
+HEADED=1 SLOWMO=400 bun tools/verify-gathering-locations.ts mining
 ```
 
-The helper teles to each camp, samples rocks/trees/fish in scene, and prints
-PASS/FAIL only — it never edits the tables. Flip `verified: true` by hand once
-the spot and bank stand look right.
+`HEADED=1` is read by `tools/lib/harness.ts` (`launchBrowser`) and opens a real
+Chrome window (default `SLOWMO=200`). Headless is the default.
+
+The helper teles to each camp, waits until `me` is near the seed tile, samples
+rocks/trees/fish in scene, and prints PASS/FAIL only — it never edits the
+tables. A camp only PASSes if arrival succeeded **and** the expected resource
+is in scene (avoids false PASS from leftover fish after a stalled tele). Flip
+`verified: true` by hand once the spot and bank stand look right.
+
+### GatheringBot behaviour smoke
+
+After camps look right, run the live script harness (needs a **fresh deploy** so
+`out/botclient.js` matches `GatheringBot` / location tables):
+
+```bash
+bun run verify:gatheringbot                 # all scenarios
+bun run verify:gatheringbot -- mining       # mine-bank + mine-power + buy-pick
+bun run verify:gatheringbot -- fish-cook
+BUDGET_S=90 bun run verify:gatheringbot -- mine-bank
+HEADED=1 bun tools/gatheringbot-test.ts acquire
+```
+
+Scenarios cover bank/power mine, Draynor fish, Catherby cook-then-bank, Draynor
+chop/bank and chop-then-burn, plus Buy/repair with **coins only** (no pre-granted
+tools). Asserts XP / held products / acquired tools. Exit nonzero on any FAIL.
+
+Seeds use engine `give <obj> <qty>` (this Server tree has no `~item`/`~bankitem`).
+`~clearinv` still works as a content debugproc. Redeploy the bot client yourself
+when script code changes — the harness does not own engine `public/`.
 
 
 ### Hosting the single client (prod)

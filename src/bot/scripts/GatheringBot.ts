@@ -248,6 +248,12 @@ export default class GatheringBot extends TaskBot {
             this.rockIds = resolveRockIds(rocks);
             this.productKeywords = rocks.map(r => r.trim().toLowerCase());
             this.toolReqs = [pickaxeReq()];
+            // Empty multi-select falls back to every ROCK_OPTIONS entry; log so a
+            // wrong ore type (e.g. Copper at tin-only SW Varrock) is obvious.
+            this.log(
+                `rocks: ${rocks.join(', ') || '(none)'} → ${this.rockIds.size} loc id(s)`
+                    + (chosen.length === 0 ? ' [defaulted — multi-select empty]' : '')
+            );
         } else if ('fishMethod' in this.settings.raw()) {
             const method = resolveFishMethod(this.settings.str('fishMethod', FISHING_METHOD_OPTIONS[0]));
             this.targetType = 'npc';
@@ -313,6 +319,15 @@ export default class GatheringBot extends TaskBot {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
+        }
+
+        // After ::tele / zone load, Locs+Npcs are empty for a beat (docs/NAV.md
+        // #level-change-loc-lag). Blank ≠ absent — wait before first gather tick
+        // so we don't idle on "no rocks/trees in leash" with an empty scene.
+        if (this.fishing) {
+            await Execution.delayUntil(() => Npcs.query().results().length > 0, 5000);
+        } else {
+            await Execution.delayUntil(() => Locs.query().results().length > 0, 5000);
         }
 
         this.powerMode = locSetting.toLowerCase() === 'none';
@@ -970,8 +985,9 @@ export default class GatheringBot extends TaskBot {
         }
         this.log(`acquire: bought ${bought || Inventory.count(plan.name) - before}× ${plan.name}`);
         if (plan.equip) {
-            // Shop floor: equip offline; only reopen bank if non-tool gear was displaced.
-            await this.equipTools([plan.name], log, { bankDisplaced: true });
+            // Shop floor: equip offline. Do not walk back to bank just to stash a
+            // displaced bronze tool — next BankCatch / restock deposits surplus.
+            await this.equipTools([plan.name], log, { bankDisplaced: false });
         }
         return true;
     }
@@ -1056,7 +1072,8 @@ export default class GatheringBot extends TaskBot {
         }
         this.log(`acquire: smithed ${plan.name}`);
         if (plan.equip) {
-            await this.equipTools([plan.name], log, { bankDisplaced: true });
+            // Anvil floor: same as shop — don't bank-trip solely for displaced tools.
+            await this.equipTools([plan.name], log, { bankDisplaced: false });
         }
         return true;
     }

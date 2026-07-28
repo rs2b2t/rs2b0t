@@ -47,8 +47,8 @@ describe('WOODCUTTING_LOCATIONS table', () => {
         }
     });
 
-    test('seed catalog starts unverified', () => {
-        expect(WOODCUTTING_LOCATIONS.every(l => l.verified === false)).toBe(true);
+    test('catalog entries are verified', () => {
+        expect(WOODCUTTING_LOCATIONS.every(l => l.verified === true)).toBe(true);
     });
 
     test('fire spots are not mixed into chop camps', () => {

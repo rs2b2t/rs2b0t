@@ -126,9 +126,15 @@ actually paints and that a paused script makes no progress. Screenshots land in
 It does **not** deploy. Deploy first (`bun run b0t`, or
 [`tools/deploy-local.sh`](../tools/deploy-local.sh)) or it loads a stale client.
 
-The other 9 harnesses are per-subsystem and are run individually — a quest chain,
-FireGiant, the hosted wall, relogin, external script loading, a nature-runner soak.
-Several want a real GPU or a special environment rather than a plain local engine.
+The other harnesses are per-subsystem and are run individually — a quest chain,
+FireGiant, GatheringBot (`bun run verify:gatheringbot`), the hosted wall, relogin,
+external script loading, a nature-runner soak. Several want a real GPU or a special
+environment rather than a plain local engine.
+
+```sh
+bun run verify:gatheringbot                 # Miner/Fisher/Woodcutter live paths
+bun run verify:gatheringbot -- mining acquire
+```
 
 ## Writing a harness
 

@@ -5,8 +5,8 @@ import Tile from '../api/Tile.js';
 /**
  * Shared gather camp: leash anchor + bank stand for Fisher / Miner / Woodcutter.
  *
- * Spot/bank coords are often seed data (`verified: false`). Run
- * `bun tools/verify-gathering-locations.ts` before flipping verified.
+ * `verified` marks camps confirmed via live pathability + resource checks
+ * (`bun tools/verify-gathering-locations.ts` + visual stand polish).
  */
 export interface GatheringLocation {
     name: string;

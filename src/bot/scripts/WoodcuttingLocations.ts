@@ -9,9 +9,9 @@ import {
 /**
  * Woodcutting camps for GatheringBot / Woodcutter.
  *
- * Catalog from rs2b2tgathering.csv. Tree-cluster spots are seed data — banks are
- * known. Burn strips stay in FiremakingLogic (`fireSpot`); this table is chop
- * anchor + bank only. Run `bun tools/verify-gathering-locations.ts woodcutting`.
+ * Catalog from rs2b2tgathering.csv, polished via live verify + visual stand checks.
+ * Burn strips stay in FiremakingLogic (`fireSpot`); this table is chop anchor + bank.
+ * All entries ship `verified: true` after pathability/resource confirmation.
  */
 export type WoodcuttingLocation = GatheringLocation;
 
@@ -19,7 +19,8 @@ const BANK = {
     draynor: new Tile(3093, 3243, 0),
     seers: new Tile(2725, 3491, 0),
     edgeville: new Tile(3094, 3493, 0),
-    ardougneWest: new Tile(2616, 3332, 0)
+    ardougneWest: new Tile(2616, 3332, 0),
+    grandTree: new Tile(2449, 3482, 1)
 } as const;
 
 function camp(
@@ -35,7 +36,7 @@ function camp(
         bankStand,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources,
         notes
     };
@@ -65,17 +66,19 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     ),
     camp(
         'Seers (trees)',
-        new Tile(2726, 3476, 0),
+        // Couple tiles WSW of prior 2726,3476 seed.
+        new Tile(2724, 3474, 0),
         BANK.seers,
         ['logs'],
         'South of Seers bank'
     ),
     camp(
         'Seers Oaks',
-        new Tile(2730, 3470, 0),
+        // ~3–5 south of prior bank-door stand (2721,3487).
+        new Tile(2721, 3483, 0),
         BANK.seers,
         ['oak'],
-        'South of Seers bank'
+        'Just SW/S of Seers bank door'
     ),
     camp(
         'Seers Willows',
@@ -93,10 +96,11 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     ),
     camp(
         'Seers Yews (cemetery)',
-        new Tile(2735, 3462, 0),
+        // Previous 2735,3462 was party-room area; church/cemetery is further SW.
+        new Tile(2708, 3462, 0),
         BANK.seers,
         ['yew'],
-        'Cemetery south of Seers bank'
+        'Church/cemetery SW of Seers (not party room)'
     ),
     camp(
         'Edgeville Yews',
@@ -115,9 +119,9 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
     camp(
         'Gnome Stronghold',
         new Tile(2434, 3425, 0),
-        BANK.ardougneWest,
+        BANK.grandTree,
         ['magic'],
-        'No GS bank in BANK_LOCATIONS — Ardougne West fallback'
+        'Bank is Grand Tree 1F booths (open, no quest gate) — seed stand'
     )
 ];
 

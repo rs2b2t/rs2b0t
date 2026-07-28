@@ -81,9 +81,8 @@ describe('FISHING_LOCATIONS table', () => {
         expect(catherby?.obstacles).toContain('door');
     });
 
-    test('only Draynor is verified by default', () => {
-        const verified = FISHING_LOCATIONS.filter(l => l.verified).map(l => l.name);
-        expect(verified).toEqual(['Draynor Village']);
+    test('catalog entries are verified', () => {
+        expect(FISHING_LOCATIONS.every(l => l.verified === true)).toBe(true);
     });
 
     test('Karamja banks at Draynor (no local bank)', () => {

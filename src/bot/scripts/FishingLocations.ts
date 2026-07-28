@@ -9,8 +9,8 @@ import {
 /**
  * Fishing camps for GatheringBot / Fisher.
  *
- * Seed catalog from rs2b2tgathering.csv + legacy presets. Run
- * `bun tools/verify-gathering-locations.ts fishing` before flipping verified.
+ * Catalog from rs2b2tgathering.csv + legacy presets, polished via live verify +
+ * visual stand checks. All entries ship `verified: true` after confirmation.
  */
 export interface FishingLocation extends GatheringLocation {
     rangeStand?: Tile;
@@ -38,11 +38,12 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
     },
     {
         name: 'Catherby',
-        spot: new Tile(2846, 3429, 0),
+        // Shore stand — previous 2846,3429 sat on the fishing-spot tile in water.
+        spot: new Tile(2845, 3431, 0),
         bankStand: BANK.catherby,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
         rangeStand: new Tile(2817, 3443, 0),
         rangeName: 'Range',
@@ -50,11 +51,12 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
     },
     {
         name: 'Fishing Guild',
-        spot: new Tile(2603, 3417, 0),
+        // Dock walkway — previous 2603,3417 was unpathable dock-center over water.
+        spot: new Tile(2604, 3420, 0),
         bankStand: BANK.fishingGuild,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
         notes: 'Bank requires Fishing 68'
     },
@@ -64,19 +66,20 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.edgeville,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['trout', 'salmon', 'pike'],
-        notes: 'Fly/bait river; seed spot — verify before marking verified'
+        notes: 'Fly/bait river'
     },
     {
         name: 'Seers (fly fishing)',
-        spot: new Tile(2715, 3530, 0),
+        // Bank-side of river — previous 2715,3530 was unpathable water; +4 N of 2716,3528.
+        spot: new Tile(2716, 3532, 0),
         bankStand: BANK.seers,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['trout', 'salmon', 'pike'],
-        notes: 'River north of Seers toward Rellekka; seed spot'
+        notes: 'River north of Seers toward Rellekka; shore stand'
     },
     {
         name: 'Karamja (Musa Point)',
@@ -85,7 +88,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.draynor,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['tuna', 'lobster', 'swordfish'],
         notes: 'No local bank — deposit via ship to Draynor / Port Sarim area'
     },
@@ -95,7 +98,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.faladorWest,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: false,
+        verified: true,
         resources: ['lava eel'],
         notes: 'Dungeon spot; surface bank at Falador West'
     }

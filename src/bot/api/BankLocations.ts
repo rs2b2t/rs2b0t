@@ -50,6 +50,9 @@ export const BANK_LOCATIONS: BankLocation[] = [
     { name: 'Shilo Village', tile: new Tile(2852, 2954, 0), requires: { quest: 'Shilo Village' } },
     { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
     { name: 'Shantay Pass', tile: new Tile(3309, 3120, 0) },
+    // Grand Tree 1F bank booths (SE of trunk ladder). Open without Grand Tree quest.
+    // Stand in front of the south booth row; mine still requires the quest.
+    { name: 'Grand Tree', tile: new Tile(2449, 3482, 1) },
     {
         name: 'Duel Arena',
         tile: new Tile(3382, 3269, 0),

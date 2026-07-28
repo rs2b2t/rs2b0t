@@ -8,14 +8,21 @@ test('bank names are unique', () => {
     expect(new Set(names).size).toBe(names.length);
 });
 
-test('every bank centre is a plausible level-0 world tile', () => {
+test('every bank centre is a plausible world tile', () => {
     for (const b of BANK_LOCATIONS) {
-        expect(b.tile.level, b.name).toBe(0);
-        expect(b.tile.x, b.name).toBeGreaterThan(2500);
+        expect(b.tile.level, b.name).toBeGreaterThanOrEqual(0);
+        expect(b.tile.level, b.name).toBeLessThanOrEqual(3);
+        expect(b.tile.x, b.name).toBeGreaterThan(2300);
         expect(b.tile.x, b.name).toBeLessThan(3600);
         expect(b.tile.z, b.name).toBeGreaterThan(2900);
         expect(b.tile.z, b.name).toBeLessThan(3600);
     }
+});
+
+test('Grand Tree bank is 1F at booths (no quest gate)', () => {
+    const gt = BANK_LOCATIONS.find(b => b.name === 'Grand Tree');
+    expect(gt?.tile).toEqual({ x: 2449, z: 3482, level: 1 });
+    expect(gt?.requires).toBeUndefined();
 });
 
 test('Yanille bank centre matches its bank_zones midpoint', () => {
@@ -50,6 +57,10 @@ test('nearestBank returns null when no bank is on the tile level', () => {
     expect(nearestBank({ x: 2612, z: 3092, level: 2 })).toBeNull();
 });
 
+test('nearestBank on Grand Tree 1F picks Grand Tree (ungated)', () => {
+    expect(nearestBank({ x: 2449, z: 3482, level: 1 })?.name).toBe('Grand Tree');
+});
+
 const openOnly = (b: BankLocation): boolean => b.requires === undefined;
 const all = (): boolean => true;
 
@@ -67,6 +78,11 @@ describe('bank entry gates', () => {
     test('Canifis carries its Priest in Peril gate', () => {
         const canifis = BANK_LOCATIONS.find(b => b.name === 'Canifis')!;
         expect(canifis.requires?.quest).toBe('Priest in Peril');
+    });
+
+    test('Grand Tree bank is ungated (mine still needs the quest)', () => {
+        const gt = BANK_LOCATIONS.find(b => b.name === 'Grand Tree')!;
+        expect(gt.requires).toBeUndefined();
     });
 
     test('every other bank is ungated', () => {
@@ -96,7 +112,12 @@ describe('nearestUsableBank', () => {
         expect(picked?.name).toBe('Canifis');
     });
 
-    test('level filter still applies', () => {
-        expect(nearestUsableBank({ x: 2600, z: 3420, level: 1 }, all)).toBeNull();
+    test('level filter still applies (no level-2 banks)', () => {
+        expect(nearestUsableBank({ x: 2600, z: 3420, level: 2 }, all)).toBeNull();
+    });
+
+    test('on Grand Tree 1F, banks at Grand Tree without a quest gate', () => {
+        expect(nearestUsableBank({ x: 2449, z: 3482, level: 1 }, openOnly)?.name).toBe('Grand Tree');
+        expect(nearestUsableBank({ x: 2449, z: 3482, level: 1 }, all)?.name).toBe('Grand Tree');
     });
 });
