@@ -321,6 +321,9 @@ export default class GatheringBot extends TaskBot {
         } else if (!this.powerMode) {
             this.log('location: no preset — nearest bank');
         }
+        if (this.powerMode) {
+            this.log('location: power mode — drop haul; bank only to fetch missing tools (nearest bank)');
+        }
         const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
         this.log(
             `gather: '${this.target}' (${this.action}${pairNote}) leash ${this.leash} @ ${this.anchor}; ${this.fullInventoryNote()}`
@@ -418,6 +421,19 @@ export default class GatheringBot extends TaskBot {
         return 'Gathering';
     }
 
+    private paintAccent(): string {
+        if (this.fishing) {
+            return '#7ec8e3';
+        }
+        if (this.mining()) {
+            return '#e0c36a';
+        }
+        if (this.woodcutting()) {
+            return '#9be05b';
+        }
+        return '#9be05b';
+    }
+
     private paintProductLabel(): string {
         if (this.mining()) {
             return 'Ore';
@@ -441,17 +457,12 @@ export default class GatheringBot extends TaskBot {
         return this.cookMode;
     }
 
-    private paintStatusLine(): string {
-        const s = this.status.trim();
-        if (s.length <= 58) {
+    private paintTitleStatus(): string {
+        const s = this.status.trim() || 'idle';
+        if (s.length <= 40) {
             return s;
         }
-        return `${s.slice(0, 55)}…`;
-    }
-
-    private paintTitle(): string {
-        const at = this.anchor ? ` at (${this.anchor.x}, ${this.anchor.z}, ${this.anchor.level})` : '';
-        return `${this.paintKind()} — ${this.action} [${this.target}]${at}`;
+        return `${s.slice(0, 37)}…`;
     }
 
     private paintModeLabel(): string {
@@ -467,7 +478,48 @@ export default class GatheringBot extends TaskBot {
         if (this.fishing && this.cookMode === 'bank-raw-then-cook') {
             return 'bank→cook';
         }
-        return this.location ? 'bank' : 'bank (nearest)';
+        return this.location ? 'bank' : 'nearest bank';
+    }
+
+    private paintLocLabel(): string {
+        if (this.location) {
+            return this.location.name;
+        }
+        return this.powerMode ? 'power' : 'nearest bank';
+    }
+
+    private paintSkillShort(skill: string): string {
+        switch (skill) {
+            case 'woodcutting':
+                return 'WC';
+            case 'firemaking':
+                return 'FM';
+            case 'fishing':
+                return 'Fish';
+            case 'cooking':
+                return 'Cook';
+            case 'mining':
+                return 'Mine';
+            default:
+                return skill;
+        }
+    }
+
+    private paintSkillTitle(skill: string): string {
+        switch (skill) {
+            case 'woodcutting':
+                return 'Woodcutting';
+            case 'firemaking':
+                return 'Firemaking';
+            case 'fishing':
+                return 'Fishing';
+            case 'cooking':
+                return 'Cooking';
+            case 'mining':
+                return 'Mining';
+            default:
+                return skill;
+        }
     }
 
     private trackedSkills(): string[] {
@@ -497,13 +549,30 @@ export default class GatheringBot extends TaskBot {
         }
     }
 
-    private fmtXpHr(skill: string, mins: number): string {
+    private xpGained(skill: string): number {
         const start = this.xpStart[skill];
-        if (start === undefined || mins <= 0.5) {
+        if (start === undefined) {
+            return 0;
+        }
+        return Math.max(0, Skills.xp(skill) - start);
+    }
+
+    private fmtXpHr(skill: string, mins: number): string {
+        if (this.xpStart[skill] === undefined || mins <= 0.5) {
             return '—';
         }
-        const gained = Math.max(0, Skills.xp(skill) - start);
-        return `${(((gained / mins) * 60) / 1000).toFixed(1)}k`;
+        return `${(((this.xpGained(skill) / mins) * 60) / 1000).toFixed(1)}k`;
+    }
+
+    private fmtXpGained(skill: string): string {
+        const n = this.xpGained(skill);
+        if (n <= 0) {
+            return '+0';
+        }
+        if (n >= 1000) {
+            return `+${(n / 1000).toFixed(1)}k`;
+        }
+        return `+${n}`;
     }
 
     private fullInventoryNote(): string {
@@ -527,61 +596,126 @@ export default class GatheringBot extends TaskBot {
         return `banking ${this.productLabel()} when full`;
     }
 
+    private paintClip(text: string, max = 52): string {
+        const s = text.trim();
+        if (s.length <= max) {
+            return s;
+        }
+        return `${s.slice(0, Math.max(0, max - 1))}…`;
+    }
+
+    private cookPhaseLabel(): string {
+        if (this.cookMode !== 'bank-raw-then-cook') {
+            return this.cookingLoad ? 'cooking' : 'idle';
+        }
+        if (this.inCookBatch) {
+            return this.cookingLoad ? 'cooking' : 'draining';
+        }
+        return 'fishing';
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
-        p.title(this.paintTitle());
-        p.text(this.paintStatusLine(), '#8a919a');
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: this.paintAccent() });
+        p.title(`${this.paintKind()} — ${this.paintTitleStatus()}`);
 
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const catchHr = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
-        p.row(`Runtime ${fmtDuration(mins)}`, `Inv ${Inventory.used()}/28`, catchHr);
-        p.row(`${this.paintProductLabel()} ${this.gathered}`, `Banked ${this.banked}`, `Trips ${this.trips}`);
+        const rate = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
+        const product = this.paintProductLabel();
+        const cookOn = this.fishing && this.cookMode !== 'off';
+        const burnOn = this.chopping && this.burnMode !== 'off';
 
-        const xpBits = this.trackedSkills().map(sk => {
-            const short =
-                sk === 'woodcutting'
-                    ? 'WC'
-                    : sk === 'firemaking'
-                      ? 'FM'
-                      : sk === 'fishing'
-                        ? 'Fish'
-                        : sk === 'cooking'
-                          ? 'Cook'
-                          : sk === 'mining'
-                            ? 'Mine'
-                            : sk;
-            return `${short} ${this.fmtXpHr(sk, mins)}/hr`;
-        });
-        if (xpBits.length === 1) {
-            p.row(xpBits[0]);
-        } else if (xpBits.length === 2) {
-            p.row(xpBits[0], xpBits[1]);
-        } else if (xpBits.length >= 3) {
-            p.row(xpBits[0], xpBits[1], xpBits[2]);
+        const tabNames = ['Overview', 'Skills'];
+        if (cookOn) {
+            tabNames.push('Cook');
         }
-
-        if (this.mining() && this.gems > 0) {
-            p.row(`Gems ${this.gems}`);
+        if (burnOn) {
+            tabNames.push('Burn');
         }
+        tabNames.push('Setup');
 
-        const loc = this.location?.name ?? (this.powerMode ? null : 'nearest bank');
-        if (loc) {
-            p.text(`Loc ${loc} · ${this.paintModeLabel()}`);
-        } else if (this.powerMode) {
-            p.text(`Mode ${this.paintModeLabel()}`);
-        }
+        const tab = p.tabs('gb', tabNames);
 
-        if (this.cookMode !== 'off' && this.fishing) {
-            const filter = this.cookFishFilter || 'all raw';
-            p.row(`Cook ${this.paintCookMode()}`, `Cooked ${this.cooked}`, `Filter ${filter}`);
-            if (this.cookMode === 'bank-raw-then-cook') {
-                const phase = this.inCookBatch ? (this.cookingLoad ? 'cooking' : 'draining') : 'fishing';
-                p.row(`Raw bank ${this.bankRawInBank}/${this.bankRawTarget}`, `Batch ${phase}`);
+        if (tab === 'Overview') {
+            p.row(`Runtime: ${fmtDuration(mins)}`, `${product}: ${this.gathered}`, rate);
+            const third =
+                this.mining() && this.gems > 0
+                    ? `Gems: ${this.gems}`
+                    : cookOn
+                      ? `Cooked: ${this.cooked}`
+                      : burnOn
+                        ? `Fires: ${this.firesLit}`
+                        : `Inv: ${Inventory.used()}/28`;
+            p.row(`Banked: ${this.banked}`, `Trips: ${this.trips}`, third);
+            p.bar('Pack', Inventory.used() / 28);
+
+            const skills = this.trackedSkills();
+            if (skills.length === 1) {
+                const sk = skills[0];
+                p.row(
+                    `${this.paintSkillShort(sk)}: ${Skills.level(sk)}`,
+                    `XP/hr: ${this.fmtXpHr(sk, mins)}`,
+                    this.fmtXpGained(sk)
+                );
+            } else if (skills.length >= 2) {
+                p.row(
+                    ...skills.slice(0, 3).map(sk => `${this.paintSkillShort(sk)} ${this.fmtXpHr(sk, mins)}/hr`)
+                );
             }
-        }
 
-        if (this.burnMode !== 'off' && this.chopping) {
-            p.row(`Fires ${this.firesLit}`, `Spot ${this.burnSpotName || '—'}`);
+            p.text(this.paintClip(`${this.action} · ${this.target} · ${this.paintLocLabel()}`), '#8a919a');
+        } else if (tab === 'Skills') {
+            const skills = this.trackedSkills();
+            if (skills.length === 0) {
+                p.text('no tracked skills', '#8a919a');
+            } else {
+                for (const sk of skills) {
+                    p.row(
+                        `${this.paintSkillTitle(sk)} ${Skills.level(sk)}`,
+                        `XP/hr: ${this.fmtXpHr(sk, mins)}`,
+                        this.fmtXpGained(sk)
+                    );
+                }
+            }
+            p.text(this.paintClip(`session ${fmtDuration(mins)} · ${product} ${this.gathered} (${rate})`), '#8a919a');
+        } else if (tab === 'Cook') {
+            p.row(`Mode: ${this.paintCookMode()}`, `Cooked: ${this.cooked}`, `Filter: ${this.cookFishFilter || 'all raw'}`);
+            if (this.cookMode === 'bank-raw-then-cook') {
+                p.row(
+                    `Raw bank: ${this.bankRawInBank}/${this.bankRawTarget}`,
+                    `Phase: ${this.cookPhaseLabel()}`,
+                    `After: ${this.afterCook}`
+                );
+            } else {
+                p.row(`Phase: ${this.cookPhaseLabel()}`, `Burnt: ${this.burntPolicy}`);
+            }
+            p.row(`Cook XP/hr: ${this.fmtXpHr('cooking', mins)}`, this.fmtXpGained('cooking'));
+            if (this.rangeStand) {
+                p.text(
+                    this.paintClip(
+                        `Range: ${this.rangeName} @ (${this.rangeStand.x}, ${this.rangeStand.z}, ${this.rangeStand.level})`
+                    ),
+                    '#8a919a'
+                );
+            } else {
+                p.text('Range: not resolved', '#8a919a');
+            }
+        } else if (tab === 'Burn') {
+            p.row(`Mode: ${this.burnMode}`, `Fires: ${this.firesLit}`, `Logs: ${this.burnLogs}`);
+            p.row(`Spot: ${this.burnSpotName || '—'}`, `FM XP/hr: ${this.fmtXpHr('firemaking', mins)}`);
+            p.row(this.fmtXpGained('firemaking'), this.hasTinderbox() ? 'Tinderbox: yes' : 'Tinderbox: missing');
+            p.text(this.paintClip(this.fullInventoryNote()), '#8a919a');
+        } else {
+            // Setup
+            p.row(`Loc: ${this.paintLocLabel()}`, `Mode: ${this.paintModeLabel()}`);
+            p.row(`Action: ${this.action}`, `Target: ${this.target}`);
+            p.row(`Leash: ${this.leash}`, `Gear: ${this.paintClip(this.gearLabel(), 22)}`);
+            if (this.anchor) {
+                p.text(
+                    `Anchor: (${this.anchor.x}, ${this.anchor.z}, ${this.anchor.level})`,
+                    '#8a919a'
+                );
+            }
+            p.text(this.paintClip(this.fullInventoryNote()), '#8a919a');
         }
 
         p.gap();
@@ -633,6 +767,26 @@ export default class GatheringBot extends TaskBot {
     }
     isPowerMode(): boolean {
         return this.powerMode;
+    }
+
+    /** True when standing outside the gather leash (startup / after bank). */
+    awayFromGatherSpot(slack = 4): boolean {
+        return !tileWithinLeash(this, Game.tile() ?? this.getAnchor(), slack);
+    }
+
+    /**
+     * Power-mode tool trips clear the pack first (keep only gear names), then withdraw.
+     * Bank mode keeps the same deposit-except-gear behaviour.
+     */
+    restockDepositMatcher(): (name: string) => boolean {
+        return depositAllExcept(this.gearKeepNamesList());
+    }
+
+    stopMissingGear(reason: string, missing: string[]): void {
+        const need = missing.join(' + ') || this.gearLabel();
+        this.setStatus(`restock: stop — ${need}`);
+        this.log(`restock: ${reason} — need ${need}; stopping`);
+        ScriptRunner.stop();
     }
 
     heldItemNames(): string[] {
@@ -1333,14 +1487,12 @@ class ReplacePickaxe implements Task {
     }
 
     async execute(): Promise<void> {
-        if (this.bot.isPowerMode()) {
-            this.bot.setStatus('pickaxe broke — power mode has no bank');
-            this.bot.log('pickaxe: broken under power mode — stopping (switch Full inventory to Auto to restock)');
-            ScriptRunner.stop();
-            return;
-        }
         this.bot.setStatus('pickaxe: fetching replacement');
-        this.bot.log('pickaxe: broken — banking for best replacement');
+        this.bot.log(
+            this.bot.isPowerMode()
+                ? 'pickaxe: broken — power mode nearest-bank replacement'
+                : 'pickaxe: broken — banking for best replacement'
+        );
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (Equipment.contains(BROKEN_PICKAXE) && !Inventory.isFull()) {
@@ -1348,10 +1500,16 @@ class ReplacePickaxe implements Task {
         }
 
         if (!(await this.bot.openScriptBank(log))) {
+            if (this.bot.isPowerMode()) {
+                this.bot.stopMissingGear('could not open nearest bank for pickaxe', ['pickaxe']);
+                return;
+            }
             this.bot.log('pickaxe: could not open bank — will retry');
             return;
         }
 
+        // Clear junk / broken pick; keep other gear names so multi-tool kits survive.
+        await Bank.depositAllMatching(this.bot.restockDepositMatcher());
         await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
@@ -1364,6 +1522,10 @@ class ReplacePickaxe implements Task {
         const one = item ? withdrawOp(item.ops, '1') ?? 'Withdraw-1' : 'Withdraw-1';
         await Bank.withdraw(pick, one);
         if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
+            if (this.bot.isPowerMode()) {
+                this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
+                return;
+            }
             this.bot.log('pickaxe: withdraw did not land — will retry');
             return;
         }
@@ -1377,7 +1539,7 @@ class RestockFishingGear implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        if (!this.bot.isFishing() || this.bot.hasGear() || this.bot.isPowerMode()) {
+        if (!this.bot.isFishing() || this.bot.hasGear()) {
             return false;
         }
         if (EventSignal.pending() || Game.inCombat()) {
@@ -1387,6 +1549,8 @@ class RestockFishingGear implements Task {
         if (this.bot.cookEnabled() && (this.bot.isCookingLoad() || this.bot.isCookBatchReady())) {
             return false;
         }
+        // Power mode only leaves the spot for tools when already away, or at start with no gear.
+        // If somehow gear is lost on-spot, still allow the trip (missing gear is fatal otherwise).
         return this.bot.fishMethodDef() !== null;
     }
 
@@ -1396,11 +1560,20 @@ class RestockFishingGear implements Task {
             return;
         }
         const missing = this.bot.missingGearNames();
+        const power = this.bot.isPowerMode();
         this.bot.setStatus(`restock: ${missing.join(' + ') || this.bot.gearLabel()}`);
-        this.bot.log(`restock: missing ${missing.join(', ') || this.bot.gearLabel()}`);
+        this.bot.log(
+            power
+                ? `restock: power mode — nearest bank for ${missing.join(', ') || this.bot.gearLabel()}`
+                : `restock: missing ${missing.join(', ') || this.bot.gearLabel()}`
+        );
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (!(await this.bot.openScriptBank(log))) {
+            if (power) {
+                this.bot.stopMissingGear('could not open nearest bank', missing);
+                return;
+            }
             this.bot.log('restock: could not open bank — will retry');
             await Execution.delayTicks(3);
             return;
@@ -1408,8 +1581,11 @@ class RestockFishingGear implements Task {
         await Execution.delay(bankHumanDelayMs());
         await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
 
-
-        await Bank.depositAllMatching(depositAllExcept(this.bot.gearKeepNamesList()));
+        // Deposit everything that is not required gear (clears haul / junk before tool withdraw).
+        if (power || this.bot.awayFromGatherSpot()) {
+            this.bot.log('restock: depositing non-gear first');
+        }
+        await Bank.depositAllMatching(this.bot.restockDepositMatcher());
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         await Execution.delayTicks(1);
 
@@ -1420,15 +1596,17 @@ class RestockFishingGear implements Task {
         );
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
-            this.bot.log(
-                still.length > 0
-                    ? `restock: bank has no ${still.join(' / ')} — deposit gear or switch method`
-                    : 'restock: gear already topped up'
-            );
             if (still.length > 0) {
+                if (power) {
+                    this.bot.stopMissingGear('bank has no required fishing gear', still);
+                    return;
+                }
                 this.bot.setStatus(`restock: missing in bank ${still.join(' + ')}`);
+                this.bot.log(`restock: bank has no ${still.join(' / ')} — deposit gear or switch method`);
                 await Execution.delayTicks(8);
+                return;
             }
+            this.bot.log('restock: gear already topped up');
             return;
         }
 
@@ -1443,7 +1621,6 @@ class RestockFishingGear implements Task {
                 this.bot.log(`restock: withdraw 1× ${step.name}`);
                 await Bank.withdraw(step.name, one);
             } else if (step.qty >= 50) {
-
                 const all = withdrawOp(item.ops, 'all');
                 if (all && Bank.count(step.name) <= step.qty) {
                     this.bot.log(`restock: withdraw all ${step.name} (${Bank.count(step.name)})`);
@@ -1465,6 +1642,10 @@ class RestockFishingGear implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
+            if (power) {
+                this.bot.stopMissingGear('incomplete after withdraw', still);
+                return;
+            }
             this.bot.setStatus(`restock: still missing ${still.join(' + ')}`);
             this.bot.log(`restock: incomplete — need ${still.join(', ')}`);
             await Execution.delayTicks(5);
@@ -1480,7 +1661,7 @@ class RestockGatherTool implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        if (this.bot.isFishing() || this.bot.hasGear() || this.bot.isPowerMode()) {
+        if (this.bot.isFishing() || this.bot.hasGear()) {
             return false;
         }
         if (this.bot.toolReqsList().length === 0) {
@@ -1503,11 +1684,20 @@ class RestockGatherTool implements Task {
     async execute(): Promise<void> {
         const missing = this.bot.missingGearNames();
         const label = missing.join(' + ') || this.bot.gearLabel();
+        const power = this.bot.isPowerMode();
         this.bot.setStatus(`restock: ${label}`);
-        this.bot.log(`restock: missing ${label}`);
+        this.bot.log(
+            power
+                ? `restock: power mode — nearest bank for ${label}`
+                : `restock: missing ${label}`
+        );
         const log = (m: string) => this.bot.log(`  ${m}`);
 
         if (!(await this.bot.openScriptBank(log))) {
+            if (power) {
+                this.bot.stopMissingGear('could not open nearest bank', missing);
+                return;
+            }
             this.bot.log(`restock: could not open bank for ${label} — will retry`);
             await Execution.delayTicks(3);
             return;
@@ -1515,21 +1705,27 @@ class RestockGatherTool implements Task {
         await Execution.delay(bankHumanDelayMs());
         await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
 
-
-        await Bank.depositAllMatching(depositAllExcept(this.bot.gearKeepNamesList()));
+        if (power || this.bot.awayFromGatherSpot()) {
+            this.bot.log('restock: depositing non-gear first');
+        }
+        await Bank.depositAllMatching(this.bot.restockDepositMatcher());
         await Execution.delayUntil(() => Bank.loaded(), 3000);
         await Execution.delayTicks(1);
 
         const plan = this.bot.gatherToolRestockPlan();
         if (plan.length === 0) {
             const still = this.bot.missingGearNames();
-            this.bot.setStatus(`restock: no ${still.join(' / ') || label} in bank`);
-            this.bot.log(
-                still.length > 0
-                    ? `restock: bank has no ${still.join(' / ')} — deposit tools and restart`
-                    : 'restock: tools already topped up'
-            );
-            await Execution.delayTicks(8);
+            if (still.length > 0) {
+                if (power) {
+                    this.bot.stopMissingGear('bank has no required tools', still);
+                    return;
+                }
+                this.bot.setStatus(`restock: no ${still.join(' / ') || label} in bank`);
+                this.bot.log(`restock: bank has no ${still.join(' / ')} — deposit tools and restart`);
+                await Execution.delayTicks(8);
+                return;
+            }
+            this.bot.log('restock: tools already topped up');
             return;
         }
 
@@ -1559,6 +1755,10 @@ class RestockGatherTool implements Task {
 
         if (!this.bot.hasGear()) {
             const still = this.bot.missingGearNames();
+            if (power) {
+                this.bot.stopMissingGear('incomplete after withdraw', still);
+                return;
+            }
             this.bot.setStatus(`restock: still missing ${still.join(' + ')}`);
             this.bot.log(`restock: incomplete — need ${still.join(', ')}`);
             await Execution.delayTicks(5);
