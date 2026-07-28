@@ -174,6 +174,8 @@ export default class GatheringBot extends TaskBot {
     private firesLit = 0;
     private burnLaneRemain = 0;
 
+    private xpStart: Record<string, number> = {};
+
     private rejected = new Set<string>();
     private cooldownUntil = new Map<string, number>();
 
@@ -308,6 +310,7 @@ export default class GatheringBot extends TaskBot {
 
 
         this.gearKeep = this.rebuildGearKeep();
+        this.captureXpStart();
 
         if (this.location) {
             const auto = locSetting.toLowerCase() === 'auto' ? ' (auto)' : '';
@@ -319,14 +322,8 @@ export default class GatheringBot extends TaskBot {
             this.log('location: no preset — nearest bank');
         }
         const pairNote = this.pairOp ? ` + pair '${this.pairOp}'` : '';
-        const fullNote =
-            this.burnMode === 'chop-then-burn'
-                ? 'burning'
-                : this.powerMode
-                  ? 'dropping'
-                  : 'banking';
         this.log(
-            `gather: '${this.target}' (${this.action}${pairNote}) leash ${this.leash} @ ${this.anchor}; ${fullNote} ${this.productLabel()} when full`
+            `gather: '${this.target}' (${this.action}${pairNote}) leash ${this.leash} @ ${this.anchor}; ${this.fullInventoryNote()}`
         );
 
         this.on('inventory.changed', e => {
@@ -452,26 +449,126 @@ export default class GatheringBot extends TaskBot {
         return `${s.slice(0, 55)}…`;
     }
 
+    private paintTitle(): string {
+        const at = this.anchor ? ` at (${this.anchor.x}, ${this.anchor.z}, ${this.anchor.level})` : '';
+        return `${this.paintKind()} — ${this.action} [${this.target}]${at}`;
+    }
+
+    private paintModeLabel(): string {
+        if (this.powerMode) {
+            return 'drop';
+        }
+        if (this.burnMode === 'chop-then-burn') {
+            return 'burn';
+        }
+        if (this.fishing && this.cookMode === 'cook-then-bank') {
+            return 'cook→bank';
+        }
+        if (this.fishing && this.cookMode === 'bank-raw-then-cook') {
+            return 'bank→cook';
+        }
+        return this.location ? 'bank' : 'bank (nearest)';
+    }
+
+    private trackedSkills(): string[] {
+        const skills: string[] = [];
+        if (this.fishing) {
+            skills.push('fishing');
+        }
+        if (this.mining()) {
+            skills.push('mining');
+        }
+        if (this.woodcutting()) {
+            skills.push('woodcutting');
+        }
+        if (this.fishing && this.cookMode !== 'off') {
+            skills.push('cooking');
+        }
+        if (this.chopping && this.burnMode !== 'off') {
+            skills.push('firemaking');
+        }
+        return skills;
+    }
+
+    private captureXpStart(): void {
+        this.xpStart = {};
+        for (const skill of this.trackedSkills()) {
+            this.xpStart[skill] = Skills.xp(skill);
+        }
+    }
+
+    private fmtXpHr(skill: string, mins: number): string {
+        const start = this.xpStart[skill];
+        if (start === undefined || mins <= 0.5) {
+            return '—';
+        }
+        const gained = Math.max(0, Skills.xp(skill) - start);
+        return `${(((gained / mins) * 60) / 1000).toFixed(1)}k`;
+    }
+
+    private fullInventoryNote(): string {
+        if (this.burnMode === 'chop-then-burn') {
+            return `burning ${this.burnLogs} when full`;
+        }
+        if (this.powerMode) {
+            return `dropping ${this.productLabel()} when full`;
+        }
+        if (this.fishing && this.cookMode === 'cook-then-bank') {
+            const filter = cookFilterLabel(this.cookFishFilter);
+            if (this.cookFishFilter) {
+                return `cook ${filter} then bank (other raw banked as-is) when full`;
+            }
+            return 'cook then bank when full';
+        }
+        if (this.fishing && this.cookMode === 'bank-raw-then-cook') {
+            const filter = cookFilterLabel(this.cookFishFilter);
+            return `bank ${filter} to ${this.bankRawTarget} then cook batches`;
+        }
+        return `banking ${this.productLabel()} when full`;
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
-        p.title(this.paintKind());
+        p.title(this.paintTitle());
         p.text(this.paintStatusLine(), '#8a919a');
 
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const perHr = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
-        p.row(`Runtime ${fmtDuration(mins)}`, `Inv ${Inventory.used()}/28`, perHr);
+        const catchHr = mins > 0.5 ? `${Math.round((this.gathered / mins) * 60)}/hr` : '—/hr';
+        p.row(`Runtime ${fmtDuration(mins)}`, `Inv ${Inventory.used()}/28`, catchHr);
         p.row(`${this.paintProductLabel()} ${this.gathered}`, `Banked ${this.banked}`, `Trips ${this.trips}`);
+
+        const xpBits = this.trackedSkills().map(sk => {
+            const short =
+                sk === 'woodcutting'
+                    ? 'WC'
+                    : sk === 'firemaking'
+                      ? 'FM'
+                      : sk === 'fishing'
+                        ? 'Fish'
+                        : sk === 'cooking'
+                          ? 'Cook'
+                          : sk === 'mining'
+                            ? 'Mine'
+                            : sk;
+            return `${short} ${this.fmtXpHr(sk, mins)}/hr`;
+        });
+        if (xpBits.length === 1) {
+            p.row(xpBits[0]);
+        } else if (xpBits.length === 2) {
+            p.row(xpBits[0], xpBits[1]);
+        } else if (xpBits.length >= 3) {
+            p.row(xpBits[0], xpBits[1], xpBits[2]);
+        }
 
         if (this.mining() && this.gems > 0) {
             p.row(`Gems ${this.gems}`);
         }
 
-        if (this.location) {
-            p.row(`Loc ${this.location.name}`, this.powerMode ? 'Mode drop' : 'Mode bank');
+        const loc = this.location?.name ?? (this.powerMode ? null : 'nearest bank');
+        if (loc) {
+            p.text(`Loc ${loc} · ${this.paintModeLabel()}`);
         } else if (this.powerMode) {
-            p.row('Mode drop');
-        } else if (this.mining() || this.woodcutting() || this.fishing) {
-            p.row('Mode bank (nearest)');
+            p.text(`Mode ${this.paintModeLabel()}`);
         }
 
         if (this.cookMode !== 'off' && this.fishing) {
