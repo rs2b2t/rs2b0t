@@ -552,7 +552,7 @@ export default defineBot({
     name: 'Miner',
     settingsSchema: {
         rock:  { type: 'string', default: 'Copper rocks', label: 'Rock', options: ['Copper rocks', 'Tin rocks'] },
-        world: { type: 'boolean', default: true, label: 'World-hop when crowded' },
+        power: { type: 'boolean', default: false, label: 'Power mine (drop ore)' },
         // or spread PERIODIC_BANK_SETTINGS into combat scripts
     },
     create: () => new Miner(),

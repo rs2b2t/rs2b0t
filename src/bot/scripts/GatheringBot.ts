@@ -1953,6 +1953,9 @@ class RestockGatherTool implements Task {
 class Gather implements Task {
     constructor(private bot: GatheringBot) {}
 
+    /** NPC index of the spot we last successfully started fishing on (null = no active session). */
+    private activeFishIndex: number | null = null;
+
     private spotCandidate(n: { id: number; tile: () => Tile; actions: () => string[] }, maxDist: number): boolean {
         const t = n.tile();
         return (
@@ -2122,23 +2125,31 @@ class Gather implements Task {
 
     private async executeFish(): Promise<void> {
         const target = this.findSpot();
-        // Spot gone/out of leash but primaryAnim still rolling — wait it out before re-click.
-        // (Whirlpool has its own flee path; this is just "anim leftover after hop/despawn".)
-        if (!target && Game.animating()) {
-            this.bot.setStatus('fish: finishing cast (no spot)');
-            await Execution.delayUntil(
-                () => !Game.animating() || EventSignal.pending() || Inventory.isFull() || Game.inCombat() || ChatDialog.canContinue(),
-                8000
-            );
-            return;
-        }
+
         if (!target) {
-            // Pier hop: spot left the leash but is still nearby — walk to it instead of idling.
+            this.activeFishIndex = null;
+            // Pier hop: chase a nearby out-of-leash spot immediately — don't wait out leftover cast anim.
             const hunt = this.findHuntSpot();
             if (hunt) {
                 const ht = hunt.tile();
                 this.bot.setStatus(`fish: hunting spot @ ${ht}`);
                 await Traversal.walkTo(ht, { radius: 1, timeoutMs: 20_000 });
+                return;
+            }
+            // No hunt target either. Short finishing-cast wait, waking if a spot reappears.
+            if (Game.animating()) {
+                this.bot.setStatus('fish: finishing cast (no spot)');
+                await Execution.delayUntil(
+                    () =>
+                        !Game.animating() ||
+                        this.findSpot() !== null ||
+                        this.findHuntSpot() !== null ||
+                        EventSignal.pending() ||
+                        Inventory.isFull() ||
+                        Game.inCombat() ||
+                        ChatDialog.canContinue(),
+                    2500
+                );
                 return;
             }
             this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of anchor`);
@@ -2150,11 +2161,36 @@ class Gather implements Task {
         const startTile = target.tile();
         const key = keyOf(startTile);
 
+        // Leftover cast anim from a previous spot — don't bind a long session to the new index.
+        // Wait briefly for idle (or this spot to die), then re-click on the next pass.
+        if (Game.animating() && this.activeFishIndex !== index) {
+            this.bot.setStatus('fish: clearing cast before re-click');
+            await Execution.delayUntil(
+                () =>
+                    !Game.animating() ||
+                    this.fishingBroken(index, startTile) ||
+                    EventSignal.pending() ||
+                    Inventory.isFull() ||
+                    Game.inCombat() ||
+                    ChatDialog.canContinue(),
+                2500
+            );
+            if (this.fishingBroken(index, startTile)) {
+                const live = this.spotByIndex(index);
+                if (live && WHIRLPOOL_IDS.has(live.id)) {
+                    await this.fleeWhirlpool(live.tile());
+                }
+                this.activeFishIndex = null;
+            }
+            return;
+        }
+
         if (!Game.animating()) {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${startTile}`);
             const before = Inventory.used();
             if (!(await target.interact(this.bot.actionName()))) {
                 this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
+                this.activeFishIndex = null;
                 await Execution.delayTicks(2);
                 return;
             }
@@ -2166,23 +2202,28 @@ class Gather implements Task {
 
             const live = this.spotByIndex(index);
             if (live && WHIRLPOOL_IDS.has(live.id)) {
+                this.activeFishIndex = null;
                 await this.fleeWhirlpool(live.tile());
                 return;
             }
             if (this.fishingBroken(index, startTile) && Inventory.used() === before && !Game.animating()) {
+                this.activeFishIndex = null;
                 if (ChatDialog.canContinue()) {
                     this.bot.reject(key);
                 }
                 return;
             }
             if (Inventory.used() === before && !Game.animating()) {
+                this.activeFishIndex = null;
                 this.bot.cooldown(key, 4);
                 return;
             }
+            this.activeFishIndex = index;
         }
 
         for (let guard = 0; guard < 200; guard++) {
             if (this.fishingBroken(index, startTile)) {
+                this.activeFishIndex = null;
                 const live = this.spotByIndex(index);
                 if (live && WHIRLPOOL_IDS.has(live.id)) {
                     await this.fleeWhirlpool(live.tile());
@@ -2195,6 +2236,7 @@ class Gather implements Task {
                 8000
             );
             if (this.fishingBroken(index, startTile)) {
+                this.activeFishIndex = null;
                 const live = this.spotByIndex(index);
                 if (live && WHIRLPOOL_IDS.has(live.id)) {
                     await this.fleeWhirlpool(live.tile());
@@ -2205,9 +2247,11 @@ class Gather implements Task {
                 continue;
             }
             if (!Game.animating()) {
+                this.activeFishIndex = null;
                 return;
             }
         }
+        this.activeFishIndex = null;
     }
 
     private async executeMine(): Promise<void> {
