@@ -85,10 +85,11 @@ import {
 import { Banking, depositAllExcept } from '../api/Banking.js';
 import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
-import { talkThrough } from '../quests/exec/primitives.js';
+import { driveDialog } from '../quests/exec/primitives.js';
 import {
     BROKEN_AXE,
     COINS,
+    FORGETFUL_BANK_ODDS,
     HAMMER as ACQUIRE_HAMMER,
     acquireKeepNames,
     canFundPlan,
@@ -212,6 +213,11 @@ export default class GatheringBot extends TaskBot {
      * hits BankCatch, and for cold starts with bronze equipped + steel in bank.
      */
     private startupToolBankSyncPending = false;
+    /**
+     * When true, ~1/{@link FORGETFUL_BANK_ODDS} bank closes walk out and re-open
+     * as if something was forgotten. Off by default (settings: forgetfulBank).
+     */
+    private forgetfulBank = false;
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
 
@@ -369,6 +375,7 @@ export default class GatheringBot extends TaskBot {
         }
 
         this.toolAcquire = parseToolAcquireMode(this.settings.str('toolAcquire', 'Off'));
+        this.forgetfulBank = this.settings.bool('forgetfulBank', false);
         this.startupToolBankSyncPending = false;
         if (this.toolAcquire === 'on') {
             this.log('tools: acquire Buy/repair enabled (shops + broken repair + mith+ axe smith when bars ready)');
@@ -381,6 +388,9 @@ export default class GatheringBot extends TaskBot {
                 this.startupToolBankSyncPending = true;
                 this.log('tools: will check bank once for a better axe/pick before gathering');
             }
+        }
+        if (this.forgetfulBank) {
+            this.log(`bank: forgetful exits on (~1/${FORGETFUL_BANK_ODDS} chance after close)`);
         }
 
         this.gearKeep = this.rebuildGearKeep();
@@ -663,6 +673,9 @@ export default class GatheringBot extends TaskBot {
      * After wielding a tool, anything that was previously equipped may land in the
      * inventory (old axe/pick, or a weapon/shield). Re-open bank if needed and
      * deposit those so users don't lose gear mid-run.
+     *
+     * Prefer {@link prepareWornSurplusForDeposit} + deposit while the bank is
+     * already open so the happy path never needs this recovery reopen.
      */
     async bankDisplacedAfterEquip(
         displaced: readonly string[],
@@ -697,15 +710,112 @@ export default class GatheringBot extends TaskBot {
         await this.bankPace();
     }
 
+    /**
+     * Unequip worse worn tiered tools (and optional extras) into the pack while
+     * the bank is open so they can be deposited in the same session.
+     * Equipment.unequip does not require the bank to be closed.
+     */
+    async prepareWornSurplusForDeposit(
+        log: (m: string) => void = m => this.log(`  ${m}`),
+        extraKeep: readonly string[] = []
+    ): Promise<void> {
+        if (this.toolReqs.length === 0) {
+            return;
+        }
+        const keep = new Set(
+            bestHeldToolNames(this.toolReqs, this.skillLevel, this.heldCount).map(n => n.toLowerCase())
+        );
+        for (const n of extraKeep) {
+            keep.add(n.toLowerCase());
+        }
+        for (const r of this.toolReqs) {
+            if (r.kind === 'exact') {
+                keep.add(r.name.toLowerCase());
+            }
+        }
+        for (const item of Equipment.items()) {
+            const name = item.name ?? '';
+            if (!name) {
+                continue;
+            }
+            const key = name.toLowerCase();
+            if (keep.has(key)) {
+                continue;
+            }
+            const isTiered = this.toolReqs.some(
+                r => r.kind === 'tiered' && r.tiers.some(t => t.name.toLowerCase() === key)
+            );
+            if (!isTiered) {
+                continue;
+            }
+            if (Inventory.isFull()) {
+                log(`bank: pack full — cannot unequip surplus ${name}`);
+                break;
+            }
+            log(`bank: unequip surplus ${name} for deposit`);
+            await Equipment.unequip(name);
+            await Execution.delayUntil(() => !Equipment.contains(name) || Inventory.first(name) !== null, 3000);
+            await this.bankPace();
+        }
+    }
+
+    /**
+     * Close the bank once. When forgetfulBank is on, ~1/FORGETFUL_BANK_ODDS chance
+     * to walk a few tiles out and re-open briefly as if something was forgotten.
+     */
+    async closeScriptBank(
+        log: (m: string) => void = m => this.log(`  ${m}`),
+        opts: { allowForgetful?: boolean } = {}
+    ): Promise<void> {
+        if (!Bank.isOpen()) {
+            return;
+        }
+        await this.bankPace();
+        await Bank.close();
+        await Execution.delayTicks(1);
+
+        const allowForgetful = opts.allowForgetful !== false;
+        if (!allowForgetful || !this.forgetfulBank) {
+            return;
+        }
+        if (Math.floor(Math.random() * FORGETFUL_BANK_ODDS) !== 0) {
+            return;
+        }
+
+        const here = Game.tile();
+        if (!here) {
+            return;
+        }
+        log(`bank: forgot something — stepping out then back (1/${FORGETFUL_BANK_ODDS})`);
+        const stand = this.location?.bankStand ?? here;
+        // A few tiles off the booth, not a full trip home.
+        const away = new Tile(here.x + (Math.random() < 0.5 ? -3 : 3), here.z + (Math.random() < 0.5 ? -2 : 2), here.level);
+        await Traversal.walkResilient(away, { radius: 1, timeoutMs: 12_000, log });
+        await Execution.delay(400 + Math.floor(Math.random() * 700));
+        if (await this.openScriptBank(log)) {
+            await this.waitBankReady(log);
+            // Glance only — no real withdraw; just the double-take.
+            await this.bankPace();
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+        }
+        // Nudge back toward the booth stand so callers that walk home aren't stranded sideways.
+        if (stand) {
+            await Traversal.walkResilient(stand, { radius: 3, timeoutMs: 12_000, log });
+        }
+    }
+
     async executeToolAcquirePlan(
         plan: ToolAcquirePlan,
-        log: (m: string) => void = m => this.log(`  ${m}`)
+        log: (m: string) => void = m => this.log(`  ${m}`),
+        opts: { bankPrepared?: boolean } = {}
     ): Promise<boolean> {
         if (plan.kind === 'repair') {
             return this.executeRepairPlan(plan, log);
         }
         if (plan.kind === 'buy') {
-            return this.executeBuyPlan(plan, log);
+            return this.executeBuyPlan(plan, log, opts);
         }
         return this.executeSmithPlan(plan, log);
     }
@@ -729,11 +839,10 @@ export default class GatheringBot extends TaskBot {
             await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
             await this.bankPace();
             // Same bank open: bank surplus tools + withdraw repair float.
+            await this.prepareWornSurplusForDeposit(log, acquireKeepNames(plan));
             await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
             await this.withdrawCoinsFor(1000, log);
-            if (Bank.isOpen()) {
-                await Bank.close();
-            }
+            await this.closeScriptBank(log, { allowForgetful: false });
         }
 
         if (this.heldCount(plan.brokenName) <= 0) {
@@ -746,9 +855,31 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
 
+        // Repair is item-on-NPC + chat (not Trade/shop). Use the broken tool on
+        // Bob/Nurmof, then drive the repair dialogue options.
+        const broken = Inventory.first(plan.brokenName);
+        if (!broken) {
+            log(`acquire: ${plan.brokenName} not in pack to use on ${plan.vendor.keeper}`);
+            return false;
+        }
+        const vendor = Npcs.query().name(plan.vendor.keeper).within(12).nearest();
+        if (!vendor) {
+            log(`acquire: no '${plan.vendor.keeper}' nearby for repair`);
+            return false;
+        }
+
         const beforeBroken = this.heldCount(plan.brokenName);
-        if (!(await talkThrough(plan.vendor.keeper, plan.prefer, log))) {
-            log(`acquire: dialogue with ${plan.vendor.keeper} failed — will retry / buy`);
+        log(`acquire: use ${plan.brokenName} on ${plan.vendor.keeper}`);
+        if (!(await broken.useOn(vendor))) {
+            log(`acquire: use-on ${plan.vendor.keeper} failed — will retry / buy`);
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
+            log(`acquire: ${plan.vendor.keeper} never opened repair dialogue`);
+            return false;
+        }
+        if (!(await driveDialog(plan.prefer, log))) {
+            log(`acquire: repair dialogue with ${plan.vendor.keeper} failed — will retry / buy`);
             return false;
         }
         await Execution.delayTicks(2);
@@ -758,7 +889,7 @@ export default class GatheringBot extends TaskBot {
             return true;
         }
         if (plan.label === 'pickaxe' && bestPickaxe(Skills.level('mining'), n => this.heldCount(n) > 0)) {
-            this.log(`acquire: usable pick after ${plan.vendor.keeper} talk`);
+            this.log(`acquire: usable pick after ${plan.vendor.keeper} repair`);
             return true;
         }
         log(`acquire: ${plan.vendor.keeper} did not repair — try buy path`);
@@ -767,42 +898,47 @@ export default class GatheringBot extends TaskBot {
 
     private async executeBuyPlan(
         plan: Extract<ToolAcquirePlan, { kind: 'buy' }>,
-        log: (m: string) => void
+        log: (m: string) => void,
+        opts: { bankPrepared?: boolean } = {}
     ): Promise<boolean> {
         this.setStatus(`buy: ${plan.qty}× ${plan.name}`);
         this.log(`acquire: ${plan.reason} @ ${plan.vendor.keeper} (${plan.cost}gp)`);
 
-        if (!(await this.openBankAt(plan.vendor.bankStand, log))) {
-            log('acquire: could not open bank for coins');
-            return false;
-        }
-        if (!(await this.waitBankReady(log))) {
-            log('acquire: bank did not load for coin withdraw');
-            return false;
-        }
-        const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
-        await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
-        await this.bankPace();
-        // Same open: stash worse tools, then pull GP for the shop trip.
-        await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
+        // Caller already deposited surplus + withdrew shop GP in the same bank session.
+        const skipBank = opts.bankPrepared === true && Inventory.count(COINS) >= plan.cost;
+        if (!skipBank) {
+            if (!(await this.openBankAt(plan.vendor.bankStand, log))) {
+                log('acquire: could not open bank for coins');
+                return false;
+            }
+            if (!(await this.waitBankReady(log))) {
+                log('acquire: bank did not load for coin withdraw');
+                return false;
+            }
+            const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
+            await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
+            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+            await this.bankPace();
+            // Same open: stash worse tools, then pull GP for the shop trip.
+            await this.prepareWornSurplusForDeposit(log, acquireKeepNames(plan));
+            await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
 
-        if (!canFundPlan(plan, Inventory.count(COINS), Bank.count(COINS))) {
-            log(`acquire: not enough coins for ${plan.name} (${plan.cost}gp)`);
-            this.markAcquireBackoff(60_000);
-            if (Bank.isOpen()) {
-                await Bank.close();
+            if (!canFundPlan(plan, Inventory.count(COINS), Bank.count(COINS))) {
+                log(`acquire: not enough coins for ${plan.name} (${plan.cost}gp)`);
+                this.markAcquireBackoff(60_000);
+                await this.closeScriptBank(log, { allowForgetful: false });
+                return false;
             }
-            return false;
-        }
-        if (!(await this.withdrawCoinsFor(plan.cost, log))) {
-            if (Bank.isOpen()) {
-                await Bank.close();
+            if (!(await this.withdrawCoinsFor(plan.cost, log))) {
+                await this.closeScriptBank(log, { allowForgetful: false });
+                return false;
             }
-            return false;
-        }
-        if (Bank.isOpen()) {
-            await Bank.close();
+            await this.closeScriptBank(log, { allowForgetful: false });
+        } else {
+            log('acquire: bank already prepared — heading to shop');
+            if (Bank.isOpen()) {
+                await this.closeScriptBank(log, { allowForgetful: false });
+            }
         }
 
         if (!(await this.walkToToolVendor(plan.vendor, log))) {
@@ -823,7 +959,8 @@ export default class GatheringBot extends TaskBot {
         }
         this.log(`acquire: bought ${bought || Inventory.count(plan.name) - before}× ${plan.name}`);
         if (plan.equip) {
-            await this.equipTools([plan.name], log);
+            // Shop floor: equip offline; only reopen bank if non-tool gear was displaced.
+            await this.equipTools([plan.name], log, { bankDisplaced: true });
         }
         return true;
     }
@@ -847,6 +984,7 @@ export default class GatheringBot extends TaskBot {
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
         await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
         await this.bankPace();
+        await this.prepareWornSurplusForDeposit(log, acquireKeepNames(plan));
         await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
 
         if (Inventory.count(ACQUIRE_HAMMER) < 1) {
@@ -854,7 +992,7 @@ export default class GatheringBot extends TaskBot {
             if (!h) {
                 log('acquire: no hammer for smithing');
                 this.markAcquireBackoff(60_000);
-                await Bank.close();
+                await this.closeScriptBank(log, { allowForgetful: false });
                 return false;
             }
             const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
@@ -868,7 +1006,7 @@ export default class GatheringBot extends TaskBot {
             if (!b) {
                 log(`acquire: no ${plan.bar} in bank`);
                 this.markAcquireBackoff(60_000);
-                await Bank.close();
+                await this.closeScriptBank(log, { allowForgetful: false });
                 return false;
             }
             const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
@@ -877,9 +1015,7 @@ export default class GatheringBot extends TaskBot {
             await Execution.delayUntil(() => Inventory.count(plan.bar) > 0, 3000);
             await this.bankPace();
         }
-        if (Bank.isOpen()) {
-            await Bank.close();
-        }
+        await this.closeScriptBank(log, { allowForgetful: false });
 
         if (!(await Traversal.walkResilient(plan.anvilStand, { radius: 2, timeoutMs: 90_000, log }))) {
             log('acquire: could not reach anvil');
@@ -909,7 +1045,7 @@ export default class GatheringBot extends TaskBot {
         }
         this.log(`acquire: smithed ${plan.name}`);
         if (plan.equip) {
-            await this.equipTools([plan.name], log);
+            await this.equipTools([plan.name], log, { bankDisplaced: true });
         }
         return true;
     }
@@ -1419,15 +1555,17 @@ export default class GatheringBot extends TaskBot {
     }
 
     /**
-     * Withdraw a better banked tiered tool (steel while bronze is held), equip it,
-     * and deposit the worse tier. Bank must already be open/loaded.
-     * Returns true when at least one better tool was withdrawn.
+     * Withdraw better banked tiered tools (steel while bronze is held) and deposit
+     * the worse tier in the **same** bank open. Does **not** equip — caller closes
+     * once then wields offline so we never open/close thrice for one upgrade.
+     * Bank must already be open/loaded.
+     * Returns names that should be equipped after the bank closes.
      */
     async withdrawBetterGatherToolsFromBank(
         log: (m: string) => void = m => this.log(`  ${m}`)
-    ): Promise<boolean> {
+    ): Promise<{ withdrew: boolean; toEquip: string[] }> {
         if (!Bank.isOpen() || this.toolReqs.length === 0) {
-            return false;
+            return { withdrew: false, toEquip: [] };
         }
         const plan = this.gatherToolRestockPlan();
         const upgrades = plan.filter(step =>
@@ -1438,7 +1576,7 @@ export default class GatheringBot extends TaskBot {
             )
         );
         if (upgrades.length === 0) {
-            return false;
+            return { withdrew: false, toEquip: [] };
         }
 
         for (const step of upgrades) {
@@ -1457,31 +1595,22 @@ export default class GatheringBot extends TaskBot {
             await this.bankPace();
         }
 
+        // Unequip bronze (etc.) into pack while bank stays open, then deposit.
+        await this.prepareWornSurplusForDeposit(log);
+        await this.depositSurplusGatherTools(log);
+
         const toEquip = [
             ...upgrades.filter(s => s.equip).map(s => s.name),
             ...this.toolsToEquip()
         ];
-        if (toEquip.length > 0) {
-            await this.equipTools(toEquip, log);
-        }
-        // Re-open if equip closed the bank — surplus bronze still needs depositing.
-        if (!Bank.isOpen()) {
-            if (!(await this.openScriptBank(log))) {
-                return true;
-            }
-            if (!(await this.waitBankReady(log))) {
-                return true;
-            }
-        }
-        await this.depositSurplusGatherTools(log);
-        this.log(`tools: using better banked gear (${this.gearLabel()})`);
-        return true;
+        this.log(`tools: banked better gear ready (${this.gearLabel()})`);
+        return { withdrew: true, toEquip: [...new Set(toEquip)] };
     }
 
     /**
      * If Buy/repair is on and a better banked or affordable tool exists, take it now.
      * Prefer bank withdraw (steel in bank + bronze held) before shop/smith.
-     * Caller may already be banking; otherwise opens the script bank.
+     * Single bank session: withdraw → unequip surplus → deposit → optional coins → close once → equip.
      * Returns true when a bank/shop trip was attempted (success or fail with backoff).
      */
     async tryUpgradeGatherToolAtBank(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
@@ -1526,45 +1655,48 @@ export default class GatheringBot extends TaskBot {
             return true;
         }
 
-        // Banked steel while bronze is held: withdraw + equip + deposit surplus first.
-        const withdrewBetter = await this.withdrawBetterGatherToolsFromBank(log);
+        // Banked steel while bronze is held: withdraw + deposit surplus (equip after close).
+        const { withdrew: withdrewBetter, toEquip } = await this.withdrawBetterGatherToolsFromBank(log);
         if (startup) {
             this.clearStartupToolBankSync();
         }
 
         // While we're here: bank worse tools and only then plan the shop upgrade (needs bank GP).
         if (!withdrewBetter) {
+            await this.prepareWornSurplusForDeposit(log);
             await this.depositSurplusGatherTools(log);
         }
 
-        if (!this.acquireReady()) {
+        const finishEquipAndHome = async (didWork: boolean): Promise<boolean> => {
             if (Bank.isOpen()) {
-                await this.bankPace();
-                await Bank.close();
+                await this.closeScriptBank(log);
             }
-            if (withdrewBetter) {
+            if (toEquip.length > 0) {
+                // Surplus already banked in-session — do not reopen for displaced tools.
+                await this.equipTools(toEquip, log, { bankDisplaced: false });
+            }
+            if (didWork || withdrewBetter) {
                 await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
             }
-            return withdrewBetter;
+            return didWork || withdrewBetter;
+        };
+
+        if (!this.acquireReady()) {
+            return finishEquipAndHome(withdrewBetter);
         }
 
         const plan = planGatherToolAcquire(this.toolReqsList(), this.acquireWorldWithBank(), {
             upgrade: true
         });
         if (!plan || plan.kind === 'repair') {
-            if (Bank.isOpen()) {
-                await this.bankPace();
-                await Bank.close();
-            }
             // Nothing better in shop — cool down so we do not re-check every bank trip.
             this.markAcquireBackoff(120_000);
             if (withdrewBetter) {
                 this.log('acquire: bank tool upgraded; no better shop tool right now');
-                await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
-                return true;
+            } else {
+                this.log('acquire: no better tool affordable right now');
             }
-            this.log('acquire: no better tool affordable right now');
-            return false;
+            return finishEquipAndHome(withdrewBetter);
         }
 
         // Same bank open: pull shop GP before closing for the vendor walk.
@@ -1572,34 +1704,25 @@ export default class GatheringBot extends TaskBot {
             if (!canFundPlan(plan, Inventory.count(COINS), Bank.count(COINS))) {
                 log(`acquire: not enough coins for ${plan.name} (${plan.cost}gp)`);
                 this.markAcquireBackoff(60_000);
-                if (Bank.isOpen()) {
-                    await Bank.close();
-                }
-                if (withdrewBetter) {
-                    await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
-                }
-                return true;
+                return finishEquipAndHome(withdrewBetter);
             }
             if (!(await this.withdrawCoinsFor(plan.cost, log))) {
                 this.markAcquireBackoff(30_000);
-                if (Bank.isOpen()) {
-                    await Bank.close();
-                }
-                if (withdrewBetter) {
-                    await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
-                }
-                return true;
+                return finishEquipAndHome(withdrewBetter);
             }
         }
 
         if (Bank.isOpen()) {
-            await this.bankPace();
-            await Bank.close();
+            await this.closeScriptBank(log, { allowForgetful: false });
+        }
+        if (toEquip.length > 0) {
+            await this.equipTools(toEquip, log, { bankDisplaced: false });
         }
         this.log(`acquire: upgrade opportunity — ${plan.reason}`);
-        // Buy plan already withdrew coins above — executeBuyPlan will open bank again
-        // only if still short; surplus already deposited.
-        const ok = await this.executeToolAcquirePlan(plan, log);
+        // Coins + surplus already handled — skip the second bank open in executeBuyPlan.
+        const ok = await this.executeToolAcquirePlan(plan, log, {
+            bankPrepared: plan.kind === 'buy'
+        });
         this.markAcquireBackoff(ok ? 90_000 : 45_000);
         // Always head home after an upgrade attempt so BankCatch early-return is safe.
         await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
@@ -1654,8 +1777,7 @@ export default class GatheringBot extends TaskBot {
             const buy = planFishingGearAcquire(method, this.acquireWorldWithBank(), this.fishingAcquireOpts());
             if (buy?.kind === 'buy' && isFishingBaitPiece({ name: buy.name, restock: this.baitQty })) {
                 if (Bank.isOpen()) {
-                    await this.bankPace();
-                    await Bank.close();
+                    await this.closeScriptBank(log, { allowForgetful: false });
                 }
                 const ok = await this.executeToolAcquirePlan(buy, log);
                 if (!ok) {
@@ -1767,14 +1889,21 @@ export default class GatheringBot extends TaskBot {
     /**
      * Close bank if open, then Wield each tool. Returns false if any equip failed.
      * Must not run while bank is open — backpack ops become Deposit-*.
-     * Anything previously worn that lands in the pack (old axe/pick, weapon, shield)
-     * is deposited so users don't lose gear mid-run.
+     *
+     * @param opts.bankDisplaced when true (default), reopen bank to deposit gear
+     *   shoved into the pack by the wield. Prefer false when surplus was already
+     *   unequipped+deposited in the same bank session before this call.
      */
-    async equipTools(names: readonly string[], log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
+    async equipTools(
+        names: readonly string[],
+        log: (m: string) => void = m => this.log(`  ${m}`),
+        opts: { bankDisplaced?: boolean } = {}
+    ): Promise<boolean> {
         const unique = [...new Set(names.filter(n => n.length > 0))];
         if (unique.length === 0) {
             return true;
         }
+        const bankDisplaced = opts.bankDisplaced !== false;
         if (Bank.isOpen()) {
             if (!(await Bank.close())) {
                 log('equip: could not close bank');
@@ -1812,6 +1941,10 @@ export default class GatheringBot extends TaskBot {
             await Execution.delay(180 + Math.floor(Math.random() * 220));
         }
 
+        if (!bankDisplaced) {
+            return ok;
+        }
+
         const keepWorn = new Set(unique.map(n => n.toLowerCase()));
         const displaced: string[] = [];
         for (const item of Inventory.items()) {
@@ -1834,21 +1967,12 @@ export default class GatheringBot extends TaskBot {
         if (displaced.length > 0) {
             await this.bankDisplacedAfterEquip(displaced, log);
             if (Bank.isOpen()) {
-                await this.bankPace();
-                await Bank.close();
+                await this.closeScriptBank(log, { allowForgetful: false });
             }
         }
         return ok;
     }
 
-    isLocalBurn(): boolean {
-        return this.burnLocal;
-    }
-
-    /**
-     * Expand the Auto start-area burn box when no clear lane remains.
-     * Returns true if the plot grew.
-     */
     tryExpandBurnPlot(): boolean {
         if (!this.burnLocal || !this.burnPlot) {
             return false;
@@ -2221,7 +2345,7 @@ class BankCatch implements Task {
         }
 
         if (Bank.isOpen()) {
-            await Bank.close();
+            await this.bot.closeScriptBank(log);
         }
         if (!this.bot.isCookBatchReady()) {
             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
@@ -2575,7 +2699,7 @@ class RepairBrokenGatherTool implements Task {
                     });
                     if (buy && buy.kind !== 'repair') {
                         if (Bank.isOpen()) {
-                            await Bank.close();
+                            await this.bot.closeScriptBank(log, { allowForgetful: false });
                         }
                         const ok = await this.bot.executeToolAcquirePlan(buy, log);
                         if (ok) {
@@ -2600,7 +2724,11 @@ class RepairBrokenGatherTool implements Task {
                 return;
             }
             this.bot.log(`pickaxe: replaced with ${pick}`);
-            await this.bot.equipTools([pick], log);
+            // Close once, then equip offline (replacement may displace broken/other gear).
+            if (Bank.isOpen()) {
+                await this.bot.closeScriptBank(log);
+            }
+            await this.bot.equipTools([pick], log, { bankDisplaced: true });
             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
             return;
         }
@@ -2613,7 +2741,7 @@ class RepairBrokenGatherTool implements Task {
                 await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_AXE.toLowerCase());
                 await Execution.delayUntil(() => Bank.loaded(), 2000);
                 if (Bank.isOpen()) {
-                    await Bank.close();
+                    await this.bot.closeScriptBank(log);
                 }
             }
             this.bot.log('axe: deposited broken — restock/acquire will fetch a usable axe');
@@ -2718,7 +2846,7 @@ class RestockFishingGear implements Task {
                     );
                     if (buy) {
                         if (Bank.isOpen()) {
-                            await Bank.close();
+                            await this.bot.closeScriptBank(log, { allowForgetful: false });
                         }
                         const ok = await this.bot.executeToolAcquirePlan(buy, log);
                         if (ok && this.bot.hasGear()) {
@@ -2747,7 +2875,7 @@ class RestockFishingGear implements Task {
             }
             this.bot.log('restock: gear already topped up');
             if (Bank.isOpen()) {
-                await Bank.close();
+                await this.bot.closeScriptBank(log);
             }
             return;
         }
@@ -2792,7 +2920,7 @@ class RestockFishingGear implements Task {
                 );
                 if (buy) {
                     if (Bank.isOpen()) {
-                        await Bank.close();
+                        await this.bot.closeScriptBank(log, { allowForgetful: false });
                     }
                     const ok = await this.bot.executeToolAcquirePlan(buy, log);
                     if (ok && this.bot.hasGear()) {
@@ -2815,7 +2943,7 @@ class RestockFishingGear implements Task {
         }
 
         if (Bank.isOpen()) {
-            await Bank.close();
+            await this.bot.closeScriptBank(log);
         }
         this.bot.log(`restock: gear ok (${this.bot.gearLabel()})`);
         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
@@ -2885,7 +3013,7 @@ class RestockGatherTool implements Task {
                     });
                     if (buy) {
                         if (Bank.isOpen()) {
-                            await Bank.close();
+                            await this.bot.closeScriptBank(log, { allowForgetful: false });
                         }
                         const ok = await this.bot.executeToolAcquirePlan(buy, log);
                         if (ok) {
@@ -2911,10 +3039,13 @@ class RestockGatherTool implements Task {
             this.bot.log('restock: tools already topped up');
             // Still try to equip anything held but unworn, then leave bank.
             const leftover = this.bot.toolsToEquip();
+            if (Bank.isOpen()) {
+                await this.bot.prepareWornSurplusForDeposit(log);
+                await this.bot.depositSurplusGatherTools(log);
+                await this.bot.closeScriptBank(log);
+            }
             if (leftover.length > 0) {
-                await this.bot.equipTools(leftover, log);
-            } else if (Bank.isOpen()) {
-                await Bank.close();
+                await this.bot.equipTools(leftover, log, { bankDisplaced: false });
             }
             return;
         }
@@ -2940,15 +3071,18 @@ class RestockGatherTool implements Task {
             await Execution.delay(bankHumanDelayMs());
         }
 
-        // Close bank before Wield — bank side-view turns backpack ops into Deposit-*.
+        // Same open: unequip/deposit surplus, close once, then Wield offline.
+        await this.bot.prepareWornSurplusForDeposit(log);
+        await this.bot.depositSurplusGatherTools(log);
         const toEquip = [
             ...plan.filter(s => s.equip).map(s => s.name),
             ...this.bot.toolsToEquip()
         ];
+        if (Bank.isOpen()) {
+            await this.bot.closeScriptBank(log);
+        }
         if (toEquip.length > 0) {
-            await this.bot.equipTools(toEquip, log);
-        } else if (Bank.isOpen()) {
-            await Bank.close();
+            await this.bot.equipTools(toEquip, log, { bankDisplaced: false });
         }
 
         if (!this.bot.hasGear()) {
@@ -2959,7 +3093,7 @@ class RestockGatherTool implements Task {
                 });
                 if (buy) {
                     if (Bank.isOpen()) {
-                        await Bank.close();
+                        await this.bot.closeScriptBank(log, { allowForgetful: false });
                     }
                     const ok = await this.bot.executeToolAcquirePlan(buy, log);
                     if (ok) {

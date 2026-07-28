@@ -1,7 +1,7 @@
 import type { SettingsSchema } from '../runtime/Settings.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import { BURN_MODE_OPTIONS, FIRE_SPOT_OPTIONS } from './FiremakingLogic.js';
-import { TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
+import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
 
 /**
  * Woodcutter — GatheringBot preset for trees + optional chop-then-burn.
@@ -47,7 +47,8 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
         help:
             'Shown only when Burn mode is Chop then burn. Where to light fires. Auto = burn near where you started the script until the pack is empty (repaths/expands when tiles fill with fires). Named spots = fixed bank-side strips (Varrock East, Draynor, …).'
     },
-    toolAcquire: TOOL_ACQUIRE_SETTING
+    toolAcquire: TOOL_ACQUIRE_SETTING,
+    forgetfulBank: FORGETFUL_BANK_SETTING
 };
 
 export default class Woodcutter extends GatheringBot {}

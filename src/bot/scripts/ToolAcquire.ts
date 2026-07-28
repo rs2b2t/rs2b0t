@@ -45,6 +45,21 @@ export const TOOL_ACQUIRE_SETTING = {
         'Off = only use tools already in the bank/pack. Buy / repair = when a usable tool is missing (or a better shop tier is affordable), withdraw coins and buy/repair at Bob (axes), Nurmof (pickaxes), Gerrant/Harry (fishing gear). Broken picks/axes prefer repair at Nurmof/Bob. Mithril+ axes can be smithed when a matching bar + hammer are in the bank.'
 };
 
+/**
+ * Rare humanization: after a normal bank close, ~1/N chance to walk a few tiles
+ * out and re-open as if something was forgotten. Off by default.
+ */
+export const FORGETFUL_BANK_ODDS = 100;
+
+export const FORGETFUL_BANK_SETTING = {
+    type: 'boolean' as const,
+    default: false,
+    label: 'Forgetful bank exits',
+    group: 'Tools',
+    help:
+        `Rare humanization after closing the bank: about 1 in ${FORGETFUL_BANK_ODDS} chance to walk a few tiles away, re-open the bank as if you forgot something, then leave again. Off by default.`
+};
+
 export interface ToolVendor {
     keeper: string;
     stand: Tile;

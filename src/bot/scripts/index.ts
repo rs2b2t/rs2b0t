@@ -22,7 +22,7 @@ import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './Woodcutter.js';
-import { TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
+import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
@@ -215,7 +215,8 @@ ScriptRegistry.register({
             help:
                 'What to do when the pack is full of ore. Auto = bank the ore at the nearest bank and restock a pickaxe if needed. None = power-mine (drop ore; no bank).'
         },
-        toolAcquire: TOOL_ACQUIRE_SETTING
+        toolAcquire: TOOL_ACQUIRE_SETTING,
+        forgetfulBank: FORGETFUL_BANK_SETTING
     },
     create: () => new GatheringBot()
 });
@@ -354,7 +355,8 @@ ScriptRegistry.register({
             help:
                 'Shown only for Bank raw then cook. Stop = end the script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N.'
         },
-        toolAcquire: TOOL_ACQUIRE_SETTING
+        toolAcquire: TOOL_ACQUIRE_SETTING,
+        forgetfulBank: FORGETFUL_BANK_SETTING
     },
     create: () => new GatheringBot()
 });
