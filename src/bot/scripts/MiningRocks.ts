@@ -31,23 +31,8 @@ export const GAS_ROCK_TICKS = 60;
 
 export const BROKEN_PICKAXE = 'Broken pickaxe';
 
-export const PICKAXES: readonly { name: string; level: number }[] = [
-    { name: 'Rune pickaxe', level: 41 },
-    { name: 'Adamant pickaxe', level: 31 },
-    { name: 'Mithril pickaxe', level: 21 },
-    { name: 'Steel pickaxe', level: 6 },
-    { name: 'Iron pickaxe', level: 1 },
-    { name: 'Bronze pickaxe', level: 1 }
-];
-
-export function bestPickaxe(miningLevel: number, available: (name: string) => boolean): string | null {
-    for (const p of PICKAXES) {
-        if (miningLevel >= p.level && available(p.name)) {
-            return p.name;
-        }
-    }
-    return null;
-}
+/** @deprecated import from Tools.js — re-exported for existing callers. */
+export { PICKAXES, bestPickaxe } from './Tools.js';
 
 export function resolveRockIds(names: string[]): Set<number> {
     const ids = new Set<number>();

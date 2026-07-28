@@ -190,6 +190,10 @@ export const Inventory: {
 export const Equipment: {
     items(): InvItem[];
     contains(name: string): boolean;
+    /** Wear/wield from the backpack (Wield/Wear/Equip op). */
+    equip(name: string): Promise<boolean>;
+    /** Remove from a worn slot into the backpack. */
+    unequip(name: string): Promise<boolean>;
 };
 
 export const Skills: {
@@ -213,13 +217,173 @@ export interface BankItemSnapshot {
     comId: number;
 }
 
+/** Bank booth / chest access descriptor (some banks need openFirst first). */
+export interface BankObjectAccess {
+    name: string;
+    op: string;
+    openFirst?: { name: string; op: string };
+}
+
+/**
+ * Pick a withdraw menu label from a bank item's `ops` list.
+ * Handles both "Withdraw-All" and "Withdraw All" spellings.
+ */
+export function withdrawOp(
+    ops: readonly (string | null)[],
+    amount: 'all' | '10' | '1' | 'any'
+): string | null;
+
 export const Bank: {
     isOpen(): boolean;
+    /**
+     * True once the bank item list has populated. `isOpen` alone is not enough —
+     * the list fills a beat later (and again after deposit). Until then every
+     * `count()` reads 0, which is indistinguishable from an empty bank.
+     */
+    loaded(): boolean;
+    /** Toggle note/item withdraw mode (resets to Item when the bank opens). */
+    setNoteMode(on: boolean): Promise<void>;
     items(): BankItemSnapshot[];
+    /** Exact name match (case-insensitive). */
     count(name: string): number;
+    /**
+     * Withdraw by context-menu op label (default `'Withdraw-1'`).
+     * Prefer `withdrawOp(item.ops, 'all'|'10'|'1'|'any')` for the real label.
+     */
     withdraw(name: string, op?: string): boolean | Promise<boolean>;
+    /** Withdraw-X + count dialog for an exact quantity. */
+    withdrawX(name: string, count: number): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
+    /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;
+    /**
+     * Deposit every side-backpack item for which `match(name, id)` is true.
+     * Prefer building matchers with `depositAllExcept` / `depositMatcher`.
+     */
+    depositAllMatching(
+        match: (name: string, id: number) => boolean,
+        log?: (msg: string) => void
+    ): Promise<void>;
+    /**
+     * Open a booth near a known stand tile (walk onto the counter if needed).
+     * Prefer `Banking.open({ stand, boothName, boothOp })` for script work.
+     */
+    openBooth(
+        stand: WorldTile,
+        boothName: string,
+        op: string,
+        log?: (msg: string) => void
+    ): Promise<boolean>;
+    /** Open the nearest named bank object already in the loaded scene. */
+    openNearest(
+        boothName: string,
+        op: string,
+        log?: (msg: string) => void
+    ): Promise<boolean>;
+    /** Like openNearest, but may open a chest/door first via `access.openFirst`. */
+    openNearestAccess(
+        access: BankObjectAccess,
+        log?: (msg: string) => void
+    ): Promise<boolean>;
+};
+
+// ---- high-level banking (prefer this over raw Bank.open*) ----
+
+export type BankStrategy = 'off' | 'items' | 'time' | 'either';
+
+export interface BankDestination {
+    name: string;
+    tile: WorldTile;
+    access?: BankObjectAccess;
+}
+
+export interface BankTriggerState {
+    lootCount: number;
+    minutesSinceLastBank: number;
+    itemsThreshold: number;
+    minutesThreshold: number;
+}
+
+/** Whether a periodic-bank strategy should fire given current counters. */
+export function shouldBankNow(strategy: BankStrategy, s: BankTriggerState): boolean;
+
+/** Parse a settings dropdown label ('Off' | 'Loot count' | 'Time' | 'Either'). */
+export function parseBankStrategy(label: string): BankStrategy;
+
+/**
+ * Ready-made settingsSchema fragment for combat/loot scripts:
+ * `bankStrategy`, `bankEveryItems`, `bankEveryMinutes`, `bankCommonJunk`.
+ */
+export const PERIODIC_BANK_SETTINGS: SettingsSchema;
+
+/** Substrings matched as optional "common junk" when banking loot. */
+export const COMMON_BANK_LOOT: string[];
+
+/** Random-event casket obj id — always treated as common bank loot. */
+export const RANDOM_EVENT_CASKET_ID: number;
+
+export function matchesCommonBankLoot(name: string, id?: number): boolean;
+
+/** Combine a script's own deposit predicate with optional common-junk matching. */
+export function depositMatcher(
+    own: (name: string) => boolean,
+    includeCommon: boolean
+): (name: string, id?: number) => boolean;
+
+/**
+ * Deposit predicate that keeps the named tools/consumables and banks everything else.
+ * Pass the result to `Bank.depositAllMatching`.
+ *
+ * @example
+ * await Bank.depositAllMatching(depositAllExcept(['Harpoon', 'Lobster pot']));
+ */
+export function depositAllExcept(keep: Iterable<string>): (name: string) => boolean;
+
+export interface OpenBankOpts {
+    /**
+     * Preset bank stand tile. When set: walk here (opening doors/gates if
+     * `obstacles` is non-empty) then `Bank.openBooth`.
+     */
+    stand?: WorldTile | null;
+    boothName?: string;
+    boothOp?: string;
+    /**
+     * Openable obstacle names on the way to a preset stand (e.g. `['door','gate']`).
+     * Empty / omitted = plain `Traversal.walkResilient` to the stand.
+     */
+    obstacles?: string[];
+    /** Forced destination when no booth is in scene and `stand` is unset. */
+    destination?: BankDestination;
+    log?: (msg: string) => void;
+}
+
+/**
+ * High-level bank open + one-shot bank-and-deposit helpers.
+ * Prefer `Banking.open` over hand-rolling walk + `Bank.openBooth` / `openNearest`.
+ */
+export const Banking: {
+    /**
+     * Open a bank for script work (deposit / withdraw / restock).
+     * - Preset `stand`: walk (with optional door/gate opens) → openBooth
+     * - No stand: booth in scene → openNearestAccess; else web-walk nearest known bank
+     *
+     * Does **not** deposit or walk back — callers own the bank session.
+     */
+    open(opts?: OpenBankOpts): Promise<boolean>;
+    /**
+     * Open nearest (or forced) bank, deposit matching items, optional afterDeposit,
+     * optional walk to `returnTo`.
+     */
+    bankNearest(opts: {
+        deposit: (name: string) => boolean;
+        commonJunk?: boolean;
+        destination?: BankDestination;
+        returnTo?: WorldTile;
+        boothName?: string;
+        boothOp?: string;
+        afterDeposit?: () => void | Promise<void>;
+        log?: (msg: string) => void;
+    }): Promise<boolean>;
 };
 
 export const Shop: {
@@ -265,6 +429,44 @@ export const ChatDialog: {
      * first) at the largest fixed quantity offered (prefer 10).
      */
     make(match?: string): Promise<boolean>;
+};
+
+export interface TradeItem {
+    id: number;
+    name: string | null;
+    count: number;
+}
+
+/**
+ * Player-to-player trade screen. Both players must "Trade with" each other,
+ * then both accept the offer screen and the confirm screen.
+ */
+export const Trade: {
+    onOfferScreen(): boolean;
+    onConfirmScreen(): boolean;
+    active(): boolean;
+    partner(): string | null;
+    myOffer(): TradeItem[];
+    theirOffer(): TradeItem[];
+    /** Send "Trade with" to a nearby player by display name. */
+    request(playerName: string): Promise<boolean>;
+    /**
+     * Offer-All of `itemName` from the trade side-pack.
+     * `pick` chooses among same-name slots (e.g. unnoted vs noted).
+     */
+    offerAll(
+        itemName: string,
+        pick?: (i: { count: number; id: number; slot: number }) => boolean
+    ): Promise<boolean>;
+    /** Offer exactly `n` via Offer-X + count dialog. */
+    offer(
+        itemName: string,
+        n: number,
+        pick?: (i: { count: number; id: number; slot: number }) => boolean
+    ): Promise<boolean>;
+    /** Accept the current offer or confirm screen. */
+    accept(): Promise<boolean>;
+    decline(): Promise<void>;
 };
 
 // ---- movement ----
@@ -409,6 +611,10 @@ export function hasAll(needs: ItemNeed[]): boolean;
 export class AcquireTask implements Task {
     constructor(bot: AbstractBot, needs: ItemNeed[]);
     validate(): boolean;
+    /** Dropdown choices when type is 'string' (or multi-select for 'string[]'). */
+    options?: string[];
+    /** Panel group heading for related settings. */
+    group?: string;
     execute(): Promise<void>;
 }
 

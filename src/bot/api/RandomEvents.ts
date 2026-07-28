@@ -35,7 +35,17 @@ const GAS_CHEST_LOC_ID = 2141;
 const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
-const FISHING_GEAR = ['small fishing net', 'big fishing net', 'fishing rod', 'fly fishing rod', 'harpoon', 'lobster pot'];
+const FISHING_GEAR = [
+    'small fishing net',
+    'big fishing net',
+    'fishing rod',
+    'oily fishing rod',
+    'fly fishing rod',
+    'harpoon',
+    'lobster pot',
+    'fishing bait',
+    'feather'
+];
 const GEAR_LOSS_WINDOW_MS = 90_000;
 /** Hostile fishing/mining randoms (river troll, rock golem, …) often open from a
  *  few tiles out. Detect by id within this range when they face/attack us, not

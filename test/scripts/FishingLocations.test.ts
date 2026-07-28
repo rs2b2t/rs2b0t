@@ -27,6 +27,9 @@ describe('resolveLocation', () => {
         expect(resolveLocation('draynor village', new Tile(3222, 3218, 0))?.name).toBe('Draynor Village');
         expect(resolveLocation('Catherby', new Tile(0, 0, 0))?.name).toBe('Catherby');
         expect(resolveLocation('Fishing Guild', new Tile(0, 0, 0))?.name).toBe('Fishing Guild');
+        expect(resolveLocation('Taverley Dungeon (lava eels)', new Tile(0, 0, 0))?.name).toBe(
+            'Taverley Dungeon (lava eels)'
+        );
     });
 
     test('unknown names resolve to null', () => {
@@ -35,14 +38,35 @@ describe('resolveLocation', () => {
 });
 
 describe('FISHING_LOCATIONS table', () => {
-    test('every region contains its own spot and bank stand', () => {
+    test('every region contains its own spot; bank is local except Taverley (Falador west)', () => {
         for (const loc of FISHING_LOCATIONS) {
-            expect(loc.region.contains(loc.spot)).toBe(true);
-            expect(loc.region.contains(loc.bankStand)).toBe(true);
+            expect(loc.region.contains(loc.spot), loc.name).toBe(true);
+            if (loc.name.startsWith('Taverley')) {
+                // Surface bank is intentionally outside the dungeon region.
+                expect(loc.region.contains(loc.bankStand), loc.name).toBe(false);
+                expect(loc.bankStand).toEqual(new Tile(2946, 3368, 0));
+            } else {
+                expect(loc.region.contains(loc.bankStand), loc.name).toBe(true);
+            }
         }
     });
 
     test('dropdown options are Auto + every location + None', () => {
-        expect(LOCATION_OPTIONS).toEqual(['Auto', 'Draynor Village', 'Catherby', 'Fishing Guild', 'None']);
+        expect(LOCATION_OPTIONS).toEqual([
+            'Auto',
+            'Draynor Village',
+            'Catherby',
+            'Fishing Guild',
+            'Taverley Dungeon (lava eels)',
+            'None'
+        ]);
+    });
+
+    test('Catherby has a range stand for cook-after-fish', () => {
+        const catherby = FISHING_LOCATIONS.find(l => l.name === 'Catherby');
+        expect(catherby?.rangeStand).toEqual(new Tile(2817, 3443, 0));
+        expect(catherby?.rangeName).toBe('Range');
+        expect(catherby?.obstacles).toContain('door');
+        expect(catherby?.region.contains(catherby.rangeStand!)).toBe(true);
     });
 });

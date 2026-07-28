@@ -19,7 +19,7 @@ surface (`apiVersion 1`) over the game client. This is the complete reference.
 - [Execution](#execution) — the only legal way to sleep
 - [Game](#game) — world state
 - [Entities & queries](#entities--queries)
-- [Inventory & Equipment](#inventory--equipment) · [Bank](#bank) · [Skills](#skills) · [ChatDialog](#chatdialog)
+- [Inventory & Equipment](#inventory--equipment) · [Bank](#bank) · [Banking](#banking) · [Skills](#skills) · [ChatDialog](#chatdialog) · [Shop](#shop) · [Trade](#trade) · [Quests](#quests)
 - [Movement](#movement)
 - [Events](#events)
 - [Settings](#settings)
@@ -233,11 +233,14 @@ class Player { name; inCombat; /* + Locatable, actions() */ }
 Inventory.items(): InvItem[]
 Inventory.first(name: string): InvItem | null
 Inventory.contains(name: string): boolean
-Inventory.used(): number            // occupied slots
+Inventory.count(name: string): number   // total qty across stacks/slots
+Inventory.used(): number                // occupied slots
 Inventory.isFull(): boolean
 
 Equipment.items(): InvItem[]
 Equipment.contains(name: string): boolean
+Equipment.equip(name: string): Promise<boolean>    // Wield/Wear/Equip from pack
+Equipment.unequip(name: string): Promise<boolean>  // Remove into pack
 ```
 
 ### InvItem
@@ -262,19 +265,123 @@ if (raw && range) await raw.useOn(range);
 
 ## Bank
 
+Low-level bank UI. Prefer [`Banking.open`](#banking) to walk to and open a bank;
+use `Bank.*` once the interface is open.
+
 ```ts
 Bank.isOpen(): boolean
-Bank.items(): BankItemSnapshot[]              // { slot, id, name, count, ops, comId }
-Bank.count(name: string): number
+Bank.loaded(): boolean                    // item list populated (wait after open/deposit)
+Bank.setNoteMode(on: boolean): Promise<void>
+Bank.items(): BankItemSnapshot[]          // { slot, id, name, count, ops, comId }
+Bank.count(name: string): number          // exact name, case-insensitive
 Bank.withdraw(name: string, op?: string): boolean | Promise<boolean>
+Bank.withdrawX(name: string, count: number): Promise<boolean>   // Withdraw-X + dialog
 Bank.deposit(name: string, op?: string): boolean | Promise<boolean>
 Bank.depositInventory(): Promise<void>
+Bank.depositAllMatching(match: (name, id) => boolean, log?): Promise<void>
+Bank.openBooth(stand, boothName, op, log?): Promise<boolean>
+Bank.openNearest(boothName, op, log?): Promise<boolean>
+Bank.openNearestAccess(access, log?): Promise<boolean>
+
+// Pick a real withdraw label from item.ops ("Withdraw-All" vs "Withdraw All")
+withdrawOp(ops, amount: 'all' | '10' | '1' | 'any'): string | null
 ```
 
-`withdraw`/`deposit`/`count` match names **exactly**. `op` is the context menu
-label (e.g. `'Withdraw-10'`, `'Withdraw-All'`); read the real ops off
-`Bank.items()[i].ops` when unsure. Open a bank by interacting with a booth/banker
-loc first.
+**Gotchas**
+
+- `isOpen` only means the bank component exists. After open (and after every
+  deposit) wait for `Bank.loaded()` before trusting `count()` / `items()` —
+  until then counts read as 0.
+- `withdraw`/`deposit`/`count` match names **exactly** (case-insensitive).
+  `op` is the context-menu label; use `withdrawOp(item.ops, 'all')` rather than
+  hard-coding `'Withdraw-All'`.
+- Do **not** hand-roll walk + booth click in new scripts — use `Banking.open`.
+
+```ts
+if (!(await Banking.open({ stand: bankTile }))) return;
+await Execution.delayUntil(() => Bank.loaded(), 3000);
+await Bank.depositAllMatching(depositAllExcept(['Harpoon', 'Fishing bait']));
+const bait = Bank.items().find(i => i.name === 'Fishing bait');
+const op = bait ? withdrawOp(bait.ops, 'all') : null;
+if (op) await Bank.withdraw('Fishing bait', op);
+// or exact qty:
+await Bank.withdrawX('Feather', 100);
+```
+
+## Banking
+
+High-level open / deposit helpers. **This is what scripts should call.**
+
+```ts
+Banking.open(opts?: {
+    stand?: WorldTile | null;     // preset stand → walk + openBooth
+    boothName?: string;           // default 'Bank booth'
+    boothOp?: string;             // default 'Use-quickly'
+    obstacles?: string[];         // doors/gates on the way to stand (e.g. ['door','gate'])
+    destination?: BankDestination;// force a bank when no booth in scene
+    log?: (msg: string) => void;
+}): Promise<boolean>
+// Does NOT deposit or walk back — caller owns the session.
+
+Banking.bankNearest(opts: {
+    deposit: (name: string) => boolean;
+    commonJunk?: boolean;         // also bank gems/fruit/beer/kebabs/caskets (default true)
+    destination?: BankDestination;
+    returnTo?: WorldTile;
+    boothName?: string;
+    boothOp?: string;
+    afterDeposit?: () => void | Promise<void>;
+    log?: (msg: string) => void;
+}): Promise<boolean>
+```
+
+**Open rules**
+
+| Situation | Behaviour |
+|---|---|
+| `stand` set, `obstacles` non-empty | walk opening doors/gates → `openBooth` |
+| `stand` set, no obstacles | `walkResilient` → `openBooth` |
+| no `stand`, booth in scene | `openNearestAccess` |
+| no `stand`, no booth | web-walk nearest known bank, then open |
+
+**Deposit helpers** (pass into `Bank.depositAllMatching` or `bankNearest.deposit`):
+
+```ts
+depositAllExcept(keep: Iterable<string>): (name: string) => boolean
+// keep tools/bait; bank everything else
+
+depositMatcher(own: (name) => boolean, includeCommon: boolean): (name, id?) => boolean
+matchesCommonBankLoot(name: string, id?: number): boolean
+COMMON_BANK_LOOT: string[]            // 'uncut', gem names, 'strange fruit', …
+RANDOM_EVENT_CASKET_ID: number        // always treated as common loot
+```
+
+**Periodic bank settings** (combat/loot scripts):
+
+```ts
+PERIODIC_BANK_SETTINGS   // bankStrategy / bankEveryItems / bankEveryMinutes / bankCommonJunk
+parseBankStrategy(label: string): 'off' | 'items' | 'time' | 'either'
+shouldBankNow(strategy, { lootCount, minutesSinceLastBank, itemsThreshold, minutesThreshold }): boolean
+```
+
+```ts
+// Preset location with a door between spots and bank
+await Banking.open({
+    stand: loc.bankStand,
+    boothName: loc.boothName,
+    boothOp: loc.boothOp,
+    obstacles: loc.obstacles ?? [],
+    log: m => this.log(m),
+});
+await Bank.depositAllMatching(depositAllExcept(['Small fishing net']));
+
+// No preset — web-walk nearest bank, dump loot, walk back
+await Banking.bankNearest({
+    deposit: depositAllExcept(['Lobster pot']),
+    returnTo: this.anchor,
+    log: m => this.log(m),
+});
+```
 
 ## Skills
 
@@ -283,6 +390,7 @@ Skills.index(name: string): number      // lowercase name → index, -1 if unkno
 Skills.level(name: string): number      // base (unboosted)
 Skills.effective(name: string): number  // current (boosted/drained)
 Skills.xp(name: string): number
+Skills.hpFraction(): number             // effective/base hitpoints (1 while unreadable)
 ```
 
 ## ChatDialog
@@ -300,6 +408,44 @@ ChatDialog.makeProducts(): string[]
 ChatDialog.make(match?: string): Promise<boolean>  // contains match at the largest fixed qty
 ```
 
+## Shop
+
+```ts
+Shop.isOpen(): boolean
+Shop.open(npcName: string): Promise<boolean>   // must already be near the NPC
+Shop.stock(): { name; count; slot }[]
+Shop.buy(name: string, n: number): Promise<number>   // units actually bought
+Shop.sell(name: string, n: number): Promise<number>
+Shop.close(): Promise<void>
+```
+
+## Trade
+
+Player-to-player trade. Both sides must "Trade with" each other, then accept
+offer + confirm.
+
+```ts
+Trade.active(): boolean
+Trade.onOfferScreen(): boolean
+Trade.onConfirmScreen(): boolean
+Trade.partner(): string | null
+Trade.myOffer(): TradeItem[]            // { id, name, count }
+Trade.theirOffer(): TradeItem[]
+Trade.request(playerName: string): Promise<boolean>
+Trade.offerAll(itemName, pick?): Promise<boolean>
+Trade.offer(itemName, n, pick?): Promise<boolean>   // Offer-X exact qty
+Trade.accept(): Promise<boolean>
+Trade.decline(): Promise<void>
+```
+
+## Quests
+
+```ts
+Quests.all(): { name: string; status: QuestStatus }[]
+Quests.status(name: string): QuestStatus   // 'notStarted' | 'inProgress' | 'complete' | 'unknown'
+Quests.points(): number
+```
+
 ---
 
 ## Movement
@@ -310,6 +456,18 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     timeoutMs?: number;
     log?: (msg: string) => void;
 }): Promise<boolean>
+
+// Prefer for unattended walks — escalates re-path / big-budget / scene bridge
+// and by default never gives up (only random-event or Stop ends it early).
+Traversal.walkResilient(dest: WorldTile, opts: {
+    radius: number;
+    attempts?: number;
+    timeoutMs?: number;
+    sceneRadius?: number;
+    maxBudget?: number;
+    log?: (msg: string) => void;
+}): Promise<boolean>
+
 Traversal.preload(): void      // warm the nav worker before the first walk
 Traversal.remaining(): number  // path tiles left in the active walk
 ```
@@ -317,12 +475,14 @@ Traversal.remaining(): number  // path tiles left in the active walk
 `Traversal.walkTo` web-walks the whole world (A\* over the collision pack + door/
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
+`walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
+script bank runs and long unattended walks**.
 
 For same-scene clicks, `DirectNavigator.walk(dest)` / `walkTo(dest, radius?,
-timeoutMs?)` are available, but prefer `Traversal.walkTo`.
+timeoutMs?)` are available, but prefer `Traversal.walkTo` / `walkResilient`.
 
 ```ts
-if (!await Traversal.walkTo({ x: 2662, z: 3305, level: 0 }, { radius: 0 })) {
+if (!await Traversal.walkResilient({ x: 2662, z: 3305, level: 0 }, { radius: 0 })) {
     this.log('could not reach the stall');
 }
 ```
@@ -360,7 +520,16 @@ runtime through `this.settings`.
 
 ```ts
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
-interface SettingDef { type: SettingType; default: unknown; label?; min?; max?; help?; }
+interface SettingDef {
+    type: SettingType;
+    default: unknown;
+    label?: string;
+    min?: number;
+    max?: number;
+    help?: string;
+    options?: string[];   // dropdown (string) or multi-select (string[])
+    group?: string;       // panel group heading
+}
 type SettingsSchema = Record<string, SettingDef>;
 
 interface SettingsBag {
@@ -377,8 +546,9 @@ interface SettingsBag {
 export default defineBot({
     name: 'Miner',
     settingsSchema: {
-        rock:  { type: 'string', default: 'Copper rocks', label: 'Rock' },
+        rock:  { type: 'string', default: 'Copper rocks', label: 'Rock', options: ['Copper rocks', 'Tin rocks'] },
         world: { type: 'boolean', default: true, label: 'World-hop when crowded' },
+        // or spread PERIODIC_BANK_SETTINGS into combat scripts
     },
     create: () => new Miner(),
 });

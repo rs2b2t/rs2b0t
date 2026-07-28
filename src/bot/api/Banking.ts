@@ -3,9 +3,11 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { nearestBank, type BankObjectAccess } from './BankLocations.js';
 import { Execution } from './Execution.js';
 import { Game } from './Game.js';
+import Tile from './Tile.js';
 import { Traversal } from './Traversal.js';
 import { Bank } from './hud/Bank.js';
 import { Locs } from './queries/Locs.js';
+import { walkOpening } from './walkOpening.js';
 
 export type BankStrategy = 'off' | 'items' | 'time' | 'either';
 
@@ -93,7 +95,63 @@ function realBooth(boothName: string) {
     return Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
 }
 
+export interface OpenBankOpts {
+    /** Preset bank stand (location table). When set, walk here then openBooth. */
+    stand?: WorldTile | null;
+    boothName?: string;
+    boothOp?: string;
+    /**
+     * Openable obstacles on the way to a preset stand (doors/gates).
+     * Empty = plain walkResilient to the stand.
+     */
+    obstacles?: string[];
+    /** Optional forced destination when no booth is in scene and stand is unset. */
+    destination?: BankDestination;
+    log?: (msg: string) => void;
+}
+
+function asTile(t: WorldTile): Tile {
+    return t instanceof Tile ? t : new Tile(t.x, t.z, t.level);
+}
+
 export const Banking = {
+    /**
+     * Open a bank for script work (deposit / withdraw / restock).
+     * - Preset `stand`: walkOpening (if obstacles) or walkResilient → openBooth
+     * - No stand: booth in scene → openNearestAccess; else web-walk nearestBank first
+     *
+     * Does not deposit or return — callers own the bank session.
+     */
+    async open(opts: OpenBankOpts = {}): Promise<boolean> {
+        const boothName = opts.boothName ?? 'Bank booth';
+        const boothOp = opts.boothOp ?? 'Use-quickly';
+        const log = opts.log ?? (() => {});
+        const obstacles = (opts.obstacles ?? []).map(s => s.trim().toLowerCase()).filter(Boolean);
+
+        if (opts.stand) {
+            const stand = asTile(opts.stand);
+            if (obstacles.length > 0) {
+                await walkOpening(stand, 2, obstacles, log);
+            } else {
+                await Traversal.walkResilient(stand, { radius: 2, timeoutMs: 120_000, log });
+            }
+            return Bank.openBooth(stand, boothName, boothOp, log);
+        }
+
+        let destination: BankDestination | null = null;
+        if (!realBooth(boothName)) {
+            const here = Game.tile();
+            destination = opts.destination ?? (here ? nearestBank(here) : null);
+            if (destination) {
+                log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
+                await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });
+            }
+        }
+
+        const access = destination?.access ?? { name: boothName, op: boothOp };
+        return Bank.openNearestAccess(access, log);
+    },
+
     async bankNearest(opts: {
         deposit: (name: string) => boolean;
         commonJunk?: boolean;
@@ -104,29 +162,22 @@ export const Banking = {
         afterDeposit?: () => void | Promise<void>;
         log?: (msg: string) => void;
     }): Promise<boolean> {
-        const boothName = opts.boothName ?? 'Bank booth';
-        const boothOp = opts.boothOp ?? 'Use-quickly';
         const log = opts.log ?? (() => {});
-        let destination: BankDestination | null = null;
-
-        if (!realBooth(boothName)) {
-            const here = Game.tile();
-            destination = opts.destination ?? (here ? nearestBank(here) : null);
-            if (destination) {
-                log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
-                await Traversal.walkResilient(destination.tile, { radius: 4, timeoutMs: 120_000, log });
-            }
-        }
-
-        const access = destination?.access ?? { name: boothName, op: boothOp };
-        if (!(await Bank.openNearestAccess(access, log))) {
+        if (
+            !(await Banking.open({
+                boothName: opts.boothName,
+                boothOp: opts.boothOp,
+                destination: opts.destination,
+                log
+            }))
+        ) {
             return false;
         }
         await Bank.depositAllMatching(depositMatcher(opts.deposit, opts.commonJunk ?? true));
         await opts.afterDeposit?.();
         await Execution.delayTicks(1);
         if (opts.returnTo) {
-            await Traversal.walkResilient(opts.returnTo, { radius: 3, timeoutMs: 120_000, log });
+            await Traversal.walkResilient(asTile(opts.returnTo), { radius: 3, timeoutMs: 120_000, log });
         }
         return true;
     }
