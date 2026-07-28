@@ -2758,31 +2758,11 @@ class Gather implements Task {
         const startTile = target.tile();
         const key = keyOf(startTile);
 
-        // Leftover cast anim from a previous spot — don't bind a long session to the new index.
-        // Wait briefly for idle (or this spot to die), then re-click on the next pass.
-        if (Game.animating() && this.activeFishIndex !== index) {
-            this.bot.setStatus('fish: clearing cast before re-click');
-            await Execution.delayUntil(
-                () =>
-                    !Game.animating() ||
-                    this.fishingBroken(index, startTile) ||
-                    EventSignal.pending() ||
-                    Inventory.isFull() ||
-                    Game.inCombat() ||
-                    ChatDialog.canContinue(),
-                2500
-            );
-            if (this.fishingBroken(index, startTile)) {
-                const live = this.spotByIndex(index);
-                if (live && WHIRLPOOL_IDS.has(live.id)) {
-                    await this.fleeWhirlpool(live.tile());
-                }
-                this.activeFishIndex = null;
-            }
-            return;
-        }
-
-        if (!Game.animating()) {
+        // Click immediately when idle OR when the target is a different spot than the
+        // active session. A fresh interact cancels leftover cast anim — no need to
+        // wait it out ("clearing cast before re-click").
+        const needsClick = !Game.animating() || this.activeFishIndex !== index;
+        if (needsClick) {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${startTile}`);
             const before = Inventory.used();
             if (!(await target.interact(this.bot.actionName()))) {
