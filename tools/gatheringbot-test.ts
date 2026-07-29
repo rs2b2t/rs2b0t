@@ -872,7 +872,8 @@ const SPOT = {
     /** Barbarian Village fly/bait river (location bank = Edgeville). */
     barbVillageFish: { x: 3104, z: 3430, level: 0 },
     /** Willows NW of Crafting Guild — Auto freeform WC (outside every WC camp chunk). */
-    willowsNwCg: { x: 2910, z: 3328, level: 0 },
+    // Was 2910,3328 (~25N of the stand); willows sit closer to the guild wall.
+    willowsNwCg: { x: 2910, z: 3303, level: 0 },
     /** Wilderness skeleton mine iron/coal — Auto freeform mine. */
     skelMine: { x: 3018, z: 3590, level: 0 },
     /** Ardougne river fly fishing — Auto freeform fish. */
@@ -1302,6 +1303,113 @@ const SCENARIOS: Scenario[] = [
             `boughtSteel=${logHas(cur, /acquire:\s*bought\s+\d+×\s*Steel axe/i)} steelAxe=${hasTool(cur, 'Steel axe')} anyAxe=${hasAnyAxe(cur)} coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     },
     {
+        id: 'repair-axe-bob',
+        tags: ['acquire', 'repair', 'woodcutting', 'wc', 'tools'],
+        script: 'Woodcutter',
+        // Broken steel-tier axe in pack → Draynor bank float → Bob item-on-NPC repair.
+        // Debug obj is tiered (macro_broken_steel_hatchet); display name is always "Broken axe".
+        start: SPOT.draynorBank,
+        camp: SPOT.bob,
+        settings: {
+            treeName: 'Tree',
+            location: 'Draynor (trees)',
+            burnMode: 'Off',
+            toolAcquire: 'Buy / repair',
+            forgetfulBank: false,
+            leashRadius: 12
+        },
+        purgeBank: { stand: SPOT.draynorBank, match: TOOL_RE.axe, label: 'axes@draynor' },
+        // Steel broken axe repairs free at Bob (oc_cost 0); small coin float for bank withdraw path.
+        seed: [
+            { debug: 'macro_broken_steel_hatchet', name: 'Broken axe', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 1000 }
+        ],
+        scene: 'bank',
+        budgetMs: 200_000,
+        check: ({ cur, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const repaired = logHas(cur, /acquire:\s*repaired\s+Broken axe\s+at\s+Bob/i);
+            const started = logHas(cur, /acquire:\s*repair\s+Broken axe\s+via\s+Bob/i);
+            const gotSteel = hasTool(cur, 'Steel axe');
+            const stillBroken = hasTool(cur, 'Broken axe');
+            if (repaired && gotSteel && !stillBroken) {
+                return 'pass';
+            }
+            // Repair log is authoritative even if equip lagged a tick.
+            if (repaired && !stillBroken) {
+                return 'pass';
+            }
+            if (repaired && elapsedMs >= 30_000) {
+                return 'pass';
+            }
+            if (started && gotSteel && !stillBroken) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ cur }) =>
+            `repairedLog=${logHas(cur, /acquire:\s*repaired\s+Broken axe/i)} ` +
+            `repairStart=${logHas(cur, /acquire:\s*repair\s+Broken axe/i)} ` +
+            `steelAxe=${hasTool(cur, 'Steel axe')} broken=${hasTool(cur, 'Broken axe')} ` +
+            `coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'} ` +
+            `worn=${cur.worn.join(',') || 'none'}`
+    },
+    {
+        id: 'repair-pick-nurmof',
+        tags: ['acquire', 'repair', 'mining', 'tools'],
+        script: 'Miner',
+        // Broken steel-tier pick → Fally East bank float → Nurmof hop + item-on-NPC repair.
+        // Debug obj is tiered (macro_broken_steel_pickaxe); display name is always "Broken pickaxe".
+        start: SPOT.faladorEast,
+        camp: SPOT.nurmofHop,
+        settings: {
+            rocks: 'Copper',
+            location: 'Dwarven Mine',
+            toolAcquire: 'Buy / repair',
+            forgetfulBank: false,
+            leashRadius: 14
+        },
+        purgeBank: { stand: SPOT.faladorEast, match: TOOL_RE.pick, label: 'picks@fally-e' },
+        // Steel broken pick costs 17gp at Nurmof; pad for bank withdrawCoinsFor(1000).
+        seed: [
+            { debug: 'macro_broken_steel_pickaxe', name: 'Broken pickaxe', qty: 1 },
+            { debug: 'coins', name: 'Coins', qty: 1000 }
+        ],
+        scene: 'bank',
+        budgetMs: 200_000,
+        check: ({ cur, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const repaired = logHas(cur, /acquire:\s*repaired\s+Broken pickaxe\s+at\s+Nurmof/i);
+            const started = logHas(cur, /acquire:\s*repair\s+Broken pickaxe\s+via\s+Nurmof/i);
+            const usablePick = logHas(cur, /acquire:\s*usable pick after\s+Nurmof\s+repair/i);
+            const gotSteel = hasTool(cur, 'Steel pickaxe');
+            const stillBroken = hasTool(cur, 'Broken pickaxe');
+            if ((repaired || usablePick) && gotSteel && !stillBroken) {
+                return 'pass';
+            }
+            if ((repaired || usablePick) && !stillBroken) {
+                return 'pass';
+            }
+            if ((repaired || usablePick) && elapsedMs >= 30_000) {
+                return 'pass';
+            }
+            if (started && gotSteel && !stillBroken) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ cur }) =>
+            `repairedLog=${logHas(cur, /acquire:\s*repaired\s+Broken pickaxe/i)} ` +
+            `repairStart=${logHas(cur, /acquire:\s*repair\s+Broken pickaxe/i)} ` +
+            `steelPick=${hasTool(cur, 'Steel pickaxe')} broken=${hasTool(cur, 'Broken pickaxe')} ` +
+            `coins=${invCount(cur, 'Coins')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'} ` +
+            `worn=${cur.worn.join(',') || 'none'}`
+    },
+    {
         id: 'buy-net',
         tags: ['acquire', 'buy', 'fishing', 'tools'],
         script: 'Fisher',
@@ -1640,13 +1748,45 @@ try {
             await clearChatDialogs(page);
 
             // Acquire tests must not already hold the tool after purge+seed.
-            if (sc.id.startsWith('buy-') || sc.id === 'smith-rune-axe' || sc.id === 'restock-fly-barb') {
+            if (
+                sc.id.startsWith('buy-')
+                || sc.id.startsWith('repair-')
+                || sc.id === 'smith-rune-axe'
+                || sc.id === 'restock-fly-barb'
+            ) {
                 const pre = await snap(page);
                 if ((sc.id === 'buy-pick') && hasAnyPick(pre)) {
                     throw new Error('precondition: already holding a pickaxe after purge');
                 }
                 if ((sc.id === 'buy-axe' || sc.id === 'smith-rune-axe') && hasAnyAxe(pre)) {
                     throw new Error('precondition: already holding an axe after purge');
+                }
+                if (sc.id === 'repair-axe-bob') {
+                    if (invCount(pre, 'Broken axe') < 1 && !hasTool(pre, 'Broken axe')) {
+                        throw new Error('precondition: no Broken axe after seed');
+                    }
+                    // Usable axes would skip repair; broken-only pack is required.
+                    const usableAxe = pre.inv.some(i => /\baxe\b/i.test(i.name) && !/broken/i.test(i.name) && !/pickaxe/i.test(i.name))
+                        || pre.worn.some(w => /\baxe\b/i.test(w) && !/broken/i.test(w) && !/pickaxe/i.test(w));
+                    if (usableAxe) {
+                        throw new Error('precondition: usable axe present after purge+seed (would skip Bob repair)');
+                    }
+                    if (invCount(pre, 'Coins') < 1) {
+                        throw new Error(`precondition: need coins for repair float (have ${invCount(pre, 'Coins')})`);
+                    }
+                }
+                if (sc.id === 'repair-pick-nurmof') {
+                    if (invCount(pre, 'Broken pickaxe') < 1 && !hasTool(pre, 'Broken pickaxe')) {
+                        throw new Error('precondition: no Broken pickaxe after seed');
+                    }
+                    const usablePick = pre.inv.some(i => /pickaxe/i.test(i.name) && !/broken/i.test(i.name))
+                        || pre.worn.some(w => /pickaxe/i.test(w) && !/broken/i.test(w));
+                    if (usablePick) {
+                        throw new Error('precondition: usable pick present after purge+seed (would skip Nurmof repair)');
+                    }
+                    if (invCount(pre, 'Coins') < 17) {
+                        throw new Error(`precondition: need ≥17gp for steel pick repair (have ${invCount(pre, 'Coins')})`);
+                    }
                 }
                 if (sc.id === 'buy-net' && invCount(pre, 'Small fishing net') > 0) {
                     throw new Error('precondition: already holding a net after purge');

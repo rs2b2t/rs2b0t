@@ -118,11 +118,12 @@ const LOCAL_BURN_HALF = 8;
 
 /**
  * Floor for non-Auto location modes (named camps + power None).
- * Named camps are large (Catherby pier, multi-rock mines) — a tight UI default
- * like 10–18 leaves "no spots within 28 of anchor" while standing in camp.
+ * Named camps are large (Catherby pier, Fishing Guild docks, multi-rock mines) —
+ * a tight UI default like 10–18 leaves "no spots within N of anchor" while standing
+ * in camp. Floor 40 still clipped Fishing Guild pier hops (hunt was also capped at 40).
  * Auto keeps the raw setting so freeform / unverified snaps stay conservative.
  */
-export const NAMED_CAMP_LEASH_FLOOR = 40;
+export const NAMED_CAMP_LEASH_FLOOR = 64;
 
 /** @deprecated Prefer {@link NAMED_CAMP_LEASH_FLOOR} — same value, kept for imports. */
 export const START_TILE_LEASH_FLOOR = NAMED_CAMP_LEASH_FLOOR;
@@ -140,6 +141,21 @@ export function effectiveGatherLeash(settingLeash: number, locationSetting: stri
     return Math.max(NAMED_CAMP_LEASH_FLOOR, raw);
 }
 
+/** True when Location is Auto — expert freeform; no mob-flee babysitting. */
+export function isAutoLocation(locationSetting: string): boolean {
+    return locationSetting.trim().toLowerCase() === 'auto';
+}
+
+/**
+ * Pier-hop hunt radius past the gather leash.
+ * Must exceed the leash (no hard 40 cap) so named camps with a high floor still
+ * chase spots that hop further along the dock.
+ */
+export function gatherHuntRadius(leash: number): number {
+    const L = Math.max(2, Math.floor(Number.isFinite(leash) ? leash : 10));
+    return Math.max(L + 12, 28);
+}
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
@@ -150,10 +166,10 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         type: 'number',
         default: 10,
         min: 2,
-        max: 40,
+        max: 64,
         label: 'Leash radius (tiles)',
         help:
-            'How far from the camp/start anchor to hunt targets. Only Location Auto uses this value as-is (freeform and unverified chunk snaps). Named camps and None floor to 40 so large piers/mines stay fully in range.'
+            'How far from the camp/start anchor to hunt targets. Only Location Auto uses this value as-is (freeform and unverified chunk snaps). Named camps and None floor to 64 so large piers/mines (Fishing Guild, Catherby) stay fully in range.'
     }
 };
 
@@ -207,6 +223,8 @@ export default class GatheringBot extends TaskBot {
     private pairOp = '';
     private dropMatch = 'ore';
     private leash = 10;
+    /** Raw location setting — Auto skips mob flee (expert / may-die). */
+    private locationSetting = 'None';
 
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
@@ -341,6 +359,7 @@ export default class GatheringBot extends TaskBot {
 
         const here = Game.tile()!;
         const locSetting = this.settings.str('location', 'None');
+        this.locationSetting = locSetting;
         // Skill-branched location tables — Miner/WC must not resolve fishing piers.
         if (this.fishing) {
             this.location = resolveFishingLocation(locSetting, here);
@@ -355,7 +374,7 @@ export default class GatheringBot extends TaskBot {
         // Named/Auto camps pin the gather leash to the camp spot. Power mode (None)
         // and Auto freeform (no preset in this 64×64 map square) leash from the live
         // start tile. Leash width: only Auto respects the UI setting; named camps
-        // and None floor to NAMED_CAMP_LEASH_FLOOR (Catherby pier etc. need ~40).
+        // and None floor to NAMED_CAMP_LEASH_FLOOR (Fishing Guild / Catherby need ~64).
         this.leash = effectiveGatherLeash(this.leash, locSetting);
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
@@ -464,12 +483,17 @@ export default class GatheringBot extends TaskBot {
         this.gearKeep = this.rebuildGearKeep();
         this.captureXpStart();
 
-        // Multi-combat pests (lava-maze spiders, etc.) pin a retaliating miner forever.
-        // Off at start so a hit only stuns briefly — FleeCombat walks it off.
-        if (Game.setAutoRetaliate(false)) {
-            this.log('combat: Auto Retaliate off (gather — flee, do not fight)');
+        // Named/None: multi-combat pests (lava-maze spiders, etc.) pin a retaliating
+        // gatherer forever — Auto Retaliate off + FleeCombat walks hits off.
+        // Location Auto is expert / may-die: leave combat alone (no flee babysitting).
+        if (!isAutoLocation(this.locationSetting)) {
+            if (Game.setAutoRetaliate(false)) {
+                this.log('combat: Auto Retaliate off (gather — flee, do not fight)');
+            } else {
+                this.log('combat: could not toggle Auto Retaliate (controls missing?)');
+            }
         } else {
-            this.log('combat: could not toggle Auto Retaliate (controls missing?)');
+            this.log('combat: Location Auto — mob flee off (may die)');
         }
 
         if (this.location) {
@@ -521,10 +545,12 @@ export default class GatheringBot extends TaskBot {
         const cookOn = this.fishing && this.cookMode !== 'off' && this.rangeStand !== null;
         const burnOn = this.burnEnabled();
         const gatherTools = (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
+        const mobFlee = !isAutoLocation(this.locationSetting);
         this.add(
             new ContinueDialog(),
-            // Before gather/bank: break multi-combat pulls (wildy spiders) by walking off.
-            new FleeCombat(this),
+            // Named/None only: break multi-combat pulls (wildy spiders) by walking off.
+            // Auto = expert mode — no mob flee (random events still handled elsewhere).
+            ...(mobFlee ? [new FleeCombat(this)] : []),
             ...(this.mining() || this.woodcutting() ? [new RepairBrokenGatherTool(this)] : []),
             ...(this.fishing ? [new RestockFishingGear(this)] : []),
             ...(gatherTools
@@ -2429,12 +2455,17 @@ function keyOf(t: { x: number; z: number }): string {
     return `${t.x},${t.z}`;
 }
 
-/** Step size when kiting away from an attacker that is already on the anchor. */
-const FLEE_STEP = 8;
+/** First kite step away from a mob (named camps only — Auto skips FleeCombat). */
+const FLEE_STEP = 12;
+/** Second kite if still stuck after the first walk. */
+const FLEE_STEP_HARD = 20;
 
 /**
- * Break multi-combat pulls (lava-maze spiders, random events, etc.).
+ * Break multi-combat pulls from aggressive NPCs (lava-maze spiders, dark wizards, etc.).
+ * Not for random events — those are handled elsewhere.
  * Auto Retaliate is off at start — walking away ends the fight instead of trading hits.
+ * Always kite *away* from the attacker (never walk back onto the camp anchor while
+ * spiders sit on it). Prefer east when the vector is ambiguous (Lava Maze exit).
  */
 class FleeCombat implements Task {
     constructor(private bot: GatheringBot) {}
@@ -2454,25 +2485,29 @@ class FleeCombat implements Task {
         );
     }
 
-    private fleeTile(here: { x: number; z: number; level: number }, attacker: Npc | null): Tile {
-        const anchor = this.bot.getAnchor();
-        // Prefer the camp/start anchor when we're not already on it — gets us back to rocks.
-        if (anchor.distanceTo(here) > 2) {
-            return anchor;
-        }
+    private fleeTile(
+        here: { x: number; z: number; level: number },
+        attacker: Npc | null,
+        step: number
+    ): Tile {
         if (!attacker) {
-            // No face target — step south of anchor (typical wildy approach).
-            return new Tile(here.x, here.z - FLEE_STEP, here.level);
+            // No face target — east first (Lava Maze spiders / wildy approach), then south.
+            return new Tile(here.x + step, here.z, here.level);
         }
         const at = attacker.tile();
-        const dx = here.x - at.x;
-        const dz = here.z - at.z;
+        let dx = here.x - at.x;
+        let dz = here.z - at.z;
+        // Stacked on the attacker or zero vector — default east (named wildy camps).
+        if (dx === 0 && dz === 0) {
+            dx = 1;
+            dz = 0;
+        }
         const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1;
         const sz = dz === 0 ? 0 : dz > 0 ? 1 : -1;
-        // If stacked on the attacker, pick a cardinal step.
-        const ox = sx === 0 && sz === 0 ? 0 : sx;
-        const oz = sx === 0 && sz === 0 ? -1 : sz;
-        return new Tile(here.x + ox * FLEE_STEP, here.z + oz * FLEE_STEP, here.level);
+        // Pure north/south kite: bias a half-step east so we don't re-enter spider packs.
+        const ox = sx === 0 ? 1 : sx;
+        const oz = sz;
+        return new Tile(here.x + ox * step, here.z + oz * step, here.level);
     }
 
     async execute(): Promise<void> {
@@ -2485,7 +2520,7 @@ class FleeCombat implements Task {
             return;
         }
         const attacker = this.attacker();
-        const dest = this.fleeTile(here, attacker);
+        const dest = this.fleeTile(here, attacker, FLEE_STEP);
         const who = attacker?.name ?? 'attacker';
         this.bot.setStatus(`combat: fleeing ${who} → ${dest.x},${dest.z}`);
         this.bot.log(`combat: under attack by ${who} — walking off to ${dest.x},${dest.z}`);
@@ -2493,10 +2528,10 @@ class FleeCombat implements Task {
         await Traversal.walkTo(dest, { radius: 2, timeoutMs: 20_000 });
         await Execution.delayUntil(() => !Game.inCombat(), 12_000);
         if (Game.inCombat()) {
-            // Still stuck — try a second step away from whoever is on us.
+            // Still stuck — longer kite away from whoever is on us.
             const still = Game.tile();
             if (still) {
-                const again = this.fleeTile(still, this.attacker());
+                const again = this.fleeTile(still, this.attacker(), FLEE_STEP_HARD);
                 this.bot.log(`combat: still in combat — second kite to ${again.x},${again.z}`);
                 await Traversal.walkTo(again, { radius: 2, timeoutMs: 15_000 });
                 await Execution.delayUntil(() => !Game.inCombat(), 10_000);
@@ -3443,9 +3478,10 @@ class Gather implements Task {
     /**
      * Spots that hopped just outside the leash (common on long piers).
      * Hunt radius is wider than leash so we walk to them instead of stalling.
+     * Not hard-capped at 40 — named camps floor leash to 64 and still need headroom.
      */
     private huntRadius(): number {
-        return Math.min(40, Math.max(this.bot.leashRadius() + 10, 24));
+        return gatherHuntRadius(this.bot.leashRadius());
     }
 
     private findHuntSpot() {

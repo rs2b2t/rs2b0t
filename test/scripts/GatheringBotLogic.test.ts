@@ -3,6 +3,8 @@ import {
     NAMED_CAMP_LEASH_FLOOR,
     effectiveGatherLeash,
     fishingSessionBroken,
+    gatherHuntRadius,
+    isAutoLocation,
     shouldYieldGathering
 } from '#/bot/scripts/GatheringBot.js';
 
@@ -11,18 +13,39 @@ describe('effectiveGatherLeash', () => {
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
         expect(effectiveGatherLeash(18, 'auto')).toBe(18);
         expect(effectiveGatherLeash(40, 'Auto')).toBe(40);
+        expect(effectiveGatherLeash(64, 'Auto')).toBe(64);
     });
 
-    test('named camps floor to NAMED_CAMP_LEASH_FLOOR (Catherby-scale)', () => {
+    test('named camps floor to NAMED_CAMP_LEASH_FLOOR (Fishing Guild / Catherby-scale)', () => {
         expect(effectiveGatherLeash(10, 'Catherby')).toBe(NAMED_CAMP_LEASH_FLOOR);
         expect(effectiveGatherLeash(18, 'Catherby')).toBe(NAMED_CAMP_LEASH_FLOOR);
         expect(effectiveGatherLeash(12, 'Southwest Varrock Mine')).toBe(NAMED_CAMP_LEASH_FLOOR);
-        expect(effectiveGatherLeash(40, 'Draynor Village')).toBe(40);
+        expect(effectiveGatherLeash(18, 'Fishing Guild')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(40, 'Draynor Village')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(64, 'Draynor Village')).toBe(64);
     });
 
     test('None (power) also floors — start-tile clusters need width', () => {
         expect(effectiveGatherLeash(10, 'None')).toBe(NAMED_CAMP_LEASH_FLOOR);
         expect(effectiveGatherLeash(8, 'none')).toBe(NAMED_CAMP_LEASH_FLOOR);
+    });
+});
+
+describe('isAutoLocation', () => {
+    test('only Auto is expert freeform (no mob flee)', () => {
+        expect(isAutoLocation('Auto')).toBe(true);
+        expect(isAutoLocation(' auto ')).toBe(true);
+        expect(isAutoLocation('Fishing Guild')).toBe(false);
+        expect(isAutoLocation('None')).toBe(false);
+    });
+});
+
+describe('gatherHuntRadius', () => {
+    test('extends past leash without a hard 40 cap', () => {
+        expect(gatherHuntRadius(18)).toBe(30);
+        expect(gatherHuntRadius(40)).toBe(52);
+        expect(gatherHuntRadius(NAMED_CAMP_LEASH_FLOOR)).toBeGreaterThan(NAMED_CAMP_LEASH_FLOOR);
+        expect(gatherHuntRadius(NAMED_CAMP_LEASH_FLOOR)).toBe(NAMED_CAMP_LEASH_FLOOR + 12);
     });
 });
 

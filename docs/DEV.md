@@ -137,19 +137,54 @@ After camps look right, run the live script harness (needs a **fresh deploy** so
 
 ```bash
 bun run verify:gatheringbot                 # all scenarios
-bun run verify:gatheringbot -- mining       # mine-bank + mine-power + buy-pick
+bun run verify:gatheringbot -- mining       # mine-bank + mine-power + buy-pick + …
 bun run verify:gatheringbot -- fish-cook
-BUDGET_S=90 bun run verify:gatheringbot -- mine-bank
+BUDGET_S=180 bun run verify:gatheringbot -- mine-bank
 HEADED=1 bun tools/gatheringbot-test.ts acquire
+HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
 ```
 
-Scenarios cover bank/power mine, Draynor fish, Catherby cook-then-bank, Draynor
-chop/bank and chop-then-burn, plus Buy/repair with **coins only** (no pre-granted
-tools). Asserts XP / held products / acquired tools. Exit nonzero on any FAIL.
+Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /
+`endgame`):
+
+| id | what it proves |
+| --- | --- |
+| `mine-bank` / `mine-power` | SW Varrock tin bank loop vs drop mode |
+| `fish-bank` / `fish-cook` | Draynor net bank; Catherby lobster cook-then-bank |
+| `wc-bank` / `wc-burn` | Draynor chop+bank; chop-then-burn |
+| `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
+| `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
+| `repair-axe-bob` | Seed broken steel axe → Bob item-on-NPC repair (`macro_broken_steel_hatchet`) |
+| `repair-pick-nurmof` | Seed broken steel pick → Nurmof repair (`macro_broken_steel_pickaxe`) |
+| `restock-fly-barb` | Gerrant multi-buy fly rod + feathers from Draynor bank |
+| `auto-freeform-wc-willows-cg` | Auto outside every WC camp chunk → start-tile freeform |
+| `auto-freeform-mine-skel` | Auto freeform at wilderness skeleton mine |
+| `auto-freeform-fish-ardy-river` | Auto freeform at Ardougne river fly |
+| `smith-rune-axe` | Buy/repair smith path (bars + hammer → rune axe) |
+
+**Location / leash (product behaviour, not just the harness):**
+
+- **Named camps** pin the gather anchor to the camp spot and **floor leash to 64**
+  (Catherby pier, Fishing Guild docks, multi-rock mines). The UI `leashRadius` is
+  ignored below that floor. Hunt radius extends past the leash (no hard 40 cap).
+- **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
+  tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
+  start-tile leash, nearest bank). Auto is expert / may-die: **no mob flee**
+  (spiders, dark wizards) — random events still run.
+- **None** is power/drop mode (also floors leash to 64 from the start tile).
+- **Named/None mob flee** kites *away* from the attacker (east-biased), not back onto
+  the camp anchor while multi-combat pests sit on it.
+
+Asserts XP / held products / acquired tools / bank proximity. Exit nonzero on any FAIL.
 
 Seeds use engine `give <obj> <qty>` (this Server tree has no `~item`/`~bankitem`).
 `~clearinv` still works as a content debugproc. Redeploy the bot client yourself
 when script code changes — the harness does not own engine `public/`.
+
+Mainland setup always teles off Tutorial Island + `setvar tutorial 1000` then
+**relogs** (side icons only unlock from the login payload). Engine-TS holds the old
+session after unclean logout — harness probes from ~20s (`RELOG_COOLDOWN_MS` /
+`RELOG_PROBE_MS` / `RELOG_RETRY_MS` override).
 
 
 ### Hosting the single client (prod)

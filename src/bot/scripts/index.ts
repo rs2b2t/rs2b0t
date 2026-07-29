@@ -286,10 +286,10 @@ ScriptRegistry.register({
             type: 'number',
             default: 18,
             min: 2,
-            max: 40,
+            max: 64,
             label: 'Leash radius (tiles)',
             help:
-                'How far from the camp/start anchor to prefer fishing spots. Only Location Auto uses this as-is. Named camps and None floor to 40 (Catherby pier is huge). The bot still hunts a bit past the leash when spots hop along the pier.'
+                'How far from the camp/start anchor to prefer fishing spots. Only Location Auto uses this as-is. Named camps and None floor to 64 (Fishing Guild / Catherby piers are huge). The bot still hunts past the leash when spots hop along the pier. Location Auto does not mob-flee (expert / may-die).'
         },
         location: {
             type: 'string',
