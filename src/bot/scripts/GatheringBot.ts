@@ -4418,12 +4418,13 @@ class Gather implements Task {
     /**
      * Distance origin for fishing spots.
      * Freeform fish → player (chase river hops); named camp → pier/mine anchor.
+     * Game.tile() is a plain WorldTile — wrap with Tile.from for distanceTo.
      */
     private fishSpotOrigin(): Tile {
         const freeformFish = this.bot.isNpc() && this.bot.isFreeformCamp();
         const here = Game.tile();
         if (gatherSpotRangeOrigin(freeformFish, here !== null) === 'player' && here) {
-            return here;
+            return Tile.from(here);
         }
         return this.bot.getAnchor();
     }
