@@ -85,8 +85,19 @@ describe('FISHING_LOCATIONS table', () => {
         expect(catherby?.obstacles).toContain('door');
     });
 
-    test('catalog entries are verified', () => {
-        expect(FISHING_LOCATIONS.every(l => l.verified === true)).toBe(true);
+    test('core catalog entries are verified; tick-manip camps may be provisional', () => {
+        const provisional = new Set(['Gnome Stronghold (fishing)']);
+        for (const loc of FISHING_LOCATIONS) {
+            if (provisional.has(loc.name)) {
+                expect(loc.verified, loc.name).toBe(false);
+            } else {
+                expect(loc.verified, loc.name).toBe(true);
+            }
+        }
+    });
+
+    test('includes Gnome Stronghold fishing camp (#160)', () => {
+        expect(FISHING_LOCATIONS.some(l => l.name === 'Gnome Stronghold (fishing)')).toBe(true);
     });
 
     test('Karamja banks at Draynor (no local bank)', () => {

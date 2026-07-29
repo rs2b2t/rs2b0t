@@ -112,6 +112,16 @@ describe('shouldYieldGathering', () => {
         expect(shouldYieldGathering(false, false, false, false, true)).toBe(true);
         expect(shouldYieldGathering(false, false, false, false, false)).toBe(false);
     });
+
+    test('allowCombat keeps gathering during retaliate tick-manip (#160)', () => {
+        expect(shouldYieldGathering(false, false, false, false, true, true)).toBe(false);
+        expect(shouldYieldGathering(false, false, false, false, true, false)).toBe(true);
+        // Non-combat exits still win even when combat is allowed.
+        expect(shouldYieldGathering(true, false, false, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, true, false, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, false, true, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, false, false, true, true, true)).toBe(true);
+    });
 });
 
 describe('AXE_BAR_FOR (smith restock keep)', () => {
@@ -155,5 +165,14 @@ describe('fishingSessionBroken', () => {
         expect(fishingSessionBroken({ ...calm, eventPending: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inventoryFull: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, dialogPending: true })).toBe(true);
+    });
+
+    test('allowCombat keeps fishing during Tannerfishing / retaliate (#160)', () => {
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true })).toBe(false);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: false })).toBe(true);
+        // Spot/event exits still break even when combat is allowed.
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, spotGone: true })).toBe(true);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, eventPending: true })).toBe(true);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, inventoryFull: true })).toBe(true);
     });
 });

@@ -52,8 +52,26 @@ describe('WOODCUTTING_LOCATIONS table', () => {
         }
     });
 
-    test('catalog entries are verified', () => {
-        expect(WOODCUTTING_LOCATIONS.every(l => l.verified === true)).toBe(true);
+    test('core catalog entries are verified; tick-manip camps may be provisional', () => {
+        const provisional = new Set([
+            'S Falador Oaks',
+            'Lumbridge Farmer Willows',
+            'Lumbridge Castle Willows'
+        ]);
+        for (const loc of WOODCUTTING_LOCATIONS) {
+            if (provisional.has(loc.name)) {
+                expect(loc.verified, loc.name).toBe(false);
+            } else {
+                expect(loc.verified, loc.name).toBe(true);
+            }
+        }
+    });
+
+    test('includes tick-manip WC camps (#160)', () => {
+        const names = new Set(WOODCUTTING_LOCATIONS.map(l => l.name));
+        expect(names.has('S Falador Oaks')).toBe(true);
+        expect(names.has('Lumbridge Farmer Willows')).toBe(true);
+        expect(names.has('Lumbridge Castle Willows')).toBe(true);
     });
 
     test('fire spots are not mixed into chop camps', () => {
