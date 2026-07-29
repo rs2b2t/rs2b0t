@@ -135,6 +135,20 @@ that quest steps are built from:
 | `talkOp(actions)` / `pickPreferred(options, prefer)` | choosing an op or an option |
 | `isUnderground(t)` / `needsHop(here, anchor)` | whether a level change is required |
 
+[`exec/prompts.ts`](../src/bot/quests/exec/prompts.ts) covers the other half — the
+world, rather than a conversation:
+
+| Primitive | What it handles |
+|---|---|
+| `promptLoc(step, log)` | walk to a stand, act on a loc, answer the prompt it raised |
+| `useOnLoc(itemId, loc, prefer, expect, log)` | the same for `oplocu`, which no op-based step can express |
+| `driveChoice(prefer, log)` | `driveDialog` that abandons rather than guessing |
+| `locNear(name, op, within)` / `heldId(id)` / `settleScene()` | the small repeated lookups |
+
+`driveChoice` exists because loc prompts routinely put the refusal first — the
+gallows offers *"I don't think so, it might animate and attack me!"* as option one.
+Falling through to an unmatched option is worse than stopping.
+
 Dialogue is driven by **preference lists** rather than indices, so option reordering
 does not break a quest:
 
@@ -154,6 +168,11 @@ continue leaves the conversation half-finished and the quest un-advanced.
 tool: it wanders out of leash and the step is abandoned. Use
 [`Reach.npcDialog`](NAV.md#the-reach-primitive), which searches the whole scene and
 lets the server chase.
+
+Opening the dialogue itself goes through [`Reach`](NAV.md#the-reach-primitive), so an
+NPC who has wandered behind a shut door is reached rather than abandoned. Being inside
+the leash does not mean being reachable: Fred the Farmer paces into his bedroom, the
+one interior door re-shuts, and every talk from the anchor is silently dropped.
 
 ## Provisioning
 
@@ -255,7 +274,26 @@ Three engine behaviours bit this quest hard enough to be worth stating once:
   an error — the rock simply does not respond, and the step retries until the watchdog
   parks it. Anything a step needs but does not consume has to be sourced explicitly.
 
-Two habits fall out of the last one, and both cost hours here:
+Shilo Village added three more, each of which cost a live run:
+
+- **A region the walker cannot reach is a nav-data problem, not a walker one.** The
+  Ah Za Rhoon mound and Rashiliyia's tomb sit in a 6,193-tile jungle whose only links
+  to the mainland are two Agility shortcuts that `derive-doors` cannot see. Four
+  curated `transports.json` edges fixed what no amount of quest code could.
+- **A journal that renders nothing is not a journal that says "not started".** At
+  `found_snake_weed` while the unidentified herb is held, Jungle Potion's journal
+  writes no line at all, and every other `found_` stage writes the *previous* stage's
+  "go and pick it" line. When a held item is unambiguous evidence of progress, let it
+  outrank the journal instead of trying to parse a state that was never written.
+- **A door that refuses the key that opens it is a `useOn`, not an `Open`.** Rashiliyia's
+  tomb exit answers "The door seems to be locked!" to anyone *carrying* the bone key.
+  Read the `oplocu` handler before assuming an op exists for what you want.
+- **Not every box is a chat box.** A scroll body built with `if_settext` is a *main*
+  modal: dialogue drivers cannot see it, and while it is up every journal read comes back
+  empty — which reads as "stage unavailable" and parks the quest one step later. Close it
+  with `actions.closeModal()`, the same way `readProgress` does.
+
+Two habits fall out of the tool lesson, and both cost hours here:
 
 - **Seed a stage test with only what that stage produces, never with its tools.** Every
   Watch Tower stage-10 test handed the bot a pickaxe, so all of them passed and the

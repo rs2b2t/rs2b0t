@@ -74,3 +74,22 @@ describe('ProgressWatchdog', () => {
         expect(NO_PROGRESS_PARK).toBe(8);
     });
 });
+
+describe('progressSignature — journal flags', () => {
+    const withFlags = (flags: string[]): QuestSnapshot => ({
+        ...snap('inProgress', [['knife', 1]]),
+        stage: 7,
+        progress: { stage: 7, flags: new Set(flags) }
+    });
+
+    test('a flag-only change counts as progress', () => {
+        // Reading a scroll or searching a lock moves nothing else at all. Without
+        // flags in the signature such a step burns the whole no-progress budget.
+        expect(progressSignature(withFlags(['read-tattered'])))
+            .not.toBe(progressSignature(withFlags(['read-tattered', 'read-crumpled'])));
+    });
+
+    test('the same flags in a different order are the same signature', () => {
+        expect(progressSignature(withFlags(['b', 'a']))).toBe(progressSignature(withFlags(['a', 'b'])));
+    });
+});

@@ -44,7 +44,16 @@ function main(): void {
         if (!type.op || !type.op.some(op => op?.toLowerCase() === 'open')) {
             continue;
         }
-        const QUEST_LOCKED = new Set(['closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8']);
+        // Doors a script refuses until a quest condition is met. Baking them as
+        // ordinary edges makes the pathfinder route through a wall and the walker
+        // repath forever against "This door is completely sealed".
+        const QUEST_LOCKED = new Set([
+            'closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8',
+            // Rashiliyia's skeletal doors: three bones, or nothing.
+            'thzq_tombrooml1', 'thzq_tombrooml2', 'thzq_tombrooml3', 'thzq_tombroomr1', 'thzq_tombroomr2',
+            // Her tomb's outer gate: the Beads of the Dead, or she meets you at it.
+            'zombiequeengateclosedl', 'zombiequeengateclosedr'
+        ]);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
         if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || QUEST_LOCKED.has(type.debugname ?? '')) {
             lockedSkipped++;

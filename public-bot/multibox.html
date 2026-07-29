@@ -47,6 +47,11 @@
         .mbx-addtile:hover { color: #04A800; border-color: #04A800; }
         .mbx-resources { width: 236px; box-sizing: border-box; flex: 0 0 auto; padding: 7px 8px; border: 1px solid #2c2c2c; border-radius: 4px; background: #0a0a0a; display: flex; flex-direction: column; gap: 4px; }
         .mbx-resource-bots { padding-bottom: 4px; border-bottom: 1px solid #222; color: #5be05b; }
+        .mbx-bulk-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 2px 0 6px; border-bottom: 1px solid #222; }
+        .mbx-bulk-controls button { min-width: 0; background: #101d11; border: 1px solid #28522a; color: #9bd49b; padding: 4px; border-radius: 3px; cursor: pointer; font: inherit; }
+        .mbx-bulk-controls button:hover { border-color: #04A800; color: #5be05b; }
+        .mbx-bulk-controls button:disabled { background: #0d0d0d; border-color: #222; color: #444; cursor: default; }
+        .mbx-bulk-renderers { grid-column: 1 / -1; }
         .mbx-resource-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; }
         /* an author display rule beats the UA's [hidden]{display:none}, so the
            hidden host rows need this or they stay on screen */
@@ -89,6 +94,12 @@
             <div id="mbx-add" class="mbx-addtile">+ add bot</div>
             <div id="mbx-resources" class="mbx-resources">
                 <div id="mbx-resource-bots" class="mbx-resource-bots">0 bots</div>
+                <div class="mbx-bulk-controls" aria-label="all bot controls">
+                    <button id="mbx-start-all" type="button">start all</button>
+                    <button id="mbx-stop-all" type="button">stop all</button>
+                    <button id="mbx-renderers-off" class="mbx-bulk-renderers" type="button">turn all renderers off</button>
+                    <button id="mbx-renderers-on" class="mbx-bulk-renderers" type="button">turn all renderers on</button>
+                </div>
                 <div id="mbx-resource-cpu-row" class="mbx-resource-row" title="CPU used by every process/thread in the dedicated bot browser"><span class="mbx-resource-label">CPU</span><span id="mbx-resource-cpu" class="mbx-resource-value">measuring…</span></div>
                 <div id="mbx-resource-memory-row" class="mbx-resource-row" title="Current memory charged to the dedicated bot browser"><span class="mbx-resource-label">RAM</span><span id="mbx-resource-memory" class="mbx-resource-value">measuring…</span></div>
                 <div class="mbx-resource-row" title="Bot game and cache WebSocket payload measured inside each client"><span class="mbx-resource-label">Traffic</span><span id="mbx-resource-traffic" class="mbx-resource-value">measuring…</span></div>

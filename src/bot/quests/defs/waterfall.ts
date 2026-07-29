@@ -7,6 +7,7 @@ import { Inventory, type InvItem } from '../../api/hud/Inventory.js';
 import { Quests } from '../../api/hud/Quests.js';
 import { Skills } from '../../api/hud/Skills.js';
 import { Locs, type Loc } from '../../api/queries/Locs.js';
+import { Npcs } from '../../api/queries/Npcs.js';
 import { Sustain } from '../../api/Sustain.js';
 import { Traversal } from '../../api/Traversal.js';
 import Tile from '../../api/Tile.js';
@@ -45,6 +46,7 @@ const ITEM = {
     AIR_RUNE: { id: 556, name: 'Air rune' },
     EARTH_RUNE: { id: 557, name: 'Earth rune' },
     COINS: { id: 995, name: 'Coins' },
+    KEBAB: { id: 1971, name: 'Kebab' },
     ROPE: { id: 954, name: 'Rope' },
     TEA: { id: 1978, name: 'Cup of tea' },
     BREAD: { id: 2309, name: 'Bread' }
@@ -56,6 +58,7 @@ const TRAVEL_TEA_TARGET = 10;
 const RUNE_TARGET = 6;
 const RUNE_UNIT_BUDGET = 24;
 const BETTY_RETURN_FARE = 60;
+const EASTERN_SUPPLY_FARE = 60;
 const CASH_FLOAT = 500;
 // The forced entry -> crate -> south-door route is 80 physical tiles. At the
 // prepared pack's ~9 kg, 40% covers about 105 running tiles through the
@@ -89,6 +92,14 @@ const AEMAD_SHOP = { npc: 'Aemad', anchor: new Tile(2614, 3293, 0) };
 const BAKER_SHOP = { npc: 'Baker', anchor: new Tile(2654, 3311, 0) };
 const TEA_SHOP = { npc: 'Tea seller', anchor: new Tile(3271, 3411, 0) };
 const BETTY_SHOP = { npc: 'Betty', anchor: new Tile(3012, 3259, 0) };
+const VARROCK_MAN = new Tile(3240, 3405, 0);
+const AL_KHARID_MAN = new Tile(3279, 3188, 0);
+const KEBAB_SELLER = new Tile(3272, 3182, 0);
+const AL_KHARID_TOLL = 10;
+const AL_KHARID_ENTRY_CASH = AL_KHARID_TOLL + 3;
+const SAFE_PICKPOCKET_HP = 3;
+const FUNDING_MAN_LEASH = 24;
+const FUNDING_STALL_MS = 120_000;
 
 const ALMERA: NpcStop = {
     npc: 'Almera',
@@ -267,11 +278,235 @@ function coinsHeld(snap: QuestSnapshot): number {
     return heldCount(snap, ITEM.COINS);
 }
 
+function remainingWaterfallCash(snap: QuestSnapshot): number {
+    // A blank eastern account needs 1,472 gp at Varrock East:
+    //   500 retained float + 100 Tea + 300 Bread + 20 Rope + 432 runes
+    //   + 60 for the later Betty leg + 60 for the safe eastern supply leg.
+    // The last 60 is not theoretical headroom: the live level-3 route to the
+    // Baker crossed Port Sarim->Musa and Brimhaven->Ardougne at 30 gp each.
+    const tea = needsEasternTravelBootstrap(snap)
+        ? Math.max(0, TRAVEL_TEA_TARGET - owned(snap, ITEM.TEA)) * 10
+        : 0;
+    const bread = Math.max(0, BREAD_TARGET - owned(snap, ITEM.BREAD)) * 20;
+    const rope = owned(snap, ITEM.ROPE) > 0 ? 0 : 20;
+    const runes = RUNES.reduce(
+        (total, rune) => total + Math.max(0, RUNE_TARGET - owned(snap, rune)) * RUNE_UNIT_BUDGET,
+        0
+    );
+    const supplyFare = needsEasternTravelBootstrap(snap) ? EASTERN_SUPPLY_FARE : 0;
+    // Stage zero cannot buy runes yet. Even if a restart happens beside Betty,
+    // retain the later fare because the quest first leaves and returns west.
+    const runeFare = runes > 0 ? BETTY_RETURN_FARE : 0;
+    return CASH_FLOAT + tea + bread + rope + runes + supplyFare + runeFare;
+}
+
+function liveCoins(): number {
+    return liveCount(ITEM.COINS);
+}
+
+function inAlKharidFundingArea(tile: ReturnType<typeof Game.tile>): boolean {
+    return tile !== null
+        && tile.level === 0
+        && tile.x >= 3230
+        && tile.x <= 3330
+        && tile.z >= 3120
+        && tile.z <= 3227;
+}
+
+function fundingMan(anchor: Tile) {
+    return Npcs.query()
+        .name('Man')
+        .action('Pickpocket')
+        .where(npc => npc.tile().distanceTo(anchor) <= FUNDING_MAN_LEASH)
+        .nearest();
+}
+
+async function reachFundingMan(anchor: Tile, log: (message: string) => void): Promise<boolean> {
+    if (!(await Traversal.walkResilient(anchor, { radius: 6, attempts: 4, timeoutMs: 180_000, log }))) {
+        return false;
+    }
+    if (fundingMan(anchor)) return true;
+    if (await Execution.delayUntil(() => fundingMan(anchor) !== null, 15_000)) return true;
+    log(`no pickpocketable Man returned within ${FUNDING_MAN_LEASH} tiles of (${anchor.x},${anchor.z})`);
+    return false;
+}
+
+async function clearFundingContinues(): Promise<void> {
+    for (let pages = 0; pages < 12 && ChatDialog.canContinue(); pages++) {
+        await ChatDialog.continue();
+        await Execution.delayTicks(1);
+    }
+}
+
+async function pickpocketFundingMan(anchor: Tile, log: (message: string) => void): Promise<boolean> {
+    let man = fundingMan(anchor);
+    if (!man) {
+        if (!(await reachFundingMan(anchor, log))) return false;
+        man = fundingMan(anchor);
+    }
+    if (!man) return false;
+
+    const coinsBefore = liveCoins();
+    const xpBefore = Skills.xp('thieving');
+    const hpBefore = Skills.effective('hitpoints');
+    if (!(await man.interact('Pickpocket'))) return false;
+    const resolved = await Execution.delayUntil(
+        () => liveCoins() > coinsBefore
+            || Skills.xp('thieving') > xpBefore
+            || Skills.effective('hitpoints') < hpBefore
+            || ChatDialog.canContinue(),
+        8000
+    );
+    if (!resolved) {
+        log(`pickpocketing Man at ${man.tile()} produced no coin, XP, health, or dialogue change`);
+        // A walking target can step away after the packet is accepted. This is
+        // an observed miss, not a failed funding route; re-query the live NPC.
+        await Execution.delayTicks(2);
+        return true;
+    }
+    await clearFundingContinues();
+    if (Skills.effective('hitpoints') < hpBefore) {
+        // A failed level-1 Man pickpocket stuns for exactly eight server ticks.
+        await Execution.delayTicks(8);
+    }
+    return true;
+}
+
+async function buyFundingKebab(log: (message: string) => void): Promise<boolean> {
+    if (!(await Traversal.walkResilient(KEBAB_SELLER, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
+        return false;
+    }
+    const seller = Npcs.query().name('Kebab seller').action('Talk-to').within(8).nearest();
+    if (!seller) {
+        log(`no talkable Kebab seller near (${KEBAB_SELLER.x},${KEBAB_SELLER.z})`);
+        return false;
+    }
+    const kebabsBefore = liveCount(ITEM.KEBAB);
+    if (!(await seller.interact('Talk-to'))) return false;
+
+    for (let step = 0; step < 40; step++) {
+        if (liveCount(ITEM.KEBAB) > kebabsBefore) return true;
+        if (ChatDialog.canContinue()) {
+            await ChatDialog.continue();
+            await Execution.delayTicks(1);
+            continue;
+        }
+        const options = ChatDialog.options();
+        if (options.length > 0) {
+            const choice = options.find(option => option.trim().toLowerCase() === 'yes please.');
+            if (!choice) {
+                log(`Kebab seller offered unexpected options: [${options.join(' | ')}]`);
+                return false;
+            }
+            if (!(await ChatDialog.chooseOption(choice))) return false;
+            await Execution.delayTicks(1);
+            continue;
+        }
+        await Execution.delayTicks(1);
+    }
+    log('Kebab seller accepted no exact purchase within 40 dialogue steps');
+    return false;
+}
+
+async function eatFundingKebab(): Promise<boolean> {
+    const kebab = liveItem(ITEM.KEBAB);
+    if (!kebab) return false;
+    const before = liveCount(ITEM.KEBAB);
+    if (!(await kebab.interact('Eat'))) return false;
+    return Execution.delayUntil(() => liveCount(ITEM.KEBAB) < before, 5000);
+}
+
+async function restoreFundingHealth(kebabsAvailable: boolean, log: (message: string) => void): Promise<boolean> {
+    while (Skills.effective('hitpoints') < SAFE_PICKPOCKET_HP) {
+        if (kebabsAvailable && liveCoins() > 0) {
+            if (!(await buyFundingKebab(log)) || !(await eatFundingKebab())) return false;
+            continue;
+        }
+        log(`waiting for ${SAFE_PICKPOCKET_HP} Hitpoints before another Man pickpocket`);
+        await Execution.delayUntil(() => Skills.effective('hitpoints') >= SAFE_PICKPOCKET_HP, 0);
+    }
+    return true;
+}
+
+async function farmWaterfallCoins(
+    anchor: Tile,
+    target: number,
+    kebabsAvailable: boolean,
+    log: (message: string) => void
+): Promise<boolean> {
+    if (!(await reachFundingMan(anchor, log))) return false;
+    let reportedHundreds = Math.floor(liveCoins() / 100);
+    let lastEvidenceAt = performance.now();
+    while (liveCoins() < target) {
+        const coinsBefore = liveCoins();
+        const xpBefore = Skills.xp('thieving');
+        const hpBefore = Skills.effective('hitpoints');
+        if (!(await restoreFundingHealth(kebabsAvailable, log))) return false;
+        if (!(await pickpocketFundingMan(anchor, log))) return false;
+        if (liveCoins() !== coinsBefore
+            || Skills.xp('thieving') !== xpBefore
+            || Skills.effective('hitpoints') !== hpBefore) {
+            lastEvidenceAt = performance.now();
+        } else if (performance.now() - lastEvidenceAt >= FUNDING_STALL_MS) {
+            log(`no cash, Thieving XP, or Hitpoints change for ${FUNDING_STALL_MS / 1000}s at the verified Man`);
+            return false;
+        }
+        const hundreds = Math.floor(liveCoins() / 100);
+        if (hundreds > reportedHundreds) {
+            reportedHundreds = hundreds;
+            log(`Waterfall funding: ${liveCoins()}/${target} gp`);
+        }
+    }
+    return true;
+}
+
+export function waterfallFundingTarget(minimum: number, returnBank: Tile): number {
+    const returnFare = AL_KHARID_TOLL + (returnBank.x < 3100 ? EASTERN_SUPPLY_FARE : 0);
+    return minimum + returnFare;
+}
+
+async function fundWaterfallCoins(minimum: number, returnBank: Tile, log: (message: string) => void): Promise<boolean> {
+    if (liveCoins() >= minimum && !inAlKharidFundingArea(Game.tile())) return true;
+
+    if (!inAlKharidFundingArea(Game.tile())) {
+        if (liveCoins() < AL_KHARID_ENTRY_CASH) {
+            log(`earning the ${AL_KHARID_TOLL} gp Al Kharid toll and a food reserve from a Varrock Man`);
+            if (!(await farmWaterfallCoins(VARROCK_MAN, AL_KHARID_ENTRY_CASH, false, log))) return false;
+        }
+        if (liveCoins() >= minimum) return true;
+        if (!(await Traversal.walkResilient(AL_KHARID_MAN, { radius: 6, attempts: 4, timeoutMs: 240_000, log }))) {
+            return false;
+        }
+        if (!inAlKharidFundingArea(Game.tile())) {
+            log('did not cross the Al Kharid toll gate into the verified Man/Kebab area');
+            return false;
+        }
+    }
+
+    // Returning to Varrock pays only the gate. Returning to the western supply
+    // bank then takes the two exact 30-gp ship edges observed on the safe route.
+    const target = waterfallFundingTarget(minimum, returnBank);
+    log(`pickpocketing the Al Kharid Man to ${target} gp, buying exact Kebabs below ${SAFE_PICKPOCKET_HP} HP`);
+    if (!(await farmWaterfallCoins(AL_KHARID_MAN, target, true, log))) return false;
+    if (!(await Traversal.walkResilient(returnBank, { radius: 3, attempts: 4, timeoutMs: 300_000, log }))) {
+        return false;
+    }
+    if (liveCoins() < minimum) {
+        log(`returned from self-funding with ${liveCoins()} gp, below the required ${minimum}`);
+        return false;
+    }
+    return true;
+}
+
 function ensureCoins(snap: QuestSnapshot, minimum: number = CASH_FLOAT, bank: Tile = ARDOUGNE_BANK): QuestStep | null {
     if (coinsHeld(snap) >= minimum) return null;
     const available = banked(snap, ITEM.COINS);
     if (available <= 0) {
-        return { kind: 'wait', reason: 'need ' + minimum + ' gp for Waterfall supplies' };
+        return {
+            kind: 'custom',
+            name: `earn ${minimum} gp for Waterfall supplies`,
+            run: log => fundWaterfallCoins(minimum, bank, log)
+        };
     }
     return withdrawExact(ITEM.COINS, Math.min(Math.max(minimum - coinsHeld(snap), 1), available), bank);
 }
@@ -957,6 +1192,8 @@ function stageZero(snap: QuestSnapshot, area: WaterfallArea): QuestStep {
     if (!snap.bankKnown) return scanBank(bank);
     const normalize = normalizeLoadout(snap, START_KEEP, 'bank everything except Waterfall supplies', bank);
     if (normalize) return normalize;
+    const cash = ensureCoins(snap, remainingWaterfallCash(snap), bank);
+    if (cash) return cash;
     const food = sourceTravelFood(snap, bank);
     if (food) return food;
     const rope = sourceRope(snap, bank);

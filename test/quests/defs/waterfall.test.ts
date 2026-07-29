@@ -5,9 +5,11 @@ import {
     parseWaterfallJournal,
     readWaterfallStage,
     waterfall,
+    waterfallFundingTarget,
     waterfallDungeonEntryReadiness,
     waterfallArea
 } from '#/bot/quests/defs/waterfall.js';
+import Tile from '#/bot/api/Tile.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
 
 interface ItemSpec {
@@ -101,7 +103,7 @@ function snapshot(options: SnapshotOptions = {}): QuestSnapshot {
 const START_PACK: readonly ItemQty[] = [
     [ITEM.ROPE, 1],
     [ITEM.BREAD, 15],
-    [ITEM.COINS, 500]
+    [ITEM.COINS, 992]
 ];
 
 const DUNGEON_PACK: readonly ItemQty[] = [
@@ -292,6 +294,11 @@ describe('bank knowledge and one-way areas', () => {
 });
 
 describe('fresh-account travel bootstrap', () => {
+    test('reserves the exact observed route home from each funding area', () => {
+        expect(waterfallFundingTarget(1472, new Tile(3253, 3420, 0))).toBe(1482);
+        expect(waterfallFundingTarget(500, new Tile(2616, 3332, 0))).toBe(570);
+    });
+
     test('scans the safe Varrock East bank from a fresh Lumbridge start', () => {
         const step = decide(snapshot({
             stage: WATERFALL_STAGE.NOT_STARTED,
@@ -304,19 +311,19 @@ describe('fresh-account travel bootstrap', () => {
         }
     });
 
-    test('withdraws 600 gp and buys ten teas before the dangerous westbound supply trip', () => {
+    test('withdraws the full 1472-gp quest budget before the dangerous westbound supply trip', () => {
         const coins = withdrawal(decide(snapshot({
             stage: WATERFALL_STAGE.NOT_STARTED,
             bank: [[ITEM.COINS, 2_000_000]],
             tile: [3253, 3420]
         })));
-        expect(coins.items).toEqual([{ name: 'Coins', id: 995, qty: 600 }]);
+        expect(coins.items).toEqual([{ name: 'Coins', id: 995, qty: 1472 }]);
         expect({ x: coins.bank?.x, z: coins.bank?.z }).toEqual({ x: 3253, z: 3420 });
 
         const tea = decide(snapshot({
             stage: WATERFALL_STAGE.NOT_STARTED,
-            inv: [[ITEM.COINS, 600]],
-            bank: [[ITEM.COINS, 1_999_400]],
+            inv: [[ITEM.COINS, 1472]],
+            bank: [[ITEM.COINS, 1_998_528]],
             tile: [3253, 3420]
         }));
         expect(tea.kind).toBe('buy');
@@ -332,8 +339,8 @@ describe('fresh-account travel bootstrap', () => {
 
         const bread = decide(snapshot({
             stage: WATERFALL_STAGE.NOT_STARTED,
-            inv: [[ITEM.COINS, 500], [ITEM.TEA, 10]],
-            bank: [[ITEM.COINS, 1_999_400]],
+            inv: [[ITEM.COINS, 1372], [ITEM.TEA, 10]],
+            bank: [[ITEM.COINS, 1_998_528]],
             tile: [3271, 3411]
         }));
         expect(bread.kind).toBe('buy');
@@ -346,6 +353,49 @@ describe('fresh-account travel bootstrap', () => {
         }
     });
 
+    test('earns its whole remaining quest budget when both the fresh pack and bank are empty', () => {
+        const step = decide(snapshot({
+            stage: WATERFALL_STAGE.NOT_STARTED,
+            tile: [3253, 3420]
+        }));
+        expect(step.kind).toBe('custom');
+        expect(customName(step)).toBe('earn 1472 gp for Waterfall supplies');
+    });
+
+    test('retains the later rune fare even when a stage-zero restart is already beside Betty', () => {
+        const step = decide(snapshot({
+            stage: WATERFALL_STAGE.NOT_STARTED,
+            tile: [3012, 3259]
+        }));
+        expect(customName(step)).toBe('earn 1312 gp for Waterfall supplies');
+    });
+
+    test('self-funds only the remaining shortage after exhausting a small bank stack', () => {
+        const withdrawalStep = withdrawal(decide(snapshot({
+            stage: WATERFALL_STAGE.NOT_STARTED,
+            bank: [[ITEM.COINS, 500]],
+            tile: [3253, 3420]
+        })));
+        expect(withdrawalStep.items).toEqual([{ name: 'Coins', id: 995, qty: 500 }]);
+
+        const fundingStep = decide(snapshot({
+            stage: WATERFALL_STAGE.NOT_STARTED,
+            inv: [[ITEM.COINS, 500]],
+            tile: [3253, 3420]
+        }));
+        expect(customName(fundingStep)).toBe('earn 1472 gp for Waterfall supplies');
+    });
+
+    test('does not refarm after the aggregate cash is spent on the stocked western loadout', () => {
+        const step = decide(snapshot({
+            stage: WATERFALL_STAGE.NOT_STARTED,
+            inv: [[ITEM.COINS, 992], [ITEM.TEA, 10], [ITEM.BREAD, 15], [ITEM.ROPE, 1]],
+            tile: [2654, 3311]
+        }));
+        expect(step.kind).toBe('talk');
+        if (step.kind === 'talk') expect(step.stop.npc).toBe('Almera');
+    });
+
     test('banks spent cups but retains unconsumed tea during startup', () => {
         expect(customName(decide(snapshot({
             stage: WATERFALL_STAGE.NOT_STARTED,
@@ -356,8 +406,8 @@ describe('fresh-account travel bootstrap', () => {
 
     test('sources eastern travel tea even when all Bread is already held or banked', () => {
         for (const options of [
-            { inv: [[ITEM.COINS, 600], [ITEM.BREAD, 15]] as ItemQty[] },
-            { inv: [[ITEM.COINS, 600]] as ItemQty[], bank: [[ITEM.BREAD, 15]] as ItemQty[] }
+            { inv: [[ITEM.COINS, 1172], [ITEM.BREAD, 15]] as ItemQty[] },
+            { inv: [[ITEM.COINS, 1172]] as ItemQty[], bank: [[ITEM.BREAD, 15]] as ItemQty[] }
         ]) {
             const step = decide(snapshot({
                 ...options,
@@ -704,6 +754,23 @@ describe('stage 5/6 dungeon loadout and dispatch', () => {
             inv: [...partialAir, [ITEM.AIR_RUNE, 2]],
             bank: [[ITEM.AIR_RUNE, 3], [ITEM.COINS, 2_000_000]]
         }))).items).toEqual([{ name: 'Air rune', id: 556, qty: 3 }]);
+    });
+
+    test('self-funds the exact full rune-shop budget when the known bank has no cash or runes', () => {
+        const excludedIds = new Set<number>([
+            ITEM.COINS.id,
+            ITEM.AIR_RUNE.id,
+            ITEM.EARTH_RUNE.id,
+            ITEM.WATER_RUNE.id
+        ]);
+        const withoutCoinsOrRunes = DUNGEON_PACK.filter(([item]) => !excludedIds.has(item.id));
+        const step = decide(snapshot({
+            stage: WATERFALL_STAGE.ENTERED_TOMB,
+            inv: withoutCoinsOrRunes,
+            tile: [2616, 3332]
+        }));
+        expect(step.kind).toBe('custom');
+        expect(customName(step)).toBe('earn 992 gp for Waterfall supplies');
     });
 
     test('dispatches stage 5 through the dungeon and stage 6 to the pillars', () => {

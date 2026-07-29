@@ -9,20 +9,28 @@ import { ActionRouter } from '#/bot/input/ActionRouter.js';
 
 const originals = {
     answerCountDialog: actions.answerCountDialog,
+    bankComId: reader.bankComId,
     bankItems: reader.bankItems,
+    bankSideItems: reader.bankSideItems,
     countDialogOpen: reader.countDialogOpen,
     inventory: reader.inventory,
     inventorySize: reader.inventorySize,
+    modals: reader.modals,
+    delayTicks: Execution.delayTicks,
     delayUntil: Execution.delayUntil,
     invButton: ActionRouter.driver.invButton
 };
 
 afterEach(() => {
     (actions as any).answerCountDialog = originals.answerCountDialog;
+    (reader as any).bankComId = originals.bankComId;
     (reader as any).bankItems = originals.bankItems;
+    (reader as any).bankSideItems = originals.bankSideItems;
     (reader as any).countDialogOpen = originals.countDialogOpen;
     (reader as any).inventory = originals.inventory;
     (reader as any).inventorySize = originals.inventorySize;
+    (reader as any).modals = originals.modals;
+    (Execution as any).delayTicks = originals.delayTicks;
     (Execution as any).delayUntil = originals.delayUntil;
     (ActionRouter.driver as any).invButton = originals.invButton;
 });
@@ -61,10 +69,14 @@ describe('Bank exact-ID helpers', () => {
         let inventory: InvItemSnapshot[] = [];
         const clicked: number[] = [];
 
+        (reader as any).bankComId = () => 5382;
         (reader as any).bankItems = () => bankItems;
+        (reader as any).bankSideItems = () => inventory;
         (reader as any).inventory = () => inventory;
         (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
         (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
         (Execution as any).delayUntil = async (condition: () => boolean) => condition();
         (ActionRouter.driver as any).invButton = (id: number) => {
             clicked.push(id);

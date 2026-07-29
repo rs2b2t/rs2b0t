@@ -9,6 +9,7 @@ import { Skills } from '../../api/hud/Skills.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Sustain } from '../../api/Sustain.js';
 import { Traversal } from '../../api/Traversal.js';
 import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -59,10 +60,10 @@ async function readLostCityStage(): Promise<number | undefined> {
 }
 
 const KNIFE = 'Knife';
-const KEBAB = 'Kebab';
-const KEBAB_TARGET = 12;
 const BRANCH = 'Dramen branch';
 const STAFF = 'Dramen staff';
+export const LOST_CITY_FOOD_TARGET = 20;
+export const LOST_CITY_STAFF_TARGET = 5;
 const AXES = ['Rune axe', 'Adamant axe', 'Mithril axe', 'Black axe', 'Steel axe', 'Iron axe', 'Bronze axe'];
 const DUNGEON_AXES = ['Iron axe', 'Bronze axe'];
 
@@ -76,7 +77,6 @@ const ENTRANA_ZOMBIE_ID = 76;
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
 const KNIFE_SPAWN = new Tile(3224, 3202, 0);
 const BOB_AXES = { npc: 'Bob', anchor: new Tile(3232, 3203, 0) };
-const KEBAB_SELLER = new Tile(3272, 3182, 0);
 const SHAMUS_TREE = new Tile(3138, 3212, 0);
 const PORT_SARIM_MONK = new Tile(3046, 3235, 0);
 const ENTRANA_LANDING = new Tile(2834, 3334, 0);
@@ -139,6 +139,11 @@ function bankAxe(snap: QuestSnapshot): string | null {
     return AXES.find(name => banked(snap, name) > 0) ?? null;
 }
 
+function selectedFood(): string | null {
+    const food = QuestFood.name?.trim();
+    return food ? food : null;
+}
+
 function withdraw(items: { name: string; qty: number }[]): QuestStep {
     return { kind: 'withdraw', items, bank: DRAYNOR_BANK };
 }
@@ -148,8 +153,8 @@ function scanBank(): QuestStep {
 }
 
 function mainlandKeep(): string[] {
-    const food = QuestFood.name?.trim().toLowerCase();
-    return ['knife', 'kebab', ...AXES.map(name => name.toLowerCase()), 'dramen branch', 'dramen staff', 'coins', ...(food ? [food] : [])];
+    const food = selectedFood()?.toLowerCase();
+    return ['knife', ...AXES.map(name => name.toLowerCase()), 'dramen branch', 'dramen staff', 'coins', ...(food ? [food] : [])];
 }
 
 function makeAcquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -205,8 +210,8 @@ function sourceMainlandAxe(snap: QuestSnapshot): QuestStep | null {
 }
 
 function entranaKeep(): string[] {
-    const food = QuestFood.name?.trim().toLowerCase();
-    return ['knife', 'kebab', 'coins', ...(food ? [food] : [])];
+    const food = selectedFood()?.toLowerCase();
+    return ['knife', 'coins', ...(food ? [food] : [])];
 }
 
 function hasEntranaSpillover(snap: QuestSnapshot): boolean {
@@ -223,76 +228,37 @@ async function unequipAll(_log: (m: string) => void): Promise<boolean> {
     return Equipment.items().length === 0;
 }
 
-async function buyKebabs(log: (m: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(KEBAB_SELLER, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
-        return false;
+function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
+    const food = selectedFood();
+    if (!food) {
+        return { kind: 'wait', reason: 'select a food item for the Lost City fights' };
     }
-    for (let i = Inventory.count(KEBAB); i < KEBAB_TARGET; i++) {
-        if (Inventory.count('Coins') < 1) {
-            log('no coins left for combat Kebabs');
-            return false;
-        }
-        const before = Inventory.count(KEBAB);
-        if (!(await talkThrough('Kebab seller', ['Yes please.'], log))) {
-            return false;
-        }
-        if (!(await Execution.delayUntil(() => Inventory.count(KEBAB) > before, 5000))) {
-            log('Kebab seller dialogue completed without adding a Kebab');
-            return false;
-        }
-    }
-    return true;
-}
-
-function sourceKebabs(snap: QuestSnapshot): QuestStep | null {
-    const missing = KEBAB_TARGET - heldCount(snap, KEBAB);
+    const missing = LOST_CITY_FOOD_TARGET - heldCount(snap, food);
     if (missing <= 0) {
         return null;
     }
     if (!snap.bankKnown) {
         return scanBank();
     }
-    const inBank = banked(snap, KEBAB);
-    // If the bank cannot supply every missing Kebab, buying the remainder may first need a new
-    // inventory slot for Coins. Reserve it now so that withdrawing food cannot fill the pack and
-    // strand the quest with no disposable item.
-    const coinSlot = inBank < missing && heldCount(snap, 'Coins') === 0 ? 1 : 0;
-    const space = makeAcquisitionSpace(snap, missing + coinSlot);
+    const inBank = banked(snap, food);
+    if (inBank < missing) {
+        return {
+            kind: 'wait',
+            reason: `need ${missing} more ${food} in the bank (${LOST_CITY_FOOD_TARGET} combat food total)`
+        };
+    }
+    const space = makeAcquisitionSpace(snap, missing);
     if (space) {
         return space;
     }
-    if (inBank > 0) {
-        return withdraw([{ name: KEBAB, qty: Math.min(missing, inBank) }]);
-    }
-    if (heldCount(snap, 'Coins') < missing) {
-        const bankCoins = banked(snap, 'Coins');
-        if (bankCoins > 0) {
-            return withdraw([{ name: 'Coins', qty: Math.min(Math.max(missing, 100), bankCoins) }]);
-        }
-        return { kind: 'wait', reason: 'need coins for combat Kebabs' };
-    }
-    return { kind: 'custom', name: `buy ${missing} combat Kebabs`, run: buyKebabs };
+    return withdraw([{ name: food, qty: missing }]);
 }
 
-async function eatKebab(): Promise<boolean> {
-    const food = Inventory.first(KEBAB);
-    if (!food) {
-        return false;
-    }
-    const beforeCount = Inventory.count(KEBAB);
-    const beforeHp = Skills.effective('hitpoints');
-    if (!(await food.interact('Eat'))) {
-        return false;
-    }
-    return Execution.delayUntil(
-        () => Inventory.count(KEBAB) < beforeCount || Skills.effective('hitpoints') !== beforeHp,
-        3000
-    );
-}
-
-async function restoreWithKebabs(target: number): Promise<void> {
-    for (let i = 0; i < KEBAB_TARGET && Skills.hpFraction() < target && Inventory.contains(KEBAB); i++) {
-        if (!(await eatKebab())) {
+async function restoreWithSelectedFood(target: number): Promise<void> {
+    for (let i = 0; i < LOST_CITY_FOOD_TARGET && Skills.hpFraction() < target; i++) {
+        const beforeHp = Skills.effective('hitpoints');
+        await Sustain.run();
+        if (Skills.effective('hitpoints') <= beforeHp) {
             return;
         }
     }
@@ -301,9 +267,7 @@ async function restoreWithKebabs(target: number): Promise<void> {
 async function waitOutCombat(timeoutMs: number): Promise<boolean> {
     const deadline = performance.now() + timeoutMs;
     while (Game.inCombat() && performance.now() < deadline) {
-        if (Skills.hpFraction() < 0.65 && Inventory.contains(KEBAB)) {
-            await eatKebab();
-        }
+        await Sustain.run();
         await Execution.delayTicks(1);
     }
     return !Game.inCombat();
@@ -366,8 +330,9 @@ function liveHasDungeonAxe(): boolean {
 
 async function takeDungeonAxe(): Promise<boolean> {
     if (Inventory.isFull()) {
+        const keep = mainlandKeep();
         const junk = Inventory.items().find(item => item.name !== null
-            && ![KNIFE, BRANCH, STAFF, 'Coins', ...AXES].some(keep => keep.toLowerCase() === item.name!.toLowerCase())
+            && !keep.includes(item.name.toLowerCase())
             && item.actions().some(op => op.toLowerCase() === 'drop'));
         if (junk) {
             await junk.interact('Drop');
@@ -408,7 +373,7 @@ async function acquireDungeonAxe(log: (m: string) => void): Promise<boolean> {
         await Execution.delayTicks(2);
         return false;
     }
-    await restoreWithKebabs(0.85);
+    await restoreWithSelectedFood(0.9);
     if (!(await zombie.interact('Attack'))) {
         return false;
     }
@@ -449,7 +414,7 @@ async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
     if (!spirit) {
         return false;
     }
-    await restoreWithKebabs(0.9);
+    await restoreWithSelectedFood(0.9);
     if (!Game.inCombat() && !(await spirit.interact('Attack'))) {
         return false;
     }
@@ -463,8 +428,9 @@ async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
 
 async function chopBranch(log: (m: string) => void): Promise<boolean> {
     if (Inventory.isFull()) {
+        const keep = mainlandKeep();
         const junk = Inventory.items().find(item => item.name !== null
-            && ![KNIFE, BRANCH, STAFF, 'Coins', ...AXES].some(keep => keep.toLowerCase() === item.name!.toLowerCase())
+            && !keep.includes(item.name.toLowerCase())
             && item.actions().some(op => op.toLowerCase() === 'drop'));
         if (!junk || !(await junk.interact('Drop'))) {
             log('inventory is full and has no disposable item for the Dramen branch');
@@ -562,7 +528,7 @@ function travelToDungeon(snap: QuestSnapshot): QuestStep {
         if (snap.worn.size > 0) {
             return { kind: 'custom', name: 'remove Entrana-restricted equipment', run: unequipAll };
         }
-        const food = sourceKebabs(snap);
+        const food = sourceCombatFood(snap);
         if (food) {
             return food;
         }
@@ -582,6 +548,108 @@ function dungeonWork(snap: QuestSnapshot, stage: number): QuestStep {
         return { kind: 'custom', name: 'defeat the Tree Spirit', run: defeatTreeSpirit };
     }
     return { kind: 'custom', name: 'cut a Dramen branch', run: chopBranch };
+}
+
+function localStaffCount(snap: QuestSnapshot): number {
+    return heldCount(snap, STAFF) + (worn(snap, STAFF) ? 1 : 0);
+}
+
+function localStaffMaterials(snap: QuestSnapshot): number {
+    return localStaffCount(snap) + heldCount(snap, BRANCH);
+}
+
+function knownStaffMaterials(snap: QuestSnapshot): number {
+    return localStaffMaterials(snap) + banked(snap, STAFF) + banked(snap, BRANCH);
+}
+
+function craftHeldBranch(snap: QuestSnapshot, area: LostCityArea): QuestStep {
+    const knife = sourceKnife(snap);
+    if (knife) {
+        return area === 'dungeon' ? { kind: 'custom', name: 'leave the dungeon to replace the Knife', run: leaveDungeon } : knife;
+    }
+    return { kind: 'useOn', item: KNIFE, targetKind: 'item', target: BRANCH, anchor: DRAMEN_TREE, product: STAFF };
+}
+
+function bankedStaffMaterialsToWithdraw(snap: QuestSnapshot): { name: string; qty: number }[] | null {
+    let missing = LOST_CITY_STAFF_TARGET - localStaffMaterials(snap);
+    if (missing <= 0) {
+        return [];
+    }
+
+    const staffs = Math.min(missing, banked(snap, STAFF));
+    missing -= staffs;
+    const branches = Math.min(missing, banked(snap, BRANCH));
+    missing -= branches;
+    if (missing > 0) {
+        return null;
+    }
+    return [...(staffs > 0 ? [{ name: STAFF, qty: staffs }] : []), ...(branches > 0 ? [{ name: BRANCH, qty: branches }] : [])];
+}
+
+function finishFiveStaves(snap: QuestSnapshot, stage: number, area: LostCityArea): QuestStep {
+    if (area === 'zanaris') {
+        return { kind: 'wait', reason: 'waiting for Lost City completion' };
+    }
+
+    if (area === 'dungeon') {
+        if (knownStaffMaterials(snap) < LOST_CITY_STAFF_TARGET) {
+            return dungeonWork(snap, stage);
+        }
+        if (held(snap, BRANCH)) {
+            return craftHeldBranch(snap, area);
+        }
+        return { kind: 'custom', name: 'exit through the Wilderness portal', run: leaveDungeon };
+    }
+
+    if (area !== 'mainland') {
+        return travelToDungeon(snap);
+    }
+
+    // A normal run leaves the dungeon with all five local. Do not add a long bank
+    // detour merely to discover that no recovery material is needed.
+    if (localStaffMaterials(snap) >= LOST_CITY_STAFF_TARGET) {
+        if (held(snap, BRANCH)) {
+            return craftHeldBranch(snap, area);
+        }
+        if (!worn(snap, STAFF)) {
+            return { kind: 'equip', item: STAFF };
+        }
+        return { kind: 'custom', name: 'enter Zanaris through the swamp shed', run: enterZanaris };
+    }
+    if (!snap.bankKnown) {
+        return scanBank();
+    }
+
+    if (knownStaffMaterials(snap) < LOST_CITY_STAFF_TARGET) {
+        return travelToDungeon(snap);
+    }
+    if (held(snap, BRANCH)) {
+        return craftHeldBranch(snap, area);
+    }
+
+    const materials = bankedStaffMaterialsToWithdraw(snap);
+    if (materials && materials.length > 0) {
+        if (materials.some(item => item.name === BRANCH) && !held(snap, KNIFE)) {
+            const knife = sourceKnife(snap);
+            if (knife) {
+                return knife;
+            }
+        }
+        const slots = materials.reduce((sum, item) => sum + item.qty, 0);
+        const space = makeAcquisitionSpace(snap, slots);
+        if (space) {
+            return space;
+        }
+        return withdraw(materials);
+    }
+
+    if (localStaffCount(snap) < LOST_CITY_STAFF_TARGET) {
+        return { kind: 'wait', reason: `recovering ${LOST_CITY_STAFF_TARGET} Dramen staves` };
+    }
+    if (!worn(snap, STAFF)) {
+        return { kind: 'equip', item: STAFF };
+    }
+    return { kind: 'custom', name: 'enter Zanaris through the swamp shed', run: enterZanaris };
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -615,83 +683,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return travelToDungeon(snap);
     }
 
-    if (stage === LOST_CITY_STAGE.BRANCH_CUT) {
-        if (held(snap, BRANCH)) {
-            const knife = sourceKnife(snap);
-            if (knife) {
-                return area === 'dungeon'
-                    ? { kind: 'custom', name: 'leave the dungeon to replace the Knife', run: leaveDungeon }
-                    : knife;
-            }
-            return { kind: 'useOn', item: KNIFE, targetKind: 'item', target: BRANCH, anchor: DRAMEN_TREE, product: STAFF };
-        }
-        if (area === 'mainland') {
-            if (!snap.bankKnown) {
-                return scanBank();
-            }
-            if (banked(snap, BRANCH) > 0) {
-                const items = [
-                    { name: BRANCH, qty: 1 },
-                    ...(held(snap, KNIFE) ? [] : [{ name: KNIFE, qty: 1 }])
-                ];
-                const space = makeAcquisitionSpace(snap, items.length);
-                if (space) {
-                    return space;
-                }
-                return withdraw(items);
-            }
-        }
-        if (area === 'dungeon') {
-            return dungeonWork(snap, stage);
-        }
-        return travelToDungeon(snap);
-    }
-
-    if (stage === LOST_CITY_STAGE.STAFF_MADE) {
-        if (worn(snap, STAFF)) {
-            return area === 'dungeon'
-                ? { kind: 'custom', name: 'exit through the Wilderness portal', run: leaveDungeon }
-                : { kind: 'custom', name: 'enter Zanaris through the swamp shed', run: enterZanaris };
-        }
-        if (held(snap, STAFF)) {
-            return { kind: 'equip', item: STAFF };
-        }
-        if (held(snap, BRANCH)) {
-            const knife = sourceKnife(snap);
-            if (knife) {
-                return area === 'dungeon'
-                    ? { kind: 'custom', name: 'leave the dungeon to replace the Knife', run: leaveDungeon }
-                    : knife;
-            }
-            return { kind: 'useOn', item: KNIFE, targetKind: 'item', target: BRANCH, anchor: DRAMEN_TREE, product: STAFF };
-        }
-        if (area === 'mainland') {
-            if (!snap.bankKnown) {
-                return scanBank();
-            }
-            if (banked(snap, STAFF) > 0) {
-                const space = makeAcquisitionSpace(snap, 1);
-                if (space) {
-                    return space;
-                }
-                return withdraw([{ name: STAFF, qty: 1 }]);
-            }
-            if (banked(snap, BRANCH) > 0) {
-                const items = [
-                    { name: BRANCH, qty: 1 },
-                    ...(held(snap, KNIFE) ? [] : [{ name: KNIFE, qty: 1 }])
-                ];
-                const space = makeAcquisitionSpace(snap, items.length);
-                if (space) {
-                    return space;
-                }
-                return withdraw(items);
-            }
-        }
-        if (area === 'dungeon') {
-            return dungeonWork(snap, stage);
-        }
-        return travelToDungeon(snap);
+    if (stage === LOST_CITY_STAGE.BRANCH_CUT || stage === LOST_CITY_STAGE.STAFF_MADE) {
+        return finishFiveStaves(snap, stage, area);
     }
 
     return { kind: 'wait', reason: `unrecognized Lost City stage ${stage}` };
@@ -703,6 +696,7 @@ export const lostcity: QuestModule = {
     grind: ['Zombie', 'Tree spirit'],
     tools: ['knife', 'axe', 'dramen branch', 'dramen staff'],
     ownsInventory: true,
+    sustain: { foods: [], eatBelowHp: 0.9 },
     readStage: readLostCityStage,
     decide
 };

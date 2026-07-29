@@ -2,12 +2,15 @@
 import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
+import { Reach } from '../../api/Reach.js';
 import Tile from '../../api/Tile.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Locs } from '../../api/queries/Locs.js';
-import { Npcs } from '../../api/queries/Npcs.js';
+import { Npcs, talkOp, type Npc } from '../../api/queries/Npcs.js';
 import { Traversal } from '../../api/Traversal.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
+
+export { talkOp };
 
 export function pickPreferred(options: string[], prefer: string[]): string | null {
     for (const p of prefer) {
@@ -44,10 +47,6 @@ export function pickByLine(lines: string[], options: string[], rules: readonly L
         return null;
     }
     return options.find(o => o.toLowerCase().includes(hit.choose.toLowerCase())) ?? null;
-}
-
-export function talkOp(actions: string[]): string | null {
-    return actions.find(a => /^talk/i.test(a)) ?? null;
 }
 
 export function isUnderground(t: { z: number }): boolean {
@@ -211,19 +210,31 @@ export async function driveDialog(prefer: string[], log: (m: string) => void): P
     return !ChatDialog.isOpen();
 }
 
+const DIALOGUE_OPEN_MS = 8000;
+
 async function openDialogue(npcName: string, log: (m: string) => void): Promise<boolean> {
-    if (ChatDialog.isOpen()) {
+    const dialogReady = (): boolean => ChatDialog.isOpen() || ChatDialog.canContinue();
+    if (dialogReady()) {
         return true;
     }
-    const npc = Npcs.query().name(npcName).where(n => talkOp(n.actions()) !== null).nearest();
+    const find = (): Npc | null => Npcs.query().name(npcName).where(n => talkOp(n.actions()) !== null).nearest();
+    const npc = find();
     if (!npc) {
         log(`no '${npcName}' nearby to talk to`);
         return false;
     }
-    if (!(await npc.interact(talkOp(npc.actions())!))) {
-        return false;
-    }
-    if (!(await Execution.delayUntil(() => ChatDialog.isOpen(), 8000))) {
+    // An NPC who wandered behind a shut door is in the scene and inside the leash,
+    // yet unreachable — Reach opens the door rather than waiting out the talk.
+    const status = await Reach.entityOp({
+        find,
+        op: talkOp(npc.actions())!,
+        expect: dialogReady,
+        openWhenUnreachable: true,
+        expectMs: DIALOGUE_OPEN_MS,
+        what: npcName,
+        log
+    });
+    if (status !== 'done') {
         log(`'${npcName}' never opened a dialogue`);
         return false;
     }

@@ -3,12 +3,22 @@ import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
 import { Loc, Npc } from '../entities/index.js';
 
+const BACKPACK_CAPACITY = 28;
+
+export function backpackSnapshots(): InvItemSnapshot[] {
+    return reader.bankComId() !== -1 ? reader.bankSideItems() : reader.inventory();
+}
+
+export function backpackCapacity(): number {
+    return reader.bankComId() !== -1 ? BACKPACK_CAPACITY : reader.inventorySize();
+}
+
 /**
  * One backpack slot.
  * @see docs/API.md#invitem
  */
 export class InvItem {
-    constructor(readonly snap: InvItemSnapshot) {}
+    constructor(readonly snap: InvItemSnapshot, private readonly componentOps = false) {}
 
     get name(): string | null {
         return this.snap.name;
@@ -34,7 +44,10 @@ export class InvItem {
         const wanted = action.toLowerCase();
         for (let i = 0; i < this.snap.ops.length; i++) {
             if (this.snap.ops[i]?.toLowerCase() === wanted) {
-                return ActionRouter.driver.heldOp(this.snap.id, this.snap.slot, this.snap.comId, i + 1);
+                const driver = ActionRouter.driver;
+                return this.componentOps
+                    ? driver.invButton(this.snap.id, this.snap.slot, this.snap.comId, i + 1)
+                    : driver.heldOp(this.snap.id, this.snap.slot, this.snap.comId, i + 1);
             }
         }
 
@@ -42,6 +55,11 @@ export class InvItem {
     }
 
     useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean> {
+        // The bank side backpack exposes Deposit-* component buttons, not held
+        // item actions, so it cannot start or receive a Use operation.
+        if (this.componentOps || (target instanceof InvItem && target.componentOps)) {
+            return false;
+        }
         const driver = ActionRouter.driver;
         if (target instanceof InvItem) {
             return driver.useItemOnItem(this.snap.id, this.snap.slot, this.snap.comId, target.snap.id, target.snap.slot, target.snap.comId);
@@ -63,7 +81,8 @@ export class InvItem {
  */
 export const Inventory = {
     items(): InvItem[] {
-        return reader.inventory().map(s => new InvItem(s));
+        const bankOpen = reader.bankComId() !== -1;
+        return backpackSnapshots().map(s => new InvItem(s, bankOpen));
     },
 
     first(name: string): InvItem | null {
@@ -76,25 +95,31 @@ export const Inventory = {
     },
 
     used(): number {
-        return reader.inventory().length;
+        return backpackSnapshots().length;
     },
 
     count(name: string): number {
         const wanted = name.toLowerCase();
-        return reader
-            .inventory()
+        return backpackSnapshots()
             .filter(i => i.name?.toLowerCase() === wanted)
             .reduce((sum, i) => sum + i.count, 0);
     },
 
+    countById(id: number): number {
+        return backpackSnapshots()
+            .filter(i => i.id === id)
+            .reduce((sum, i) => sum + i.count, 0);
+    },
+
     isFull(): boolean {
-        const size = reader.inventorySize();
+        const size = backpackCapacity();
         return size > 0 && Inventory.used() >= size;
     },
 
-    // 0 when the pack interface hasn't loaded yet — callers must treat that as "don't know"
+    // Outside the bank, 0 means the pack interface has not loaded yet. The
+    // bank side view always represents the game's fixed 28-slot backpack.
     free(): number {
-        const size = reader.inventorySize();
+        const size = backpackCapacity();
         return size > 0 ? Math.max(0, size - Inventory.used()) : 0;
     }
 };

@@ -46,6 +46,9 @@ interface Lcb {
     renderGate: { drawn: number; backgroundIntervalMs: number };
     runner: { state: string };
     setRenderMode(mode: RenderMode): void;
+    startSelectedScript(): void;
+    stopScript(): void;
+    setRendererEnabled(enabled: boolean): void;
     setCredentials(u: string, p: string): void;
     setAutoLogin(on: boolean): void;
     setLoginCoordination(coordination: LoginCoordination | null): void;
@@ -134,6 +137,18 @@ class DomSlotHandle implements SlotHandle {
             l.setRenderMode(mode);
         });
         this.applyLayout();
+    }
+
+    startScript(): void {
+        this.whenReady(l => l.startSelectedScript());
+    }
+
+    stopScript(): void {
+        this.whenReady(l => l.stopScript());
+    }
+
+    setRendererEnabled(enabled: boolean): void {
+        this.whenReady(l => l.setRendererEnabled(enabled));
     }
 
     setCredentials(u: string, p: string): void {

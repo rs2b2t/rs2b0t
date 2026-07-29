@@ -33,8 +33,9 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const client = new BotClient(nodeid, lowmem, members);
 
     const panelRoot = document.getElementById('bot-panel');
+    let panel: BotPanel | null = null;
     if (panelRoot) {
-        new BotPanel(panelRoot, BotHost, {
+        panel = new BotPanel(panelRoot, BotHost, {
             enabled: () => RenderGate.enabled,
             setEnabled: enabled => {
                 RenderGate.setEnabled(enabled);
@@ -82,6 +83,9 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),
         setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),
         setLoginCoordination: (coordination: LoginCoordination | null) => AutoRelogin.setLoginCoordination(coordination),
+        startSelectedScript: () => panel?.startSelectedScript(),
+        stopScript: () => panel?.stopScript(),
+        setRendererEnabled: (enabled: boolean) => panel?.setRendererEnabled(enabled),
         clueProgress: () => ClueExecutor.current,
         paint: paintState,
         clueTraces: () => readTraceRing(localStorage, TRACE_STORAGE_KEY),

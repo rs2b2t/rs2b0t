@@ -19,6 +19,14 @@ function boot(): void {
 
     const ops = new DomSlotOps(rail, addTile);
     const controller = new MultiBoxController(ops);
+    const startAll = document.getElementById('mbx-start-all') as HTMLButtonElement;
+    const stopAll = document.getElementById('mbx-stop-all') as HTMLButtonElement;
+    const renderersOff = document.getElementById('mbx-renderers-off') as HTMLButtonElement;
+    const renderersOn = document.getElementById('mbx-renderers-on') as HTMLButtonElement;
+    startAll.addEventListener('click', () => controller.startAll());
+    stopAll.addEventListener('click', () => controller.stopAll());
+    renderersOff.addEventListener('click', () => controller.setAllRenderers(false));
+    renderersOn.addEventListener('click', () => controller.setAllRenderers(true));
     const traffic = new TrafficCollector();
     const resources = new ResourcePanel(
         {
@@ -238,6 +246,11 @@ function boot(): void {
     function renderRail(): void {
         const snaps = controller.snapshot();
         resources.setBotCount(snaps.length);
+        const empty = snaps.length === 0;
+        startAll.disabled = empty;
+        stopAll.disabled = empty;
+        renderersOff.disabled = empty;
+        renderersOn.disabled = empty;
         const tiles = railTiles();
         if (tiles.length !== snaps.length) {
             throw new Error(`rail desync: ${tiles.length} tiles vs ${snaps.length} slots`);

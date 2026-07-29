@@ -408,7 +408,10 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'junglepotion', name: 'Jungle Potion', questPoints: 1,
-        requirements: {},
+        requirements: {
+            skills: [{ skill: 'herblore', level: 3 }],
+            quests: ['druid']
+        },
         items: []
     },
     {
@@ -593,9 +596,17 @@ export const QUESTS: QuestRecord[] = [
         id: 'zombiequeen',
         name: 'Shilo Village',
         questPoints: 2,
-        requirements: {},
-        items: [
-            { name: 'Rope', qty: 1, kind: 'mustHave' }
-        ]
+        requirements: {
+            skills: [
+                { skill: 'crafting', level: 20 },
+                { skill: 'agility', level: 32 },
+                { skill: 'smithing', level: 4 },
+                { skill: 'mining', level: 4 }
+            ],
+            quests: ['junglepotion']
+        },
+        // Karamja has no bank until this quest opens Shilo's, so the module sources
+        // its whole loadout from Jiminua's rather than provisioning from a bank.
+        items: []
     }
 ];

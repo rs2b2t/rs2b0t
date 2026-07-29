@@ -46,6 +46,14 @@ Multi-level routing is therefore a **data** property, not an algorithm one: the
 executor already knows how to climb, and gains a new route the moment an edge for it
 exists in the pack.
 
+So is *same-level* routing, wherever the link is an Agility shortcut. `derive-doors`
+only sees doors, so a balance log or a climbable outcrop leaves two regions looking
+disconnected however open they are in game. Southern Karamja was the extreme case:
+the 6,193-tile jungle holding the Ah Za Rhoon mound and Rashiliyia's tomb, and all of
+Cairn Isle, were unreachable from anywhere until four `kind: "dungeon"` edges — a
+wooden log and a set of climbing rocks — were curated in. When a quest reports a stand
+tile as `pathable-from=[nothing]`, look for the shortcut before touching the walker.
+
 A pack-less checkout is a silent failure mode — the navigator has nothing to search,
 so every route fails rather than erroring loudly.
 
@@ -236,9 +244,21 @@ await Reach.npcDialog({ near, ... }); // walk to a stand, then talk to an NPC
 ```
 
 It walks to the caller's `near` stand, performs the action, and — when the *server*
-replies that it cannot reach — opens the blocking door and retries. It does not run
-its own client-side reachability search and does not try to race a door's re-shut.
-Status is explicit: `'done' | 'retry' | 'unreachable'`.
+replies that it cannot reach — opens the blocking door and retries. It does not try to
+race a door's re-shut. Status is explicit: `'done' | 'retry' | 'unreachable'`.
+
+For a **loc** that server verdict is the whole story, and Reach runs no client-side
+search. An **NPC** is different: the server only says "I can't reach that!" once its
+own path search dead-ends, and a target that keeps wandering postpones that
+indefinitely — clicking a farmer shut in the next room just walks you to the door and
+leaves you there, silently, forever. So the NPC paths (`npcDialog`, and `entityOp`
+under `openWhenUnreachable`) probe the scene themselves and open the door on their own
+verdict. A wrong probe is harmless: it falls through to the ordinary click.
+
+That probe is only trusted within `PROBE_RADIUS` on the same level. `REACH_BFS_STEPS`
+expansions run out at about eleven tiles of open ground, so past that "too far to
+search" is indistinguishable from "walled off" — and a patrolling target would have
+the bot opening doors it never needed.
 
 `Reach.npcDialog` searches the whole scene and lets the server walk the player to the
 target, so it follows an NPC that wanders. A leash-limited approach loop cannot — a

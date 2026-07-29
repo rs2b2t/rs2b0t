@@ -1,10 +1,6 @@
-import { describe, expect, test } from 'bun:test';
-import {
-    decide,
-    lostCityArea,
-    LOST_CITY_STAGE,
-    parseLostCityJournal
-} from '#/bot/quests/defs/lostcity.js';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { decide, lostCityArea, LOST_CITY_FOOD_TARGET, LOST_CITY_STAGE, LOST_CITY_STAFF_TARGET, lostcity, parseLostCityJournal } from '#/bot/quests/defs/lostcity.js';
+import { QuestFood } from '#/bot/quests/food.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
 
@@ -13,8 +9,7 @@ const ENTRANA_SHIP: WorldTile = { x: 2834, z: 3334, level: 1 };
 const ENTRANA: WorldTile = { x: 2820, z: 3374, level: 0 };
 const DUNGEON: WorldTile = { x: 2822, z: 9774, level: 0 };
 const ZANARIS: WorldTile = { x: 3220, z: 9592, level: 0 };
-const COMBAT_FOOD = Array(12).fill('Kebab') as string[];
-const KEBAB_FUNDS = Array(12).fill('Coins') as string[];
+const COMBAT_FOOD = Array(LOST_CITY_FOOD_TARGET).fill('Lobster') as string[];
 
 interface SnapshotOptions {
     journal?: QuestSnapshot['journal'];
@@ -54,6 +49,10 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
 function customName(step: QuestStep): string | null {
     return step.kind === 'custom' ? step.name : null;
 }
+
+beforeEach(() => {
+    QuestFood.name = 'Lobster';
+});
 
 describe('Lost City journal stage parsing', () => {
     test.each([
@@ -131,22 +130,35 @@ describe('Lost City stages 0-3', () => {
         const equipment = decide(snap({ stage: 2, inv: ['Knife'], worn: ['Leather body'] }));
         expect(customName(equipment)).toBe('remove Entrana-restricted equipment');
 
-        const food = decide(snap({ stage: 2, inv: ['Knife', ...KEBAB_FUNDS] }));
-        expect(customName(food)).toBe('buy 12 combat Kebabs');
+        const food = decide(snap({ stage: 2, inv: ['Knife'], bank: COMBAT_FOOD }));
+        expect(food.kind === 'withdraw' && food.items).toEqual([{ name: 'Lobster', qty: LOST_CITY_FOOD_TARGET }]);
 
-        const ready = decide(snap({ stage: 2, inv: ['Knife', 'Coins', ...COMBAT_FOOD] }));
+        const ready = decide(snap({ stage: 2, inv: ['Knife', ...COMBAT_FOOD] }));
         expect(customName(ready)).toBe('sail from Port Sarim to Entrana');
     });
 
-    test('reserves a separate inventory slot for a newly withdrawn Kebab coin stack', () => {
-        const step = decide(snap({
-            stage: 2,
-            inv: ['Knife'],
-            bank: ['Coins'],
-            freeSlots: 12
-        }));
+    test('requires the configured food without falling back to Kebabs', () => {
+        QuestFood.name = null;
+        const blank = decide(snap({ stage: 2, inv: ['Knife'] }));
+        expect(blank.kind === 'wait' && blank.reason).toContain('select a food item');
+
+        QuestFood.name = 'Lobster';
+        const short = decide(snap({ stage: 2, inv: ['Knife'], bank: Array(10).fill('Lobster') }));
+        expect(short.kind === 'wait' && short.reason).toContain('20 combat food total');
+        expect(JSON.stringify(short)).not.toContain('Kebab');
+    });
+
+    test('reserves enough inventory space for all configured combat food', () => {
+        const step = decide(
+            snap({
+                stage: 2,
+                inv: ['Knife'],
+                bank: COMBAT_FOOD,
+                freeSlots: LOST_CITY_FOOD_TARGET - 1
+            })
+        );
         expect(step.kind).toBe('wait');
-        expect(step.kind === 'wait' && step.reason).toContain('13 free inventory slots');
+        expect(step.kind === 'wait' && step.reason).toContain(`${LOST_CITY_FOOD_TARGET} free inventory slots`);
     });
 
     test('stage 2 resumes aboard the ship and on Entrana', () => {
@@ -175,34 +187,61 @@ describe('Lost City stages 0-3', () => {
 });
 
 describe('Lost City stage 4 branch recovery', () => {
-    test('crafts a held branch when the Knife is present', () => {
-        const step = decide(snap({ stage: 4, inv: ['Knife', 'Dramen branch'], tile: DUNGEON }));
-        expect(step.kind).toBe('useOn');
-        if (step.kind === 'useOn') {
-            expect(step.item).toBe('Knife');
-            expect(step.target).toBe('Dramen branch');
-            expect(step.product).toBe('Dramen staff');
+    test('collects five branches before crafting all five staves', () => {
+        const collect = decide(
+            snap({
+                stage: 4,
+                inv: ['Knife', 'Dramen branch'],
+                worn: ['Iron axe'],
+                tile: DUNGEON
+            })
+        );
+        expect(customName(collect)).toBe('cut a Dramen branch');
+
+        let inventory = ['Knife', ...Array(LOST_CITY_STAFF_TARGET).fill('Dramen branch')] as string[];
+        let stage: number = LOST_CITY_STAGE.BRANCH_CUT;
+        for (let made = 0; made < LOST_CITY_STAFF_TARGET; made++) {
+            const step = decide(snap({ stage, inv: inventory, worn: ['Iron axe'], tile: DUNGEON }));
+            expect(step.kind).toBe('useOn');
+            if (step.kind === 'useOn') {
+                expect(step.item).toBe('Knife');
+                expect(step.target).toBe('Dramen branch');
+                expect(step.product).toBe('Dramen staff');
+            }
+            inventory = inventory.filter((name, index) => name !== 'Dramen branch' || index !== inventory.indexOf('Dramen branch'));
+            inventory.push('Dramen staff');
+            stage = LOST_CITY_STAGE.STAFF_MADE;
         }
+        expect(customName(decide(snap({ stage, inv: inventory, worn: ['Iron axe'], tile: DUNGEON })))).toBe('exit through the Wilderness portal');
     });
 
-    test('leaves the dungeon if a held branch has outlived the Knife', () => {
-        const step = decide(snap({ stage: 4, inv: ['Dramen branch'], tile: DUNGEON }));
+    test('leaves the dungeon if five held branches have outlived the Knife', () => {
+        const step = decide(
+            snap({
+                stage: 4,
+                inv: Array(LOST_CITY_STAFF_TARGET).fill('Dramen branch'),
+                tile: DUNGEON
+            })
+        );
         expect(customName(step)).toBe('leave the dungeon to replace the Knife');
     });
 
-    test('scans an unknown bank, then withdraws a banked branch and Knife', () => {
+    test('scans an unknown bank, then restores a mixed five-staff batch', () => {
         expect(decide(snap({ stage: 4, bankKnown: false })).kind).toBe('scanBank');
 
-        const step = decide(snap({ stage: 4, bank: ['Dramen branch', 'Knife'] }));
-        expect(step.kind).toBe('withdraw');
-        expect(step.kind === 'withdraw' && step.items).toEqual([
-            { name: 'Dramen branch', qty: 1 },
-            { name: 'Knife', qty: 1 }
+        const bank = ['Knife', ...Array(2).fill('Dramen staff'), ...Array(3).fill('Dramen branch')] as string[];
+        const knife = decide(snap({ stage: 4, bank }));
+        expect(knife.kind === 'withdraw' && knife.items).toEqual([{ name: 'Knife', qty: 1 }]);
+
+        const materials = decide(snap({ stage: 4, inv: ['Knife'], bank }));
+        expect(materials.kind === 'withdraw' && materials.items).toEqual([
+            { name: 'Dramen staff', qty: 2 },
+            { name: 'Dramen branch', qty: 3 }
         ]);
     });
 
     test('recovers a lost branch by returning to Entrana and cutting another', () => {
-        const mainland = decide(snap({ stage: 4, inv: ['Knife', 'Coins', ...COMBAT_FOOD] }));
+        const mainland = decide(snap({ stage: 4, inv: ['Knife', ...COMBAT_FOOD] }));
         expect(customName(mainland)).toBe('sail from Port Sarim to Entrana');
 
         const dungeon = decide(snap({ stage: 4, tile: DUNGEON, worn: ['Bronze axe'] }));
@@ -211,36 +250,53 @@ describe('Lost City stage 4 branch recovery', () => {
 });
 
 describe('Lost City stages 5-6', () => {
-    test('stage 5 scans first, then restores a banked staff', () => {
+    test('stage 5 scans first, then restores five banked staves', () => {
         expect(decide(snap({ stage: 5, bankKnown: false })).kind).toBe('scanBank');
 
-        const step = decide(snap({ stage: 5, bank: ['Dramen staff'] }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Dramen staff', qty: 1 }]);
+        const step = decide(snap({ stage: 5, bank: Array(LOST_CITY_STAFF_TARGET).fill('Dramen staff') }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Dramen staff', qty: LOST_CITY_STAFF_TARGET }]);
     });
 
-    test('stage 5 can restore a banked branch as an alternate recovery path', () => {
-        const step = decide(snap({ stage: 5, bank: ['Dramen branch', 'Knife'] }));
-        expect(step.kind === 'withdraw' && step.items).toEqual([
-            { name: 'Dramen branch', qty: 1 },
-            { name: 'Knife', qty: 1 }
-        ]);
+    test('stage 5 does not equip or finish with only one staff', () => {
+        const step = decide(snap({ stage: 5, inv: ['Knife', 'Dramen staff', ...COMBAT_FOOD] }));
+        expect(step.kind).toBe('deposit');
+        expect(step.kind === 'deposit' && step.keep).not.toContain('dramen staff');
     });
 
-    test('stage 5 equips a held staff and enters Zanaris with a worn staff', () => {
-        const equip = decide(snap({ stage: 5, inv: ['Dramen staff'] }));
+    test('stage 5 equips only after holding five staves and then enters Zanaris', () => {
+        const equip = decide(
+            snap({
+                stage: 5,
+                inv: Array(LOST_CITY_STAFF_TARGET).fill('Dramen staff'),
+                bankKnown: false
+            })
+        );
         expect(equip.kind === 'equip' && equip.item).toBe('Dramen staff');
 
-        const enter = decide(snap({ stage: 5, worn: ['Dramen staff'] }));
+        const enter = decide(
+            snap({
+                stage: 5,
+                inv: Array(LOST_CITY_STAFF_TARGET - 1).fill('Dramen staff'),
+                worn: ['Dramen staff']
+            })
+        );
         expect(customName(enter)).toBe('enter Zanaris through the swamp shed');
     });
 
-    test('stage 5 exits the dungeon without unequipping its worn staff', () => {
-        const step = decide(snap({ stage: 5, worn: ['Dramen staff'], tile: DUNGEON }));
+    test('stage 5 exits the dungeon after all five staves are made', () => {
+        const step = decide(
+            snap({
+                stage: 5,
+                inv: Array(LOST_CITY_STAFF_TARGET).fill('Dramen staff'),
+                worn: ['Iron axe'],
+                tile: DUNGEON
+            })
+        );
         expect(customName(step)).toBe('exit through the Wilderness portal');
     });
 
     test('stage 5 recovers a completely lost staff, including an axe-less dungeon restart', () => {
-        const mainland = decide(snap({ stage: 5, inv: ['Knife', 'Coins', ...COMBAT_FOOD] }));
+        const mainland = decide(snap({ stage: 5, inv: ['Knife', ...COMBAT_FOOD] }));
         expect(customName(mainland)).toBe('sail from Port Sarim to Entrana');
 
         const dungeon = decide(snap({ stage: 5, tile: DUNGEON }));
@@ -254,5 +310,9 @@ describe('Lost City stages 5-6', () => {
 
     test('unknown journal remains safely idle', () => {
         expect(decide(snap({ stage: 2, journal: 'unknown' })).kind).toBe('wait');
+    });
+
+    test('uses the AIO-selected food at the quest-safe combat threshold', () => {
+        expect(lostcity.sustain).toEqual({ foods: [], eatBelowHp: 0.9 });
     });
 });

@@ -108,6 +108,19 @@ Some hard-won details:
   held, tiles reached — not on log lines.
 - Software rendering (SwiftShader) is unreliable for some harnesses; several need a
   real GPU. Parallel browsers also perturb door timing, so validate a door fix solo.
+- **`~maxme` grants stats and never gear.** A quest with a real fight in it needs
+  the harness to give and equip a kit, or the "max stats" account is punching a
+  level-93 boss. `Equipment.equip()` awaits `Execution.delayUntil`, which needs a
+  running script context and throws from `page.evaluate` — drive the Wield/Wear
+  held-op yourself; the direct input driver's is synchronous.
+- **`::give` reaches the inventory, never the bank.** There is no working bank cheat
+  in the current content, so a bank-withdraw path stays a unit-test concern.
+- **A stage test seeds only what that stage produces, never its tools.** See
+  [Quests](QUESTS.md#adding-a-quest) — every Watch Tower stage-10 test handed the bot
+  a pickaxe, so all of them passed while the quest could not mine.
+  [`tools/shilo-solo-test.ts`](../tools/shilo-solo-test.ts) is the current worked
+  example: `--stage`/`--bits` jump the quest varps, `--tele` drops the account beside
+  the leg under test, and `--speed 300` runs the engine at 2× ticks.
 
 ## The end-to-end smoke
 
