@@ -89,8 +89,8 @@ export class WorldMapPicker {
 
             // 2. Create interactive canvas & obtain 2D rendering context
             const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 600;
+            canvas.width = 640;
+            canvas.height = 480;
             canvas.style.backgroundColor = '#000';
             canvas.style.border = '2px solid #555';
             canvas.style.cursor = 'crosshair';
@@ -164,12 +164,26 @@ export class WorldMapPicker {
 
                 picker.selectedTile = { x: tileX, z: tileZ, level: 0 };
 
+                // Re-render map to clear previous crosshair
+                pixMap.setPixels();
+                mapView.renderWorldMap(
+                    0, 0,
+                    mapView.mapWidth, mapView.mapHeight,
+                    0, 0,
+                    canvas.width, canvas.height
+                );
+                pixMap.draw(0, 0);
+                pixMap.setPixels();
+                picker.drawWalkDestinations(0, 0, canvas.width, canvas.height);
+                pixMap.draw(0, 0);
+
                 // Draw crosshair marker using raw canvas 2D context
                 drawCrosshair(ctx, clickX, clickY);
 
                 // Show confirm button
                 confirmBtn.style.display = 'inline-block';
                 confirmBtn.disabled = false;
+                canvas.style.cursor = 'default';
             };
 
             // Draw crosshair at pixel position using native canvas API (no Pix2D)
