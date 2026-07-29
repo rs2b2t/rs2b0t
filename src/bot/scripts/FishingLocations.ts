@@ -29,6 +29,15 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
 
     },
     {
+        name: 'Barbarian Village',
+        spot: new Tile(3104, 3430, 0),
+        region: Area.rectangular(new Tile(3080, 3420, 0), new Tile(3120, 3500, 0)),
+        bankStand: new Tile(3094, 3494, 0),
+        boothName: 'Bank booth',
+        boothOp: 'Use-quickly',
+        verified: false
+    },
+    {
         name: 'Catherby',
         spot: new Tile(2846, 3429, 0),
         region: Area.rectangular(new Tile(2800, 3410, 0), new Tile(2870, 3445, 0)),

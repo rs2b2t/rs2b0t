@@ -15,6 +15,14 @@ describe('resolveLocation', () => {
         expect(resolveLocation('Auto', new Tile(3092, 3243, 0))?.name).toBe('Draynor Village');
     });
 
+    test('Auto detects Barbarian Village from the fishing spot', () => {
+        expect(resolveLocation('Auto', new Tile(3104, 3430, 0))?.name).toBe('Barbarian Village');
+    });
+
+    test('Auto detects Barbarian Village from Edgeville bank', () => {
+        expect(resolveLocation('Auto', new Tile(3094, 3494, 0))?.name).toBe('Barbarian Village');
+    });
+
     test('Auto resolves to null away from every location (Lumbridge)', () => {
         expect(resolveLocation('Auto', new Tile(3222, 3218, 0))).toBeNull();
     });
@@ -55,6 +63,7 @@ describe('FISHING_LOCATIONS table', () => {
         expect(LOCATION_OPTIONS).toEqual([
             'Auto',
             'Draynor Village',
+            'Barbarian Village',
             'Catherby',
             'Fishing Guild',
             'Taverley Dungeon (lava eels)',
