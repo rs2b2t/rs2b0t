@@ -163,6 +163,26 @@ export function gatherHuntRadius(leash: number): number {
     return Math.max(L + 12, 28);
 }
 
+/**
+ * Whether post-bank / no-target gather should walk toward the camp anchor.
+ *
+ * "Already home" is the soft {@link HOME_ARRIVE_RADIUS} disk — not the full gather
+ * leash. Named camps floor leash to 64 so pier/mine hunting stays wide; bank stands
+ * often sit inside that disk but in another map square (Catherby bank→pier ≈ 36).
+ * Treating full leash as home left Fisher idling on "no spots within N of anchor"
+ * at the bank (#154).
+ */
+export function shouldWalkHomeToGatherAnchor(
+    distToAnchor: number | null | undefined,
+    arriveRadius = HOME_ARRIVE_RADIUS
+): boolean {
+    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
+        return false;
+    }
+    const r = Math.max(0, Math.floor(Number.isFinite(arriveRadius) ? arriveRadius : HOME_ARRIVE_RADIUS));
+    return distToAnchor > r;
+}
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
@@ -1739,8 +1759,9 @@ export default class GatheringBot extends TaskBot {
 
     /**
      * Soft return toward the gather anchor after bank/shop/repair.
-     * Skips the walk when already inside the camp disk — no robotic pin of the
-     * exact location.spot tile before the next chop/fish/mine.
+     * Skips only when already inside the soft arrive disk ({@link HOME_ARRIVE_RADIUS})
+     * — not the full gather leash. Bank stands at named camps often sit inside the
+     * leash but far from resources (Catherby bank is ~36 from the pier).
      */
     async walkHomeIfNeeded(
         log: (m: string) => void = m => this.log(`  ${m}`),
@@ -1748,11 +1769,7 @@ export default class GatheringBot extends TaskBot {
     ): Promise<boolean> {
         const here = Game.tile();
         const anchor = this.getAnchor();
-        if (here && anchor.distanceTo(here) <= arriveRadius) {
-            return true;
-        }
-        // Also skip when still inside the gather leash (named camps are large).
-        if (here && tileWithinLeash(this, here, 0)) {
+        if (here && !shouldWalkHomeToGatherAnchor(anchor.distanceTo(here), arriveRadius)) {
             return true;
         }
         return Traversal.walkResilient(anchor, { radius: arriveRadius, log });
@@ -3787,6 +3804,16 @@ class Gather implements Task {
                 );
                 return;
             }
+            // Scene-local query found nothing. If we're still outside the soft camp
+            // disk (post-bank at Catherby/Guild/Seers), walk home so the pier loads.
+            // Inside the arrive disk, idle with status — temporary spot despawn.
+            const here = Game.tile();
+            const anchor = this.bot.getAnchor();
+            if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+                this.bot.setStatus('fish: returning to camp');
+                await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
+                return;
+            }
             this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of anchor`);
             await Execution.delayTicks(2);
             return;
@@ -3885,6 +3912,15 @@ class Gather implements Task {
                         ChatDialog.canContinue(),
                     2500
                 );
+                return;
+            }
+            // Same post-bank / off-camp miss as fishing (#154): walk into the soft
+            // camp disk when far; only status-idle once already near the anchor.
+            const here = Game.tile();
+            const anchor = this.bot.getAnchor();
+            if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+                this.bot.setStatus('gather: returning to camp');
+                await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
             }
             const kind = this.bot.woodcutting() ? 'trees' : 'rocks';

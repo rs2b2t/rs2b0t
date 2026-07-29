@@ -6,6 +6,7 @@ import {
     fishingSessionBroken,
     gatherHuntRadius,
     isAutoLocation,
+    shouldWalkHomeToGatherAnchor,
     shouldYieldGathering
 } from '#/bot/scripts/GatheringBot.js';
 import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
@@ -18,6 +19,36 @@ describe('HOME_ARRIVE_RADIUS (soft home after bank/shop)', () => {
         // Inside disk → walkHomeIfNeeded short-circuits (no robotic pin).
         expect(anchor.distanceTo(new Tile(2845 + 8, 3431, 0))).toBe(8);
         expect(anchor.distanceTo(new Tile(2845 + 9, 3431, 0))).toBe(9);
+    });
+});
+
+describe('shouldWalkHomeToGatherAnchor (#154 post-bank)', () => {
+    // Catherby pier anchor + bank stand (FishingLocations).
+    const catherbySpot = new Tile(2845, 3431, 0);
+    const catherbyBank = new Tile(2809, 3441, 0);
+
+    test('Catherby bank is inside named-camp leash but outside soft arrive disk', () => {
+        const bankDist = catherbySpot.distanceTo(catherbyBank);
+        expect(bankDist).toBe(36);
+        expect(bankDist).toBeLessThanOrEqual(NAMED_CAMP_LEASH_FLOOR);
+        expect(bankDist).toBeGreaterThan(HOME_ARRIVE_RADIUS);
+        // Full-leash "already home" was the bug — bank must still request a walk.
+        expect(shouldWalkHomeToGatherAnchor(bankDist)).toBe(true);
+        expect(shouldWalkHomeToGatherAnchor(bankDist, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+    });
+
+    test('skips walk only inside the soft arrive disk', () => {
+        expect(shouldWalkHomeToGatherAnchor(0)).toBe(false);
+        expect(shouldWalkHomeToGatherAnchor(HOME_ARRIVE_RADIUS)).toBe(false);
+        expect(shouldWalkHomeToGatherAnchor(HOME_ARRIVE_RADIUS + 1)).toBe(true);
+        // Draynor bank ~12 from willows — short walk into arrive disk is correct.
+        expect(shouldWalkHomeToGatherAnchor(12)).toBe(true);
+    });
+
+    test('null / non-finite distance does not force a walk', () => {
+        expect(shouldWalkHomeToGatherAnchor(null)).toBe(false);
+        expect(shouldWalkHomeToGatherAnchor(undefined)).toBe(false);
+        expect(shouldWalkHomeToGatherAnchor(Number.NaN)).toBe(false);
     });
 });
 

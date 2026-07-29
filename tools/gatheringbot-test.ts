@@ -1153,6 +1153,9 @@ const SCENARIOS: Scenario[] = [
     {
         // Cook then bank: seed cooked (not raw) so one catch fills the pack with
         // 1 raw + 26 cooked → cook the raw → bank the cooked pile at Catherby.
+        // NOTE (#154): pass criteria stop at deposit near bank. They do NOT prove
+        // post-bank return to the pier (bank is ~36 from spot, inside leash 64).
+        // Unit coverage: shouldWalkHomeToGatherAnchor in GatheringBotLogic.test.ts.
         id: 'fish-cook-bank',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
         script: 'Fisher',
