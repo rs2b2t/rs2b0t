@@ -85,6 +85,7 @@ type Abi = {
             openBooth(stand: Tile, boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
             openNearest(boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
             withdraw(name: string, op?: string): boolean | Promise<boolean>;
+            depositAllMatching(match: (name: string, id: number) => boolean, log?: (m: string) => void): Promise<void>;
             close(timeoutMs?: number): Promise<boolean>;
         };
         Traversal: {
@@ -785,6 +786,121 @@ async function purgeBankTools(
     }
 }
 
+/**
+ * Open the bank at `bankStand`, deposit every held item whose name matches
+ * `names` (case-insensitive exact), close. Leaves pack empty of those items so
+ * the script under test must withdraw them — exercises Banking.open / restock
+ * bank path instead of the "materials already held" short-circuit.
+ *
+ * Same one-shot LoopingBot pattern as {@link purgeBankTools}.
+ */
+async function depositHeldToBank(
+    page: Page,
+    bankStand: Tile,
+    names: readonly string[],
+    label: string
+): Promise<void> {
+    const want = names.map(n => n.trim()).filter(n => n.length > 0);
+    if (want.length === 0) {
+        return;
+    }
+
+    const arrived = await teleArrive(page, bankStand, 12);
+    if (!arrived) {
+        throw new Error(`deposit ${label}: tele to bank ${bankStand.x},${bankStand.z} failed`);
+    }
+    await waitSceneReady(page, 'bank', { radius: 10, label: `deposit-${label}/bank`, timeoutMs: 15_000 });
+
+    await stopScript(page);
+    await page.evaluate(
+        ([stand, nameList, scriptName]) => {
+            const g = globalThis as never as Abi;
+            const abi = g.__rs2b0t;
+            const keep = new Set((nameList as string[]).map(n => n.toLowerCase()));
+            g.__gbProbe = { done: false, ok: false, reason: '', withdrew: 0 };
+
+            class DepositBankBot extends abi.LoopingBot {
+                private ran = false;
+                override async loop(): Promise<number> {
+                    if (this.ran) {
+                        return 5000;
+                    }
+                    this.ran = true;
+                    const res = g.__gbProbe!;
+                    const log = (_m: string) => {
+                        /* quiet */
+                    };
+                    try {
+                        if (!abi.Bank.isOpen()) {
+                            const opened =
+                                (await abi.Bank.openBooth(stand, 'Bank booth', 'Use-quickly', log))
+                                || (await abi.Bank.openNearest('Bank booth', 'Use-quickly', log));
+                            if (!opened) {
+                                res.ok = false;
+                                res.reason = 'could not open bank';
+                                res.done = true;
+                                return 5000;
+                            }
+                        }
+                        await abi.Execution.delayUntil(() => abi.Bank.loaded() || !abi.Bank.isOpen(), 4000);
+                        if (!abi.Bank.isOpen()) {
+                            res.ok = false;
+                            res.reason = 'bank closed before load';
+                            res.done = true;
+                            return 5000;
+                        }
+                        await abi.Execution.delayTicks(1);
+
+                        // Deposit only the seeded materials — leave coins/junk alone.
+                        await abi.Bank.depositAllMatching(name => keep.has((name ?? '').toLowerCase()));
+                        await abi.Execution.delayUntil(() => abi.Bank.loaded() || !abi.Bank.isOpen(), 3000);
+                        await abi.Execution.delayTicks(1);
+
+                        // Confirm pack no longer holds the targets.
+                        const still = (nameList as string[]).filter(n => abi.Inventory.count(n) > 0);
+                        if (abi.Bank.isOpen()) {
+                            await abi.Bank.close();
+                        }
+                        if (still.length > 0) {
+                            res.ok = false;
+                            res.reason = `still holding ${still.join(', ')} after deposit`;
+                            res.done = true;
+                            return 5000;
+                        }
+                        res.ok = true;
+                        res.reason = '';
+                        res.withdrew = keep.size;
+                    } catch (e) {
+                        res.ok = false;
+                        res.reason = e instanceof Error ? e.message : String(e);
+                    }
+                    res.done = true;
+                    return 5000;
+                }
+            }
+
+            abi.registerScript({ name: scriptName, create: () => new DepositBankBot() });
+            g.rs2b0t.runner.start(g.rs2b0t.registry.get(scriptName));
+        },
+        [bankStand, want, `GbDeposit_${label.replace(/[^a-zA-Z0-9_]/g, '_')}`] as const
+    );
+
+    await page
+        .waitForFunction(() => (globalThis as never as Abi).__gbProbe?.done === true, undefined, { timeout: 45_000 })
+        .catch(() => undefined);
+
+    const result = await page.evaluate(() => {
+        const p = (globalThis as never as Abi).__gbProbe;
+        return p ?? { done: true, ok: false, reason: 'no probe result', withdrew: 0 };
+    });
+    await stopScript(page);
+
+    if (!result.ok) {
+        throw new Error(`deposit ${label}: ${result.reason || 'failed'}`);
+    }
+    console.log(`  deposit ${label}: banked ${want.join(' + ')} (pack clear)`);
+}
+
 function printNewLogs(s: Snap, lastTime: number, stamp: () => string): number {
     let max = lastTime;
     for (const l of s.logs) {
@@ -818,6 +934,11 @@ type Scenario = {
     stats?: { skill: string; level: number }[];
     /** Before seed: open this bank and withdraw matching tools, then clearinv. */
     purgeBank?: { stand: Tile; match: RegExp; label: string };
+    /**
+     * After seed: open this bank, deposit the named held items, close.
+     * Forces the script to withdraw (bank path) instead of materials-held short-circuit.
+     */
+    depositSeedToBank?: { stand: Tile; names: string[]; label: string };
     /** Scene readiness after tele. Path-from-bank uses 'bank' or 'skip'. */
     scene?: SceneExpect;
     budgetMs?: number;
@@ -851,6 +972,8 @@ const SPOT = {
     seVarrockMine: { x: 3285, z: 3366, level: 0 },
     draynorFish: { x: 3086, z: 3231, level: 0 },
     catherbyFish: { x: 2845, z: 3431, level: 0 },
+    /** Catherby bank booth stand (cook→bank deposit). */
+    catherbyBank: { x: 2809, z: 3441, level: 0 },
     draynorTrees: { x: 3098, z: 3242, level: 0 },
     /** Lava Maze runite rocks (wildy). */
     lavaRunite: { x: 3058, z: 3884, level: 0 },
@@ -1022,11 +1145,14 @@ const SCENARIOS: Scenario[] = [
             `fishing xp ${start.xp.fishing}->${cur.xp.fishing}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, raw=${invMatch(cur, /^raw /i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
     },
     {
-        id: 'fish-cook',
-        tags: ['fishing', 'fish', 'cook', 'early'],
+        // Cook then bank: seed cooked (not raw) so one catch fills the pack with
+        // 1 raw + 26 cooked → cook the raw → bank the cooked pile at Catherby.
+        id: 'fish-cook-bank',
+        tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
         script: 'Fisher',
         start: offsetTile(SPOT.catherbyFish, -6, 4),
         camp: SPOT.catherbyFish,
+        bank: SPOT.catherbyBank,
         settings: {
             fishMethod: 'Lobster cage — lobster',
             location: 'Catherby',
@@ -1037,30 +1163,41 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 18
         },
-        // Pot + 26 raw = 27 slots; one free so it must fish the last lobster,
-        // then cook-then-bank the pack (not cook a pre-filled inventory only).
+        // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank.
         seed: [
             { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
-            { debug: 'raw_lobster', name: 'Raw lobster', qty: 26 }
+            { debug: 'lobster', name: 'Lobster', qty: 26 }
         ],
         // Cooking/fishing already 99 from BASE_STATS.
         scene: 'skip',
-        budgetMs: 180_000,
-        check: ({ start, cur }) => {
+        budgetMs: 210_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
             const fishXp = cur.xp.fishing - start.xp.fishing;
             const cookXp = cur.xp.cooking - start.xp.cooking;
             const cooked = invMatch(cur, /^lobster$/i);
+            const raw = invMatch(cur, /^raw lobster$/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Must catch the last lobster, then start cooking the pack.
-            if (fishXp > 0 && (cookXp > 0 || cooked > 0)) {
+            // Full cook→bank: catch → cook XP → deposit cooked near bank.
+            if (
+                fishXp > 0
+                && cookXp > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && cooked <= 2
+                && raw === 0
+                && minDistToBank <= 12
+            ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur }) =>
-            `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking}, rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)}`
+        failMsg: ({ start, cur, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking} ` +
+            `rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)} ` +
+            `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank}`
     },
     {
         id: 'wc-bank',
@@ -1633,7 +1770,9 @@ const SCENARIOS: Scenario[] = [
         id: 'smith-rune-axe',
         tags: ['acquire', 'smith', 'woodcutting', 'wc', 'tools', 'endgame'],
         script: 'Woodcutter',
-        // Bar + hammer ready → Varrock west bank / anvil smith path (no shop axe).
+        // Materials live in Varrock West bank — script must open bank, withdraw,
+        // then walk anvil. Location stays Draynor so camp bankStand is far; nearby
+        // bank preference should snap to Varrock West underfoot.
         start: SPOT.varrockWestBank,
         camp: SPOT.varrockAnvil,
         settings: {
@@ -1645,11 +1784,16 @@ const SCENARIOS: Scenario[] = [
             leashRadius: 12
         },
         purgeBank: { stand: SPOT.varrockWestBank, match: TOOL_RE.axe, label: 'axes@varrock-w' },
-        // Hammer + runite bar; WC/smith already 99 — this is the smith path, not shop tier.
+        // give → deposit via preflight bot → pack empty; restock must bank-withdraw.
         seed: [
             { debug: 'hammer', name: 'Hammer', qty: 1 },
             { debug: 'runite_bar', name: 'Runite bar', qty: 1 }
         ],
+        depositSeedToBank: {
+            stand: SPOT.varrockWestBank,
+            names: ['Hammer', 'Runite bar'],
+            label: 'smith-mats@varrock-w'
+        },
         scene: 'bank',
         budgetMs: 210_000,
         check: ({ cur }) => {
@@ -1744,6 +1888,16 @@ try {
                 await seedItem(page, it.debug, it.name, it.qty ?? 1);
                 console.log(`  seeded ${it.qty ?? 1}x ${it.name}`);
             }
+            // Optional: park seeded mats in the bank so the script must withdraw
+            // (smith-rune-axe — exercises bank path, not materials-held short-circuit).
+            if (sc.depositSeedToBank) {
+                await depositHeldToBank(
+                    page,
+                    sc.depositSeedToBank.stand,
+                    sc.depositSeedToBank.names,
+                    sc.depositSeedToBank.label
+                );
+            }
             // Already-met levels (99 from BASE_STATS) are skipped.
             await grantStats(page, sc.stats ?? []);
             await clearChatDialogs(page);
@@ -1810,11 +1964,15 @@ try {
                     throw new Error('precondition: no coins after seed');
                 }
                 if (sc.id === 'smith-rune-axe') {
-                    if (invCount(pre, 'Runite bar') < 1) {
-                        throw new Error('precondition: no Runite bar after seed');
+                    // Mats were deposited — pack must be empty of them so restock banks.
+                    if (invCount(pre, 'Runite bar') > 0 || invCount(pre, 'Hammer') > 0) {
+                        throw new Error(
+                            `precondition: hammer/bar still in pack after deposit ` +
+                                `(bar=${invCount(pre, 'Runite bar')} hammer=${invCount(pre, 'Hammer')})`
+                        );
                     }
-                    if (invCount(pre, 'Hammer') < 1) {
-                        throw new Error('precondition: no Hammer after seed');
+                    if (hasAnyAxe(pre)) {
+                        throw new Error('precondition: already holding an axe after purge+deposit');
                     }
                 }
             }
@@ -1883,12 +2041,16 @@ try {
                     }
                 }
 
+                // fish-cook-bank seeds cooked lobster; track cooked+raw so
+                // productPeak / near-bank / bankedHint still fire on deposit.
                 const product =
-                    sc.script === 'Miner'
-                        ? invMatch(cur, /ore/i)
-                        : sc.script === 'Fisher'
-                          ? invMatch(cur, /^raw /i)
-                          : invMatch(cur, /logs/i);
+                    sc.id === 'fish-cook-bank'
+                        ? invMatch(cur, /^(raw )?lobster$/i)
+                        : sc.script === 'Miner'
+                          ? invMatch(cur, /ore/i)
+                          : sc.script === 'Fisher'
+                            ? invMatch(cur, /^raw /i)
+                            : invMatch(cur, /logs/i);
                 if (product > 0) {
                     sawProduct = true;
                 }

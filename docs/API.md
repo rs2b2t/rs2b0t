@@ -323,14 +323,19 @@ High-level open / deposit helpers. **This is what scripts should call.**
 
 ```ts
 Banking.open(opts?: {
-    stand?: WorldTile | null;     // preset stand → walk + openBooth
+    stand?: WorldTile | null;     // preset stand when no bank is already nearby
     boothName?: string;           // default 'Bank booth'
     boothOp?: string;             // default 'Use-quickly'
     obstacles?: string[];         // doors/gates on the way to stand (e.g. ['door','gate'])
     destination?: BankDestination;// force a bank when no booth in scene
+    preferNearby?: boolean;       // default true — local booth beats distant stand
+    nearbyRadius?: number;        // default NEARBY_BANK_RADIUS (14)
     log?: (msg: string) => void;
 }): Promise<boolean>
 // Does NOT deposit or walk back — caller owns the session.
+
+NEARBY_BANK_RADIUS                // snap radius for "bank underfoot"
+resolveBankOpenRoute(input)       // pure router (unit-tested)
 
 Banking.bankNearest(opts: {
     deposit: (name: string) => boolean;
@@ -344,10 +349,12 @@ Banking.bankNearest(opts: {
 }): Promise<boolean>
 ```
 
-**Open rules**
+**Open rules** (default `preferNearby: true`)
 
 | Situation | Behaviour |
 |---|---|
+| usable booth within `nearbyRadius` | open it — **ignore** distant preset stand |
+| nearest known bank within radius, stand far | walk that local bank |
 | `stand` set, `obstacles` non-empty | walk opening doors/gates → `openBooth` |
 | `stand` set, no obstacles | `walkResilient` → `openBooth` |
 | no `stand`, booth in scene | `openNearestAccess` |

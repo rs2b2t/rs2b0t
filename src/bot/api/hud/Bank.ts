@@ -170,8 +170,9 @@ export const Bank = {
                 }
             }
 
-            log?.(`booth didn't open from here — stepping onto (${stand.x}, ${stand.z}, ${stand.level})`);
-            await Traversal.walkTo(stand, { radius: 0, timeoutMs: 15000, log });
+            log?.(`booth didn't open from here — stepping near (${stand.x}, ${stand.z}, ${stand.level})`);
+            // radius 1: adjacent is enough to click the booth; exact-tile pin looks robotic.
+            await Traversal.walkTo(stand, { radius: 1, timeoutMs: 15000, log });
             await Execution.delayTicks(1);
             const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
             const adjOp = adj ? pick(adj.actions()) : undefined;
@@ -254,7 +255,7 @@ export const Bank = {
                 const stand = bankStand(booth.tile());
                 if (stand) {
                     log?.(`booth didn't open — stepping to the bank counter at (${stand.x}, ${stand.z})`);
-                    await Traversal.walkTo(stand, { radius: 0, timeoutMs: 15000, log });
+                    await Traversal.walkTo(stand, { radius: 1, timeoutMs: 15000, log });
                 } else {
                     log?.(`no reachable tile beside '${boothName}' yet — closing in`);
                     await Traversal.walkTo(booth.tile(), { radius: 1, timeoutMs: 15000, log });

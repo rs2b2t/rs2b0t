@@ -1,6 +1,11 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { nearestBank, type BankObjectAccess } from './BankLocations.js';
+import {
+    bankDistance,
+    nearestBank,
+    type BankLocation,
+    type BankObjectAccess
+} from './BankLocations.js';
 import { Execution } from './Execution.js';
 import { Game } from './Game.js';
 import Tile from './Tile.js';
@@ -8,6 +13,13 @@ import { Traversal } from './Traversal.js';
 import { Bank } from './hud/Bank.js';
 import { Locs } from './queries/Locs.js';
 import { walkOpening } from './walkOpening.js';
+
+/**
+ * Snap radius for "I'm already at a bank" — booth underfoot / local stand.
+ * Wider than a single booth tile so starting next to Draynor still counts when
+ * the script's camp bank is Edgeville (Barb fly restock).
+ */
+export const NEARBY_BANK_RADIUS = 14;
 
 /**
  * When a bot should break off and bank.
@@ -103,8 +115,19 @@ function realBooth(boothName: string) {
     return Locs.query().name(boothName).where(l => l.actions().length > 0).nearest();
 }
 
+/** Usable booth within Chebyshev `maxDist` of the player (scene-local). */
+function nearbyUsableBooth(boothName: string, maxDist: number) {
+    return Locs.query()
+        .name(boothName)
+        .where(l => l.actions().length > 0 && l.distance() <= maxDist)
+        .nearest();
+}
+
 export interface OpenBankOpts {
-    /** Preset bank stand (location table). When set, walk here then openBooth. */
+    /**
+     * Preset bank stand (location table). Used when no bank is already nearby.
+     * Nearby booth / local nearestBank always wins when {@link preferNearby} is on.
+     */
     stand?: WorldTile | null;
     boothName?: string;
     boothOp?: string;
@@ -115,7 +138,57 @@ export interface OpenBankOpts {
     obstacles?: string[];
     /** Optional forced destination when no booth is in scene and stand is unset. */
     destination?: BankDestination;
+    /**
+     * Prefer a bank already underfoot / in the local scene over a distant preset
+     * stand. Default true — starting next to Draynor must not web-walk to Edgeville
+     * just because the camp table says Edgeville.
+     */
+    preferNearby?: boolean;
+    /** Chebyshev / booth distance for nearby snap. Default {@link NEARBY_BANK_RADIUS}. */
+    nearbyRadius?: number;
     log?: (msg: string) => void;
+}
+
+export type BankOpenRoute = 'already-open' | 'scene-booth' | 'local-bank' | 'preset-stand' | 'nearest-fallback';
+
+/**
+ * Pure routing for {@link Banking.open} — unit-tested without the client.
+ * Nearby scene booth or local known bank beats a distant camp/vendor stand.
+ */
+export function resolveBankOpenRoute(input: {
+    bankOpen?: boolean;
+    here: WorldTile | null;
+    stand?: WorldTile | null;
+    /** Distance to a usable booth in scene, or null if none within radius. */
+    nearbyBoothDist: number | null;
+    nearest: BankLocation | null;
+    preferNearby?: boolean;
+    nearbyRadius?: number;
+}): BankOpenRoute {
+    if (input.bankOpen) {
+        return 'already-open';
+    }
+    const prefer = input.preferNearby !== false;
+    const radius = input.nearbyRadius ?? NEARBY_BANK_RADIUS;
+    if (prefer && input.nearbyBoothDist !== null && input.nearbyBoothDist <= radius) {
+        return 'scene-booth';
+    }
+    const here = input.here;
+    if (prefer && here && input.nearest) {
+        const localD = bankDistance(here, input.nearest.tile);
+        if (localD <= radius) {
+            const stand = input.stand;
+            // Already at/near a bank that isn't the preset — use it (Draynor vs Edgeville).
+            if (!stand || bankDistance(here, stand) > radius) {
+                return 'local-bank';
+            }
+            // Preset stand is also local (same bank area) — still fine to walk the stand.
+        }
+    }
+    if (input.stand) {
+        return 'preset-stand';
+    }
+    return 'nearest-fallback';
 }
 
 function asTile(t: WorldTile): Tile {
@@ -125,8 +198,13 @@ function asTile(t: WorldTile): Tile {
 export const Banking = {
     /**
      * Open a bank for script work (deposit / withdraw / restock).
-     * - Preset `stand`: walkOpening (if obstacles) or walkResilient → openBooth
-     * - No stand: booth in scene → openNearestAccess; else web-walk nearestBank first
+     *
+     * Route (default {@link preferNearby} = true):
+     * 1. Bank already open → done
+     * 2. Usable booth within {@link nearbyRadius} → open it (ignore distant stand)
+     * 3. Known {@link nearestBank} within radius and stand is far → walk that bank
+     * 4. Preset `stand` → walkOpening / walkResilient → openBooth
+     * 5. Else booth in scene → openNearest; else web-walk nearestBank
      *
      * Does not deposit or return — callers own the bank session.
      */
@@ -135,8 +213,39 @@ export const Banking = {
         const boothOp = opts.boothOp ?? 'Use-quickly';
         const log = opts.log ?? (() => {});
         const obstacles = (opts.obstacles ?? []).map(s => s.trim().toLowerCase()).filter(Boolean);
+        const preferNearby = opts.preferNearby !== false;
+        const nearbyRadius = opts.nearbyRadius ?? NEARBY_BANK_RADIUS;
 
-        if (opts.stand) {
+        if (Bank.isOpen()) {
+            return true;
+        }
+
+        const here = Game.tile();
+        const boothNear = preferNearby ? nearbyUsableBooth(boothName, nearbyRadius) : null;
+        const nearest = here ? nearestBank(here) : null;
+        const route = resolveBankOpenRoute({
+            bankOpen: false,
+            here,
+            stand: opts.stand ?? null,
+            nearbyBoothDist: boothNear ? boothNear.distance() : null,
+            nearest,
+            preferNearby,
+            nearbyRadius
+        });
+
+        if (route === 'scene-booth') {
+            log(`bank: booth within ${nearbyRadius} — opening here (skip long walk)`);
+            return Bank.openNearestAccess({ name: boothName, op: boothOp }, log);
+        }
+
+        if (route === 'local-bank' && nearest) {
+            log(`bank: local ${nearest.name} bank — using it instead of distant preset`);
+            await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log });
+            const access = nearest.access ?? { name: boothName, op: boothOp };
+            return Bank.openNearestAccess(access, log);
+        }
+
+        if (route === 'preset-stand' && opts.stand) {
             const stand = asTile(opts.stand);
             if (obstacles.length > 0) {
                 await walkOpening(stand, 2, obstacles, log);
@@ -146,10 +255,10 @@ export const Banking = {
             return Bank.openBooth(stand, boothName, boothOp, log);
         }
 
+        // nearest-fallback (no stand): scene booth anywhere, else web-walk nearestBank
         let destination: BankDestination | null = null;
         if (!realBooth(boothName)) {
-            const here = Game.tile();
-            destination = opts.destination ?? (here ? nearestBank(here) : null);
+            destination = opts.destination ?? (nearest ? { name: nearest.name, tile: nearest.tile, access: nearest.access } : null);
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
                 await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });
@@ -185,7 +294,8 @@ export const Banking = {
         await opts.afterDeposit?.();
         await Execution.delayTicks(1);
         if (opts.returnTo) {
-            await Traversal.walkResilient(asTile(opts.returnTo), { radius: 3, timeoutMs: 120_000, log });
+            // Soft arrive — no need to stand on the exact return pin.
+            await Traversal.walkResilient(asTile(opts.returnTo), { radius: 6, timeoutMs: 120_000, log });
         }
         return true;
     }

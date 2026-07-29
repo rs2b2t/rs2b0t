@@ -134,13 +134,14 @@ environment rather than a plain local engine.
 ```sh
 bun run verify:gatheringbot                 # Miner/Fisher/Woodcutter live paths
 bun run verify:gatheringbot -- mining acquire
-HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts fish-cook restock-fly-barb
+HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts fish-cook-bank restock-fly-barb
 ```
 
-GatheringBot scenarios cover bank/power gather, Catherby cook-then-bank, long
-paths, Buy/repair (coins-only + Bob/Nurmof broken-tool repair), Gerrant multi-buy restock, Auto freeform outside
-preset 64×64 map squares, and smith. Named camps floor leash to 64; only Location
-Auto respects a tight `leashRadius` (and skips mob flee). See
+GatheringBot scenarios cover bank/power gather, Catherby cook-then-bank (seed cooked
+lobster → catch last → cook → deposit), long paths, Buy/repair (coins-only + Bob/Nurmof
+broken-tool repair), Gerrant multi-buy restock, Auto freeform outside preset 64×64 map
+squares, and smith. Named camps floor leash to 64; only Location Auto respects a tight
+`leashRadius` (and skips mob flee). See
 [DEV.md](DEV.md#gatheringbot-behaviour-smoke) for the full id table and redeploy
 notes. Mainland setup always relogs after tutorial unlock (`RELOG_*` env overrides
 in `tools/tutorial/harness.ts`).

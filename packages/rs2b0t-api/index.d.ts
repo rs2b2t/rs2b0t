@@ -447,8 +447,8 @@ export function depositAllExcept(keep: Iterable<string>): (name: string) => bool
 
 export interface OpenBankOpts {
     /**
-     * Preset bank stand tile. When set: walk here (opening doors/gates if
-     * `obstacles` is non-empty) then `Bank.openBooth`.
+     * Preset bank stand tile. Used when no bank is already nearby (see
+     * `preferNearby`). Distant stands are not forced when a booth is underfoot.
      */
     stand?: WorldTile | null;
     boothName?: string;
@@ -460,8 +460,35 @@ export interface OpenBankOpts {
     obstacles?: string[];
     /** Forced destination when no booth is in scene and `stand` is unset. */
     destination?: BankDestination;
+    /**
+     * Prefer a bank already underfoot / in the local scene over a distant preset
+     * stand. Default true — starting next to Draynor must not web-walk to Edgeville
+     * just because the camp table says Edgeville.
+     */
+    preferNearby?: boolean;
+    /** Distance for nearby snap. Default {@link NEARBY_BANK_RADIUS}. */
+    nearbyRadius?: number;
     log?: (msg: string) => void;
 }
+
+/** Snap radius for "I'm already at a bank" (booth underfoot / local stand). */
+export const NEARBY_BANK_RADIUS: number;
+
+export type BankOpenRoute = 'already-open' | 'scene-booth' | 'local-bank' | 'preset-stand' | 'nearest-fallback';
+
+/**
+ * Pure routing for {@link Banking.open} — unit-testable without the client.
+ * Nearby scene booth or local known bank beats a distant camp/vendor stand.
+ */
+export function resolveBankOpenRoute(input: {
+    bankOpen?: boolean;
+    here: WorldTile | null;
+    stand?: WorldTile | null;
+    nearbyBoothDist: number | null;
+    nearest: { name: string; tile: WorldTile; access?: BankObjectAccess } | null;
+    preferNearby?: boolean;
+    nearbyRadius?: number;
+}): BankOpenRoute;
 
 /**
  * High-level bank open + one-shot bank-and-deposit helpers.
@@ -470,8 +497,7 @@ export interface OpenBankOpts {
 export const Banking: {
     /**
      * Open a bank for script work (deposit / withdraw / restock).
-     * - Preset `stand`: walk (with optional door/gate opens) → openBooth
-     * - No stand: booth in scene → openNearestAccess; else web-walk nearest known bank
+     * Default preferNearby: booth/local bank underfoot wins over a distant stand.
      *
      * Does **not** deposit or walk back — callers own the bank session.
      */

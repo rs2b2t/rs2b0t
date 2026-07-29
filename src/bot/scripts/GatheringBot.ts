@@ -118,6 +118,12 @@ import {
 const LOCAL_BURN_HALF = 8;
 
 /**
+ * Soft home arrive radius after bank/shop/repair.
+ * Humans re-enter the camp disk — they do not pin the exact location.spot tile.
+ */
+export const HOME_ARRIVE_RADIUS = 8;
+
+/**
  * Floor for non-Auto location modes (named camps + power None).
  * Named camps are large (Catherby pier, Fishing Guild docks, multi-rock mines) —
  * a tight UI default like 10–18 leaves "no spots within N of anchor" while standing
@@ -1732,6 +1738,27 @@ export default class GatheringBot extends TaskBot {
     }
 
     /**
+     * Soft return toward the gather anchor after bank/shop/repair.
+     * Skips the walk when already inside the camp disk — no robotic pin of the
+     * exact location.spot tile before the next chop/fish/mine.
+     */
+    async walkHomeIfNeeded(
+        log: (m: string) => void = m => this.log(`  ${m}`),
+        arriveRadius = HOME_ARRIVE_RADIUS
+    ): Promise<boolean> {
+        const here = Game.tile();
+        const anchor = this.getAnchor();
+        if (here && anchor.distanceTo(here) <= arriveRadius) {
+            return true;
+        }
+        // Also skip when still inside the gather leash (named camps are large).
+        if (here && tileWithinLeash(this, here, 0)) {
+            return true;
+        }
+        return Traversal.walkResilient(anchor, { radius: arriveRadius, log });
+    }
+
+    /**
      * True when already at/near the script bank (or bank UI open). Used so tool
      * upgrades never pull the player off trees/rocks on a cold start.
      * Draynor bank is only ~12 tiles from the willow anchor — inside ReturnToAnchor
@@ -1882,7 +1909,7 @@ export default class GatheringBot extends TaskBot {
                 await this.equipTools(toEquip, log, { bankDisplaced: false });
             }
             if (didWork || withdrewBetter) {
-                await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+                await this.walkHomeIfNeeded(log);
             }
             return didWork || withdrewBetter;
         };
@@ -1931,7 +1958,7 @@ export default class GatheringBot extends TaskBot {
         });
         this.markAcquireBackoff(ok ? 90_000 : 45_000);
         // Always head home after an upgrade attempt so BankCatch early-return is safe.
-        await Traversal.walkResilient(this.getAnchor(), { radius: 3, log });
+        await this.walkHomeIfNeeded(log);
         return true;
     }
 
@@ -2676,7 +2703,7 @@ class BankCatch implements Task {
             await this.bot.closeScriptBank(log);
         }
         if (!this.bot.isCookBatchReady()) {
-            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+            await this.bot.walkHomeIfNeeded(log);
         }
     }
 }
@@ -2851,7 +2878,7 @@ class FishBankCooked implements Task {
         } else {
             this.bot.endCookingLoad();
         }
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+        await this.bot.walkHomeIfNeeded(log);
     }
 }
 
@@ -2892,7 +2919,7 @@ class FishWithdrawCookBatch implements Task {
             this.bot.forceBankRawEmpty();
             this.bot.finishCookCycle();
             if (!this.bot.isCookBatchReady() && this.bot.getAfterCook() === 'continue') {
-                await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                await this.bot.walkHomeIfNeeded(log);
             }
             return;
         }
@@ -2927,7 +2954,7 @@ class FishWithdrawCookBatch implements Task {
             }
             this.bot.finishCookCycle();
             if (!this.bot.isCookBatchReady() && this.bot.getAfterCook() === 'continue') {
-                await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                await this.bot.walkHomeIfNeeded(log);
             }
             return;
         }
@@ -2987,7 +3014,7 @@ class RepairBrokenGatherTool implements Task {
             if (plan?.kind === 'repair') {
                 const ok = await this.bot.executeToolAcquirePlan(plan, log);
                 if (ok) {
-                    await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                    await this.bot.walkHomeIfNeeded(log);
                     return;
                 }
                 this.bot.log('acquire: repair failed — falling back to bank/buy');
@@ -3031,7 +3058,7 @@ class RepairBrokenGatherTool implements Task {
                         }
                         const ok = await this.bot.executeToolAcquirePlan(buy, log);
                         if (ok) {
-                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            await this.bot.walkHomeIfNeeded(log);
                             return;
                         }
                     }
@@ -3057,7 +3084,7 @@ class RepairBrokenGatherTool implements Task {
                 await this.bot.closeScriptBank(log);
             }
             await this.bot.equipTools([pick], log, { bankDisplaced: true });
-            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+            await this.bot.walkHomeIfNeeded(log);
             return;
         }
 
@@ -3138,6 +3165,32 @@ class RestockFishingGear implements Task {
         );
         const log = (m: string) => this.bot.log(`  ${m}`);
 
+        // Coins already cover the shop cart (seeded restock at a booth that isn't
+        // the camp bank) — skip bank entirely and walk straight to Gerrant/Harry.
+        // Prefer-nearby Banking still helps when we *do* need the bank, but held GP
+        // must not force Edgeville from Draynor just to glance at an empty booth.
+        if (this.bot.toolAcquireEnabled() && this.bot.acquireReady() && missing.length > 0) {
+            const preCart = fishingGearShopCart(
+                method,
+                this.bot.acquireWorldWithBank(),
+                this.bot.fishingAcquireOpts()
+            );
+            if (preCart.length > 0 && Inventory.count(COINS) >= buyPlansCost(preCart)) {
+                this.bot.log('restock: coins held for shop cart — skipping bank, heading to vendor');
+                const ok = await this.bot.executeFishingGearShopCart(preCart, log, {
+                    bankPrepared: true
+                });
+                if (ok && this.bot.hasGear()) {
+                    await this.bot.walkHomeIfNeeded(log);
+                    return;
+                }
+                if (ok) {
+                    return;
+                }
+                // Shop failed — fall through to bank path for a normal retry.
+            }
+        }
+
         if (!(await this.bot.openScriptBank(log))) {
             if (power) {
                 this.bot.stopMissingGear('could not open nearest bank', missing);
@@ -3186,7 +3239,7 @@ class RestockFishingGear implements Task {
                             bankPrepared: invFunded
                         });
                         if (ok && this.bot.hasGear()) {
-                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            await this.bot.walkHomeIfNeeded(log);
                             return;
                         }
                         if (ok) {
@@ -3264,7 +3317,7 @@ class RestockFishingGear implements Task {
                         bankPrepared: invFunded
                     });
                     if (ok && this.bot.hasGear()) {
-                        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                        await this.bot.walkHomeIfNeeded(log);
                         return;
                     }
                     if (ok) {
@@ -3286,7 +3339,7 @@ class RestockFishingGear implements Task {
             await this.bot.closeScriptBank(log);
         }
         this.bot.log(`restock: gear ok (${this.bot.gearLabel()})`);
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+        await this.bot.walkHomeIfNeeded(log);
     }
 }
 
@@ -3324,6 +3377,24 @@ class RestockGatherTool implements Task {
         );
         const log = (m: string) => this.bot.log(`  ${m}`);
 
+        // Hammer+bar (or shop GP / broken tool) already in pack — skip the camp-bank
+        // hop entirely. Suite seeds materials at Varrock West; walking Draynor first
+        // burns the budget before the anvil walk even starts.
+        if (this.bot.toolAcquireEnabled() && this.bot.acquireReady() && missing.length > 0) {
+            const preBuy = planGatherToolAcquire(this.bot.toolReqsList(), this.bot.acquireWorldWithBank(), {
+                upgrade: false
+            });
+            if (preBuy && this.bot.acquireMaterialsHeld(preBuy)) {
+                this.bot.log(`restock: materials held for ${preBuy.kind} — skipping bank`);
+                const ok = await this.bot.executeToolAcquirePlan(preBuy, log, { bankPrepared: true });
+                if (ok) {
+                    await this.bot.walkHomeIfNeeded(log);
+                    return;
+                }
+                // Acquire failed — fall through to bank path.
+            }
+        }
+
         if (!(await this.bot.openScriptBank(log))) {
             if (power) {
                 this.bot.stopMissingGear('could not open nearest bank', missing);
@@ -3360,7 +3431,7 @@ class RestockGatherTool implements Task {
                         }
                         const ok = await this.bot.executeToolAcquirePlan(buy, log, { bankPrepared });
                         if (ok) {
-                            await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                            await this.bot.walkHomeIfNeeded(log);
                             return;
                         }
                     } else {
@@ -3441,7 +3512,7 @@ class RestockGatherTool implements Task {
                     }
                     const ok = await this.bot.executeToolAcquirePlan(buy, log, { bankPrepared });
                     if (ok) {
-                        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+                        await this.bot.walkHomeIfNeeded(log);
                         return;
                     }
                 }
@@ -3457,7 +3528,7 @@ class RestockGatherTool implements Task {
         }
 
         this.bot.log(`restock: tools ok (${this.bot.gearLabel()})`);
-        await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
+        await this.bot.walkHomeIfNeeded(log);
     }
 }
 

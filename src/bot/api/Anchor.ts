@@ -48,8 +48,9 @@ export function resolveRunAnchor(here: WorldTile, locationSpot: Tile | null | un
 }
 
 export function createReturnToAnchorTask(host: AnchorHost, opts: ReturnToAnchorOptions = {}): Task {
-    const slack = opts.slack ?? 4;
-    const arriveRadius = opts.arriveRadius ?? 3;
+    // Soft defaults: humans re-enter the camp disk, they don't pin the exact spot tile.
+    const slack = opts.slack ?? 6;
+    const arriveRadius = opts.arriveRadius ?? 8;
     const timeoutMs = opts.timeoutMs ?? 90_000;
     const status = opts.status ?? 'returning to anchor';
 
@@ -62,7 +63,13 @@ export function createReturnToAnchorTask(host: AnchorHost, opts: ReturnToAnchorO
         },
         async execute(): Promise<void> {
             host.setStatus?.(status);
-            await Traversal.walkTo(host.getAnchor(), { radius: arriveRadius, timeoutMs });
+            const here = Game.tile();
+            const anchor = host.getAnchor();
+            // Already inside the arrive disk — don't micro-walk the pin.
+            if (here && anchor.distanceTo(here) <= arriveRadius) {
+                return;
+            }
+            await Traversal.walkTo(anchor, { radius: arriveRadius, timeoutMs });
         }
     };
 }
