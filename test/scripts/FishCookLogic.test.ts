@@ -175,6 +175,16 @@ describe('cook flow predicates', () => {
         expect(shouldStartBankRawCookBatch('bank-raw-then-cook', 9999, 500)).toBe(true);
     });
 
+    test('harness shape: 973 banked + 27 deposited hits explicit N=1000', () => {
+        // fish-bank-raw-cook: cert_raw_lobster 973 → bank, inv 26 raw + catch 1.
+        const N = 1000;
+        const banked = 973;
+        const deposited = 27; // 26 seed + 1 catch
+        expect(shouldStartBankRawCookBatch('bank-raw-then-cook', banked, N)).toBe(false);
+        expect(shouldStartBankRawCookBatch('bank-raw-then-cook', banked + deposited, N)).toBe(true);
+        expect(countRawInBank([{ name: 'Raw lobster', count: banked + deposited }], 'Lobster')).toBe(1000);
+    });
+
     test('sticky batch: N is entry only — keep draining after withdraw drops below N', () => {
         const N = 5000;
         // Arm when bank hits N

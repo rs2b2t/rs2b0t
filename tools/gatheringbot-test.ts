@@ -937,8 +937,14 @@ type Scenario = {
     /**
      * After seed: open this bank, deposit the named held items, close.
      * Forces the script to withdraw (bank path) instead of materials-held short-circuit.
+     * Notes (`cert_*`) share the unnoted display name and un-note on deposit.
      */
     depositSeedToBank?: { stand: Tile; names: string[]; label: string };
+    /**
+     * After {@link depositSeedToBank}: give more held items (tool + near-full pack)
+     * that must stay in inv — used when bank seed and inv seed share a display name.
+     */
+    seedAfterDeposit?: { debug: string; name: string; qty?: number }[];
     /** Scene readiness after tele. Path-from-bank uses 'bank' or 'skip'. */
     scene?: SceneExpect;
     budgetMs?: number;
@@ -1198,6 +1204,69 @@ const SCENARIOS: Scenario[] = [
             `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking} ` +
             `rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)} ` +
             `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank}`
+    },
+    {
+        // Bank raw then cook: seed bank with noted raw (un-notes on deposit),
+        // inv = pot + 26 raw → catch last → bank hits N → withdraw/cook batch.
+        // 973 bank + 27 deposited = 1000 (explicit bankRawBeforeCook; product default is 56).
+        id: 'fish-bank-raw-cook',
+        tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
+        script: 'Fisher',
+        start: offsetTile(SPOT.catherbyFish, -6, 4),
+        camp: SPOT.catherbyFish,
+        bank: SPOT.catherbyBank,
+        settings: {
+            fishMethod: 'Lobster cage — lobster',
+            location: 'Catherby',
+            cookMode: 'Bank raw then cook',
+            cookFish: 'Lobster',
+            burntPolicy: 'Drop',
+            bankRawBeforeCook: 1000,
+            afterCookCycle: 'Stop',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        // cert_* is stackable; deposit un-notes into bank as Raw lobster.
+        seed: [{ debug: 'cert_raw_lobster', name: 'Raw lobster', qty: 973 }],
+        depositSeedToBank: {
+            stand: SPOT.catherbyBank,
+            names: ['Raw lobster'],
+            label: 'raw-lob@catherby'
+        },
+        seedAfterDeposit: [
+            { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
+            { debug: 'raw_lobster', name: 'Raw lobster', qty: 26 }
+        ],
+        scene: 'skip',
+        budgetMs: 240_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+            const fishXp = cur.xp.fishing - start.xp.fishing;
+            const cookXp = cur.xp.cooking - start.xp.cooking;
+            const batchStart = logHas(cur, /cook:\s*bank holds\s+\d+.*starting batch/i);
+            const withdrew = logHas(cur, /cook:\s*withdr/i);
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            // Catch last → bank raw to N → batch arm → cook XP (or at least withdraw).
+            if (
+                fishXp > 0
+                && bankedHint
+                && sawNearBank
+                && productPeak >= 26
+                && batchStart
+                && (cookXp > 0 || withdrew)
+                && minDistToBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking} ` +
+            `batch=${logHas(cur, /starting batch/i)} withdr=${logHas(cur, /cook:\s*withdr/i)} ` +
+            `rawLob=${invMatch(cur, /^raw lobster$/i)} peak=${productPeak} ` +
+            `banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank}`
     },
     {
         id: 'wc-bank',
@@ -1890,6 +1959,7 @@ try {
             }
             // Optional: park seeded mats in the bank so the script must withdraw
             // (smith-rune-axe — exercises bank path, not materials-held short-circuit).
+            // cert_* notes share the unnoted name and un-note on deposit.
             if (sc.depositSeedToBank) {
                 await depositHeldToBank(
                     page,
@@ -1897,6 +1967,11 @@ try {
                     sc.depositSeedToBank.names,
                     sc.depositSeedToBank.label
                 );
+            }
+            // Inv gear/pack after bank seed (fish-bank-raw-cook: pot + 26 raw).
+            for (const it of sc.seedAfterDeposit ?? []) {
+                await seedItem(page, it.debug, it.name, it.qty ?? 1);
+                console.log(`  seeded after deposit ${it.qty ?? 1}x ${it.name}`);
             }
             // Already-met levels (99 from BASE_STATS) are skipped.
             await grantStats(page, sc.stats ?? []);
@@ -1908,6 +1983,7 @@ try {
                 || sc.id.startsWith('repair-')
                 || sc.id === 'smith-rune-axe'
                 || sc.id === 'restock-fly-barb'
+                || sc.id === 'fish-bank-raw-cook'
             ) {
                 const pre = await snap(page);
                 if ((sc.id === 'buy-pick') && hasAnyPick(pre)) {
@@ -1973,6 +2049,20 @@ try {
                     }
                     if (hasAnyAxe(pre)) {
                         throw new Error('precondition: already holding an axe after purge+deposit');
+                    }
+                }
+                if (sc.id === 'fish-bank-raw-cook') {
+                    if (invCount(pre, 'Lobster pot') < 1) {
+                        throw new Error('precondition: need Lobster pot after seedAfterDeposit');
+                    }
+                    if (invCount(pre, 'Raw lobster') < 26) {
+                        throw new Error(
+                            `precondition: need 26 Raw lobster in pack (have ${invCount(pre, 'Raw lobster')})`
+                        );
+                    }
+                    // One free slot so the last catch can fill the pack.
+                    if (pre.free < 1) {
+                        throw new Error(`precondition: need ≥1 free inv slot (free=${pre.free})`);
                     }
                 }
             }
@@ -2043,14 +2133,17 @@ try {
 
                 // fish-cook-bank seeds cooked lobster; track cooked+raw so
                 // productPeak / near-bank / bankedHint still fire on deposit.
+                // fish-bank-raw-cook tracks raw lobster through the bank trip.
                 const product =
                     sc.id === 'fish-cook-bank'
                         ? invMatch(cur, /^(raw )?lobster$/i)
-                        : sc.script === 'Miner'
-                          ? invMatch(cur, /ore/i)
-                          : sc.script === 'Fisher'
-                            ? invMatch(cur, /^raw /i)
-                            : invMatch(cur, /logs/i);
+                        : sc.id === 'fish-bank-raw-cook'
+                          ? invMatch(cur, /^raw lobster$/i)
+                          : sc.script === 'Miner'
+                            ? invMatch(cur, /ore/i)
+                            : sc.script === 'Fisher'
+                              ? invMatch(cur, /^raw /i)
+                              : invMatch(cur, /logs/i);
                 if (product > 0) {
                     sawProduct = true;
                 }

@@ -34,4 +34,14 @@ describe('Anchor helpers', () => {
         expect(tileWithinLeash(h, new Tile(56, 50, 0))).toBe(false);
         expect(tileWithinLeash(h, new Tile(56, 50, 0), 1)).toBe(true);
     });
+
+    test('soft return defaults: slack 6 / arrive disk 8 (createReturnToAnchorTask)', () => {
+        // Humans re-enter the camp disk — beyondLeash with slack 6, arrive ≤ 8.
+        const h = host(0, 0, 10);
+        expect(beyondLeash(h, new Tile(16, 0, 0), 6)).toBe(false); // 16 <= 10+6
+        expect(beyondLeash(h, new Tile(17, 0, 0), 6)).toBe(true);
+        const anchor = new Tile(0, 0, 0);
+        expect(anchor.distanceTo(new Tile(8, 0, 0))).toBeLessThanOrEqual(8);
+        expect(anchor.distanceTo(new Tile(9, 0, 0))).toBeGreaterThan(8);
+    });
 });

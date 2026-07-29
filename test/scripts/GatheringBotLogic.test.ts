@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    HOME_ARRIVE_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
     effectiveGatherLeash,
     fishingSessionBroken,
@@ -8,6 +9,17 @@ import {
     shouldYieldGathering
 } from '#/bot/scripts/GatheringBot.js';
 import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
+import Tile from '#/bot/api/Tile.js';
+
+describe('HOME_ARRIVE_RADIUS (soft home after bank/shop)', () => {
+    test('is a camp disk, not a single pin tile', () => {
+        expect(HOME_ARRIVE_RADIUS).toBe(8);
+        const anchor = new Tile(2845, 3431, 0);
+        // Inside disk → walkHomeIfNeeded short-circuits (no robotic pin).
+        expect(anchor.distanceTo(new Tile(2845 + 8, 3431, 0))).toBe(8);
+        expect(anchor.distanceTo(new Tile(2845 + 9, 3431, 0))).toBe(9);
+    });
+});
 
 describe('effectiveGatherLeash', () => {
     test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
