@@ -91,13 +91,19 @@ import {
 import {
     FLETCHABLE_LOG_NAMES,
     KNIFE_DELAY_MAKE_MATCH,
+    SHORTBOW_NAMES,
     TICK_MANIP_KNIFE,
     combatBreaksGather,
+    extraDelayLogsToDrop,
+    farmerWillowPhase,
     isFletchableLogName,
+    isShortbowName,
     knifeDelayPhase,
     miningRateForPickaxe,
     nextGatherClickTick,
     profileForSetting,
+    shouldCookForTannerfish,
+    shouldEatForTannerfish,
     type TickManipProfile
 } from './TickManipLogic.js';
 import { Banking, depositAllExcept } from '../api/Banking.js';
@@ -643,12 +649,16 @@ export default class GatheringBot extends TaskBot {
         const gatherTools = (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
         // Flee only for AFK named/None — Auto and retaliate tick-manip skip FleeCombat.
         const mobFlee = !isAutoLocation(this.locationSetting) && !this.tickManip.allowCombat;
+        // Tannerfishing is a power-train (cook/eat on the pier) — drop haul, no bank loop.
+        const tannerPower = this.tickManip.cookEatInterleave;
         this.add(
             new ContinueDialog(),
             // Named/None only: break multi-combat pulls (wildy spiders) by walking off.
             // Auto / retaliate tick-manip = may-die — no mob flee.
             ...(mobFlee ? [new FleeCombat(this)] : []),
             ...(this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
+            ...(this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
+            ...(this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
             ...(this.mining() || this.woodcutting() ? [new RepairBrokenGatherTool(this)] : []),
             ...(this.fishing ? [new RestockFishingGear(this)] : []),
             ...(gatherTools
@@ -656,7 +666,7 @@ export default class GatheringBot extends TaskBot {
                 : []),
             ...(cookOn ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)] : []),
             ...(burnOn ? createChopBurnTasks(this) : []),
-            this.powerMode ? new DropProduct(this) : new BankCatch(this),
+            this.powerMode || tannerPower ? new DropProduct(this) : new BankCatch(this),
             new Gather(this),
 
             createReturnToAnchorTask(this, {
@@ -674,8 +684,8 @@ export default class GatheringBot extends TaskBot {
                 names.add(n);
             }
         }
-        // Knife + one delay log for knife-delay tick manip (#160).
-        if (this.tickManip.useKnifeDelay) {
+        // Knife + one delay log for knife-delay / farmer 6t (#160).
+        if (this.tickManip.useKnifeDelay || this.tickManip.farmerWillowCycle) {
             names.add(TICK_MANIP_KNIFE);
             // Prefer the log type matching the tree when chopping; else keep any fletchable.
             if (this.chopping) {
@@ -687,14 +697,11 @@ export default class GatheringBot extends TaskBot {
             }
         }
         if (this.tickManip.shortbowRapid) {
-            // Keep any shortbow already held — do not force a specific tier name.
-            names.add('Shortbow');
-            names.add('Oak shortbow');
-            names.add('Willow shortbow');
-            names.add('Maple shortbow');
-            names.add('Yew shortbow');
-            names.add('Magic shortbow');
+            for (const bow of SHORTBOW_NAMES) {
+                names.add(bow);
+            }
         }
+        // Tannerfishing is power-train: cooked catch is eaten, not banked — no gearKeep names.
         if (this.toolAcquire === 'on') {
             names.add(COINS);
             names.add(BROKEN_PICKAXE);
@@ -1476,6 +1483,9 @@ export default class GatheringBot extends TaskBot {
         if (this.powerMode) {
             return 'drop';
         }
+        if (this.tickManip.cookEatInterleave) {
+            return 'tanner drop';
+        }
         if (this.burnMode === 'chop-then-burn') {
             return 'burn';
         }
@@ -1589,6 +1599,9 @@ export default class GatheringBot extends TaskBot {
         if (this.powerMode) {
             return `dropping ${this.productLabel()} when full`;
         }
+        if (this.tickManip.cookEatInterleave) {
+            return 'tannerfishing: cook/eat on pier; drop haul when full (may die)';
+        }
         if (this.fishing && this.cookMode === 'cook-then-bank') {
             const filter = cookFilterLabel(this.cookFishFilter);
             if (this.cookFishFilter) {
@@ -1610,6 +1623,9 @@ export default class GatheringBot extends TaskBot {
         }
         if (this.powerMode) {
             return `Full: drop ${this.productLabel()}`;
+        }
+        if (this.tickManip.cookEatInterleave) {
+            return 'Full: tanner cook/eat · drop';
         }
         if (this.fishing && this.cookMode === 'cook-then-bank') {
             if (this.cookFishFilter) {
@@ -1695,7 +1711,8 @@ export default class GatheringBot extends TaskBot {
                     this.tickManip.useKnifeDelay ? 'knife' : null,
                     this.tickManip.timedReclick || this.tickManip.method === 'iron-cadence' ? 'reclick' : null,
                     this.tickManip.shortbowRapid ? 'rapid' : null,
-                    this.tickManip.farmerWillowCycle ? 'farmer' : null
+                    this.tickManip.farmerWillowCycle ? 'farmer' : null,
+                    this.tickManip.cookEatInterleave ? 'cook/eat' : null
                 ]
                     .filter(Boolean)
                     .join(' · ');
@@ -1939,31 +1956,15 @@ export default class GatheringBot extends TaskBot {
     }
 
     /**
-     * Arm knife+log delay (+2 server). Prefer Make-X qty 1 / shafts to avoid long queues.
-     * Returns true when a delay action was issued (or Make-X already handled).
+     * Arm knife+log delay (+2 server).
+     *
+     * Server only sets %action_delay after a Make confirm (process_fletch_logs).
+     * Make-X / count dialog is a failure mode for tick manip — always Make-1.
+     * Product completion is incidental; re-click gather on the next tick.
      */
     async armKnifeDelay(): Promise<boolean> {
         if (ChatDialog.isMakeMenu()) {
-            // Prefer shafts qty-1 style: makeX when available, else make (largest qty button).
-            if (await ChatDialog.makeX(KNIFE_DELAY_MAKE_MATCH, 1)) {
-                await Execution.delayTicks(1);
-                return true;
-            }
-            if (await ChatDialog.make(KNIFE_DELAY_MAKE_MATCH)) {
-                await Execution.delayTicks(1);
-                return true;
-            }
-            // Fall through to first product qty-1 if shafts missing.
-            const products = ChatDialog.makeProducts();
-            if (products[0] && (await ChatDialog.makeX(products[0], 1))) {
-                await Execution.delayTicks(1);
-                return true;
-            }
-            if (products[0] && (await ChatDialog.make(products[0]))) {
-                await Execution.delayTicks(1);
-                return true;
-            }
-            return false;
+            return this.confirmKnifeDelayMake();
         }
         const knife = Inventory.first(TICK_MANIP_KNIFE);
         const log = this.delayLogItem();
@@ -1974,30 +1975,192 @@ export default class GatheringBot extends TaskBot {
         if (!(await knife.useOn(log))) {
             return false;
         }
-        // Wait briefly for Make-X; if it never opens, inventory may have changed (no menu path).
+        // Wait briefly for the skill-multi menu (not a full fletch).
         await Execution.delayUntil(
             () => ChatDialog.isMakeMenu() || ChatDialog.canContinue(),
             1200
         );
         if (ChatDialog.isMakeMenu()) {
-            if (await ChatDialog.makeX(KNIFE_DELAY_MAKE_MATCH, 1)) {
-                await Execution.delayTicks(1);
-                return true;
+            return this.confirmKnifeDelayMake();
+        }
+        // No menu — use-on may have no-op'd; treat as failed arm.
+        return false;
+    }
+
+    /** Make-1 only (shafts when offered, else first product). Never Make-X. */
+    private async confirmKnifeDelayMake(): Promise<boolean> {
+        if (await ChatDialog.makeOne(KNIFE_DELAY_MAKE_MATCH)) {
+            return true;
+        }
+        const products = ChatDialog.makeProducts();
+        if (products[0] && (await ChatDialog.makeOne(products[0]))) {
+            return true;
+        }
+        // Last resort: first product Make-1 without name match already tried;
+        // do not fall back to ChatDialog.make (largest qty) or makeX.
+        this.log(
+            `tick: knife Make-1 failed (menu: [${products.join(', ')}]) — never Make-X`
+        );
+        return false;
+    }
+
+    /**
+     * Drop surplus fletchable logs so knife-delay keeps exactly one delay log.
+     * Prefer dropping non-tree-matched logs first when chopping.
+     */
+    async trimDelayLogs(keep = 1): Promise<number> {
+        if (!this.tickManip.useKnifeDelay) {
+            return 0;
+        }
+        const prefer =
+            this.chopping ? logsForTree(this.target).toLowerCase() : '';
+        let dropped = 0;
+        for (let guard = 0; guard < 12; guard++) {
+            const logs = Inventory.items().filter(i => isFletchableLogName(i.name));
+            const total = logs.reduce((s, i) => s + Math.max(1, i.count), 0);
+            const extra = extraDelayLogsToDrop(total, keep);
+            if (extra <= 0) {
+                break;
             }
-            if (await ChatDialog.make(KNIFE_DELAY_MAKE_MATCH)) {
-                await Execution.delayTicks(1);
-                return true;
+            // Prefer dropping a log that is not the tree-matched delay type.
+            const item =
+                (prefer
+                    ? logs.find(i => (i.name ?? '').toLowerCase() !== prefer)
+                    : null) ??
+                logs.find(i => (i.name ?? '').toLowerCase() !== prefer) ??
+                logs[logs.length - 1];
+            if (!item) {
+                break;
             }
-            const products = ChatDialog.makeProducts();
-            if (products[0] && (await ChatDialog.makeX(products[0], 1))) {
-                await Execution.delayTicks(1);
-                return true;
-            }
-            if (products[0]) {
-                await ChatDialog.make(products[0]);
+            const before = Inventory.used();
+            await item.interact('Drop');
+            if (await Execution.delayUntil(() => Inventory.used() < before, 2500)) {
+                dropped += before - Inventory.used();
+            } else {
+                break;
             }
         }
+        if (dropped > 0) {
+            this.log(`tick: dropped ${dropped} extra delay log(s)`);
+        }
+        return dropped;
+    }
+
+    /** Best shortbow held or worn for 3t rapid retaliate. */
+    heldShortbowName(): string | null {
+        for (const n of SHORTBOW_NAMES) {
+            if (Equipment.contains(n)) {
+                return n;
+            }
+        }
+        for (const n of SHORTBOW_NAMES) {
+            if (Inventory.count(n) > 0) {
+                return n;
+            }
+        }
+        const loose = Inventory.items().find(i => isShortbowName(i.name));
+        return loose?.name ?? null;
+    }
+
+    async ensureShortbowEquipped(): Promise<boolean> {
+        if (!this.tickManip.shortbowRapid) {
+            return true;
+        }
+        const worn = Equipment.items().some(i => isShortbowName(i.name));
+        if (worn) {
+            return true;
+        }
+        const name = this.heldShortbowName();
+        if (!name) {
+            return false;
+        }
+        this.setStatus('tick: equip shortbow');
+        return Equipment.equip(name);
+    }
+
+    /**
+     * Tannerfishing: cook one raw on nearest Fire/Range (scene-local).
+     * Does not walk to a bank range — stays near the pier.
+     */
+    async tannerCookOne(): Promise<boolean> {
+        if (!this.tickManip.cookEatInterleave) {
+            return false;
+        }
+        if (ChatDialog.isMakeMenu()) {
+            const raw = this.lastRawFish();
+            const hint = raw?.name ?? undefined;
+            if (!(await ChatDialog.make(hint))) {
+                await ChatDialog.make();
+            }
+            await Execution.delayTicks(1);
+            return true;
+        }
+        const raw = this.lastRawFish();
+        if (!raw) {
+            return false;
+        }
+        const oven =
+            Locs.query()
+                .name('Fire', 'Range', 'Cooking range')
+                .where(l => l.distance() <= 8)
+                .nearest() ??
+            Locs.query().name('Fire', 'Range', 'Cooking range').nearest();
+        if (!oven) {
+            this.log('tick: tannerfish — no Fire/Range in scene (light a fire or stand near one)');
+            return false;
+        }
+        this.setStatus(`tick: cook ${raw.name}`);
+        const before = this.cookableRawCount();
+        if (!(await raw.useOn(oven))) {
+            return false;
+        }
+        await Execution.delayUntil(
+            () =>
+                this.cookableRawCount() < before ||
+                ChatDialog.isMakeMenu() ||
+                ChatDialog.canContinue(),
+            5000
+        );
+        if (ChatDialog.isMakeMenu()) {
+            const hint = raw.name ?? undefined;
+            if (!(await ChatDialog.make(hint))) {
+                await ChatDialog.make();
+            }
+            await Execution.delayTicks(1);
+        }
         return true;
+    }
+
+    /** Tannerfishing: eat one cooked fish when HP is low. */
+    async tannerEatOne(): Promise<boolean> {
+        if (!this.tickManip.cookEatInterleave) {
+            return false;
+        }
+        const food = Inventory.items().find(i => isCookedFishName(i.name));
+        if (!food) {
+            return false;
+        }
+        this.setStatus(`tick: eat ${food.name}`);
+        const before = Skills.effective('hitpoints');
+        if (!(await food.interact('Eat'))) {
+            return false;
+        }
+        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+        return true;
+    }
+
+    /** Drop one product log (farmer t6 / power-style). */
+    async dropOneProductLog(): Promise<boolean> {
+        const item =
+            Inventory.items().find(i => this.isProduct(i.name) && isFletchableLogName(i.name)) ??
+            Inventory.items().find(i => this.isProduct(i.name));
+        if (!item) {
+            return false;
+        }
+        this.setStatus(`tick: drop ${item.name}`);
+        const before = Inventory.used();
+        await item.interact('Drop');
+        return Execution.delayUntil(() => Inventory.used() < before, 2500);
     }
 
     /** True when standing outside the gather leash (startup / after bank). */
@@ -2799,7 +2962,7 @@ const FLEE_STEP = 12;
 const FLEE_STEP_HARD = 20;
 
 /**
- * Keep rapid style selected for 3t shortbow retaliate WC (#160).
+ * Keep empty shortbow equipped + rapid style for 3t shortbow retaliate WC (#160).
  * Re-applies after login (combat-mode varp is not persisted).
  */
 class EnsureShortbowRapid implements Task {
@@ -2815,11 +2978,25 @@ class EnsureShortbowRapid implements Task {
             return false;
         }
         const rapid = parseRangeStyle('rapid');
-        return Game.combatMode() !== rapid;
+        const needStyle = Game.combatMode() !== rapid;
+        const needBow = !Equipment.items().some(i => isShortbowName(i.name));
+        return needStyle || needBow;
     }
 
     async execute(): Promise<void> {
+        if (!(await this.bot.ensureShortbowEquipped())) {
+            if (++this.fails >= 3) {
+                this.fails = 0;
+                this.retryAt = Date.now() + 15_000;
+                this.bot.log('combat: no shortbow in pack — bring one for 3t rapid');
+            }
+            return;
+        }
         const rapid = parseRangeStyle('rapid');
+        if (Game.combatMode() === rapid) {
+            this.fails = 0;
+            return;
+        }
         this.bot.setStatus('tick: set rapid style');
         Game.setCombatStyle(rapid);
         if (await Execution.delayUntil(() => Game.combatMode() === rapid, 3000)) {
@@ -2830,6 +3007,87 @@ class EnsureShortbowRapid implements Task {
             this.retryAt = Date.now() + 15_000;
             this.bot.log('combat: could not set rapid style — retrying later');
         }
+    }
+}
+
+/** Keep knife-delay pack at one fletchable log so Make-X does not multi-queue. */
+class TrimKnifeDelayLogs implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (!this.bot.tickManipProfile().useKnifeDelay || EventSignal.pending() || Bank.isOpen()) {
+            return false;
+        }
+        const logs = Inventory.items().filter(i => isFletchableLogName(i.name));
+        const total = logs.reduce((s, i) => s + Math.max(1, i.count), 0);
+        return extraDelayLogsToDrop(total, 1) > 0;
+    }
+
+    async execute(): Promise<void> {
+        await this.bot.trimDelayLogs(1);
+    }
+}
+
+/**
+ * Tannerfishing sustain: eat cooked catch when low HP; cook raw on a nearby Fire/Range.
+ * Runs above Gather so combat ticks can still heal without leaving the pier.
+ * Yields to DropProduct when the pack is full and there is no oven in scene.
+ */
+class TannerfishSustain implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    private nearestOven() {
+        return (
+            Locs.query()
+                .name('Fire', 'Range', 'Cooking range')
+                .where(l => l.distance() <= 8)
+                .nearest() ??
+            Locs.query().name('Fire', 'Range', 'Cooking range').nearest()
+        );
+    }
+
+    validate(): boolean {
+        if (!this.bot.tickManipProfile().cookEatInterleave) {
+            return false;
+        }
+        if (EventSignal.pending() || Bank.isOpen() || ChatDialog.canContinue()) {
+            return false;
+        }
+        const cooked = this.bot.cookedFishCount() > 0;
+        if (shouldEatForTannerfish(Skills.hpFraction(), cooked)) {
+            return true;
+        }
+        if (ChatDialog.isMakeMenu() && this.bot.cookableRawCount() > 0) {
+            return true;
+        }
+        if (
+            !shouldCookForTannerfish({
+                rawCount: this.bot.cookableRawCount(),
+                cookedCount: this.bot.cookedFishCount(),
+                freeSlots: Inventory.free(),
+                hpFraction: Skills.hpFraction()
+            })
+        ) {
+            return false;
+        }
+        // Need an oven to cook — if pack is full and none in scene, let DropProduct run.
+        if (!this.nearestOven()) {
+            return false;
+        }
+        return true;
+    }
+
+    async execute(): Promise<void> {
+        const cooked = this.bot.cookedFishCount() > 0;
+        if (shouldEatForTannerfish(Skills.hpFraction(), cooked)) {
+            await this.bot.tannerEatOne();
+            return;
+        }
+        // Drop burnt so pack stays usable.
+        if (this.bot.burntFishCount() > 0) {
+            await dropBurnt(this.bot);
+        }
+        await this.bot.tannerCookOne();
     }
 }
 
@@ -2913,30 +3171,141 @@ class FleeCombat implements Task {
     }
 }
 
+/** Fletch leftovers from knife-delay / farmer Make-X (not product logs). */
+function isFletchByproductName(name: string | null | undefined): boolean {
+    const n = (name ?? '').toLowerCase();
+    return (
+        n.includes('shaft') ||
+        n.includes('arrow shaft') ||
+        n === 'headless arrow' ||
+        n.includes('stock') ||
+        (n.includes('shortbow') && n.includes('(u)')) ||
+        (n.includes('longbow') && n.includes('(u)'))
+    );
+}
+
 class DropProduct implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        return Inventory.isFull() && this.bot.products().length > 0;
+        if (!Inventory.isFull()) {
+            return false;
+        }
+        if (this.bot.tickManipProfile().cookEatInterleave) {
+            // Burnt always goes; raw haul drops; excess cooked beyond food buffer.
+            return (
+                this.bot.burntFishCount() > 0 ||
+                this.bot.products().length > 0 ||
+                this.bot.cookedFishCount() > 4
+            );
+        }
+        if (
+            (this.bot.tickManipProfile().useKnifeDelay ||
+                this.bot.tickManipProfile().farmerWillowCycle) &&
+            Inventory.items().some(i => isFletchByproductName(i.name))
+        ) {
+            return true;
+        }
+        return this.bot.products().length > 0;
     }
 
     async execute(): Promise<void> {
+        // Drop burnt first during Tannerfishing so pack space opens for cook/eat.
+        if (this.bot.tickManipProfile().cookEatInterleave && this.bot.burntFishCount() > 0) {
+            await dropBurnt(this.bot);
+        }
+        // Knife/farmer: clear Make-X leftovers so the pack cannot soft-lock on shafts.
+        if (
+            this.bot.tickManipProfile().useKnifeDelay ||
+            this.bot.tickManipProfile().farmerWillowCycle
+        ) {
+            await dropFletchByproducts(this.bot);
+        }
         await dropAll(this.bot);
+        // Tannerfishing: if still full of cooked food, trim to a small buffer.
+        if (this.bot.tickManipProfile().cookEatInterleave && Inventory.isFull()) {
+            await dropExcessCooked(this.bot, 3);
+        }
     }
 }
 
 async function dropAll(bot: GatheringBot): Promise<void> {
     bot.setStatus('dropping');
+    // Tannerfishing keeps cooked catch as food — products() is raw-only for Fisher.
     for (let guard = 0; guard < 30; guard++) {
         const item = bot.products()[0];
         if (!item) {
             break;
+        }
+        // Knife-delay: never drop the last fletchable delay log.
+        if (
+            bot.tickManipProfile().useKnifeDelay &&
+            isFletchableLogName(item.name)
+        ) {
+            const logs = Inventory.items().filter(i => isFletchableLogName(i.name));
+            const total = logs.reduce((s, i) => s + Math.max(1, i.count), 0);
+            if (total <= 1) {
+                // Only the delay log left among products — stop.
+                const other = bot.products().find(i => !isFletchableLogName(i.name));
+                if (!other) {
+                    break;
+                }
+                const beforeOther = Inventory.used();
+                await other.interact('Drop');
+                await Execution.delayUntil(() => Inventory.used() < beforeOther, 3000);
+                continue;
+            }
         }
         const before = Inventory.used();
         await item.interact('Drop');
         await Execution.delayUntil(() => Inventory.used() < before, 3000);
     }
     bot.log('drop: haul cleared');
+}
+
+/** Drop cooked fish above `keep` (Tannerfishing food buffer). */
+async function dropExcessCooked(bot: GatheringBot, keep = 3): Promise<void> {
+    let dropped = 0;
+    for (let guard = 0; guard < 28; guard++) {
+        if (bot.cookedFishCount() <= keep) {
+            break;
+        }
+        const item = Inventory.items().find(i => isCookedFishName(i.name));
+        if (!item) {
+            break;
+        }
+        const before = Inventory.used();
+        await item.interact('Drop');
+        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+            dropped += before - Inventory.used();
+        } else {
+            break;
+        }
+    }
+    if (dropped > 0) {
+        bot.log(`tick: dropped ${dropped} excess cooked (keep ${keep})`);
+    }
+}
+
+/** Drop arrow shafts / unstrung bows from knife Make-X so knife-delay cannot soft-lock. */
+async function dropFletchByproducts(bot: GatheringBot): Promise<void> {
+    let dropped = 0;
+    for (let guard = 0; guard < 28; guard++) {
+        const item = Inventory.items().find(i => isFletchByproductName(i.name));
+        if (!item) {
+            break;
+        }
+        const before = Inventory.used();
+        await item.interact('Drop');
+        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+            dropped += before - Inventory.used();
+        } else {
+            break;
+        }
+    }
+    if (dropped > 0) {
+        bot.log(`tick: dropped ${dropped} fletch byproduct(s)`);
+    }
 }
 
 class BankCatch implements Task {
@@ -4084,21 +4453,37 @@ class Gather implements Task {
                 this.bot.log('tick: knife delay needs Knife + 1 fletchable log');
                 return false;
             }
+            // t1: knife+Make-1 arms +2. t2: reclick gather. t3: delay expires / roll window.
             const phase = knifeDelayPhase(Game.tick(), this.bot.lastGatherRollTick());
             if (phase === 'delay-action' || ChatDialog.isMakeMenu()) {
-                await this.bot.armKnifeDelay();
+                const armed = await this.bot.armKnifeDelay();
+                if (!armed && !ChatDialog.isMakeMenu()) {
+                    this.bot.log('tick: knife delay arm failed');
+                    return false;
+                }
             }
-            // Re-click gather on the next tick window.
+            // Do not wait for fletch product — reclick on the next game tick.
             await Execution.delayUntil(() => Game.tick() >= this.bot.lastGatherRollTick() + 1, 1200);
             await reclick();
             return true;
         }
 
-        if (profile.timedReclick || profile.method === 'iron-cadence') {
-            const cycle = this.bot.gatherCycleTicks();
-            if (cycle == null || cycle < 1) {
-                return false;
-            }
+        // Farmer 6t is driven by executeFarmerWillow — only stamp the roll here.
+        if (profile.farmerWillowCycle) {
+            return false;
+        }
+
+        // Timed reclick: fly 4t, iron pick-rate, and retaliate methods with a known
+        // native cycle (2t oaks / 3t shortbow / tannerfish fly). Combat allowed.
+        const cycle = this.bot.gatherCycleTicks();
+        if (
+            cycle != null &&
+            cycle >= 1 &&
+            (profile.timedReclick ||
+                profile.method === 'iron-cadence' ||
+                profile.allowCombat ||
+                profile.nativeCycleTicks != null)
+        ) {
             const due = nextGatherClickTick(this.bot.lastGatherRollTick(), cycle);
             this.bot.setStatus(`tick: wait ${cycle}t reclick`);
             await Execution.delayUntil(
@@ -4120,7 +4505,7 @@ class Gather implements Task {
             return true;
         }
 
-        // Retaliate / farmer / tannerfish: stamp the roll; keep AFK wait (combat allowed).
+        // Unknown cycle retaliate: stamp the roll; keep AFK wait (combat allowed).
         return false;
     }
 
@@ -4285,6 +4670,12 @@ class Gather implements Task {
     }
 
     private async executeMine(): Promise<void> {
+        // Farmer willows 6-tick machine (#160) — dedicated phase loop.
+        if (this.bot.tickManipProfile().farmerWillowCycle) {
+            await this.executeFarmerWillow();
+            return;
+        }
+
         const target = this.findRock();
         if (!target) {
             // Keep-alive when near anchor with no matching loc — surface why we idle.
@@ -4383,6 +4774,149 @@ class Gather implements Task {
                 return;
             }
         }
+    }
+
+    /**
+     * Farmer willows 6-tick cycle (#160):
+     * t1 click tree · t2–t4 wait · t5 knife log · t6 drop log · repeat.
+     * Auto Retaliate stays ON (may die). Needs Knife + willow logs in pack.
+     */
+    private async executeFarmerWillow(): Promise<void> {
+        if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
+            return;
+        }
+
+        // Resync cycle clock when unset or stale (login / long AFK).
+        const now0 = Game.tick();
+        let start = this.bot.farmerCycleStartTick();
+        if (start < 0 || now0 - start > 18) {
+            this.bot.noteFarmerCycleStart(now0);
+            start = now0;
+        }
+
+        const phase = farmerWillowPhase(Game.tick(), start);
+        if (phase === 'click-tree') {
+            const tree = this.findRock();
+            if (!tree) {
+                const here = Game.tile();
+                const anchor = this.bot.getAnchor();
+                if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+                    this.bot.setStatus('farmer: returning to camp');
+                    await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
+                    return;
+                }
+                this.bot.setStatus('farmer: no tree in leash');
+                await Execution.delayTicks(2);
+                return;
+            }
+            const tile = tree.tile();
+            this.bot.setStatus(`farmer t1: chop ${this.bot.targetName()} @ ${tile}`);
+            // Stamp cycle start on the click beat so phase 0 stays aligned.
+            this.bot.noteFarmerCycleStart(Game.tick());
+            const before = Inventory.used();
+            if (!(await tree.interact(this.bot.actionName()))) {
+                this.bot.log(`farmer: no '${this.bot.actionName()}' on tree`);
+                await Execution.delayTicks(1);
+                return;
+            }
+            // Brief wait for anim/log; do not AFK the full cut — t5 will process.
+            await Execution.delayUntil(
+                () =>
+                    Inventory.used() > before ||
+                    Game.animating() ||
+                    EventSignal.pending() ||
+                    Inventory.isFull(),
+                1800
+            );
+            if (Inventory.used() > before) {
+                this.bot.noteGatherRoll();
+            }
+            // Advance toward t5 without blocking the whole cycle in one task beat.
+            await Execution.delayUntil(
+                () => {
+                    const s = this.bot.farmerCycleStartTick();
+                    const p = farmerWillowPhase(Game.tick(), s);
+                    return p === 'cut-log' || p === 'drop-log' || p === 'click-tree';
+                },
+                4500
+            );
+            return;
+        }
+
+        if (phase === 'cut-log') {
+            // Knife the newest product log (arms +2 delay / processes the roll).
+            if (ChatDialog.isMakeMenu()) {
+                this.bot.setStatus('farmer t5: make-x');
+                await this.bot.armKnifeDelay();
+                return;
+            }
+            const log =
+                Inventory.items().find(i => this.bot.isProduct(i.name) && isFletchableLogName(i.name)) ??
+                this.bot.delayLogItem();
+            const knife = Inventory.first(TICK_MANIP_KNIFE);
+            if (!knife || !log) {
+                this.bot.setStatus('farmer t5: need knife + log');
+                this.bot.log('farmer: cut-log needs Knife + a fletchable log');
+                await Execution.delayTicks(1);
+                return;
+            }
+            this.bot.setStatus(`farmer t5: knife ${log.name}`);
+            if (!(await knife.useOn(log))) {
+                await Execution.delayTicks(1);
+                return;
+            }
+            await Execution.delayUntil(
+                () => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || !Game.animating(),
+                1500
+            );
+            if (ChatDialog.isMakeMenu()) {
+                await this.bot.armKnifeDelay();
+            }
+            // Wait into drop phase.
+            await Execution.delayUntil(
+                () => farmerWillowPhase(Game.tick(), this.bot.farmerCycleStartTick()) === 'drop-log',
+                2000
+            );
+            return;
+        }
+
+        if (phase === 'drop-log') {
+            this.bot.setStatus('farmer t6: drop log');
+            // Drop one product log (prefer fletch leftovers / shafts stay).
+            const dropped = await this.bot.dropOneProductLog();
+            if (!dropped) {
+                // Nothing to drop — still advance the cycle clock.
+                this.bot.log('farmer: drop-log with empty product slot');
+            }
+            // Next cycle starts on the following tick.
+            await Execution.delayUntil(
+                () => {
+                    const s = this.bot.farmerCycleStartTick();
+                    const elapsed = Game.tick() - s;
+                    return elapsed >= 6 || farmerWillowPhase(Game.tick(), s) === 'click-tree';
+                },
+                2000
+            );
+            // Roll cycle start forward by 6 so phase 0 lands on the next click beat.
+            const s = this.bot.farmerCycleStartTick();
+            if (Game.tick() - s >= 6) {
+                this.bot.noteFarmerCycleStart(s + 6 * Math.floor((Game.tick() - s) / 6));
+            }
+            return;
+        }
+
+        // wait phases (t2–t4): sleep until cut-log / drop / next click.
+        this.bot.setStatus('farmer: wait');
+        await Execution.delayUntil(
+            () => {
+                if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
+                    return true;
+                }
+                const p = farmerWillowPhase(Game.tick(), this.bot.farmerCycleStartTick());
+                return p !== 'wait';
+            },
+            4000
+        );
     }
 }
 

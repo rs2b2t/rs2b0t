@@ -578,6 +578,11 @@ export const ChatDialog: {
      * first) at the largest fixed quantity offered (prefer 10).
      */
     make(match?: string): Promise<boolean>;
+    /**
+     * In a make menu, pick Make-1 for the product whose name contains `match`
+     * (or the first). Never opens the Make-X count dialog.
+     */
+    makeOne(match?: string): Promise<boolean>;
 };
 
 export interface TradeItem {

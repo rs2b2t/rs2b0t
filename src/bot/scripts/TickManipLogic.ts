@@ -5,7 +5,7 @@
  * - Woodcutting default action_delay = map_clock + 3
  * - Fly fishing (freshfish) = +4
  * - Mining interval = pickaxe mining_rate (mith=4, rune=2, …)
- * - Knife + log fletch arms +2 (Make-X multi unless constrained)
+ * - Knife + log fletch arms +2 after Make-1 confirm (never Make-X; product finish is incidental)
  * - Auto-retaliate flinch = attackrate/2 (rapid style −1)
  *
  * Client cannot read %action_delay — planners use XP / inventory / tick edges.
@@ -26,7 +26,11 @@ export const FLETCHABLE_LOG_NAMES = [
 
 export type FletchableLogName = (typeof FLETCHABLE_LOG_NAMES)[number];
 
-/** Prefer cheapest Make-X product so a single delay arm does not long-queue bows. */
+/**
+ * Soft product hint for Make-1 when the menu offers shafts (normal Logs only).
+ * Oak+ only offer bows — armKnifeDelay falls back to the first product.
+ * Never use Make-X for delay arming.
+ */
 export const KNIFE_DELAY_MAKE_MATCH = 'shaft';
 
 // ── Fisher ──────────────────────────────────────────────────────────────────
@@ -334,23 +338,26 @@ export function nextGatherClickTick(rollTick: number, cycleTicks: number, lateSl
 }
 
 /**
- * Knife-delay phase after a roll at `rollTick`:
- * - delay action on the roll tick (arms +2)
- * - re-click gather on rollTick + 1 (same-or-next tick pattern from issue)
+ * Knife-delay phase relative to delay-arm tick `armTick` (Make-1 confirm):
+ * - t1 armTick: knife+log + Make-1 → %action_delay = map_clock+2
+ * - t2 armTick+1: re-click gather (delay still live)
+ * - t3 armTick+2: delay expires → gather roll window
+ *
+ * Callers often stamp armTick ≈ last gather roll when the bot reacts same-tick.
  */
 export type KnifeDelayPhase = 'delay-action' | 'reclick' | 'wait';
 
-export function knifeDelayPhase(nowTick: number, rollTick: number): KnifeDelayPhase {
+export function knifeDelayPhase(nowTick: number, armTick: number): KnifeDelayPhase {
     const now = Math.floor(nowTick);
-    const roll = Math.floor(rollTick);
-    if (now <= roll) {
+    const arm = Math.floor(armTick);
+    if (now <= arm) {
         return 'delay-action';
     }
-    if (now === roll + 1) {
+    if (now === arm + 1) {
         return 'reclick';
     }
-    // Missed the window — treat as delay-action to re-arm.
-    if (now > roll + 1) {
+    // Missed the reclick window — re-arm rather than idle.
+    if (now > arm + 1) {
         return 'delay-action';
     }
     return 'wait';
@@ -414,4 +421,37 @@ export const SHORTBOW_NAMES = [
 export function isShortbowName(name: string | null | undefined): boolean {
     const n = (name ?? '').toLowerCase();
     return n.includes('shortbow');
+}
+
+/** Eat cooked catch during Tannerfishing when HP fraction is below this. */
+export const TANNERFISH_EAT_HP = 0.55;
+
+/** True when Tannerfishing should spend a beat eating cooked fish. */
+export function shouldEatForTannerfish(hpFraction: number, hasCooked: boolean): boolean {
+    return hasCooked && hpFraction < TANNERFISH_EAT_HP;
+}
+
+/**
+ * Prefer cooking a raw catch when the pack is getting full or we need food soon.
+ * Pure heuristic — caller still needs a Fire/Range in scene.
+ */
+export function shouldCookForTannerfish(opts: {
+    rawCount: number;
+    cookedCount: number;
+    freeSlots: number;
+    hpFraction: number;
+}): boolean {
+    if (opts.rawCount <= 0) {
+        return false;
+    }
+    // Always cook at least one when we have raw and room is tight.
+    if (opts.freeSlots <= 2) {
+        return true;
+    }
+    // Build a small cooked buffer when HP is not full.
+    if (opts.cookedCount < 2 && opts.hpFraction < 0.9) {
+        return true;
+    }
+    // Otherwise cook opportunistically when we have several raw.
+    return opts.rawCount >= 3 && opts.cookedCount < 4;
 }

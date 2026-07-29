@@ -3,6 +3,7 @@ import {
     FISH_TICK_MANIP_OPTIONS,
     FLETCHABLE_LOG_NAMES,
     MINE_TICK_MANIP_OPTIONS,
+    TANNERFISH_EAT_HP,
     WC_TICK_MANIP_OPTIONS,
     combatBreaksGather,
     extraDelayLogsToDrop,
@@ -17,6 +18,8 @@ import {
     parseMineTickManip,
     parseWcTickManip,
     profileForSetting,
+    shouldCookForTannerfish,
+    shouldEatForTannerfish,
     wcTickManipProfile
 } from '#/bot/scripts/TickManipLogic.js';
 
@@ -169,5 +172,31 @@ describe('delay log helpers', () => {
     test('shortbow detect', () => {
         expect(isShortbowName('Maple shortbow')).toBe(true);
         expect(isShortbowName('Maple longbow')).toBe(false);
+    });
+});
+
+describe('tannerfish heuristics', () => {
+    test('eat when HP below threshold and cooked held', () => {
+        expect(shouldEatForTannerfish(TANNERFISH_EAT_HP - 0.01, true)).toBe(true);
+        expect(shouldEatForTannerfish(TANNERFISH_EAT_HP, true)).toBe(false);
+        expect(shouldEatForTannerfish(0.1, false)).toBe(false);
+    });
+
+    test('cook when pack tight or building food buffer', () => {
+        expect(
+            shouldCookForTannerfish({ rawCount: 1, cookedCount: 0, freeSlots: 2, hpFraction: 1 })
+        ).toBe(true);
+        expect(
+            shouldCookForTannerfish({ rawCount: 1, cookedCount: 0, freeSlots: 10, hpFraction: 0.8 })
+        ).toBe(true);
+        expect(
+            shouldCookForTannerfish({ rawCount: 4, cookedCount: 1, freeSlots: 10, hpFraction: 1 })
+        ).toBe(true);
+        expect(
+            shouldCookForTannerfish({ rawCount: 0, cookedCount: 0, freeSlots: 0, hpFraction: 0.2 })
+        ).toBe(false);
+        expect(
+            shouldCookForTannerfish({ rawCount: 1, cookedCount: 4, freeSlots: 10, hpFraction: 1 })
+        ).toBe(false);
     });
 });
