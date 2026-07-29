@@ -1772,6 +1772,7 @@ export default class GatheringBot extends TaskBot {
         if (here && !shouldWalkHomeToGatherAnchor(anchor.distanceTo(here), arriveRadius)) {
             return true;
         }
+        this.setStatus('returning to camp');
         return Traversal.walkResilient(anchor, { radius: arriveRadius, log });
     }
 

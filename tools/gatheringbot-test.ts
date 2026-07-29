@@ -958,6 +958,13 @@ type Scenario = {
         bankedHint: boolean;
         /** True once player was within bankRadius of sc.bank while product was high. */
         sawNearBank: boolean;
+        /**
+         * After bankedHint+sawNearBank, player entered the soft camp disk
+         * (post-bank home walk — #154 Catherby bank sits inside leash).
+         */
+        returnedToCampAfterBank: boolean;
+        /** Closest camp distance observed after the bank trip signals fired. */
+        minDistToCampAfterBank: number;
         minDistToCamp: number;
         minDistToBank: number;
         startDistToCamp: number;
@@ -967,9 +974,11 @@ type Scenario = {
         cur: Snap;
         minDistToCamp: number;
         minDistToBank?: number;
+        minDistToCampAfterBank?: number;
         productPeak?: number;
         bankedHint?: boolean;
         sawNearBank?: boolean;
+        returnedToCampAfterBank?: boolean;
     }) => string;
 };
 
@@ -1153,9 +1162,8 @@ const SCENARIOS: Scenario[] = [
     {
         // Cook then bank: seed cooked (not raw) so one catch fills the pack with
         // 1 raw + 26 cooked → cook the raw → bank the cooked pile at Catherby.
-        // NOTE (#154): pass criteria stop at deposit near bank. They do NOT prove
-        // post-bank return to the pier (bank is ~36 from spot, inside leash 64).
-        // Unit coverage: shouldWalkHomeToGatherAnchor in GatheringBotLogic.test.ts.
+        // #154: must also leave the bank toward the pier after deposit. Catherby
+        // bank is ~36 from spot (inside leash 64) — deposit-only used to false-PASS.
         id: 'fish-cook-bank',
         tags: ['fishing', 'fish', 'cook', 'bank', 'early'],
         script: 'Fisher',
@@ -1172,15 +1180,25 @@ const SCENARIOS: Scenario[] = [
             forgetfulBank: false,
             leashRadius: 18
         },
-        // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank.
+        // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank → home.
         seed: [
             { debug: 'lobster_pot', name: 'Lobster pot', qty: 1 },
             { debug: 'lobster', name: 'Lobster', qty: 26 }
         ],
         // Cooking/fishing already 99 from BASE_STATS.
         scene: 'skip',
-        budgetMs: 210_000,
-        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+        // Extra headroom for bank→pier walk (~36 tiles) after deposit.
+        budgetMs: 270_000,
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
             const fishXp = cur.xp.fishing - start.xp.fishing;
             const cookXp = cur.xp.cooking - start.xp.cooking;
             const cooked = invMatch(cur, /^lobster$/i);
@@ -1188,7 +1206,7 @@ const SCENARIOS: Scenario[] = [
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Full cook→bank: catch → cook XP → deposit cooked near bank.
+            // Full cook→bank→home: catch → cook → deposit near bank → walk to pier.
             if (
                 fishXp > 0
                 && cookXp > 0
@@ -1198,15 +1216,27 @@ const SCENARIOS: Scenario[] = [
                 && cooked <= 2
                 && raw === 0
                 && minDistToBank <= 12
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 12
             ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+        failMsg: ({
+            start,
+            cur,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
             `fish xp ${start.xp.fishing}→${cur.xp.fishing} cook xp ${start.xp.cooking}→${cur.xp.cooking} ` +
             `rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)} ` +
-            `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank}`
+            `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
+            `homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
     },
     {
         // Bank raw then cook: seed bank with noted raw (un-notes on deposit),
@@ -2106,6 +2136,11 @@ try {
             const startDistToCamp = start.tile && sc.camp ? chebyshev(start.tile, sc.camp) : 0;
             let minDistToCamp = startDistToCamp;
             let minDistToBank = start.tile && sc.bank ? chebyshev(start.tile, sc.bank) : 999;
+            // Post-bank home (#154): only count camp approach after deposit signals.
+            // Soft arrive disk is 8; allow a little pier slack so path end still counts.
+            const CAMP_HOME_AFTER_BANK = 12;
+            let returnedToCampAfterBank = false;
+            let minDistToCampAfterBank = 999;
             let lastLog = 0;
             let sawProduct = false;
             let productPeak = 0;
@@ -2169,6 +2204,18 @@ try {
                 }
                 prevProduct = product;
 
+                // After deposit at bank, require a real walk back toward camp resources.
+                // Do not use overall minDistToCamp — start tile is already near camp.
+                if (bankedHint && sawNearBank && cur.tile && sc.camp) {
+                    const dCamp = chebyshev(cur.tile, sc.camp);
+                    if (dCamp < minDistToCampAfterBank) {
+                        minDistToCampAfterBank = dCamp;
+                    }
+                    if (dCamp <= CAMP_HOME_AFTER_BANK) {
+                        returnedToCampAfterBank = true;
+                    }
+                }
+
                 const elapsedMs = Date.now() - scStart;
                 const verdict = sc.check({
                     start,
@@ -2178,6 +2225,8 @@ try {
                     productPeak,
                     bankedHint,
                     sawNearBank,
+                    returnedToCampAfterBank,
+                    minDistToCampAfterBank,
                     minDistToCamp,
                     minDistToBank,
                     startDistToCamp
@@ -2189,7 +2238,10 @@ try {
                         `${cur.xp.woodcutting - start.xp.woodcutting}/${cur.xp.cooking - start.xp.cooking}/` +
                         `${cur.xp.firemaking - start.xp.firemaking}/${cur.xp.smithing - start.xp.smithing} ` +
                         `productPeak=${productPeak} distCamp ${startDistToCamp}→${minDistToCamp}` +
-                        (sc.bank ? ` distBank→${minDistToBank} nearBank=${sawNearBank}` : '') +
+                        (sc.bank
+                            ? ` distBank→${minDistToBank} nearBank=${sawNearBank}` +
+                              ` homeAfterBank=${returnedToCampAfterBank} distCampAfterBank→${minDistToCampAfterBank}`
+                            : '') +
                         ` tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`;
                     break;
                 }
@@ -2201,9 +2253,11 @@ try {
                             cur,
                             minDistToCamp,
                             minDistToBank,
+                            minDistToCampAfterBank,
                             productPeak,
                             bankedHint,
-                            sawNearBank
+                            sawNearBank,
+                            returnedToCampAfterBank
                         }) ?? `runner=${cur.runner}`;
                     break;
                 }
@@ -2216,6 +2270,8 @@ try {
                         productPeak,
                         bankedHint,
                         sawNearBank,
+                        returnedToCampAfterBank,
+                        minDistToCampAfterBank,
                         minDistToCamp,
                         minDistToBank,
                         startDistToCamp
@@ -2224,7 +2280,10 @@ try {
                         outcome = 'pass';
                         detail =
                             `stopped ok; productPeak=${productPeak} distCamp→${minDistToCamp}` +
-                            (sc.bank ? ` distBank→${minDistToBank}` : '');
+                            (sc.bank
+                                ? ` distBank→${minDistToBank} homeAfterBank=${returnedToCampAfterBank}` +
+                                  ` distCampAfterBank→${minDistToCampAfterBank}`
+                                : '');
                     } else {
                         outcome = 'fail';
                         detail =
@@ -2234,9 +2293,11 @@ try {
                                     cur,
                                     minDistToCamp,
                                     minDistToBank,
+                                    minDistToCampAfterBank,
                                     productPeak,
                                     bankedHint,
-                                    sawNearBank
+                                    sawNearBank,
+                                    returnedToCampAfterBank
                                 }) ?? ''
                             }`;
                     }
@@ -2254,9 +2315,11 @@ try {
                             cur,
                             minDistToCamp,
                             minDistToBank,
+                            minDistToCampAfterBank,
                             productPeak,
                             bankedHint,
-                            sawNearBank
+                            sawNearBank,
+                            returnedToCampAfterBank
                         }) ?? ''
                     }`;
             }
