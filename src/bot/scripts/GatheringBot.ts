@@ -202,6 +202,57 @@ export function shouldWalkHomeToGatherAnchor(
     return distToAnchor > r;
 }
 
+/**
+ * Backup soft-home from a gather miss (no spot/rock in scene).
+ *
+ * BankCatch / restock use the tight {@link HOME_ARRIVE_RADIUS} disk via
+ * {@link shouldWalkHomeToGatherAnchor}. Gather must **not** — freeform pier-hops and
+ * brief spot despawns sit just outside the 8-tile disk and thrash hunt↔home.
+ * Only pull home when clearly off-camp (bank square / long wander).
+ */
+export function shouldSoftHomeFromGatherMiss(
+    distToAnchor: number | null | undefined,
+    leash = NAMED_CAMP_LEASH_FLOOR
+): boolean {
+    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
+        return false;
+    }
+    const L = Math.max(2, Math.floor(Number.isFinite(leash) ? leash : NAMED_CAMP_LEASH_FLOOR));
+    // ≥20 tiles off anchor, or past half the leash (named camps) — not the soft disk.
+    const threshold = Math.max(HOME_ARRIVE_RADIUS + 12, Math.min(L, 28));
+    return distToAnchor > threshold;
+}
+
+/** Hostile NPCs that should keep us from re-entering camp after a kite (wildy). */
+export function hostileAttackerNearby(
+    npcs: readonly {
+        inCombat: boolean;
+        targetsMe: () => boolean;
+        targetsAnotherPlayer: () => boolean;
+        actions: () => string[];
+        distance: () => number;
+    }[],
+    radius = 8
+): boolean {
+    const r = Math.max(1, Math.floor(radius));
+    return npcs.some(n => {
+        if (n.distance() > r) {
+            return false;
+        }
+        if (!n.actions().includes('Attack')) {
+            return false;
+        }
+        // On us, or fighting in our face (multi-combat pack).
+        if (n.targetsMe()) {
+            return true;
+        }
+        if (n.inCombat && !n.targetsAnotherPlayer() && n.distance() <= 2) {
+            return true;
+        }
+        return false;
+    });
+}
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
@@ -350,6 +401,11 @@ export default class GatheringBot extends TaskBot {
 
     private rejected = new Set<string>();
     private cooldownUntil = new Map<string, number>();
+    /**
+     * After FleeCombat kites off a multi-combat pack, suppress ReturnToAnchor /
+     * gather re-entry until this timestamp so we don't walk straight back onto spiders.
+     */
+    private combatClearUntil = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -671,11 +727,35 @@ export default class GatheringBot extends TaskBot {
 
             createReturnToAnchorTask(this, {
                 slack: 4,
-                suppress: () => this.burnEnabled() && this.isBurningLoad()
+                // Long bank→camp legs (Varrock W → SW mine ≈ 60+) need web path first.
+                longRangeTiles: 24,
+                suppress: () =>
+                    (this.burnEnabled() && this.isBurningLoad()) || this.shouldSuppressCampReentry()
             })
         );
     }
 
+    /** Mark a recent combat kite — hold camp re-entry briefly. */
+    noteCombatFlee(holdMs = 14_000): void {
+        this.combatClearUntil = Math.max(this.combatClearUntil, Date.now() + Math.max(0, holdMs));
+    }
+
+    /**
+     * True while we should not walk back onto the gather anchor after fleeing
+     * multi-combat (Lava Maze spiders) or while a hostile is still in our face.
+     */
+    shouldSuppressCampReentry(): boolean {
+        if (Date.now() < this.combatClearUntil) {
+            return true;
+        }
+        if (isAutoLocation(this.locationSetting) || this.tickManip.allowCombat) {
+            return false;
+        }
+        return hostileAttackerNearby(
+            Npcs.query().action('Attack').within(10).results(),
+            10
+        );
+    }
 
     private rebuildGearKeep(): string[] {
         const names = new Set<string>(toolKeepNames(this.toolReqs));
@@ -1362,9 +1442,27 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
         this.log(`acquire: smithed ${plan.name}`);
+        // Make-X panel can linger and steal inv ops — clear before Wield.
+        if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
+            await Execution.delayUntil(
+                () => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(),
+                2500
+            );
+            await Execution.delayTicks(1);
+        }
+        // Ensure backpack tab is focused so Wield ops resolve.
+        await Game.openSideTab(3);
+        await Execution.delayTicks(1);
         if (plan.equip && canWieldTool(plan.name, Skills.level('attack'))) {
             // Anvil floor: same as shop — don't bank-trip solely for displaced tools.
-            await this.equipTools([plan.name], log, { bankDisplaced: false });
+            // Retry once — smith panel / anim lag often eats the first Wield.
+            let equipped = await this.equipTools([plan.name], log, { bankDisplaced: false });
+            if (!equipped && Inventory.first(plan.name) && !Equipment.contains(plan.name)) {
+                log(`equip: retry ${plan.name} after smith`);
+                await Execution.delayTicks(2);
+                await Game.openSideTab(3);
+                equipped = await this.equipTools([plan.name], log, { bankDisplaced: false });
+            }
         } else if (plan.equip) {
             log(`equip: skip ${plan.name} (need Attack ${toolAttackLevel(plan.name)})`);
         }
@@ -2610,6 +2708,17 @@ export default class GatheringBot extends TaskBot {
             }
             await Execution.delayTicks(1);
         }
+        // Make-X / shop / dialog can leave the main modal open — Wield ops fail until clear.
+        if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
+            await Execution.delayUntil(
+                () => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(),
+                2500
+            );
+            await Execution.delayTicks(1);
+        }
+        // Backpack side-tab (3) so inv ops are live after anvil/shop main modal.
+        await Game.openSideTab(3);
+        await Execution.delayTicks(1);
 
         // Snapshot worn gear before wield — equipping an axe/pick can shove the
         // previous weapon (or worse axe) into the inventory.
@@ -2630,9 +2739,17 @@ export default class GatheringBot extends TaskBot {
                 ok = false;
                 continue;
             }
-            const equipped = await Equipment.equip(name);
+            let equipped = await Equipment.equip(name);
+            // One immediate retry — first click often races smith/shop close.
+            if (!equipped && Inventory.first(name) !== null && !Equipment.contains(name)) {
+                await Execution.delayTicks(1);
+                await Game.openSideTab(3);
+                equipped = await Equipment.equip(name);
+            }
             if (!equipped) {
-                log(`equip failed: ${name}`);
+                const item = Inventory.first(name);
+                const ops = item ? item.actions().join(',') : 'missing';
+                log(`equip failed: ${name} (ops=[${ops}])`);
                 ok = false;
             } else {
                 log(`equipped ${name}`);
@@ -3144,6 +3261,8 @@ class FleeCombat implements Task {
     async execute(): Promise<void> {
         // Re-assert off in case a death/relog restored the default.
         Game.setAutoRetaliate(false);
+        // Hold ReturnToAnchor / gather re-entry so we don't walk back onto the pack.
+        this.bot.noteCombatFlee(16_000);
 
         const here = Game.tile();
         if (!here) {
@@ -3164,9 +3283,17 @@ class FleeCombat implements Task {
             if (still) {
                 const again = this.fleeTile(still, this.attacker(), FLEE_STEP_HARD);
                 this.bot.log(`combat: still in combat — second kite to ${again.x},${again.z}`);
+                this.bot.noteCombatFlee(18_000);
                 await Traversal.walkTo(again, { radius: 2, timeoutMs: 15_000 });
                 await Execution.delayUntil(() => !Game.inCombat(), 10_000);
             }
+        }
+        // If hostiles are still stacked on us after the kite, hold camp longer.
+        if (
+            Game.inCombat() ||
+            hostileAttackerNearby(Npcs.query().action('Attack').within(6).results(), 6)
+        ) {
+            this.bot.noteCombatFlee(12_000);
         }
     }
 }
@@ -3372,8 +3499,15 @@ class BankCatch implements Task {
         if (Bank.isOpen()) {
             await this.bot.closeScriptBank(log);
         }
+        // Always leave the bank toward camp after a deposit (unless cook-batch stays).
+        // walkHomeIfNeeded short-circuits inside the soft arrive disk; long bank→mine
+        // legs (Varrock W → SW mine) need the full walkResilient budget.
         if (!this.bot.isCookBatchReady()) {
-            await this.bot.walkHomeIfNeeded(log);
+            this.bot.setStatus('bank: returning to camp');
+            const home = await this.bot.walkHomeIfNeeded(log);
+            if (!home) {
+                this.bot.log('bank: walk home incomplete — will retry via gather/return');
+            }
         }
     }
 }
@@ -3850,11 +3984,11 @@ class RestockFishingGear implements Task {
                 const ok = await this.bot.executeFishingGearShopCart(preCart, log, {
                     bankPrepared: true
                 });
-                if (ok && this.bot.hasGear()) {
-                    await this.bot.walkHomeIfNeeded(log);
-                    return;
-                }
+                // Always leave the shop toward camp after any successful buy —
+                // partial carts used to soft-lock on Gerrant's tile.
                 if (ok) {
+                    this.bot.setStatus('restock: returning to camp');
+                    await this.bot.walkHomeIfNeeded(log);
                     return;
                 }
                 // Shop failed — fall through to bank path for a normal retry.
@@ -3908,12 +4042,10 @@ class RestockFishingGear implements Task {
                         const ok = await this.bot.executeFishingGearShopCart(cart, log, {
                             bankPrepared: invFunded
                         });
-                        if (ok && this.bot.hasGear()) {
-                            await this.bot.walkHomeIfNeeded(log);
-                            return;
-                        }
                         if (ok) {
-                            // Partial cart (stock/coins) — next tick retries remaining.
+                            // Full or partial cart — leave the shop toward camp either way.
+                            this.bot.setStatus('restock: returning to camp');
+                            await this.bot.walkHomeIfNeeded(log);
                             return;
                         }
                     } else {
@@ -3986,11 +4118,9 @@ class RestockFishingGear implements Task {
                     const ok = await this.bot.executeFishingGearShopCart(cart, log, {
                         bankPrepared: invFunded
                     });
-                    if (ok && this.bot.hasGear()) {
-                        await this.bot.walkHomeIfNeeded(log);
-                        return;
-                    }
                     if (ok) {
+                        this.bot.setStatus('restock: returning to camp');
+                        await this.bot.walkHomeIfNeeded(log);
                         return;
                     }
                 }
@@ -4009,6 +4139,7 @@ class RestockFishingGear implements Task {
             await this.bot.closeScriptBank(log);
         }
         this.bot.log(`restock: gear ok (${this.bot.gearLabel()})`);
+        this.bot.setStatus('restock: returning to camp');
         await this.bot.walkHomeIfNeeded(log);
     }
 }
@@ -4320,6 +4451,10 @@ class Gather implements Task {
         if (combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather())) {
             return false;
         }
+        // After FleeCombat, don't walk back onto spiders while the hold is active.
+        if (this.bot.shouldSuppressCampReentry()) {
+            return false;
+        }
 
         if (this.bot.cookEnabled() && (this.bot.isCookingLoad() || this.bot.isCookBatchReady())) {
             return false;
@@ -4569,12 +4704,14 @@ class Gather implements Task {
                 );
                 return;
             }
-            // Scene-local query found nothing. If we're still outside the soft camp
-            // disk (post-bank at Catherby/Guild/Seers), walk home so the pier loads.
-            // Inside the arrive disk, idle with status — temporary spot despawn.
+            // Scene-local query found nothing. Soft-home only when clearly off-camp
+            // (bank square / long wander) — not the tight 8-tile disk (hunt thrash).
             const here = Game.tile();
             const anchor = this.bot.getAnchor();
-            if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+            if (
+                here &&
+                shouldSoftHomeFromGatherMiss(anchor.distanceTo(here), this.bot.leashRadius())
+            ) {
                 this.bot.setStatus('fish: returning to camp');
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
@@ -4693,11 +4830,14 @@ class Gather implements Task {
                 );
                 return;
             }
-            // Same post-bank / off-camp miss as fishing (#154): walk into the soft
-            // camp disk when far; only status-idle once already near the anchor.
+            // Same post-bank / off-camp miss as fishing: soft-home only when clearly
+            // off-camp — not the tight 8-tile disk (hunt thrash on freeform).
             const here = Game.tile();
             const anchor = this.bot.getAnchor();
-            if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+            if (
+                here &&
+                shouldSoftHomeFromGatherMiss(anchor.distanceTo(here), this.bot.leashRadius())
+            ) {
                 this.bot.setStatus('gather: returning to camp');
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
@@ -4800,7 +4940,10 @@ class Gather implements Task {
             if (!tree) {
                 const here = Game.tile();
                 const anchor = this.bot.getAnchor();
-                if (here && shouldWalkHomeToGatherAnchor(anchor.distanceTo(here))) {
+                if (
+                    here &&
+                    shouldSoftHomeFromGatherMiss(anchor.distanceTo(here), this.bot.leashRadius())
+                ) {
                     this.bot.setStatus('farmer: returning to camp');
                     await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                     return;

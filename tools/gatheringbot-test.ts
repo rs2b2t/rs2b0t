@@ -1050,13 +1050,22 @@ const SCENARIOS: Scenario[] = [
         ],
         scene: 'skip',
         budgetMs: 180_000,
-        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
             const xpGain = cur.xp.mining - start.xp.mining;
             const ore = invMatch(cur, /ore/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Real bank loop: mine last → walk to bank → deposit (not just fill pack).
+            // Real bank loop: mine last → walk to bank → deposit → return toward camp.
             if (
                 xpGain > 0
                 && productPeak >= 26
@@ -1064,13 +1073,25 @@ const SCENARIOS: Scenario[] = [
                 && sawNearBank
                 && ore <= 2
                 && minDistToBank <= 10
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 12
             ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
-            `mining xp ${start.xp.mining}→${cur.xp.mining}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, ore=${invMatch(cur, /ore/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `mining xp ${start.xp.mining}→${cur.xp.mining}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, ore=${invMatch(cur, /ore/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank} homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
     },
     {
         id: 'mine-power',
@@ -1137,13 +1158,22 @@ const SCENARIOS: Scenario[] = [
         // Fishing 99 from BASE_STATS.
         scene: 'skip',
         budgetMs: 180_000,
-        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
             const xpGain = cur.xp.fishing - start.xp.fishing;
             const raw = invMatch(cur, /^raw /i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Real bank loop: fish last → walk to bank → deposit.
+            // Real bank loop: fish last → walk to bank → deposit → return toward camp.
             if (
                 xpGain > 0
                 && productPeak >= 26
@@ -1151,13 +1181,25 @@ const SCENARIOS: Scenario[] = [
                 && sawNearBank
                 && raw <= 2
                 && minDistToBank <= 10
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 12
             ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
-            `fishing xp ${start.xp.fishing}->${cur.xp.fishing}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, raw=${invMatch(cur, /^raw /i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `fishing xp ${start.xp.fishing}->${cur.xp.fishing}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, raw=${invMatch(cur, /^raw /i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank} homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
     },
     {
         // Cook then bank: seed cooked (not raw) so one catch fills the pack with
@@ -1323,13 +1365,22 @@ const SCENARIOS: Scenario[] = [
         ],
         scene: 'skip',
         budgetMs: 180_000,
-        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
             const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
             const logs = invMatch(cur, /logs/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Real bank loop: chop last → walk to bank → deposit.
+            // Real bank loop: chop last → walk to bank → deposit → return toward camp.
             if (
                 xpGain > 0
                 && productPeak >= 26
@@ -1337,13 +1388,25 @@ const SCENARIOS: Scenario[] = [
                 && sawNearBank
                 && logs <= 2
                 && minDistToBank <= 10
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 12
             ) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur, minDistToCamp, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
-            `wc xp ${start.xp.woodcutting}->${cur.xp.woodcutting}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, logs=${invMatch(cur, /logs/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank}`
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `wc xp ${start.xp.woodcutting}->${cur.xp.woodcutting}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, logs=${invMatch(cur, /logs/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank} homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
     },
     {
         id: 'wc-burn',
@@ -1410,11 +1473,16 @@ const SCENARIOS: Scenario[] = [
             const xpGain = cur.xp.mining - start.xp.mining;
             const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 5;
             const nearCamp = minDistToCamp <= 10;
-            // Wildy: solid approach into camp; XP/product nice-to-have (PK / depleted rocks).
-            if (pathed && nearCamp && (xpGain > 0 || sawProduct || elapsedMs >= 55_000)) {
+            // Wildy: approach camp and either gather or show combat kite (not elapsed-only).
+            const fled = logHas(cur, /combat:\s*under attack|combat:\s*still in combat/i);
+            if (pathed && nearCamp && (xpGain > 0 || sawProduct || fled)) {
                 return 'pass';
             }
             if (xpGain > 0 && nearCamp) {
+                return 'pass';
+            }
+            // Pathed into camp and held for a while without crashing — still require flee or gather signal.
+            if (pathed && nearCamp && fled && elapsedMs >= 40_000) {
                 return 'pass';
             }
             return 'wait';
@@ -1723,15 +1791,12 @@ const SCENARIOS: Scenario[] = [
             const troutSalmon = invMatch(cur, /raw (trout|salmon)/i);
             const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 5;
             const nearCamp = minDistToCamp <= 14;
-            // Core: Gerrant sold both pieces in one cart (no bank-between-buys).
+            // Core: Gerrant sold both pieces and we left toward barb camp (or fished).
+            // multiBuy/elapsed alone used to soft-PASS while stuck on Gerrant's tile.
             if (boughtRod && boughtFeather && gotRod && gotFeather) {
-                if (nearCamp || fishXp > 0 || troutSalmon > 0 || multiBuy || elapsedMs >= 90_000) {
+                if (nearCamp || pathed || fishXp > 0 || troutSalmon > 0) {
                     return 'pass';
                 }
-            }
-            // Bought both pieces and left Draynor toward camp.
-            if (boughtRod && boughtFeather && (pathed || nearCamp)) {
-                return 'pass';
             }
             return 'wait';
         },
@@ -1903,18 +1968,19 @@ const SCENARIOS: Scenario[] = [
                 return 'fail';
             }
             const smithed = logHas(cur, /acquire:\s*smithed\s+Rune axe/i);
-            const gotRune = hasTool(cur, 'Rune axe');
+            const gotRune = hasTool(cur, 'Rune axe') || invCount(cur, 'Rune axe') > 0;
+            const equippedLog = logHas(cur, /equipped\s+Rune axe/i);
+            // Must actually hold/wield the axe — smithed log alone used to soft-PASS on equip fail.
             if (smithed && gotRune) {
                 return 'pass';
             }
-            // Smithed log is authoritative even if equip lagged.
-            if (smithed) {
+            if (smithed && equippedLog) {
                 return 'pass';
             }
             return 'wait';
         },
         failMsg: ({ cur }) =>
-            `smithedLog=${logHas(cur, /acquire:\s*smithed/i)} runeAxe=${hasTool(cur, 'Rune axe')} bar=${invCount(cur, 'Runite bar')} hammer=${invCount(cur, 'Hammer')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
+            `smithedLog=${logHas(cur, /acquire:\s*smithed/i)} equippedLog=${logHas(cur, /equipped\s+Rune axe/i)} runeAxe=${hasTool(cur, 'Rune axe')} invAxe=${invCount(cur, 'Rune axe')} bar=${invCount(cur, 'Runite bar')} hammer=${invCount(cur, 'Hammer')} inv=${cur.inv.map(i => i.name).join(',') || 'empty'}`
     }
 ];
 

@@ -5,7 +5,9 @@ import {
     effectiveGatherLeash,
     fishingSessionBroken,
     gatherHuntRadius,
+    hostileAttackerNearby,
     isAutoLocation,
+    shouldSoftHomeFromGatherMiss,
     shouldWalkHomeToGatherAnchor,
     shouldYieldGathering
 } from '#/bot/scripts/GatheringBot.js';
@@ -49,6 +51,82 @@ describe('shouldWalkHomeToGatherAnchor (#154 post-bank)', () => {
         expect(shouldWalkHomeToGatherAnchor(null)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(undefined)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(Number.NaN)).toBe(false);
+    });
+});
+
+describe('shouldSoftHomeFromGatherMiss (gather no-target thrash)', () => {
+    test('does not thrash on freeform pier-hops just outside the 8-tile disk', () => {
+        // Bank/restock still use the tight disk; gather miss must not.
+        expect(shouldWalkHomeToGatherAnchor(12)).toBe(true);
+        expect(shouldSoftHomeFromGatherMiss(12)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(HOME_ARRIVE_RADIUS + 1)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(19)).toBe(false);
+    });
+
+    test('pulls home from bank square / long wander', () => {
+        // Default leash = NAMED_CAMP_LEASH_FLOOR → threshold max(20, min(L,28)) = 28.
+        expect(shouldSoftHomeFromGatherMiss(20)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(28)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(29)).toBe(true);
+        // Catherby bank ~36 from pier — clearly off-camp.
+        expect(shouldSoftHomeFromGatherMiss(36)).toBe(true);
+        // Varrock W bank → SW mine is far past any camp disk.
+        expect(shouldSoftHomeFromGatherMiss(69)).toBe(true);
+    });
+
+    test('respects a tight freeform leash without using the soft disk', () => {
+        // leash 12 → threshold max(20, min(12,28)) = 20 (HOME+12 floor).
+        expect(shouldSoftHomeFromGatherMiss(15, 12)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(21, 12)).toBe(true);
+        // Huge leash still caps threshold at 28.
+        expect(shouldSoftHomeFromGatherMiss(28, 64)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(29, 64)).toBe(true);
+    });
+
+    test('null / non-finite distance does not force a walk', () => {
+        expect(shouldSoftHomeFromGatherMiss(null)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(undefined)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(Number.NaN)).toBe(false);
+    });
+});
+
+describe('hostileAttackerNearby (post-kite camp suppress)', () => {
+    const npc = (partial: {
+        dist: number;
+        attack?: boolean;
+        targetsMe?: boolean;
+        inCombat?: boolean;
+        targetsAnother?: boolean;
+    }) => ({
+        inCombat: partial.inCombat ?? false,
+        targetsMe: () => partial.targetsMe ?? false,
+        targetsAnotherPlayer: () => partial.targetsAnother ?? false,
+        actions: () => (partial.attack === false ? ['Talk-to'] : ['Attack']),
+        distance: () => partial.dist
+    });
+
+    test('empty / non-attackers are clear', () => {
+        expect(hostileAttackerNearby([])).toBe(false);
+        expect(hostileAttackerNearby([npc({ dist: 2, attack: false, targetsMe: true })])).toBe(false);
+        expect(hostileAttackerNearby([npc({ dist: 20, targetsMe: true })])).toBe(false);
+    });
+
+    test('attacker targeting us within radius is hostile', () => {
+        expect(hostileAttackerNearby([npc({ dist: 5, targetsMe: true })])).toBe(true);
+        expect(hostileAttackerNearby([npc({ dist: 5, targetsMe: true })], 4)).toBe(false);
+    });
+
+    test('adjacent multi-combat pack member counts even if not on us', () => {
+        expect(
+            hostileAttackerNearby([npc({ dist: 2, inCombat: true, targetsAnother: false })])
+        ).toBe(true);
+        // Fighting someone else a bit further out is not our problem.
+        expect(
+            hostileAttackerNearby([npc({ dist: 5, inCombat: true, targetsAnother: false })])
+        ).toBe(false);
+        expect(
+            hostileAttackerNearby([npc({ dist: 1, inCombat: true, targetsAnother: true })])
+        ).toBe(false);
     });
 });
 
