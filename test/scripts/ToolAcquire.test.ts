@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { pickaxeReq, axeReq } from '#/bot/scripts/Tools.js';
 import { resolveFishMethod } from '#/bot/scripts/FishingMethods.js';
 import {
+    AXE_BAR_FOR,
     BOB_VENDOR,
     BROKEN_AXE,
     BROKEN_PICKAXE,
@@ -329,6 +330,21 @@ describe('ToolAcquire helpers', () => {
         }
         const repair = planBrokenToolRepair(n => n === BROKEN_PICKAXE)!;
         expect(acquireKeepNames(repair)).toContain(BROKEN_PICKAXE);
+
+        // Smith keep must retain bar + hammer so restock deposit does not dump materials.
+        const smith = planAxeAcquire(
+            world({
+                levels: { woodcutting: 41, smithing: 86 },
+                held: { Hammer: 1, 'Runite bar': 1 }
+            }),
+            { upgrade: false }
+        );
+        expect(smith?.kind).toBe('smith');
+        if (smith?.kind === 'smith') {
+            expect(smith.bar).toBe('Runite bar');
+            expect(acquireKeepNames(smith)).toEqual(expect.arrayContaining(['Coins', 'Runite bar', 'Hammer']));
+            expect(AXE_BAR_FOR['Rune axe']).toBe('Runite bar');
+        }
     });
 
     test('planGatherToolAcquire routes mining/woodcutting reqs', () => {

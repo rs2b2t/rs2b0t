@@ -93,6 +93,7 @@ import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { driveDialog } from '../quests/exec/primitives.js';
 import {
+    AXE_BAR_FOR,
     BROKEN_AXE,
     COINS,
     FORGETFUL_BANK_ODDS,
@@ -581,6 +582,11 @@ export default class GatheringBot extends TaskBot {
             names.add(BROKEN_PICKAXE);
             names.add(BROKEN_AXE);
             names.add(ACQUIRE_HAMMER);
+            // Smith materials must survive restock deposit — otherwise a Draynor
+            // camp bank dumps the Runite bar before executeSmithPlan can use it.
+            for (const bar of Object.values(AXE_BAR_FOR)) {
+                names.add(bar);
+            }
         }
         return [...names];
     }
@@ -921,7 +927,7 @@ export default class GatheringBot extends TaskBot {
         if (plan.kind === 'buy') {
             return this.executeBuyPlan(plan, log, opts);
         }
-        return this.executeSmithPlan(plan, log);
+        return this.executeSmithPlan(plan, log, opts);
     }
 
     /**
@@ -1134,55 +1140,75 @@ export default class GatheringBot extends TaskBot {
 
     private async executeSmithPlan(
         plan: Extract<ToolAcquirePlan, { kind: 'smith' }>,
-        log: (m: string) => void
+        log: (m: string) => void,
+        opts: { bankPrepared?: boolean } = {}
     ): Promise<boolean> {
         this.setStatus(`smith: ${plan.name}`);
         this.log(`acquire: ${plan.reason} @ Varrock anvil`);
 
-        if (!(await this.openBankAt(plan.vendorBank, log))) {
-            log('acquire: could not open bank for smith materials');
-            return false;
-        }
-        if (!(await this.waitBankReady(log))) {
-            log('acquire: bank did not load for smith materials');
-            return false;
-        }
-        const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
-        await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
-        await this.bankPace();
-        await this.prepareWornSurplusForDeposit(log, acquireKeepNames(plan));
-        await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
+        // Restock / seed already left hammer + bar in the pack — skip the vendor
+        // bank open (and a second deposit that could strand materials elsewhere).
+        // opts.bankPrepared is API-symmetric with buy; materials-held alone is enough.
+        void opts;
+        const materialsHeld =
+            Inventory.count(ACQUIRE_HAMMER) >= 1 && Inventory.count(plan.bar) >= 1;
+        if (materialsHeld) {
+            log('acquire: smith materials already held — heading to anvil');
+            if (Bank.isOpen()) {
+                await this.closeScriptBank(log, { allowForgetful: false });
+            }
+        } else {
+            if (!(await this.openBankAt(plan.vendorBank, log))) {
+                log('acquire: could not open bank for smith materials');
+                return false;
+            }
+            if (!(await this.waitBankReady(log))) {
+                log('acquire: bank did not load for smith materials');
+                return false;
+            }
+            const keep = new Set(acquireKeepNames(plan, this.gearKeepNamesList()).map(n => n.toLowerCase()));
+            await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
+            await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+            await this.bankPace();
+            await this.prepareWornSurplusForDeposit(log, acquireKeepNames(plan));
+            await this.depositSurplusGatherTools(log, acquireKeepNames(plan));
 
-        if (Inventory.count(ACQUIRE_HAMMER) < 1) {
-            const h = Bank.items().find(i => (i.name ?? '').toLowerCase() === ACQUIRE_HAMMER.toLowerCase());
-            if (!h) {
-                log('acquire: no hammer for smithing');
-                this.markAcquireBackoff(60_000);
-                await this.closeScriptBank(log, { allowForgetful: false });
-                return false;
+            if (Inventory.count(ACQUIRE_HAMMER) < 1) {
+                const h = Bank.items().find(i => (i.name ?? '').toLowerCase() === ACQUIRE_HAMMER.toLowerCase());
+                if (!h) {
+                    log('acquire: no hammer for smithing');
+                    this.markAcquireBackoff(60_000);
+                    await this.closeScriptBank(log, { allowForgetful: false });
+                    return false;
+                }
+                const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
+                await this.bankPace();
+                await Bank.withdraw(ACQUIRE_HAMMER, one);
+                await Execution.delayUntil(() => Inventory.count(ACQUIRE_HAMMER) > 0, 3000);
+                await this.bankPace();
             }
-            const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
-            await this.bankPace();
-            await Bank.withdraw(ACQUIRE_HAMMER, one);
-            await Execution.delayUntil(() => Inventory.count(ACQUIRE_HAMMER) > 0, 3000);
-            await this.bankPace();
-        }
-        if (Inventory.count(plan.bar) < 1) {
-            const b = Bank.items().find(i => (i.name ?? '').toLowerCase() === plan.bar.toLowerCase());
-            if (!b) {
-                log(`acquire: no ${plan.bar} in bank`);
-                this.markAcquireBackoff(60_000);
-                await this.closeScriptBank(log, { allowForgetful: false });
-                return false;
+            if (Inventory.count(plan.bar) < 1) {
+                const b = Bank.items().find(i => (i.name ?? '').toLowerCase() === plan.bar.toLowerCase());
+                if (!b) {
+                    log(`acquire: no ${plan.bar} in bank`);
+                    this.markAcquireBackoff(60_000);
+                    await this.closeScriptBank(log, { allowForgetful: false });
+                    return false;
+                }
+                const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
+                await this.bankPace();
+                await Bank.withdraw(plan.bar, one);
+                await Execution.delayUntil(() => Inventory.count(plan.bar) > 0, 3000);
+                await this.bankPace();
             }
-            const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
-            await this.bankPace();
-            await Bank.withdraw(plan.bar, one);
-            await Execution.delayUntil(() => Inventory.count(plan.bar) > 0, 3000);
-            await this.bankPace();
+            await this.closeScriptBank(log, { allowForgetful: false });
         }
-        await this.closeScriptBank(log, { allowForgetful: false });
+
+        if (Inventory.count(ACQUIRE_HAMMER) < 1 || Inventory.count(plan.bar) < 1) {
+            log(`acquire: missing hammer or ${plan.bar} before anvil walk`);
+            this.markAcquireBackoff(30_000);
+            return false;
+        }
 
         if (!(await Traversal.walkResilient(plan.anvilStand, { radius: 2, timeoutMs: 90_000, log }))) {
             log('acquire: could not reach anvil');
@@ -1959,10 +1985,14 @@ export default class GatheringBot extends TaskBot {
                 p => isFishingBaitPiece({ name: p.name, restock: this.baitQty })
             );
             if (cart.length > 0) {
+                const cartCost = buyPlansCost(cart);
+                const invFunded = Inventory.count(COINS) >= cartCost;
                 if (Bank.isOpen()) {
                     await this.closeScriptBank(log, { allowForgetful: false });
                 }
-                const ok = await this.executeFishingGearShopCart(cart, log);
+                const ok = await this.executeFishingGearShopCart(cart, log, {
+                    bankPrepared: invFunded
+                });
                 if (!ok) {
                     this.markAcquireBackoff(20_000);
                 }
@@ -2047,6 +2077,21 @@ export default class GatheringBot extends TaskBot {
 
     gearKeepNamesList(): string[] {
         return this.rebuildGearKeep();
+    }
+
+    /**
+     * True when inventory already holds what executeBuy/Smith needs so restock can
+     * pass bankPrepared and skip a second bank open (or a wrong-camp bank hop).
+     */
+    acquireMaterialsHeld(plan: ToolAcquirePlan): boolean {
+        if (plan.kind === 'buy') {
+            return Inventory.count(COINS) >= plan.cost;
+        }
+        if (plan.kind === 'smith') {
+            return Inventory.count(ACQUIRE_HAMMER) >= 1 && Inventory.count(plan.bar) >= 1;
+        }
+        // repair: broken tool must be held; coins optional float handled in executeRepairPlan
+        return this.heldCount(plan.brokenName) > 0;
     }
 
     gatherToolRestockPlan() {
@@ -3129,10 +3174,17 @@ class RestockFishingGear implements Task {
                         this.bot.fishingAcquireOpts()
                     );
                     if (cart.length > 0) {
+                        const cartCost = buyPlansCost(cart);
+                        // Inv already covers the cart (coins kept through deposit) —
+                        // skip a second bank open and walk straight to Gerrant/Harry.
+                        // Otherwise executeBuyPlans funds at vendor.bankStand itself.
+                        const invFunded = Inventory.count(COINS) >= cartCost;
                         if (Bank.isOpen()) {
                             await this.bot.closeScriptBank(log, { allowForgetful: false });
                         }
-                        const ok = await this.bot.executeFishingGearShopCart(cart, log);
+                        const ok = await this.bot.executeFishingGearShopCart(cart, log, {
+                            bankPrepared: invFunded
+                        });
                         if (ok && this.bot.hasGear()) {
                             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
                             return;
@@ -3203,10 +3255,14 @@ class RestockFishingGear implements Task {
                     this.bot.fishingAcquireOpts()
                 );
                 if (cart.length > 0) {
+                    const cartCost = buyPlansCost(cart);
+                    const invFunded = Inventory.count(COINS) >= cartCost;
                     if (Bank.isOpen()) {
                         await this.bot.closeScriptBank(log, { allowForgetful: false });
                     }
-                    const ok = await this.bot.executeFishingGearShopCart(cart, log);
+                    const ok = await this.bot.executeFishingGearShopCart(cart, log, {
+                        bankPrepared: invFunded
+                    });
                     if (ok && this.bot.hasGear()) {
                         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
                         return;
@@ -3296,10 +3352,13 @@ class RestockGatherTool implements Task {
                         upgrade: false
                     });
                     if (buy) {
+                        // After deposit-except-gear, smith bars/hammer (or shop GP)
+                        // stay in pack when gearKeep includes them — hand off prepared.
+                        const bankPrepared = this.bot.acquireMaterialsHeld(buy);
                         if (Bank.isOpen()) {
                             await this.bot.closeScriptBank(log, { allowForgetful: false });
                         }
-                        const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                        const ok = await this.bot.executeToolAcquirePlan(buy, log, { bankPrepared });
                         if (ok) {
                             await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
                             return;
@@ -3376,10 +3435,11 @@ class RestockGatherTool implements Task {
                     upgrade: false
                 });
                 if (buy) {
+                    const bankPrepared = this.bot.acquireMaterialsHeld(buy);
                     if (Bank.isOpen()) {
                         await this.bot.closeScriptBank(log, { allowForgetful: false });
                     }
-                    const ok = await this.bot.executeToolAcquirePlan(buy, log);
+                    const ok = await this.bot.executeToolAcquirePlan(buy, log, { bankPrepared });
                     if (ok) {
                         await Traversal.walkResilient(this.bot.getAnchor(), { radius: 3, log });
                         return;

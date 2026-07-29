@@ -874,7 +874,7 @@ const SPOT = {
     /** Willows NW of Crafting Guild — Auto freeform WC (outside every WC camp chunk). */
     // Was 2910,3328 (~25N of the stand); willows sit closer to the guild wall.
     willowsNwCg: { x: 2910, z: 3303, level: 0 },
-    /** Wilderness skeleton mine iron/coal — Auto freeform mine. */
+    /** Wilderness skeleton mine (coal) — Auto freeform mine. */
     skelMine: { x: 3018, z: 3590, level: 0 },
     /** Ardougne river fly fishing — Auto freeform fish. */
     ardyRiverFly: { x: 2566, z: 3374, level: 0 }
@@ -1551,11 +1551,11 @@ const SCENARIOS: Scenario[] = [
         id: 'auto-freeform-mine-skel',
         tags: ['freeform', 'auto', 'mining', 'mine', 'wildy'],
         script: 'Miner',
-        // Wilderness skeleton mine iron/coal — outside every MINING_LOCATIONS chunk.
+        // Wilderness skeleton mine is coal rocks — outside every MINING_LOCATIONS chunk.
         start: SPOT.skelMine,
         camp: SPOT.skelMine,
         settings: {
-            rocks: 'Iron',
+            rocks: 'Coal',
             location: 'Auto',
             toolAcquire: 'Off',
             forgetfulBank: false,
@@ -1573,8 +1573,9 @@ const SCENARIOS: Scenario[] = [
             }
             const freeform = logHas(cur, /location:\s*no preset\s*—\s*nearest bank/i);
             const xpGain = cur.xp.mining - start.xp.mining;
-            const ore = invMatch(cur, /ore/i);
-            if (freeform && (xpGain > 0 || ore > 0) && minDistToCamp <= 50) {
+            // Coal is not "* ore"; count coal + any ore product.
+            const haul = invMatch(cur, /^(coal|.+ ore)$/i);
+            if (freeform && (xpGain > 0 || haul > 0) && minDistToCamp <= 50) {
                 return 'pass';
             }
             return 'wait';
@@ -1582,7 +1583,7 @@ const SCENARIOS: Scenario[] = [
         failMsg: ({ start, cur, minDistToCamp }) =>
             `freeform=${logHas(cur, /location:\s*no preset/i)} ` +
             `namedSnap=${logHas(cur, /location:\s*(Barbarian|Varrock|Dwarven|Lava)/i)} ` +
-            `mineXpΔ=${cur.xp.mining - start.xp.mining} ore=${invMatch(cur, /ore/i)} ` +
+            `mineXpΔ=${cur.xp.mining - start.xp.mining} haul=${invMatch(cur, /^(coal|.+ ore)$/i)} ` +
             `distStart=${minDistToCamp} tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {

@@ -7,6 +7,7 @@ import {
     isAutoLocation,
     shouldYieldGathering
 } from '#/bot/scripts/GatheringBot.js';
+import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
 
 describe('effectiveGatherLeash', () => {
     test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
@@ -67,6 +68,15 @@ describe('shouldYieldGathering', () => {
     test('combat yields so river troll / swarm can be handled', () => {
         expect(shouldYieldGathering(false, false, false, false, true)).toBe(true);
         expect(shouldYieldGathering(false, false, false, false, false)).toBe(false);
+    });
+});
+
+describe('AXE_BAR_FOR (smith restock keep)', () => {
+    test('maps every smithable axe to a bar name restock must retain', () => {
+        expect(AXE_BAR_FOR['Rune axe']).toBe('Runite bar');
+        expect(AXE_BAR_FOR['Mithril axe']).toBe('Mithril bar');
+        expect(Object.values(AXE_BAR_FOR).length).toBeGreaterThanOrEqual(6);
+        expect(new Set(Object.values(AXE_BAR_FOR)).has('Runite bar')).toBe(true);
     });
 });
 
