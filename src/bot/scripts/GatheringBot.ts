@@ -173,6 +173,24 @@ export function isAutoLocation(locationSetting: string): boolean {
 }
 
 /**
+ * Origin for fishing-spot distance checks.
+ *
+ * Named camps pin the pier/mine anchor so bank squares never count as in-camp
+ * resources. Freeform fish (Auto with no preset / power None) must measure from
+ * the **player** — river spots hop, and after a hunt walk the start-tile anchor
+ * leaves the bot idling on "no spots within N of anchor" while spots sit next
+ * to the player (Ardougne Auto freeform regression).
+ */
+export function gatherSpotRangeOrigin(freeformFish: boolean, hasPlayerTile: boolean): 'player' | 'anchor' {
+    return freeformFish && hasPlayerTile ? 'player' : 'anchor';
+}
+
+/** Spot is inside the gather/hunt disk measured from {@link gatherSpotRangeOrigin}. */
+export function spotWithinGatherRange(distFromOrigin: number, maxDist: number): boolean {
+    return Number.isFinite(distFromOrigin) && distFromOrigin <= maxDist;
+}
+
+/**
  * Pier-hop hunt radius past the gather leash.
  * Must exceed the leash (no hard 40 cap) so named camps with a high floor still
  * chase spots that hop further along the dock.
@@ -2825,6 +2843,15 @@ export default class GatheringBot extends TaskBot {
     getLocation(): GatheringLocation | null {
         return this.location;
     }
+
+    /**
+     * No named camp preset — Auto freeform or power None.
+     * Fisher spot search is player-relative; start tile still bounds wander via ReturnToAnchor.
+     */
+    isFreeformCamp(): boolean {
+        return this.location === null;
+    }
+
     countTrip(n: number): void {
         this.trips++;
         this.banked += n;
@@ -4388,10 +4415,24 @@ class Gather implements Task {
     /** NPC index of the spot we last successfully started fishing on (null = no active session). */
     private activeFishIndex: number | null = null;
 
+    /**
+     * Distance origin for fishing spots.
+     * Freeform fish → player (chase river hops); named camp → pier/mine anchor.
+     */
+    private fishSpotOrigin(): Tile {
+        const freeformFish = this.bot.isNpc() && this.bot.isFreeformCamp();
+        const here = Game.tile();
+        if (gatherSpotRangeOrigin(freeformFish, here !== null) === 'player' && here) {
+            return here;
+        }
+        return this.bot.getAnchor();
+    }
+
     private spotCandidate(n: { id: number; tile: () => Tile; actions: () => string[] }, maxDist: number): boolean {
         const t = n.tile();
+        const origin = this.bot.isNpc() ? this.fishSpotOrigin() : this.bot.getAnchor();
         return (
-            this.bot.getAnchor().distanceTo(t) <= maxDist &&
+            spotWithinGatherRange(origin.distanceTo(t), maxDist) &&
             this.bot.usable(keyOf(t)) &&
             !WHIRLPOOL_IDS.has(n.id) &&
             this.bot.matchesSpot(n.actions())
@@ -4419,10 +4460,11 @@ class Gather implements Task {
     private findHuntSpot() {
         const leash = this.bot.leashRadius();
         const hunt = this.huntRadius();
+        const origin = this.fishSpotOrigin();
         return Npcs.query()
             .name(this.bot.targetName())
             .where(n => {
-                const d = this.bot.getAnchor().distanceTo(n.tile());
+                const d = origin.distanceTo(n.tile());
                 return d > leash && this.spotCandidate(n, hunt);
             })
             .nearest();
@@ -4472,6 +4514,11 @@ class Gather implements Task {
             return true;
         }
         if (this.bot.isNpc()) {
+            // Freeform fish measures spots from the player — still yield past the start-tile
+            // leash so ReturnToAnchor bounds wander (don't chase the whole river).
+            if (this.bot.isFreeformCamp() && beyondLeash(this.bot, Game.tile(), 4)) {
+                return false;
+            }
             // Prefer in-leash spots; also stay active for pier-hop hunts just outside leash.
             if (this.findSpot() !== null || this.findHuntSpot() !== null) {
                 return true;
@@ -4716,7 +4763,12 @@ class Gather implements Task {
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
             }
-            this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of anchor`);
+            // Freeform measures from the player; named camps from the pier anchor.
+            const originLabel =
+                gatherSpotRangeOrigin(this.bot.isFreeformCamp(), here !== null) === 'player'
+                    ? 'you'
+                    : 'anchor';
+            this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of ${originLabel}`);
             await Execution.delayTicks(2);
             return;
         }

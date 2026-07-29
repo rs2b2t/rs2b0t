@@ -5,11 +5,13 @@ import {
     effectiveGatherLeash,
     fishingSessionBroken,
     gatherHuntRadius,
+    gatherSpotRangeOrigin,
     hostileAttackerNearby,
     isAutoLocation,
     shouldSoftHomeFromGatherMiss,
     shouldWalkHomeToGatherAnchor,
-    shouldYieldGathering
+    shouldYieldGathering,
+    spotWithinGatherRange
 } from '#/bot/scripts/GatheringBot.js';
 import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
 import Tile from '#/bot/api/Tile.js';
@@ -51,6 +53,33 @@ describe('shouldWalkHomeToGatherAnchor (#154 post-bank)', () => {
         expect(shouldWalkHomeToGatherAnchor(null)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(undefined)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(Number.NaN)).toBe(false);
+    });
+});
+
+describe('gatherSpotRangeOrigin (Auto freeform fish vs named camp)', () => {
+    test('freeform fish with a live player tile measures from the player', () => {
+        // Ardougne river: after hunting toward a hop, spots near the player must
+        // still count even when far from the start-tile anchor.
+        expect(gatherSpotRangeOrigin(true, true)).toBe('player');
+    });
+
+    test('named camp / non-freeform always pins the pier anchor', () => {
+        expect(gatherSpotRangeOrigin(false, true)).toBe('anchor');
+        expect(gatherSpotRangeOrigin(false, false)).toBe('anchor');
+    });
+
+    test('freeform without a player tile falls back to anchor', () => {
+        expect(gatherSpotRangeOrigin(true, false)).toBe('anchor');
+    });
+
+    test('spotWithinGatherRange is inclusive Chebyshev disk', () => {
+        // Stuck tile 2582,3353 vs start 2566,3374 is cheb 21 — outside a 10 leash
+        // from start, but a spot 3 tiles from the player is still fishable freeform.
+        expect(spotWithinGatherRange(3, 40)).toBe(true);
+        expect(spotWithinGatherRange(40, 40)).toBe(true);
+        expect(spotWithinGatherRange(41, 40)).toBe(false);
+        expect(spotWithinGatherRange(21, 10)).toBe(false);
+        expect(spotWithinGatherRange(Number.NaN, 40)).toBe(false);
     });
 });
 
