@@ -289,7 +289,7 @@ ScriptRegistry.register({
             max: 40,
             label: 'Leash radius (tiles)',
             help:
-                'How far from the start/anchor tile to prefer fishing spots. Spots hop along piers (Catherby, etc.) — 18 covers most banks; the bot still hunts a bit farther if the pier empties inside the leash.'
+                'How far from the camp/start anchor to prefer fishing spots. Only Location Auto uses this as-is. Named camps and None floor to 40 (Catherby pier is huge). The bot still hunts a bit past the leash when spots hop along the pier.'
         },
         location: {
             type: 'string',

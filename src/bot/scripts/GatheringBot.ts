@@ -116,16 +116,36 @@ import {
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
 
-/** Floor when leash is measured from the live start tile (location None / no camp). */
-export const START_TILE_LEASH_FLOOR = 40;
+/**
+ * Floor for non-Auto location modes (named camps + power None).
+ * Named camps are large (Catherby pier, multi-rock mines) — a tight UI default
+ * like 10–18 leaves "no spots within 28 of anchor" while standing in camp.
+ * Auto keeps the raw setting so freeform / unverified snaps stay conservative.
+ */
+export const NAMED_CAMP_LEASH_FLOOR = 40;
+
+/** @deprecated Prefer {@link NAMED_CAMP_LEASH_FLOOR} — same value, kept for imports. */
+export const START_TILE_LEASH_FLOOR = NAMED_CAMP_LEASH_FLOOR;
+
+/**
+ * Effective gather leash from the UI value + location mode.
+ * - Auto → respect setting (freeform / unverified chunk snaps).
+ * - Named camp or None → at least {@link NAMED_CAMP_LEASH_FLOOR}.
+ */
+export function effectiveGatherLeash(settingLeash: number, locationSetting: string): number {
+    const raw = Math.max(2, Math.floor(Number.isFinite(settingLeash) ? settingLeash : 10));
+    if (locationSetting.trim().toLowerCase() === 'auto') {
+        return raw;
+    }
+    return Math.max(NAMED_CAMP_LEASH_FLOOR, raw);
+}
 
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
     action: { type: 'string', default: 'Mine', label: 'Action', help: 'right-click op, e.g. Mine / Chop down / Net' },
     dropMatch: { type: 'string', default: 'ore', label: 'Drop items containing', help: 'when full, drop items whose name contains this (the gathered product)' },
-    // Named camps pin the leash to the camp spot (modest radius is fine).
-    // Start-tile modes (location None / Auto freeform) floor up to START_TILE_LEASH_FLOOR.
+    // Named camps / None floor to NAMED_CAMP_LEASH_FLOOR. Auto alone keeps the setting.
     leashRadius: {
         type: 'number',
         default: 10,
@@ -133,7 +153,7 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         max: 40,
         label: 'Leash radius (tiles)',
         help:
-            'How far from the camp/start anchor to hunt targets. Named locations pin the anchor to the camp spot. Location None and Auto freeform (start outside every preset 64×64 map square) measure from your start tile and floor this to 40 so a nearby spawn still sees the whole cluster.'
+            'How far from the camp/start anchor to hunt targets. Only Location Auto uses this value as-is (freeform and unverified chunk snaps). Named camps and None floor to 40 so large piers/mines stay fully in range.'
     }
 };
 
@@ -255,6 +275,7 @@ export default class GatheringBot extends TaskBot {
         this.target = this.settings.str('target', 'Rocks');
         this.action = this.settings.str('action', 'Mine');
         this.dropMatch = this.settings.str('dropMatch', 'ore').toLowerCase();
+        // Final leash applied after location is resolved (named/None floor; Auto keeps setting).
         this.leash = this.settings.num('leashRadius', 10);
 
         if ('rocks' in this.settings.raw()) {
@@ -333,15 +354,13 @@ export default class GatheringBot extends TaskBot {
 
         // Named/Auto camps pin the gather leash to the camp spot. Power mode (None)
         // and Auto freeform (no preset in this 64×64 map square) leash from the live
-        // start tile — that radius must be wide (floor 40) or a slightly-off spawn
-        // only sees one rock/tree.
+        // start tile. Leash width: only Auto respects the UI setting; named camps
+        // and None floor to NAMED_CAMP_LEASH_FLOOR (Catherby pier etc. need ~40).
+        this.leash = effectiveGatherLeash(this.leash, locSetting);
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
-            if (this.leash < START_TILE_LEASH_FLOOR) {
-                this.leash = START_TILE_LEASH_FLOOR;
-            }
         }
 
         // After ::tele / zone load, Locs+Npcs are empty for a beat (docs/NAV.md

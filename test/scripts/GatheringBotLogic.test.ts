@@ -1,5 +1,30 @@
 import { describe, expect, test } from 'bun:test';
-import { fishingSessionBroken, shouldYieldGathering } from '#/bot/scripts/GatheringBot.js';
+import {
+    NAMED_CAMP_LEASH_FLOOR,
+    effectiveGatherLeash,
+    fishingSessionBroken,
+    shouldYieldGathering
+} from '#/bot/scripts/GatheringBot.js';
+
+describe('effectiveGatherLeash', () => {
+    test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
+        expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
+        expect(effectiveGatherLeash(18, 'auto')).toBe(18);
+        expect(effectiveGatherLeash(40, 'Auto')).toBe(40);
+    });
+
+    test('named camps floor to NAMED_CAMP_LEASH_FLOOR (Catherby-scale)', () => {
+        expect(effectiveGatherLeash(10, 'Catherby')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(18, 'Catherby')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(12, 'Southwest Varrock Mine')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(40, 'Draynor Village')).toBe(40);
+    });
+
+    test('None (power) also floors — start-tile clusters need width', () => {
+        expect(effectiveGatherLeash(10, 'None')).toBe(NAMED_CAMP_LEASH_FLOOR);
+        expect(effectiveGatherLeash(8, 'none')).toBe(NAMED_CAMP_LEASH_FLOOR);
+    });
+});
 
 describe('shouldYieldGathering', () => {
     test('a pending random event interrupts an active gather loop', () => {
