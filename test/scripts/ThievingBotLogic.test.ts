@@ -6,6 +6,7 @@ import {
     nextWithdrawChunk,
     safeToSteal,
     shouldRestockFood,
+    STUN_COMBAT_TICKS,
     THIEVER_BANKING_OPTIONS
 } from '#/bot/scripts/ThievingBotLogic.js';
 
@@ -57,5 +58,11 @@ describe('bulk withdraw chunk selection', () => {
         expect(nextWithdrawChunk(10)).toEqual({ kind: 'op', op: 'Withdraw-10' });
         expect(nextWithdrawChunk(11)).toEqual({ kind: 'x', count: 11 });
         expect(nextWithdrawChunk(22)).toEqual({ kind: 'x', count: 22 });
+    });
+});
+
+describe('pickpocket stun', () => {
+    test('wait the full 9-tick movement lock (retrying at 8 only turns the character)', () => {
+        expect(STUN_COMBAT_TICKS).toBe(9);
     });
 });

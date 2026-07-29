@@ -1,14 +1,12 @@
 /**
  * Live verification for Thiever efficiency (GitHub #139).
  *
- * Boots a mainland account, seeds 1000 cooked lobsters into the bank via
- * noted `give cert_lobster` + deposit (same pattern as GatheringBot's
- * fish-bank-raw-cook), starts Thiever on Ardougne Guards with Auto food
- * banking, and asserts thieving XP/hr ≥ 25k after a warm-up window.
+ * Boots a mainland account, seeds a short pack of cooked lobsters (no bank
+ * seed — default ~720s budgets don't need it), starts Thiever on Ardougne
+ * Guards with loot off, and asserts thieving XP/hr ≥ 25k after a warm-up.
  *
  * Item seed uses engine cheat `give <obj> <qty>` (not maintainer-content
- * `~item` / `~bankitem`). Notes (`cert_*`) share the unnoted display name and
- * un-note on deposit.
+ * `~item` / `~bankitem`).
  *
  * Requires a deployed bot client and a running engine (default http://localhost:8890).
  * Redeploy the bot client yourself when Thiever / Anchor / Bank change —
@@ -34,9 +32,7 @@ const WARMUP_S = Number(process.env.WARMUP_S) || 180;
 const TARGET_XPH = Number(process.env.TARGET_XPH) || 25_000;
 
 const GUARD_SPOT = { x: 2661, z: 3306, level: 0 } as const;
-/** Ardougne south bank — nearest usable booth to market Guards. */
-const ARDY_SOUTH_BANK = { x: 2655, z: 3286, level: 0 } as const;
-const BANK_FOOD = 1000;
+/** Pack food only — enough for a default ~12 min soak without a bank trip. */
 const INV_FOOD = 22;
 
 function fail(msg: string): never {
@@ -55,27 +51,7 @@ type Abi = {
             items(): { name: string | null; count: number }[];
             used(): number;
         };
-        Bank: {
-            isOpen(): boolean;
-            loaded(): boolean;
-            items(): { name: string | null; count: number }[];
-            openBooth(stand: Tile, boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
-            openNearest(boothName: string, op: string, log?: (m: string) => void): Promise<boolean>;
-            depositAllMatching(match: (name: string, id: number) => boolean, log?: (m: string) => void): Promise<void>;
-            close(timeoutMs?: number): Promise<boolean>;
-        };
-        Execution: {
-            delayTicks(n: number): Promise<void>;
-            delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
-        };
-        LoopingBot: new () => { loop(): Promise<number | void> };
-        registerScript(m: { name: string; create(): unknown }): void;
         Npcs: {
-            query(): {
-                results(): { name: string | null; distance(): number }[];
-            };
-        };
-        Locs: {
             query(): {
                 results(): { name: string | null; distance(): number }[];
             };
@@ -91,7 +67,6 @@ type Abi = {
         registry: { get(name: string): unknown };
         client: { ingame: boolean; sceneState: number };
     };
-    __thProbe?: { done: boolean; ok: boolean; reason: string };
 };
 
 function teleCheat(t: Tile): string {
@@ -100,17 +75,6 @@ function teleCheat(t: Tile): string {
 
 function chebyshev(a: Tile, b: Tile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-async function stopScript(page: Page): Promise<void> {
-    await page.evaluate(() => {
-        try {
-            (globalThis as never as Abi).rs2b0t.runner.stop();
-        } catch {
-            /* ignore */
-        }
-    });
-    await page.waitForTimeout(400);
 }
 
 async function teleArrive(page: Page, spot: Tile, maxDist = 18): Promise<boolean> {
@@ -237,122 +201,6 @@ async function clearChatDialogs(page: Page): Promise<void> {
     }
 }
 
-/**
- * Open bank at stand, deposit every held item matching `names` (exact, ci).
- * cert_* notes un-note into the bank under the same display name.
- */
-async function depositHeldToBank(page: Page, bankStand: Tile, names: readonly string[], label: string): Promise<void> {
-    const want = names.map(n => n.trim()).filter(n => n.length > 0);
-    if (want.length === 0) {
-        return;
-    }
-
-    if (!(await teleArrive(page, bankStand, 12))) {
-        throw new Error(`deposit ${label}: tele to bank ${bankStand.x},${bankStand.z} failed`);
-    }
-    // Wait for booth scenery after tele.
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-        const hit = await page.evaluate(r => {
-            const g = globalThis as never as Abi;
-            if (!g.rs2b0t?.client?.ingame || g.rs2b0t.client.sceneState !== 2) {
-                return false;
-            }
-            return g.__rs2b0t.Locs.query()
-                .results()
-                .some(l => l.distance() <= r && /bank booth|bank chest/i.test(l.name ?? ''));
-        }, 10);
-        if (hit) {
-            break;
-        }
-        await page.waitForTimeout(350);
-    }
-
-    await stopScript(page);
-    await page.evaluate(
-        ([stand, nameList, scriptName]) => {
-            const g = globalThis as never as Abi;
-            const abi = g.__rs2b0t;
-            const keep = new Set((nameList as string[]).map(n => n.toLowerCase()));
-            g.__thProbe = { done: false, ok: false, reason: '' };
-
-            class DepositBankBot extends abi.LoopingBot {
-                private ran = false;
-                override async loop(): Promise<number> {
-                    if (this.ran) {
-                        return 5000;
-                    }
-                    this.ran = true;
-                    const res = g.__thProbe!;
-                    const log = (_m: string) => {
-                        /* quiet */
-                    };
-                    try {
-                        if (!abi.Bank.isOpen()) {
-                            const opened =
-                                (await abi.Bank.openBooth(stand, 'Bank booth', 'Use-quickly', log))
-                                || (await abi.Bank.openNearest('Bank booth', 'Use-quickly', log));
-                            if (!opened) {
-                                res.ok = false;
-                                res.reason = 'could not open bank';
-                                res.done = true;
-                                return 5000;
-                            }
-                        }
-                        await abi.Execution.delayUntil(() => abi.Bank.loaded() || !abi.Bank.isOpen(), 4000);
-                        if (!abi.Bank.isOpen()) {
-                            res.ok = false;
-                            res.reason = 'bank closed before load';
-                            res.done = true;
-                            return 5000;
-                        }
-                        await abi.Execution.delayTicks(1);
-                        await abi.Bank.depositAllMatching(name => keep.has((name ?? '').toLowerCase()));
-                        await abi.Execution.delayUntil(() => abi.Bank.loaded() || !abi.Bank.isOpen(), 3000);
-                        await abi.Execution.delayTicks(1);
-                        const still = (nameList as string[]).filter(n => abi.Inventory.count(n) > 0);
-                        if (abi.Bank.isOpen()) {
-                            await abi.Bank.close();
-                        }
-                        if (still.length > 0) {
-                            res.ok = false;
-                            res.reason = `still holding ${still.join(', ')} after deposit`;
-                            res.done = true;
-                            return 5000;
-                        }
-                        res.ok = true;
-                        res.reason = '';
-                    } catch (e) {
-                        res.ok = false;
-                        res.reason = e instanceof Error ? e.message : String(e);
-                    }
-                    res.done = true;
-                    return 5000;
-                }
-            }
-
-            abi.registerScript({ name: scriptName, create: () => new DepositBankBot() });
-            g.rs2b0t.runner.start(g.rs2b0t.registry.get(scriptName));
-        },
-        [bankStand, want, `ThDeposit_${label.replace(/[^a-zA-Z0-9_]/g, '_')}`] as const
-    );
-
-    await page
-        .waitForFunction(() => (globalThis as never as Abi).__thProbe?.done === true, undefined, { timeout: 45_000 })
-        .catch(() => undefined);
-
-    const result = await page.evaluate(() => {
-        const p = (globalThis as never as Abi).__thProbe;
-        return p ?? { done: true, ok: false, reason: 'no probe result' };
-    });
-    await stopScript(page);
-
-    if (!result.ok) {
-        throw new Error(`deposit ${label}: ${result.reason || 'failed'}`);
-    }
-    console.log(`  deposit ${label}: banked ${want.join(' + ')} (pack clear)`);
-}
-
 async function setSettings(page: Page, script: string, map: Record<string, string | number | boolean>): Promise<void> {
     await page.evaluate(([name, entries]) => {
         for (const [k, v] of Object.entries(entries)) {
@@ -418,15 +266,9 @@ try {
 
     await clearInv(page);
 
-    // Bank seed: noted cooked lobsters → deposit un-notes into bank as Lobster.
-    // 1000 is enough for a long soak without restocking the bank mid-run.
-    console.log(`  seeding ${BANK_FOOD} noted cooked lobsters → Ardougne south bank`);
-    await seedItem(page, 'cert_lobster', 'Lobster', BANK_FOOD);
-    await depositHeldToBank(page, ARDY_SOUTH_BANK, ['Lobster'], 'lobster@ardy-s');
-
-    // Starting pack food so Steal runs before the first bank trip.
+    // Pack food only — skip bank seed on short budgets (setup waste).
     await seedItem(page, 'lobster', 'Lobster', INV_FOOD);
-    console.log(`  inv: ${INV_FOOD} cooked Lobster; bank: ${BANK_FOOD} Lobster`);
+    console.log(`  inv: ${INV_FOOD} cooked Lobster (no bank seed)`);
 
     if (!(await teleArrive(page, GUARD_SPOT, 10))) {
         fail(`could not tele to Guard spot ${GUARD_SPOT.x},${GUARD_SPOT.z}`);
@@ -458,17 +300,21 @@ try {
         action: 'Pickpocket',
         food: 'Lobster',
         eatAtHp: 50,
-        banking: 'Auto',
+        // No bank seed on short soaks — don't walk empty for food.
+        banking: 'None',
         foodWithdraw: 22,
         bankAtFood: 0,
-        loot: 'coins',
+        // Blank loot: coin walks are not part of the XP/hr bar for #139.
+        loot: '',
         obstacle: 'door, gate',
         leashRadius: 19
     });
     await startScript(page, 'Thiever');
+    // XP/hr is measured from script start, not process boot (seed/relog skew).
+    const scriptT0 = Date.now();
     console.log(
-        `started Thiever Guard/Lobster/Auto/22/19 — budget ${Math.round(BUDGET_MS / 1000)}s, ` +
-            `warmup ${WARMUP_S}s, target ≥${(TARGET_XPH / 1000).toFixed(0)}k XP/hr`
+        `started Thiever Guard/Lobster/None/22/19 loot=off — budget ${Math.round(BUDGET_MS / 1000)}s, ` +
+            `warmup ${WARMUP_S}s active, target ≥${(TARGET_XPH / 1000).toFixed(0)}k XP/hr`
     );
 
     const start = await snap(page);
@@ -487,16 +333,16 @@ try {
             }
         }
 
-        const elapsedS = (Date.now() - t0) / 1000;
+        const activeS = (Date.now() - scriptT0) / 1000;
         const gained = cur.thievingXp - startXp;
-        const xph = elapsedS > 30 ? (gained / elapsedS) * 3600 : 0;
+        const xph = activeS > 30 ? (gained / activeS) * 3600 : 0;
         if (xph > peakXph) {
             peakXph = xph;
         }
 
         const tile = cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?';
         console.log(
-            `  ${stamp()} xp+${gained} (${(xph / 1000).toFixed(1)}k/hr) food=${cur.food} ` +
+            `  ${stamp()} xp+${gained} (${(xph / 1000).toFixed(1)}k/hr active) food=${cur.food} ` +
                 `guards=${cur.guardsNear} tile=${tile} runner=${cur.runner} lv=${cur.thievingLevel}`
         );
 
@@ -504,12 +350,12 @@ try {
             fail(`runner state is '${cur.runner}' after +${gained} xp`);
         }
 
-        if (elapsedS >= WARMUP_S) {
-            bestSample = { s: elapsedS, xph, gained };
+        if (activeS >= WARMUP_S) {
+            bestSample = { s: activeS, xph, gained };
             if (xph >= TARGET_XPH && gained >= 500) {
                 console.log(
                     `PASS: ${(xph / 1000).toFixed(1)}k thieving XP/hr ` +
-                        `(+${gained} xp in ${Math.round(elapsedS)}s; peak ${(peakXph / 1000).toFixed(1)}k)`
+                        `(+${gained} xp in ${Math.round(activeS)}s active; peak ${(peakXph / 1000).toFixed(1)}k)`
                 );
                 process.exit(0);
             }
@@ -519,7 +365,7 @@ try {
     if (bestSample && bestSample.xph >= TARGET_XPH) {
         console.log(
             `PASS: ${(bestSample.xph / 1000).toFixed(1)}k thieving XP/hr ` +
-                `(+${bestSample.gained} xp in ${Math.round(bestSample.s)}s)`
+                `(+${bestSample.gained} xp in ${Math.round(bestSample.s)}s active)`
         );
         process.exit(0);
     }
@@ -527,7 +373,7 @@ try {
     const final = bestSample;
     fail(
         final
-            ? `only ${(final.xph / 1000).toFixed(1)}k XP/hr after ${Math.round(final.s)}s ` +
+            ? `only ${(final.xph / 1000).toFixed(1)}k XP/hr after ${Math.round(final.s)}s active ` +
                   `(+${final.gained} xp, peak ${(peakXph / 1000).toFixed(1)}k; need ≥${(TARGET_XPH / 1000).toFixed(0)}k)`
             : `never left warmup (${WARMUP_S}s) with measurable XP`
     );

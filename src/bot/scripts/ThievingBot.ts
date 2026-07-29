@@ -111,14 +111,17 @@ export default class ThievingBot extends TaskBot {
             }
         });
 
+        // Eat before Steal so low-HP bites happen during stun downtime (can't
+        // pickpocket anyway). Steal before Loot so coins don't pull us off a guard.
+        // Loot also refuses while stunned and only takes adjacent drops.
         this.add(
             new ContinueDialog(),
             new EatFood(this),
             new FoodBank(this),
             new WaitForHealth(this),
             new DropJunk(this),
-            new Loot(this),
             new Steal(this),
+            new Loot(this),
             createReturnToAnchorTask(this, {
                 slack: 4,
                 arriveRadius: 2,
@@ -232,6 +235,7 @@ class EatFood implements Task {
         return Inventory.items().find(i => this.bot.isFood(i.name)) ?? null;
     }
     validate(): boolean {
+        // Higher priority than Steal — eats during stun when movement is locked.
         return Skills.hpFraction() < this.bot.eatGate() && this.food() !== null;
     }
     async execute(): Promise<void> {
@@ -239,7 +243,7 @@ class EatFood implements Task {
         if (!food) {
             return;
         }
-        this.bot.setStatus('eating');
+        this.bot.setStatus(this.bot.stunned() ? 'eating (stunned)' : 'eating');
         const before = Skills.effective('hitpoints');
         await food.interact('Eat');
         await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
@@ -356,17 +360,19 @@ class Loot implements Task {
         if (want.length === 0) {
             return null;
         }
+        // Adjacent only — walking the leash for coins wrecks pickpocket XP/hr.
         return GroundItems.query()
             .where(g => {
                 const n = g.name?.toLowerCase();
                 return n !== undefined && want.some(k => n.includes(k));
             })
-            .where(g => tileWithinLeash(this.bot, g.tile()) && Reachability.canReach(g.tile()))
+            .where(g => g.distance() <= 1 && tileWithinLeash(this.bot, g.tile()) && Reachability.canReach(g.tile()))
             .nearest();
     }
 
     validate(): boolean {
-        return !Inventory.isFull() && this.find() !== null;
+        // Never loot during stun: Take would only spin us or path after unlock.
+        return !this.bot.stunned() && !Inventory.isFull() && this.find() !== null;
     }
 
     async execute(): Promise<void> {
@@ -393,19 +399,35 @@ class Steal implements Task {
     constructor(private bot: ThievingBot) {}
 
     private candidates(): Npc[] {
+        // Adjacent first: less walk time between attempts after a stun unlocks.
         return Npcs.query()
             .name(this.bot.targetName())
             .action(this.bot.actionName())
             .where(n => tileWithinLeash(this.bot, n.tile()))
             .results()
-            .sort((a, b) => a.distance() - b.distance());
+            .sort((a, b) => {
+                const adj = Number(a.distance() > 1) - Number(b.distance() > 1);
+                return adj !== 0 ? adj : a.distance() - b.distance();
+            });
     }
 
     validate(): boolean {
-        return this.bot.canSteal() && !this.bot.stunned() && !Inventory.isFull() && this.candidates().length > 0;
+        // Own the stun wait so Loot cannot walk us off a guard — but yield when
+        // HP is low so EatFood can use the locked ticks.
+        if (this.bot.stunned() && Skills.hpFraction() < this.bot.eatGate()) {
+            return false;
+        }
+        return this.bot.canSteal() && !Inventory.isFull() && this.candidates().length > 0;
     }
 
     async execute(): Promise<void> {
+        if (this.bot.stunned()) {
+            // Bail as soon as eating is needed; EatFood is higher priority next loop.
+            this.bot.setStatus('stunned — waiting');
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < this.bot.eatGate(), 9000);
+            return;
+        }
+
         const { target, blocked } = chooseTarget(this.candidates(), n => Reachability.canReach(n.tile(), { adjacentOk: true }));
 
         if (!target) {
@@ -441,7 +463,7 @@ class Steal implements Task {
             return;
         }
         if (this.bot.stunned()) {
-            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < this.bot.eatGate(), 8000);
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < this.bot.eatGate(), 9000);
         }
     }
 }

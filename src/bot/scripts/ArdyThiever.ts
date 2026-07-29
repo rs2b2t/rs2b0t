@@ -328,12 +328,15 @@ class FightBack implements Task {
 class LootDrops implements Task {
     constructor(private bot: ArdyThiever) {}
     private find() {
+        // Adjacent only — walking for coins during/after stun wrecks pickpocket cadence.
         return GroundItems.query()
             .where(g => matchesAny(g.name, LOOT))
-            .where(g => g.tile().distanceTo(ANCHOR) <= LEASH + 4 && Reachability.canReach(g.tile()))
+            .where(g => g.distance() <= 1 && g.tile().distanceTo(ANCHOR) <= LEASH + 4 && Reachability.canReach(g.tile()))
             .nearest();
     }
-    validate(): boolean { return !this.bot.inRealCombat() && !Inventory.isFull() && this.find() !== null; }
+    validate(): boolean {
+        return !this.bot.inRealCombat() && !this.bot.stunned() && !Inventory.isFull() && this.find() !== null;
+    }
     async execute(): Promise<void> {
         const drop = this.find();
         if (!drop) { return; }
@@ -349,6 +352,7 @@ class LootDrops implements Task {
 
 class EatFood implements Task {
     constructor(private bot: ArdyThiever) {}
+    // Runs above Pickpocket so low-HP bites use stun downtime (can't thieve anyway).
     validate(): boolean { return shouldEat(Skills.hpFraction(), EAT_AT, foodCount()); }
     async execute(): Promise<void> {
         for (let bite = 0; bite < 28; bite++) {
@@ -356,7 +360,12 @@ class EatFood implements Task {
             if (Skills.hpFraction() >= EAT_TO || foodCount() === 0) { return; }
             const food = Inventory.items().find(i => matchesAny(i.name, FOOD));
             if (!food) { return; }
-            this.bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
+            const hpPct = Math.round(Skills.hpFraction() * 100);
+            this.bot.setStatus(
+                this.bot.stunned()
+                    ? `eating ${food.name} while stunned (${hpPct}% hp)`
+                    : `eating ${food.name} (${hpPct}% hp)`
+            );
             const before = Skills.effective('hitpoints');
             if (!(await food.interact('Eat'))) { return; }
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
@@ -431,19 +440,34 @@ class Pickpocket implements Task {
     constructor(private bot: ArdyThiever) {}
 
     private candidates(): Npc[] {
+        // Prefer adjacent: less walk time between attempts after a stun unlocks.
         return Npcs.query()
             .name(TARGET)
             .action(PICKPOCKET_OP)
             .where(n => n.tile().distanceTo(ANCHOR) <= LEASH)
             .results()
-            .sort((a, b) => a.distance() - b.distance());
+            .sort((a, b) => {
+                const adj = Number(a.distance() > 1) - Number(b.distance() > 1);
+                return adj !== 0 ? adj : a.distance() - b.distance();
+            });
     }
 
     validate(): boolean {
+        // Yield while stunned + low HP so EatFood can bite during the lock.
+        if (this.bot.stunned() && Skills.hpFraction() < EAT_AT) {
+            return false;
+        }
         return !this.bot.inRealCombat() && foodCount() > RESTOCK_AT && !Inventory.isFull() && this.candidates().length > 0;
     }
 
     async execute(): Promise<void> {
+        if (this.bot.stunned()) {
+            // Exit early when eating is needed; EatFood is higher priority next loop.
+            this.bot.setStatus('stunned — waiting');
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < EAT_AT, 9000);
+            return;
+        }
+
         const { target, blocked } = chooseTarget(this.candidates(), n => Reachability.canReach(n.tile(), { adjacentOk: true }));
 
         if (!target) {
@@ -472,7 +496,7 @@ class Pickpocket implements Task {
             return;
         }
         if (this.bot.stunned()) {
-            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < EAT_AT, 8000);
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < EAT_AT, 9000);
         }
     }
 }
