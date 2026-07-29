@@ -28,12 +28,12 @@ import { stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
+import { STUN_COMBAT_TICKS, withdrawTo } from './ThievingBotLogic.js';
 
 const BANK_STAND = new Tile(2655, 3286, 0);
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const PICKPOCKET_OP = 'Pickpocket';
 const FLEE_TILE = new Tile(2655, 3298, 0);
-const STUN_COMBAT_TICKS = 8;
 const ENGAGE_RADIUS = 5;
 const OBSTACLE = ['door', 'gate'];
 const FOOD = CAKE_ITEMS;
@@ -374,11 +374,7 @@ class PanicRetreat implements Task {
         if (await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))) {
             const banked = Bank.items().find(i => matchesAny(i.name, FOOD));
             if (banked?.name) {
-                for (let i = 0; i < FOOD_TARGET && !Inventory.isFull(); i++) {
-                    const before = foodCount();
-                    if (!(await Bank.withdraw(banked.name, 'Withdraw-1'))) { break; }
-                    if (!(await Execution.delayUntil(() => foodCount() > before, 2000))) { break; }
-                }
+                await withdrawTo(banked.name, FOOD_TARGET, foodCount);
             }
         }
         if (foodCount() === 0) {

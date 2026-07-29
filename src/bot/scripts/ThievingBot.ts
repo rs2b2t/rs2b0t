@@ -1,3 +1,4 @@
+import { createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash } from '../api/Anchor.js';
 import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
@@ -12,14 +13,24 @@ import { SettingsStore } from '../runtime/Settings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
-import { Npcs } from '../api/queries/Npcs.js';
+import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import { nearestBank } from '../api/BankLocations.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
-import { autoFoodBanking, countFood, foodMatches, safeToSteal, shouldRestockFood, THIEVER_BANKING_OPTIONS } from './ThievingBotLogic.js';
+import { chooseTarget } from './ArdyThieverLogic.js';
+import {
+    STUN_COMBAT_TICKS,
+    autoFoodBanking,
+    countFood,
+    foodMatches,
+    safeToSteal,
+    shouldRestockFood,
+    THIEVER_BANKING_OPTIONS,
+    withdrawTo
+} from './ThievingBotLogic.js';
 
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Man', options: PICKPOCKET_TARGET_NAMES, label: 'Pickpocket target', help: 'pick by exact in-game name (level in parens): Man/Woman 1, Farmer 10, Rogue 32, Guard 40, Knight of Ardougne 55, Paladin 70, Hero 80' },
@@ -27,12 +38,12 @@ export const SETTINGS: SettingsSchema = {
     food: { type: 'string', default: '', label: 'Food to eat (name contains)', help: 'eat this when HP drops from failed steals; Auto banking withdraws the first matching bank item' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
     banking: { type: 'string', default: 'None', options: THIEVER_BANKING_OPTIONS, label: 'Food banking', help: 'Auto = bank non-food items, withdraw food, and return to the starting spot' },
-    foodWithdraw: { type: 'number', default: 10, min: 1, max: 27, label: 'Food to carry', showIf: { key: 'banking', anyOf: ['Auto'] } },
+    foodWithdraw: { type: 'number', default: 22, min: 1, max: 27, label: 'Food to carry', showIf: { key: 'banking', anyOf: ['Auto'] } },
     bankAtFood: { type: 'number', default: 0, min: 0, max: 26, label: 'Bank at food remaining', showIf: { key: 'banking', anyOf: ['Auto'] } },
     dropMatch: { type: 'string', default: '', label: 'Drop when full (name contains)', help: 'drop these when the pack fills; blank = just idle when full (coins stack, so rarely fills)' },
     loot: { type: 'string', default: 'coins', label: 'Pick up from ground (name contains)', help: 'grab matching ground drops within the leash, e.g. coins; comma-separate for several; blank = pick up nothing' },
     obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (name contains)', help: 'when a target or the anchor is walled off, open the nearest of these that still has an Open action; comma-separate' },
-    leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Leash radius (tiles)' }
+    leashRadius: { type: 'number', default: 19, min: 2, max: 40, label: 'Leash radius (tiles)' }
 };
 
 function splitKeywords(raw: string): string[] {
@@ -51,12 +62,12 @@ export default class ThievingBot extends TaskBot {
     private food = '';
     private eatAtHp = 0.5;
     private autoBank = false;
-    private foodWithdraw = 10;
+    private foodWithdraw = 22;
     private bankAtFood = 0;
     private dropMatch = '';
     private loot: string[] = ['coins'];
     private obstacle: string[] = ['door', 'gate'];
-    private leash = 6;
+    private leash = 19;
 
     private steals = 0;
     private eats = 0;
@@ -65,6 +76,7 @@ export default class ThievingBot extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
+    private stunnedUntilTick = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -74,15 +86,15 @@ export default class ThievingBot extends TaskBot {
         this.food = this.settings.str('food', '').toLowerCase();
         this.eatAtHp = this.settings.num('eatAtHp', 50) / 100;
         this.autoBank = autoFoodBanking(this.settings.str('banking', 'None'));
-        this.foodWithdraw = this.settings.num('foodWithdraw', 10);
+        this.foodWithdraw = this.settings.num('foodWithdraw', 22);
         this.bankAtFood = Math.min(this.settings.num('bankAtFood', 0), this.foodWithdraw - 1);
         this.dropMatch = this.settings.str('dropMatch', '').toLowerCase();
         this.loot = splitKeywords(this.settings.str('loot', 'coins'));
         this.obstacle = splitKeywords(this.settings.str('obstacle', 'door, gate'));
-        this.leash = this.settings.num('leashRadius', 6);
+        this.leash = this.settings.num('leashRadius', 19);
 
         const here = Game.tile()!;
-        this.anchor = new Tile(here.x, here.z, here.level);
+        this.anchor = resolveRunAnchor(here, null);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('thieving');
         if (this.autoBank && !this.food) {
@@ -94,12 +106,27 @@ export default class ThievingBot extends TaskBot {
         this.log(`thieving '${this.target}' (${this.action}) within ${this.leash} of ${this.anchor}${this.food ? `, eating *${this.food}* below ${Math.round(this.eatAtHp * 100)}% hp` : ''}, banking ${this.autoBank ? `at ${this.bankAtFood} food (target ${this.foodWithdraw})` : 'off'}`);
 
         this.on('chat.message', e => {
-            if (/you (pick|steal|manage to steal)/i.test(e.text)) {
-                this.steals++;
+            if (/been stunned|fail to pick/i.test(e.text)) {
+                this.stunnedUntilTick = Game.tick() + STUN_COMBAT_TICKS;
             }
         });
 
-        this.add(new ContinueDialog(), new EatFood(this), new FoodBank(this), new WaitForHealth(this), new DropJunk(this), new Loot(this), new Steal(this), new ReturnToAnchor(this));
+        this.add(
+            new ContinueDialog(),
+            new EatFood(this),
+            new FoodBank(this),
+            new WaitForHealth(this),
+            new DropJunk(this),
+            new Loot(this),
+            new Steal(this),
+            createReturnToAnchorTask(this, {
+                slack: 4,
+                arriveRadius: 2,
+                obstacles: this.obstacle,
+                longRangeTiles: 30,
+                status: 'returning to anchor'
+            })
+        );
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -110,7 +137,7 @@ export default class ThievingBot extends TaskBot {
         const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `Target: ${this.target}`, `XP/hr: ${xph}`);
         p.row(`Steals: ${this.steals}`, `Ate: ${this.eats}`, `Picked: ${this.picked}`);
-        p.row(`Food: ${this.foodCount()}`, `Bank trips: ${this.bankTrips}`);
+        p.row(`Food: ${this.foodCount()}`, `Bank trips: ${this.bankTrips}`, `Stunned: ${this.stunned() ? 'yes' : 'no'}`);
         p.bar('HP', Skills.hpFraction());
 
         p.gap();
@@ -168,6 +195,9 @@ export default class ThievingBot extends TaskBot {
     canSteal(): boolean {
         return safeToSteal(Skills.hpFraction(), this.eatAtHp, this.foodCount());
     }
+    stunned(): boolean {
+        return Game.tick() <= this.stunnedUntilTick;
+    }
     dropKeyword(): string {
         return this.dropMatch;
     }
@@ -176,6 +206,9 @@ export default class ThievingBot extends TaskBot {
     }
     obstacleList(): string[] {
         return this.obstacle;
+    }
+    countSteal(): void {
+        this.steals++;
     }
     countEat(): void {
         this.eats++;
@@ -249,20 +282,12 @@ class FoodBank implements Task {
             return;
         }
 
-        for (let guard = 0; guard < this.bot.foodTarget() && this.bot.foodCount() < this.bot.foodTarget() && !Inventory.isFull(); guard++) {
-            const bankFood = Bank.items().find(item => this.bot.isFood(item.name));
-            if (!bankFood?.name) {
-                break;
-            }
-            const before = this.bot.foodCount();
-            if (!(await Bank.withdraw(bankFood.name, 'Withdraw-1'))) {
-                await Execution.delayTicks(1);
-                continue;
-            }
-            if (!(await Execution.delayUntil(() => this.bot.foodCount() > before, 2500))) {
-                break;
-            }
+        const bankFood = Bank.items().find(item => this.bot.isFood(item.name));
+        if (!bankFood?.name) {
+            this.bot.stopSafely(`no '${this.bot.foodKeyword()}' food in the bank`);
+            return;
         }
+        await withdrawTo(bankFood.name, this.bot.foodTarget(), () => this.bot.foodCount());
         if (this.bot.foodCount() <= this.bot.foodFloor()) {
             this.bot.stopSafely(`only ${this.bot.foodCount()} '${this.bot.foodKeyword()}' food available`);
             return;
@@ -331,14 +356,12 @@ class Loot implements Task {
         if (want.length === 0) {
             return null;
         }
-        const anchor = this.bot.getAnchor();
-        const within = this.bot.leashRadius();
         return GroundItems.query()
             .where(g => {
                 const n = g.name?.toLowerCase();
                 return n !== undefined && want.some(k => n.includes(k));
             })
-            .where(g => g.tile().distanceTo(anchor) <= within && Reachability.canReach(g.tile()))
+            .where(g => tileWithinLeash(this.bot, g.tile()) && Reachability.canReach(g.tile()))
             .nearest();
     }
 
@@ -365,54 +388,60 @@ class Loot implements Task {
 }
 
 class Steal implements Task {
+    private unreachableStreak = 0;
+
     constructor(private bot: ThievingBot) {}
 
-    private find() {
-        const anchor = this.bot.getAnchor();
-        const within = this.bot.leashRadius();
+    private candidates(): Npc[] {
         return Npcs.query()
             .name(this.bot.targetName())
             .action(this.bot.actionName())
-            .where(n => n.tile().distanceTo(anchor) <= within)
-            .nearest();
+            .where(n => tileWithinLeash(this.bot, n.tile()))
+            .results()
+            .sort((a, b) => a.distance() - b.distance());
     }
 
     validate(): boolean {
-        return this.bot.canSteal() && !Inventory.isFull() && this.find() !== null;
+        return this.bot.canSteal() && !this.bot.stunned() && !Inventory.isFull() && this.candidates().length > 0;
     }
 
     async execute(): Promise<void> {
-        const npc = this.find();
-        if (!npc) {
+        const { target, blocked } = chooseTarget(this.candidates(), n => Reachability.canReach(n.tile(), { adjacentOk: true }));
+
+        if (!target) {
+            if (blocked && this.unreachableStreak++ < 2) {
+                this.bot.setStatus(`clearing path to ${this.bot.targetName()}`);
+                await walkOpening(blocked.tile(), 1, this.bot.obstacleList(), m => this.bot.log(m));
+            } else {
+                this.bot.setStatus(`${this.bot.targetName()} out of reach — waiting`);
+                await Execution.delayTicks(2);
+            }
             return;
         }
-        if (!Reachability.canReach(npc.tile(), { adjacentOk: true })) {
-            this.bot.setStatus(`clearing path to ${this.bot.targetName()}`);
-            await walkOpening(npc.tile(), 1, this.bot.obstacleList(), m => this.bot.log(m));
-            return;
-        }
-        this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${npc.tile()}`);
+        this.unreachableStreak = 0;
+
+        this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${target.tile()}`);
         const xpBefore = Skills.xp('thieving');
         const usedBefore = Inventory.used();
-        if (!(await npc.interact(this.bot.actionName()))) {
+        if (!(await target.interact(this.bot.actionName()))) {
             await Execution.delayTicks(2);
             return;
         }
         await Execution.delayUntil(
-            () => Skills.xp('thieving') > xpBefore || Inventory.used() > usedBefore || ChatDialog.canContinue() || Skills.hpFraction() < this.bot.eatGate(),
-            3000
+            () =>
+                Skills.xp('thieving') > xpBefore ||
+                Inventory.used() > usedBefore ||
+                ChatDialog.canContinue() ||
+                this.bot.stunned() ||
+                Skills.hpFraction() < this.bot.eatGate(),
+            2500
         );
-    }
-}
-
-class ReturnToAnchor implements Task {
-    constructor(private bot: ThievingBot) {}
-    validate(): boolean {
-        const here = Game.tile();
-        return here !== null && this.bot.getAnchor().distanceTo(here) > this.bot.leashRadius() + 4;
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus('returning to anchor');
-        await walkOpening(this.bot.getAnchor(), 2, this.bot.obstacleList(), m => this.bot.log(m));
+        if (Skills.xp('thieving') > xpBefore) {
+            this.bot.countSteal();
+            return;
+        }
+        if (this.bot.stunned()) {
+            await Execution.delayUntil(() => !this.bot.stunned() || Skills.hpFraction() < this.bot.eatGate(), 8000);
+        }
     }
 }

@@ -422,7 +422,7 @@ Tags: `gathering`, `drop`, `banking`, `cooking`
 |---|---|---|---|
 | `fishMethod` | string | `"Small net — shrimp/anchovy"` | Fishing method — one of: Small net — shrimp/anchovy, Bait rod — sardine/herring, Fly fishing — trout/salmon, Bait rod — pike, Big net — mackerel/cod/bass, Lobster cage — lobster, Harpoon — tuna/swordfish, Harpoon — sharks, Oily rod — lava eel |
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
-| `leashRadius` | number (2–40) | `18` | Leash radius (tiles) |
+| `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), None |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
@@ -471,7 +471,7 @@ Tags: `gathering`, `banking`, `drop`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
-| `leashRadius` | number (2–40) | `10` | Leash radius (tiles) |
+| `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, None |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
@@ -669,12 +669,12 @@ Tags: `pickpocket`, `coins`, `banking`, `food`
 | `food` | string | `""` | Food to eat (name contains) |
 | `eatAtHp` | number (0–100) | `50` | Eat below HP% |
 | `banking` | string | `"None"` | Food banking — one of: None, Auto |
-| `foodWithdraw` | number (1–27) | `10` | Food to carry |
+| `foodWithdraw` | number (1–27) | `22` | Food to carry |
 | `bankAtFood` | number (0–26) | `0` | Bank at food remaining |
 | `dropMatch` | string | `""` | Drop when full (name contains) |
 | `loot` | string | `"coins"` | Pick up from ground (name contains) |
 | `obstacle` | string | `"door, gate"` | Openable obstacles (name contains) |
-| `leashRadius` | number (2–20) | `6` | Leash radius (tiles) |
+| `leashRadius` | number (2–40) | `19` | Leash radius (tiles) |
 
 ## Treasure Trails
 
@@ -710,7 +710,7 @@ Tags: `gathering`, `banking`, `drop`, `firemaking`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `treeName` | string | `"Tree"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
-| `leashRadius` | number (2–40) | `10` | Leash radius (tiles) |
+| `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, None |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |

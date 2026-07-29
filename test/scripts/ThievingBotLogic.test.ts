@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { autoFoodBanking, countFood, foodMatches, safeToSteal, shouldRestockFood, THIEVER_BANKING_OPTIONS } from '#/bot/scripts/ThievingBotLogic.js';
+import {
+    autoFoodBanking,
+    countFood,
+    foodMatches,
+    nextWithdrawChunk,
+    safeToSteal,
+    shouldRestockFood,
+    THIEVER_BANKING_OPTIONS
+} from '#/bot/scripts/ThievingBotLogic.js';
 
 describe('Thiever food banking', () => {
     test('banking is opt-in', () => {
@@ -35,5 +43,19 @@ describe('Thiever food banking', () => {
         expect(safeToSteal(0.49, 0.5, 0)).toBe(false);
         expect(safeToSteal(0.49, 0.5, 1)).toBe(true);
         expect(safeToSteal(0.5, 0.5, 0)).toBe(true);
+    });
+});
+
+describe('bulk withdraw chunk selection', () => {
+    test('need ladder: 1 / 5 / 10 / X', () => {
+        expect(nextWithdrawChunk(0)).toBeNull();
+        expect(nextWithdrawChunk(-1)).toBeNull();
+        expect(nextWithdrawChunk(1)).toEqual({ kind: 'op', op: 'Withdraw-1' });
+        expect(nextWithdrawChunk(4)).toEqual({ kind: 'op', op: 'Withdraw-1' });
+        expect(nextWithdrawChunk(5)).toEqual({ kind: 'op', op: 'Withdraw-5' });
+        expect(nextWithdrawChunk(9)).toEqual({ kind: 'op', op: 'Withdraw-5' });
+        expect(nextWithdrawChunk(10)).toEqual({ kind: 'op', op: 'Withdraw-10' });
+        expect(nextWithdrawChunk(11)).toEqual({ kind: 'x', count: 11 });
+        expect(nextWithdrawChunk(22)).toEqual({ kind: 'x', count: 22 });
     });
 });

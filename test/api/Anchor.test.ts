@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { beyondLeash, resolveRunAnchor, tileWithinLeash, type AnchorHost } from '#/bot/api/Anchor.js';
+import { beyondLeash, createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash, type AnchorHost, type ReturnToAnchorOptions } from '#/bot/api/Anchor.js';
 import Tile from '#/bot/api/Tile.js';
 
 function host(ax: number, az: number, leash: number): AnchorHost {
@@ -43,5 +43,21 @@ describe('Anchor helpers', () => {
         const anchor = new Tile(0, 0, 0);
         expect(anchor.distanceTo(new Tile(8, 0, 0))).toBeLessThanOrEqual(8);
         expect(anchor.distanceTo(new Tile(9, 0, 0))).toBeGreaterThan(8);
+    });
+
+    test('createReturnToAnchorTask accepts obstacle / long-range options', () => {
+        const h = host(0, 0, 10);
+        const opts: ReturnToAnchorOptions = {
+            slack: 4,
+            arriveRadius: 2,
+            obstacles: ['door', 'gate'],
+            longRangeTiles: 30,
+            status: 'returning to anchor'
+        };
+        const task = createReturnToAnchorTask(h, opts);
+        expect(typeof task.validate).toBe('function');
+        expect(typeof task.execute).toBe('function');
+        // Without a live Game.tile(), beyondLeash is false — task stays idle.
+        expect(task.validate()).toBe(false);
     });
 });
