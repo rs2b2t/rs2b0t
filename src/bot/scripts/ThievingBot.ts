@@ -164,6 +164,9 @@ export default class ThievingBot extends TaskBot {
     getAnchor(): Tile {
         return this.anchor!;
     }
+    override recoveryAnchor(): Tile | null {
+        return this.anchor;
+    }
     leashRadius(): number {
         return this.leash;
     }
@@ -246,8 +249,9 @@ class EatFood implements Task {
         this.bot.setStatus(this.bot.stunned() ? 'eating (stunned)' : 'eating');
         const before = Skills.effective('hitpoints');
         await food.interact('Eat');
-        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
-        this.bot.countEat();
+        if (await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000)) {
+            this.bot.countEat();
+        }
     }
 }
 

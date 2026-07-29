@@ -161,6 +161,8 @@ export default class ArdyThiever extends TaskBot {
             }
         });
 
+        // Eat before Pickpocket (use stun downtime); Pickpocket before Loot so
+        // adjacent coins don't pull cadence off the target (matches Thiever).
         this.add(
             new ContinueDialog(),
             new DeathRecovery(this, {
@@ -170,7 +172,6 @@ export default class ArdyThiever extends TaskBot {
                 onRecovered: () => { this.died = false; }
             }),
             ...(RESPONSE === 'Fight' ? [] : [new Flee(this)]),
-            new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
             ...(RESPONSE === 'Fight' ? [new FightBack(this)] : []),
@@ -189,6 +190,7 @@ export default class ArdyThiever extends TaskBot {
             new BankRun(this),
             new RestockCakes(this),
             new Pickpocket(this),
+            new LootDrops(this),
             new ReturnToAnchor(this)
         );
     }
