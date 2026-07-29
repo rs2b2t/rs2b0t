@@ -22,8 +22,17 @@ type Rs2b0t = {
 /** Cold cache / first headed Chrome often spends minutes on jag + ondemand. */
 const BOOT_MS = Number(process.env.BOOT_MS) || 180_000;
 const LOGIN_MS = Number(process.env.LOGIN_MS) || 120_000;
-/** Engine holds the old session ~30s after unclean logout before accepting login. */
-const RELOG_COOLDOWN_MS = Number(process.env.RELOG_COOLDOWN_MS) || 28_000;
+/**
+ * Minimum wait after logout before the first login probe.
+ * Engine-TS keeps the old session alive after unclean logout (login response 5:
+ * "already logged in / try again in 60 secs"). Live probes usually succeed ~30–40s
+ * after logout — a long fixed sleep + 12s failed attempt was burning ~44s every run.
+ */
+const RELOG_COOLDOWN_MS = Number(process.env.RELOG_COOLDOWN_MS) || 20_000;
+/** How long each login probe waits for ingame+scene before retrying. */
+const RELOG_PROBE_MS = Number(process.env.RELOG_PROBE_MS) || 5_000;
+/** Gap between failed probes (engine still holding the old session). */
+const RELOG_RETRY_MS = Number(process.env.RELOG_RETRY_MS) || 3_000;
 const RELOG_BUDGET_MS = Number(process.env.RELOG_BUDGET_MS) || 120_000;
 
 async function waitClientBooted(page: Page, label: string): Promise<void> {
@@ -82,8 +91,9 @@ export async function bootAndLogin(page: Page, base: string, user: string): Prom
 
 export async function relog(page: Page, user: string): Promise<void> {
     console.log(
-        `  relog: logout → ${Math.round(RELOG_COOLDOWN_MS / 1000)}s engine cooldown ` +
-            `(dead-connection hold; RELOG_COOLDOWN_MS / RELOG_BUDGET_MS override)`
+        `  relog: logout → probe from ${Math.round(RELOG_COOLDOWN_MS / 1000)}s ` +
+            `(${Math.round(RELOG_PROBE_MS / 1000)}s probes / ${Math.round(RELOG_RETRY_MS / 1000)}s gap; ` +
+            `RELOG_COOLDOWN_MS / RELOG_PROBE_MS / RELOG_RETRY_MS / RELOG_BUDGET_MS override)`
     );
     await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.logout());
     await page.waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, {
@@ -98,7 +108,7 @@ export async function relog(page: Page, user: string): Promise<void> {
             void client.login(u, 'test', false);
         }, user);
 
-    const isIngame = () =>
+    const isIngame = (timeoutMs: number) =>
         page
             .waitForFunction(
                 () => {
@@ -106,12 +116,13 @@ export async function relog(page: Page, user: string): Promise<void> {
                     return client.ingame && client.sceneState === 2;
                 },
                 undefined,
-                { timeout: 12_000 }
+                { timeout: timeoutMs }
             )
             .then(() => true)
             .catch(() => false);
 
-    // Fixed hold: Engine-TS rejects login until the prior connection is fully dead.
+    // Don't hammer login while the engine still holds the old session, but don't
+    // oversleep either — probe early with short timeouts until one sticks.
     await page.waitForTimeout(RELOG_COOLDOWN_MS);
 
     // Title loop must still be ticking (cache/UI ready) before we hammer login.
@@ -122,7 +133,7 @@ export async function relog(page: Page, user: string): Promise<void> {
     for (;;) {
         attempt++;
         await attemptLogin();
-        if (await isIngame()) {
+        if (await isIngame(RELOG_PROBE_MS)) {
             console.log(`  relog: back ingame (attempt ${attempt})`);
             return;
         }
@@ -132,8 +143,10 @@ export async function relog(page: Page, user: string): Promise<void> {
                     `${Math.round(RELOG_BUDGET_MS / 1000)}s (engine dead-connection or client still loading)`
             );
         }
-        console.log(`  relog: attempt ${attempt} not ingame yet — retry`);
-        await page.waitForTimeout(4000);
+        if (attempt === 1 || attempt % 3 === 0) {
+            console.log(`  relog: attempt ${attempt} not ingame yet — retry`);
+        }
+        await page.waitForTimeout(RELOG_RETRY_MS);
     }
 }
 
