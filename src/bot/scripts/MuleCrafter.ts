@@ -246,8 +246,8 @@ export default class MuleCrafter extends TaskBot {
         if (!this.hasPartners()) return null;
         return Players.query().name(...this.partners).nearest();
     }
-    markMuleTraded(name: string): void { this.tradedMules.add(name); }
-    hasAllMulesTraded(): boolean { return this.partners.every(p => this.tradedMules.has(p)); }
+    markMuleTraded(name: string): void { this.tradedMules.add(name.toLowerCase()); }
+    hasAllMulesTraded(): boolean { return this.partners.every(p => this.tradedMules.has(p.toLowerCase())); }
     resetTradedMules(): void { this.tradedMules.clear(); }
 
     async walkTo(dest: Tile, radius = 2): Promise<void> {
