@@ -351,6 +351,10 @@ class EatFood implements Task {
         if (this.bot.died) {
             return false;
         }
+        // Don't eat while the bank is open — let BankAndRestock finish first.
+        if (Bank.isOpen()) {
+            return false;
+        }
         const hp = Skills.hpFraction();
         const eatAt = this.bot.settings.num('eatAtHp', 40) / 100;
         const eatTo = this.bot.settings.num('eatToHp', 90) / 100;
@@ -456,10 +460,7 @@ class BankAndRestock implements Task {
                 await Bank.depositInventory();
             }
             const amt = this.bot.settings.num('foodAmount', 20);
-            for (let i = 0; i < amt; i++) {
-                await Bank.withdraw(foodName, 'Withdraw-1');
-                await Execution.delayTicks(1);
-            }
+            await Bank.withdrawX(foodName, amt);
             const afterCount = foodCount(foodName);
             const minFood = this.bot.settings.num('minFood', 1);
             if (afterCount < minFood) {
