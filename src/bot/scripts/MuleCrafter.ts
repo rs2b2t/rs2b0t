@@ -487,14 +487,19 @@ class CrafterTradeAtRuins implements Task {
         this.bot.log(`CrafterTradeAtRuins: offer screen with ${who}, their offer state=${state}, my runes=${Inventory.count(this.bot.cfg().rune)}, my ess=${essCount()}`);
 
         if (state === 'has-essence') {
-            const runes = Inventory.count(this.bot.cfg().rune);
-            if (runes > 0) {
-                this.bot.setStatus(`offering ${runes} ${this.bot.cfg().rune}s to ${who}`);
-                const offered = await Trade.offerAll(this.bot.cfg().rune);
-                this.bot.log(`CrafterTradeAtRuins: offerAll returned ${offered}`);
-                await Execution.delayTicks(1);
+            const talismanName = this.bot.cfg().talisman;
+            const toOffer = Inventory.items()
+                .filter(i => i.name && i.name.toLowerCase() !== talismanName.toLowerCase());
+            const uniqueNames = [...new Set(toOffer.map(i => i.name!))];
+            if (uniqueNames.length > 0) {
+                this.bot.setStatus(`offering ${uniqueNames.length} item type(s) to ${who}`);
+                for (const name of uniqueNames) {
+                    const ok = await Trade.offerAll(name);
+                    this.bot.log(`CrafterTradeAtRuins: offered ${name} returned ${ok}`);
+                    await Execution.delayTicks(1);
+                }
             } else {
-                this.bot.setStatus(`accepting essence from ${who} (no runes yet)`);
+                this.bot.setStatus(`accepting essence from ${who} (nothing to offer)`);
             }
             const accepted = await Trade.accept();
             this.bot.log(`CrafterTradeAtRuins: offer-screen accept returned ${accepted}`);
