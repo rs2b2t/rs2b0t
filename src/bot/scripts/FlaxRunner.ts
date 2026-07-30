@@ -137,21 +137,21 @@ export default class FlaxRunner extends TaskBot {
 
         if (this.mode === 'Runner') {
             this.add(
+                new OfferTrade(this),
                 new PickFlax(this),
                 new GoToField(this),
-                new BankFlax(this),
-                new GoToWheel(this),
+                new GoToMeet(this),
                 new WaitAndTrade(this),
             );
         } else {
             this.add(
                 new HandleTrade(this),
-                new RequestTrade(this),
                 new SpinFlax(this),
-                new BankStrings(this),
                 new ClimbDown(this),
+                new BankStrings(this),
                 new ClimbUp(this),
-                new GoToWheel(this),
+                new RequestTrade(this),
+                new GoToMeet(this),
             );
         }
     }
@@ -195,6 +195,10 @@ export default class FlaxRunner extends TaskBot {
     atWheel(): boolean {
         const here = Game.tile();
         return here !== null && this.wheelTile_.distanceTo(here) <= this.leashRadius_;
+    }
+    atMeet(): boolean {
+        const here = Game.tile();
+        return here !== null && this.ladderTile_.distanceTo(here) <= this.leashRadius_;
     }
     onFloor(level: number): boolean {
         const t = Game.tile();
@@ -276,47 +280,32 @@ class GoToField implements Task {
     }
 }
 
-class BankFlax implements Task {
+class OfferTrade implements Task {
     constructor(private bot: FlaxRunner) {}
     validate(): boolean {
         if (this.bot.getMode() !== 'Runner') return false;
-        if (Trade.active()) return false;
-        return Inventory.isFull() && flaxCount(this.bot.flaxNameStr()) > 0;
+        if (!Trade.active()) return false;
+        if (Trade.onConfirmScreen()) return false;
+        return flaxCount(this.bot.flaxNameStr()) > 0;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('banking flax');
-        await Traversal.walkResilient(this.bot.bankEntranceTile(), {
-            radius: 3,
-            attempts: 4,
-            timeoutMs: 120_000,
-            log: m => this.bot.log(`  ${m}`),
-        });
-        await Bank.openBooth(
-            { x: this.bot.bankStandTile().x, z: this.bot.bankStandTile().z, level: this.bot.bankStandTile().level },
-            this.bot.boothLocName(),
-            BOOTH.op,
-            m => this.bot.log(`  ${m}`),
-        );
-        await Bank.depositInventory();
-        await Bank.close();
-        this.bot.countTrip();
+        this.bot.setStatus('offering flax to spinner');
+        await Trade.offerAll(this.bot.flaxNameStr());
+        await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
     }
 }
 
-class GoToWheel implements Task {
+class GoToMeet implements Task {
     constructor(private bot: FlaxRunner) {}
     validate(): boolean {
         if (Trade.active()) return false;
-        if (this.bot.getMode() === 'Runner') {
-            return flaxCount(this.bot.flaxNameStr()) >= 28 && !this.bot.atWheel();
-        } else {
-            return !this.bot.atWheel() && !this.bot.atField();
-        }
+        const here = Game.tile();
+        if (!here) return false;
+        return this.bot.ladderStandTile().distanceTo(here) > this.bot.leashRadius();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('travelling to the spinning wheel');
-        const dest = this.bot.wheelStand();
-        await Traversal.walkResilient(dest, {
+        this.bot.setStatus('travelling to meet point');
+        await Traversal.walkResilient(this.bot.ladderStandTile(), {
             radius: this.bot.leashRadius(),
             attempts: 6,
             timeoutMs: 240_000,
@@ -331,8 +320,7 @@ class WaitAndTrade implements Task {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
         if (flaxCount(this.bot.flaxNameStr()) < 28) return false;
-        const partner = this.bot.nearestPartner();
-        return partner !== null && partner.distance() <= TRADE_RANGE;
+        return this.bot.atMeet();
     }
     async execute(): Promise<void> {
         this.bot.setStatus('waiting for spinner to request trade');
