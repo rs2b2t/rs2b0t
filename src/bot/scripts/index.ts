@@ -46,6 +46,7 @@ import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js'
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
+import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 
@@ -450,6 +451,15 @@ ScriptRegistry.register({
     tags: ['edgeville', 'dungeon', 'monkey-bars', 'wilderness', 'banking'],
     settingsSchema: EDGEVILLE_MONKEYBARS_SETTINGS,
     create: () => new EdgevilleMonkeyBars()
+});
+
+ScriptRegistry.register({
+    name: 'MuleCrafter',
+    description: 'Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.',
+    category: 'Runecrafting',
+    tags: ['runecrafting', 'trade', 'crafter', 'mule', 'falador', 'edgeville'],
+    settingsSchema: MULECRAFTER_SETTINGS,
+    create: () => new MuleCrafter()
 });
 
 ScriptRegistry.register({

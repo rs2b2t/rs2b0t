@@ -113,6 +113,22 @@ export async function bringUpOffIsland(page: Page, opts: { user: string; typeWai
     if (!backIn) { fail('relogin failed'); }
 }
 
+export async function stopScript(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        try { (globalThis as never as Rs2b0t).rs2b0t.runner.stop(); } catch { /* ignore */ }
+    });
+    await page.waitForTimeout(400);
+}
+
+export async function setSettings(page: Page, script: string, map: Record<string, string | number | boolean>): Promise<void> {
+    await page.evaluate(([name, entries]) => {
+        for (const [k, v] of Object.entries(entries)) {
+            sessionStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v));
+            try { localStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v)); } catch { /* private mode */ }
+        }
+    }, [script, map] as const);
+}
+
 export async function startFromLibrary(page: Page, category: string, script: string): Promise<void> {
     await page.getByRole('button', { name: 'Browse…' }).click();
     await page.waitForSelector('.rs2b0t-modal-backdrop', { state: 'visible', timeout: 5000 });
