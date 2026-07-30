@@ -48,6 +48,7 @@ import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
+import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 
 ScriptRegistry.register({
@@ -532,4 +533,13 @@ ScriptRegistry.register({
     tags: ['firemaking', 'banking', 'varrock', 'draynor', 'seers', 'afk'],
     settingsSchema: FIREMAKER_SETTINGS,
     create: () => new Firemaker()
+});
+
+ScriptRegistry.register({
+    name: 'FlaxRunner',
+    description: 'Two-player cooperative flax picking and spinning — Runner picks flax and delivers to Spinner; Spinner spins flax into bow strings and banks them',
+    category: 'Crafting',
+    tags: ['crafting', 'fletching', 'flax', 'bow-strings', 'trade', 'two-player', 'afk'],
+    settingsSchema: FLAXRUNNER_SETTINGS,
+    create: () => new FlaxRunner()
 });
