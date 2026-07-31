@@ -437,8 +437,8 @@ class SpinFlax implements Task {
             }
         }
         if (ChatDialog.isMakeMenu()) {
-            if (!(await ChatDialog.makeX(BOW_STRING, flaxCount(this.bot.flaxNameStr())))) {
-                this.bot.log(`Spin menu open but couldn't Make-X '${BOW_STRING}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
+            if (!(await ChatDialog.makeX(FLAX, flaxCount(this.bot.flaxNameStr())))) {
+                this.bot.log(`Spin menu open but couldn't Make-X '${FLAX}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
                 await Execution.delayTicks(2);
                 return;
             }
