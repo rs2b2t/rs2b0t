@@ -204,7 +204,7 @@ class GoToField implements Task {
     validate(): boolean {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
-        if (flaxCount(FLAX) >= 28) return false;
+        if (flaxCount(FLAX) >= 28 - (Inventory.used() - flaxCount(FLAX))) return false;
         return !this.bot.atField();
     }
     async execute(): Promise<void> {
@@ -268,7 +268,7 @@ class WaitAndTrade implements Task {
     validate(): boolean {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
-        if (flaxCount(FLAX) < 28) return false;
+        if (flaxCount(FLAX) < 28 - (Inventory.used() - flaxCount(FLAX))) return false;
         return this.bot.atMeet();
     }
     async execute(): Promise<void> {
