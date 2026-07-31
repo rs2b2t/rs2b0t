@@ -313,12 +313,12 @@ class GoToMeet implements Task {
         if (Trade.active()) return false;
         const here = Game.tile();
         if (!here) return false;
-        return this.bot.ladderStandTile().distanceTo(here) > TRADE_RANGE;
+        return this.bot.ladderStandTile().distanceTo(here) > 1;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('travelling to meet point');
         await Traversal.walkResilient(this.bot.ladderStandTile(), {
-            radius: TRADE_RANGE,
+            radius: 1,
             attempts: 6,
             timeoutMs: 240_000,
             log: m => this.bot.log(`  ${m}`),
@@ -337,13 +337,8 @@ class WaitAndTrade implements Task {
     async execute(): Promise<void> {
         const partner = this.bot.nearestPartner();
         if (!partner || partner.distance() > TRADE_RANGE) {
-            this.bot.setStatus('walking to spinner');
-            await Traversal.walkResilient(partner.tile(), {
-                radius: TRADE_RANGE,
-                attempts: 3,
-                timeoutMs: 30_000,
-                log: m => this.bot.log(`  ${m}`),
-            });
+            this.bot.setStatus('waiting for spinner to arrive');
+            await Execution.delayTicks(2);
             return;
         }
         this.bot.setStatus('requesting trade with spinner');
@@ -365,13 +360,8 @@ class RequestTrade implements Task {
     async execute(): Promise<void> {
         const partner = this.bot.nearestPartner();
         if (!partner || partner.distance() > TRADE_RANGE) {
-            this.bot.setStatus('walking to runner');
-            await Traversal.walkResilient(partner.tile(), {
-                radius: TRADE_RANGE,
-                attempts: 3,
-                timeoutMs: 30_000,
-                log: m => this.bot.log(`  ${m}`),
-            });
+            this.bot.setStatus('waiting for runner to arrive');
+            await Execution.delayTicks(2);
             return;
         }
         this.bot.setStatus('requesting trade from runner');
