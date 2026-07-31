@@ -37,9 +37,7 @@ import { Execution } from '../api/Execution.js';
 import {
     FISHING_LOCATIONS,
     FISHING_LOCATION_OPTIONS,
-    LOCATION_OPTIONS,
-    resolveFishingLocation,
-    resolveLocation
+    resolveFishingLocation
 } from '../api/FishingLocations.js';
 import {
     ALL_FISHING_GEAR_NAMES,
@@ -335,9 +333,7 @@ export function installAbi(): void {
         resolveGatheringLocation,
         FISHING_LOCATIONS,
         FISHING_LOCATION_OPTIONS,
-        LOCATION_OPTIONS,
         resolveFishingLocation,
-        resolveLocation,
         MINING_LOCATIONS,
         MINING_LOCATION_OPTIONS,
         resolveMiningLocation,

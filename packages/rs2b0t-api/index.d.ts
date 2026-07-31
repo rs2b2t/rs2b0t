@@ -1087,7 +1087,7 @@ export function bestSmithableAxe(
     barCount: (barName: string) => number,
     hasHammer: boolean
 ): { name: string; bar: string; smithLevel: number } | null;
-export function planBrokenToolRepair(w: AcquireWorld): Extract<ToolAcquirePlan, { kind: 'repair' }> | null;
+export function planBrokenToolRepair(heldOrWorn: (name: string) => boolean): Extract<ToolAcquirePlan, { kind: 'repair' }> | null;
 export function planPickaxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null;
 export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null;
 export interface FishingVendorNear { x: number; z: number }
@@ -1141,11 +1141,7 @@ export interface FishingLocation extends GatheringLocation {
 }
 export const FISHING_LOCATIONS: FishingLocation[];
 export const FISHING_LOCATION_OPTIONS: string[];
-/** @deprecated alias of FISHING_LOCATION_OPTIONS */
-export const LOCATION_OPTIONS: string[];
 export function resolveFishingLocation(setting: string, startTile: WorldTile): FishingLocation | null;
-/** @deprecated alias of resolveFishingLocation */
-export function resolveLocation(setting: string, startTile: WorldTile): FishingLocation | null;
 
 export type MiningLocation = GatheringLocation;
 export const MINING_LOCATIONS: MiningLocation[];
