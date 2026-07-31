@@ -38,7 +38,7 @@ export const SETTINGS: SettingsSchema = {
         min: 1,
         max: 28,
         label: 'Min flax capacity',
-        help: 'Runner only: if junk leaves room for fewer than this many flax, bank non-flax items (keeps flax) then resume picking/delivering',
+        help: 'Runner only: bank non-flax junk (keeps flax) when a full pack still has trash, or mid-trip when junk leaves room for fewer than this many flax',
     },
 };
 
@@ -185,11 +185,15 @@ export default class FlaxRunner extends TaskBot {
     }
 
     /**
-     * Random-event trash (or other junk) has stolen enough slots that we can't
-     * hold `minFlaxCapacity` flax — bank non-flax only, keep flax.
+     * Bank non-flax (keep flax) when:
+     * - pack is full and still has junk — clear trash *before* walking to the meet; or
+     * - mid-trip junk has cut flax capacity below minFlaxCapacity.
      */
     needsJunkBank(): boolean {
-        return this.hasNonFlax() && this.flaxCapacity() < this.minFlaxCapacity;
+        if (!this.hasNonFlax()) return false;
+        // Handoff-ready pack with trash: bank first, refill if needed, then meet.
+        if (Inventory.isFull() && flaxCount() > 0) return true;
+        return this.flaxCapacity() < this.minFlaxCapacity;
     }
 
     async bankNonFlax(): Promise<boolean> {
@@ -197,7 +201,10 @@ export default class FlaxRunner extends TaskBot {
         const junkBefore = Math.max(0, Inventory.used() - flaxCount());
         this.setStatus('banking non-flax junk');
         this.clearStickyFlax();
-        this.log(`flax capacity ${this.flaxCapacity()} < ${this.minFlaxCapacity} — depositing ${junkBefore} non-flax slot(s)`);
+        this.log(
+            `banking ${junkBefore} non-flax slot(s) `
+            + `(flax ${flaxCount()}, capacity ${this.flaxCapacity()}, min ${this.minFlaxCapacity})`,
+        );
 
         if (this.atField()) {
             this.setStatus('leaving the field via the gate');
