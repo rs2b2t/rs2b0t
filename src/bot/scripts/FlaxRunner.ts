@@ -321,11 +321,13 @@ class WaitAndTrade implements Task {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
         if (flaxCount(this.bot.flaxNameStr()) < 28) return false;
-        return this.bot.atMeet();
+        const partner = this.bot.nearestPartner();
+        return partner !== null && partner.distance() <= TRADE_RANGE;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('waiting for spinner to request trade');
-        await Execution.delayTicks(2);
+        this.bot.setStatus('requesting trade with spinner');
+        await Trade.request(this.bot.getPartner());
+        await Execution.delayUntil(() => Trade.active(), 4000);
     }
 }
 
@@ -336,7 +338,7 @@ class RequestTrade implements Task {
     validate(): boolean {
         if (this.bot.getMode() !== 'Spinner') return false;
         if (Trade.active()) return false;
-        if (flaxCount(this.bot.flaxNameStr()) === 0) return false;
+        if (flaxCount(this.bot.flaxNameStr()) > 0) return false;
         const partner = this.bot.nearestPartner();
         return partner !== null && partner.distance() <= TRADE_RANGE;
     }
