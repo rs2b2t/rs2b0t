@@ -1,7 +1,7 @@
 import type { SettingsSchema } from '../runtime/Settings.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import { BURN_MODE_OPTIONS, FIRE_SPOT_OPTIONS } from './FiremakingLogic.js';
-import { WC_TICK_MANIP_OPTIONS } from './TickManipLogic.js';
+import { TICK_MANIP_UNSHIPPED_HELP, WC_TICK_MANIP_OPTIONS, tickManipUiOptions } from './TickManipLogic.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/ToolAcquire.js';
 import { WOODCUTTING_LOCATION_OPTIONS } from '../api/WoodcuttingLocations.js';
 
@@ -33,11 +33,10 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
     tickManip: {
         type: 'string',
         default: 'Off',
-        options: [...WC_TICK_MANIP_OPTIONS],
+        options: tickManipUiOptions(WC_TICK_MANIP_OPTIONS),
         label: 'Tick manip',
         group: 'Tick manip',
-        help:
-            'Optional Lost City–style tick methods (server delays). Off = AFK chop. Knife delay (+2) = knife one log between rolls (keep Knife + 1 log). 2t retaliate oaks / 3t farmer willows / 3t willows shortbow rapid = Auto Retaliate ON and may die (no flee). Forced Off under Location None. Prefer matching camps (S Falador Oaks, Lumbridge Farmer Willows).'
+        help: TICK_MANIP_UNSHIPPED_HELP
     },
     burnMode: {
         type: 'string',

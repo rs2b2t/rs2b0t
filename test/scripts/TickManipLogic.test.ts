@@ -4,6 +4,7 @@ import {
     FLETCHABLE_LOG_NAMES,
     MINE_TICK_MANIP_OPTIONS,
     TANNERFISH_EAT_HP,
+    TICK_MANIP_SHIPPED,
     WC_TICK_MANIP_OPTIONS,
     combatBreaksGather,
     extraDelayLogsToDrop,
@@ -20,6 +21,7 @@ import {
     profileForSetting,
     shouldCookForTannerfish,
     shouldEatForTannerfish,
+    tickManipUiOptions,
     wcTickManipProfile
 } from '#/bot/scripts/TickManipLogic.js';
 
@@ -60,9 +62,32 @@ describe('parseMineTickManip / parseWcTickManip', () => {
     });
 });
 
+describe('product gate (TICK_MANIP_SHIPPED)', () => {
+    test('UI options are Off-only until shipped', () => {
+        if (TICK_MANIP_SHIPPED) {
+            expect(tickManipUiOptions(FISH_TICK_MANIP_OPTIONS).length).toBeGreaterThan(1);
+        } else {
+            expect(tickManipUiOptions(FISH_TICK_MANIP_OPTIONS)).toEqual(['Off']);
+            expect(tickManipUiOptions(MINE_TICK_MANIP_OPTIONS)).toEqual(['Off']);
+            expect(tickManipUiOptions(WC_TICK_MANIP_OPTIONS)).toEqual(['Off']);
+        }
+    });
+
+    test('profileForSetting ignores non-Off labels while unshipped', () => {
+        if (TICK_MANIP_SHIPPED) {
+            expect(profileForSetting('wc', 'Knife delay (+2)').useKnifeDelay).toBe(true);
+            return;
+        }
+        expect(profileForSetting('fish', 'Tannerfishing').method).toBe('off');
+        expect(profileForSetting('wc', 'Knife delay (+2)').method).toBe('off');
+        expect(profileForSetting('mine', 'Iron cadence (pick-aware)').method).toBe('off');
+        expect(profileForSetting('fish', 'Off').method).toBe('off');
+    });
+});
+
 describe('profiles', () => {
     test('Off defaults flee and no combat gather', () => {
-        const p = profileForSetting('fish', 'Off');
+        const p = fishTickManipProfile('off');
         expect(p.method).toBe('off');
         expect(p.combat).toBe('flee');
         expect(p.allowCombat).toBe(false);
@@ -78,19 +103,17 @@ describe('profiles', () => {
     });
 
     test('knife delay flags inventory delay', () => {
-        const p = profileForSetting('wc', 'Knife delay (+2)');
+        const p = wcTickManipProfile('knife-delay');
         expect(p.useKnifeDelay).toBe(true);
         expect(p.allowCombat).toBe(false);
     });
 
     test('retaliate methods allow combat and may die', () => {
-        for (const label of ['2t retaliate oaks', '3t farmer willows', '3t willows shortbow rapid', 'Tannerfishing'] as const) {
-            const skill = label === 'Tannerfishing' ? 'fish' : 'wc';
-            const p = profileForSetting(skill, label);
-            expect(p.allowCombat, label).toBe(true);
-            expect(p.combat, label).toBe('retaliate-may-die');
-            expect(p.mayDie, label).toBe(true);
-        }
+        expect(wcTickManipProfile('2t-oaks').allowCombat).toBe(true);
+        expect(wcTickManipProfile('3t-farmer').mayDie).toBe(true);
+        expect(wcTickManipProfile('3t-shortbow').combat).toBe('retaliate-may-die');
+        expect(fishTickManipProfile('tannerfish').allowCombat).toBe(true);
+        expect(fishTickManipProfile('tannerfish').mayDie).toBe(true);
     });
 
     test('shortbow rapid only on 3t shortbow method', () => {
@@ -104,7 +127,7 @@ describe('profiles', () => {
     });
 
     test('tannerfish cook/eat interleave', () => {
-        const p = profileForSetting('fish', 'Tannerfishing');
+        const p = fishTickManipProfile('tannerfish');
         expect(p.cookEatInterleave).toBe(true);
     });
 });

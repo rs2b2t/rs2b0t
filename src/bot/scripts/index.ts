@@ -8,7 +8,12 @@ import {
     COOK_FISH_OPTIONS,
     COOK_MODE_OPTIONS
 } from './FishCookLogic.js';
-import { FISH_TICK_MANIP_OPTIONS, MINE_TICK_MANIP_OPTIONS } from './TickManipLogic.js';
+import {
+    FISH_TICK_MANIP_OPTIONS,
+    MINE_TICK_MANIP_OPTIONS,
+    TICK_MANIP_UNSHIPPED_HELP,
+    tickManipUiOptions
+} from './TickManipLogic.js';
 import { ROCK_OPTIONS } from '../api/MiningRocks.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
@@ -224,11 +229,10 @@ ScriptRegistry.register({
         tickManip: {
             type: 'string',
             default: 'Off',
-            options: [...MINE_TICK_MANIP_OPTIONS],
+            options: tickManipUiOptions(MINE_TICK_MANIP_OPTIONS),
             label: 'Tick manip',
             group: 'Tick manip',
-            help:
-                'Optional tick methods. Off = AFK mine. Iron cadence (pick-aware) = re-click iron on the pickaxe mining_rate cycle (mith=4t, rune=2t, …). Forced Off under Location None. Prefer Legends Guild Iron camps for 3-rock iron.'
+            help: TICK_MANIP_UNSHIPPED_HELP
         },
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
@@ -308,11 +312,10 @@ ScriptRegistry.register({
         tickManip: {
             type: 'string',
             default: 'Off',
-            options: [...FISH_TICK_MANIP_OPTIONS],
+            options: tickManipUiOptions(FISH_TICK_MANIP_OPTIONS),
             label: 'Tick manip',
             group: 'Tick manip',
-            help:
-                'Optional tick methods (server delays). Off = AFK fish. 4t fly reclick = re-click fly spots on the +4 cycle. Knife delay (+2) = knife one log between rolls (keep Knife + 1 log). Tannerfishing = cook/eat interleave with Auto Retaliate ON (may die; Gnome Stronghold camp). Forced Off under Location None.'
+            help: TICK_MANIP_UNSHIPPED_HELP
         },
         location: {
             type: 'string',

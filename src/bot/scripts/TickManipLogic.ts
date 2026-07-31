@@ -9,7 +9,17 @@
  * - Auto-retaliate flinch = attackrate/2 (rapid style −1)
  *
  * Client cannot read %action_delay — planners use XP / inventory / tick edges.
+ *
+ * Product gate: {@link TICK_MANIP_SHIPPED} is false until methods are fully ready.
+ * When false, UI options are Off-only and {@link profileForSetting} always returns Off
+ * so end users cannot enable WIP methods (saved settings are ignored).
  */
+
+/**
+ * Flip to true when tick-manip methods are ready for end users.
+ * Keep false for leash/camp PRs and incomplete method work.
+ */
+export const TICK_MANIP_SHIPPED = false;
 
 /** Inventory delay item pair (knife + one fletchable log). */
 export const TICK_MANIP_KNIFE = 'Knife';
@@ -282,10 +292,31 @@ function methodLabel(skill: TickManipSkill, method: TickManipMethod): string {
     return WC_TICK_MANIP_OPTIONS.find(o => parseWcTickManip(o) === method) ?? method;
 }
 
+/**
+ * UI dropdown options for a skill. When {@link TICK_MANIP_SHIPPED} is false, only Off.
+ */
+export function tickManipUiOptions(full: readonly string[]): string[] {
+    if (TICK_MANIP_SHIPPED) {
+        return [...full];
+    }
+    return ['Off'];
+}
+
+export const TICK_MANIP_UNSHIPPED_HELP =
+    'Tick methods are not shipped yet (WIP). Leave Off — AFK gather only. Non-Off values in saved settings are ignored.';
+
+/**
+ * Resolve a settings label to a runtime profile.
+ * When {@link TICK_MANIP_SHIPPED} is false, always Off (ignores label).
+ * Unit tests for methods should call the *Profile builders directly.
+ */
 export function profileForSetting(
     skill: TickManipSkill,
     label: string
 ): TickManipProfile {
+    if (!TICK_MANIP_SHIPPED) {
+        return OFF_PROFILE(skill);
+    }
     if (skill === 'fish') {
         const m = parseFishTickManip(label);
         return fishTickManipProfile(m, label.trim() || 'Off');
