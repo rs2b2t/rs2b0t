@@ -267,6 +267,7 @@ class GoToField implements Task {
     validate(): boolean {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
+        if (flaxCount(this.bot.flaxNameStr()) >= 28) return false;
         return !this.bot.atField();
     }
     async execute(): Promise<void> {
