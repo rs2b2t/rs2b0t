@@ -285,14 +285,25 @@ class OfferTrade implements Task {
     constructor(private bot: FlaxRunner) {}
     validate(): boolean {
         if (this.bot.getMode() !== 'Runner') return false;
-        if (!Trade.active()) return false;
-        if (Trade.onConfirmScreen()) return false;
-        return flaxCount(this.bot.flaxNameStr()) > 0;
+        return Trade.active();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('offering flax to spinner');
-        await Trade.offerAll(this.bot.flaxNameStr());
-        await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
+        if (Trade.onConfirmScreen()) {
+            this.bot.setStatus('confirming trade with spinner');
+            await Trade.accept();
+            await Execution.delayUntil(() => !Trade.active(), 4000);
+            return;
+        }
+        if (Trade.onOfferScreen()) {
+            if (Trade.myOffer().length === 0) {
+                this.bot.setStatus('offering flax to spinner');
+                await Trade.offerAll(this.bot.flaxNameStr());
+                await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
+            } else {
+                this.bot.setStatus('accepting trade offer');
+                await Trade.accept();
+            }
+        }
     }
 }
 
