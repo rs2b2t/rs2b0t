@@ -31,7 +31,15 @@ const BOOTH = { op: 'Use-quickly' };
 
 export const SETTINGS: SettingsSchema = {
     mode: { type: 'string', default: 'Runner', options: ['Runner', 'Spinner'], label: 'Mode', help: 'Runner picks flax and delivers to Spinner; Spinner spins flax into bow strings and banks them' },
-    partner: { type: 'string', default: '', label: 'Partner name', help: 'Runner: spinner\'s player name. Spinner: runner\'s player name.' }
+    partner: { type: 'string', default: '', label: 'Partner name', help: 'Runner: spinner\'s player name. Spinner: runner\'s player name.' },
+    minFlaxCapacity: {
+        type: 'number',
+        default: 24,
+        min: 1,
+        max: 28,
+        label: 'Min flax capacity',
+        help: 'Runner only: if junk leaves room for fewer than this many flax, bank non-flax items (keeps flax) then resume picking/delivering',
+    },
 };
 
 function flaxCount(): number {
@@ -61,6 +69,7 @@ export default class FlaxRunner extends TaskBot {
 
     private mode = 'Runner';
     private partner = '';
+    private minFlaxCapacity = 24;
 
     private picked = 0;
     private delivered = 0;
@@ -78,8 +87,10 @@ export default class FlaxRunner extends TaskBot {
         this.startedAt = Date.now();
         this.mode = this.settings.str('mode', 'Runner');
         this.partner = this.settings.str('partner', '');
+        this.minFlaxCapacity = this.settings.num('minFlaxCapacity', 24);
 
-        this.log(`${this.mode} mode — partner: ${this.partner || '(none)'}`);
+        this.log(`${this.mode} mode — partner: ${this.partner || '(none)'}`
+            + (this.mode === 'Runner' ? `, min flax capacity ${this.minFlaxCapacity}` : ''));
 
         this.on('inventory.changed', e => {
             if (e.id !== -1 && this.isFlax(e.name)) {
@@ -93,6 +104,7 @@ export default class FlaxRunner extends TaskBot {
             this.add(
                 new EscapeFlaxTrap(this),
                 new OfferTrade(this),
+                new BankJunk(this),
                 new WaitAndTrade(this),
                 new GoToMeet(this),
                 new PickFlax(this),
@@ -114,6 +126,8 @@ export default class FlaxRunner extends TaskBot {
 
     override recoveryAnchor(): Tile | null {
         if (this.mode === 'Spinner') return SPINNING_WHEEL_AREA;
+        // Junk bank mid-trip: prefer the bank so watchdog doesn't yank us to the field first.
+        if (this.needsJunkBank()) return BANK_STAND;
         // Waiting on trade must not walk a full pack back to the field.
         return this.readyToDeliver() ? LADDER_TILE : FLAX_FIELD;
     }
@@ -149,11 +163,87 @@ export default class FlaxRunner extends TaskBot {
 
     /** Pack is full and still holds flax — deliver, do not pick or return to the field. */
     readyToDeliver(): boolean {
-        return Inventory.isFull() && flaxCount() > 0;
+        return Inventory.isFull() && flaxCount() > 0 && !this.needsJunkBank();
     }
 
     needsFlax(): boolean {
         return !Inventory.isFull();
+    }
+
+    /** Slots available for flax (pack size minus non-flax junk). */
+    flaxCapacity(): number {
+        const free = Inventory.free();
+        const used = Inventory.used();
+        const size = free + used;
+        if (size <= 0) return 28;
+        const nonFlax = Math.max(0, used - flaxCount());
+        return Math.max(0, size - nonFlax);
+    }
+
+    hasNonFlax(): boolean {
+        return Inventory.used() > flaxCount();
+    }
+
+    /**
+     * Random-event trash (or other junk) has stolen enough slots that we can't
+     * hold `minFlaxCapacity` flax — bank non-flax only, keep flax.
+     */
+    needsJunkBank(): boolean {
+        return this.hasNonFlax() && this.flaxCapacity() < this.minFlaxCapacity;
+    }
+
+    async bankNonFlax(): Promise<boolean> {
+        const log = (m: string): void => this.log(`  ${m}`);
+        const junkBefore = Math.max(0, Inventory.used() - flaxCount());
+        this.setStatus('banking non-flax junk');
+        this.clearStickyFlax();
+        this.log(`flax capacity ${this.flaxCapacity()} < ${this.minFlaxCapacity} — depositing ${junkBefore} non-flax slot(s)`);
+
+        if (this.atField()) {
+            this.setStatus('leaving the field via the gate');
+            await Traversal.walkResilient(FLAX_GATE, {
+                radius: 0,
+                attempts: 4,
+                timeoutMs: 120_000,
+                log,
+            });
+        }
+
+        this.setStatus('walking to the bank');
+        if (!(await Traversal.walkResilient(BANK_ENTRANCE, {
+            radius: 1,
+            attempts: 6,
+            timeoutMs: 240_000,
+            log,
+        }))) {
+            this.log('could not reach the bank entrance — will retry');
+            return false;
+        }
+
+        await Traversal.walkResilient(BANK_STAND, {
+            radius: 0,
+            attempts: 3,
+            timeoutMs: 60_000,
+            log,
+        });
+
+        const opened = (await Bank.openBooth(
+            { x: BANK_STAND.x, z: BANK_STAND.z, level: BANK_STAND.level },
+            BOOTH_NAME,
+            BOOTH.op,
+            log,
+        )) || (await Bank.openNearest(BOOTH_NAME, BOOTH.op, log));
+        if (!opened) {
+            this.log('could not open the bank — will retry');
+            return false;
+        }
+
+        // Keep flax; dump random-event trash and anything else.
+        await Bank.depositAllMatching(depositAllExcept([FLAX]), log);
+        await Bank.close();
+        await Execution.delayTicks(1);
+        this.log(`deposited non-flax junk — holding ${flaxCount()} flax, capacity ${this.flaxCapacity()}`);
+        return true;
     }
 
     atField(): boolean {
@@ -352,6 +442,18 @@ class EscapeFlaxTrap implements Task {
     }
     async execute(): Promise<void> {
         await this.bot.carveOut();
+    }
+}
+
+class BankJunk implements Task {
+    constructor(private bot: FlaxRunner) {}
+    validate(): boolean {
+        if (this.bot.getMode() !== 'Runner') return false;
+        if (Trade.active()) return false;
+        return this.bot.needsJunkBank();
+    }
+    async execute(): Promise<void> {
+        await this.bot.bankNonFlax();
     }
 }
 
@@ -656,10 +758,8 @@ class BankStrings implements Task {
             BOOTH.op,
             m => this.bot.log(`  ${m}`),
         );
-        await Bank.depositAllMatching(
-            depositAllExcept([FLAX]),
-            m => this.bot.log(`  ${m}`),
-        );
+        // Deposit everything — strings, leftover fibre, and random-event trash.
+        await Bank.depositInventory();
         await Bank.close();
         this.bot.countTrip();
     }
