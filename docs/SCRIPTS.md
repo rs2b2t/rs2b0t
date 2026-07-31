@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **40 scripts** across 19 categories. They double as worked
+The client ships **42 scripts** across 19 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -16,7 +16,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Agility](#agility) — 3
 - [Combat](#combat) — 9
 - [Cooking](#cooking) — 1
-- [Crafting](#crafting) — 4
+- [Crafting](#crafting) — 5
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
@@ -26,7 +26,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Navigation](#navigation) — 1
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 2
-- [Runecrafting](#runecrafting) — 2
+- [Runecrafting](#runecrafting) — 3
 - [Smithing](#smithing) — 2
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
@@ -352,6 +352,18 @@ Tags: `seers`, `gathering`, `banking`, `afk`
 | `bankStand` | tile | `{"x":2725,"z":3493,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 
+### FlaxRunner
+
+Two-player cooperative flax picking and spinning — Runner picks flax and delivers to Spinner; Spinner spins flax into bow strings and banks them
+
+Tags: `crafting`, `fletching`, `flax`, `bow-strings`, `trade`, `two-player`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `mode` | string | `"Runner"` | Mode — one of: Runner, Spinner |
+| `partner` | string | `""` | Partner name |
+| `minFlaxCapacity` | number (1–28) | `24` | Min flax capacity |
+
 ### FlaxSpinner
 
 Seers flax spinner — withdraw flax, climb to the spinning wheel, Spin-X into bow string, bank, repeat
@@ -576,6 +588,19 @@ Reports DONE/READY/BLOCKED eligibility for all quests
 Tags: `quests`, `overlay`, `dashboard`
 
 ## Runecrafting
+
+### MuleCrafter
+
+Crafter + mule runecrafting loop — both run bank→ruins→bank each cycle. Crafter has the talisman, crafts at the altar, trades runes for essence at the ruins. Mule ferries essence to the ruins and runes back to the bank. Dry mule signals at the bank and the crafter shares 1/N essence. Multi-mule round-robin with comma-separated partner names.
+
+Tags: `runecrafting`, `trade`, `crafter`, `mule`, `falador`, `edgeville`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rune` | string | `"Air rune"` | Rune — one of: Air rune, Mind rune, Water rune, Earth rune, Fire rune, Body rune, Cosmic rune, Chaos rune, Nature rune, Law rune, Death rune |
+| `mode` | string | `"Crafter"` | Mode — one of: Crafter, Mule |
+| `partner` | string | `""` | Partner name(s) (Optional for Crafter) |
+| `bankFill` | boolean | `true` | Fill essence at bank |
 
 ### NatureCrafter
 

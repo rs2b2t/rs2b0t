@@ -12,7 +12,7 @@ import {
     missingFishingGear,
     resolveFishMethod,
     spotMatchesMethod
-} from '#/bot/scripts/FishingMethods.js';
+} from '#/bot/api/FishingMethods.js';
 
 test('Net disambiguates small (Net/Bait) vs big (Net/Harpoon) net by pair', () => {
     const small = resolveFishMethod('Small net — shrimp/anchovy');

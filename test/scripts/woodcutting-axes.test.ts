@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AXES, bestAxe } from '#/bot/scripts/WoodcuttingAxes.js';
+import { AXES, bestAxe } from '#/bot/api/Tools.js';
 
 describe('bestAxe', () => {
     const bank = (names: string[]) => (name: string) => names.includes(name);

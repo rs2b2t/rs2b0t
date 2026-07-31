@@ -13,15 +13,15 @@
  *   HEADED=1 SLOWMO=400 bun tools/verify-gathering-locations.ts mining
  */
 import { boot, cheatQuiet, fail, launchBrowser, login } from './lib/harness.js';
-import type { GatheringLocation } from '../src/bot/scripts/GatheringLocations.js';
+import type { GatheringLocation } from '../src/bot/api/GatheringLocations.js';
 
 // Location tables import BankLocations → Skills/Quests → client graphics (Jpeg needs document).
 // bun test preloads happy-dom; plain `bun tools/...` does not.
 const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
 GlobalRegistrator.register();
-const { FISHING_LOCATIONS } = await import('../src/bot/scripts/FishingLocations.js');
-const { MINING_LOCATIONS } = await import('../src/bot/scripts/MiningLocations.js');
-const { WOODCUTTING_LOCATIONS } = await import('../src/bot/scripts/WoodcuttingLocations.js');
+const { FISHING_LOCATIONS } = await import('../src/bot/api/FishingLocations.js');
+const { MINING_LOCATIONS } = await import('../src/bot/api/MiningLocations.js');
+const { WOODCUTTING_LOCATIONS } = await import('../src/bot/api/WoodcuttingLocations.js');
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
 const skills = process.argv.slice(2).map(s => s.toLowerCase());

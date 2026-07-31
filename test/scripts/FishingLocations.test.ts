@@ -7,7 +7,7 @@ import {
     LOCATION_OPTIONS,
     resolveFishingLocation,
     resolveLocation
-} from '#/bot/scripts/FishingLocations.js';
+} from '#/bot/api/FishingLocations.js';
 
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 

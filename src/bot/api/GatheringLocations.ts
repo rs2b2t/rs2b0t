@@ -1,6 +1,6 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
-import { bankDistance } from '../api/BankLocations.js';
-import Tile from '../api/Tile.js';
+import { bankDistance } from './BankLocations.js';
+import Tile from './Tile.js';
 
 /**
  * Shared gather camp: leash anchor + bank stand for Fisher / Miner / Woodcutter.

@@ -31,9 +31,6 @@ export const GAS_ROCK_TICKS = 60;
 
 export const BROKEN_PICKAXE = 'Broken pickaxe';
 
-/** @deprecated import from Tools.js — re-exported for existing callers. */
-export { PICKAXES, bestPickaxe } from './Tools.js';
-
 export function resolveRockIds(names: string[]): Set<number> {
     const ids = new Set<number>();
     for (const name of names) {

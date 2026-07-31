@@ -2,8 +2,8 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import { BURN_MODE_OPTIONS, FIRE_SPOT_OPTIONS } from './FiremakingLogic.js';
 import { WC_TICK_MANIP_OPTIONS } from './TickManipLogic.js';
-import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
-import { WOODCUTTING_LOCATION_OPTIONS } from './WoodcuttingLocations.js';
+import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/ToolAcquire.js';
+import { WOODCUTTING_LOCATION_OPTIONS } from '../api/WoodcuttingLocations.js';
 
 /**
  * Woodcutter — GatheringBot preset for trees + optional chop-then-burn.

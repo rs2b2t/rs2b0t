@@ -1,7 +1,7 @@
 import { AGILITY_SETTINGS } from './AgilityBot.js';
-import { FISHING_LOCATION_OPTIONS } from './FishingLocations.js';
-import { FISHING_METHOD_OPTIONS } from './FishingMethods.js';
-import { MINING_LOCATION_OPTIONS } from './MiningLocations.js';
+import { FISHING_LOCATION_OPTIONS } from '../api/FishingLocations.js';
+import { FISHING_METHOD_OPTIONS } from '../api/FishingMethods.js';
+import { MINING_LOCATION_OPTIONS } from '../api/MiningLocations.js';
 import {
     AFTER_COOK_OPTIONS,
     BURNT_POLICY_OPTIONS,
@@ -9,7 +9,7 @@ import {
     COOK_MODE_OPTIONS
 } from './FishCookLogic.js';
 import { FISH_TICK_MANIP_OPTIONS, MINE_TICK_MANIP_OPTIONS } from './TickManipLogic.js';
-import { ROCK_OPTIONS } from './MiningRocks.js';
+import { ROCK_OPTIONS } from '../api/MiningRocks.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import AgilityBot from './AgilityBot.js';
@@ -24,7 +24,7 @@ import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
 import Woodcutter, { WOODCUTTER_SETTINGS } from './Woodcutter.js';
-import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from './ToolAcquire.js';
+import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/ToolAcquire.js';
 import QuestDashboard from '../quests/QuestDashboard.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';

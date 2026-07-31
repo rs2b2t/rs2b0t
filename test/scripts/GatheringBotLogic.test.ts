@@ -13,7 +13,7 @@ import {
     shouldYieldGathering,
     spotWithinGatherRange
 } from '#/bot/scripts/GatheringBot.js';
-import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
+import { AXE_BAR_FOR } from '#/bot/api/ToolAcquire.js';
 import Tile from '#/bot/api/Tile.js';
 
 describe('HOME_ARRIVE_RADIUS (soft home after bank/shop)', () => {

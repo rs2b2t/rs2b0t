@@ -1,20 +1,18 @@
-import Tile from '../api/Tile.js';
-import { AXES, PICKAXES, type ToolReq, type ToolTier } from './Tools.js';
+import Tile from './Tile.js';
 import type { FishingGearPiece, FishingMethod } from './FishingMethods.js';
+import { BROKEN_PICKAXE } from './MiningRocks.js';
+import { AXES, HAMMER, PICKAXES, type ToolReq, type ToolTier } from './Tools.js';
+
+export { BROKEN_PICKAXE, HAMMER };
 
 /** Coins stack name in inventory/bank. */
 export const COINS = 'Coins';
-
-/** Broken pickaxe (mining random). */
-export const BROKEN_PICKAXE = 'Broken pickaxe';
 
 /**
  * Broken axe — not always present on every private build, but when it is we
  * prefer Bob repair over buying another.
  */
 export const BROKEN_AXE = 'Broken axe';
-
-export const HAMMER = 'Hammer';
 
 export type ToolAcquireMode = 'off' | 'on';
 

@@ -5,7 +5,7 @@ import {
     MINING_LOCATIONS,
     MINING_LOCATION_OPTIONS,
     resolveMiningLocation
-} from '#/bot/scripts/MiningLocations.js';
+} from '#/bot/api/MiningLocations.js';
 
 const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
 

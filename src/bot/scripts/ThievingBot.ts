@@ -17,7 +17,7 @@ import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import { nearestBank } from '../api/BankLocations.js';
 import { walkOpening } from '../api/walkOpening.js';
-import { PICKPOCKET_TARGET_NAMES } from './PickpocketTargets.js';
+import { PICKPOCKET_TARGET_NAMES } from '../api/PickpocketTargets.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { chooseTarget } from './ArdyThieverLogic.js';

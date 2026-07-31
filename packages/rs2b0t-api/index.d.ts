@@ -897,6 +897,10 @@ export interface SettingDef {
     min?: number;
     max?: number;
     help?: string;
+    options?: string[];
+    optionLabels?: Record<string, string>;
+    group?: string;
+    showIf?: { key: string; anyOf: string[] };
 }
 
 /** Parameter schema: shown as a form in the panel, overridable via
@@ -934,6 +938,276 @@ export function defineBot(manifest: BotManifestInput): BotManifest;
 
 /** Imperative registration (the loader calls this for default exports). */
 export function registerScript(manifest: BotManifestInput, origin?: string): void;
+
+// ---- world catalogs (data tables + pure helpers) ----
+// @see docs/API.md#world-catalogs
+
+/** Bank requirement (skill or quest) for a known bank stand. */
+export interface BankRequirement {
+    skill?: { name: string; level: number };
+    quest?: string;
+}
+
+/** A bank, its stand tile, and how to open it. */
+export interface BankLocation {
+    name: string;
+    tile: Tile;
+    requires?: BankRequirement;
+    access?: BankObjectAccess;
+}
+
+/** Every known bank stand. */
+export const BANK_LOCATIONS: BankLocation[];
+/** Euclidean same-plane distance (not Chebyshev). */
+export function bankDistance(from: WorldTile, bank: WorldTile): number;
+export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) => boolean): BankLocation | null;
+export function bankUnlocked(bank: BankLocation): boolean;
+export function nearestBank(from: WorldTile): BankLocation | null;
+
+export interface ToolTier {
+    name: string;
+    level: number;
+    attackLevel?: number;
+}
+
+export type ToolReq =
+    | { kind: 'tiered'; skill: string; tiers: readonly ToolTier[]; label: string; equip?: boolean }
+    | { kind: 'exact'; name: string; min?: number; restock?: number; equip?: boolean };
+
+export const PICKAXES: readonly ToolTier[];
+export const AXES: readonly ToolTier[];
+export const TINDERBOX: string;
+export const HAMMER: string;
+export const KNIFE: string;
+export const CHISEL: string;
+export const NEEDLE: string;
+export function pickaxeReq(equip?: boolean): ToolReq;
+export function axeReq(equip?: boolean): ToolReq;
+export function exactTool(name: string, opts?: { min?: number; restock?: number; equip?: boolean }): ToolReq;
+export function tinderboxReq(): ToolReq;
+export function toolAttackLevel(name: string): number;
+export function canWieldTool(name: string, attackLevel: number): boolean;
+export function bestFromTiers(level: number, tiers: readonly ToolTier[], available: (name: string) => boolean): string | null;
+export function bestPickaxe(miningLevel: number, available: (name: string) => boolean): string | null;
+export function bestAxe(woodcuttingLevel: number, available: (name: string) => boolean): string | null;
+export function toolKeepNames(reqs: readonly ToolReq[]): string[];
+export function hasToolReq(req: ToolReq, skillLevel: (skill: string) => number, count: (name: string) => number): boolean;
+export function hasAllTools(reqs: readonly ToolReq[], skillLevel: (skill: string) => number, count: (name: string) => number): boolean;
+export function missingToolLabels(reqs: readonly ToolReq[], skillLevel: (skill: string) => number, count: (name: string) => number): string[];
+export function toolKitLabel(reqs: readonly ToolReq[], skillLevel: (skill: string) => number, count: (name: string) => number): string;
+export interface ToolRestockStep { name: string; qty: number; equip: boolean }
+export function toolRestockPlan(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    invCount: (name: string) => number,
+    bankCount: (name: string) => number
+): ToolRestockStep[];
+export function bankHasBetterGatherTool(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    invCount: (name: string) => number,
+    bankCount: (name: string) => number
+): boolean;
+export function toolsNeedingEquip(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    count: (name: string) => number,
+    worn: (name: string) => boolean
+): string[];
+export function bestHeldToolNames(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    count: (name: string) => number
+): string[];
+export function surplusHeldToolNames(
+    reqs: readonly ToolReq[],
+    skillLevel: (skill: string) => number,
+    count: (name: string) => number
+): string[];
+
+export const COINS: string;
+export const BROKEN_PICKAXE: string;
+export const BROKEN_AXE: string;
+export type ToolAcquireMode = 'off' | 'on';
+export function parseToolAcquireMode(raw: string | boolean | undefined | null): ToolAcquireMode;
+export const TOOL_ACQUIRE_OPTIONS: readonly string[];
+export const TOOL_ACQUIRE_SETTING: SettingDef;
+export const FORGETFUL_BANK_ODDS: number;
+export const FORGETFUL_BANK_SETTING: SettingDef;
+
+export interface ToolVendor {
+    keeper: string;
+    stand: Tile;
+    bankStand: Tile;
+    hopFrom?: Tile;
+    hopLoc?: string;
+    hopAction?: string;
+}
+export interface ShopOffer { name: string; cost: number; vendor: ToolVendor }
+export const BOB_VENDOR: ToolVendor;
+export const NURMOF_VENDOR: ToolVendor;
+export const GERRANT_VENDOR: ToolVendor;
+export const HARRY_VENDOR: ToolVendor;
+export const GERRANT_ONLY_FISHING: ReadonlySet<string>;
+export const VARROCK_ANVIL_STAND: Tile;
+export const VARROCK_ANVIL_BANK: Tile;
+export const PICKAXE_SHOP_COSTS: Readonly<Record<string, number>>;
+export const AXE_SHOP_COSTS: Readonly<Record<string, number>>;
+export const FISHING_SHOP_COSTS: Readonly<Record<string, number>>;
+export const AXE_SMITH_LEVEL: Readonly<Record<string, number>>;
+export const AXE_BAR_FOR: Readonly<Record<string, string>>;
+
+export type ToolAcquirePlan =
+    | { kind: 'repair'; brokenName: string; label: 'pickaxe' | 'axe'; vendor: ToolVendor; prefer: string[] }
+    | { kind: 'buy'; name: string; cost: number; qty: number; vendor: ToolVendor; equip: boolean; reason: string }
+    | { kind: 'smith'; name: string; bar: string; smithLevel: number; vendorBank: Tile; anvilStand: Tile; equip: boolean; reason: string };
+
+export interface AcquireWorld {
+    skillLevel: (skill: string) => number;
+    heldCount: (name: string) => number;
+    invCount: (name: string) => number;
+    bankCount: (name: string) => number;
+    worn: (name: string) => boolean;
+}
+
+export function bestOwnedTier(level: number, tiers: readonly ToolTier[], count: (name: string) => number): string | null;
+export function pickaxeShopOffers(): ShopOffer[];
+export function axeShopOffers(): ShopOffer[];
+export function bestAffordableShopTier(
+    level: number,
+    tiers: readonly ToolTier[],
+    offers: readonly ShopOffer[],
+    coins: number,
+    owned: string | null
+): ShopOffer | null;
+export function bestSmithableAxe(
+    woodcuttingLevel: number,
+    smithingLevel: number,
+    owned: string | null,
+    barCount: (barName: string) => number,
+    hasHammer: boolean
+): { name: string; bar: string; smithLevel: number } | null;
+export function planBrokenToolRepair(w: AcquireWorld): Extract<ToolAcquirePlan, { kind: 'repair' }> | null;
+export function planPickaxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null;
+export function planAxeAcquire(w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null;
+export interface FishingVendorNear { x: number; z: number }
+export function fishingVendorFor(name: string, near?: FishingVendorNear | null): ToolVendor;
+export function fishingShopCost(name: string): number | null;
+export function isFishingBaitPiece(g: Pick<FishingGearPiece, 'name' | 'restock'>): boolean;
+export function withBaitTarget(method: Pick<FishingMethod, 'gear'>, baitQty: number): { gear: FishingGearPiece[] };
+export interface PlanFishingGearOpts { near?: FishingVendorNear | null; baitQty?: number }
+export type FishingGearBuyPlan = Extract<ToolAcquirePlan, { kind: 'buy' }>;
+export function planFishingGearBuys(method: Pick<FishingMethod, 'gear'>, w: AcquireWorld, opts?: PlanFishingGearOpts): FishingGearBuyPlan[];
+export function planFishingGearAcquire(method: Pick<FishingMethod, 'gear'>, w: AcquireWorld, opts?: PlanFishingGearOpts): ToolAcquirePlan | null;
+export function buyPlansCost(plans: readonly Pick<FishingGearBuyPlan, 'cost'>[]): number;
+export function fishingGearShopCart(method: Pick<FishingMethod, 'gear'>, w: AcquireWorld, opts?: PlanFishingGearOpts): FishingGearBuyPlan[];
+export function planGatherToolAcquire(reqs: readonly ToolReq[], w: AcquireWorld, opts: { upgrade: boolean }): ToolAcquirePlan | null;
+export function coinsToWithdraw(need: number, invCoins: number): number;
+export function canFundPlan(plan: ToolAcquirePlan, invCoins: number, bankCoins: number): boolean;
+export function acquireKeepNames(plan: ToolAcquirePlan, extra?: readonly string[]): string[];
+export function shopableMissingFishingGear(gear: readonly FishingGearPiece[], count: (name: string) => number): string[];
+
+export interface PickpocketTarget { name: string; level: number }
+export const PICKPOCKET_TARGETS: PickpocketTarget[];
+export const PICKPOCKET_TARGET_NAMES: string[];
+export const ARDOUGNE_PICKPOCKET_TARGETS: string[];
+
+export interface GatheringLocation {
+    name: string;
+    spot: Tile;
+    bankStand: Tile;
+    verified: boolean;
+    boothName?: string;
+    boothOp?: string;
+    obstacles?: string[];
+    resources?: readonly string[];
+    notes?: string;
+}
+export const DEFAULT_BOOTH_NAME: string;
+export const DEFAULT_BOOTH_OP: string;
+export const MAP_SQUARE: number;
+export function sameMapSquare(a: WorldTile, b: WorldTile): boolean;
+export function locationOptions(table: readonly GatheringLocation[]): string[];
+export function boothFields(loc: GatheringLocation | null | undefined): { boothName: string; boothOp: string };
+export function resolveGatheringLocation<T extends GatheringLocation>(
+    setting: string,
+    startTile: WorldTile,
+    table: readonly T[]
+): T | null;
+
+export interface FishingLocation extends GatheringLocation {
+    rangeStand?: Tile;
+    rangeName?: string;
+}
+export const FISHING_LOCATIONS: FishingLocation[];
+export const FISHING_LOCATION_OPTIONS: string[];
+/** @deprecated alias of FISHING_LOCATION_OPTIONS */
+export const LOCATION_OPTIONS: string[];
+export function resolveFishingLocation(setting: string, startTile: WorldTile): FishingLocation | null;
+/** @deprecated alias of resolveFishingLocation */
+export function resolveLocation(setting: string, startTile: WorldTile): FishingLocation | null;
+
+export type MiningLocation = GatheringLocation;
+export const MINING_LOCATIONS: MiningLocation[];
+export const MINING_LOCATION_OPTIONS: string[];
+export function resolveMiningLocation(setting: string, startTile: WorldTile): MiningLocation | null;
+
+export type WoodcuttingLocation = GatheringLocation;
+export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[];
+export const WOODCUTTING_LOCATION_OPTIONS: string[];
+export function resolveWoodcuttingLocation(setting: string, startTile: WorldTile): WoodcuttingLocation | null;
+
+export interface FishingGearPiece { name: string; min: number; restock: number }
+export interface FishingMethod { name: string; op: string; pair: string; gear: FishingGearPiece[] }
+export const WHIRLPOOL_IDS: Set<number>;
+export const FISHING_METHODS: FishingMethod[];
+export const FISHING_METHOD_OPTIONS: string[];
+export const ALL_FISHING_GEAR_NAMES: string[];
+export function resolveFishMethod(name: string): FishingMethod;
+export function gearKeepNames(method: Pick<FishingMethod, 'gear'>): string[];
+export function hasFishingGear(method: Pick<FishingMethod, 'gear'>, count: (name: string) => number): boolean;
+export function missingFishingGear(method: Pick<FishingMethod, 'gear'>, count: (name: string) => number): FishingGearPiece[];
+export function gearLabel(method: Pick<FishingMethod, 'gear'>): string;
+export function fishingRestockPlan(
+    method: Pick<FishingMethod, 'gear'>,
+    invCount: (name: string) => number,
+    bankCount: (name: string) => number
+): { name: string; qty: number }[];
+export function spotMatchesMethod(actions: readonly string[], method: Pick<FishingMethod, 'op' | 'pair'>): boolean;
+
+export const ROCK_TYPES: Record<string, number[]>;
+export const ROCK_OPTIONS: string[];
+export const GAS_ROCK_IDS: Set<number>;
+export const GAS_ROCK_TICKS: number;
+export function resolveRockIds(names: string[]): Set<number>;
+
+export interface WalkDestination { name: string; tile: Tile }
+export const WALK_DESTINATIONS: WalkDestination[];
+export const WALK_OPTIONS: string[];
+export function resolveDestination(name: string): WalkDestination | null;
+
+export interface CowLocation { name: string; anchor: Tile; usesAlKharidToll: boolean }
+export const COW_LOCATIONS: CowLocation[];
+export const COW_LOCATION_OPTIONS: string[];
+export const AL_KHARID_BANK: Tile;
+export const TOLL_COIN_TARGET: number;
+export function isCowFieldLootTile(anchor: WorldTile, leashRadius: number, tile: WorldTile): boolean;
+export function resolveCowLocation(setting: string, start: WorldTile): CowLocation | null;
+export function nearestCowLocation(tile: WorldTile): CowLocation;
+export function needsTollCoins(location: CowLocation | null, enabled: boolean): boolean;
+export function shouldBootstrapTollCoins(location: CowLocation | null, start: WorldTile, coins: number, enabled: boolean): boolean;
+
+export interface RuneRoute {
+    rune: string;
+    talisman: string;
+    level: number;
+    bank: string;
+    ruins: Tile;
+}
+export const RUNES: Record<string, RuneRoute>;
+export type RuneType = keyof typeof RUNES;
+export const RUNE_OPTIONS: string[];
+export const DEFAULT_RUNE: string;
 
 /** Low-level adapter reads — escape hatch; prefer the typed surface above. */
 export const reader: Record<string, (...args: never[]) => unknown>;

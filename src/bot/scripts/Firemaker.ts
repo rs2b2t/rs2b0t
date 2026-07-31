@@ -30,7 +30,7 @@ import {
     tileKey,
     type FirePlot
 } from './FiremakingLogic.js';
-import { exactTool, hasAllTools, toolKeepNames, toolRestockPlan, type ToolReq } from './Tools.js';
+import { exactTool, hasAllTools, toolKeepNames, toolRestockPlan, type ToolReq } from '../api/Tools.js';
 
 export { FIRE_SPOTS, LOG_LEVELS } from './FiremakingLogic.js';
 

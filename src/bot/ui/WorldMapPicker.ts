@@ -9,8 +9,8 @@ import PixFont from '#/graphics/PixFont.js';
 import PixMap from '#/graphics/PixMap.js';
 import { canvas2d } from '#/graphics/Canvas.js';
 import { TypedArray1d, TypedArray2d } from '#/util/Arrays.js';
-import { WALK_DESTINATIONS } from '../scripts/WalkDestinations.js';
-import type { WalkDestination } from '../scripts/WalkDestinations.js';
+import { WALK_DESTINATIONS } from '../api/WalkDestinations.js';
+import type { WalkDestination } from '../api/WalkDestinations.js';
 import type Tile from '../api/Tile.js';
 
 import { MapView } from '../../mapview/MapView.js';

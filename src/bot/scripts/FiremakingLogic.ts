@@ -1,7 +1,7 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../api/Tile.js';
 
-export { TINDERBOX } from './Tools.js';
+export { TINDERBOX } from '../api/Tools.js';
 export const CANT_LIGHT = /can't light a fire here/i;
 
 /** How long to wait for the light attempt to start (log leaves pack / anim / blocked). */

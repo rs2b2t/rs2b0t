@@ -8,7 +8,7 @@ import {
     resolveCowLocation,
     shouldBootstrapTollCoins,
     TOLL_COIN_TARGET
-} from '#/bot/scripts/CowKillerLocations.js';
+} from '#/bot/api/CowKillerLocations.js';
 
 describe('CowKiller locations', () => {
     test('maps the two supported fields to verified cow-spawn centres', () => {

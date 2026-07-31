@@ -110,7 +110,8 @@ The headless harness ABI and the end-to-end smoke are documented in
 
 ### Gathering location seed coords
 
-Fisher / Miner / Woodcutter camps live in `src/bot/scripts/*Locations.ts`. Most
+Fisher / Miner / Woodcutter camps live in `src/bot/api/*Locations.ts` (public
+`@rs2b0t/api` catalogs). Most
 entries ship with `verified: false` seed tiles from the gathering CSV. After a
 local engine is up:
 

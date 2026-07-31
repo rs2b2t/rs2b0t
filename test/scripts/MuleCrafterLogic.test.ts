@@ -11,8 +11,10 @@ import { type TradeItem } from '#/bot/api/hud/Trade.js';
 
 describe('MuleCrafterLogic', () => {
     describe('RUNES', () => {
-        test('has correct keys (singular)', () => {
-            expect(Object.keys(RUNES)).toEqual(['Air rune', 'Mind rune']);
+        test('includes F2P runes (singular names)', () => {
+            for (const key of ['Air rune', 'Mind rune', 'Water rune', 'Earth rune', 'Fire rune', 'Body rune']) {
+                expect(RUNES[key], key).toBeDefined();
+            }
         });
 
         test('Air rune route has correct data', () => {
@@ -20,10 +22,9 @@ describe('MuleCrafterLogic', () => {
             expect(air.rune).toBe('Air rune');
             expect(air.talisman).toBe('Air talisman');
             expect(air.level).toBe(1);
-            expect(air.bank.x).toBe(3013);
-            expect(air.bank.z).toBe(3355);
-            expect(air.ruins.x).toBe(2985);
-            expect(air.ruins.z).toBe(3291);
+            expect(air.bank).toBe('Falador East');
+            expect(air.ruins.x).toBe(2983);
+            expect(air.ruins.z).toBe(3288);
         });
 
         test('Mind rune route has correct data', () => {
@@ -31,16 +32,15 @@ describe('MuleCrafterLogic', () => {
             expect(mind.rune).toBe('Mind rune');
             expect(mind.talisman).toBe('Mind talisman');
             expect(mind.level).toBe(2);
-            expect(mind.bank.x).toBe(3096);
-            expect(mind.bank.z).toBe(3494);
-            expect(mind.ruins.x).toBe(2982);
-            expect(mind.ruins.z).toBe(3514);
+            expect(mind.bank).toBe('Edgeville');
+            expect(mind.ruins.x).toBe(2980);
+            expect(mind.ruins.z).toBe(3511);
         });
     });
 
     describe('RUNE_OPTIONS', () => {
         test('matches RUNES keys', () => {
-            expect(RUNE_OPTIONS).toEqual(['Air rune', 'Mind rune']);
+            expect(RUNE_OPTIONS).toEqual(Object.keys(RUNES));
         });
     });
 

@@ -15,7 +15,7 @@ import {
     shouldBootstrapTollCoins,
     TOLL_COIN_TARGET,
     type CowLocation
-} from './CowKillerLocations.js';
+} from '../api/CowKillerLocations.js';
 
 function chickenPreset(overrides: Record<string, unknown>): SettingsSchema {
     const schema: SettingsSchema = {};

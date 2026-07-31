@@ -19,11 +19,11 @@ import { walkOpening } from '../api/walkOpening.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { resolveFishingLocation, type FishingLocation } from './FishingLocations.js';
-import { type GatheringLocation } from './GatheringLocations.js';
-import { resolveMiningLocation } from './MiningLocations.js';
-import { resolveWoodcuttingLocation } from './WoodcuttingLocations.js';
-import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from './MiningRocks.js';
+import { resolveFishingLocation, type FishingLocation } from '../api/FishingLocations.js';
+import { type GatheringLocation } from '../api/GatheringLocations.js';
+import { resolveMiningLocation } from '../api/MiningLocations.js';
+import { resolveWoodcuttingLocation } from '../api/WoodcuttingLocations.js';
+import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from '../api/MiningRocks.js';
 import {
     TINDERBOX,
     expandLocalFirePlot,
@@ -52,7 +52,7 @@ import {
     toolRestockPlan,
     toolsNeedingEquip,
     type ToolReq
-} from './Tools.js';
+} from '../api/Tools.js';
 import { createChopBurnTasks } from './ChopBurnTasks.js';
 import {
     FISHING_METHOD_OPTIONS,
@@ -65,7 +65,7 @@ import {
     resolveFishMethod,
     spotMatchesMethod,
     type FishingMethod
-} from './FishingMethods.js';
+} from '../api/FishingMethods.js';
 import {
     bankHumanDelayMs,
     cookBatchAfterLoad,
@@ -131,7 +131,7 @@ import {
     type ToolAcquireMode,
     type ToolAcquirePlan,
     type ToolVendor
-} from './ToolAcquire.js';
+} from '../api/ToolAcquire.js';
 
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;

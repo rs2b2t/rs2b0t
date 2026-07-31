@@ -1,7 +1,7 @@
 import { BANK_LOCATIONS } from '../api/BankLocations.js';
 import Tile from '../api/Tile.js';
 import { type TradeItem } from '../api/hud/Trade.js';
-import { RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneRoute, type RuneType } from './RuneCraftLocations.js';
+import { RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneRoute, type RuneType } from '../api/RuneCraftLocations.js';
 
 export { RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneRoute, type RuneType };
 

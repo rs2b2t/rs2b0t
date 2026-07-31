@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { pickaxeReq, axeReq } from '#/bot/scripts/Tools.js';
-import { resolveFishMethod } from '#/bot/scripts/FishingMethods.js';
+import { pickaxeReq, axeReq } from '#/bot/api/Tools.js';
+import { resolveFishMethod } from '#/bot/api/FishingMethods.js';
 import {
     AXE_BAR_FOR,
     BOB_VENDOR,
@@ -27,8 +27,8 @@ import {
     planGatherToolAcquire,
     planPickaxeAcquire,
     type AcquireWorld
-} from '#/bot/scripts/ToolAcquire.js';
-import { AXES, PICKAXES } from '#/bot/scripts/Tools.js';
+} from '#/bot/api/ToolAcquire.js';
+import { AXES, PICKAXES } from '#/bot/api/Tools.js';
 
 function world(partial: Partial<AcquireWorld> & { levels?: Record<string, number>; held?: Record<string, number>; bank?: Record<string, number> }): AcquireWorld {
     const levels = partial.levels ?? {};

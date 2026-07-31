@@ -1,5 +1,5 @@
 import Tile from '../api/Tile.js';
-import { PICKPOCKET_TARGETS } from './PickpocketTargets.js';
+import { PICKPOCKET_TARGETS } from '../api/PickpocketTargets.js';
 
 export interface TargetSpot {
     anchor: Tile;
