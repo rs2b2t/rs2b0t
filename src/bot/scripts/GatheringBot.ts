@@ -218,12 +218,14 @@ export function resourceWithinCamp(distFromHome: number, campRadius: number): bo
 }
 
 /**
- * Hunt radius past the primary gather disk (freeform leash or named chase).
- * Must exceed the primary disk so pier hops just outside still walk-to.
+ * Freeform hunt radius past the UI/start leash.
+ * Generous pad so river hops beyond the old "leash+12" wall still walk-to
+ * (status used to idle on "no spots within 40 of you" with leash 28).
+ * Named camps do not use this — they accept any spot in camp membership.
  */
 export function gatherHuntRadius(primaryDisk: number): number {
     const L = Math.max(2, Math.floor(Number.isFinite(primaryDisk) ? primaryDisk : 10));
-    return Math.max(L + 12, 28);
+    return Math.max(L + 24, 48);
 }
 
 /**
@@ -540,19 +542,18 @@ export default class GatheringBot extends TaskBot {
             this.location = null;
         }
 
-        // Named/Auto camps pin membership to the camp home pin. Power mode (None)
-        // and Auto freeform (no preset in this 64×64 map square) leash from the live
-        // start tile. Membership width: only Auto respects the UI setting; named camps
-        // and None floor to NAMED_CAMP_LEASH_FLOOR. Fishing hops use player-relative chase.
-        this.leash = effectiveGatherLeash(this.leash, locSetting);
+        // Membership:
+        // - Resolved camp (named or Auto-snap) → camp geography (campRadius / floor 64),
+        //   never the Auto UI leash (that was clipping camp scan to e.g. 18).
+        // - Freeform Auto / power None → start-tile leash from UI (+ None floor).
+        // Fishing discovery for named camps is any matching spot inside membership;
+        // freeform uses player-relative hunt (see Gather.findFishSpot).
         if (this.location?.spot) {
             this.anchor = resolveRunAnchor(new Tile(here.x, here.z, here.level), this.location.spot);
-            // Per-camp membership override when authored on the location table.
-            if (this.location.campRadius != null) {
-                this.leash = Math.max(this.leash, resolveCampRadius(this.location.campRadius));
-            }
+            this.leash = resolveCampRadius(this.location.campRadius, NAMED_CAMP_LEASH_FLOOR);
         } else {
             this.anchor = new Tile(here.x, here.z, here.level);
+            this.leash = effectiveGatherLeash(this.leash, locSetting);
         }
 
         // After ::tele / zone load, Locs+Npcs are empty for a beat (docs/NAV.md
@@ -4469,8 +4470,7 @@ class Gather implements Task {
     private activeFishIndex: number | null = null;
 
     /**
-     * Distance origin for fishing spots.
-     * Named camp + freeform fish → player (chase pier/river hops).
+     * Distance origin for ranking fishing spots (prefer nearest to player).
      * Game.tile() is a plain WorldTile — wrap with Tile.from for distanceTo.
      */
     private fishSpotOrigin(): Tile {
@@ -4483,82 +4483,87 @@ class Gather implements Task {
         return this.bot.getAnchor();
     }
 
-    /** Primary fish disk: named = chase radius; freeform = membership leash. */
-    private fishPrimaryDisk(): number {
-        return this.bot.isNamedCamp() ? this.bot.chaseRadius() : this.bot.leashRadius();
+    /** Freeform primary disk = UI/start leash; hunt extends past it. */
+    private freeformHuntRadius(): number {
+        return gatherHuntRadius(this.bot.leashRadius());
     }
 
-    private spotCandidate(n: { id: number; tile: () => Tile; actions: () => string[] }, maxDist: number): boolean {
-        const t = n.tile();
-        const origin = this.bot.isNpc() ? this.fishSpotOrigin() : this.bot.getAnchor();
-        if (!spotWithinGatherRange(origin.distanceTo(t), maxDist)) {
-            return false;
-        }
-        // Named camps: keep spots inside camp membership so chase cannot leave the coastline.
-        if (this.bot.isNamedCamp() && !resourceWithinCamp(this.bot.getAnchor().distanceTo(t), this.bot.leashRadius())) {
-            return false;
-        }
+    /** Shared filters: usable, not whirlpool, method matches. */
+    private fishSpotBaseOk(n: { id: number; tile: () => Tile; actions: () => string[] }): boolean {
         return (
-            this.bot.usable(keyOf(t)) &&
+            this.bot.usable(keyOf(n.tile())) &&
             !WHIRLPOOL_IDS.has(n.id) &&
             this.bot.matchesSpot(n.actions())
         );
     }
 
-    /** Preferred spots inside the primary disk (chase for named, leash for freeform). */
-    private findSpot() {
-        const primary = this.fishPrimaryDisk();
-        return Npcs.query()
-            .name(this.bot.targetName())
-            .where(n => this.spotCandidate(n, primary))
-            .nearest();
+    /**
+     * Whether a fishing spot is in range for this camp mode.
+     * - Named / Auto-snap: any spot inside camp membership (home pin). No player-distance wall.
+     * - Freeform: spot within hunt of the player, or still within hunt of the start-tile anchor
+     *   (so we can walk along a river hop without idling on "within 40 of you").
+     */
+    private fishSpotInRange(spotTile: Tile): boolean {
+        if (this.bot.isNamedCamp()) {
+            return resourceWithinCamp(this.bot.getAnchor().distanceTo(spotTile), this.bot.leashRadius());
+        }
+        const origin = this.fishSpotOrigin();
+        const hunt = this.freeformHuntRadius();
+        if (spotWithinGatherRange(origin.distanceTo(spotTile), hunt)) {
+            return true;
+        }
+        // Spot still near the freeform start pin — walk the river even if far from the player.
+        return spotWithinGatherRange(this.bot.getAnchor().distanceTo(spotTile), hunt);
     }
 
     /**
-     * Spots that hopped just outside the primary disk (common on long piers).
-     * Hunt radius is wider so we walk to them instead of stalling.
-     * Named camps measure from the player and fence to camp membership.
+     * Nearest matching fishing spot in scene for this mode.
+     * Named camps: entire membership disk (fixes "no spots within 40 of you" mid-pier).
+     * Freeform: player/start hunt disks.
      */
+    private findFishSpot() {
+        return Npcs.query()
+            .name(this.bot.targetName())
+            .where(n => this.fishSpotBaseOk(n) && this.fishSpotInRange(n.tile()))
+            .nearest();
+    }
+
+    /** @deprecated Prefer {@link findFishSpot} — kept for call sites that meant "nearby only". */
+    private findSpot() {
+        return this.findFishSpot();
+    }
+
+    /** Freeform-only: spots just outside primary leash of the player (legacy hunt path). */
     private huntRadius(): number {
-        return gatherHuntRadius(this.fishPrimaryDisk());
+        return this.bot.isNamedCamp() ? this.bot.leashRadius() : this.freeformHuntRadius();
     }
 
     private findHuntSpot() {
-        const primary = this.fishPrimaryDisk();
-        const hunt = this.huntRadius();
+        // Named: findFishSpot already covers full camp — no separate hunt tier.
+        if (this.bot.isNamedCamp()) {
+            return null;
+        }
+        const primary = this.bot.leashRadius();
+        const hunt = this.freeformHuntRadius();
         const origin = this.fishSpotOrigin();
         return Npcs.query()
             .name(this.bot.targetName())
             .where(n => {
+                if (!this.fishSpotBaseOk(n)) {
+                    return false;
+                }
                 const d = origin.distanceTo(n.tile());
-                return d > primary && this.spotCandidate(n, hunt);
+                return d > primary && d <= hunt;
             })
             .nearest();
     }
 
-    /**
-     * Named-camp only: any matching spot inside camp membership from the home pin.
-     * Covers far pier hops when the player is still at home (chase-from-player would miss them).
-     * Freeform has no camp scan — start-tile leash + player chase only.
-     */
+    /** Named: same as findFishSpot (full membership). Freeform: null. */
     private findCampScanSpot() {
         if (!this.bot.isNamedCamp()) {
             return null;
         }
-        const home = this.bot.getAnchor();
-        const campR = this.bot.leashRadius();
-        return Npcs.query()
-            .name(this.bot.targetName())
-            .where(n => {
-                const t = n.tile();
-                return (
-                    resourceWithinCamp(home.distanceTo(t), campR) &&
-                    this.bot.usable(keyOf(t)) &&
-                    !WHIRLPOOL_IDS.has(n.id) &&
-                    this.bot.matchesSpot(n.actions())
-                );
-            })
-            .nearest();
+        return this.findFishSpot();
     }
 
     private findRock() {
@@ -4610,12 +4615,8 @@ class Gather implements Task {
             if (this.bot.isFreeformCamp() && beyondLeash(this.bot, Game.tile(), 4)) {
                 return false;
             }
-            // Near-player chase / hunt; named camps also scan the full camp membership disk.
-            if (
-                this.findSpot() !== null ||
-                this.findHuntSpot() !== null ||
-                this.findCampScanSpot() !== null
-            ) {
+            // Named: any matching spot in camp membership. Freeform: player/start hunt disks.
+            if (this.findFishSpot() !== null || this.findHuntSpot() !== null) {
                 return true;
             }
             // No spots in range: keep-alive near the pier so status updates, but yield
@@ -4818,27 +4819,20 @@ class Gather implements Task {
     }
 
     private async executeFish(): Promise<void> {
-        const target = this.findSpot();
+        // Named: nearest matching spot in camp membership. Freeform: player/start hunt.
+        // If the spot is far, interact will path; we still walk when beyond a short step.
+        const target = this.findFishSpot() ?? this.findHuntSpot();
 
         if (!target) {
             this.activeFishIndex = null;
-            // Pier hop: chase a nearby out-of-chase/leash spot immediately — don't wait out leftover cast anim.
-            const hunt = this.findHuntSpot() ?? this.findCampScanSpot();
-            if (hunt) {
-                const ht = hunt.tile();
-                this.bot.setStatus(`fish: hunting spot @ ${ht}`);
-                await Traversal.walkTo(ht, { radius: 1, timeoutMs: 20_000 });
-                return;
-            }
-            // No hunt target either. Short finishing-cast wait, waking if a spot reappears.
+            // No target. Short finishing-cast wait, waking if a spot reappears.
             if (Game.animating()) {
                 this.bot.setStatus('fish: finishing cast (no spot)');
                 await Execution.delayUntil(
                     () =>
                         !Game.animating() ||
-                        this.findSpot() !== null ||
+                        this.findFishSpot() !== null ||
                         this.findHuntSpot() !== null ||
-                        this.findCampScanSpot() !== null ||
                         EventSignal.pending() ||
                         Inventory.isFull() ||
                         combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather()) ||
@@ -4859,19 +4853,42 @@ class Gather implements Task {
                 await this.bot.walkHomeIfNeeded(m => this.bot.log(`  ${m}`));
                 return;
             }
-            // Named + freeform fish measure from the player when available.
-            const originLabel =
-                gatherSpotRangeOrigin(
-                    this.bot.isFreeformCamp(),
-                    here !== null,
-                    this.bot.isNamedCamp()
-                ) === 'player'
-                    ? 'you'
-                    : 'anchor';
-            this.bot.setStatus(`fish: no spots within ${this.huntRadius()} of ${originLabel}`);
+            // Named: membership disk from home. Freeform: hunt from player/start.
+            if (this.bot.isNamedCamp()) {
+                this.bot.setStatus(`fish: no spots in camp (r${this.bot.leashRadius()} of home)`);
+            } else {
+                this.bot.setStatus(`fish: no spots within ${this.freeformHuntRadius()} of you/start`);
+            }
             await Execution.delayTicks(2);
             return;
         }
+
+        // Walk when the spot is more than a few tiles away (pier hop / camp scan).
+        const here0 = Game.tile();
+        const spotTile = target.tile();
+        if (here0 && Tile.from(here0).distanceTo(spotTile) > 2) {
+            this.bot.setStatus(`fish: walking to spot @ ${spotTile}`);
+            await Traversal.walkTo(spotTile, { radius: 1, timeoutMs: 20_000 });
+            // Re-resolve after walk — hop may have moved.
+            const again = this.findFishSpot() ?? this.findHuntSpot();
+            if (!again) {
+                this.activeFishIndex = null;
+                return;
+            }
+            // Fall through to interact with the (possibly new) nearest spot.
+            return this.executeFishAfterArrive(again);
+        }
+
+        await this.executeFishAfterArrive(target);
+    }
+
+    private async executeFishAfterArrive(target: {
+        index: number;
+        tile: () => Tile;
+        actions: () => string[];
+        interact: (op: string) => Promise<boolean>;
+        id: number;
+    }): Promise<void> {
 
         const index = target.index;
         const startTile = target.tile();
