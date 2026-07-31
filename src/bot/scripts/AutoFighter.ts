@@ -3,10 +3,14 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
-import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
+import { Autocast } from '../api/combat/Autocast.js';
+import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
+import { SPELL_DB } from '../api/combat/data/spelldb.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { Equipment } from '../api/hud/Equipment.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
@@ -37,14 +41,26 @@ import { RANDOM_EVENT_CASKET_ID } from '../api/Banking.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
-const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
+
+const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
+const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
+const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
+const SHOW_MAGE_RANGE = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 
 export const SETTINGS: SettingsSchema = {
     target: { type: 'string', default: 'Guard', label: 'Target NPC name', help: 'exact in-game name, e.g. Guard, Chicken, or Moss giant' },
     spot: { type: 'string', default: START_POSITION, options: SPOT_OPTIONS, label: 'Killing spot', help: 'use the tile where the script starts, or walk to custom coordinates' },
     coordinates: { type: 'tile', default: DEFAULT_CUSTOM_SPOT, label: 'Killing coordinates (x,z)', showIf: { key: 'spot', anyOf: [CUSTOM_COORDINATES] } },
     leashRadius: { type: 'number', default: 8, min: 2, max: 30, label: 'Leash radius (tiles)' },
-    combatStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Combat style' },
+    combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage', 'range'], label: 'Combat style' },
+    meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
+    spell: { type: 'string', default: 'Fire Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE, help: 'kept armed via autocast — a staff must be wielded' },
+    runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE, help: 'the bot tops runes up to this many casts of the selected spell; runes the wielded staff provides free are skipped' },
+    rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
+    ammo: { type: 'string', default: 'Bronze arrow', label: 'Ammo (withdrawn from bank)', group: 'Combat', showIf: SHOW_RANGE },
+    ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
+    ammoRestockBelow: { type: 'number', default: 25, min: 0, max: 100, label: 'Bank for ammo below %', group: 'Combat', showIf: SHOW_MAGE_RANGE, help: 'when not banking for food, go bank once magic casts / ranged ammo drop below this percentage of a full trip' },
     food: { type: 'string', default: 'Trout', label: 'Food (withdrawn from bank)' },
     foodWithdraw: { type: 'number', default: 10, min: 0, max: 27, label: 'Food to carry' },
     eatAtHp: { type: 'number', default: 50, min: 0, max: 100, label: 'Eat below HP%' },
@@ -70,7 +86,15 @@ let SOLVE_CLUES = true;
 let BANK_AT = 12;
 let AUTO_BANK = true;
 let BANK_COMMON = true;
-let COMBAT_STYLE: MeleeCombatStyle = 'strength';
+let STYLE: 'melee' | 'mage' | 'range' = 'melee';
+let MELEE_STYLE: MeleeCombatStyle = 'strength';
+let RANGE_MODE = 1;
+let SPELL = 'Fire Strike';
+let RUNES_WITHDRAW = 150;
+let AMMO = 'Bronze arrow';
+let AMMO_WITHDRAW = 500;
+let AMMO_RESTOCK_BELOW = 0.25;
+let TRACKED_GEAR: string[] = [];
 
 function foodCount(): number {
     return countMatching(Inventory.items(), [FOOD]);
@@ -78,12 +102,42 @@ function foodCount(): number {
 function lootSlots(): number {
     return slotsMatching(Inventory.items(), LOOT);
 }
+function wieldedNames(): string[] {
+    return Equipment.items().map(i => i.name ?? '');
+}
+function castsLeft(): number {
+    return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
+}
+function wieldedAmmo(): number {
+    return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
+}
+function totalAmmo(): number {
+    return Inventory.count(AMMO) + wieldedAmmo();
+}
+function restockThreshold(): number {
+    return Math.max(1, Math.floor(AMMO_RESTOCK_BELOW * (STYLE === 'mage' ? RUNES_WITHDRAW : AMMO_WITHDRAW)));
+}
+function supplyMetric(): number {
+    return STYLE === 'mage' ? castsLeft() : totalAmmo();
+}
+function needStyleSupplies(): boolean {
+    return STYLE !== 'melee' && supplyMetric() < restockThreshold();
+}
+function fullyOutOfSupplies(): boolean {
+    if (STYLE === 'melee') {
+        return false;
+    }
+    return supplyMetric() === 0;
+}
 
-export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean): boolean {
+export function shouldKeepBankItem(name: string, id: number, food: string, bankCommon: boolean, ammo: string[] = [], gear: string[] = []): boolean {
     const n = name.toLowerCase();
     const genericCasket = id === RANDOM_EVENT_CASKET_ID;
+    const ammoMatch = ammo.some(a => a.toLowerCase() === n);
+    const gearMatch = gear.some(g => g.toLowerCase() === n);
     return matchesAny(name, [food]) || n === 'coins' || KIT.includes(n) || n.includes('clue')
-        || (n.includes('casket') && !genericCasket) || (genericCasket && !bankCommon);
+        || (n.includes('casket') && !genericCasket) || (genericCasket && !bankCommon)
+        || ammoMatch || gearMatch;
 }
 
 export default class AutoFighter extends TaskBot {
@@ -98,6 +152,7 @@ export default class AutoFighter extends TaskBot {
     private solveClue: SolveClue | undefined;
     bankAfterSolve = false;
     bankFoodEmpty = false;
+    private supplyEmpty = false;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -120,7 +175,15 @@ export default class AutoFighter extends TaskBot {
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         AUTO_BANK = autoBankEnabled(this.settings.str('banking', 'Auto'));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
-        COMBAT_STYLE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        STYLE = this.settings.str('combatStyle', 'melee') as 'melee' | 'mage' | 'range';
+        MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        SPELL = this.settings.str('spell', 'Fire Strike');
+        RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
+        RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
+        AMMO = this.settings.str('ammo', 'Bronze arrow');
+        AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
+        AMMO_RESTOCK_BELOW = this.settings.num('ammoRestockBelow', 25) / 100;
+        TRACKED_GEAR = Equipment.items().map(i => i.name ?? '').filter(n => n.length > 0);
 
         this.solveClue = new SolveClue({
             log: m => this.log(m),
@@ -152,7 +215,7 @@ export default class AutoFighter extends TaskBot {
 
         this.startedAt = Date.now();
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.log(`AutoFighter starting — '${TARGET}' at ${spotMode} ${ANCHOR} r${LEASH}, banking ${AUTO_BANK ? 'auto' : 'none'}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]`);
+        this.log(`AutoFighter starting — '${TARGET}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -178,9 +241,11 @@ export default class AutoFighter extends TaskBot {
             new LootDrops(this),
             new EatFood(this),
             new PanicRetreat(this),
+            new ReequipGear(this),
             this.solveClue!,
             new BankRun(this),
-            new SetStyle(this),
+            new SetAttackStyle(this),
+            new ArmAutocast(this),
             new Fight(this),
             new ReturnToAnchor(this)
         );
@@ -200,7 +265,7 @@ export default class AutoFighter extends TaskBot {
         const xp = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0) - this.xpAtStart;
         const xph = mins > 0.5 ? `${((xp / mins) * 60 / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
-        p.row(`Looted: ${this.looted}`, `Food: ${foodCount()}`, this.deaths ? `Deaths: ${this.deaths}` : `Trips: ${this.trips}`);
+        p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}` : STYLE === 'range' ? `Ammo: ${totalAmmo()}` : `Style: ${MELEE_STYLE}`, `Food: ${foodCount()}`, this.deaths ? `Deaths: ${this.deaths}` : `Trips: ${this.trips}`);
         p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
         p.bar('HP', Skills.hpFraction());
         p.gap();
@@ -213,6 +278,8 @@ export default class AutoFighter extends TaskBot {
     countLoot(): void { this.looted++; }
     countEat(): void { this.eats++; }
     countTrip(): void { this.trips++; }
+    noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
+    supplyKnownEmpty(): boolean { return this.supplyEmpty; }
 }
 
 class LootDrops implements Task {
@@ -317,14 +384,19 @@ class PanicRetreat implements Task {
 class BankRun implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
-        if (Game.inCombat()) {
+        const outOfSupplies = fullyOutOfSupplies();
+        if (Game.inCombat() && !outOfSupplies) {
             return false;
         }
         if (foodCount() > 0) {
             this.bot.bankFoodEmpty = false;
         }
+        if (STYLE !== 'melee' && supplyMetric() >= restockThreshold()) {
+            this.bot.noteSupplyEmpty(false);
+        }
         return this.bot.bankAfterSolve || (AUTO_BANK && shouldBank(lootSlots(), BANK_AT, Inventory.isFull()))
-            || (foodCount() === 0 && FOOD_WITHDRAW > 0 && !this.bot.bankFoodEmpty);
+            || (foodCount() === 0 && FOOD_WITHDRAW > 0 && !this.bot.bankFoodEmpty)
+            || (STYLE !== 'melee' && needStyleSupplies() && !this.bot.supplyKnownEmpty());
     }
     async execute(): Promise<void> {
         const here = Game.tile();
@@ -333,6 +405,15 @@ class BankRun implements Task {
             this.bot.bankAfterSolve = false;
             return;
         }
+        const reason = this.bot.bankAfterSolve ? 'clue solved'
+            : (AUTO_BANK && shouldBank(lootSlots(), BANK_AT, Inventory.isFull()))
+                ? `loot ${lootSlots()}/${BANK_AT} slots or inventory full`
+                : (foodCount() === 0 && FOOD_WITHDRAW > 0 && !this.bot.bankFoodEmpty)
+                    ? 'out of food'
+                    : STYLE !== 'melee' && needStyleSupplies()
+                        ? `supplies below threshold (${supplyMetric()} < ${restockThreshold()})`
+                        : 'unknown';
+        this.bot.log(`BankRun triggered: ${reason}`);
         this.bot.setStatus(this.bot.bankAfterSolve ? 'clue done — banking the loot' : 'banking');
         this.bot.log(`banking at the ${bank.name} bank (${bank.tile})`);
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
@@ -341,7 +422,7 @@ class BankRun implements Task {
         if (!(await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             return;
         }
-        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON), m => this.bot.log(`  ${m}`));
+        await Bank.depositAllMatching((name, id) => !shouldKeepBankItem(name, id, FOOD, BANK_COMMON, STYLE === 'range' ? [AMMO] : [], TRACKED_GEAR), m => this.bot.log(`  ${m}`));
         for (let guard = 0; guard < FOOD_WITHDRAW && foodCount() < FOOD_WITHDRAW && !Inventory.isFull(); guard++) {
             const before = foodCount();
             if (!(await Bank.withdraw(FOOD, 'Withdraw-1'))) {
@@ -355,27 +436,160 @@ class BankRun implements Task {
             this.bot.bankFoodEmpty = true;
             this.bot.log(`no '${FOOD}' in the bank — fighting on without food (foodless safety disarmed)`);
         }
+        await this.restockStyleSupplies();
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
         this.bot.setStatus('heading back to the spot');
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
+
+    private async restockStyleSupplies(): Promise<void> {
+        if (STYLE === 'melee') {
+            this.bot.noteSupplyEmpty(false);
+            return;
+        }
+        if (STYLE === 'mage') {
+            this.bot.setStatus('withdrawing runes');
+            for (const { rune, count } of runeWithdrawList(SPELL, wieldedNames(), RUNES_WITHDRAW)) {
+                if (Inventory.count(rune) < count) {
+                    const got = await withdrawTo(rune, count);
+                    this.bot.log(`withdrew ${got} ${rune} (${Inventory.count(rune)}/${count})`);
+                }
+            }
+            const after = castsLeft();
+            this.bot.log(`runes restocked: ${after} casts left (re-bank threshold ${restockThreshold()})`);
+            if (after < restockThreshold()) {
+                this.bot.noteSupplyEmpty(true);
+                this.bot.log(`WARNING: bank can't top runes up to ${restockThreshold()} casts — pausing ammo bank runs (have ${after})`);
+            } else {
+                this.bot.noteSupplyEmpty(false);
+            }
+            return;
+        }
+        this.bot.setStatus(`restocking ${AMMO}`);
+        const got = await withdrawTo(AMMO, AMMO_WITHDRAW);
+        if (got > 0) {
+            this.bot.log(`withdrew ${got} ${AMMO} (${totalAmmo()} total in quiver + inventory)`);
+        }
+        if (Inventory.count(AMMO) > 0 && wieldedAmmo() === 0) {
+            if (await Equipment.equip(AMMO)) {
+                this.bot.log(`equipped ${AMMO} (${wieldedAmmo()} in quiver)`);
+            } else {
+                this.bot.log(`WARNING: could not equip ${AMMO} — will retry from inventory`);
+            }
+        }
+        const after = totalAmmo();
+        if (after < restockThreshold()) {
+            this.bot.noteSupplyEmpty(true);
+            this.bot.log(`WARNING: bank can't supply ${AMMO} up to ${restockThreshold()} — pausing ammo bank runs (have ${after})`);
+        } else {
+            this.bot.noteSupplyEmpty(false);
+            this.bot.log(`ammo ready: ${after} total (${wieldedAmmo()} quiver, ${Inventory.count(AMMO)} inventory)`);
+        }
+    }
 }
 
-class SetStyle implements Task {
-    private announced = false;
+async function withdrawTo(name: string, target: number): Promise<number> {
+    const start = Inventory.count(name);
+    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
+        const before = Inventory.count(name);
+        const need = target - before;
+        if (need > 10 && (await Bank.withdrawX(name, need))) {
+            if (Inventory.count(name) > before) {
+                continue;
+            }
+            break;
+        }
+        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
+        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
+            break;
+        }
+    }
+    return Inventory.count(name) - start;
+}
+
+class SetAttackStyle implements Task {
+    private fails = 0;
+    private retryAt = 0;
     constructor(private bot: AutoFighter) {}
+    private selected(): boolean {
+        return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(MELEE_STYLE);
+    }
     validate(): boolean {
-        return !Game.inCombat() && !Game.hasCombatStyle(COMBAT_STYLE);
+        return STYLE !== 'mage' && !Game.inCombat() && !this.selected() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(COMBAT_STYLE);
-        const ok = await Execution.delayUntil(() => Game.hasCombatStyle(COMBAT_STYLE), 3000);
-        const resolution = Game.combatStyleResolution(COMBAT_STYLE);
-        if (ok && resolution && !this.announced) {
-            this.announced = true;
-            this.bot.log(`combat style: ${describeCombatStyle(resolution)}`);
+        if (STYLE === 'range') {
+            Game.setCombatMode(RANGE_MODE);
+        } else {
+            Game.setCombatStyle(MELEE_STYLE);
+        }
+        if (await Execution.delayUntil(() => this.selected(), 3000)) {
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.fails = 0;
+            this.retryAt = Date.now() + 60_000;
+            this.bot.log(`could not set the ${STYLE} attack style (combat tab not ready?) — retrying in 60s`);
+        }
+    }
+}
+
+class ArmAutocast implements Task {
+    private fails = 0;
+    private retryAt = 0;
+    constructor(private bot: AutoFighter) {}
+    validate(): boolean {
+        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
+            return false;
+        }
+        if (castsLeft() < 1) {
+            return false;
+        }
+        return Autocast.staffTabAttached();
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus(`arming autocast: ${SPELL}`);
+        await Execution.delayTicks(3);
+        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.fails = 0;
+            this.retryAt = Date.now() + 60_000;
+            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' — retrying in 60s (check spell/level, and that a staff is wielded).`);
+        }
+    }
+}
+
+class ReequipGear implements Task {
+    private lastFailLogAt = 0;
+    constructor(private bot: AutoFighter) {}
+    private candidates(): string[] {
+        const gear = [...TRACKED_GEAR];
+        if (STYLE === 'range' && !gear.some(g => g.toLowerCase() === AMMO.toLowerCase())) {
+            gear.push(AMMO);
+        }
+        return gear;
+    }
+    validate(): boolean {
+        return this.candidates().some(g => !Equipment.contains(g) && Inventory.first(g) !== null);
+    }
+    async execute(): Promise<void> {
+        for (const item of this.candidates()) {
+            if (Equipment.contains(item)) {
+                continue;
+            }
+            const inv = Inventory.first(item);
+            if (!inv) {
+                continue;
+            }
+            this.bot.setStatus(`re-equipping ${item}`);
+            if (await Equipment.equip(item)) {
+                this.bot.log(`equipped ${item}`);
+            } else if (Date.now() > this.lastFailLogAt) {
+                this.lastFailLogAt = Date.now() + 30_000;
+                this.bot.log(`WARNING: could not equip ${item} (not wieldable / no weapon slot?) — retrying`);
+            }
         }
     }
 }
@@ -419,6 +633,14 @@ class Fight implements Task {
                 return;
             }
             if (shouldEat(Skills.hpFraction(), EAT_AT, foodCount()) || Skills.hpFraction() < PANIC_AT) {
+                return;
+            }
+            if (STYLE === 'range' && wieldedAmmo() < restockThreshold() && Inventory.count(AMMO) > 0) {
+                this.bot.log(`ammo in quiver below ${restockThreshold()} — reloading from inventory`);
+                return;
+            }
+            if (fullyOutOfSupplies()) {
+                this.bot.log(`out of ${STYLE === 'mage' ? 'runes' : 'ammo'} — breaking off to restock`);
                 return;
             }
             const cur = this.track(target);
