@@ -187,16 +187,21 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 
 **Location / leash (product behaviour, not just the harness):**
 
-- **Named camps** pin the gather anchor to the camp spot and **floor leash to 64**
-  (Catherby pier, Fishing Guild docks, multi-rock mines). The UI `leashRadius` is
-  ignored below that floor. Hunt radius extends past the leash (no hard 40 cap).
+- **Named camps** pin the **home** tile to the camp spot and floor **membership**
+  (ReturnToAnchor / rock disk) to **64** (overridable per camp via `campRadius`).
+  The UI `leashRadius` is ignored below that floor for membership. **Fishing spots**
+  chase from the **player** inside camp (`chaseRadius`, default 24) with a hunt pad
+  past chase — not a single pin disk for hops. Spots outside membership are rejected
+  so chase cannot leave the coastline.
 - **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
   tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
-  start-tile leash, nearest bank). Auto is expert / may-die: **no mob flee**
-  (spiders, dark wizards) — random events still run.
-- **None** is power/drop mode (also floors leash to 64 from the start tile).
+  start-tile leash, nearest bank, player-relative fish). Auto is expert / may-die:
+  **no mob flee** (spiders, dark wizards) — random events still run.
+- **None** is power/drop mode (also floors membership to 64 from the start tile).
 - **Named/None mob flee** kites *away* from the attacker (east-biased), not back onto
   the camp anchor while multi-combat pests sit on it.
+- **Post-bank home** uses the soft arrive disk (8 tiles), not full membership (#154
+  Catherby bank ≈ 36 from pier).
 
 Asserts XP / held products / acquired tools / bank proximity. Exit nonzero on any FAIL.
 

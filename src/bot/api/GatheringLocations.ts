@@ -3,19 +3,32 @@ import { bankDistance } from './BankLocations.js';
 import Tile from './Tile.js';
 
 /**
- * Shared gather camp: leash anchor + bank stand for Fisher / Miner / Woodcutter.
+ * Shared gather camp: home pin + bank stand for Fisher / Miner / Woodcutter.
  *
+ * Membership (ReturnToAnchor / soft wander bound) uses {@link campRadius}; fishing
+ * hop chase while in camp uses {@link chaseRadius} measured from the player.
  * `verified` marks camps confirmed via live pathability + resource checks
  * (`bun tools/verify-gathering-locations.ts` + visual stand polish).
  */
 export interface GatheringLocation {
     name: string;
+    /** Home pin — bank return / soft arrive disk centre. */
     spot: Tile;
     bankStand: Tile;
     verified: boolean;
     boothName?: string;
     boothOp?: string;
     obstacles?: string[];
+    /**
+     * Camp membership radius from {@link spot} (Chebyshev).
+     * Player outside this disk → ReturnToAnchor. Defaults to 64 when omitted.
+     */
+    campRadius?: number;
+    /**
+     * Player-relative fishing-spot / hop disk while in camp.
+     * Defaults to 24 when omitted. Loc gather (rocks/trees) still uses campRadius from home.
+     */
+    chaseRadius?: number;
     /** CSV-ish resource tags for docs / verify helper (not used by Gather target pick). */
     resources?: readonly string[];
     notes?: string;
@@ -23,6 +36,22 @@ export interface GatheringLocation {
 
 export const DEFAULT_BOOTH_NAME = 'Bank booth';
 export const DEFAULT_BOOTH_OP = 'Use-quickly';
+
+/** Default camp membership when a named location omits {@link GatheringLocation.campRadius}. */
+export const DEFAULT_CAMP_RADIUS = 64;
+
+/** Default player-relative fish chase when a named location omits {@link GatheringLocation.chaseRadius}. */
+export const DEFAULT_CHASE_RADIUS = 24;
+
+export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
+    const raw = campRadius != null && Number.isFinite(campRadius) ? campRadius : fallback;
+    return Math.max(2, Math.floor(raw));
+}
+
+export function resolveChaseRadius(chaseRadius: number | null | undefined, fallback = DEFAULT_CHASE_RADIUS): number {
+    const raw = chaseRadius != null && Number.isFinite(chaseRadius) ? chaseRadius : fallback;
+    return Math.max(2, Math.floor(raw));
+}
 
 /**
  * Engine map-square edge length. Auto only snaps to a preset when the start

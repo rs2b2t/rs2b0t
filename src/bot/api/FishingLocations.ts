@@ -44,6 +44,9 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.catherby,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        // Long shore hops — membership past the old pin-disk stuck (~72).
+        campRadius: 80,
+        chaseRadius: 28,
         verified: true,
         resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
         rangeStand: new Tile(2817, 3443, 0),
@@ -57,6 +60,8 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.fishingGuild,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        campRadius: 80,
+        chaseRadius: 28,
         verified: true,
         resources: ['mackerel', 'cod', 'bass', 'tuna', 'lobster', 'swordfish', 'shark'],
         notes: 'Bank requires Fishing 68'
@@ -67,6 +72,8 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.edgeville,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        campRadius: 72,
+        chaseRadius: 28,
         verified: true,
         resources: ['trout', 'salmon', 'pike'],
         notes: 'Fly/bait river'
@@ -78,6 +85,8 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.seers,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        campRadius: 80,
+        chaseRadius: 28,
         verified: true,
         resources: ['trout', 'salmon', 'pike'],
         notes: 'River north of Seers toward Rellekka; shore stand'
@@ -89,6 +98,8 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.draynor,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        campRadius: 72,
+        chaseRadius: 28,
         verified: true,
         resources: ['tuna', 'lobster', 'swordfish'],
         notes: 'No local bank — deposit via ship to Draynor / Port Sarim area'
@@ -112,6 +123,9 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         bankStand: BANK.grandTree,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
+        // Hops ~2382–2394, 3407–3425 — wide membership for river train.
+        campRadius: 72,
+        chaseRadius: 28,
         verified: false,
         resources: ['trout', 'salmon'],
         notes: 'Tick manip: Tannerfishing (fly + cook/eat). Unverified seed; bank Grand Tree 1F'

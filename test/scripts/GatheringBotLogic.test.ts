@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    DEFAULT_CHASE_RADIUS,
     HOME_ARRIVE_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
     effectiveGatherLeash,
@@ -8,12 +9,14 @@ import {
     gatherSpotRangeOrigin,
     hostileAttackerNearby,
     isAutoLocation,
+    resourceWithinCamp,
     shouldSoftHomeFromGatherMiss,
     shouldWalkHomeToGatherAnchor,
     shouldYieldGathering,
     spotWithinGatherRange
 } from '#/bot/scripts/GatheringBot.js';
 import { AXE_BAR_FOR } from '#/bot/api/ToolAcquire.js';
+import { DEFAULT_CAMP_RADIUS, resolveCampRadius, resolveChaseRadius } from '#/bot/api/GatheringLocations.js';
 import Tile from '#/bot/api/Tile.js';
 
 describe('HOME_ARRIVE_RADIUS (soft home after bank/shop)', () => {
@@ -61,15 +64,23 @@ describe('gatherSpotRangeOrigin (Auto freeform fish vs named camp)', () => {
         // Ardougne river: after hunting toward a hop, spots near the player must
         // still count even when far from the start-tile anchor.
         expect(gatherSpotRangeOrigin(true, true)).toBe('player');
+        expect(gatherSpotRangeOrigin(true, true, false)).toBe('player');
     });
 
-    test('named camp / non-freeform always pins the pier anchor', () => {
-        expect(gatherSpotRangeOrigin(false, true)).toBe('anchor');
-        expect(gatherSpotRangeOrigin(false, false)).toBe('anchor');
+    test('named camp measures from the player (pier hop chase)', () => {
+        // Spot beside the player mid-pier must count even when far from the home pin.
+        expect(gatherSpotRangeOrigin(false, true, true)).toBe('player');
+        // Freeform flag false + named still player.
+        expect(gatherSpotRangeOrigin(false, true, true)).toBe('player');
     });
 
-    test('freeform without a player tile falls back to anchor', () => {
+    test('loc freeform (non-fish) without named camp pins the anchor', () => {
+        expect(gatherSpotRangeOrigin(false, true, false)).toBe('anchor');
+    });
+
+    test('without a player tile falls back to anchor', () => {
         expect(gatherSpotRangeOrigin(true, false)).toBe('anchor');
+        expect(gatherSpotRangeOrigin(false, false, true)).toBe('anchor');
     });
 
     test('spotWithinGatherRange is inclusive Chebyshev disk', () => {
@@ -80,6 +91,48 @@ describe('gatherSpotRangeOrigin (Auto freeform fish vs named camp)', () => {
         expect(spotWithinGatherRange(41, 40)).toBe(false);
         expect(spotWithinGatherRange(21, 10)).toBe(false);
         expect(spotWithinGatherRange(Number.NaN, 40)).toBe(false);
+    });
+});
+
+describe('resourceWithinCamp + chase (named camp hop fence)', () => {
+    test('camp membership is inclusive Chebyshev from home pin', () => {
+        expect(resourceWithinCamp(0, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
+        expect(resourceWithinCamp(64, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
+        expect(resourceWithinCamp(65, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+        // Spot 72 from pin (old "leash+8" stuck) is outside default membership.
+        expect(resourceWithinCamp(72, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+        // Wider per-camp membership covers long piers.
+        expect(resourceWithinCamp(72, 80)).toBe(true);
+    });
+
+    test('player-relative chase accepts spots near the bot regardless of pin distance math', () => {
+        // Scenario: player mid-pier (dist 50 from pin), spot 3 tiles away.
+        // Chase disk from player: in range. Camp fence: pin→spot ~53 still in 64.
+        expect(spotWithinGatherRange(3, DEFAULT_CHASE_RADIUS)).toBe(true);
+        expect(resourceWithinCamp(53, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
+        // Spot next to player but outside membership → fence rejects (wrong coastline).
+        expect(spotWithinGatherRange(2, DEFAULT_CHASE_RADIUS)).toBe(true);
+        expect(resourceWithinCamp(70, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+    });
+
+    test('camp scan covers far pier hops from home when chase-from-player would miss', () => {
+        // Player at home pin; spot at dist 50 (outside chase 24 / hunt 36, inside membership 64).
+        expect(spotWithinGatherRange(50, DEFAULT_CHASE_RADIUS)).toBe(false);
+        expect(spotWithinGatherRange(50, gatherHuntRadius(DEFAULT_CHASE_RADIUS))).toBe(false);
+        expect(resourceWithinCamp(50, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
+        // Old pin-disk stuck: spot at 72 > membership 64 needs a wider campRadius on that camp.
+        expect(resourceWithinCamp(72, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+        expect(resourceWithinCamp(72, 80)).toBe(true);
+    });
+
+    test('resolveCampRadius / resolveChaseRadius defaults', () => {
+        expect(DEFAULT_CAMP_RADIUS).toBe(64);
+        expect(DEFAULT_CHASE_RADIUS).toBe(24);
+        expect(resolveCampRadius(undefined)).toBe(64);
+        expect(resolveCampRadius(48)).toBe(48);
+        expect(resolveChaseRadius(undefined)).toBe(24);
+        expect(resolveChaseRadius(30)).toBe(30);
+        expect(gatherHuntRadius(DEFAULT_CHASE_RADIUS)).toBe(DEFAULT_CHASE_RADIUS + 12);
     });
 });
 
