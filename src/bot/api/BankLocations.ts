@@ -91,6 +91,11 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
     return best;
 }
 
+/** Whether this account's quests and stats unlock the bank at all. */
+export function bankUnlocked(bank: BankLocation): boolean {
+    return meetsRequirement(bank);
+}
+
 function meetsRequirement(bank: BankLocation): boolean {
     const req = bank.requires;
     if (!req) {

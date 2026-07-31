@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **38 scripts** across 18 categories. They double as worked
+The client ships **40 scripts** across 19 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -19,7 +19,8 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Crafting](#crafting) — 4
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
-- [Fletching](#fletching) — 1
+- [Fletching](#fletching) — 2
+- [Herblore](#herblore) — 1
 - [Mining](#mining) — 2
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 1
@@ -286,13 +287,13 @@ Tags: `rellekka`, `keys`, `afk`
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
-| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
-| `ammo` | string | `"Bronze arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Ogre arrow, Bolts, Barbed bolts |
-| `ammoWithdraw` | number (1–1000) | `200` | Ammo per bank trip |
-| `minStack` | number (1–50) | `1` | Ignore arrow stacks smaller than |
-| `collectRange` | number (2–30) | `12` | Arrow sweep range (tiles) |
+| `ammo` | string | `"Bronze arrow"` | Bow ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Ogre arrow, Bolts, Barbed bolts |
+| `ammoWithdraw` | number (1–1000) | `200` | Projectiles per bank trip |
+| `minStack` | number (1–50) | `1` | Ignore projectile stacks smaller than |
+| `collectRange` | number (2–30) | `12` | Projectile sweep range (tiles) |
 | `food` | string | `"Lobster"` | Food — one of: Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `eatAtHp` | number (1–99) | `50` | Eat below HP% |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
@@ -451,6 +452,24 @@ Tags: `fletching`, `banking`, `afk`
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `leashRadius` | number (2–20) | `6` | Booth search radius (tiles) |
 
+### DartFletcher
+
+Spam-attaches feathers to stackable dart tips at the five-action-per-tick server ceiling; runs anywhere until either input stack is empty
+
+Tags: `fletching`, `darts`, `members`, `fast`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `tier` | string | `"Bronze"` | Dart tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
+
+## Herblore
+
+### RoguesPurse
+
+Infinite Herblore grind at the fungus-covered cavern wall under the Karamja jungle — searches, identifies, and drops Rogues purse on the tick. Walks itself there; needs Herblore 3 and Jungle Potion past the point where Trufitus asks for the purse
+
+Tags: `herblore`, `karamja`, `members`, `afk`
+
 ## Mining
 
 ### EssMiner
@@ -546,7 +565,7 @@ Tags: `quest`, `queue`, `aio`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Rune Mysteries Quest, Doric's Quest, Sheep Shearer, The Restless Ghost, Cook's Assistant, Witch's Potion, Romeo & Juliet, Prince Ali Rescue, Waterfall Quest, Goblin Diplomacy, Demon Slayer, Witch's House, Merlin's Crystal, Priest in Peril, Black Knight's Fortress, Druidic Ritual, Lost City, The Tourist Trap, Watch Tower |
+| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Rune Mysteries Quest, Doric's Quest, Sheep Shearer, The Restless Ghost, Cook's Assistant, Witch's Potion, Romeo & Juliet, Prince Ali Rescue, Waterfall Quest, Goblin Diplomacy, Demon Slayer, Witch's House, Merlin's Crystal, Priest in Peril, Black Knight's Fortress, Druidic Ritual, Lost City, The Tourist Trap, Watch Tower, Vampire Slayer, Jungle Potion, Shilo Village |
 | `food` | string | `"Trout"` | Food item |
 | `eatAtHp` | number (1–99) | `50` | Eat below HP% |
 

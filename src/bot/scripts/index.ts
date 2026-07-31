@@ -41,12 +41,14 @@ import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter.js';
 import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
+import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
+import RoguesPurse from './RoguesPurse.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
@@ -398,6 +400,23 @@ ScriptRegistry.register({
     tags: ['fletching', 'banking', 'afk'],
     settingsSchema: BANKFLETCHER_SETTINGS,
     create: () => new BankFletcher()
+});
+
+ScriptRegistry.register({
+    name: 'DartFletcher',
+    description: 'Spam-attaches feathers to stackable dart tips at the five-action-per-tick server ceiling; runs anywhere until either input stack is empty',
+    category: 'Fletching',
+    tags: ['fletching', 'darts', 'members', 'fast'],
+    settingsSchema: DART_FLETCHER_SETTINGS,
+    create: () => new DartFletcher()
+});
+
+ScriptRegistry.register({
+    name: 'RoguesPurse',
+    description: 'Infinite Herblore grind at the fungus-covered cavern wall under the Karamja jungle — searches, identifies, and drops Rogues purse on the tick. Walks itself there; needs Herblore 3 and Jungle Potion past the point where Trufitus asks for the purse',
+    category: 'Herblore',
+    tags: ['herblore', 'karamja', 'members', 'afk'],
+    create: () => new RoguesPurse()
 });
 
 ScriptRegistry.register({

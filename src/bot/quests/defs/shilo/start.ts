@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import { Execution } from '../../../api/Execution.js';
 import { Traversal } from '../../../api/Traversal.js';
 import { ChatDialog } from '../../../api/hud/ChatDialog.js';

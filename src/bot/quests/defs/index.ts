@@ -6,7 +6,7 @@ import { restlessghost } from './restlessghost.js';
 import { cooksassistant } from './cooksassistant.js';
 import { hetty } from './hetty.js';
 import { romeojuliet } from './romeojuliet.js';
-import { princeali } from './princeali.js';
+import { princeali } from './princeali/index.js';
 import { waterfall } from './waterfall.js';
 import { goblindiplomacy } from './goblindiplomacy.js';
 import { demonslayer } from './demonslayer.js';

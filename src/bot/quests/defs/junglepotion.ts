@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
@@ -64,7 +63,7 @@ export const JUNGLE_HERBS: readonly JungleHerb[] = [
 ];
 
 // The cave mouth is 2x2 over (2824-2825, 3118-3119), so the stand is its west neighbour.
-const POTHOLE_ENTRANCE = { loc: 'Rocks', op: 'Search', stand: new Tile(2823, 3119, 0) };
+export const POTHOLE_ENTRANCE = { loc: 'Rocks', op: 'Search', stand: new Tile(2823, 3119, 0) };
 const POTHOLE_EXIT = { loc: 'Hand holds', op: 'Climb', stand: new Tile(2830, 9521, 0) };
 
 const START_DIALOGUE = [
@@ -75,7 +74,7 @@ const START_DIALOGUE = [
 
 const HAND_IN_DIALOGUE = ['Of course!'];
 
-function inCaves(tile: QuestSnapshot['tile']): boolean {
+export function inCaves(tile: QuestSnapshot['tile']): boolean {
     return tile !== null && tile !== undefined && tile.z >= 9400;
 }
 
@@ -168,7 +167,7 @@ export async function readJungleProgress(): Promise<QuestProgress | undefined> {
 }
 
 /** The cave mouth raises a message box first, then the yes/no prompt. */
-async function enterPothole(log: (m: string) => void): Promise<boolean> {
+export async function enterPothole(log: (m: string) => void): Promise<boolean> {
     if (inCaves(Game.tile())) {
         return true;
     }

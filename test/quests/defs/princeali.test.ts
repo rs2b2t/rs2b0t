@@ -1,183 +1,279 @@
-import { expect, test, describe } from 'bun:test';
-import { decide, princeali } from '#/bot/quests/defs/princeali.js';
-import type { QuestSnapshot } from '#/bot/quests/engine/types.js';
+import { describe, expect, test } from 'bun:test';
+
+import { PA_ITEM } from '#/bot/quests/defs/princeali/areas.js';
+import { PRINCE_STAGE } from '#/bot/quests/defs/princeali/journal.js';
+import { decide, princeali } from '#/bot/quests/defs/princeali/index.js';
+import type { QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
+
+const I = PA_ITEM;
+const S = PRINCE_STAGE;
+const RICH: [number, number][] = [[I.COINS.id, 2_000_000]];
+const PURSE: [number, number][] = [[I.COINS.id, 1000]];
+const DISGUISE: [number, number][] = [[I.BLOND_WIG.id, 1], [I.PINK_SKIRT.id, 1], [I.PASTE.id, 1]];
 
 const snap = (
-    journal: string,
-    items: [string, number][] = [],
-    noProgress = 0,
-    bankCoins = 0,
-    worn: string[] = []
+    stage: number | undefined,
+    invIds: [number, number][] = [],
+    bankIds: [number, number][] = RICH,
+    extra: Partial<QuestSnapshot> = {}
 ): QuestSnapshot => ({
-    journal: journal as QuestSnapshot['journal'],
-    inv: new Map(items),
-    worn: new Set(worn),
-    noProgress,
-    bankCoins
+    journal: stage === S.COMPLETE ? 'complete' : 'inProgress',
+    inv: new Map(),
+    invIds: new Map(invIds),
+    worn: new Set(),
+    wornIds: new Set(),
+    noProgress: 0,
+    bankCoins: 0,
+    bank: new Map(),
+    bankIds: new Map(bankIds),
+    bankKnown: true,
+    stage,
+    progress: stage === undefined ? undefined : { stage, flags: new Set() },
+    ...extra
 });
 
-const ALL4: [string, number][] = [['bronze key', 1], ['wig', 1], ['pink skirt', 1], ['paste', 1]];
+/** Everything the quest needs in the pack, so PREP falls through to the stage logic. */
+const kitted = (stage: number, extra: [number, number][] = []): QuestSnapshot =>
+    snap(stage, [
+        ...PURSE,
+        ...DISGUISE,
+        [I.PRINCE_KEY.id, 1],
+        [I.ROPE.id, 2],
+        [I.BEER.id, 3],
+        [I.JUG_OF_WATER.id, 1],
+        ...extra
+    ]);
 
-describe('princeali provisioning — raw items declared + gatherable', () => {
-    test('every acquirable record item has a gather fn (else the engine blocks it)', () => {
-        const acquirable = princeali.record.items.filter(i => i.kind === 'acquirable');
-        expect(acquirable.length).toBeGreaterThan(0);
-        for (const it of acquirable) {
-            expect(princeali.gather?.[it.name.toLowerCase()]).toBeDefined();
+describe('module shape', () => {
+    test('declares the Draynor bank at level 0', () => {
+        expect(princeali.bank?.x).toBe(3093);
+        expect(princeali.bank?.z).toBe(3243);
+        expect(princeali.bank?.level).toBe(0);
+    });
+
+    test('owns its own inventory and reads progress, with no gather map', () => {
+        expect(princeali.ownsInventory).toBe(true);
+        expect(princeali.readProgress).toBeDefined();
+        expect(princeali.gather).toBeUndefined();
+    });
+
+    test('every record item is acquirable, so eligibility never blocks the quest', () => {
+        expect(princeali.record.items.length).toBeGreaterThan(0);
+        for (const item of princeali.record.items) {
+            expect(item.kind).toBe('acquirable');
         }
     });
-    test('raw declarations are leaves only — no created/stage-gated or Leela-probe items', () => {
-        const names = princeali.record.items.map(i => i.name.toLowerCase());
-        for (const created of ['wig', 'blond wig', 'paste', 'soft clay', 'yellow dye', 'ashes', 'key print', 'bronze key', 'clay', 'bucket', 'beer']) {
-            expect(names).not.toContain(created);
-        }
+
+    test('the record keeps coins, or every dialogue purchase parks', () => {
+        expect(princeali.record.items.map(item => item.name.toLowerCase())).toContain('coins');
     });
-    test('declared raws are the cheap buyables — buy steps; onion/logs/wool are NOT provisioned', () => {
-        const s = snap('inProgress', [], 0, 100);
-        expect(princeali.gather!['redberries'](s, 1).kind).toBe('buy');
-        expect(princeali.gather!['bronze bar'](s, 1).kind).toBe('buy');
-        expect(princeali.gather!['pink skirt'](s, 1).kind).toBe('buy');
-        expect(princeali.gather!['rope'](s, 1).kind).toBe('buy');
-        for (const jit of ['onion', 'logs', 'ball of wool', 'clay', 'jug of water']) {
-            expect(princeali.gather?.[jit]).toBeUndefined();
-            expect(princeali.record.items.map(i => i.name.toLowerCase())).not.toContain(jit);
-        }
+
+    test('three quest points', () => {
+        expect(princeali.record.questPoints).toBe(3);
     });
 });
 
-describe('princeali decide — lifecycle', () => {
-    test('notStarted -> Hassan', () => {
-        const s = decide(snap('notStarted'));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Hassan');
+describe('lifecycle', () => {
+    test('an unloaded journal waits — it is not notStarted', () => {
+        expect(decide(snap(undefined, [], RICH, { journal: 'unknown' })).kind).toBe('wait');
     });
-    test('complete -> done; unknown -> wait', () => {
-        expect(decide(snap('complete')).kind).toBe('done');
-        expect(decide(snap('unknown')).kind).toBe('wait');
+
+    test('a loaded journal with no readable stage waits', () => {
+        expect(decide(snap(undefined)).kind).toBe('wait');
+    });
+
+    test('stage 0 -> Hassan', () => {
+        const step = decide(snap(S.NOT_STARTED, PURSE));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Hassan');
+    });
+
+    test('stage 10 -> Osman', () => {
+        const step = decide(snap(S.STARTED, PURSE));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Osman');
+    });
+
+    test('stage 100 -> Hassan for the reward', () => {
+        const step = decide(snap(S.SAVED));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Hassan');
+    });
+
+    test('stage 110 and a complete journal are both done', () => {
+        expect(decide(snap(S.COMPLETE)).kind).toBe('done');
+        expect(decide(snap(S.SAVED, [], RICH, { journal: 'complete' })).kind).toBe('done');
     });
 });
 
-describe('princeali decide — row 1 commits to the jailbreak on all-4', () => {
-    test('all 4 + coins in pack -> jailbreak custom (custom self-provisions beers/rope)', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['beer', 3], ['rope', 2], ['coins', 40]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
+describe('the purse comes before anything that walks', () => {
+    test('an unseen bank is scanned first, even at stage 0', () => {
+        const s = snap(S.NOT_STARTED, [], RICH, { bankKnown: false });
+        expect(decide(s).kind).toBe('scanBank');
     });
-    test('all 4, no supplies, pack coins present -> STILL jailbreak (not a buy detour)', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['coins', 40]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
+
+    // Al-Kharid is reachable only through the 10gp toll gate or the Shantay Pass, and
+    // the walker pre-avoids a crossing it cannot pay for.
+    test('stage 0 with an empty purse withdraws coins before walking to Hassan', () => {
+        const step = decide(snap(S.NOT_STARTED));
+        expect(step.kind === 'withdraw' && step.items[0].name).toBe('Coins');
     });
-    test('all 4, pack short of coins but bank covers -> withdraw coins first', () => {
-        const s = decide(snap('inProgress', [...ALL4], 0, 60));
-        expect(s.kind === 'withdraw' && s.items[0].name).toBe('Coins');
+
+    test('stage 10 with an empty purse withdraws coins before walking to Osman', () => {
+        const step = decide(snap(S.STARTED));
+        expect(step.kind === 'withdraw' && step.items[0].name).toBe('Coins');
     });
-    test('all 4, pack has enough coins -> jailbreak (no withdraw)', () => {
-        const s = decide(snap('inProgress', [...ALL4, ['coins', 30]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('jailbreak');
+
+    test('stage 100 does not need coins — the gate is free once the prince is out', () => {
+        const step = decide(snap(S.SAVED, [], []));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Hassan');
+    });
+
+    test('no coins anywhere at stage 20 is an honest wait, never a loop', () => {
+        expect(decide(snap(S.SPOKEN_OSMAN, [], [])).kind).toBe('wait');
     });
 });
 
-describe('princeali decide — row 3 Osman/key', () => {
-    test('key print + bronze bar -> talk Osman', () => {
-        const s = decide(snap('inProgress', [['key print', 1], ['bronze bar', 1]]));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Osman');
+describe('stage 20 route order', () => {
+    test('with coins, the first leg is the Al-Kharid bar', () => {
+        const step = decide(snap(S.SPOKEN_OSMAN, PURSE));
+        expect(step.kind === 'buy' && step.item).toBe('Bronze bar');
+        expect(step.kind === 'buy' && step.shop.npc).toBe('Shantay');
     });
-    test('key print, no bronze bar, bank covers -> buy Bronze bar at Shantay', () => {
-        const s = decide(snap('inProgress', [['key print', 1]], 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Bronze bar');
-        expect(s.kind === 'buy' && s.shop.npc).toBe('Shantay');
+
+    test('then the water, on the same Shantay trip', () => {
+        const step = decide(snap(S.SPOKEN_OSMAN, [...PURSE, [I.BRONZE_BAR.id, 1]]));
+        expect(step.kind === 'buy' && step.item).toBe('Jug of water');
+        expect(step.kind === 'buy' && step.shop.npc).toBe('Shantay');
     });
-    test('key print, no bronze bar, BROKE (no pack/bank coins) -> park a wait, never loop', () => {
-        const s = decide(snap('inProgress', [['key print', 1]], 0, 0));
-        expect(s.kind).toBe('wait');
+
+    test('then Lumbridge, before Varrock and before the west', () => {
+        const step = decide(snap(S.SPOKEN_OSMAN, [...PURSE, [I.BRONZE_BAR.id, 1], [I.JUG_OF_WATER.id, 2]]));
+        expect(step.kind === 'buy' && step.shop.npc).toBe('Shop keeper');
+    });
+
+    test('everything held -> Leela hands the key over and promotes the stage', () => {
+        const step = decide(kitted(S.SPOKEN_OSMAN));
+        expect(step.kind === 'custom' && step.name).toContain('Leela');
     });
 });
 
-describe('princeali decide — rows 4/5/6 key acquisition', () => {
-    test('soft clay held -> osman briefing + keli imprint (custom)', () => {
-        const s = decide(snap('inProgress', [['soft clay', 1]]));
-        expect(s.kind === 'custom' && s.name).toBe('osman briefing + keli imprint');
+describe('stage 20 resumability', () => {
+    test('a soft clay in the pack routes to Lady Keli, not back to the mine', () => {
+        const step = decide(
+            snap(S.SPOKEN_OSMAN, [...PURSE, ...DISGUISE, [I.SOFT_CLAY.id, 1], [I.BRONZE_BAR.id, 1], [I.ROPE.id, 2], [I.BEER.id, 3], [I.JUG_OF_WATER.id, 1]])
+        );
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Lady Keli');
     });
-    test('fresh start (holds Bronze bar + pickaxe), noProgress 0 -> mine Clay, NOT a premature Osman trip', () => {
-        const s = decide(snap('inProgress', [['bronze bar', 1], ['bronze pickaxe', 1]], 0));
-        expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
+
+    test('a print plus a bar routes to the forge-and-collect', () => {
+        const step = decide(
+            snap(S.SPOKEN_OSMAN, [...PURSE, ...DISGUISE, [I.KEY_PRINT.id, 1], [I.BRONZE_BAR.id, 1], [I.ROPE.id, 2], [I.BEER.id, 3], [I.JUG_OF_WATER.id, 1]])
+        );
+        expect(step.kind === 'custom' && step.name).toContain('Osman');
     });
-    test('post-forge (Bronze bar consumed), noProgress 0 -> collect the key from Leela', () => {
-        const s = decide(snap('inProgress', [], 0));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Leela');
+
+    test('a banked key is withdrawn rather than re-forged', () => {
+        const step = decide(
+            snap(
+                S.SPOKEN_OSMAN,
+                [...PURSE, ...DISGUISE, [I.ROPE.id, 2], [I.BEER.id, 3], [I.JUG_OF_WATER.id, 1]],
+                [...RICH, [I.PRINCE_KEY.id, 1]]
+            )
+        );
+        expect(step.kind === 'withdraw' && step.items.some(item => item.id === I.PRINCE_KEY.id)).toBe(true);
     });
-    test('empty-handed, Leela stalled (noProgress 1), pickaxe in pack -> mine Clay', () => {
-        const s = decide(snap('inProgress', [['bronze pickaxe', 1]], 1));
-        expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
+
+    test('a plain wig plus dye routes to dyeing it, not to Ned for another wig', () => {
+        const step = decide(
+            snap(S.SPOKEN_OSMAN, [
+                ...PURSE,
+                [I.BRONZE_BAR.id, 1],
+                [I.JUG_OF_WATER.id, 2],
+                [I.TINDERBOX.id, 1],
+                [I.PINK_SKIRT.id, 1],
+                [I.CLAY.id, 1],
+                [I.REDBERRIES.id, 1],
+                [I.POT_OF_FLOUR.id, 1],
+                [I.BEER.id, 3],
+                [I.ASHES.id, 1],
+                [I.PLAIN_WIG.id, 1],
+                [I.YELLOW_DYE.id, 1]
+            ])
+        );
+        expect(step.kind).toBe('custom');
+        expect(step.kind === 'custom' && step.name).toContain('dye');
     });
-    test('empty-handed, Leela stalled, NO pickaxe -> get a pickaxe (bank-first, then spawn)', () => {
-        const s = decide(snap('inProgress', [], 1));
-        expect(s.kind === 'custom' && s.name).toBe('get a pickaxe');
-    });
-    test('a pickaxe EQUIPPED (worn) counts -> mine Clay, no fetch', () => {
-        const s = decide(snap('inProgress', [], 1, 0, ['iron pickaxe']));
-        expect(s.kind === 'mineRock' && s.rock).toBe('Clay');
-    });
-    test('has clay, no water, bank covers -> buy Jug of water at Shantay', () => {
-        const s = decide(snap('inProgress', [['clay', 1]], 1, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Jug of water');
-        expect(s.kind === 'buy' && s.shop.npc).toBe('Shantay');
-    });
-    test('has clay + jug of water -> make soft clay (item-on-item)', () => {
-        const s = decide(snap('inProgress', [['clay', 1], ['jug of water', 1]], 1));
-        expect(s.kind === 'useOn' && s.targetKind).toBe('item');
-        expect(s.kind === 'useOn' && s.item).toBe('Jug of water');
-        expect(s.kind === 'useOn' && s.product).toBe('Soft clay');
+
+    // The west cluster is walked before Draynor, so the pickaxe leg has to come
+    // before the wig legs even though the wig is what the quest is waiting on.
+    test('the route reaches the pickaxe before the Draynor crafting', () => {
+        const step = decide(
+            snap(S.SPOKEN_OSMAN, [...PURSE, [I.BRONZE_BAR.id, 1], [I.JUG_OF_WATER.id, 2], [I.TINDERBOX.id, 1], [I.PLAIN_WIG.id, 1], [I.YELLOW_DYE.id, 1], [I.PINK_SKIRT.id, 1]])
+        );
+        expect(step.kind === 'grabGround' && step.item).toBe('Bronze pickaxe');
     });
 });
 
-describe('princeali decide — row 7 wig', () => {
-    test('have key, no wig -> wig pipeline (custom)', () => {
-        const s = decide(snap('inProgress', [['bronze key', 1]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('wig');
+describe('stages 30 through 50', () => {
+    test('30 -> Joe', () => {
+        const step = decide(kitted(S.PREP_FINISHED));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Joe');
     });
-    test('plain wig + yellow dye (mid-dye) still routes to wig pipeline', () => {
-        const s = decide(snap('inProgress', [['bronze key', 1], ['wig', 1], ['yellow dye', 1]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('wig');
+
+    test('40 -> the break-in', () => {
+        const step = decide(kitted(S.GUARD_DRUNK));
+        expect(step.kind === 'custom' && step.name).toContain('Keli');
+    });
+
+    test('50 -> the break-in', () => {
+        const step = decide(kitted(S.TIED_KELI));
+        expect(step.kind === 'custom' && step.name).toContain('Keli');
+    });
+
+    test('30 short of beer buys more rather than talking to Joe empty-handed', () => {
+        const step = decide(snap(S.PREP_FINISHED, [...PURSE, ...DISGUISE, [I.PRINCE_KEY.id, 1], [I.ROPE.id, 1]]));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Bartender');
     });
 });
 
-describe('princeali decide — row 8 paste chain', () => {
-    const base: [string, number][] = [['bronze key', 1], ['wig', 1]];
-    test('no redberries -> buy at Port Sarim (Wydin)', () => {
-        const s = decide(snap('inProgress', base, 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Redberries');
-        expect(s.kind === 'buy' && s.shop.npc).toBe('Wydin');
+describe('stages 30 through 50 recover a lost disguise instead of parking', () => {
+    // Dying at stage 40 drops the non-tradeable quest items. The issue asks for
+    // resumability from any point, so the prep legs have to run here too.
+    test('a lost paste at stage 40 goes shopping, it does not wait', () => {
+        const step = decide(
+            snap(S.GUARD_DRUNK, [...PURSE, [I.BLOND_WIG.id, 1], [I.PINK_SKIRT.id, 1], [I.PRINCE_KEY.id, 1], [I.ROPE.id, 1]])
+        );
+        expect(step.kind).not.toBe('wait');
+        expect(step.kind).not.toBe('done');
     });
-    test('no pot of flour -> buy at Port Sarim', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1]], 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Pot of flour');
+
+    test('a lost wig at stage 50 rebuilds it from wool', () => {
+        const step = decide(
+            snap(S.TIED_KELI, [...PURSE, [I.PINK_SKIRT.id, 1], [I.PASTE.id, 1], [I.PRINCE_KEY.id, 1], [I.ROPE.id, 1]])
+        );
+        expect(step.kind).not.toBe('wait');
     });
-    test('no ashes, no tinderbox -> buy Tinderbox at Lumbridge general', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1]], 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Tinderbox');
-        expect(s.kind === 'buy' && s.shop.npc).toBe('Shop keeper');
+
+    test('a lost key at stage 40 asks Leela to replace it, never Osman', () => {
+        const step = decide(snap(S.GUARD_DRUNK, [...PURSE, ...DISGUISE, [I.ROPE.id, 1]]));
+        expect(step.kind === 'custom' && step.name).toContain('Leela');
+        expect(step.kind === 'custom' && step.name).not.toContain('Osman');
     });
-    test('tinderbox but no logs -> grab Logs', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['tinderbox', 1]]));
-        expect(s.kind === 'grabGround' && s.item).toBe('Logs');
+
+    test('a lost rope at stage 50 buys another from Ned', () => {
+        const step = decide(snap(S.TIED_KELI, [...PURSE, ...DISGUISE, [I.PRINCE_KEY.id, 1]]));
+        expect(step.kind === 'talk' && step.stop.npc).toBe('Ned');
     });
-    test('tinderbox + logs -> burn for ashes (custom)', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['tinderbox', 1], ['logs', 1]]));
-        expect(s.kind === 'custom' && s.name.toLowerCase()).toContain('ash');
-    });
-    test('ashes but no water -> buy Jug of water', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['ashes', 1]], 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Jug of water');
-    });
-    test('all paste ingredients + water -> talk Aggie', () => {
-        const s = decide(snap('inProgress', [...base, ['redberries', 1], ['pot of flour', 1], ['ashes', 1], ['jug of water', 1]]));
-        expect(s.kind === 'talk' && s.stop.npc).toBe('Aggie');
+
+    test('no clay is mined at stage 40 — Osman would refuse the print', () => {
+        const step = decide(snap(S.GUARD_DRUNK, [...PURSE, ...DISGUISE, [I.PRINCE_KEY.id, 1], [I.ROPE.id, 1], [I.PICKAXE.id, 1]]));
+        expect(step.kind).not.toBe('mineRock');
     });
 });
 
-describe('princeali decide — row 9 skirt', () => {
-    test('no pink skirt -> buy at Thessalia', () => {
-        const s = decide(snap('inProgress', [['bronze key', 1], ['wig', 1], ['paste', 1]], 0, 100));
-        expect(s.kind === 'buy' && s.item).toBe('Pink skirt');
-        expect(s.kind === 'buy' && s.shop.npc).toBe('Thessalia');
-    });
+describe('every stage produces a step', () => {
+    for (const stage of Object.values(S)) {
+        test(`stage ${stage} never returns undefined`, () => {
+            const step: QuestStep = decide(kitted(stage));
+            expect(step.kind).toBeDefined();
+        });
+    }
 });

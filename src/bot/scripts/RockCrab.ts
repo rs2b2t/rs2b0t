@@ -16,7 +16,7 @@ import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, describeCombatStyle, parseCo
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
-import { BOWS, STAFFS } from '../api/combat/equipment.js';
+import { STAFFS } from '../api/combat/equipment.js';
 import { sweepPlan } from '../api/combat/AmmoLogic.js';
 import type { GroundItem } from '../api/queries/GroundItems.js';
 import { Paint } from '../api/hud/Paint.js';
@@ -32,6 +32,7 @@ import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
+import { ROCK_CRAB_RANGED_WEAPONS, rangeSupplyEmpty, rockCrabRangeLoadout } from './RockCrabRangeLogic.js';
 
 const DEFAULT_RESET = new Tile(2712, 3688, 0);
 const DEFAULT_BANK = new Tile(2725, 3491, 0);
@@ -63,13 +64,13 @@ export const SETTINGS: SettingsSchema = {
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE, help: 'which melee stat to train; re-applied each login since com_mode is not saved' },
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE, help: 'rapid trains Ranged fastest; longrange splits xp with Defence' },
     staff: { type: 'string', default: 'Staff of air', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE, help: 'wielded staff, withdrawn from bank when missing' },
-    bow: { type: 'string', default: 'Maple shortbow', options: BOWS, label: 'Bow', group: 'Combat', showIf: SHOW_RANGE, help: 'wielded bow, withdrawn from bank when missing' },
+    bow: { type: 'string', default: 'Maple shortbow', options: ROCK_CRAB_RANGED_WEAPONS, label: 'Ranged weapon', group: 'Combat', showIf: SHOW_RANGE, help: 'bows use the selected ammo; darts are the weapon and projectile stack' },
     spell: { type: 'string', default: 'Wind Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
-    ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
-    ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
-    minStack: { type: 'number', default: 1, min: 1, max: 50, label: 'Ignore arrow stacks smaller than', group: 'Combat', showIf: SHOW_RANGE, help: 'every kill sweeps your arrows off the ground; stacks below this size are not worth the walk' },
-    collectRange: { type: 'number', default: 12, min: 2, max: 30, label: 'Arrow sweep range (tiles)', group: 'Combat', showIf: SHOW_RANGE },
+    ammo: { type: 'string', default: 'Bronze arrow', options: AMMO_OPTIONS, label: 'Bow ammo', group: 'Combat', showIf: SHOW_RANGE, help: 'used by bows; ignored when the ranged weapon is a dart' },
+    ammoWithdraw: { type: 'number', default: 200, min: 1, max: 1000, label: 'Projectiles per bank trip', group: 'Combat', showIf: SHOW_RANGE },
+    minStack: { type: 'number', default: 1, min: 1, max: 50, label: 'Ignore projectile stacks smaller than', group: 'Combat', showIf: SHOW_RANGE, help: 'every kill sweeps your arrows, bolts or darts off the ground; stacks below this size are not worth the walk' },
+    collectRange: { type: 'number', default: 12, min: 2, max: 30, label: 'Projectile sweep range (tiles)', group: 'Combat', showIf: SHOW_RANGE },
 
     food: { type: 'string', default: 'Lobster', options: FOOD_OPTIONS, label: 'Food', group: 'Food & healing' },
     eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', group: 'Food & healing' },
@@ -198,7 +199,8 @@ export default class RockCrab extends TaskBot {
             enabled: () => SOLVE_CLUES
         });
 
-        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${AMMO}' w/ '${WEAPON || '(no weapon set)'}' (${this.settings.str('rangeStyle', 'rapid')}, sweep>=${MIN_STACK})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
+        const loadout = rangeLoadout();
+        const styleNote = STYLE === 'mage' ? `, mage '${SPELL}' w/ '${WEAPON || '(no weapon set)'}'` : STYLE === 'range' ? `, range '${loadout.projectile}'${loadout.thrown ? ' (thrown)' : ` w/ '${loadout.weapon || '(no weapon set)'}'`} (${this.settings.str('rangeStyle', 'rapid')}, sweep>=${MIN_STACK})` : ` (${this.settings.str('meleeStyle', 'strength')})`;
         this.log(`RockCrab starting — spots [${LOCS.map(t => `${t.x},${t.z}`).join(' | ')}] starting at ${currentSpot()} r${FIELD_RADIUS}, stack ${DESIRED_STACK}, food '${FOOD_NAME}' (eat<${Math.round(EAT_HP * 100)}%), bank ${BANK_TILE}, style ${STYLE}${styleNote}`);
         if (STYLE === 'mage' && spellButtonCom(SPELL) === -1) {
             this.log(`WARNING: '${SPELL}' is not an autocastable spell (Wind/Water/Earth/Fire Strike, Bolt, Blast or Wave) — autocast will not arm`);
@@ -236,7 +238,7 @@ export default class RockCrab extends TaskBot {
             new GearEquip(this),
             new SetAttackStyle(this),
             new ArmAutocast(this),
-            new CollectAmmo(this),
+            new CollectProjectiles(this),
             this.solveClue!,
             new BankRun(this),
             new PeriodicBank({
@@ -277,7 +279,7 @@ export default class RockCrab extends TaskBot {
             const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
             const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
             p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
-            const styleCol = STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `Quiver: ${quiverCount()}  ground ${ammoStacksOnGround().reduce((n, g) => n + g.count, 0)}` : `Resets: ${this.resets}`;
+            const styleCol = STYLE === 'mage' ? `Casts: ${castsLeft()}${Autocast.armed() ? '' : ' (OFF)'}` : STYLE === 'range' ? `${rangeLoadout().thrown ? 'Darts' : 'Quiver'}: ${equippedProjectileCount()}  ground ${projectileStacksOnGround().reduce((n, g) => n + g.count, 0)}` : `Resets: ${this.resets}`;
             p.row(`Food: ${foodCount()}`, styleCol, this.deaths ? `Deaths: ${this.deaths}` : `Banks: ${this.bankTrips}`);
             p.bar('HP', Skills.hpFraction());
         } else if (tab === 'Loot') {
@@ -429,17 +431,27 @@ function wieldedNames(): string[] {
     return Equipment.items().map(i => i.name ?? '');
 }
 
-function quiverCount(): number {
-    return Equipment.items().find(i => (i.name ?? '').toLowerCase() === AMMO.toLowerCase())?.count ?? 0;
+function rangeLoadout() {
+    return rockCrabRangeLoadout(WEAPON, AMMO);
+}
+
+function rangeProjectile(): string {
+    return rangeLoadout().projectile;
+}
+
+function equippedProjectileCount(): number {
+    const projectile = rangeProjectile().toLowerCase();
+    return Equipment.items().find(i => (i.name ?? '').toLowerCase() === projectile)?.count ?? 0;
 }
 
 function castsLeft(): number {
     return castsAvailable(SPELL, wieldedNames(), rune => Inventory.count(rune));
 }
 
-function ammoStacksOnGround(): GroundItem[] {
+function projectileStacksOnGround(): GroundItem[] {
+    const projectile = rangeProjectile().toLowerCase();
     return GroundItems.query()
-        .where(g => (g.name ?? '').toLowerCase() === AMMO.toLowerCase() && inField(g.tile()))
+        .where(g => (g.name ?? '').toLowerCase() === projectile && inField(g.tile()))
         .results();
 }
 
@@ -453,7 +465,8 @@ function needStyleSupplies(): boolean {
         return castsLeft() < 1;
     }
     if (STYLE === 'range') {
-        return quiverCount() === 0 && Inventory.count(AMMO) === 0 && ammoStacksOnGround().length === 0;
+        const projectile = rangeProjectile();
+        return rangeSupplyEmpty(equippedProjectileCount(), Inventory.count(projectile), projectileStacksOnGround().length);
     }
     return false;
 }
@@ -462,8 +475,9 @@ function cluePending(): boolean {
     return SOLVE_CLUES && Inventory.items().some(i => (i.name ?? '').toLowerCase() === 'clue scroll');
 }
 
-async function sweepAmmoOnce(bot: RockCrab, force: boolean): Promise<number> {
-    const stacks = ammoStacksOnGround();
+async function sweepProjectilesOnce(bot: RockCrab, force: boolean): Promise<number> {
+    const projectile = rangeProjectile();
+    const stacks = projectileStacksOnGround();
     const plan = new Set(
         sweepPlan(
             stacks.map(g => ({ key: stackKey(g), count: g.count, distance: g.distance() })),
@@ -475,21 +489,22 @@ async function sweepAmmoOnce(bot: RockCrab, force: boolean): Promise<number> {
         if (EventSignal.pending() || bot.died || !plan.has(stackKey(stack))) {
             continue;
         }
-        const before = Inventory.count(AMMO);
+        const before = Inventory.count(projectile);
         await stack.interact('Take');
-        if (await Execution.delayUntil(() => Inventory.count(AMMO) > before, 5000)) {
+        if (await Execution.delayUntil(() => Inventory.count(projectile) > before, 5000)) {
             collected++;
-            bot.log(`swept ${Inventory.count(AMMO) - before} ${AMMO} off the ground`);
+            bot.log(`swept ${Inventory.count(projectile) - before} ${projectile} off the ground`);
         }
     }
-    if (Inventory.count(AMMO) > 0) {
-        await quiverPackAmmo();
+    if (Inventory.count(projectile) > 0) {
+        await equipPackProjectiles();
     }
     return collected;
 }
 
-async function quiverPackAmmo(): Promise<boolean> {
-    const item = Inventory.first(AMMO);
+async function equipPackProjectiles(): Promise<boolean> {
+    const projectile = rangeProjectile();
+    const item = Inventory.first(projectile);
     if (!item) {
         return true;
     }
@@ -497,9 +512,9 @@ async function quiverPackAmmo(): Promise<boolean> {
     if (!op) {
         return false;
     }
-    const before = Inventory.count(AMMO);
+    const before = Inventory.count(projectile);
     await item.interact(op);
-    return Execution.delayUntil(() => Inventory.count(AMMO) < before, 3000);
+    return Execution.delayUntil(() => Inventory.count(projectile) < before, 3000);
 }
 
 async function eatOnce(bot: RockCrab): Promise<boolean> {
@@ -554,7 +569,7 @@ class GearEquip implements Task {
         if (WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) !== null) {
             return true;
         }
-        return STYLE === 'range' && Inventory.count(AMMO) > 0;
+        return STYLE === 'range' && Inventory.count(rangeProjectile()) > 0;
     }
 
     async execute(): Promise<void> {
@@ -568,11 +583,12 @@ class GearEquip implements Task {
             }
             return;
         }
-        if (await quiverPackAmmo()) {
-            this.bot.log(`quivered ${AMMO} — ${quiverCount()} carried`);
+        const projectile = rangeProjectile();
+        if (await equipPackProjectiles()) {
+            this.bot.log(`equipped ${projectile} — ${equippedProjectileCount()} ready`);
             this.fails = 0;
         } else if (++this.fails >= 5) {
-            this.bot.log(`WARNING: could not move '${AMMO}' from the pack to the quiver after 5 tries`);
+            this.bot.log(`WARNING: could not equip '${projectile}' from the pack after 5 tries`);
         }
     }
 }
@@ -644,31 +660,38 @@ class ArmAutocast implements Task {
     }
 }
 
-class CollectAmmo implements Task {
+class CollectProjectiles implements Task {
     private warnedMismatch = false;
 
     constructor(private bot: RockCrab) {}
 
     private force(): boolean {
-        const quiverDry = quiverCount() === 0 && Inventory.count(AMMO) === 0;
-        return quiverDry || (!hasFood() && !this.bot.bankIsKnownEmpty()) || needStyleSupplies() || cluePending();
+        const projectile = rangeProjectile();
+        const equippedDry = equippedProjectileCount() === 0 && Inventory.count(projectile) === 0;
+        return equippedDry || (!hasFood() && !this.bot.bankIsKnownEmpty()) || needStyleSupplies() || cluePending();
     }
 
     validate(): boolean {
         if (STYLE !== 'range') {
             return false;
         }
-        if (!this.warnedMismatch && GroundItems.query().where(g => /arrow|bolt/i.test(g.name ?? '') && (g.name ?? '').toLowerCase() !== AMMO.toLowerCase() && inField(g.tile())).nearest() !== null) {
+        const projectile = rangeProjectile();
+        if (
+            !this.warnedMismatch &&
+            GroundItems.query()
+                .where(g => /arrow|bolt|dart/i.test(g.name ?? '') && (g.name ?? '').toLowerCase() !== projectile.toLowerCase() && inField(g.tile()))
+                .nearest() !== null
+        ) {
             this.warnedMismatch = true;
-            this.bot.log(`WARNING: ground ammo in the field does not match the '${AMMO}' setting — those will never be collected. Fix the Ammo dropdown if they're yours.`);
+            this.bot.log(`WARNING: ground projectiles in the field do not match '${projectile}' — those will not be collected. Check the Ranged weapon and Bow ammo settings if they're yours.`);
         }
-        const stacks = ammoStacksOnGround().map(g => ({ key: stackKey(g), count: g.count, distance: g.distance() }));
+        const stacks = projectileStacksOnGround().map(g => ({ key: stackKey(g), count: g.count, distance: g.distance() }));
         return sweepPlan(stacks, { minStack: MIN_STACK, range: COLLECT_RANGE, force: this.force() }).length > 0;
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus(`sweeping ${AMMO}`);
-        await sweepAmmoOnce(this.bot, this.force());
+        this.bot.setStatus(`sweeping ${rangeProjectile()}`);
+        await sweepProjectilesOnce(this.bot, this.force());
     }
 }
 
@@ -686,6 +709,9 @@ class BankRun implements Task {
     }
 
     private needWeapon(): boolean {
+        if (STYLE === 'range' && rangeLoadout().thrown) {
+            return false;
+        }
         return STYLE !== 'melee' && WEAPON !== '' && !Equipment.contains(WEAPON) && Inventory.first(WEAPON) === null && !this.bot.weaponKnownMissing();
     }
 
@@ -694,7 +720,7 @@ class BankRun implements Task {
             return;
         }
         this.bot.setStatus('restocking — walking to the bank');
-        this.bot.log(`banking at ${BANK_TILE} (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, ammo ${quiverCount()}` : ''}${this.needWeapon() ? `, need ${WEAPON}` : ''})`);
+        this.bot.log(`banking at ${BANK_TILE} (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, projectiles ${equippedProjectileCount()}` : ''}${this.needWeapon() ? `, need ${WEAPON}` : ''})`);
 
         if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
             this.bot.log('walk to the bank failed — will retry');
@@ -783,15 +809,18 @@ class BankRun implements Task {
                 this.bot.noteStyleSupplyEmpty(false);
             }
         } else if (STYLE === 'range') {
-            this.bot.setStatus(`withdrawing ${AMMO}`);
-            const gained = await this.withdrawTo(AMMO, AMMO_WITHDRAW);
+            const projectile = rangeProjectile();
+            this.bot.setStatus(`withdrawing ${projectile}`);
+            const gained = await this.withdrawTo(projectile, AMMO_WITHDRAW);
             if (gained > 0) {
-                await Equipment.equip(AMMO);
-                this.bot.log(`withdrew ${gained} ${AMMO} — quiver ${quiverCount()}`);
+                if (!(await Bank.close()) || !(await equipPackProjectiles())) {
+                    this.bot.log(`WARNING: withdrew ${projectile}, but could not equip the stack — will retry from the pack`);
+                }
+                this.bot.log(`withdrew ${gained} ${projectile} — ${equippedProjectileCount()} equipped`);
                 this.bot.noteStyleSupplyEmpty(false);
-            } else if (quiverCount() === 0 && Inventory.count(AMMO) === 0) {
+            } else if (equippedProjectileCount() === 0 && Inventory.count(projectile) === 0) {
                 this.bot.noteStyleSupplyEmpty(true);
-                this.bot.log(`WARNING: no '${AMMO}' in the bank and none carried — deposit ammo to resume. Collected arrows will re-enable shooting.`);
+                this.bot.log(`WARNING: no '${projectile}' in the bank and none carried — deposit projectiles to resume. Recovered projectiles will re-enable ranged combat.`);
             }
         }
     }
@@ -872,6 +901,9 @@ class Fight implements Task {
         if (Skills.hpFraction() < FIGHT_HP_GATE) {
             return false;
         }
+        if (STYLE === 'range' && equippedProjectileCount() === 0) {
+            return false;
+        }
         return stackReady();
     }
 
@@ -891,6 +923,9 @@ class Fight implements Task {
                 continue;
             }
             if (Skills.hpFraction() < FIGHT_HP_GATE) {
+                return;
+            }
+            if (STYLE === 'range' && equippedProjectileCount() === 0) {
                 return;
             }
 
@@ -918,7 +953,7 @@ class Fight implements Task {
                 }
                 this.bot.log(`rock crab down — ${this.bot.killsTotal()} kills total`);
                 if (STYLE === 'range') {
-                    await sweepAmmoOnce(this.bot, false);
+                    await sweepProjectilesOnce(this.bot, false);
                 }
             }
             this.lastCount = remaining;
@@ -932,7 +967,7 @@ class Aggro implements Task {
     constructor(private bot: RockCrab) {}
 
     validate(): boolean {
-        if (Skills.hpFraction() < FIGHT_HP_GATE || this.bot.deAggroed()) {
+        if (Skills.hpFraction() < FIGHT_HP_GATE || this.bot.deAggroed() || (STYLE === 'range' && equippedProjectileCount() === 0)) {
             return false;
         }
         return activeCrabs().length < DESIRED_STACK && dormantRocks().length > 0;

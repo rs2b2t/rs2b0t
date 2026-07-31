@@ -29,5 +29,5 @@ How the client works, how to run it, and how to write bots for it.
 
 ---
 
-`docs/superpowers/` holds design specs and implementation plans. Those are historical
-records of decisions, not part of this manual.
+Design specs and implementation plans are working notes, not part of this manual, and
+are not committed — see `.gitignore`.

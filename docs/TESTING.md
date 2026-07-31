@@ -113,14 +113,25 @@ Some hard-won details:
   level-93 boss. `Equipment.equip()` awaits `Execution.delayUntil`, which needs a
   running script context and throws from `page.evaluate` — drive the Wield/Wear
   held-op yourself; the direct input driver's is synchronous.
-- **`::give` reaches the inventory, never the bank.** There is no working bank cheat
-  in the current content, so a bank-withdraw path stays a unit-test concern.
+- **`::give` reaches the inventory, never the bank** — but `::bank_f2p` stocks the bank
+  (coins included) and raises no dialog, so bank-withdraw paths *are* testable. Prefer it
+  to `::bank_preset`, which first asks "This clears your bank. Continue?" and needs the
+  choice answered before it does anything.
+- **`::death` is a clean kill** (`~damage_self(999)`): respawn is Lumbridge `(3221,3218)`,
+  and `move_priciest_item_on_hero_to_death` keeps *one* of each of the three priciest items
+  — so a coin stack comes back as a single coin. Use it to test death recovery for real
+  rather than seeding a post-death pose.
 - **A stage test seeds only what that stage produces, never its tools.** See
   [Quests](QUESTS.md#adding-a-quest) — every Watch Tower stage-10 test handed the bot
   a pickaxe, so all of them passed while the quest could not mine.
   [`tools/shilo-solo-test.ts`](../tools/shilo-solo-test.ts) is the current worked
   example: `--stage`/`--bits` jump the quest varps, `--tele` drops the account beside
   the leg under test, and `--speed 300` runs the engine at 2× ticks.
+- **Measure throughput per tick, never per hour.** A dev world does not tick at 600ms
+  and `--speed` changes it again, so an actions/hour figure read off a sim is fiction.
+  [`tools/roguespurse-test.ts`](../tools/roguespurse-test.ts) reports herbs/**tick**
+  from the `host.tickCount` delta, which is comparable to the engine's own limits
+  (5 user events per tick) and to a real 600ms world.
 
 ## The end-to-end smoke
 

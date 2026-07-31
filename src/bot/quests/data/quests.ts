@@ -103,12 +103,15 @@ export const QUESTS: QuestRecord[] = [
         questPoints: 3,
         requirements: {},
         items: [
+            { name: 'Coins', qty: 400, kind: 'acquirable' },
+            { name: 'Bronze bar', qty: 1, kind: 'acquirable' },
+            { name: 'Pink skirt', qty: 1, kind: 'acquirable' },
             { name: 'Redberries', qty: 1, kind: 'acquirable' },
             { name: 'Pot of flour', qty: 1, kind: 'acquirable' },
             { name: 'Tinderbox', qty: 1, kind: 'acquirable' },
-            { name: 'Bronze bar', qty: 1, kind: 'acquirable' },
-            { name: 'Pink skirt', qty: 1, kind: 'acquirable' },
-            { name: 'Rope', qty: 1, kind: 'acquirable' }
+            { name: 'Shears', qty: 1, kind: 'acquirable' },
+            { name: 'Rope', qty: 2, kind: 'acquirable' },
+            { name: 'Beer', qty: 3, kind: 'acquirable' }
         ]
     },
     {

@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import Tile from '../../../api/Tile.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 

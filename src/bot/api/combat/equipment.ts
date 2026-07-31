@@ -7,6 +7,8 @@ export const BOWS: string[] = [
     'Magic shortbow', 'Magic longbow'
 ];
 
+export const DARTS: string[] = ['Bronze dart', 'Iron dart', 'Steel dart', 'Black dart', 'Mithril dart', 'Adamant dart', 'Rune dart'];
+
 export const MELEE_WEAPONS: string[] = [
     'Bronze scimitar', 'Iron scimitar', 'Steel scimitar', 'Black scimitar', 'Mithril scimitar', 'Adamant scimitar', 'Rune scimitar',
     'Bronze sword', 'Iron sword', 'Steel sword', 'Black sword', 'Mithril sword', 'Adamant sword', 'Rune sword',

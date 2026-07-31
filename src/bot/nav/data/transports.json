@@ -72,5 +72,6 @@
     {"from":{"x":2549,"z":3112,"level":1},"to":{"x":2549,"z":3112,"level":2},"locName":"Ladder","action":"Climb-up","kind":"stair"},
     {"from":{"x":2549,"z":3112,"level":2},"to":{"x":2549,"z":3112,"level":1},"locName":"Ladder","action":"Climb-down","kind":"stair"},
     {"from":{"x":2933,"z":4712,"level":2},"to":{"x":2933,"z":4712,"level":1},"locName":"Ladder","action":"Climb-down","kind":"stair"},
-    {"from":{"x":2511,"z":3091,"level":0},"to":{"x":2511,"z":3096,"level":0},"locName":"Ropeswing","action":"Swing-on","kind":"dungeon"}
+    {"from":{"x":2511,"z":3091,"level":0},"to":{"x":2511,"z":3096,"level":0},"locName":"Ropeswing","action":"Swing-on","kind":"dungeon"},
+    {"from":{"x":3304,"z":3114,"level":0},"to":{"x":3304,"z":3118,"level":0},"locName":"Shantay pass","action":"Go-through","kind":"dungeon"}
 ]

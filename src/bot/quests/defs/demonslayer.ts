@@ -47,13 +47,16 @@ const MANHOLE_TILE = new Tile(3237, 3458, 0);
 const SEWER_LAND = new Tile(3237, 9858, 0);
 const SEWER_KEY = new Tile(3225, 9897, 0);
 const DELRITH_TILE = new Tile(3229, 3369, 0);
-const WIZARD_ANCHOR = new Tile(3107, 3159, 0);
+const GOBLIN_ANCHOR = new Tile(3144, 3231, 0);
 const WIZ_L1_STAND = new Tile(3105, 3160, 1);
 const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3414, 0) };
 
 const INCANTATION = 'Aber Camerinthum Purchai Gabindo';
 
 const BONES_NEEDED = 25;
+const BONES_ID = 526;
+const GOBLIN_ID = 100;
+const GOBLIN_RADIUS = 20;
 
 const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
 const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
@@ -73,26 +76,42 @@ function fillBucket(snap: QuestSnapshot): QuestStep {
     return buyOrWait(snap, { kind: 'buy', item: 'Bucket', qty: 1, shop: VARROCK_GENERAL, estGp: 15 });
 }
 
-async function grindWizards(log: (m: string) => void): Promise<boolean> {
+async function grindGoblins(log: (m: string) => void): Promise<boolean> {
     if (Inventory.count('Bones') >= BONES_NEEDED) {
         return true;
     }
-    const drop = GroundItems.query().name('Bones').within(6).nearest();
+    if (Game.inCombat()) {
+        await Execution.delayTicks(2);
+        return false;
+    }
+    const drop = GroundItems.query()
+        .name('Bones')
+        .where(item => item.id === BONES_ID)
+        .within(GOBLIN_RADIUS)
+        .nearest();
     if (drop) {
         const before = Inventory.count('Bones');
-        if (!(await drop.interact('Take'))) { return false; }
+        if (!(await drop.interact('Take'))) {
+            return false;
+        }
         await Execution.delayUntil(() => Inventory.count('Bones') > before, 6000);
         return false;
     }
-    const wiz = Npcs.query().name('Wizard').action('Attack').where(n => !n.inCombat).within(10).nearest();
-    if (!wiz) {
-        await Traversal.walkResilient(WIZARD_ANCHOR, { radius: 3, attempts: 3, timeoutMs: 90_000, log });
+    const goblin = Npcs.query()
+        .name('Goblin')
+        .action('Attack')
+        .where(n => n.id === GOBLIN_ID && !n.inCombat && !n.targetsAnotherPlayer())
+        .within(GOBLIN_RADIUS)
+        .nearest();
+    if (!goblin) {
+        await Traversal.walkResilient(GOBLIN_ANCHOR, { radius: 3, attempts: 3, timeoutMs: 90_000, log });
         return false;
     }
-    const idx = wiz.index;
-    if (!(await wiz.interact('Attack'))) { return false; }
-    await Execution.delayUntil(() => Game.inCombat(), 5000);
-    await Execution.delayUntil(() => !Npcs.all().some(n => n.index === idx && /wizard/i.test(n.name ?? '')), 30_000);
+    if (!(await goblin.interact('Attack'))) {
+        return false;
+    }
+    await Execution.delayUntil(() => Game.inCombat() || !goblin.valid(), 5000);
+    await Execution.delayUntil(() => !goblin.valid(), 30_000);
     return false;
 }
 
@@ -220,7 +239,7 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
                 });
                 return false;
             }
-            return grindWizards(log);
+            return grindGoblins(log);
         }
 
         if (level !== 1) {
@@ -329,10 +348,10 @@ export const demonslayer: QuestModule = {
     record: QUESTS.find(r => r.id === 'demon')!,
     bank: new Tile(3185, 3440, 0),
     food: 10,
-    grind: ['delrith', 'weakened delrith', 'dark wizard', 'wizard'],
+    grind: ['delrith', 'weakened delrith', 'dark wizard', 'goblin'],
     gather: {
         'bucket of water': fillBucket,
-        'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindWizards })
+        'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindGoblins })
     },
     tools: ['key', 'silverlight', 'bucket', 'bones', 'coins'],
     decide
