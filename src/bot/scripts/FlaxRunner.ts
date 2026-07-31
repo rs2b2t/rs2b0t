@@ -313,12 +313,12 @@ class GoToMeet implements Task {
         if (Trade.active()) return false;
         const here = Game.tile();
         if (!here) return false;
-        return this.bot.ladderStandTile().distanceTo(here) > this.bot.leashRadius();
+        return this.bot.ladderStandTile().distanceTo(here) > TRADE_RANGE;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('travelling to meet point');
         await Traversal.walkResilient(this.bot.ladderStandTile(), {
-            radius: this.bot.leashRadius(),
+            radius: TRADE_RANGE,
             attempts: 6,
             timeoutMs: 240_000,
             log: m => this.bot.log(`  ${m}`),
@@ -332,10 +332,20 @@ class WaitAndTrade implements Task {
         if (this.bot.getMode() !== 'Runner') return false;
         if (Trade.active()) return false;
         if (flaxCount(this.bot.flaxNameStr()) < 28) return false;
-        const partner = this.bot.nearestPartner();
-        return partner !== null && partner.distance() <= TRADE_RANGE;
+        return this.bot.atMeet();
     }
     async execute(): Promise<void> {
+        const partner = this.bot.nearestPartner();
+        if (!partner || partner.distance() > TRADE_RANGE) {
+            this.bot.setStatus('walking to spinner');
+            await Traversal.walkResilient(partner.tile(), {
+                radius: TRADE_RANGE,
+                attempts: 3,
+                timeoutMs: 30_000,
+                log: m => this.bot.log(`  ${m}`),
+            });
+            return;
+        }
         this.bot.setStatus('requesting trade with spinner');
         await Trade.request(this.bot.getPartner());
         await Execution.delayUntil(() => Trade.active(), 4000);
@@ -350,10 +360,20 @@ class RequestTrade implements Task {
         if (this.bot.getMode() !== 'Spinner') return false;
         if (Trade.active()) return false;
         if (flaxCount(this.bot.flaxNameStr()) > 0) return false;
-        const partner = this.bot.nearestPartner();
-        return partner !== null && partner.distance() <= TRADE_RANGE;
+        return this.bot.atMeet();
     }
     async execute(): Promise<void> {
+        const partner = this.bot.nearestPartner();
+        if (!partner || partner.distance() > TRADE_RANGE) {
+            this.bot.setStatus('walking to runner');
+            await Traversal.walkResilient(partner.tile(), {
+                radius: TRADE_RANGE,
+                attempts: 3,
+                timeoutMs: 30_000,
+                log: m => this.bot.log(`  ${m}`),
+            });
+            return;
+        }
         this.bot.setStatus('requesting trade from runner');
         await Trade.request(this.bot.getPartner());
         await Execution.delayUntil(() => Trade.active(), 4000);
