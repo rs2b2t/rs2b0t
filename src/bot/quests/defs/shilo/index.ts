@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import type { WorldTile } from '../../../adapter/ClientAdapter.js';
 import { QUESTS } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';

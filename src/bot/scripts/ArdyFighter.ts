@@ -6,7 +6,7 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy, depositMatcher } from '../api/Banking.js';
-import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -65,7 +65,7 @@ let REST_UNTIL = 0.6;
 let FOOD_TARGET = 8;
 let BANK_AT = 12;
 let BANK_COMMON = true;
-let COMBAT_MODE = 1;
+let COMBAT_STYLE: MeleeCombatStyle = 'strength';
 let SOLVE_CLUES = true;
 
 function foodCount(): number {
@@ -108,7 +108,7 @@ export default class ArdyFighter extends TaskBot {
         FOOD_TARGET = this.settings.num('foodTarget', 8);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
-        COMBAT_MODE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        COMBAT_STYLE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         this.solveClue = new SolveClue({
             log: m => this.log(m),
@@ -227,7 +227,7 @@ export default class ArdyFighter extends TaskBot {
     }
 
     private switchStyle(style: string): void {
-        COMBAT_MODE = parseCombatStyle(style);
+        COMBAT_STYLE = parseCombatStyle(style);
         SettingsStore.save('ArdyFighter', 'combatStyle', style);
         this.log(`combat style switched to ${style} (from the paint)`);
     }
@@ -421,16 +421,17 @@ class SetStyle implements Task {
     constructor(private bot: ArdyFighter) {}
 
     validate(): boolean {
-        return !Game.inCombat() && Game.combatMode() !== COMBAT_MODE;
+        return !Game.inCombat() && !Game.hasCombatStyle(COMBAT_STYLE);
     }
 
     async execute(): Promise<void> {
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(COMBAT_MODE);
-        const ok = await Execution.delayUntil(() => Game.combatMode() === COMBAT_MODE, 3000);
-        if (ok && !this.announced) {
+        Game.setCombatStyle(COMBAT_STYLE);
+        const ok = await Execution.delayUntil(() => Game.hasCombatStyle(COMBAT_STYLE), 3000);
+        const resolution = Game.combatStyleResolution(COMBAT_STYLE);
+        if (ok && resolution && !this.announced) {
             this.announced = true;
-            this.bot.log(`combat style: ${['accurate', 'aggressive', 'defensive'][COMBAT_MODE] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][COMBAT_MODE] ?? '?'})`);
+            this.bot.log(`combat style: ${describeCombatStyle(resolution)}`);
         }
     }
 }

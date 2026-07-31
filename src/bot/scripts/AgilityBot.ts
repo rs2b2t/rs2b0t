@@ -1,3 +1,4 @@
+import type { WorldTile } from '../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
@@ -5,13 +6,23 @@ import { Game } from '../api/Game.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Paint } from '../api/hud/Paint.js';
 import { Skills } from '../api/hud/Skills.js';
+import Tile from '../api/Tile.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
+import { Traversal } from '../api/Traversal.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Reachability } from '../api/Reachability.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
+
+export const GNOME_COURSE_START = new Tile(2474, 3436, 0);
+export const GNOME_COURSE_RADIUS = 20;
+
+/** The course footprint spans the ground and elevated obstacle planes. */
+export function atGnomeCourse(here: WorldTile, start: WorldTile = GNOME_COURSE_START, radius: number = GNOME_COURSE_RADIUS): boolean {
+    return Math.max(Math.abs(here.x - start.x), Math.abs(here.z - start.z)) <= radius;
+}
 
 export const AGILITY_SETTINGS: SettingsSchema = {
     obstacles: {
@@ -48,7 +59,7 @@ export default class AgilityBot extends TaskBot {
         this.xpAtStart = Skills.xp('agility');
         this.log(`running agility course: [${this.course.join(' -> ')}] within ${this.radius} tiles`);
 
-        this.add(new ContinueDialog(), new DoObstacle(this));
+        this.add(new ContinueDialog(), new TravelToCourse(this), new DoObstacle(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -97,6 +108,26 @@ export default class AgilityBot extends TaskBot {
         this.log(`course re-sync: step ${this.step} (${this.currentName()}) -> ${idx} (${name})`);
         this.step = idx;
         return true;
+    }
+}
+
+class TravelToCourse implements Task {
+    constructor(private bot: AgilityBot) {}
+
+    validate(): boolean {
+        const here = Game.tile();
+        return here !== null && !atGnomeCourse(here);
+    }
+
+    async execute(): Promise<void> {
+        this.bot.setStatus('walking to the Gnome Stronghold agility course');
+        this.bot.log(`web-walking to the course start ${GNOME_COURSE_START}`);
+        await Traversal.walkResilient(GNOME_COURSE_START, {
+            radius: 2,
+            attempts: 6,
+            timeoutMs: 240_000,
+            log: message => this.bot.log(`  ${message}`)
+        });
     }
 }
 

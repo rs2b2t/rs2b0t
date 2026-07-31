@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import { Game } from '../../../api/Game.js';
 import { shiloArea, type ShiloArea } from './areas.js';
 

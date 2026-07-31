@@ -6,7 +6,7 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, depositAllExcept, parseBankStrategy, type BankDestination } from '../api/Banking.js';
-import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
@@ -58,7 +58,7 @@ export default class ChickenKiller extends TaskBot {
     private target = 'Chicken';
     private loot = ['bones'];
     private buryEnabled = true;
-    private combatMode = 1;
+    private combatStyle: MeleeCombatStyle = 'strength';
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -69,7 +69,7 @@ export default class ChickenKiller extends TaskBot {
         this.target = this.settings.str('targetName', 'Chicken');
         this.loot = this.settings.str('lootMatch', 'bones').toLowerCase().split('|').map(s => s.trim()).filter(s => s.length > 0);
         this.buryEnabled = this.settings.bool('buryBones', true);
-        this.combatMode = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        this.combatStyle = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
 
         const hinted = RecoveryHints.takeAnchor();
         const here = Game.tile()!;
@@ -217,8 +217,8 @@ export default class ChickenKiller extends TaskBot {
     getAnchor(): Tile {
         return this.anchor!;
     }
-    targetCombatMode(): number {
-        return this.combatMode;
+    targetCombatStyle(): MeleeCombatStyle {
+        return this.combatStyle;
     }
 }
 
@@ -227,17 +227,18 @@ class SetCombatStyle implements Task {
     constructor(private bot: ChickenKiller) {}
 
     validate(): boolean {
-        return !Game.inCombat() && Game.combatMode() !== this.bot.targetCombatMode();
+        return !Game.inCombat() && !Game.hasCombatStyle(this.bot.targetCombatStyle());
     }
 
     async execute(): Promise<void> {
-        const mode = this.bot.targetCombatMode();
+        const style = this.bot.targetCombatStyle();
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(mode);
-        const ok = await Execution.delayUntil(() => Game.combatMode() === mode, 3000);
-        if (ok && !this.announced) {
+        Game.setCombatStyle(style);
+        const ok = await Execution.delayUntil(() => Game.hasCombatStyle(style), 3000);
+        const resolution = Game.combatStyleResolution(style);
+        if (ok && resolution && !this.announced) {
             this.announced = true;
-            this.bot.log(`combat style set to ${['accurate', 'aggressive', 'defensive'][mode] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][mode] ?? '?'})`);
+            this.bot.log(`combat style set to ${describeCombatStyle(resolution)}`);
         }
     }
 }

@@ -9,6 +9,9 @@ class FakeHandle implements SlotHandle {
     destroyed = false;
     loginCoordination: LoginCoordination | null = null;
     setRenderMode(m: RenderMode): void { this.mode = m; this.calls.push(`mode:${m}`); }
+    startScript(): void { this.calls.push('start'); }
+    stopScript(): void { this.calls.push('stop'); }
+    setRendererEnabled(enabled: boolean): void { this.calls.push(`renderer:${enabled}`); }
     setCredentials(u: string): void { this.calls.push(`creds:${u}`); }
     setAutoLogin(on: boolean): void { this.calls.push(`autoLogin:${on}`); }
     setLoginCoordination(coordination: LoginCoordination | null): void {
@@ -185,6 +188,27 @@ describe('MultiBoxController', () => {
         expect(modes.filter(m => m === 'focused').length).toBe(1);
         expect(modes.filter(m => m === 'background').length).toBe(2);
         expect(c.focusedId).not.toBeNull();
+    });
+
+    test('bulk controls act once on every bot without changing focus or render mode', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        const alice = c.add({ username: 'alice', password: 'a' })!;
+        c.add({ username: 'bob', password: 'b' })!;
+        c.focus(alice.id);
+        ops.handles.forEach(handle => handle.calls.splice(0));
+
+        c.startAll();
+        c.stopAll();
+        c.setAllRenderers(false);
+        c.setAllRenderers(true);
+
+        expect(ops.handles.map(handle => handle.calls)).toEqual([
+            ['start', 'stop', 'renderer:false', 'renderer:true'],
+            ['start', 'stop', 'renderer:false', 'renderer:true']
+        ]);
+        expect(ops.handles.map(handle => handle.mode)).toEqual(['focused', 'background']);
+        expect(c.focusedId).toBe(alice.id);
     });
 
     test('remove destroys the handle and unfocuses when the last bot goes', () => {

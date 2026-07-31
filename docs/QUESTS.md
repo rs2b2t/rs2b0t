@@ -169,6 +169,11 @@ tool: it wanders out of leash and the step is abandoned. Use
 [`Reach.npcDialog`](NAV.md#the-reach-primitive), which searches the whole scene and
 lets the server chase.
 
+Opening the dialogue itself goes through [`Reach`](NAV.md#the-reach-primitive), so an
+NPC who has wandered behind a shut door is reached rather than abandoned. Being inside
+the leash does not mean being reachable: Fred the Farmer paces into his bedroom, the
+one interior door re-shuts, and every talk from the anchor is silently dropped.
+
 ## Provisioning
 
 [`engine/provisioning.ts`](../src/bot/quests/engine/provisioning.ts) assembles what a
@@ -296,6 +301,43 @@ Two habits fall out of the tool lesson, and both cost hours here:
 - **Guarding a requirement by location inverts it.** "Skip the pickaxe check inside the
   enclave, because one cannot be fetched from there" describes exactly the state that
   must walk back out. Source before entering, and let the pocket-escape handle the rest.
+
+Prince Ali Rescue added four more, and each is a class of bug rather than a one-off:
+
+- **A quest-internal varp the client cannot read is not state you may branch on.**
+  `prince_keystatus` decides whether Osman forges the key or refuses, and it is
+  `scope=perm` with no `transmit`. The durable answer is a step that *acts and then reads
+  the result*: talk to Osman, and treat a print still in the pack as proof the key was
+  already forged, so the same step goes on to collect it from Leela. Counters and
+  `noProgress` tie-breaks are not a substitute — they turn a crash window into a wedge
+  that holds an unusable print forever.
+- **Display names collide, and the collisions are exactly the quest items.** `plainwig`
+  and `blondwig` both render `Wig`, and only the blond one satisfies any check. `Beer`,
+  `Pot of flour`, `Logs` and `Coins` each have a twin too. Wherever two objects share a
+  name, `snap.invIds` is the only correct lookup — `snap.inv` silently accepts the wrong
+  one and every downstream check passes for the wrong reason.
+- **An NPC you delete can come back inside the window you needed.** Lady Keli respawns
+  100 ticks after `npc_del`, five tiles from the cell door, and the door refuses the key
+  while she is within ten. Anything whose respawn timer is shorter than the work it
+  unblocks has to run as one step, and its stage has to be re-entrant with the
+  consumable needed to redo it — hence two ropes.
+- **A stage the quest can only reach one way is an oracle.** Leela promotes to stage 30
+  only while the key is in the pack, so from 30 on the key provably existed: forging is
+  impossible, a missing key is unambiguously a loss to be re-issued, and every clay leg
+  can go quiet. Reading a stage for what it *proves* replaces the varp you cannot see.
+
+Two habits about verification, both of which cost live runs here:
+
+- **A live harness runs the built bundle, not your source.** The page loads
+  `botclient.js`; until it is rebuilt and copied into the engine's `public/bot/`, every
+  run silently exercises the old code. A `--stage 100` jump that kept buying redberries
+  looked like a journal-parsing bug for three runs and was a stale bundle. Harnesses
+  should build and deploy themselves rather than trust the operator.
+- **Before believing a "this is broken server-side" note, check its date against the nav
+  fixes.** `sheepshearer` avoided the Lumbridge spinning wheel for a fortnight on the
+  strength of a probe taken six days before the multi-level loc-snapshot settle landed.
+  A level-1 loc queried in the tick after a climb reads back empty, and blank is not
+  absent — the wheel works.
 
 ## See also
 

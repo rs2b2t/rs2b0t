@@ -51,8 +51,15 @@ describe('MINING_LOCATIONS table', () => {
         }
     });
 
-    test('catalog entries are verified', () => {
-        expect(MINING_LOCATIONS.every(l => l.verified === true)).toBe(true);
+    test('core catalog entries are verified; tick-manip camps may be provisional', () => {
+        const provisional = new Set(['Legends Guild Iron (west)', 'Legends Guild Iron (east)']);
+        for (const loc of MINING_LOCATIONS) {
+            if (provisional.has(loc.name)) {
+                expect(loc.verified, loc.name).toBe(false);
+            } else {
+                expect(loc.verified, loc.name).toBe(true);
+            }
+        }
     });
 
     test('has CSV core camps', () => {
@@ -66,5 +73,11 @@ describe('MINING_LOCATIONS table', () => {
         ]) {
             expect(names.has(n), n).toBe(true);
         }
+    });
+
+    test('includes Legends Guild iron tick-manip camps (#160)', () => {
+        const names = new Set(MINING_LOCATIONS.map(l => l.name));
+        expect(names.has('Legends Guild Iron (west)')).toBe(true);
+        expect(names.has('Legends Guild Iron (east)')).toBe(true);
     });
 });

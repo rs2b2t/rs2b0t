@@ -12,7 +12,7 @@ import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
-import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
@@ -110,7 +110,7 @@ let BANK_COMMON = true;
 let SOLVE_CLUES = true;
 let SPADE_NAME = 'Spade';
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
-let MELEE_MODE = 1;
+let MELEE_STYLE: MeleeCombatStyle = 'strength';
 let RANGE_MODE = 1;
 let WEAPON = '';
 let SPELL = 'Wind Strike';
@@ -172,7 +172,7 @@ export default class RockCrab extends TaskBot {
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         SPADE_NAME = this.settings.str('spade', 'Spade');
         STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
-        MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of air')
             : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow') : '';
@@ -586,22 +586,26 @@ class SetAttackStyle implements Task {
 
     constructor(private bot: RockCrab) {}
 
-    private target(): number {
-        return STYLE === 'range' ? RANGE_MODE : MELEE_MODE;
+    private selected(): boolean {
+        return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(MELEE_STYLE);
     }
 
     validate(): boolean {
-        return STYLE !== 'mage' && Game.combatMode() !== this.target() && Date.now() >= this.retryAt;
+        return STYLE !== 'mage' && !this.selected() && Date.now() >= this.retryAt;
     }
 
     async execute(): Promise<void> {
-        const mode = this.target();
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(mode);
-        const ok = await Execution.delayUntil(() => Game.combatMode() === mode, 3000);
+        if (STYLE === 'range') {
+            Game.setCombatMode(RANGE_MODE);
+        } else {
+            Game.setCombatStyle(MELEE_STYLE);
+        }
+        const ok = await Execution.delayUntil(() => this.selected(), 3000);
         if (ok) {
             this.fails = 0;
-            const label = STYLE === 'range' ? ['accurate', 'rapid', 'longrange'][mode] : `${['accurate', 'aggressive', 'defensive'][mode]} (training ${['Attack', 'Strength', 'Defence'][mode]})`;
+            const resolution = STYLE === 'melee' ? Game.combatStyleResolution(MELEE_STYLE) : null;
+            const label = STYLE === 'range' ? ['accurate', 'rapid', 'longrange'][RANGE_MODE] : resolution && describeCombatStyle(resolution);
             this.bot.log(`combat style: ${label ?? '?'}`);
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;

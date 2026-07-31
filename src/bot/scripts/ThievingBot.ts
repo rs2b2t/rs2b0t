@@ -24,6 +24,7 @@ import { chooseTarget } from './ArdyThieverLogic.js';
 import {
     STUN_COMBAT_TICKS,
     autoFoodBanking,
+    closeBankAndConfirmCount,
     countFood,
     foodMatches,
     safeToSteal,
@@ -296,8 +297,15 @@ class FoodBank implements Task {
             return;
         }
         await withdrawTo(bankFood.name, this.bot.foodTarget(), () => this.bot.foodCount());
-        if (this.bot.foodCount() <= this.bot.foodFloor()) {
-            this.bot.stopSafely(`only ${this.bot.foodCount()} '${this.bot.foodKeyword()}' food available`);
+        const expectedFood = this.bot.foodCount();
+        if (expectedFood <= this.bot.foodFloor()) {
+            this.bot.stopSafely(`only ${expectedFood} '${this.bot.foodKeyword()}' food available`);
+            return;
+        }
+
+        this.bot.setStatus('closing the bank');
+        if (!(await closeBankAndConfirmCount(expectedFood, () => this.bot.foodCount()))) {
+            this.bot.stopSafely(`backpack did not retain ${expectedFood} '${this.bot.foodKeyword()}' food after closing the bank`);
             return;
         }
 

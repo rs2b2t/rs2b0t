@@ -81,7 +81,7 @@ async function killRatGrabTail(log: (m: string) => void): Promise<boolean> {
         log('killRatGrabTail: no free Rat near the anchor — LIVE-VERIFY the Rimmington spawn');
         return false;
     }
-    Game.setCombatStyle(1);
+    Game.setCombatStyle('strength');
     log('attacking a Rat for its tail');
     if (!(await rat.interact('Attack'))) {
         return false;

@@ -60,6 +60,36 @@ export const ChatDialog = {
         }, 3000);
     },
 
+    /**
+     * Pick Make-1 for the product whose name contains `match` (or the first).
+     * Used by knife-delay tick manip — never Make-X / count dialog.
+     */
+    async makeOne(match?: string): Promise<boolean> {
+        const products = reader.makeProducts();
+        if (products.length === 0) {
+            return false;
+        }
+
+        const want = match?.toLowerCase();
+        const product = want ? products.find(p => p.name.toLowerCase().includes(want)) : products[0];
+        const btn = product?.buttons.find(b => b.qty === 1);
+        if (!btn) {
+            return false;
+        }
+
+        const modalsBefore = reader.modals();
+        const usingChat = modalsBefore.chat !== -1;
+        const before = usingChat ? modalsBefore.chat : modalsBefore.main;
+        if (!actions.ifButton(btn.comId)) {
+            return false;
+        }
+
+        return Execution.delayUntil(() => {
+            const m = reader.modals();
+            return (usingChat ? m.chat : m.main) !== before;
+        }, 3000);
+    },
+
     async makeX(match: string, count: number): Promise<boolean> {
         const products = reader.makeProducts();
         const want = match.toLowerCase();

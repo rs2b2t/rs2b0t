@@ -12,7 +12,7 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
-import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
@@ -69,7 +69,7 @@ export const SETTINGS: SettingsSchema = {
 };
 
 let STYLE: 'melee' | 'mage' | 'range' = 'melee';
-let MELEE_MODE = 1;
+let MELEE_STYLE: MeleeCombatStyle = 'strength';
 let RANGE_MODE = 1;
 let WEAPON = '';
 let SPELL = 'Wind Strike';
@@ -229,17 +229,20 @@ class SetAttackStyle implements Task {
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: MossGiant) {}
-    private target(): number {
-        return STYLE === 'range' ? RANGE_MODE : MELEE_MODE;
+    private selected(): boolean {
+        return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(MELEE_STYLE);
     }
     validate(): boolean {
-        return STYLE !== 'mage' && Game.combatMode() !== this.target() && Date.now() >= this.retryAt;
+        return STYLE !== 'mage' && !this.selected() && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
-        const mode = this.target();
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(mode);
-        if (await Execution.delayUntil(() => Game.combatMode() === mode, 3000)) {
+        if (STYLE === 'range') {
+            Game.setCombatMode(RANGE_MODE);
+        } else {
+            Game.setCombatStyle(MELEE_STYLE);
+        }
+        if (await Execution.delayUntil(() => this.selected(), 3000)) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
@@ -540,7 +543,7 @@ export default class MossGiant extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         STYLE = (this.settings.str('combatStyle', 'melee') as 'melee' | 'mage' | 'range');
-        MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         RANGE_MODE = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
         SPELL = this.settings.str('spell', 'Wind Strike');
         AMMO = this.settings.str('ammo', 'Iron arrow');

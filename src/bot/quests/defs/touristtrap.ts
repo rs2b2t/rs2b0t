@@ -951,7 +951,7 @@ async function recoverSlaveOutfitFromRowdy(log: (m: string) => void): Promise<bo
         }
     }
 
-    Game.setCombatStyle(1);
+    Game.setCombatStyle('strength');
     for (let index = 0; index < SLAVE_OUTFIT.length; index++) {
         const name = SLAVE_OUTFIT[index];
         const id = SLAVE_OUTFIT_DROP_IDS[index];
@@ -1321,11 +1321,29 @@ async function searchLowerBarrel(
 
 async function rideMineCart(anchor: Tile, log: (m: string) => void): Promise<boolean> {
     const fromLower = anchor.distanceTo(LOWER_CART) <= 1;
-    if (!(await interactLoc([LOC.MINE_CART], 'Search', anchor, log, ['Yes, of course.']))) return false;
-    return Execution.delayUntil(
+    const origin = fromLower ? 'lower mine' : 'deep mine';
+    const destination = fromLower ? 'deep mine' : 'lower mine';
+    log(`mine-cart attempt: ${origin} -> ${destination}; Agility=${Skills.level('agility')}`);
+    if (!(await interactLoc([LOC.MINE_CART], 'Search', anchor, log, ['Yes, of course.']))) {
+        log(`mine-cart interaction did not complete at the ${origin}`);
+        return false;
+    }
+    const arrived = await Execution.delayUntil(
         () => touristTrapArea(Game.tile()) === (fromLower ? 'mineDeep' : 'mineLower'),
         12_000
     );
+    if (arrived) {
+        log(`mine-cart transit reached the ${destination}`);
+        return true;
+    }
+
+    const area = touristTrapArea(Game.tile());
+    if (area === (fromLower ? 'mineLower' : 'mineDeep')) {
+        log(`mine-cart Agility roll failed at the ${origin}; retrying in place`);
+    } else {
+        log(`mine-cart transit unresolved; current area=${area}`);
+    }
+    return false;
 }
 
 async function catchAnaInBarrel(log: (m: string) => void): Promise<boolean> {
@@ -1336,6 +1354,7 @@ async function catchAnaInBarrel(log: (m: string) => void): Promise<boolean> {
 
 async function reachAndCatchAna(log: (m: string) => void): Promise<boolean> {
     let area = touristTrapArea(Game.tile());
+    log(`deep-mine recapture: starting area=${area}; empty barrel=${Inventory.contains(ITEM.BARREL) ? 'yes' : 'no'}; Ana barrel=${Inventory.contains(ITEM.ANA_BARREL) ? 'yes' : 'no'}`);
     if (area === 'campSurface') {
         if (!(await enterMine(log))) return false;
         area = touristTrapArea(Game.tile());
@@ -1353,7 +1372,13 @@ async function reachAndCatchAna(log: (m: string) => void): Promise<boolean> {
         if (!(await rideMineCart(LOWER_CART, log))) return false;
         area = touristTrapArea(Game.tile());
     }
-    return area === 'mineDeep' && catchAnaInBarrel(log);
+    if (area !== 'mineDeep') {
+        log(`deep-mine recapture did not reach Ana; current area=${area}`);
+        return false;
+    }
+    const caught = await catchAnaInBarrel(log);
+    log(caught ? 'deep-mine recapture: Ana secured in the barrel' : 'deep-mine recapture: using the empty barrel on Ana did not complete');
+    return caught;
 }
 
 async function deepToLowerCheckpoint(log: (m: string) => void): Promise<boolean> {
@@ -1371,46 +1396,96 @@ async function deepToLowerCheckpoint(log: (m: string) => void): Promise<boolean>
 async function retrieveFromSurfaceLift(log: (m: string) => void): Promise<boolean> {
     if (touristTrapArea(Game.tile()) === 'mineLower') {
         if (Inventory.contains(ITEM.ANA_BARREL)) {
-            if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.LIFT_BUCKET], LIFT_BUCKET, log, LIFT_GUARD_DIALOG))) return false;
-            if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) return false;
+            log('lift checkpoint: placing Ana on the underground lift');
+            if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.LIFT_BUCKET], LIFT_BUCKET, log, LIFT_GUARD_DIALOG))) {
+                log('lift checkpoint: underground lift interaction did not complete');
+                return false;
+            }
+            if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) {
+                log('lift checkpoint: Ana remained in the backpack after the lift interaction');
+                return false;
+            }
         }
-        if (!(await leaveMine(log))) return false;
+        if (!(await leaveMine(log))) {
+            log('lift checkpoint: could not reach the surface machinery');
+            return false;
+        }
     }
-    if (touristTrapArea(Game.tile()) !== 'campSurface') return false;
-    if (!(await interactLoc([LOC.SURFACE_WINCH], 'Use', SURFACE_WINCH_APPROACH, log))) return false;
+    const area = touristTrapArea(Game.tile());
+    if (area !== 'campSurface') {
+        log(`lift checkpoint: surface probe unavailable from area=${area}`);
+        return false;
+    }
+    log('lift checkpoint: probing the surface winch and top barrel');
+    if (!(await interactLoc([LOC.SURFACE_WINCH], 'Use', SURFACE_WINCH_APPROACH, log))) {
+        log('lift checkpoint: surface winch interaction did not complete');
+        return false;
+    }
     // The source flips the lift/barrel bits only after p_delay(3), after its first message has
     // already closed. Do not let a fast client probe the old barrel state in that quiet gap.
     await Execution.delayTicks(3);
     if (Inventory.free() < 1 && !(await freeOneRescueSlot(log))) return false;
-    if (!(await interactLoc([LOC.FULL_BARREL], 'Search', SURFACE_BARREL_APPROACH, log))) return false;
-    return Inventory.contains(ITEM.ANA_BARREL);
+    if (!(await interactLoc([LOC.FULL_BARREL], 'Search', SURFACE_BARREL_APPROACH, log))) {
+        log('lift checkpoint: top barrel search did not complete');
+        return false;
+    }
+    const recovered = Inventory.contains(ITEM.ANA_BARREL);
+    log(recovered ? 'lift checkpoint: recovered Ana from the top barrel' : 'lift checkpoint: top barrel did not contain Ana');
+    return recovered;
 }
 
 async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(ITEM.ANA_BARREL)) {
-        if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.SURFACE_CART], SURFACE_CART_APPROACH, log))) return false;
-        if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) return false;
+        log('surface cart: placing Ana in the cart');
+        if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.SURFACE_CART], SURFACE_CART_APPROACH, log))) {
+            log('surface cart: placing Ana in the cart did not complete');
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => !Inventory.contains(ITEM.ANA_BARREL), 8000))) {
+            log('surface cart: Ana remained in the backpack after the cart interaction');
+            return false;
+        }
     }
 
     // A reload may occur after the driver was paid but before boarding. Search first: when the
     // ready bit is set this is the authoritative, coin-free completion action.
     if (await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."])) {
         const area = touristTrapArea(Game.tile());
-        if (area === 'desert' && Inventory.contains(ITEM.ANA_BARREL)) return true;
+        if (area === 'desert' && Inventory.contains(ITEM.ANA_BARREL)) {
+            log('surface cart: ready-state boarding reached the desert with Ana');
+            return true;
+        }
     }
+    log('surface cart: ready-state boarding was not available');
 
     // On a restart with the quest's coins banked, use the source-authored prison-riot appeal.
     // The clean run still takes the exact 100-Coin bribe path.
-    const dialog = Inventory.count(ITEM.COINS) >= 100 ? DRIVER_DIALOG : DRIVER_NO_COIN_DIALOG;
-    if (!(await talkStrict(NPC.MINE_CART_DRIVER, SURFACE_CART_APPROACH, dialog, log, 8))) return false;
-    if (!(await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."]))) return false;
-    return Execution.delayUntil(() => {
+    const coinsSufficient = Inventory.count(ITEM.COINS) >= 100;
+    const dialog = coinsSufficient ? DRIVER_DIALOG : DRIVER_NO_COIN_DIALOG;
+    log(`surface cart: starting driver dialogue; coins>=100=${coinsSufficient ? 'yes' : 'no'}`);
+    if (!(await talkStrict(NPC.MINE_CART_DRIVER, SURFACE_CART_APPROACH, dialog, log, 8))) {
+        log('surface cart: driver dialogue did not complete');
+        return false;
+    }
+    if (!(await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."]))) {
+        log('surface cart: boarding interaction did not complete');
+        return false;
+    }
+    const escaped = await Execution.delayUntil(() => {
         const area = touristTrapArea(Game.tile());
         return area === 'desert' && Inventory.contains(ITEM.ANA_BARREL);
     }, 15_000);
+    log(escaped ? 'surface cart: driver sequence reached the desert with Ana' : 'surface cart: boarding did not reach the desert with Ana');
+    return escaped;
 }
 
 async function lowerRescueCheckpoint(log: (m: string) => void): Promise<boolean> {
+    // A failed lower-cart Agility roll leaves this exact state. Retry beside the cart; taking
+    // the lift/surface recovery route here discards a ready barrel and can loop for minutes.
+    if (Inventory.contains(ITEM.BARREL)) {
+        log('lower checkpoint: empty barrel ready after a failed cart roll; retrying the cart in place');
+        return rideMineCart(LOWER_CART, log);
+    }
     if (!Inventory.contains(ITEM.ANA_BARREL)) {
         if (!(await searchLowerBarrel(false, log))) return false;
         if (Inventory.contains(ITEM.ANA_BARREL)) return true;
@@ -1419,21 +1494,60 @@ async function lowerRescueCheckpoint(log: (m: string) => void): Promise<boolean>
     return retrieveFromSurfaceLift(log);
 }
 
-async function surfaceRescueCheckpoint(log: (m: string) => void): Promise<boolean> {
-    if (!Inventory.contains(ITEM.ANA_BARREL)) {
+export interface SurfaceRescueOperations {
+    hasAnaBarrel(): boolean;
+    retrieveLift(log: (m: string) => void): Promise<boolean>;
+    escapeByCart(log: (m: string) => void): Promise<boolean>;
+    recaptureAna(log: (m: string) => void): Promise<boolean>;
+    currentArea(): TouristTrapArea;
+    waitBetweenAttempts(): Promise<void>;
+}
+
+export async function runSurfaceRescueCheckpoint(
+    operations: SurfaceRescueOperations,
+    log: (m: string) => void
+): Promise<boolean> {
+    if (!operations.hasAnaBarrel()) {
         // Safe at hidden stages 22, 23, and 25: repeated winch use is harmless, and the exact
         // top barrel only yields Ana when its transport bit is set.
-        if (await retrieveFromSurfaceLift(log)) return true;
+        if (await operations.retrieveLift(log)) return true;
     }
     // Hidden stage 25 has Ana on this cart. Retry the full strict driver sequence before
     // concluding that every transport bit is clear.
-    for (let attempt = 0; attempt < 3; attempt++) {
-        if (await bribeDriverAndEscape(log)) return true;
-        await Execution.delayTicks(1);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        log(`surface cart attempt ${attempt}/3`);
+        if (await operations.escapeByCart(log)) return true;
+        if (attempt < 3) await operations.waitBetweenAttempts();
+    }
+    // A transient cart/driver failure must not send the player back underground while Ana is
+    // still safely held. Leave the state intact and retry this surface checkpoint next pass.
+    if (operations.hasAnaBarrel()) {
+        log('surface cart unresolved while carrying Ana; retrying this checkpoint in place');
+        return false;
     }
     // Cleared-bits/lost-barrel recovery: take the canonical lower barrel, catch original Ana
     // (which clears all transport bits server-side), then resume from that visible checkpoint.
-    return reachAndCatchAna(log);
+    log('surface lift/cart probes unresolved; falling back to deep-mine recapture');
+    const recaptured = await operations.recaptureAna(log);
+    if (!recaptured) log(`deep-mine recapture did not complete; current area=${operations.currentArea()}`);
+    return recaptured;
+}
+
+async function surfaceRescueCheckpoint(log: (m: string) => void): Promise<boolean> {
+    const slaveOutfitReady = SLAVE_OUTFIT.every(item => Inventory.contains(item) || Equipment.contains(item));
+    log(
+        `rescue checkpoint: area=${touristTrapArea(Game.tile())}; empty barrel=${Inventory.contains(ITEM.BARREL) ? 'yes' : 'no'}; `
+        + `Ana barrel=${Inventory.contains(ITEM.ANA_BARREL) ? 'yes' : 'no'}; slave outfit=${slaveOutfitReady ? 'ready' : 'missing'}; `
+        + `free slots=${Inventory.free()}; coins>=100=${Inventory.count(ITEM.COINS) >= 100 ? 'yes' : 'no'}`
+    );
+    return runSurfaceRescueCheckpoint({
+        hasAnaBarrel: () => Inventory.contains(ITEM.ANA_BARREL),
+        retrieveLift: retrieveFromSurfaceLift,
+        escapeByCart: bribeDriverAndEscape,
+        recaptureAna: reachAndCatchAna,
+        currentArea: () => touristTrapArea(Game.tile()),
+        waitBetweenAttempts: () => Execution.delayTicks(1)
+    }, log);
 }
 
 async function returnAnaToIrena(log: (m: string) => void): Promise<boolean> {
@@ -1877,8 +1991,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return custom('move Ana through the deep-to-lower cart checkpoint', deepToLowerCheckpoint);
         }
         if (area === 'mineLower') {
-            if (snap.freeSlots === 0 && !held(snap, ITEM.ANA_BARREL)) return custom('free one slot for the lower barrel probe', freeOneRescueSlot);
             if (held(snap, ITEM.ANA_BARREL)) return custom('lift Ana and retrieve her at the surface checkpoint', retrieveFromSurfaceLift);
+            if (held(snap, ITEM.BARREL)) return custom('retry the lower mine cart with the empty barrel', log => rideMineCart(LOWER_CART, log));
+            if (snap.freeSlots === 0) return custom('free one slot for the lower barrel probe', freeOneRescueSlot);
             return custom('resolve the lower barrel/lift checkpoint', lowerRescueCheckpoint);
         }
         if (area === 'mineEntrance') return custom('leave the mine to resolve the surface checkpoint', leaveMine);

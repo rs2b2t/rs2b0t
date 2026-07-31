@@ -7,9 +7,30 @@ import { Reachability } from '../Reachability.js';
 import { Traversal } from '../Traversal.js';
 import { Locs } from '../queries/Locs.js';
 import { ChatDialog } from './ChatDialog.js';
-import { Inventory } from './Inventory.js';
+import { backpackCapacity, backpackSnapshots } from './Inventory.js';
 
 export { withdrawOp } from './bankOps.js';
+
+function backpackFull(): boolean {
+    const size = backpackCapacity();
+    return size > 0 && backpackSnapshots().length >= size;
+}
+
+async function bankBackpackReady(): Promise<boolean> {
+    if (reader.bankComId() === -1) {
+        return false;
+    }
+    if (reader.modals().side === -1) {
+        await Execution.delayUntil(() => reader.modals().side !== -1 || reader.bankComId() === -1, 2000);
+    }
+    if (reader.bankComId() === -1 || reader.modals().side === -1) {
+        return false;
+    }
+    // The side component arrives before its inventory snapshot. Waiting one
+    // game tick prevents a late pre-existing stack from looking like progress.
+    await Execution.delayTicks(1);
+    return reader.bankComId() !== -1 && reader.modals().side !== -1;
+}
 
 /**
  * The bank interface. `isOpen()` only means the component exists — the item
@@ -68,21 +89,35 @@ export const Bank = {
         if (count <= 0) {
             return true;
         }
-        const wanted = name.toLowerCase();
-        const invCount = (): number => Inventory.count(name);
-        const item = reader.bankItems().find(i => i.name?.toLowerCase() === wanted);
-        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
-        if (!xOp) {
+        if (!(await bankBackpackReady())) {
             return false;
         }
-        const target = invCount() + count;
-        await clickInvButton(reader.bankItems(), name, xOp);
+        const wanted = name.toLowerCase();
+        const invCount = (): number => backpackSnapshots()
+            .filter(item => item.name?.toLowerCase() === wanted)
+            .reduce((sum, item) => sum + item.count, 0);
+        const item = reader.bankItems().find(i => i.name?.toLowerCase() === wanted);
+        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
+        if (!item || !xOp) {
+            return false;
+        }
+        const before = invCount();
+        const available = Math.max(0, item.count);
+        if (available === 0) {
+            return false;
+        }
+        const target = before + Math.min(count, available);
+        if (!(await clickInvButton(reader.bankItems(), name, xOp))) {
+            return false;
+        }
         if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
             return false;
         }
-        actions.answerCountDialog(count);
+        if (!actions.answerCountDialog(count)) {
+            return false;
+        }
         return Execution.delayUntil(
-            () => invCount() >= target || Bank.count(name) === 0 || reader.inventory().length >= reader.inventorySize(),
+            () => invCount() >= target || (invCount() > before && backpackFull()),
             4000
         );
     },
@@ -91,16 +126,23 @@ export const Bank = {
         if (count <= 0) {
             return true;
         }
-        const invCount = (): number => reader
-            .inventory()
-            .filter(i => i.id === id)
-            .reduce((sum, i) => sum + i.count, 0);
-        const item = reader.bankItems().find(i => i.id === id);
-        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
-        if (!xOp) {
+        if (!(await bankBackpackReady())) {
             return false;
         }
-        const target = invCount() + count;
+        const invCount = (): number => backpackSnapshots()
+            .filter(item => item.id === id)
+            .reduce((sum, item) => sum + item.count, 0);
+        const item = reader.bankItems().find(i => i.id === id);
+        const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
+        if (!item || !xOp) {
+            return false;
+        }
+        const before = invCount();
+        const available = Math.max(0, item.count);
+        if (available === 0) {
+            return false;
+        }
+        const target = before + Math.min(count, available);
         if (!(await clickInvButtonById(reader.bankItems(), id, xOp))) {
             return false;
         }
@@ -111,7 +153,7 @@ export const Bank = {
             return false;
         }
         return Execution.delayUntil(
-            () => invCount() >= target || Bank.countById(id) === 0 || reader.inventory().length >= reader.inventorySize(),
+            () => invCount() >= target || (invCount() > before && backpackFull()),
             4000
         );
     },
@@ -227,8 +269,16 @@ export const Bank = {
         if (!Bank.isOpen()) {
             return true;
         }
-        actions.closeModal();
-        return Execution.delayUntil(() => !Bank.isOpen(), timeoutMs);
+        const bankSide = reader.modals().side;
+        if (!actions.closeModal()) {
+            return false;
+        }
+        // The server closes the main and side bank components separately. The
+        // normal backpack is authoritative again only after both are gone.
+        return Execution.delayUntil(
+            () => !Bank.isOpen() && (bankSide === -1 || reader.modals().side !== bankSide),
+            timeoutMs
+        );
     },
 
     async openNearest(boothName: string, op: string, log?: (msg: string) => void): Promise<boolean> {

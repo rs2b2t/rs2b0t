@@ -1,4 +1,3 @@
-// docs/superpowers/specs/2026-07-29-shilo-village-design.md
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { Quests } from '../../../api/hud/Quests.js';
 import { SV_ITEM, SV_LOC, SV_TILE } from './areas.js';

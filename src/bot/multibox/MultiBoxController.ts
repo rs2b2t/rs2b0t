@@ -112,6 +112,24 @@ export class MultiBoxController {
         return this.slots.map(s => this.snap(s));
     }
 
+    startAll(): void {
+        for (const slot of this.slots) {
+            slot.handle.startScript();
+        }
+    }
+
+    stopAll(): void {
+        for (const slot of this.slots) {
+            slot.handle.stopScript();
+        }
+    }
+
+    setAllRenderers(enabled: boolean): void {
+        for (const slot of this.slots) {
+            slot.handle.setRendererEnabled(enabled);
+        }
+    }
+
     private applyModes(): void {
         // exactly one slot is focused whenever any exist; the rest render live
         // (background) so their rail thumbnails keep painting.

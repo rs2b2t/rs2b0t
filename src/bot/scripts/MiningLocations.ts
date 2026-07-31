@@ -35,7 +35,8 @@ function mine(
     spot: Tile,
     bankStand: Tile,
     resources: readonly string[],
-    notes?: string
+    notes?: string,
+    verified = true
 ): MiningLocation {
     return {
         name,
@@ -43,7 +44,7 @@ function mine(
         bankStand,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: true,
+        verified,
         resources,
         notes
     };
@@ -180,6 +181,25 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         BANK.seers,
         ['runite'],
         "Requires Heroes' Quest; basement rune rocks east of ladder"
+    ),
+    // #160 tick-manip iron camps — verified:false until live polish.
+    mine(
+        'Legends Guild Iron (west)',
+        // Iron cluster west of Legends Guild ~2691–2697, 3328–3334.
+        new Tile(2694, 3331, 0),
+        BANK.ardougneEast,
+        ['iron'],
+        'Tick manip: iron cadence (3-rock). Unverified seed; bank Ardougne East.',
+        false
+    ),
+    mine(
+        'Legends Guild Iron (east)',
+        // Iron cluster east of Legends Guild ~2710–2715, 3328–3332.
+        new Tile(2712, 3330, 0),
+        BANK.ardougneEast,
+        ['iron'],
+        'Tick manip: iron cadence (3-rock). Unverified seed; bank Ardougne East.',
+        false
     )
 ];
 

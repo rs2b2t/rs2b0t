@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **38 scripts** across 18 categories. They double as worked
+The client ships **39 scripts** across 19 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -20,6 +20,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 1
+- [Herblore](#herblore) — 1
 - [Mining](#mining) — 2
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 1
@@ -54,7 +55,7 @@ Tags: `edgeville`, `dungeon`, `monkey-bars`, `wilderness`, `banking`
 
 ### GnomeCourse
 
-Runs the Gnome Stronghold agility course (start at the log balance)
+Travels to and runs the Gnome Stronghold agility course
 
 Tags: `course`, `gnome`
 
@@ -91,7 +92,7 @@ Tags: `ardougne`, `thieving`, `banking`, `clues`, `afk`
 | `anchor` | tile | `{"x":2661,"z":3306,"level":0}` | Market anchor (x,z) |
 | `leashRadius` | number (5–25) | `12` | Leash radius (tiles) |
 | `target` | string | `"Guard"` | NPC to fight (name) |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, defence |
+| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
 | `bankStand` | tile | `{"x":2655,"z":3286,"level":0}` | Bank stand tile (x,z) |
 | `food` | string[] | `["cake","bread","chocolate slice"]` | Food names (contains) |
 | `eatAtHp` | number (0–100) | `50` | Eat below HP% |
@@ -119,7 +120,7 @@ Tags: `combat`, `clues`, `banking`, `afk`
 | `spot` | string | `"Start position"` | Killing spot — one of: Start position, Custom coordinates |
 | `coordinates` | tile | `{"x":3273,"z":3427,"level":0}` | Killing coordinates (x,z) |
 | `leashRadius` | number (2–30) | `8` | Leash radius (tiles) |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, defence |
+| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
 | `food` | string | `"Trout"` | Food (withdrawn from bank) |
 | `foodWithdraw` | number (0–27) | `10` | Food to carry |
 | `eatAtHp` | number (0–100) | `50` | Eat below HP% |
@@ -162,7 +163,7 @@ Tags: `lumbridge`, `bones`, `feathers`, `afk`
 | `targetName` | string | `"Chicken"` | Target NPC name |
 | `lootMatch` | string | `"bones"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `true` | Bury bones? |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, defence |
+| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
 | `bankStrategy` | string | `"Off"` | Periodic bank — one of: Off, Loot count, Time, Either |
 | `bankEveryItems` | number (1–27) | `15` | Bank at N loot items |
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
@@ -184,7 +185,7 @@ Tags: `lumbridge`, `falador`, `cowhide`, `bones`, `banking`, `afk`
 | `targetName` | string | `"Cow"` | Target NPC name |
 | `lootMatch` | string | `"cow hide\|bones"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `false` | Bury bones? |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, defence |
+| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
 | `bankStrategy` | string | `"Off"` | Periodic bank — one of: Off, Loot count, Time, Either |
 | `bankEveryItems` | number (1–27) | `15` | Bank at N loot items |
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
@@ -199,7 +200,7 @@ Tags: `waterfall`, `safespot`, `members`, `banking`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
@@ -231,7 +232,7 @@ Tags: `wilderness`, `dragons`, `hides`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
@@ -256,7 +257,7 @@ Tags: `ardougne`, `safespot`, `afk`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -283,7 +284,7 @@ Tags: `rellekka`, `keys`, `afk`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
@@ -423,7 +424,8 @@ Tags: `gathering`, `drop`, `banking`, `cooking`
 | `fishMethod` | string | `"Small net — shrimp/anchovy"` | Fishing method — one of: Small net — shrimp/anchovy, Bait rod — sardine/herring, Fly fishing — trout/salmon, Bait rod — pike, Big net — mackerel/cod/bass, Lobster cage — lobster, Harpoon — tuna/swordfish, Harpoon — sharks, Oily rod — lava eel |
 | `baitQty` | number (1–) | `1000` | Bait / feathers qty |
 | `leashRadius` | number (2–64) | `18` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), None |
+| `tickManip` | string | `"Off"` | Tick manip — one of: Off, 4t fly reclick, Knife delay (+2), Tannerfishing |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor Village, Catherby, Fishing Guild, Barbarian Village, Seers (fly fishing), Karamja (Musa Point), Taverley Dungeon (lava eels), Gnome Stronghold (fishing), None |
 | `cookMode` | string | `"Off"` | Cook mode — one of: Off, Cook then bank, Bank raw then cook |
 | `cookFish` | string | `"All raw"` | Fish to cook — one of: All raw, Tuna, Swordfish, Lobster, Shark, Salmon, Trout, Shrimps, Anchovies, Custom |
 | `cookFishCustom` | string | `""` | Custom cook filter |
@@ -450,6 +452,14 @@ Tags: `fletching`, `banking`, `afk`
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `leashRadius` | number (2–20) | `6` | Booth search radius (tiles) |
 
+## Herblore
+
+### RoguesPurse
+
+Infinite Herblore grind at the fungus-covered cavern wall under the Karamja jungle — searches, identifies, and drops Rogues purse on the tick. Walks itself there; needs Herblore 3 and Jungle Potion past the point where Trufitus asks for the purse
+
+Tags: `herblore`, `karamja`, `members`, `afk`
+
 ## Mining
 
 ### EssMiner
@@ -472,7 +482,8 @@ Tags: `gathering`, `banking`, `drop`
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, Legends Guild Iron (west), Legends Guild Iron (east), None |
+| `tickManip` | string | `"Off"` | Tick manip — one of: Off, Iron cadence (pick-aware) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 
@@ -544,7 +555,7 @@ Tags: `quest`, `queue`, `aio`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Rune Mysteries Quest, Doric's Quest, Sheep Shearer, The Restless Ghost, Cook's Assistant, Witch's Potion, Romeo & Juliet, Prince Ali Rescue, Waterfall Quest, Goblin Diplomacy, Demon Slayer, Witch's House, Merlin's Crystal, Priest in Peril, Black Knight's Fortress, Druidic Ritual, Lost City, The Tourist Trap, Watch Tower, Jungle Potion, Shilo Village |
+| `quests` | string[] | `[]` | Quest queue (empty = all) — one of: Rune Mysteries Quest, Doric's Quest, Sheep Shearer, The Restless Ghost, Cook's Assistant, Witch's Potion, Romeo & Juliet, Prince Ali Rescue, Waterfall Quest, Goblin Diplomacy, Demon Slayer, Witch's House, Merlin's Crystal, Priest in Peril, Black Knight's Fortress, Druidic Ritual, Lost City, The Tourist Trap, Watch Tower, Vampire Slayer, Jungle Potion, Shilo Village |
 | `food` | string | `"Trout"` | Food item |
 | `eatAtHp` | number (1–99) | `50` | Eat below HP% |
 
@@ -711,7 +722,8 @@ Tags: `gathering`, `banking`, `drop`, `firemaking`
 |---|---|---|---|
 | `treeName` | string | `"Tree"` | Tree name — one of: Tree, Oak, Willow, Maple tree, Yew, Magic tree |
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Draynor (trees), Draynor Oaks, Draynor Willows, Seers (trees), Seers Oaks, Seers Willows, Seers Maples, Seers Yews (cemetery), Edgeville Yews, Sorcerer's Tower, Gnome Stronghold, S Falador Oaks, Lumbridge Farmer Willows, Lumbridge Castle Willows, None |
+| `tickManip` | string | `"Off"` | Tick manip — one of: Off, Knife delay (+2), 2t retaliate oaks, 3t farmer willows, 3t willows shortbow rapid |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |

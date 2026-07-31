@@ -3,7 +3,7 @@ import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
-import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Inventory } from '../api/hud/Inventory.js';
@@ -70,7 +70,7 @@ let SOLVE_CLUES = true;
 let BANK_AT = 12;
 let AUTO_BANK = true;
 let BANK_COMMON = true;
-let COMBAT_MODE = 1;
+let COMBAT_STYLE: MeleeCombatStyle = 'strength';
 
 function foodCount(): number {
     return countMatching(Inventory.items(), [FOOD]);
@@ -120,7 +120,7 @@ export default class AutoFighter extends TaskBot {
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
         AUTO_BANK = autoBankEnabled(this.settings.str('banking', 'Auto'));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
-        COMBAT_MODE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        COMBAT_STYLE = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
 
         this.solveClue = new SolveClue({
             log: m => this.log(m),
@@ -366,15 +366,16 @@ class SetStyle implements Task {
     private announced = false;
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
-        return !Game.inCombat() && Game.combatMode() !== COMBAT_MODE;
+        return !Game.inCombat() && !Game.hasCombatStyle(COMBAT_STYLE);
     }
     async execute(): Promise<void> {
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(COMBAT_MODE);
-        const ok = await Execution.delayUntil(() => Game.combatMode() === COMBAT_MODE, 3000);
-        if (ok && !this.announced) {
+        Game.setCombatStyle(COMBAT_STYLE);
+        const ok = await Execution.delayUntil(() => Game.hasCombatStyle(COMBAT_STYLE), 3000);
+        const resolution = Game.combatStyleResolution(COMBAT_STYLE);
+        if (ok && resolution && !this.announced) {
             this.announced = true;
-            this.bot.log(`combat style: ${['accurate', 'aggressive', 'defensive'][COMBAT_MODE] ?? '?'} (training ${['Attack', 'Strength', 'Defence'][COMBAT_MODE] ?? '?'})`);
+            this.bot.log(`combat style: ${describeCombatStyle(resolution)}`);
         }
     }
 }

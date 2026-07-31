@@ -8,7 +8,7 @@ import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
-import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, type SpecialCrossing } from './data/specialCrossings.js';
+import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, matchesUseItem, type SpecialCrossing } from './data/specialCrossings.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
@@ -598,7 +598,17 @@ class WalkExecutorImpl {
                 log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
                 return false;
             }
-            if (!loc.interact(sc.action)) {
+            if (sc.useItem) {
+                const item = Inventory.items().find(candidate => matchesUseItem(candidate, sc.useItem!));
+                if (!item) {
+                    log(`${sc.label}: need ${sc.useItem.name} (id ${sc.useItem.id}) — skipping`);
+                    return false;
+                }
+                if (!(await item.useOn(loc))) {
+                    log(`${sc.label}: could not use ${sc.useItem.name} on ${sc.locName}`);
+                    return false;
+                }
+            } else if (!loc.interact(sc.action)) {
                 log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
                 return false;
             }

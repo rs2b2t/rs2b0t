@@ -19,6 +19,7 @@ const BANK = {
     draynor: new Tile(3093, 3243, 0),
     seers: new Tile(2725, 3491, 0),
     edgeville: new Tile(3094, 3493, 0),
+    faladorWest: new Tile(2946, 3369, 0),
     ardougneWest: new Tile(2616, 3332, 0),
     grandTree: new Tile(2449, 3482, 1)
 } as const;
@@ -28,7 +29,8 @@ function camp(
     spot: Tile,
     bankStand: Tile,
     resources: readonly string[],
-    notes?: string
+    notes?: string,
+    verified = true
 ): WoodcuttingLocation {
     return {
         name,
@@ -36,7 +38,7 @@ function camp(
         bankStand,
         boothName: 'Bank booth',
         boothOp: 'Use-quickly',
-        verified: true,
+        verified,
         resources,
         notes
     };
@@ -122,6 +124,34 @@ export const WOODCUTTING_LOCATIONS: WoodcuttingLocation[] = [
         BANK.grandTree,
         ['magic'],
         'Bank is Grand Tree 1F booths (open, no quest gate) — seed stand'
+    ),
+    // #160 tick-manip camps — verified:false until live path/resource polish.
+    camp(
+        'S Falador Oaks',
+        // Oaks south of Falador walls (~2949–3002, 3267–3314). Chickens ~2966,3346 for 2t retaliate.
+        new Tile(2976, 3290, 0),
+        BANK.faladorWest,
+        ['oak'],
+        'Tick manip: 2t retaliate oaks (chickens nearby). Unverified seed.',
+        false
+    ),
+    camp(
+        'Lumbridge Farmer Willows',
+        // Sheep-farm willows + farmer (~3221,3290 / farmer ~3227,3290). Bank Draynor.
+        new Tile(3221, 3290, 0),
+        BANK.draynor,
+        ['willow'],
+        'Tick manip: 3t farmer willows (6-tick cycle). Unverified seed.',
+        false
+    ),
+    camp(
+        'Lumbridge Castle Willows',
+        // Castle willows ~3233–3234, 3238–3244 + rats for retaliate methods.
+        new Tile(3233, 3241, 0),
+        BANK.draynor,
+        ['willow'],
+        'Tick manip: 3t shortbow rapid / retaliate willows. Unverified seed.',
+        false
     )
 ];
 

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
 
-const base = 'http://localhost:8890';
+const base = process.env.CLUE_BASE ?? 'http://localhost:8890';
 const argv = process.argv.slice(2);
 const arg = (name: string): string | null => {
     const i = argv.indexOf(`--${name}`);

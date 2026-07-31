@@ -5,9 +5,13 @@ import {
     effectiveGatherLeash,
     fishingSessionBroken,
     gatherHuntRadius,
+    gatherSpotRangeOrigin,
+    hostileAttackerNearby,
     isAutoLocation,
+    shouldSoftHomeFromGatherMiss,
     shouldWalkHomeToGatherAnchor,
-    shouldYieldGathering
+    shouldYieldGathering,
+    spotWithinGatherRange
 } from '#/bot/scripts/GatheringBot.js';
 import { AXE_BAR_FOR } from '#/bot/scripts/ToolAcquire.js';
 import Tile from '#/bot/api/Tile.js';
@@ -49,6 +53,109 @@ describe('shouldWalkHomeToGatherAnchor (#154 post-bank)', () => {
         expect(shouldWalkHomeToGatherAnchor(null)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(undefined)).toBe(false);
         expect(shouldWalkHomeToGatherAnchor(Number.NaN)).toBe(false);
+    });
+});
+
+describe('gatherSpotRangeOrigin (Auto freeform fish vs named camp)', () => {
+    test('freeform fish with a live player tile measures from the player', () => {
+        // Ardougne river: after hunting toward a hop, spots near the player must
+        // still count even when far from the start-tile anchor.
+        expect(gatherSpotRangeOrigin(true, true)).toBe('player');
+    });
+
+    test('named camp / non-freeform always pins the pier anchor', () => {
+        expect(gatherSpotRangeOrigin(false, true)).toBe('anchor');
+        expect(gatherSpotRangeOrigin(false, false)).toBe('anchor');
+    });
+
+    test('freeform without a player tile falls back to anchor', () => {
+        expect(gatherSpotRangeOrigin(true, false)).toBe('anchor');
+    });
+
+    test('spotWithinGatherRange is inclusive Chebyshev disk', () => {
+        // Stuck tile 2582,3353 vs start 2566,3374 is cheb 21 — outside a 10 leash
+        // from start, but a spot 3 tiles from the player is still fishable freeform.
+        expect(spotWithinGatherRange(3, 40)).toBe(true);
+        expect(spotWithinGatherRange(40, 40)).toBe(true);
+        expect(spotWithinGatherRange(41, 40)).toBe(false);
+        expect(spotWithinGatherRange(21, 10)).toBe(false);
+        expect(spotWithinGatherRange(Number.NaN, 40)).toBe(false);
+    });
+});
+
+describe('shouldSoftHomeFromGatherMiss (gather no-target thrash)', () => {
+    test('does not thrash on freeform pier-hops just outside the 8-tile disk', () => {
+        // Bank/restock still use the tight disk; gather miss must not.
+        expect(shouldWalkHomeToGatherAnchor(12)).toBe(true);
+        expect(shouldSoftHomeFromGatherMiss(12)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(HOME_ARRIVE_RADIUS + 1)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(19)).toBe(false);
+    });
+
+    test('pulls home from bank square / long wander', () => {
+        // Default leash = NAMED_CAMP_LEASH_FLOOR → threshold max(20, min(L,28)) = 28.
+        expect(shouldSoftHomeFromGatherMiss(20)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(28)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(29)).toBe(true);
+        // Catherby bank ~36 from pier — clearly off-camp.
+        expect(shouldSoftHomeFromGatherMiss(36)).toBe(true);
+        // Varrock W bank → SW mine is far past any camp disk.
+        expect(shouldSoftHomeFromGatherMiss(69)).toBe(true);
+    });
+
+    test('respects a tight freeform leash without using the soft disk', () => {
+        // leash 12 → threshold max(20, min(12,28)) = 20 (HOME+12 floor).
+        expect(shouldSoftHomeFromGatherMiss(15, 12)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(21, 12)).toBe(true);
+        // Huge leash still caps threshold at 28.
+        expect(shouldSoftHomeFromGatherMiss(28, 64)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(29, 64)).toBe(true);
+    });
+
+    test('null / non-finite distance does not force a walk', () => {
+        expect(shouldSoftHomeFromGatherMiss(null)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(undefined)).toBe(false);
+        expect(shouldSoftHomeFromGatherMiss(Number.NaN)).toBe(false);
+    });
+});
+
+describe('hostileAttackerNearby (post-kite camp suppress)', () => {
+    const npc = (partial: {
+        dist: number;
+        attack?: boolean;
+        targetsMe?: boolean;
+        inCombat?: boolean;
+        targetsAnother?: boolean;
+    }) => ({
+        inCombat: partial.inCombat ?? false,
+        targetsMe: () => partial.targetsMe ?? false,
+        targetsAnotherPlayer: () => partial.targetsAnother ?? false,
+        actions: () => (partial.attack === false ? ['Talk-to'] : ['Attack']),
+        distance: () => partial.dist
+    });
+
+    test('empty / non-attackers are clear', () => {
+        expect(hostileAttackerNearby([])).toBe(false);
+        expect(hostileAttackerNearby([npc({ dist: 2, attack: false, targetsMe: true })])).toBe(false);
+        expect(hostileAttackerNearby([npc({ dist: 20, targetsMe: true })])).toBe(false);
+    });
+
+    test('attacker targeting us within radius is hostile', () => {
+        expect(hostileAttackerNearby([npc({ dist: 5, targetsMe: true })])).toBe(true);
+        expect(hostileAttackerNearby([npc({ dist: 5, targetsMe: true })], 4)).toBe(false);
+    });
+
+    test('adjacent multi-combat pack member counts even if not on us', () => {
+        expect(
+            hostileAttackerNearby([npc({ dist: 2, inCombat: true, targetsAnother: false })])
+        ).toBe(true);
+        // Fighting someone else a bit further out is not our problem.
+        expect(
+            hostileAttackerNearby([npc({ dist: 5, inCombat: true, targetsAnother: false })])
+        ).toBe(false);
+        expect(
+            hostileAttackerNearby([npc({ dist: 1, inCombat: true, targetsAnother: true })])
+        ).toBe(false);
     });
 });
 
@@ -112,6 +219,16 @@ describe('shouldYieldGathering', () => {
         expect(shouldYieldGathering(false, false, false, false, true)).toBe(true);
         expect(shouldYieldGathering(false, false, false, false, false)).toBe(false);
     });
+
+    test('allowCombat keeps gathering during retaliate tick-manip (#160)', () => {
+        expect(shouldYieldGathering(false, false, false, false, true, true)).toBe(false);
+        expect(shouldYieldGathering(false, false, false, false, true, false)).toBe(true);
+        // Non-combat exits still win even when combat is allowed.
+        expect(shouldYieldGathering(true, false, false, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, true, false, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, false, true, false, true, true)).toBe(true);
+        expect(shouldYieldGathering(false, false, false, true, true, true)).toBe(true);
+    });
 });
 
 describe('AXE_BAR_FOR (smith restock keep)', () => {
@@ -155,5 +272,14 @@ describe('fishingSessionBroken', () => {
         expect(fishingSessionBroken({ ...calm, eventPending: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, inventoryFull: true })).toBe(true);
         expect(fishingSessionBroken({ ...calm, dialogPending: true })).toBe(true);
+    });
+
+    test('allowCombat keeps fishing during Tannerfishing / retaliate (#160)', () => {
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true })).toBe(false);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: false })).toBe(true);
+        // Spot/event exits still break even when combat is allowed.
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, spotGone: true })).toBe(true);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, eventPending: true })).toBe(true);
+        expect(fishingSessionBroken({ ...calm, inCombat: true, allowCombat: true, inventoryFull: true })).toBe(true);
     });
 });

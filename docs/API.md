@@ -169,7 +169,18 @@ Game.energy(): number           // run energy
 Game.weight(): number
 Game.inCombat(): boolean        // health bar showing
 Game.tick(): number             // server ticks since client boot
+Game.combatMode(): number       // current raw com_mode varp
+Game.combatStyleMode(style: 'attack' | 'strength' | 'controlled' | 'defence'): number | null
+Game.hasCombatStyle(style): boolean
+Game.setCombatStyle(style): boolean
+Game.setCombatMode(mode: number): boolean // exact numeric mode (for ranged styles)
 ```
+
+Melee styles are resolved from the Accurate, Aggressive, Controlled, or
+Defensive labels on the equipped weapon's combat interface. This handles
+duplicate and unusual layouts without guessing from the weapon name, button
+count, or ordinal order. If a requested style is unavailable, the last defensive
+button is selected (including controlled on a three-mode weapon).
 
 ---
 
@@ -236,7 +247,9 @@ Inventory.items(): InvItem[]
 Inventory.first(name: string): InvItem | null
 Inventory.contains(name: string): boolean
 Inventory.count(name: string): number   // total qty across stacks/slots
+Inventory.countById(id: number): number // exact object ID across stacks/slots
 Inventory.used(): number                // occupied slots
+Inventory.free(): number                // unoccupied slots (0 if normal pack UI is unavailable)
 Inventory.isFull(): boolean
 
 Equipment.items(): InvItem[]
@@ -255,6 +268,14 @@ class InvItem {
     useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean>;
 }
 ```
+
+While the bank is open, these queries read the bank's side-backpack component.
+Once populated, its counts and capacity remain authoritative even though the
+normal inventory tab is hidden. The side snapshot can populate one tick after
+the main bank component;
+`Bank.withdrawX*` waits for that handoff before recording its baseline. Side-view
+`InvItem` actions are the visible `Deposit-*` component buttons, and `useOn`
+returns false until the bank is closed.
 
 `useOn` is "use X with Y" behind every processing skill — knife→logs,
 raw fish→range, ess→altar. Returns false if a loc target is off-scene.
@@ -284,6 +305,7 @@ Bank.withdrawXById(id: number, count: number): Promise<boolean>
 Bank.deposit(name: string, op?: string): boolean | Promise<boolean>
 Bank.depositInventory(): Promise<void>
 Bank.depositAllMatching(match: (name, id) => boolean, log?): Promise<void>
+Bank.close(timeoutMs?: number): Promise<boolean> // waits for main + side modal halves
 Bank.openBooth(stand, boothName, op, log?): Promise<boolean>
 Bank.openNearest(boothName, op, log?): Promise<boolean>
 Bank.openNearestAccess(access, log?): Promise<boolean>

@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { decide, parseTouristTrapJournal, strictTouristTrapChoice, TOURIST_TRAP_STAGE, touristTrapArea } from '#/bot/quests/defs/touristtrap.js';
+import {
+    decide,
+    parseTouristTrapJournal,
+    runSurfaceRescueCheckpoint,
+    strictTouristTrapChoice,
+    TOURIST_TRAP_STAGE,
+    touristTrapArea,
+    type SurfaceRescueOperations
+} from '#/bot/quests/defs/touristtrap.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
 
@@ -667,6 +675,40 @@ describe('Tourist Trap disguise and rescue restart matrix', () => {
         });
     }
 
+    test('retries the failed stage-19 lower cart in place with an ordinary barrel', () => {
+        for (const freeSlots of [0, 1, 8]) {
+            const failedCart = snap({
+                stage: TOURIST_TRAP_STAGE.RESCUE,
+                tile: MINE_LOWER,
+                inv: [['Barrel', 1]],
+                worn: SLAVE_WORN,
+                freeSlots
+            });
+            const firstDecision = customName(decide(failedCart));
+            const repeatedDecision = customName(decide(failedCart));
+            expect(firstDecision).toBe('retry the lower mine cart with the empty barrel');
+            expect(repeatedDecision).toBe(firstDecision);
+        }
+    });
+
+    test('irrelevant screenshot inventory does not change failed-cart recovery', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: MINE_LOWER,
+            inv: [
+                ['Barrel', 1],
+                ['Coins', 606],
+                ['Metal key', 1],
+                ['Desert shirt', 1],
+                ['Desert robe', 1],
+                ['Desert boots', 1]
+            ],
+            worn: SLAVE_WORN,
+            freeSlots: 8
+        }));
+        expect(customName(step)).toBe('retry the lower mine cart with the empty barrel');
+    });
+
     test('does not attempt the impossible deep-mine Ana interaction without an empty barrel', () => {
         const step = decide(snap({ stage: 18, tile: MINE_DEEP, worn: SLAVE_WORN, freeSlots: 1 }));
         expect(customName(step)?.toLowerCase()).toContain('lower');
@@ -736,5 +778,82 @@ describe('Tourist Trap disguise and rescue restart matrix', () => {
     test('a full pack never starts a key-producing captain fight', () => {
         const step = decide(snap({ stage: 4, tile: CAPTAIN, worn: DESERT_WORN, freeSlots: 0 }));
         expect(customName(step)).not.toContain('defeat');
+    });
+});
+
+describe('Tourist Trap surface rescue orchestration', () => {
+    interface HarnessOptions {
+        ana?: boolean;
+        lift?: boolean;
+        cart?: readonly boolean[];
+        recapture?: boolean;
+    }
+
+    function harness(options: HarnessOptions = {}) {
+        let ana = options.ana ?? false;
+        let cartIndex = 0;
+        const calls: string[] = [];
+        const logs: string[] = [];
+        const operations: SurfaceRescueOperations = {
+            hasAnaBarrel: () => ana,
+            retrieveLift: async () => {
+                calls.push('lift');
+                ana = options.lift ?? false;
+                return ana;
+            },
+            escapeByCart: async () => {
+                calls.push('cart');
+                return options.cart?.[cartIndex++] ?? false;
+            },
+            recaptureAna: async () => {
+                calls.push('recapture');
+                return options.recapture ?? false;
+            },
+            currentArea: () => 'campSurface',
+            waitBetweenAttempts: async () => {
+                calls.push('wait');
+            }
+        };
+        return { operations, calls, logs, log: (message: string) => logs.push(message) };
+    }
+
+    test('lift recovery short-circuits cart and recapture probes', async () => {
+        const run = harness({ lift: true });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
+        expect(run.calls).toEqual(['lift']);
+    });
+
+    test('an existing Ana barrel skips the lift and escapes by cart', async () => {
+        const run = harness({ ana: true, cart: [true] });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
+        expect(run.calls).toEqual(['cart']);
+        expect(run.logs).toContain('surface cart attempt 1/3');
+    });
+
+    test('retries a bounded surface cart probe before succeeding', async () => {
+        const run = harness({ cart: [false, true] });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
+        expect(run.calls).toEqual(['lift', 'cart', 'wait', 'cart']);
+        expect(run.logs).toContain('surface cart attempt 2/3');
+    });
+
+    test('falls back to one deep-mine recapture only after all surface probes fail', async () => {
+        const run = harness({ cart: [false, false, false], recapture: true });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
+        expect(run.calls).toEqual(['lift', 'cart', 'wait', 'cart', 'wait', 'cart', 'recapture']);
+        expect(run.logs).toContain('surface lift/cart probes unresolved; falling back to deep-mine recapture');
+    });
+
+    test('does not take Ana back underground after a transient surface-cart failure', async () => {
+        const run = harness({ ana: true, cart: [false, false, false], recapture: true });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(false);
+        expect(run.calls).toEqual(['cart', 'wait', 'cart', 'wait', 'cart']);
+        expect(run.logs).toContain('surface cart unresolved while carrying Ana; retrying this checkpoint in place');
+    });
+
+    test('reports an unresolved deep-mine recapture', async () => {
+        const run = harness({ cart: [false, false, false], recapture: false });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(false);
+        expect(run.logs).toContain('deep-mine recapture did not complete; current area=campSurface');
     });
 });

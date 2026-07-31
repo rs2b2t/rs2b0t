@@ -5,6 +5,7 @@ export interface SpecialCrossing {
     level: number;
     locName: string;
     action: string;
+    useItem?: { id: number; name: string };
     requires?: { item: string; count: number };
     dialogue?: { choose: string[] };
     npc?: string;
@@ -16,6 +17,8 @@ export interface SpecialCrossing {
 export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
     { x: 3268, z: 3228, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
+
+    { x: 2568, z: 9893, level: 0, locName: 'Door', action: 'Open', useItem: { id: 298, name: 'A key' }, label: 'Baxtorian keyed door' },
 
     { x: 3027, z: 3218, level: 1, npc: 'Seaman Thresnor', locName: 'Seaman Thresnor', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2956, z: 3143, level: 1 }, label: 'Port Sarim->Musa ship' },
     { x: 2955, z: 3146, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 3032, z: 3217, level: 1 }, label: 'Musa->Port Sarim ship' },
@@ -37,4 +40,8 @@ export function pickChoice(options: string[], choose: string[]): string | null {
 
 export function meetsRequirement(have: number, requires?: { item: string; count: number }): boolean {
     return !requires || have >= requires.count;
+}
+
+export function matchesUseItem(item: { id: number }, useItem: NonNullable<SpecialCrossing['useItem']>): boolean {
+    return item.id === useItem.id;
 }

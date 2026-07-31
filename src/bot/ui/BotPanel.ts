@@ -35,6 +35,8 @@ export default class BotPanel {
     private unsubLog: (() => void) | null = null;
     private settingsBox: HTMLElement;
     private paramsModal!: ParamsModal;
+    private rendererControl?: RendererControl;
+    private rendererToggle?: HTMLInputElement;
 
     private banner: HTMLElement;
     private stateCell: HTMLElement;
@@ -80,9 +82,9 @@ export default class BotPanel {
         script.appendChild(pick);
 
         const buttons = el('div', 'rs2b0t-buttons');
-        this.startBtn = button(buttons, 'Start', () => this.handleStart());
+        this.startBtn = button(buttons, 'Start', () => this.startSelectedScript());
         this.pauseBtn = button(buttons, 'Pause', () => this.handlePause());
-        this.stopBtn = button(buttons, 'Stop', () => ScriptRunner.stop());
+        this.stopBtn = button(buttons, 'Stop', () => this.stopScript());
         script.appendChild(buttons);
 
         this.scriptStatus = row(script, 'status');
@@ -151,6 +153,26 @@ export default class BotPanel {
         this.ensureSelection();
         this.renderScriptControls();
         this.renderSettings();
+    }
+
+    startSelectedScript(): void {
+        if (isActiveState(ScriptRunner.state)) {
+            return;
+        }
+        this.handleStart();
+    }
+
+    stopScript(): void {
+        ScriptRunner.stop();
+    }
+
+    setRendererEnabled(enabled: boolean): void {
+        if (!this.rendererControl || !this.rendererToggle) {
+            return;
+        }
+        this.rendererToggle.checked = enabled;
+        localStorage.setItem(rendererEnabledKey(), enabled ? '1' : '0');
+        this.rendererControl.setEnabled(enabled);
     }
 
     private selectScript(name: string): void {
@@ -353,11 +375,13 @@ export default class BotPanel {
     }
 
     private buildRendererControls(renderer: RendererControl): HTMLElement {
+        this.rendererControl = renderer;
         const rendering = el('div', 'rs2b0t-section');
         rendering.appendChild(sectionTitle('rendering'));
 
         const rendererRow = el('label', 'rs2b0t-setting rs2b0t-setting-bool');
         const rendererToggle = document.createElement('input');
+        this.rendererToggle = rendererToggle;
         rendererToggle.type = 'checkbox';
         const savedEnabled = localStorage.getItem(rendererEnabledKey());
         rendererToggle.checked = savedEnabled === null ? renderer.enabled() : savedEnabled !== '0';
@@ -371,15 +395,11 @@ export default class BotPanel {
         note.textContent = 'Rail previews stay at 1 FPS. Rendering never pauses the bot.';
         rendering.appendChild(note);
 
-        const applyEnabled = (): void => {
-            renderer.setEnabled(rendererToggle.checked);
-        };
         rendererToggle.addEventListener('change', () => {
-            localStorage.setItem(rendererEnabledKey(), rendererToggle.checked ? '1' : '0');
-            applyEnabled();
+            this.setRendererEnabled(rendererToggle.checked);
         });
 
-        applyEnabled();
+        renderer.setEnabled(rendererToggle.checked);
         return rendering;
     }
 

@@ -280,7 +280,7 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await wieldWeapon(log);
-    Game.setCombatStyle(1);
+    Game.setCombatStyle('strength');
     const mordred = Npcs.query().name('Sir Mordred').action('Attack').within(8).nearest();
     if (mordred) {
         const here = Game.tile();
@@ -349,7 +349,7 @@ async function killGiantBat(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await wieldWeapon(log);
-    Game.setCombatStyle(1);
+    Game.setCombatStyle('strength');
     const bat = Npcs.query().name('Giant bat').action('Attack').within(10).nearest();
     if (!bat) {
         log('killGiantBat: no Giant bat near the anchor — LIVE-VERIFY the spawn is reachable');

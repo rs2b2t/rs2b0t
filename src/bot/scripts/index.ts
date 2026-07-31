@@ -8,6 +8,7 @@ import {
     COOK_FISH_OPTIONS,
     COOK_MODE_OPTIONS
 } from './FishCookLogic.js';
+import { FISH_TICK_MANIP_OPTIONS, MINE_TICK_MANIP_OPTIONS } from './TickManipLogic.js';
 import { ROCK_OPTIONS } from './MiningRocks.js';
 import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
@@ -47,6 +48,7 @@ import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter.js';
+import RoguesPurse from './RoguesPurse.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 
@@ -217,6 +219,15 @@ ScriptRegistry.register({
             help:
                 'Mine camp + full-pack behaviour. Auto = if you start in the same 64×64 map square as a known mine camp, snap to the nearest such camp and bank there; otherwise freeform (start-tile leash + nearest bank). Named camps pin spot + bank. None = power-mine (drop ore; bank only for missing tools).'
         },
+        tickManip: {
+            type: 'string',
+            default: 'Off',
+            options: [...MINE_TICK_MANIP_OPTIONS],
+            label: 'Tick manip',
+            group: 'Tick manip',
+            help:
+                'Optional tick methods. Off = AFK mine. Iron cadence (pick-aware) = re-click iron on the pickaxe mining_rate cycle (mith=4t, rune=2t, …). Forced Off under Location None. Prefer Legends Guild Iron camps for 3-rock iron.'
+        },
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
     },
@@ -291,6 +302,15 @@ ScriptRegistry.register({
             label: 'Leash radius (tiles)',
             help:
                 'How far from the camp/start anchor to prefer fishing spots. Only Location Auto uses this as-is. Named camps and None floor to 64 (Fishing Guild / Catherby piers are huge). The bot still hunts past the leash when spots hop along the pier. Location Auto does not mob-flee (expert / may-die).'
+        },
+        tickManip: {
+            type: 'string',
+            default: 'Off',
+            options: [...FISH_TICK_MANIP_OPTIONS],
+            label: 'Tick manip',
+            group: 'Tick manip',
+            help:
+                'Optional tick methods (server delays). Off = AFK fish. 4t fly reclick = re-click fly spots on the +4 cycle. Knife delay (+2) = knife one log between rolls (keep Knife + 1 log). Tannerfishing = cook/eat interleave with Auto Retaliate ON (may die; Gnome Stronghold camp). Forced Off under Location None.'
         },
         location: {
             type: 'string',
@@ -382,6 +402,14 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'RoguesPurse',
+    description: 'Infinite Herblore grind at the fungus-covered cavern wall under the Karamja jungle — searches, identifies, and drops Rogues purse on the tick. Walks itself there; needs Herblore 3 and Jungle Potion past the point where Trufitus asks for the purse',
+    category: 'Herblore',
+    tags: ['herblore', 'karamja', 'members', 'afk'],
+    create: () => new RoguesPurse()
+});
+
+ScriptRegistry.register({
     name: 'BoneBurier',
     description: 'Bank-standing Prayer trainer — withdraws full loads of an exact bone name and buries them until the bank is empty',
     category: 'Prayer',
@@ -428,7 +456,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'GnomeCourse',
-    description: 'Runs the Gnome Stronghold agility course (start at the log balance)',
+    description: 'Travels to and runs the Gnome Stronghold agility course',
     category: 'Agility',
     tags: ['course', 'gnome'],
     settingsSchema: AGILITY_SETTINGS,

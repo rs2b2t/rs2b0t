@@ -6,6 +6,10 @@ import EntityQuery from './Query.js';
  * NPC queries.
  * @see docs/API.md#entities--queries
  */
+export function talkOp(actions: string[]): string | null {
+    return actions.find(a => /^talk/i.test(a)) ?? null;
+}
+
 export const Npcs = {
     query(): EntityQuery<Npc> {
         return new EntityQuery(() => reader.npcs().map(s => new Npc(s)));

@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { specialCrossingAt, pickChoice, meetsRequirement, SPECIAL_CROSSINGS } from '../../../src/bot/nav/data/specialCrossings.js';
+import { specialCrossingAt, pickChoice, meetsRequirement, matchesUseItem, SPECIAL_CROSSINGS } from '../../../src/bot/nav/data/specialCrossings.js';
 
 describe('specialCrossingAt', () => {
     test('matches both Al Kharid toll gate tiles', () => {
@@ -14,6 +14,16 @@ describe('specialCrossingAt', () => {
     test('misses other tiles and other levels', () => {
         expect(specialCrossingAt(3268, 3227, 1)).toBeNull();
         expect(specialCrossingAt(3200, 3200, 0)).toBeNull();
+    });
+
+    test('Baxtorian door uses the retained quest key without changing graph availability', () => {
+        const door = specialCrossingAt(2568, 9893, 0);
+        expect(door?.label).toBe('Baxtorian keyed door');
+        expect(door?.locName).toBe('Door');
+        expect(door?.useItem).toEqual({ id: 298, name: 'A key' });
+        expect(door?.requires).toBeUndefined();
+        expect(matchesUseItem({ id: 293 }, door!.useItem!)).toBe(false);
+        expect(matchesUseItem({ id: 298 }, door!.useItem!)).toBe(true);
     });
 
     test('gnome stronghold gate: reopen-after-dialogue, free, helps with the boxes', () => {

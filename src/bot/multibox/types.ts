@@ -29,6 +29,9 @@ export interface SlotSnapshot extends SlotStatus {
 
 export interface SlotHandle {
     setRenderMode(mode: RenderMode): void;
+    startScript(): void;
+    stopScript(): void;
+    setRendererEnabled(enabled: boolean): void;
     setCredentials(username: string, password: string): void;
     setAutoLogin(on: boolean): void;
     setLoginCoordination(coordination: LoginCoordination | null): void;

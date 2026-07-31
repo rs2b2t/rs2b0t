@@ -178,7 +178,7 @@ async function huntMeat(meat: RitualMeat, log: (message: string) => void): Promi
         await Execution.delayTicks(2);
         return false;
     }
-    Game.setCombatStyle(1);
+    Game.setCombatStyle('strength');
     log(`attacking ${meat.npc} for ${meat.raw}`);
     if (!(await target.interact('Attack'))) {
         return false;

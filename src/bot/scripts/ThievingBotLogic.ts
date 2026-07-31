@@ -81,6 +81,15 @@ export async function withdrawTo(
     return countInInv() - start;
 }
 
+/** Close both bank panes and prove the same backpack count is visible afterward. */
+export async function closeBankAndConfirmCount(expected: number, count: () => number): Promise<boolean> {
+    if (!(await Bank.close())) {
+        return false;
+    }
+    await Execution.delayTicks(1);
+    return Execution.delayUntil(() => count() >= expected, 3000);
+}
+
 export function autoFoodBanking(mode: string): boolean {
     return mode.trim().toLowerCase() === 'auto';
 }

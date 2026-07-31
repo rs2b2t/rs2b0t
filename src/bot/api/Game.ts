@@ -2,11 +2,32 @@ import { actions, reader, type WorldTile } from '../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Execution } from './Execution.js';
+import { CombatStyleController, type CombatStyleResolution, type MeleeCombatStyle } from './CombatStyle.js';
 import type { Npc } from './entities/index.js';
 
 const COM_MODE_VARP = 43;
 
 const RUN_VARP = 173;
+
+function offeredCombatModes() {
+    const root = reader.sideTabInterface(0);
+    return root === -1 ? null : reader.selectButtonLabelsByVarp(root, COM_MODE_VARP);
+}
+
+function selectCombatMode(mode: number): boolean {
+    const root = reader.sideTabInterface(0);
+    if (root === -1) {
+        return false;
+    }
+    const btn = reader.selectButtonByVarp(root, COM_MODE_VARP, mode);
+    return btn !== -1 && actions.ifButton(btn);
+}
+
+const meleeCombatStyles = new CombatStyleController({
+    offeredModes: offeredCombatModes,
+    currentMode: () => reader.varp(COM_MODE_VARP),
+    selectMode: selectCombatMode
+});
 
 /**
  * Local player and world state.
@@ -49,14 +70,28 @@ export const Game = {
         return reader.varp(COM_MODE_VARP);
     },
 
-    setCombatStyle(mode: number): boolean {
-        const root = reader.sideTabInterface(0);
-        if (root === -1) {
-            return false;
-        }
+    combatStyleResolution(style: MeleeCombatStyle): CombatStyleResolution | null {
+        return meleeCombatStyles.resolution(style);
+    },
 
-        const btn = reader.selectButtonByVarp(root, COM_MODE_VARP, mode);
-        return btn !== -1 && actions.ifButton(btn);
+    combatStyleMode(style: MeleeCombatStyle): number | null {
+        return meleeCombatStyles.mode(style);
+    },
+
+    hasCombatStyle(style: MeleeCombatStyle): boolean {
+        return meleeCombatStyles.has(style);
+    },
+
+    setCombatStyle(style: MeleeCombatStyle | number): boolean {
+        if (typeof style === 'number') {
+            return Game.setCombatMode(style);
+        }
+        return meleeCombatStyles.set(style);
+    },
+
+    /** Set an exact combat-tab varp mode (used by ranged styles). */
+    setCombatMode(mode: number): boolean {
+        return selectCombatMode(mode);
     },
 
     /**

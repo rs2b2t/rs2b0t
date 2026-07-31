@@ -77,6 +77,16 @@ export const Execution: {
 
 // ---- game state ----
 
+export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence';
+
+export interface CombatStyleResolution {
+    /** Style requested by the script. */
+    requested: MeleeCombatStyle;
+    /** Actual interface-labelled style selected (may be defensive fallback). */
+    effective: MeleeCombatStyle;
+    mode: number;
+}
+
 /**
  * Local player and world state — position, energy, combat, animation, ticks.
  * @see docs/API.md#game
@@ -97,7 +107,15 @@ export const Game: {
     tick(): number;
     /** Current com_mode varp (combat style index). */
     combatMode(): number;
+    /** Resolve from current interface labels; unavailable styles fall back to its last defensive button. */
+    combatStyleResolution(style: MeleeCombatStyle): CombatStyleResolution | null;
+    combatStyleMode(style: MeleeCombatStyle): number | null;
+    hasCombatStyle(style: MeleeCombatStyle): boolean;
+    setCombatStyle(style: MeleeCombatStyle): boolean;
+    /** @deprecated Use setCombatMode for an exact numeric mode. */
     setCombatStyle(mode: number): boolean;
+    /** Set an exact combat-tab varp mode, primarily for ranged styles. */
+    setCombatMode(mode: number): boolean;
     /** Local player's display name, or null before login. */
     myName(): string | null;
     openSideTab(tab: number): Promise<boolean>;
@@ -578,6 +596,11 @@ export const ChatDialog: {
      * first) at the largest fixed quantity offered (prefer 10).
      */
     make(match?: string): Promise<boolean>;
+    /**
+     * In a make menu, pick Make-1 for the product whose name contains `match`
+     * (or the first). Never opens the Make-X count dialog.
+     */
+    makeOne(match?: string): Promise<boolean>;
 };
 
 export interface TradeItem {

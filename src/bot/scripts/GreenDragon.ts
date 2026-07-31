@@ -11,7 +11,7 @@ import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
-import { COMBAT_STYLE_OPTIONS, parseCombatStyle } from '../api/CombatStyle.js';
+import { COMBAT_STYLE_OPTIONS, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
@@ -73,7 +73,7 @@ export const SETTINGS: SettingsSchema = {
 };
 
 let STYLE: 'melee' | 'mage' = 'melee';
-let MELEE_MODE = 1;
+let MELEE_STYLE: MeleeCombatStyle = 'strength';
 let WEAPON = '';
 let SHIELD = 'Dragonfire shield';
 let SPELL = 'Fire Strike';
@@ -210,12 +210,12 @@ class SetAttackStyle implements Task {
     private retryAt = 0;
     constructor(private bot: GreenDragon) {}
     validate(): boolean {
-        return STYLE === 'melee' && Game.combatMode() !== MELEE_MODE && Date.now() >= this.retryAt;
+        return STYLE === 'melee' && !Game.hasCombatStyle(MELEE_STYLE) && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(MELEE_MODE);
-        if (await Execution.delayUntil(() => Game.combatMode() === MELEE_MODE, 3000)) {
+        Game.setCombatStyle(MELEE_STYLE);
+        if (await Execution.delayUntil(() => Game.hasCombatStyle(MELEE_STYLE), 3000)) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
@@ -461,7 +461,7 @@ export default class GreenDragon extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         STYLE = this.settings.str('combatStyle', 'melee') as 'melee' | 'mage';
-        MELEE_MODE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         SPELL = this.settings.str('spell', 'Fire Strike');
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of fire') : this.settings.str('weapon', 'Rune scimitar');
         SHIELD = this.settings.str('shield', 'Dragonfire shield');

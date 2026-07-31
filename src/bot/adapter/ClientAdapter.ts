@@ -85,6 +85,11 @@ export interface InvItemSnapshot {
     comId: number;
 }
 
+export interface SelectButtonLabel {
+    mode: number;
+    label: string;
+}
+
 export function attach(client: unknown): string[] {
     const missing = SELF_TEST.filter(name => !(name in (client as Record<string, unknown>)));
     raw = client as RawClient;
@@ -723,6 +728,13 @@ export const reader = {
         return walkComponents(rootComId).find(com => com.buttonType === ButtonType.BUTTON_SELECT && com.scripts?.[0]?.[0] === 5 && com.scripts[0][1] === varp && com.scriptOperand?.[0] === value)?.id ?? -1;
     },
 
+    selectButtonLabelsByVarp(rootComId: number, varp: number): SelectButtonLabel[] {
+        if (!raw) {
+            return [];
+        }
+        return readSelectButtonLabelsByVarp(rootComId, varp);
+    },
+
     mainSkillMultiItems(): InvItemSnapshot[] {
         if (!raw || raw.mainModalId === -1) {
             return [];
@@ -888,6 +900,67 @@ function walkComponents(rootComId: number): IfType[] {
     }
 
     return out;
+}
+
+/** Read each select button together with the style text rendered beside it. */
+export function readSelectButtonLabelsByVarp(rootComId: number, varp: number): SelectButtonLabel[] {
+    const components = walkPositionedComponents(rootComId);
+    const styleLabels = components.filter(({ com }) => com.type === ComponentType.TYPE_TEXT && isCombatStyleLabel(com.text));
+    const buttons = components
+        .filter(({ com }) => com.buttonType === ButtonType.BUTTON_SELECT && com.scripts?.[0]?.[0] === 5 && com.scripts[0][1] === varp && com.scriptOperand?.[0] !== undefined)
+        .sort((a, b) => a.y - b.y || a.x - b.x || a.com.id - b.com.id);
+
+    const options: SelectButtonLabel[] = [];
+    for (const button of buttons) {
+        const label = styleLabels
+            .filter(candidate => candidate.parentId === button.parentId && verticalCentre(candidate) >= button.y && verticalCentre(candidate) <= button.y + button.com.height)
+            .sort((a, b) => Math.abs(verticalCentre(a) - verticalCentre(button)) - Math.abs(verticalCentre(b) - verticalCentre(button)))[0]?.com.text;
+        if (label !== null && label !== undefined) {
+            options.push({ mode: button.com.scriptOperand![0], label });
+        }
+    }
+    return options;
+}
+
+interface PositionedComponent {
+    com: IfType;
+    parentId: number;
+    x: number;
+    y: number;
+}
+
+function walkPositionedComponents(rootComId: number): PositionedComponent[] {
+    const out: PositionedComponent[] = [];
+    const queue: { id: number; parentId: number; x: number; y: number }[] = [{ id: rootComId, parentId: -1, x: 0, y: 0 }];
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        const com = IfType.list[current.id];
+        if (!com) {
+            continue;
+        }
+
+        out.push({ com, parentId: current.parentId, x: current.x, y: current.y });
+        if (com.children) {
+            for (let i = 0; i < com.children.length; i++) {
+                queue.push({
+                    id: com.children[i],
+                    parentId: com.id,
+                    x: current.x + (com.childX?.[i] ?? 0),
+                    y: current.y + (com.childY?.[i] ?? 0)
+                });
+            }
+        }
+    }
+
+    return out;
+}
+
+function verticalCentre(component: PositionedComponent): number {
+    return component.y + component.com.height / 2;
+}
+
+function isCombatStyleLabel(text: string | null): boolean {
+    return /^\s*\((?:accurate|aggressive|controlled|defensive)\)\s*$/i.test(text ?? '');
 }
 
 function groundOps(op: (string | null)[] | null): (string | null)[] {

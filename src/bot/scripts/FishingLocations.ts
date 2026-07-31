@@ -23,7 +23,8 @@ const BANK = {
     fishingGuild: new Tile(2586, 3420, 0),
     edgeville: new Tile(3094, 3493, 0),
     seers: new Tile(2725, 3491, 0),
-    faladorWest: new Tile(2946, 3369, 0)
+    faladorWest: new Tile(2946, 3369, 0),
+    grandTree: new Tile(2449, 3482, 1)
 } as const;
 
 export const FISHING_LOCATIONS: FishingLocation[] = [
@@ -101,6 +102,19 @@ export const FISHING_LOCATIONS: FishingLocation[] = [
         verified: true,
         resources: ['lava eel'],
         notes: 'Dungeon spot; surface bank at Falador West'
+    },
+    // #160 Tannerfishing camp — verified:false until live polish.
+    // Hops river ~2382–2394, 3407–3425; stand ~2386–2390, 3418–3425. No cook loc in square —
+    // firemaking or scouted range for cook/eat interleave.
+    {
+        name: 'Gnome Stronghold (fishing)',
+        spot: new Tile(2388, 3420, 0),
+        bankStand: BANK.grandTree,
+        boothName: 'Bank booth',
+        boothOp: 'Use-quickly',
+        verified: false,
+        resources: ['trout', 'salmon'],
+        notes: 'Tick manip: Tannerfishing (fly + cook/eat). Unverified seed; bank Grand Tree 1F'
     }
 ];
 

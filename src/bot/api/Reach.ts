@@ -3,14 +3,13 @@ import { reader } from '../adapter/ClientAdapter.js';
 import { Execution } from './Execution.js';
 import { ChatDialog } from './hud/ChatDialog.js';
 import { Locs } from './queries/Locs.js';
-import { Npcs } from './queries/Npcs.js';
+import { Npcs, talkOp } from './queries/Npcs.js';
 import { Reachability } from './Reachability.js';
 import { Traversal } from './Traversal.js';
 import { WalkExecutor, isOpenableBarrier } from '../nav/WalkExecutor.js';
 import { openOp, towardDest } from './walkOpening.js';
 import { chebyshev } from '../nav/followMath.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
-import { talkOp } from '../quests/exec/primitives.js';
 import type { Interactable } from './entities/index.js';
 
 export type ReachStatus = 'done' | 'retry' | 'unreachable';
@@ -40,12 +39,20 @@ export interface ReachEntityOpts<T extends ReachEntity> {
     find: () => T | null;
     op: string;
     expect: () => boolean;
+    /** Probe the scene for a shut door instead of waiting on the server's verdict. */
+    openWhenUnreachable?: boolean;
     expectMs?: number;
     what?: string;
     log?: (m: string) => void;
 }
 
 const REACH_BFS_STEPS = 400;
+/**
+ * How far the scene probe's verdict is worth trusting. `REACH_BFS_STEPS` expansions
+ * run out at ~11 tiles of open ground, so beyond this a plain "too far" reads exactly
+ * like "walled off" — and a patrolling target would have us opening doors for nothing.
+ */
+const PROBE_RADIUS = 10;
 
 async function closeIn(near: WorldTile, radius: number, log: (m: string) => void): Promise<ReachStatus> {
     const ok = await Traversal.walkResilient(near, { radius, attempts: 4, timeoutMs: 90_000, log });
@@ -76,7 +83,7 @@ async function openBlockingDoor(toward: WorldTile, log: (m: string) => void): Pr
     if (!shut) { return true; }
     const op = openOp(shut.actions());
     if (!op) { return false; }
-    log(`reach: server said 'can't reach' — opening blocking '${shut.name}' at (${t.x},${t.z})`);
+    log(`reach: opening blocking '${shut.name}' at (${t.x},${t.z})`);
     if (!(await shut.interact(op))) { return false; }
     return Execution.delayUntil(() => {
         const still = Locs.query().where(l => l.tile().x === t.x && l.tile().z === t.z && isOpenableBarrier(l.name, l.actions())).nearest();
@@ -91,9 +98,23 @@ async function reachThroughDoors(
     targetTile: () => WorldTile | null,
     what: string,
     log: (m: string) => void,
-    retryAfterTimeout = true
+    retryAfterTimeout = true,
+    probeUnreachable = false
 ): Promise<ReachStatus> {
     for (let i = 0; i < REACH_DOOR_ATTEMPTS; i++) {
+        // The server only says "I can't reach that!" once its own path search
+        // dead-ends, which a target that keeps moving can postpone forever. For
+        // those, probe the scene instead; a wrong probe just falls through to the
+        // click below and costs nothing.
+        if (probeUnreachable && !expect()) {
+            const blocked = targetTile();
+            const here = reader.worldTile();
+            if (blocked && here && blocked.level === here.level && chebyshev(here, blocked) <= PROBE_RADIUS
+                && !Reachability.canReach(blocked, { maxSteps: REACH_BFS_STEPS, adjacentOk: true })
+                && (await openBlockingDoor(blocked, log))) {
+                continue;
+            }
+        }
         const mark = GameMessages.mark();
         const dispatched = await attempt();
         if (dispatched) {
@@ -139,7 +160,8 @@ export const Reach = {
             () => opts.find()?.tile() ?? null,
             opts.what ?? opts.op,
             log,
-            false
+            false,
+            opts.openWhenUnreachable ?? false
         );
     },
 
@@ -196,7 +218,9 @@ export const Reach = {
             opts.openMs ?? 15_000,
             () => find()?.tile() ?? null,
             opts.name,
-            log
+            log,
+            true,
+            true
         );
     }
 };
