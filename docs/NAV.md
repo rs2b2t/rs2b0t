@@ -166,6 +166,12 @@ Doors that are scripted to refuse entry from one side are **never** baked as
 bidirectional — a one-way door baked both ways lures paths into dead ends. Double
 doors are opened from the **exterior** stand; standing on a leaf wedges the crossing.
 
+A door that refuses from *both* sides is not a door at all, and `derive-doors` skips
+the type outright. `Open` in a loc's ops says nothing about whether the script honours
+it: McGrubor's Wood's front gate is locked from inside the wood and guarded by the
+Forester from outside, so the only way through the fence is the Loose Railing one
+`Squeeze-through` edge away — curated, because "Squeeze-through" is not an `Open`.
+
 ## Special crossings
 
 Some barriers need more than an `Open`: a toll, a fare, a dialogue, or a quest state.
