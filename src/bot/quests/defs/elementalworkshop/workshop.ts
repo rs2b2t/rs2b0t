@@ -602,10 +602,41 @@ async function takeElementalOre(log: (m: string) => void): Promise<boolean> {
     return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
 }
 
+/** Free one pack slot so Take is not silently refused on a full inventory. */
+async function freeSlotForOre(log: (m: string) => void): Promise<void> {
+    if (!Inventory.isFull()) {
+        return;
+    }
+    // Prefer dropping a spare food; never drop quest tools/ore/key/book.
+    const keep = new Set([
+        EW_ITEM.BATTERED_BOOK.id, EW_ITEM.BATTERED_KEY.id, EW_ITEM.ELEMENTAL_ORE.id,
+        EW_ITEM.ELEMENTAL_METAL.id, EW_ITEM.STONE_BOWL.id, EW_ITEM.STONE_BOWL_FULL.id,
+        EW_ITEM.KNIFE.id, EW_ITEM.HAMMER.id, EW_ITEM.NEEDLE.id, EW_ITEM.THREAD.id,
+        EW_ITEM.LEATHER.id, EW_ITEM.COAL.id, EW_ITEM.COINS.id,
+        1265, 1267, 1269, 1271, 1273, 1275 // pickaxes
+    ]);
+    const food = Inventory.items().find(i => {
+        const n = i.name?.toLowerCase() ?? '';
+        return (n.includes('lobster') || n.includes('swordfish') || n.includes('salmon') || n.includes('trout'))
+            && i.actions().some(a => a.toLowerCase() === 'drop');
+    });
+    const junk = food ?? Inventory.items().find(i =>
+        i.id !== undefined && !keep.has(i.id) && i.actions().some(a => a.toLowerCase() === 'drop')
+    );
+    if (!junk) {
+        log('inventory full and nothing safe to drop for Elemental ore');
+        return;
+    }
+    log(`dropping ${junk.name ?? junk.id} to free a slot for ore`);
+    await junk.interact('Drop');
+    await Execution.delayUntil(() => !Inventory.isFull(), 3_000);
+}
+
 /**
- * Mine the west-chamber rock (spawns Earth elemental) and take the ore drop.
- * Do not pathfind onto the rock loc tile — it is unwalkable; stand beside it.
- * Only kill earth elementals in the rock pocket — others do not drop quest ore.
+ * Mine the west-chamber rock (spawns the *rock* Earth elemental) and take ore.
+ * Standing "Earth elemental" NPCs in the workshop do **not** drop quest ore —
+ * only `earth_elemental_rock_version` after Mine, and only if we are the hero.
+ * Always Mine first; never attack a pre-existing earth elemental.
  */
 export async function mineElementalOre(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
@@ -613,8 +644,8 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     }
 
     await ensureMeleeWeapon(log);
+    await freeSlotForOre(log);
 
-    // Always work from the rock pocket so we do not chase water-wing elementals.
     if (!(await walkNear(ROCK_STAND, 5, log))) {
         return false;
     }
@@ -626,23 +657,34 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         }
     }
 
-    let elemental = earthAtRock();
-    if (!elemental) {
-        const rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
-        if (!rock) {
-            log('no Pile of Rock to Mine in the west chamber');
-            return false;
-        }
-        log('mining the elemental rock (Earth elemental will spawn)');
-        if (!(await rock.interact('Mine'))) {
-            return false;
-        }
-        await Execution.delayUntil(
-            () => earthAtRock() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0 || findOreOnGround() !== null,
-            12_000
-        );
-        elemental = earthAtRock();
+    // Snapshot scene NPCs so we only attack the one that spawns from this Mine.
+    const beforeIdx = new Set(
+        Npcs.query().name(EARTH_ELEMENTAL).within(20).results().map(n => n.index)
+    );
+
+    const rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
+    if (!rock) {
+        log('no Pile of Rock to Mine in the west chamber');
+        return false;
     }
+    log('mining the elemental rock (Earth elemental will spawn)');
+    if (!(await rock.interact('Mine'))) {
+        return false;
+    }
+
+    let elemental: Npc | null = null;
+    await Execution.delayUntil(() => {
+        if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0 || findOreOnGround()) {
+            return true;
+        }
+        elemental = Npcs.query()
+            .name(EARTH_ELEMENTAL)
+            .where(n => !beforeIdx.has(n.index) && !n.targetsAnotherPlayer())
+            .within(16)
+            .nearest()
+            ?? earthAtRock();
+        return elemental !== null;
+    }, 12_000);
 
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
         return true;
@@ -651,11 +693,15 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         return true;
     }
     if (!elemental) {
+        // Rock may have already been "mined" into an aggressive NPC mid-click.
+        elemental = earthAtRock();
+    }
+    if (!elemental) {
         log('Earth elemental did not appear at the rock');
         return false;
     }
 
-    log('killing the Earth elemental for Elemental ore');
+    log('killing the rock Earth elemental for Elemental ore');
     if (!(await elemental.interact('Attack'))) {
         return false;
     }
@@ -664,8 +710,8 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         6_000
     );
 
-    // Wait for death *and* loot — do not treat "left combat" alone as success
-    // (aggro can end without a kill, or loot can lag a tick).
+    // Stay until the NPC is gone or ore is visible — hero loot only drops on our kill.
+    const deathTile = elemental.tile();
     const finished = await Execution.delayUntil(
         () => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
             || findOreOnGround() !== null
@@ -676,12 +722,17 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         log('Earth elemental combat did not finish in time');
         return false;
     }
-    // Loot drop is async after death; takeElementalOre waits for it.
+
+    // Loot often lands on the death tile a tick after the NPC disappears.
+    if (deathTile) {
+        await walkNear(new Tile(deathTile.x, deathTile.z, deathTile.level), 1, log);
+        await settleScene();
+    }
     if (await takeElementalOre(log)) {
         return true;
     }
     log('Earth elemental died but Elemental ore was not on the ground');
-    return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
+    return false;
 }
 
 /**
