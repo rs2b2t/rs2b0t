@@ -31,7 +31,31 @@ export const SEERS_TRUCK = new Tile(2696, 3504, 0);
 export const SEERS_TRUCK_STAND = new Tile(2695, 3503, 0);
 export const SEERS_BANK = new Tile(2725, 3491, 0);
 
+/** Click-to-swing only. The server starts the animation within a tick or two. */
+export const MINE_START_MS = 3000;
+
+/** Backstop for a swing that neither yields nor ends. Never the normal path. */
+export const MINE_STALL_MS = 20_000;
+
 export type Phase = 'fill' | 'run' | 'drain';
+
+/** Two-stage because the swing has not begun yet on the tick we start waiting. */
+export type MineStage = 'start' | 'sustain';
+
+export interface MineView {
+    gained: boolean;
+    packFull: boolean;
+    animating: boolean;
+    /** Random event pending or a dialog open — either way, stop mining and yield. */
+    interrupted: boolean;
+}
+
+export function mineWaitDone(stage: MineStage, view: MineView): boolean {
+    if (view.gained || view.packFull || view.interrupted) {
+        return true;
+    }
+    return stage === 'start' ? view.animating : !view.animating;
+}
 
 export type DepositResult = 'all' | 'partial' | 'full' | 'wrong-item' | 'none';
 export type RemoveResult = 'all' | 'partial' | 'empty' | 'no-space' | 'none';

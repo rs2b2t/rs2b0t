@@ -25,6 +25,8 @@ import {
     MAX_PULLS_PER_HAUL,
     MINE_AREA,
     MINE_OP,
+    MINE_STALL_MS,
+    MINE_START_MS,
     MINE_TRUCK,
     MINE_TRUCK_STAND,
     REMOVE_OP,
@@ -38,16 +40,17 @@ import {
     classifyDeposit,
     classifyRemove,
     decide,
+    mineWaitDone,
     truckFullAfterDeposit,
     truckEmptyAfterRemove,
     type DepositResult,
+    type MineView,
     type Phase,
     type RemoveResult
 } from './CoalTrucksLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MESSAGE_WAIT_MS = 5000;
-const MINE_STALL_MS = 20_000;
 const RESPAWN_WAIT_TICKS = 5;
 const ROCK_LEASH = 12;
 const MAX_BANK_FAILS = 6;
@@ -202,13 +205,17 @@ export default class CoalTrucks extends LoopingBot {
         // A rock yields one coal and depletes, so return on the gain and let the next
         // loop pick a live rock. Waiting out the stall on a spent rock was costing the
         // whole 20s: measured 1 coal / 20s, against ~1 coal / 2s once this returns early.
-        await Execution.delayUntil(
-            () => Inventory.count(COAL) > before
-                || Inventory.isFull()
-                || EventSignal.pending()
-                || ChatDialog.canContinue(),
-            MINE_STALL_MS
-        );
+        // A swing that stops is the other way out: a stolen rock or a manual click ends
+        // it with no coal, and no gain condition ever fires. Two stages because the swing
+        // has not begun yet — a bare `!animating` would be true at once and re-click forever.
+        const view = (): MineView => ({
+            gained: Inventory.count(COAL) > before,
+            packFull: Inventory.isFull(),
+            animating: Game.animating(),
+            interrupted: EventSignal.pending() || ChatDialog.canContinue()
+        });
+        await Execution.delayUntil(() => mineWaitDone('start', view()), MINE_START_MS);
+        await Execution.delayUntil(() => mineWaitDone('sustain', view()), MINE_STALL_MS);
     }
 
     private async deposit(): Promise<void> {

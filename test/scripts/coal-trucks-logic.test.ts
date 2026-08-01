@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
     COAL_MINING_LEVEL,
+    MINE_START_MS,
+    MINE_STALL_MS,
     MINE_TRUCK,
     MAX_PULLS_PER_HAUL,
     MINE_TRUCK_STAND,
@@ -10,8 +12,10 @@ import {
     classifyDeposit,
     classifyRemove,
     decide,
+    mineWaitDone,
     truckFullAfterDeposit,
     truckEmptyAfterRemove,
+    type MineView,
     type WorldView
 } from '#/bot/scripts/CoalTrucksLogic.js';
 
@@ -234,6 +238,65 @@ describe('decide — drain', () => {
     });
     test('banks the last load before heading back', () => {
         expect(decide(view({ phase: 'drain', truckEmpty: true, coalHeld: 14 }))).toEqual({ kind: 'bank' });
+    });
+});
+
+const mining = (over: Partial<MineView> = {}): MineView => ({
+    gained: false,
+    packFull: false,
+    animating: false,
+    interrupted: false,
+    ...over
+});
+
+describe('mineWaitDone — a swing that stops without a yield must end the wait', () => {
+    // The bug: the wait only watched for success (a coal gain, a full pack, a random
+    // event, a dialog). When another player took the rock, or a manual click cancelled
+    // the action, the swing stopped and none of those ever became true — so the wait ran
+    // the full MINE_STALL_MS. 20s of standing still per interruption.
+    test('the swing stopping with no coal ends the wait', () => {
+        expect(mineWaitDone('sustain', mining({ animating: false }))).toBe(true);
+    });
+    test('a swing still running with no coal keeps waiting', () => {
+        expect(mineWaitDone('sustain', mining({ animating: true }))).toBe(false);
+    });
+    test('a yield ends the wait even mid-swing', () => {
+        expect(mineWaitDone('sustain', mining({ animating: true, gained: true }))).toBe(true);
+    });
+});
+
+describe('mineWaitDone — the start stage cannot spin', () => {
+    // Why two stages: the swing takes a tick or two to begin after the click, so a bare
+    // `!animating` check would be true the instant we start waiting and the loop would
+    // re-click forever without ever mining.
+    test('waits for the swing to begin rather than reporting done immediately', () => {
+        expect(mineWaitDone('start', mining({ animating: false }))).toBe(false);
+    });
+    test('the swing beginning ends the start wait', () => {
+        expect(mineWaitDone('start', mining({ animating: true }))).toBe(true);
+    });
+    test('a yield that beats the animation still ends the start wait', () => {
+        expect(mineWaitDone('start', mining({ gained: true }))).toBe(true);
+    });
+});
+
+describe('mineWaitDone — interrupts outrank both stages', () => {
+    test('a pending random event or dialog ends either stage', () => {
+        expect(mineWaitDone('start', mining({ interrupted: true }))).toBe(true);
+        expect(mineWaitDone('sustain', mining({ animating: true, interrupted: true }))).toBe(true);
+    });
+    test('a full pack ends either stage', () => {
+        expect(mineWaitDone('start', mining({ packFull: true }))).toBe(true);
+        expect(mineWaitDone('sustain', mining({ animating: true, packFull: true }))).toBe(true);
+    });
+});
+
+describe('mineWaitDone — the bounds are a backstop, not the normal path', () => {
+    test('the start bound is short: it only covers click-to-swing', () => {
+        expect(MINE_START_MS).toBeLessThanOrEqual(3000);
+    });
+    test('the stall bound stays well above the start bound', () => {
+        expect(MINE_STALL_MS).toBeGreaterThan(MINE_START_MS);
     });
 });
 
