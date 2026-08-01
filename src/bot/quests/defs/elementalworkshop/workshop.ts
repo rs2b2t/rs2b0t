@@ -7,6 +7,7 @@ import { GroundItems } from '../../../api/queries/GroundItems.js';
 import { Locs, type Loc } from '../../../api/queries/Locs.js';
 import { Npcs } from '../../../api/queries/Npcs.js';
 import { Traversal } from '../../../api/Traversal.js';
+import { GameMessages } from '../../events/gameMessages.js';
 import { heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
 import {
     BELLOWS_STAND,
@@ -185,49 +186,122 @@ export async function leaveWorkshop(log: (m: string) => void): Promise<boolean> 
     return Execution.delayUntil(() => ewArea(Game.tile()) !== 'workshop', 12_000);
 }
 
-function waterValves(): { east: Loc | null; west: Loc | null } {
+const WATER_STARTED = /water wheel starting up/i;
+const WATER_STOPPED = /water wheel coming to a standstill/i;
+const WATER_RESET = /flow gates resetting/i;
+const VALVE_LOCKED = /valve seems locked off/i;
+
+function waterValves(): { east: Loc | null; west: Loc | null; count: number } {
     const valves = Locs.query().name('Water Valve').action('Turn').within(20).results();
     if (valves.length === 0) {
-        return { east: null, west: null };
+        return { east: null, west: null, count: 0 };
     }
-    const sorted = [...valves].sort((a, b) => b.tile().x - a.tile().x);
-    return { east: sorted[0] ?? null, west: sorted[sorted.length - 1] ?? null };
+    // Distinct tiles only — a single hit must not be treated as both east and west.
+    const unique = [...valves].sort((a, b) => b.tile().x - a.tile().x);
+    const east = unique[0] ?? null;
+    const west = unique.length > 1 ? unique[unique.length - 1]! : null;
+    return { east, west, count: unique.length };
 }
 
-/** East valve then west valve, then the northern water lever — never re-pull once flowing. */
+function waterLever(): Loc | null {
+    // Prefer the lever nearest the water wheel stand, not the air-chamber lever east.
+    return Locs.query().name('Lever').action('Pull').within(14).results()
+        .sort((a, b) => dist2(a.tile(), WATER_STAND) - dist2(b.tile(), WATER_STAND))[0] ?? null;
+}
+
+async function clearNearbyWaterThreat(log: (m: string) => void): Promise<void> {
+    if (!Game.inCombat()) {
+        const pest = Npcs.query().name('Water elemental').within(8).nearest();
+        if (pest && !pest.targetsAnotherPlayer()) {
+            log('clearing a Water elemental before the valves');
+            await pest.interact('Attack');
+            await Execution.delayUntil(() => Game.inCombat() || !pest.valid(), 4_000);
+        }
+    }
+    if (Game.inCombat()) {
+        await Execution.delayUntil(() => !Game.inCombat(), 60_000);
+    }
+}
+
+/**
+ * Water controls (server): east/right valve first, then west/left, then the water lever.
+ * Pulling the lever with both valves open starts the wheel; pulling again stops it;
+ * pulling with valves wrong *resets* them. Only return true on a verified start/lock.
+ */
 export async function startWaterWheel(log: (m: string) => void): Promise<boolean> {
     if (!(await walkNear(WATER_STAND, 3, log))) {
         return false;
     }
     await settleScene();
-    const { east, west } = waterValves();
-    if (!east || !west) {
-        log('could not find both Water Valves in the northern chamber');
+    await clearNearbyWaterThreat(log);
+
+    const { east, west, count } = waterValves();
+    if (count < 2 || !east || !west) {
+        log(`need two Water Valves in the northern chamber (found ${count})`);
         return false;
     }
+    if (east.tile().x === west.tile().x && east.tile().z === west.tile().z) {
+        log('both Water Valve hits resolved to the same tile');
+        return false;
+    }
+
+    // Probe: if valves already refuse, the wheel is already running — do NOT pull (that stops it).
+    const probeMark = GameMessages.mark();
     log('turning the east Water Valve');
     if (!(await east.interact('Turn'))) {
         return false;
     }
     await Execution.delayTicks(2);
+    if (GameMessages.sawSince(probeMark, VALVE_LOCKED)) {
+        log('valves are locked — water wheel already running');
+        return true;
+    }
+
     log('turning the west Water Valve');
     if (!(await west.interact('Turn'))) {
         return false;
     }
     await Execution.delayTicks(2);
+    if (GameMessages.sawSince(probeMark, VALVE_LOCKED)) {
+        log('valves are locked — water wheel already running');
+        return true;
+    }
 
-    const lever = Locs.query().name('Lever').action('Pull').within(12).results()
-        .sort((a, b) => dist2(a.tile(), WATER_STAND) - dist2(b.tile(), WATER_STAND))[0];
+    const lever = waterLever();
     if (!lever) {
         log('no water-chamber Lever to Pull');
         return false;
     }
+
+    const leverMark = GameMessages.mark();
     log('pulling the water-chamber Lever');
     if (!(await lever.interact('Pull'))) {
         return false;
     }
-    await Execution.delayTicks(3);
-    return true;
+
+    const heard = await Execution.delayUntil(
+        () => GameMessages.sawSince(leverMark, WATER_STARTED)
+            || GameMessages.sawSince(leverMark, WATER_STOPPED)
+            || GameMessages.sawSince(leverMark, WATER_RESET),
+        6_000
+    );
+    if (GameMessages.sawSince(leverMark, WATER_STARTED)) {
+        log('water wheel started');
+        return true;
+    }
+    if (GameMessages.sawSince(leverMark, WATER_STOPPED)) {
+        // We toggled a running wheel off — leave false so the next decide re-runs valves cleanly.
+        log('water wheel stopped (lever toggled off) — will re-open valves next pass');
+        return false;
+    }
+    if (GameMessages.sawSince(leverMark, WATER_RESET)) {
+        log('flow gates reset — valve order/state was wrong');
+        return false;
+    }
+    if (!heard) {
+        log('no water-wheel sound after the lever — controls may have failed');
+    }
+    return false;
 }
 
 export async function searchCratesFor(
