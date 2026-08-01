@@ -7,7 +7,7 @@ import { GroundItems } from '../../../api/queries/GroundItems.js';
 import { Locs, type Loc } from '../../../api/queries/Locs.js';
 import { Npcs } from '../../../api/queries/Npcs.js';
 import { Traversal } from '../../../api/Traversal.js';
-import { GameMessages } from '../../events/gameMessages.js';
+import { GameMessages } from '../../../events/gameMessages.js';
 import { heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
 import {
     BELLOWS_STAND,
