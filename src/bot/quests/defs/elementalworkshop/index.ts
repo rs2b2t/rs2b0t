@@ -13,6 +13,7 @@ import {
     bestHeldPickaxe,
     fromBank,
     hasPickaxe,
+    hasSlashTool,
     held,
     surfaceLoadout
 } from './supplies.js';
@@ -53,10 +54,13 @@ function needFurnaceWork(snap: QuestSnapshot): boolean {
 }
 
 function sourceKnife(snap: QuestSnapshot): QuestStep | null {
-    if (held(snap, EW_ITEM.KNIFE.id) > 0 || held(snap, EW_ITEM.BATTERED_KEY.id) > 0) {
+    if (held(snap, EW_ITEM.BATTERED_KEY.id) > 0 || hasSlashTool(snap)) {
         return null;
     }
+    // Bank first (knife or any slash weapon from e.g. ~bank_f2p), then ground spawn.
     return fromBank(snap, EW_ITEM.KNIFE, 1)
+        ?? fromBank(snap, { id: 1333, name: 'Rune scimitar' }, 1)
+        ?? fromBank(snap, { id: 1321, name: 'Bronze scimitar' }, 1)
         ?? { kind: 'grabGround', item: EW_ITEM.KNIFE.name, anchor: KNIFE_SPAWN, waitIfMissing: true };
 }
 

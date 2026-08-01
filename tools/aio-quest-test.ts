@@ -9,6 +9,8 @@ const budgetMin = Number(process.argv[5]) || 25;
 const giveCsv = (process.argv[6] || '').trim();
 const statsCsv = (process.argv[7] || '').trim();
 const foodSetting = (process.argv[8] || '').trim();
+/** Raw debugprocs run before the script starts, e.g. `~bank_f2p` to stock the bank. */
+const cheatsCsv = (process.argv[9] || '').trim();
 const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -45,6 +47,16 @@ try {
 
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
+
+    // Ahead of advancestat: its level-up dialog swallows whatever cheat follows it.
+    // Prefer this over the legacy `give` arg — `~item` is not a debugproc and is a silent no-op
+    // (see #276 / fix/189-gobdip-food).
+    for (const command of cheatsCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        if (!(await cheatQuiet(page, command))) {
+            fail(`account prep '${command}' not sent (not ingame?)`);
+        }
+        console.log(`cheat: ${command}`);
+    }
 
     for (const pair of giveCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
         const [obj, n] = pair.split(':');

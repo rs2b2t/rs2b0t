@@ -24,6 +24,26 @@ export function hasPickaxe(snap: QuestSnapshot): boolean {
     return PICKAXES.some(p => held(snap, p.id) > 0 || (snap.wornIds?.has(p.id) ?? false));
 }
 
+/**
+ * Book spine accepts a knife *or* any slash weapon (server checks slashattack_anim).
+ * Name-based too: ~item seeding is unreliable, and bank_f2p stocks scimitars/swords.
+ */
+export function hasSlashTool(snap: QuestSnapshot): boolean {
+    if (held(snap, EW_ITEM.KNIFE.id) > 0) {
+        return true;
+    }
+    if (heldName(snap, 'knife') > 0) {
+        return true;
+    }
+    for (const name of snap.inv.keys()) {
+        const n = name.toLowerCase();
+        if (n.includes('scimitar') || n.includes('sword') || n.includes('longsword') || n.includes('dagger')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export function bestHeldPickaxe(snap: QuestSnapshot): EwItem | null {
     return PICKAXES.find(p => held(snap, p.id) > 0 || (snap.wornIds?.has(p.id) ?? false)) ?? null;
 }
@@ -70,8 +90,9 @@ export function surfaceLoadout(snap: QuestSnapshot, needBellowsFix: boolean, nee
         return key;
     }
 
-    if (held(snap, EW_ITEM.KNIFE.id) === 0 && held(snap, EW_ITEM.BATTERED_KEY.id) === 0) {
-        const knife = fromBank(snap, EW_ITEM.KNIFE, 1);
+    if (held(snap, EW_ITEM.BATTERED_KEY.id) === 0 && !hasSlashTool(snap)) {
+        const knife = fromBank(snap, EW_ITEM.KNIFE, 1)
+            ?? fromBank(snap, { id: 1333, name: 'Rune scimitar' }, 1);
         if (knife) {
             return knife;
         }
