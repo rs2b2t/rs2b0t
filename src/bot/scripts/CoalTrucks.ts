@@ -15,8 +15,8 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { GameMessages } from '../events/gameMessages.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { GAS_ROCK_IDS } from './MiningRocks.js';
-import { bestPickaxe } from './Tools.js';
+import { GAS_ROCK_IDS } from '../api/MiningRocks.js';
+import { bestPickaxe } from '../api/Tools.js';
 import {
     COAL,
     COAL_MINING_LEVEL,
