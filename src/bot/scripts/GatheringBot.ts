@@ -229,6 +229,59 @@ export function gatherHuntRadius(primaryDisk: number): number {
 }
 
 /**
+ * Prefer rocks/trees within this Chebyshev of the player when any match.
+ * Dwarven / multi-tunnel mines: membership can be 64+ tiles with iron on both
+ * wings — pure membership nearest still path-walks around walls to a slightly
+ * nearer tile. Local prefer keeps the bot on the cluster underfoot.
+ * Server iron rocks (ids 2092/2093) respawn on ~6t; see skill_mining mine.dbrow.
+ */
+export const LOCAL_MINE_PREFER_RADIUS = 12;
+
+/**
+ * Pick the best gather loc from candidates already filtered (type, camp, usable).
+ * When any candidate sits within {@link preferRadius} of the player, ignore the rest
+ * so we do not path across a mine for a far ore while a local one is up.
+ */
+export function pickNearestPreferLocal<T>(
+    candidates: readonly T[],
+    distToPlayer: (c: T) => number,
+    preferRadius = LOCAL_MINE_PREFER_RADIUS
+): T | null {
+    if (candidates.length === 0) {
+        return null;
+    }
+    const r = Math.max(0, Math.floor(Number.isFinite(preferRadius) ? preferRadius : LOCAL_MINE_PREFER_RADIUS));
+    let pool = candidates;
+    if (r > 0) {
+        const local = candidates.filter(c => distToPlayer(c) <= r);
+        if (local.length > 0) {
+            pool = local;
+        }
+    }
+    let best: T | null = null;
+    let bestD = Infinity;
+    for (const c of pool) {
+        const d = distToPlayer(c);
+        if (d < bestD) {
+            best = c;
+            bestD = d;
+        }
+    }
+    return best;
+}
+
+/**
+ * Whether to soft-cooldown a mine/chop tile after a session ends with no ore/log.
+ * Successful depletes must NOT cool the tile — empty/stump already drops out of
+ * matchesRock/name filters, and iron respawns (~6t) faster than the old 8t cooldown
+ * (bot walked across Dwarven/SE Varrock while a nearby iron was already up).
+ */
+export function shouldCooldownGatherTile(gotProduct: boolean, stillHasOtherTargets: boolean): boolean {
+    // Only soft-skip a tile after a failed click when other targets exist.
+    return !gotProduct && stillHasOtherTargets;
+}
+
+/**
  * Whether post-bank / no-target gather should walk toward the camp anchor.
  *
  * "Already home" is the soft {@link HOME_ARRIVE_RADIUS} disk — not camp membership.
@@ -4567,7 +4620,10 @@ class Gather implements Task {
     }
 
     private findRock() {
-        return Locs.query()
+        // Camp membership fence (anchor leash) + ore/tree type filters, then prefer
+        // rocks near the player so we do not path across Dwarven tunnels / SE Varrock
+        // while a matching ore is already underfoot.
+        const candidates = Locs.query()
             .name(this.bot.targetName())
             .action(this.bot.actionName())
             .where(
@@ -4578,7 +4634,8 @@ class Gather implements Task {
                     !GAS_ROCK_IDS.has(l.id) &&
                     this.bot.usable(keyOf(l.tile()))
             )
-            .nearest();
+            .results();
+        return pickNearestPreferLocal(candidates, l => l.distance(), LOCAL_MINE_PREFER_RADIUS);
     }
 
     validate(): boolean {
@@ -5021,6 +5078,9 @@ class Gather implements Task {
         }
         const tile = target.tile();
         const key = keyOf(tile);
+        // Track whether this session produced ore/logs — successful deplete must not
+        // soft-cooldown the tile (iron respawn ~6t < old 8t cooldown → far path thrash).
+        let gotProduct = false;
 
         if (!Game.animating()) {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${tile}`);
@@ -5039,15 +5099,19 @@ class Gather implements Task {
                 await this.fleeGas(key, tile);
                 return;
             }
+            if (Inventory.used() > before) {
+                gotProduct = true;
+            }
             if (Inventory.used() === before && !Game.animating()) {
                 if (ChatDialog.canContinue()) {
                     this.bot.reject(key);
-                } else if (this.findRock() !== null) {
+                } else if (shouldCooldownGatherTile(false, this.findRock() !== null)) {
+                    // Failed click with other targets available — brief skip only.
                     this.bot.cooldown(key);
                 }
                 return;
             }
-            if (Inventory.used() > before) {
+            if (gotProduct) {
                 if (await this.afterRollTickManip(() => this.reclickMine(tile))) {
                     return;
                 }
@@ -5071,15 +5135,16 @@ class Gather implements Task {
                 return;
             }
             if (Inventory.used() > mark) {
+                gotProduct = true;
                 if (await this.afterRollTickManip(() => this.reclickMine(tile))) {
                     return;
                 }
                 continue;
             }
             if (!Game.animating()) {
-                if (this.findRock() !== null && !Inventory.isFull() && !ChatDialog.canContinue()) {
-                    this.bot.cooldown(key);
-                }
+                // Natural end (deplete / stop). Never soft-cooldown here — empty/stump
+                // already drops out of findRock, and iron respawns faster than the old
+                // 8t tile skip (nearby ore up while bot paths across the mine).
                 return;
             }
         }
