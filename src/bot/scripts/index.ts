@@ -251,9 +251,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'RuneCrafter',
-    description: 'AIO Runecrafting — withdraw essence + talisman, walk to the Mysterious ruins, use the talisman to enter, craft-rune at the altar, portal back, bank. Rune type via dropdown (Air for now, south of Falador)',
+    description: 'AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; Runner ferries bank essence to a Mule Recipient by trade; Mule Recipient camps the ruins, takes every essence trade and crafts between trades',
     category: 'Runecrafting',
-    tags: ['runecrafting', 'banking', 'falador', 'afk'],
+    tags: ['runecrafting', 'banking', 'trade', 'runner', 'mule', 'afk'],
     settingsSchema: RUNECRAFTER_SETTINGS,
     create: () => new RuneCrafter()
 });

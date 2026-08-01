@@ -32,8 +32,10 @@ export async function launchBrowser(opts?: { swiftshader?: boolean }): Promise<B
     const headed = !!process.env.HEADED;
     const slowMo = headed ? Number(process.env.SLOWMO ?? 200) : 0;
     if (opts?.swiftshader) {
+        // software WebGL so the scene renders headless (no window, no GPU)
+        const mac = process.platform === 'darwin';
         return chromium.launch({
-            executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            ...(mac ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' } : { channel: 'chrome' }),
             headless: !headed,
             slowMo,
             args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']

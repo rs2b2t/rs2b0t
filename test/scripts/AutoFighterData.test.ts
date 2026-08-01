@@ -64,4 +64,18 @@ describe('AutoFighter data', () => {
         }
         expect(shouldKeepBankItem('Uncut ruby', 1619, 'Trout', true)).toBe(false);
     });
+    test('combat style defaults to melee and gates mage/range settings', () => {
+        expect(SETTINGS.combatStyle).toMatchObject({ type: 'string', default: 'melee', options: ['melee', 'mage', 'range'] });
+        expect(SETTINGS.spell.showIf).toEqual({ key: 'combatStyle', anyOf: ['mage'] });
+        expect(SETTINGS.runesWithdraw.showIf).toEqual({ key: 'combatStyle', anyOf: ['mage'] });
+        expect(SETTINGS.rangeStyle.showIf).toEqual({ key: 'combatStyle', anyOf: ['range'] });
+        expect(SETTINGS.ammo.showIf).toEqual({ key: 'combatStyle', anyOf: ['range'] });
+        expect(SETTINGS.ammoRestockBelow.showIf).toEqual({ key: 'combatStyle', anyOf: ['mage', 'range'] });
+    });
+    test('banking keeps range ammo and tracked gear', () => {
+        expect(shouldKeepBankItem('Bronze arrow', 882, 'Trout', true, ['Bronze arrow'], [])).toBe(true);
+        expect(shouldKeepBankItem('Bronze arrow', 882, 'Trout', true, [], ['Bronze arrow'])).toBe(true);
+        expect(shouldKeepBankItem('Iron arrow', 884, 'Trout', true, ['Bronze arrow'], [])).toBe(false);
+        expect(shouldKeepBankItem('Maple shortbow', 853, 'Trout', true, [], ['Maple shortbow'])).toBe(true);
+    });
 });

@@ -130,6 +130,7 @@ export default class ScriptLibrary {
     }
 
     open(): void {
+        this.category = 'All';
         this.render();
         this.backdrop.style.display = 'flex';
         this.searchEl.focus();
