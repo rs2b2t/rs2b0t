@@ -190,21 +190,25 @@ const WATER_STARTED = /water wheel starting up/i;
 const WATER_STOPPED = /water wheel coming to a standstill/i;
 const WATER_RESET = /flow gates resetting/i;
 const VALVE_LOCKED = /valve seems locked off/i;
+const VALVE_TURNED = /you turn the handle/i;
 
-function waterValves(): { east: Loc | null; west: Loc | null; count: number } {
-    const valves = Locs.query().name('Water Valve').action('Turn').within(20).results();
-    if (valves.length === 0) {
-        return { east: null, west: null, count: 0 };
+function distinctWaterValves(): Loc[] {
+    const seen = new Set<string>();
+    const out: Loc[] = [];
+    for (const v of Locs.query().name('Water Valve').action('Turn').within(20).results()) {
+        const t = v.tile();
+        const key = `${t.x},${t.z},${t.level}`;
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        out.push(v);
     }
-    // Distinct tiles only — a single hit must not be treated as both east and west.
-    const unique = [...valves].sort((a, b) => b.tile().x - a.tile().x);
-    const east = unique[0] ?? null;
-    const west = unique.length > 1 ? unique[unique.length - 1]! : null;
-    return { east, west, count: unique.length };
+    // Higher x first (guide "east"), then reverse if the lever resets.
+    return out.sort((a, b) => b.tile().x - a.tile().x || b.tile().z - a.tile().z);
 }
 
 function waterLever(): Loc | null {
-    // Prefer the lever nearest the water wheel stand, not the air-chamber lever east.
     return Locs.query().name('Lever').action('Pull').within(14).results()
         .sort((a, b) => dist2(a.tile(), WATER_STAND) - dist2(b.tile(), WATER_STAND))[0] ?? null;
 }
@@ -223,11 +227,90 @@ async function clearNearbyWaterThreat(log: (m: string) => void): Promise<void> {
     }
 }
 
+async function turnValve(valve: Loc, label: string, log: (m: string) => void): Promise<'ok' | 'locked' | 'fail'> {
+    const mark = GameMessages.mark();
+    log(`turning the ${label} Water Valve at (${valve.tile().x},${valve.tile().z})`);
+    // Stand next to this valve so the op is not dropped mid-path.
+    if (!(await walkNear(new Tile(valve.tile().x, valve.tile().z, valve.tile().level), 2, log))) {
+        return 'fail';
+    }
+    await settleScene();
+    // Re-query — scene may have resettled after the walk.
+    const live = Locs.query().name('Water Valve').action('Turn').within(6).nearest()
+        ?? valve;
+    if (!(await live.interact('Turn'))) {
+        return 'fail';
+    }
+    await Execution.delayUntil(
+        () => GameMessages.sawSince(mark, VALVE_TURNED) || GameMessages.sawSince(mark, VALVE_LOCKED),
+        4_000
+    );
+    if (GameMessages.sawSince(mark, VALVE_LOCKED)) {
+        return 'locked';
+    }
+    if (!GameMessages.sawSince(mark, VALVE_TURNED)) {
+        log(`no turn confirmation from the ${label} valve`);
+        return 'fail';
+    }
+    await Execution.delayTicks(2);
+    return 'ok';
+}
+
 /**
- * Water controls (server): east/right valve first, then west/left, then the water lever.
- * Pulling the lever with both valves open starts the wheel; pulling again stops it;
- * pulling with valves wrong *resets* them. Only return true on a verified start/lock.
+ * Server bits: right (valve_1) may only toggle while left is off; left (valve_2) always
+ * toggles. Lever needs both bits set. Wrong order → "flow gates resetting". Running
+ * wheel + lever → stop. Only succeed on verified start or locked valves.
  */
+async function tryValveOrder(
+    first: Loc,
+    second: Loc,
+    orderLabel: string,
+    log: (m: string) => void
+): Promise<'started' | 'reset' | 'stopped' | 'locked' | 'fail'> {
+    log(`valve order: ${orderLabel}`);
+    const a = await turnValve(first, 'first', log);
+    if (a === 'locked') {
+        return 'locked';
+    }
+    if (a !== 'ok') {
+        return 'fail';
+    }
+    const b = await turnValve(second, 'second', log);
+    if (b === 'locked') {
+        return 'locked';
+    }
+    if (b !== 'ok') {
+        return 'fail';
+    }
+
+    const lever = waterLever();
+    if (!lever) {
+        log('no water-chamber Lever to Pull');
+        return 'fail';
+    }
+    const leverMark = GameMessages.mark();
+    log('pulling the water-chamber Lever');
+    if (!(await lever.interact('Pull'))) {
+        return 'fail';
+    }
+    await Execution.delayUntil(
+        () => GameMessages.sawSince(leverMark, WATER_STARTED)
+            || GameMessages.sawSince(leverMark, WATER_STOPPED)
+            || GameMessages.sawSince(leverMark, WATER_RESET),
+        6_000
+    );
+    if (GameMessages.sawSince(leverMark, WATER_STARTED)) {
+        return 'started';
+    }
+    if (GameMessages.sawSince(leverMark, WATER_STOPPED)) {
+        return 'stopped';
+    }
+    if (GameMessages.sawSince(leverMark, WATER_RESET)) {
+        return 'reset';
+    }
+    return 'fail';
+}
+
 export async function startWaterWheel(log: (m: string) => void): Promise<boolean> {
     if (!(await walkNear(WATER_STAND, 3, log))) {
         return false;
@@ -235,72 +318,40 @@ export async function startWaterWheel(log: (m: string) => void): Promise<boolean
     await settleScene();
     await clearNearbyWaterThreat(log);
 
-    const { east, west, count } = waterValves();
-    if (count < 2 || !east || !west) {
-        log(`need two Water Valves in the northern chamber (found ${count})`);
+    const valves = distinctWaterValves();
+    if (valves.length < 2) {
+        log(`need two Water Valves in the northern chamber (found ${valves.length})`);
         return false;
     }
-    if (east.tile().x === west.tile().x && east.tile().z === west.tile().z) {
-        log('both Water Valve hits resolved to the same tile');
-        return false;
+    const hi = valves[0]!;
+    const lo = valves[valves.length - 1]!;
+    log(`valves at (${hi.tile().x},${hi.tile().z}) and (${lo.tile().x},${lo.tile().z})`);
+
+    // Guide says east then west. Server needs right-bit first (only toggles while left is off).
+    // If compass mapping is inverted, the reverse order is tried after a reset.
+    let result = await tryValveOrder(hi, lo, 'higher-x then lower-x', log);
+    if (result === 'reset') {
+        log('flow gates reset — retrying reverse valve order (valves are off again)');
+        result = await tryValveOrder(lo, hi, 'lower-x then higher-x', log);
     }
 
-    // Probe: if valves already refuse, the wheel is already running — do NOT pull (that stops it).
-    const probeMark = GameMessages.mark();
-    log('turning the east Water Valve');
-    if (!(await east.interact('Turn'))) {
-        return false;
-    }
-    await Execution.delayTicks(2);
-    if (GameMessages.sawSince(probeMark, VALVE_LOCKED)) {
-        log('valves are locked — water wheel already running');
-        return true;
-    }
-
-    log('turning the west Water Valve');
-    if (!(await west.interact('Turn'))) {
-        return false;
-    }
-    await Execution.delayTicks(2);
-    if (GameMessages.sawSince(probeMark, VALVE_LOCKED)) {
-        log('valves are locked — water wheel already running');
-        return true;
-    }
-
-    const lever = waterLever();
-    if (!lever) {
-        log('no water-chamber Lever to Pull');
-        return false;
-    }
-
-    const leverMark = GameMessages.mark();
-    log('pulling the water-chamber Lever');
-    if (!(await lever.interact('Pull'))) {
-        return false;
-    }
-
-    const heard = await Execution.delayUntil(
-        () => GameMessages.sawSince(leverMark, WATER_STARTED)
-            || GameMessages.sawSince(leverMark, WATER_STOPPED)
-            || GameMessages.sawSince(leverMark, WATER_RESET),
-        6_000
-    );
-    if (GameMessages.sawSince(leverMark, WATER_STARTED)) {
+    if (result === 'started') {
         log('water wheel started');
         return true;
     }
-    if (GameMessages.sawSince(leverMark, WATER_STOPPED)) {
-        // We toggled a running wheel off — leave false so the next decide re-runs valves cleanly.
+    if (result === 'locked') {
+        log('valves are locked — water wheel already running');
+        return true;
+    }
+    if (result === 'stopped') {
         log('water wheel stopped (lever toggled off) — will re-open valves next pass');
         return false;
     }
-    if (GameMessages.sawSince(leverMark, WATER_RESET)) {
-        log('flow gates reset — valve order/state was wrong');
+    if (result === 'reset') {
+        log('flow gates reset on both valve orders');
         return false;
     }
-    if (!heard) {
-        log('no water-wheel sound after the lever — controls may have failed');
-    }
+    log('water controls did not confirm a start');
     return false;
 }
 
