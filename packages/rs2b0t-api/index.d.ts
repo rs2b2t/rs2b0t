@@ -120,6 +120,8 @@ export const Game: {
     myName(): string | null;
     openSideTab(tab: number): Promise<boolean>;
     castOnNpc(spell: string, npc: Npc): Promise<boolean>;
+    /** Cast a standard spellbook teleport by destination name. */
+    teleport(name: string): Promise<boolean>;
 };
 
 // ---- entities + queries ----

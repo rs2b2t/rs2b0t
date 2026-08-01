@@ -175,7 +175,6 @@ export function legFor(t: PointLike | null): Leg {
 
 export interface EscapeTele {
     name: string;
-    com: number;
     level: number;
     runes: { rune: string; count: number }[];
     lands: Tile;
@@ -184,22 +183,22 @@ export interface EscapeTele {
 
 export const ESCAPE_TELES: Record<string, EscapeTele> = {
     Camelot: {
-        name: 'Camelot', com: 1174, level: 45,
+        name: 'Camelot', level: 45,
         runes: [{ rune: 'Air rune', count: 5 }, { rune: 'Law rune', count: 1 }],
         lands: new Tile(2757, 3478, 0), bank: new Tile(2725, 3491, 0)
     },
     Ardougne: {
-        name: 'Ardougne', com: 1540, level: 51,
+        name: 'Ardougne', level: 51,
         runes: [{ rune: 'Water rune', count: 2 }, { rune: 'Law rune', count: 2 }],
         lands: new Tile(2661, 3301, 0), bank: new Tile(2616, 3332, 0)
     },
     Falador: {
-        name: 'Falador', com: 1170, level: 37,
+        name: 'Falador', level: 37,
         runes: [{ rune: 'Water rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }],
         lands: new Tile(2965, 3378, 0), bank: new Tile(2946, 3369, 0)
     },
     Varrock: {
-        name: 'Varrock', com: 1164, level: 25,
+        name: 'Varrock', level: 25,
         runes: [{ rune: 'Fire rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Law rune', count: 1 }],
         lands: new Tile(3213, 3424, 0), bank: new Tile(3185, 3440, 0)
     }

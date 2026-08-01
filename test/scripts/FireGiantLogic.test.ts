@@ -254,17 +254,15 @@ describe('lootWaitMs', () => {
 });
 
 describe('ESCAPE_TELES', () => {
-    test('every entry carries a component, a level, runes, and a paired bank', () => {
+    test('every entry carries a name, level, runes, and a paired bank', () => {
         for (const [key, tele] of Object.entries(ESCAPE_TELES)) {
             expect(tele.name).toBe(key);
-            expect(tele.com).toBeGreaterThan(0);
             expect(tele.level).toBeGreaterThan(0);
             expect(tele.runes.length).toBeGreaterThan(0);
             expect(tele.bank.level).toBe(0);
         }
     });
     test('Camelot is the documented default pairing', () => {
-        expect(ESCAPE_TELES.Camelot.com).toBe(1174);
         expect(ESCAPE_TELES.Camelot.level).toBe(45);
         expect(ESCAPE_TELES.Camelot.bank.x).toBe(2725);
         expect(ESCAPE_TELES.Camelot.bank.z).toBe(3491);

@@ -167,14 +167,20 @@ const ok = await Execution.delayUntil(() => Inventory.used() < before, 3000);
 Game.ingame(): boolean
 Game.tile(): WorldTile | null   // local player tile, null before login/scene load
 Game.energy(): number           // run energy
+Game.runEnabled(): boolean
 Game.weight(): number
 Game.inCombat(): boolean        // health bar showing
+Game.animating(): boolean
 Game.tick(): number             // server ticks since client boot
 Game.combatMode(): number       // current raw com_mode varp
 Game.combatStyleMode(style: 'attack' | 'strength' | 'controlled' | 'defence'): number | null
 Game.hasCombatStyle(style): boolean
 Game.setCombatStyle(style): boolean
 Game.setCombatMode(mode: number): boolean // exact numeric mode (for ranged styles)
+Game.myName(): string | null
+Game.openSideTab(tab: number): Promise<boolean>
+Game.castOnNpc(spell: string, npc: Npc): Promise<boolean>
+Game.teleport(name: string): Promise<boolean>
 ```
 
 Melee styles are resolved from the Accurate, Aggressive, Controlled, or
@@ -182,6 +188,18 @@ Defensive labels on the equipped weapon's combat interface. This handles
 duplicate and unusual layouts without guessing from the weapon name, button
 count, or ordinal order. If a requested style is unavailable, the last defensive
 button is selected (including controlled on a three-mode weapon).
+
+`Game.teleport()` accepts Varrock, Lumbridge, Falador, Camelot, Ardougne,
+Watchtower, or Trollheim (case-insensitive, with an optional `teleport` suffix).
+It resolves the current magic-interface button by name first and falls back to
+the matching 2004 component ID if that live lookup fails. A `true` result means
+the click was dispatched; scripts should still wait for the expected tile change.
+
+```ts
+if (await Game.teleport('Camelot')) {
+    await Execution.delayUntil(() => Game.tile()?.x === 2757, 8000);
+}
+```
 
 ---
 
