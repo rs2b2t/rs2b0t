@@ -2,6 +2,7 @@ import { actions, reader } from '../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../api/Execution.js';
 import { Game } from '../../../api/Game.js';
 import Tile from '../../../api/Tile.js';
+import { Equipment } from '../../../api/hud/Equipment.js';
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
 import { Locs, type Loc } from '../../../api/queries/Locs.js';
@@ -508,6 +509,27 @@ async function waitOutCombat(ms: number): Promise<void> {
     await Execution.delayUntil(() => !Game.inCombat(), ms);
 }
 
+/** Prefer a real weapon — unarmed maxed accounts still stall forever on the rock elemental. */
+async function ensureMeleeWeapon(log: (m: string) => void): Promise<void> {
+    if (Equipment.items().some(i => {
+        const n = i.name?.toLowerCase() ?? '';
+        return n.includes('scimitar') || n.includes('sword') || n.includes('battleaxe') || n.includes('dagger');
+    })) {
+        return;
+    }
+    const weapon = Inventory.items().find(i => {
+        const n = i.name?.toLowerCase() ?? '';
+        return (n.includes('scimitar') || n.includes('sword') || n.includes('battleaxe') || n.includes('dagger'))
+            && i.actions().some(a => /wield|wear|equip/i.test(a));
+    });
+    if (!weapon?.name) {
+        log('no melee weapon in pack — fighting unarmed');
+        return;
+    }
+    log(`wielding ${weapon.name}`);
+    await Equipment.equip(weapon.name);
+}
+
 /**
  * Mine the west-chamber rock (spawns Earth elemental) and take the ore drop.
  * Do not pathfind onto the rock loc tile — it is unwalkable; stand beside it.
@@ -515,6 +537,19 @@ async function waitOutCombat(ms: number): Promise<void> {
 export async function mineElementalOre(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
         return true;
+    }
+
+    await ensureMeleeWeapon(log);
+
+    // Ore already on the floor from a previous kill.
+    const loose = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(16).nearest();
+    if (loose) {
+        log('taking Elemental ore from the ground');
+        if (await loose.interact('Take')) {
+            if (await Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 8_000)) {
+                return true;
+            }
+        }
     }
 
     // Enter the west rock pocket if we are not already next to a mineable rock.
@@ -526,8 +561,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         await settleScene();
         rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
     }
-    if (!rock && heldId(EW_ITEM.ELEMENTAL_ORE.id) === 0) {
-        // Still no rock — walk further west into the chamber once.
+    if (!rock) {
         if (!(await walkNear(new Tile(2702, 9888, 0), 4, log))) {
             log('no Pile of Rock to Mine');
             return false;
@@ -536,6 +570,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
     }
 
+    // Prefer an elemental already targeting us / in the west chamber (z ~9880-9900).
     let elemental = Npcs.query()
         .name(EARTH_ELEMENTAL)
         .where(n => !n.targetsAnotherPlayer())
@@ -544,7 +579,6 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
 
     if (!elemental && rock) {
         log('mining the elemental rock (Earth elemental will spawn)');
-        // Loc.interact walks adjacent to the rock; no need to stand on its tile.
         if (!(await rock.interact('Mine'))) {
             return false;
         }
@@ -569,17 +603,33 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     }
 
     log('killing the Earth elemental for Elemental ore');
-    if (!Game.inCombat() && !(await elemental.interact('Attack'))) {
+    if (!Game.inCombat()) {
+        if (!(await elemental.interact('Attack'))) {
+            return false;
+        }
+        if (!(await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid(), 5_000))) {
+            log('failed to enter combat with the Earth elemental');
+            return false;
+        }
+    }
+    // Cap the wait — if we never leave combat, fail the step so decide can re-arm.
+    const died = await Execution.delayUntil(
+        () => !Game.inCombat()
+            || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
+            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest() !== null,
+        90_000
+    );
+    if (!died && Game.inCombat()) {
+        log('combat with Earth elemental did not finish in time');
         return false;
     }
-    await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid(), 5_000);
-    await waitOutCombat(120_000);
+    await waitOutCombat(15_000);
 
     const takeOre = async (): Promise<boolean> => {
         if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
             return true;
         }
-        const ground = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(12).nearest();
+        const ground = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest();
         if (!ground) {
             return false;
         }
@@ -591,7 +641,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
 
     if (await Execution.delayUntil(
         () => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
-            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(12).nearest() !== null,
+            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest() !== null,
         10_000
     )) {
         return takeOre();
