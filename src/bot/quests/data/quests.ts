@@ -328,9 +328,13 @@ export const QUESTS: QuestRecord[] = [
             { skill: 'crafting', level: 20 }
         ] },
         items: [
+            // Needle/leather also spawn in workshop crates; thread and coal must be brought.
             { name: 'Leather', qty: 1, kind: 'acquirable' },
+            { name: 'Needle', qty: 1, kind: 'acquirable' },
             { name: 'Thread', qty: 1, kind: 'acquirable' },
-            { name: 'Coal', qty: 4, kind: 'acquirable' }
+            { name: 'Coal', qty: 4, kind: 'acquirable' },
+            { name: 'Knife', qty: 1, kind: 'acquirable' },
+            { name: 'Hammer', qty: 1, kind: 'acquirable' }
         ]
     },
     {
