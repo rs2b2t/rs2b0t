@@ -21,7 +21,7 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
     FLAX_FIELD, FLAX_GATE, SPINNING_WHEEL_AREA, BANK_ENTRANCE, BANK_STAND, LADDER_TILE,
-    TRADE_RANGE, FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
+    MEET_TILE, TRADE_RANGE, FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
     BOOTH_NAME, LADDER_NAME, CLIMB_UP, CLIMB_DOWN, FIELD_SCOPE, FIELD_ARRIVE,
     LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
 } from './FlaxRunnerLogic.js';
@@ -129,7 +129,7 @@ export default class FlaxRunner extends TaskBot {
         // Junk bank mid-trip: prefer the bank so watchdog doesn't yank us to the field first.
         if (this.needsJunkBank()) return BANK_STAND;
         // Waiting on trade must not walk a full pack back to the field.
-        return this.readyToDeliver() ? LADDER_TILE : FLAX_FIELD;
+        return this.readyToDeliver() ? MEET_TILE : FLAX_FIELD;
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -265,7 +265,10 @@ export default class FlaxRunner extends TaskBot {
 
     atMeet(): boolean {
         const here = Game.tile();
-        return here !== null && LADDER_TILE.distanceTo(here) <= LEASH;
+        // Tight radius so WaitAndTrade/RequestTrade do not pre-empt GoToMeet
+        // while still several tiles short of the handoff tile (LEASH would let
+        // partners "meet" on opposite sides of the house and never trade).
+        return here !== null && MEET_TILE.distanceTo(here) <= TRADE_RANGE;
     }
 
     onFloor(level: number): boolean {
@@ -526,7 +529,7 @@ class GoToMeet implements Task {
         if (Trade.active()) return false;
         const here = Game.tile();
         if (!here) return false;
-        if (LADDER_TILE.distanceTo(here) <= 1) return false;
+        if (MEET_TILE.distanceTo(here) <= 1) return false;
         // Runner only leaves the field when the pack is ready to hand off.
         if (this.bot.getMode() === 'Runner') return this.bot.readyToDeliver();
         // Spinner: fall-through task when not spinning/banking/trading.
@@ -535,7 +538,9 @@ class GoToMeet implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('travelling to meet point');
         this.bot.clearStickyFlax();
-        await Traversal.walkResilient(LADDER_TILE, {
+        // Outside the wheel house (east of the door) so a closed door cannot
+        // trap partners mid-handoff. Nav opens doors when the spinner leaves.
+        await Traversal.walkResilient(MEET_TILE, {
             radius: 1,
             attempts: 6,
             timeoutMs: 240_000,

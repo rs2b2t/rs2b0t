@@ -5,7 +5,14 @@ export const FLAX_GATE = new Tile(2736, 3443, 0);
 export const SPINNING_WHEEL_AREA = new Tile(2711, 3471, 1);
 export const BANK_ENTRANCE = new Tile(2726, 3487, 0);
 export const BANK_STAND = new Tile(2725, 3493, 0);
+/** Walkable stand tile inside the wheel house beside the ladder. */
 export const LADDER_TILE = new Tile(2714, 3471, 0);
+/**
+ * Runner↔Spinner handoff tile — outside the wheel house, a few tiles east of the
+ * east-wall door at (2716,3472). Meeting inside meant a closed door left partners
+ * "at meet" (LEASH) but unable to trade or path through.
+ */
+export const MEET_TILE = new Tile(2719, 3471, 0);
 
 export const TRADE_RANGE = 2;
 
