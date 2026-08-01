@@ -2,8 +2,8 @@ import { sleep } from '#/util/JsUtil.js';
 import Pix2D from '#/graphics/Pix2D.js';
 import PixMap from '#/graphics/PixMap.js';
 import { canvas, canvas2d } from '#/graphics/Canvas.js';
-import { WALK_DESTINATIONS } from '../scripts/WalkDestinations.js';
-import type { WalkDestination } from '../scripts/WalkDestinations.js';
+import { WALK_DESTINATIONS } from '../api/WalkDestinations.js';
+import type { WalkDestination } from '../api/WalkDestinations.js';
 
 import { MapView } from '../../mapview/MapView.js';
 import WorldMapFont from '../../mapview/WorldMapFont.js';

@@ -4886,7 +4886,7 @@ class Gather implements Task {
         index: number;
         tile: () => Tile;
         actions: () => string[];
-        interact: (op: string) => Promise<boolean>;
+        interact: (op: string) => boolean | Promise<boolean>;
         id: number;
     }): Promise<void> {
 
