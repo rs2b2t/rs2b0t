@@ -5,6 +5,7 @@ import Tile from '../../../api/Tile.js';
 import { Equipment } from '../../../api/hud/Equipment.js';
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
+import type { Npc } from '../../../api/entities/index.js';
 import { Locs, type Loc } from '../../../api/queries/Locs.js';
 import { Npcs } from '../../../api/queries/Npcs.js';
 import { Traversal } from '../../../api/Traversal.js';
@@ -530,9 +531,35 @@ async function ensureMeleeWeapon(log: (m: string) => void): Promise<void> {
     await Equipment.equip(weapon.name);
 }
 
+/** Earth elementals in the water/air wings do not drop quest ore — only the rock spawn does. */
+function nearRockPocket(tile: { x: number; z: number } | null | undefined): boolean {
+    if (!tile) {
+        return false;
+    }
+    // West mining wing of the workshop (live runs: rock area ~2700-2710, 9880-9900).
+    return tile.x >= 2695 && tile.x <= 2712 && tile.z >= 9875 && tile.z <= 9905;
+}
+
+function earthAtRock(): Npc | null {
+    return Npcs.query()
+        .name(EARTH_ELEMENTAL)
+        .where(n => !n.targetsAnotherPlayer() && nearRockPocket(n.tile()))
+        .within(18)
+        .nearest();
+}
+
+function oreOnGroundNearRock(): boolean {
+    return GroundItems.query()
+        .name(EW_ITEM.ELEMENTAL_ORE.name)
+        .where(g => nearRockPocket(g.tile()))
+        .within(18)
+        .nearest() !== null;
+}
+
 /**
  * Mine the west-chamber rock (spawns Earth elemental) and take the ore drop.
  * Do not pathfind onto the rock loc tile — it is unwalkable; stand beside it.
+ * Only kill earth elementals in the rock pocket — others do not drop quest ore.
  */
 export async function mineElementalOre(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
@@ -541,110 +568,89 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
 
     await ensureMeleeWeapon(log);
 
-    // Ore already on the floor from a previous kill.
-    const loose = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(16).nearest();
-    if (loose) {
-        log('taking Elemental ore from the ground');
-        if (await loose.interact('Take')) {
-            if (await Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 8_000)) {
-                return true;
-            }
-        }
-    }
-
-    // Enter the west rock pocket if we are not already next to a mineable rock.
-    let rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
-    if (!rock) {
-        if (!(await walkNear(ROCK_STAND, 4, log))) {
-            return false;
-        }
-        await settleScene();
-        rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
-    }
-    if (!rock) {
-        if (!(await walkNear(new Tile(2702, 9888, 0), 4, log))) {
-            log('no Pile of Rock to Mine');
-            return false;
-        }
-        await settleScene();
-        rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
-    }
-
-    // Prefer an elemental already targeting us / in the west chamber (z ~9880-9900).
-    let elemental = Npcs.query()
-        .name(EARTH_ELEMENTAL)
-        .where(n => !n.targetsAnotherPlayer())
-        .within(14)
-        .nearest();
-
-    if (!elemental && rock) {
-        log('mining the elemental rock (Earth elemental will spawn)');
-        if (!(await rock.interact('Mine'))) {
-            return false;
-        }
-        await Execution.delayUntil(
-            () => Npcs.query().name(EARTH_ELEMENTAL).within(14).nearest() !== null
-                || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0,
-            12_000
-        );
-        elemental = Npcs.query()
-            .name(EARTH_ELEMENTAL)
-            .where(n => !n.targetsAnotherPlayer())
-            .within(14)
-            .nearest();
-    }
-
-    if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
-        return true;
-    }
-    if (!elemental) {
-        log('Earth elemental did not appear');
+    // Always work from the rock pocket so we do not chase water-wing elementals.
+    if (!(await walkNear(ROCK_STAND, 5, log))) {
         return false;
     }
+    await settleScene();
 
-    log('killing the Earth elemental for Elemental ore');
-    if (!Game.inCombat()) {
-        if (!(await elemental.interact('Attack'))) {
-            return false;
-        }
-        if (!(await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid(), 5_000))) {
-            log('failed to enter combat with the Earth elemental');
-            return false;
-        }
-    }
-    // Cap the wait — if we never leave combat, fail the step so decide can re-arm.
-    const died = await Execution.delayUntil(
-        () => !Game.inCombat()
-            || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
-            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest() !== null,
-        90_000
-    );
-    if (!died && Game.inCombat()) {
-        log('combat with Earth elemental did not finish in time');
-        return false;
-    }
-    await waitOutCombat(15_000);
-
-    const takeOre = async (): Promise<boolean> => {
+    const takeOreNearRock = async (): Promise<boolean> => {
         if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
             return true;
         }
-        const ground = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest();
+        const ground = GroundItems.query()
+            .name(EW_ITEM.ELEMENTAL_ORE.name)
+            .where(g => nearRockPocket(g.tile()))
+            .within(18)
+            .nearest()
+            ?? GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(10).nearest();
         if (!ground) {
             return false;
         }
+        log('taking Elemental ore from the ground');
         if (!(await ground.interact('Take'))) {
             return false;
         }
         return Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 8_000);
     };
 
-    if (await Execution.delayUntil(
+    if (oreOnGroundNearRock() || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(8).nearest()) {
+        if (await takeOreNearRock()) {
+            return true;
+        }
+    }
+
+    let elemental = earthAtRock();
+    if (!elemental) {
+        const rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
+        if (!rock) {
+            log('no Pile of Rock to Mine in the west chamber');
+            return false;
+        }
+        log('mining the elemental rock (Earth elemental will spawn)');
+        if (!(await rock.interact('Mine'))) {
+            return false;
+        }
+        await Execution.delayUntil(
+            () => earthAtRock() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0 || oreOnGroundNearRock(),
+            12_000
+        );
+        elemental = earthAtRock();
+    }
+
+    if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
+        return true;
+    }
+    if (await takeOreNearRock()) {
+        return true;
+    }
+    if (!elemental) {
+        log('Earth elemental did not appear at the rock');
+        return false;
+    }
+
+    log('killing the Earth elemental for Elemental ore');
+    // If we are already in combat with something else (water wing), break off by
+    // re-clicking this elemental — server should retarget.
+    if (!(await elemental.interact('Attack'))) {
+        return false;
+    }
+    await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid() || oreOnGroundNearRock(), 6_000);
+
+    const finished = await Execution.delayUntil(
         () => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
-            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(14).nearest() !== null,
-        10_000
-    )) {
-        return takeOre();
+            || oreOnGroundNearRock()
+            || !elemental!.valid(),
+        60_000
+    );
+    if (!finished && Game.inCombat()) {
+        log('Earth elemental combat did not produce ore in time');
+        return false;
+    }
+    // Brief settle for the loot drop after death.
+    await Execution.delayTicks(3);
+    if (await takeOreNearRock()) {
+        return true;
     }
     return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
 }
