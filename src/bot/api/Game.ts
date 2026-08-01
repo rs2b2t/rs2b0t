@@ -133,7 +133,11 @@ export const Game = {
         return ActionRouter.driver.castOnNpc(comId, npc.index);
     },
 
-    /** Cast a standard spellbook teleport by destination name. */
+    /**
+     * Cast a standard spellbook teleport by destination name.
+     * Opens the magic tab when needed, resolves the live button by name, and
+     * falls back to its 2004 component ID. Success confirms dispatch, not arrival.
+     */
     async teleport(name: string): Promise<boolean> {
         const teleport = resolveTeleport(name);
         if (teleport === null) {
