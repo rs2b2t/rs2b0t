@@ -5,7 +5,7 @@ import Tile from '../../../api/Tile.js';
 import { Equipment } from '../../../api/hud/Equipment.js';
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
-import type { Npc } from '../../../api/entities/index.js';
+import type { GroundItem, Npc } from '../../../api/entities/index.js';
 import { Locs, type Loc } from '../../../api/queries/Locs.js';
 import { Npcs } from '../../../api/queries/Npcs.js';
 import { Traversal } from '../../../api/Traversal.js';
@@ -536,24 +536,70 @@ function nearRockPocket(tile: { x: number; z: number } | null | undefined): bool
     if (!tile) {
         return false;
     }
-    // West mining wing of the workshop (live runs: rock area ~2700-2710, 9880-9900).
-    return tile.x >= 2695 && tile.x <= 2712 && tile.z >= 9875 && tile.z <= 9905;
+    // West mining wing (live runs drift to ~2690–2712, z ~9880–9905).
+    return tile.x >= 2688 && tile.x <= 2714 && tile.z >= 9875 && tile.z <= 9910;
 }
 
 function earthAtRock(): Npc | null {
     return Npcs.query()
         .name(EARTH_ELEMENTAL)
         .where(n => !n.targetsAnotherPlayer() && nearRockPocket(n.tile()))
-        .within(18)
+        .within(20)
         .nearest();
 }
 
-function oreOnGroundNearRock(): boolean {
+/** Prefer exact object id — name match alone can miss depending on scene load order. */
+function findOreOnGround(): GroundItem | null {
     return GroundItems.query()
-        .name(EW_ITEM.ELEMENTAL_ORE.name)
-        .where(g => nearRockPocket(g.tile()))
-        .within(18)
-        .nearest() !== null;
+        .where(g => g.id === EW_ITEM.ELEMENTAL_ORE.id)
+        .within(24)
+        .nearest()
+        ?? GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(24).nearest();
+}
+
+/**
+ * Loot Elemental ore after the rock-spawn death. Drop can land a few tiles off and
+ * appears a tick or two after the NPC is gone — wait, walk, and retry Take.
+ */
+async function takeElementalOre(log: (m: string) => void): Promise<boolean> {
+    if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
+        return true;
+    }
+    // Wait for the server loot add after death (stack with swamprocks on same tile).
+    await Execution.delayUntil(() => findOreOnGround() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 10_000);
+    if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
+        return true;
+    }
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const ground = findOreOnGround();
+        if (!ground) {
+            await Execution.delayTicks(2);
+            continue;
+        }
+        const t = ground.tile();
+        log(`taking Elemental ore at (${t.x},${t.z}) attempt ${attempt + 1}`);
+        // Stand next to the pile so Take is not dropped mid-path.
+        if (Game.tile() && ground.distance() > 2) {
+            await walkNear(new Tile(t.x, t.z, t.level), 1, log);
+            await settleScene();
+        }
+        const live = findOreOnGround();
+        if (!live) {
+            continue;
+        }
+        const before = heldId(EW_ITEM.ELEMENTAL_ORE.id);
+        if (!(await live.interact('Take'))) {
+            await Execution.delayTicks(1);
+            continue;
+        }
+        if (await Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > before, 6_000)) {
+            return true;
+        }
+        // Another pile (e.g. swamprocks) may have been clicked first — try again.
+        await Execution.delayTicks(1);
+    }
+    return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
 }
 
 /**
@@ -574,28 +620,8 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     }
     await settleScene();
 
-    const takeOreNearRock = async (): Promise<boolean> => {
-        if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
-            return true;
-        }
-        const ground = GroundItems.query()
-            .name(EW_ITEM.ELEMENTAL_ORE.name)
-            .where(g => nearRockPocket(g.tile()))
-            .within(18)
-            .nearest()
-            ?? GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(10).nearest();
-        if (!ground) {
-            return false;
-        }
-        log('taking Elemental ore from the ground');
-        if (!(await ground.interact('Take'))) {
-            return false;
-        }
-        return Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 8_000);
-    };
-
-    if (oreOnGroundNearRock() || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(8).nearest()) {
-        if (await takeOreNearRock()) {
+    if (findOreOnGround()) {
+        if (await takeElementalOre(log)) {
             return true;
         }
     }
@@ -612,7 +638,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
             return false;
         }
         await Execution.delayUntil(
-            () => earthAtRock() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0 || oreOnGroundNearRock(),
+            () => earthAtRock() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0 || findOreOnGround() !== null,
             12_000
         );
         elemental = earthAtRock();
@@ -621,7 +647,7 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
         return true;
     }
-    if (await takeOreNearRock()) {
+    if (await takeElementalOre(log)) {
         return true;
     }
     if (!elemental) {
@@ -630,28 +656,31 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     }
 
     log('killing the Earth elemental for Elemental ore');
-    // If we are already in combat with something else (water wing), break off by
-    // re-clicking this elemental — server should retarget.
     if (!(await elemental.interact('Attack'))) {
         return false;
     }
-    await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid() || oreOnGroundNearRock(), 6_000);
+    await Execution.delayUntil(
+        () => Game.inCombat() || !elemental!.valid() || findOreOnGround() !== null,
+        6_000
+    );
 
+    // Wait for death *and* loot — do not treat "left combat" alone as success
+    // (aggro can end without a kill, or loot can lag a tick).
     const finished = await Execution.delayUntil(
         () => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
-            || oreOnGroundNearRock()
+            || findOreOnGround() !== null
             || !elemental!.valid(),
         60_000
     );
     if (!finished && Game.inCombat()) {
-        log('Earth elemental combat did not produce ore in time');
+        log('Earth elemental combat did not finish in time');
         return false;
     }
-    // Brief settle for the loot drop after death.
-    await Execution.delayTicks(3);
-    if (await takeOreNearRock()) {
+    // Loot drop is async after death; takeElementalOre waits for it.
+    if (await takeElementalOre(log)) {
         return true;
     }
+    log('Earth elemental died but Elemental ore was not on the ground');
     return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
 }
 
