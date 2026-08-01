@@ -266,6 +266,123 @@ export async function startScript(page: Page, name: string): Promise<void> {
     }, name);
 }
 
+/**
+ * Click through level-up / chat continues until the chat modal stays closed.
+ * `~maxme` (and bulk advancestat) queue a long chain of "Congratulations..." pages
+ * that otherwise block movement and swallow the next typed cheat.
+ * @see tools/gatheringbot-test.ts
+ */
+export async function clearChatDialogs(page: Page, label = 'dialogs'): Promise<void> {
+    type DialogAbi = {
+        rs2b0t: {
+            actions: {
+                continueDialog(): boolean;
+                ifButton(comId: number): boolean;
+            };
+            reader: {
+                modals(): { chat: number };
+                chatContinueComId(): number;
+                chatOptions(): { comId: number }[];
+            };
+        };
+    };
+    const clicked = await page.evaluate(async () => {
+        const g = globalThis as never as DialogAbi;
+        const { actions, reader } = g.rs2b0t;
+        let n = 0;
+        let quiet = 0;
+        for (let i = 0; i < 120; i++) {
+            const chatOpen = reader.modals().chat !== -1;
+            const canContinue = reader.chatContinueComId() !== -1;
+            const opts = reader.chatOptions();
+            if (!chatOpen && !canContinue && opts.length === 0) {
+                quiet++;
+                if (quiet >= 4) {
+                    break;
+                }
+                await new Promise(r => setTimeout(r, 200));
+                continue;
+            }
+            quiet = 0;
+            if (canContinue) {
+                if (actions.continueDialog()) {
+                    n++;
+                }
+            } else if (opts.length > 0) {
+                if (actions.ifButton(opts[0]!.comId)) {
+                    n++;
+                }
+            }
+            await new Promise(r => setTimeout(r, 250));
+        }
+        return n;
+    });
+    if (clicked > 0) {
+        console.log(`  cleared ${clicked} ${label}`);
+    }
+}
+
+/** `~maxme`, wait for combat skills to land, drain level-up chat (twice for stragglers). */
+export async function maxmeAndClearDialogs(page: Page): Promise<void> {
+    if (!(await cheatQuiet(page, '~maxme'))) {
+        throw new Error('~maxme not sent (not ingame?)');
+    }
+    await page
+        .waitForFunction(
+            () => {
+                const s = (globalThis as never as {
+                    __rs2b0t: { Skills: { level(n: string): number } };
+                }).__rs2b0t.Skills;
+                return s.level('attack') >= 99 && s.level('hitpoints') >= 99;
+            },
+            undefined,
+            { timeout: 45_000 }
+        )
+        .catch(() => undefined);
+    await clearChatDialogs(page, 'level-up dialog(s)');
+    await page.waitForTimeout(1500);
+    await clearChatDialogs(page, 'straggler dialog(s)');
+}
+
+/** Engine `::tele level,mx,mz,lx,lz` from a world tile. */
+export function teleCheat(tile: { x: number; z: number; level: number }): string {
+    return `tele ${tile.level},${tile.x >> 6},${tile.z >> 6},${tile.x & 63},${tile.z & 63}`;
+}
+
+/**
+ * Teleport and wait until within `radius` of the target world tile.
+ * Returns false if the cheat never sent or arrival timed out.
+ */
+export async function teleTo(
+    page: Page,
+    tile: { x: number; z: number; level: number },
+    radius = 8,
+    timeoutMs = 20_000
+): Promise<boolean> {
+    if (!(await cheatQuiet(page, teleCheat(tile)))) {
+        return false;
+    }
+    const ok = await page
+        .waitForFunction(
+            ([x, z, level, r]) => {
+                const t = (globalThis as never as {
+                    __rs2b0t: { Game: { tile(): { x: number; z: number; level: number } | null } };
+                }).__rs2b0t.Game.tile();
+                if (!t || t.level !== level) {
+                    return false;
+                }
+                const dx = t.x - x;
+                const dz = t.z - z;
+                return dx * dx + dz * dz <= r * r;
+            },
+            [tile.x, tile.z, tile.level, radius] as const,
+            { timeout: timeoutMs }
+        )
+        .then(() => true)
+        .catch(() => false);
+    return ok;
+}
+
 export async function runToVarp(page: Page, varpIndex: number, target: number, timeoutMs: number): Promise<boolean> {
     return page
         .waitForFunction(([i, t]) => (globalThis as never as Rs2b0t).rs2b0t.reader.varp(i) >= t, [varpIndex, target], { timeout: timeoutMs })

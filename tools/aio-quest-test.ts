@@ -1,5 +1,32 @@
+/**
+ * Live AIOQuester harness against a local engine.
+ *
+ * Usage:
+ *   HEADED=1 bun tools/aio-quest-test.ts \
+ *     [base] [user] [questsCsv] [minutes] [giveCsv] [statsCsv] [food] [cheatsCsv] [tele]
+ *
+ * giveCsv   — debug names via real `give` procs: knife:1,hammer:1  (NOT ~item — silent no-op)
+ * statsCsv  — `max` for ~maxme+dialog drain, or advancestat pairs mining:99,smithing:99
+ * cheatsCsv — raw debugprocs before stats (e.g. ~bank_f2p,speed 300). Do not put ~maxme here;
+ *             use statsCsv=max so dialogs are cleared before tele/start.
+ * tele      — world tile `x,z` or `x,z,level`, or engine tele `level,mx,mz,lx,lz`
+ *
+ * Elemental Workshop example (Seers bookcase, maxed, tools in inv, 2× ticks):
+ *   HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ew1 elemental_workshop 20 \
+ *     'knife:1,hammer:1,bronze_pickaxe:1,thread:1,leather:1,needle:1,coal:4,lobster:15' \
+ *     max Lobster '~bank_f2p,speed 300' '2716,3481'
+ */
+import type { Page } from 'playwright-core';
 import { launchBrowser } from './lib/harness.js';
-import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
+import {
+    cheatQuiet,
+    clearChatDialogs,
+    mainlandAccount,
+    maxmeAndClearDialogs,
+    startScript,
+    teleCheat,
+    teleTo
+} from './tutorial/harness.js';
 import { QUESTS } from '../src/bot/quests/data/quests.js';
 
 const base = process.argv[2] || 'http://localhost:8890';
@@ -9,8 +36,10 @@ const budgetMin = Number(process.argv[5]) || 25;
 const giveCsv = (process.argv[6] || '').trim();
 const statsCsv = (process.argv[7] || '').trim();
 const foodSetting = (process.argv[8] || '').trim();
-/** Raw debugprocs run before the script starts, e.g. `~bank_f2p` to stock the bank. */
+/** Raw debugprocs (not ~maxme — use statsCsv=max). e.g. `~bank_f2p,speed 300`. */
 const cheatsCsv = (process.argv[9] || '').trim();
+/** World `x,z[,level]` or engine `level,mx,mz,lx,lz`. */
+const teleArg = (process.argv[10] || '').trim();
 const BUDGET_MS = budgetMin * 60_000;
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -33,6 +62,72 @@ type Snapshot = {
     logs: { time: number; level: string; msg: string }[];
 };
 
+/** Parse tele arg into a world tile (for wait) + engine cheat string. */
+function parseTele(arg: string): { tile: { x: number; z: number; level: number }; cheat: string } | null {
+    if (!arg) {
+        return null;
+    }
+    const parts = arg.split(',').map(s => Number(s.trim()));
+    if (parts.some(n => !Number.isFinite(n))) {
+        return null;
+    }
+    if (parts.length === 2 || parts.length === 3) {
+        const tile = { x: parts[0]!, z: parts[1]!, level: parts[2] ?? 0 };
+        return { tile, cheat: teleCheat(tile) };
+    }
+    if (parts.length === 5) {
+        const [level, mx, mz, lx, lz] = parts as [number, number, number, number, number];
+        const tile = { x: mx * 64 + lx, z: mz * 64 + lz, level };
+        return { tile, cheat: `tele ${level},${mx},${mz},${lx},${lz}` };
+    }
+    return null;
+}
+
+async function seedGives(page: Page, csv: string): Promise<void> {
+    for (const pair of csv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        const [obj, n] = pair.split(':');
+        if (!obj) {
+            continue;
+        }
+        // Real debugproc is `give`, not `~item` (silent no-op — see #276).
+        const cmd = `give ${obj} ${Number(n) || 1}`;
+        if (!(await cheatQuiet(page, cmd))) {
+            fail(`account prep '${cmd}' not sent (not ingame?)`);
+        }
+        console.log(`gave ${pair}`);
+    }
+}
+
+async function seedStats(page: Page, csv: string): Promise<void> {
+    if (!csv) {
+        return;
+    }
+    if (csv.toLowerCase() === 'max') {
+        console.log('maxme + clear level-up dialogs');
+        await maxmeAndClearDialogs(page);
+        return;
+    }
+    let advanced = false;
+    for (const pair of csv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        const [stat, lvl] = pair.split(':');
+        if (!(await cheatQuiet(page, `advancestat ${stat} ${Number(lvl) || 1}`))) {
+            fail(`account prep 'advancestat ${pair}' not sent (not ingame?)`);
+        }
+        console.log(`advanced ${pair}`);
+        advanced = true;
+    }
+    if (advanced) {
+        await clearChatDialogs(page, 'level-up dialog(s)');
+        await page.waitForTimeout(1500);
+        await clearChatDialogs(page, 'straggler dialog(s)');
+    }
+}
+
+const tele = parseTele(teleArg);
+if (teleArg && !tele) {
+    fail(`bad tele '${teleArg}' — use x,z[,level] or level,mx,mz,lx,lz`);
+}
+
 const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
@@ -48,30 +143,45 @@ try {
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
 
-    // Ahead of advancestat: its level-up dialog swallows whatever cheat follows it.
-    // Prefer this over the legacy `give` arg — `~item` is not a debugproc and is a silent no-op
-    // (see #276 / fix/189-gobdip-food).
+    // Non-maxme cheats first (bank stock, speed, etc.). ~maxme goes through statsCsv=max.
     for (const command of cheatsCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
+        if (command === '~maxme' || command === 'maxme') {
+            console.log(`cheat: ${command} (deferred — use statsCsv=max for dialog drain)`);
+            continue;
+        }
+        if (command.startsWith('tele ')) {
+            console.log(`cheat: ${command} (deferred — use tele arg so it runs after dialogs)`);
+            continue;
+        }
         if (!(await cheatQuiet(page, command))) {
             fail(`account prep '${command}' not sent (not ingame?)`);
         }
         console.log(`cheat: ${command}`);
     }
 
-    for (const pair of giveCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
-        const [obj, n] = pair.split(':');
-        if (!(await cheatQuiet(page, `~item ${obj} ${Number(n) || 1}`))) {
-            fail(`account prep '~item ${pair}' not sent (not ingame?)`);
-        }
-        console.log(`gave ${pair}`);
+    await seedGives(page, giveCsv);
+    await seedStats(page, statsCsv);
+
+    // If cheats asked for maxme without statsCsv=max, still drain (best effort).
+    if (/(^|,)\s*~?maxme\s*(,|$)/i.test(cheatsCsv) && statsCsv.toLowerCase() !== 'max') {
+        console.log('maxme from cheatsCsv — clearing dialogs');
+        await cheatQuiet(page, '~maxme');
+        await clearChatDialogs(page, 'level-up dialog(s)');
+        await page.waitForTimeout(1500);
+        await clearChatDialogs(page, 'straggler dialog(s)');
     }
 
-    for (const pair of statsCsv.split(',').map(s => s.trim()).filter(s => s.length > 0)) {
-        const [stat, lvl] = pair.split(':');
-        if (!(await cheatQuiet(page, `advancestat ${stat} ${Number(lvl) || 1}`))) {
-            fail(`account prep 'advancestat ${pair}' not sent (not ingame?)`);
+    if (tele) {
+        console.log(`tele → ${tele.tile.x},${tele.tile.z},${tele.tile.level}`);
+        if (!(await teleTo(page, tele.tile, 10, 25_000))) {
+            // One hard retry after another dialog drain (straggler level-ups block p_finduid).
+            await clearChatDialogs(page, 'pre-tele dialog(s)');
+            if (!(await teleTo(page, tele.tile, 10, 25_000))) {
+                fail(`tele to ${tele.tile.x},${tele.tile.z} did not arrive`);
+            }
         }
-        console.log(`advanced ${pair}`);
+        // Scene rebuild lag after tele — give locs a moment before the script acts.
+        await page.waitForTimeout(1500);
     }
 
     await page.evaluate(csv => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', csv), questsCsv);

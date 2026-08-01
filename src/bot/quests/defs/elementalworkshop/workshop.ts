@@ -35,6 +35,10 @@ function dist2(a: { x: number; z: number }, b: { x: number; z: number }): number
 }
 
 async function walkNear(tile: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
+    const here = Game.tile();
+    if (here && tile.distanceTo(here) <= radius) {
+        return true;
+    }
     return Traversal.walkResilient(tile, { radius, attempts: 4, timeoutMs: 180_000, log });
 }
 
@@ -107,43 +111,55 @@ export async function enterWorkshop(log: (m: string) => void): Promise<boolean> 
     if (ewArea(Game.tile()) === 'workshop') {
         return true;
     }
-    if (!(await walkNear(SMITHY, 3, log))) {
+    // Stand outside the smithy — do not path onto the wall loc tile (unwalkable).
+    if (!(await walkNear(SMITHY, 4, log))) {
         return false;
     }
     await settleScene();
 
-    // Key on the odd looking wall (oplocu). Push also works once unlocked that tick.
+    // The "Odd looking wall" is not a normal door: oplocu with the Battered key opens it.
+    // Push only works after it is already unlocked for this player.
+    const wall = Locs.query().name('Odd looking wall').within(10).nearest();
+    if (!wall) {
+        log('no Odd looking wall near the Seers smithy');
+        return false;
+    }
     if (heldId(EW_ITEM.BATTERED_KEY.id) > 0) {
-        const opened = await useOnLoc(
-            EW_ITEM.BATTERED_KEY.id,
-            { name: 'Odd looking wall', near: SMITHY, within: 8 },
-            [],
-            () => {
-                const wall = Locs.query().name('Odd looking wall').within(8).nearest();
-                // After a successful open the wall still exists; prefer stairs climb success.
-                return wall === null || ewArea(Game.tile()) === 'workshop';
-            },
-            log
-        );
-        void opened;
-        await Execution.delayTicks(2);
+        const key = Inventory.items().find(i => i.id === EW_ITEM.BATTERED_KEY.id);
+        if (!key) {
+            log('no Battered key to use on the Odd looking wall');
+            return false;
+        }
+        log('using the Battered key on the Odd looking wall');
+        if (!(await key.useOn(wall))) {
+            return false;
+        }
+        await Execution.delayTicks(3);
     } else {
-        const wall = Locs.query().name('Odd looking wall').action('Push').within(8).nearest();
-        if (wall) {
-            await wall.interact('Push');
+        const pushable = Locs.query().name('Odd looking wall').action('Push').within(10).nearest();
+        if (pushable) {
+            log('pushing the Odd looking wall');
+            await pushable.interact('Push');
             await Execution.delayTicks(2);
+        } else {
+            log('need the Battered key for the Odd looking wall');
+            return false;
         }
     }
 
-    if (!(await walkNear(STAIRS_TOP, 2, log))) {
-        return false;
+    // Stairs are just inside; walk if needed, then Climb-down into the workshop pocket.
+    if (!(await walkNear(STAIRS_TOP, 3, log))) {
+        // Still try the climb from wherever we are if the stairs are visible.
+        await settleScene();
+    } else {
+        await settleScene();
     }
-    await settleScene();
-    const stairs = Locs.query().name('Staircase').action('Climb-down').within(6).nearest();
+    const stairs = Locs.query().name('Staircase').action('Climb-down').within(8).nearest();
     if (!stairs) {
         log('no Staircase to Climb-down in the Seers smithy');
         return false;
     }
+    log('climbing down into the Elemental Workshop');
     if (!(await stairs.interact('Climb-down'))) {
         return false;
     }
