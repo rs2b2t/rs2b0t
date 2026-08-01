@@ -463,54 +463,101 @@ export async function lightFurnace(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-export async function pullAirLever(log: (m: string) => void): Promise<boolean> {
+const FURNACE_COLD = /furnace is cold/i;
+const FURNACE_NEEDS_HEAT = /needs to be hotter/i;
+const FURNACE_NEED_COAL = /need four heaps of coal/i;
+const AIR_PUMPING = /bellows pump air/i;
+const AIR_STOPPED = /bellows stop pumping/i;
+const AIR_NOTHING = /nothing happens; the lever resets/i;
+
+async function pullAirLever(log: (m: string) => void): Promise<'on' | 'off' | 'nothing' | 'fail'> {
     if (!(await walkNear(BELLOWS_STAND, 3, log))) {
-        return false;
+        return 'fail';
     }
     await settleScene();
     const lever = Locs.query().name('Lever').action('Pull').within(12).results()
         .sort((a, b) => dist2(a.tile(), BELLOWS_STAND) - dist2(b.tile(), BELLOWS_STAND))[0];
     if (!lever) {
         log('no air-chamber Lever to Pull');
-        return false;
+        return 'fail';
     }
+    const mark = GameMessages.mark();
     log('pulling the air-chamber Lever to pump the bellows');
     if (!(await lever.interact('Pull'))) {
-        return false;
+        return 'fail';
     }
-    await Execution.delayTicks(3);
-    return true;
+    await Execution.delayUntil(
+        () => GameMessages.sawSince(mark, AIR_PUMPING)
+            || GameMessages.sawSince(mark, AIR_STOPPED)
+            || GameMessages.sawSince(mark, AIR_NOTHING),
+        5_000
+    );
+    if (GameMessages.sawSince(mark, AIR_PUMPING)) {
+        return 'on';
+    }
+    if (GameMessages.sawSince(mark, AIR_STOPPED)) {
+        return 'off';
+    }
+    if (GameMessages.sawSince(mark, AIR_NOTHING)) {
+        return 'nothing';
+    }
+    return 'fail';
 }
 
 async function waitOutCombat(ms: number): Promise<void> {
     await Execution.delayUntil(() => !Game.inCombat(), ms);
 }
 
+/**
+ * Mine the west-chamber rock (spawns Earth elemental) and take the ore drop.
+ * Do not pathfind onto the rock loc tile — it is unwalkable; stand beside it.
+ */
 export async function mineElementalOre(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
         return true;
     }
-    if (!(await walkNear(ROCK_STAND, 3, log))) {
-        return false;
-    }
-    await settleScene();
 
-    let elemental = Npcs.query().name(EARTH_ELEMENTAL).within(12).nearest();
-    if (!elemental) {
-        const rock = Locs.query().name('Pile of Rock').action('Mine').within(10).nearest();
-        if (!rock) {
+    // Enter the west rock pocket if we are not already next to a mineable rock.
+    let rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
+    if (!rock) {
+        if (!(await walkNear(ROCK_STAND, 4, log))) {
+            return false;
+        }
+        await settleScene();
+        rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
+    }
+    if (!rock && heldId(EW_ITEM.ELEMENTAL_ORE.id) === 0) {
+        // Still no rock — walk further west into the chamber once.
+        if (!(await walkNear(new Tile(2702, 9888, 0), 4, log))) {
             log('no Pile of Rock to Mine');
             return false;
         }
+        await settleScene();
+        rock = Locs.query().name('Pile of Rock').action('Mine').within(12).nearest();
+    }
+
+    let elemental = Npcs.query()
+        .name(EARTH_ELEMENTAL)
+        .where(n => !n.targetsAnotherPlayer())
+        .within(14)
+        .nearest();
+
+    if (!elemental && rock) {
         log('mining the elemental rock (Earth elemental will spawn)');
+        // Loc.interact walks adjacent to the rock; no need to stand on its tile.
         if (!(await rock.interact('Mine'))) {
             return false;
         }
         await Execution.delayUntil(
-            () => Npcs.query().name(EARTH_ELEMENTAL).within(12).nearest() !== null || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0,
-            10_000
+            () => Npcs.query().name(EARTH_ELEMENTAL).within(14).nearest() !== null
+                || heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0,
+            12_000
         );
-        elemental = Npcs.query().name(EARTH_ELEMENTAL).within(12).nearest();
+        elemental = Npcs.query()
+            .name(EARTH_ELEMENTAL)
+            .where(n => !n.targetsAnotherPlayer())
+            .within(14)
+            .nearest();
     }
 
     if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
@@ -528,10 +575,13 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
     await Execution.delayUntil(() => Game.inCombat() || !elemental!.valid(), 5_000);
     await waitOutCombat(120_000);
 
-    const oreOnGround = async (): Promise<boolean> => {
-        const ground = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(10).nearest();
+    const takeOre = async (): Promise<boolean> => {
+        if (heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0) {
+            return true;
+        }
+        const ground = GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(12).nearest();
         if (!ground) {
-            return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
+            return false;
         }
         if (!(await ground.interact('Take'))) {
             return false;
@@ -539,15 +589,19 @@ export async function mineElementalOre(log: (m: string) => void): Promise<boolea
         return Execution.delayUntil(() => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0, 8_000);
     };
 
-    if (await Execution.delayUntil(() => GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(10).nearest() !== null, 8_000)) {
-        return oreOnGround();
+    if (await Execution.delayUntil(
+        () => heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0
+            || GroundItems.query().name(EW_ITEM.ELEMENTAL_ORE.name).within(12).nearest() !== null,
+        10_000
+    )) {
+        return takeOre();
     }
     return heldId(EW_ITEM.ELEMENTAL_ORE.id) > 0;
 }
 
 /**
- * Air blowing is not journal-visible and the air lever toggles. Pull once, then
- * immediately smelt so a later decide pass cannot turn the bellows off.
+ * Smelt ore + 4 coal. Air is not journal-visible and the air lever toggles —
+ * try the furnace first; only pull air when the server says it needs more heat.
  */
 export async function smeltElementalBar(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.ELEMENTAL_METAL.id) > 0) {
@@ -562,27 +616,71 @@ export async function smeltElementalBar(log: (m: string) => void): Promise<boole
         return false;
     }
 
-    if (!(await pullAirLever(log))) {
-        return false;
-    }
+    const trySmelt = async (): Promise<'ok' | 'cold' | 'hotter' | 'coal' | 'fail'> => {
+        if (!(await walkNear(FURNACE_STAND, 3, log))) {
+            return 'fail';
+        }
+        await settleScene();
+        const before = heldId(EW_ITEM.ELEMENTAL_METAL.id);
+        const mark = GameMessages.mark();
+        log('placing Elemental ore and Coal into the Furnace');
+        const ore = Inventory.items().find(i => i.id === EW_ITEM.ELEMENTAL_ORE.id);
+        const furnace = Locs.query().name('Furnace').within(10).nearest();
+        if (!ore || !furnace) {
+            return 'fail';
+        }
+        if (!(await ore.useOn(furnace))) {
+            return 'fail';
+        }
+        await Execution.delayUntil(
+            () => heldId(EW_ITEM.ELEMENTAL_METAL.id) > before
+                || GameMessages.sawSince(mark, FURNACE_COLD)
+                || GameMessages.sawSince(mark, FURNACE_NEEDS_HEAT)
+                || GameMessages.sawSince(mark, FURNACE_NEED_COAL),
+            10_000
+        );
+        if (heldId(EW_ITEM.ELEMENTAL_METAL.id) > before) {
+            return 'ok';
+        }
+        if (GameMessages.sawSince(mark, FURNACE_NEED_COAL)) {
+            return 'coal';
+        }
+        if (GameMessages.sawSince(mark, FURNACE_COLD)) {
+            return 'cold';
+        }
+        if (GameMessages.sawSince(mark, FURNACE_NEEDS_HEAT)) {
+            return 'hotter';
+        }
+        return 'fail';
+    };
 
-    if (!(await walkNear(FURNACE_STAND, 3, log))) {
+    let result = await trySmelt();
+    if (result === 'ok') {
+        return true;
+    }
+    if (result === 'coal') {
+        log('furnace refused — need 4 Coal in the pack');
         return false;
     }
-    await settleScene();
-    const before = heldId(EW_ITEM.ELEMENTAL_METAL.id);
-    log('placing Elemental ore and Coal into the Furnace');
-    if (!(await useOnLoc(
-        EW_ITEM.ELEMENTAL_ORE.id,
-        { name: 'Furnace', near: FURNACE_STAND, within: 10 },
-        [],
-        () => heldId(EW_ITEM.ELEMENTAL_METAL.id) > before,
-        log
-    ))) {
-        // Heat may still be off if water/bellows were not ready — caller re-decides.
-        return heldId(EW_ITEM.ELEMENTAL_METAL.id) > before;
+    if (result === 'cold') {
+        log('furnace is cold — light it with lava first');
+        return false;
     }
-    return true;
+    if (result === 'hotter' || result === 'fail') {
+        // Heat off or unknown: try air once (toggle risk handled by message).
+        const air = await pullAirLever(log);
+        if (air === 'off') {
+            // Toggled off a running blast — pull again to restore.
+            log('air was on; re-pulling to restore blast');
+            await pullAirLever(log);
+        } else if (air === 'nothing') {
+            log('air lever did nothing — water wheel / bellows may not be ready');
+            return false;
+        }
+        result = await trySmelt();
+        return result === 'ok';
+    }
+    return false;
 }
 
 export async function smithElementalShield(log: (m: string) => void): Promise<boolean> {
