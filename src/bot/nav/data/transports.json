@@ -81,5 +81,7 @@
     {"from":{"x":2890,"z":4814,"level":0},"to":{"x":3107,"z":9571,"level":0},"locName":"Portal","action":"Use","kind":"portal"},
     {"from":{"x":2931,"z":4854,"level":0},"to":{"x":3107,"z":9571,"level":0},"locName":"Portal","action":"Use","kind":"portal"},
     {"from":{"x":2932,"z":4816,"level":0},"to":{"x":3107,"z":9571,"level":0},"locName":"Portal","action":"Use","kind":"portal"},
+    {"from":{"x":2465,"z":3493,"level":0},"to":{"x":2465,"z":3491,"level":0},"locName":"Tree Door","action":"Open","kind":"door"},
+    {"from":{"x":2465,"z":3491,"level":0},"to":{"x":2465,"z":3493,"level":0},"locName":"Tree Door","action":"Open","kind":"door"},
     {"from":{"x":3304,"z":3114,"level":0},"to":{"x":3304,"z":3118,"level":0},"locName":"Shantay pass","action":"Go-through","kind":"dungeon"}
 ]
