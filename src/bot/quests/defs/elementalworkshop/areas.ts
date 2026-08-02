@@ -6,7 +6,7 @@ export interface EwItem {
     name: string;
 }
 
-// Classic 2004 object ids (Lost City / rs2b2t pack). Empty and full stone bowls both
+// Classic 2004 object ids (rs2b2t pack). Empty and full stone bowls both
 // render as "A stone bowl", so every bowl check goes through id.
 export const EW_ITEM = {
     BATTERED_BOOK: { id: 2886, name: 'Battered book' },

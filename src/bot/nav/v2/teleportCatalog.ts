@@ -1,6 +1,5 @@
 /**
- * Teleport catalog derived from LostCity Server content scripts
- * (experiments/Server). See docs/nav-v2/TELEPORTS.md.
+ * Teleport catalog derived from rs2b2t-era content scripts (revision 274 pack).
  *
  * Not wired into PathFinder yet — Phase D catalog for nav-v2.
  */

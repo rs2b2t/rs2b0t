@@ -2,11 +2,12 @@
 
 # Architecture
 
-rs2b0t wraps a real 2004scape game client and drives it from TypeScript. The design
-constraint that shapes everything else: **a bot must be indistinguishable from a
-player at the wire.** No forged packets, no synthetic mouse events — bot actions go
-through the client's own action dispatch, so the bytes on the socket are the bytes a
-human click would have produced.
+rs2b0t wraps a real era (~2004) game client and drives it from TypeScript for
+**[rs2b2t](https://rs2b2t.com)**. It is not aimed at the pure Lost City or 2004scape
+projects. The design constraint that shapes everything else: **a bot must be
+indistinguishable from a player at the wire.** No forged packets, no synthetic mouse
+events — bot actions go through the client's own action dispatch, so the bytes on the
+socket are the bytes a human click would have produced.
 
 ## Contents
 
@@ -26,7 +27,7 @@ src/bot/nav|quests|  subsystems                      │
     clues|shops                                      │
 src/bot/runtime/     script lifecycle, ABI, settings ─┘
 src/bot/adapter/     ClientAdapter — the ONLY place that names client internals
-src/client/ …        the vendored 2004scape client
+src/client/ …        the vendored era browser client
 ```
 
 [`src/bot/adapter/ClientAdapter.ts`](../src/bot/adapter/ClientAdapter.ts) is the whole

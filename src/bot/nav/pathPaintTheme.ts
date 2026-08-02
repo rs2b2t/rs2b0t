@@ -1,16 +1,13 @@
 /**
- * Global nav path paint theme (Shortest Path–aligned colours + hop text).
+ * Global nav path paint theme (path / transport / hop-text colours).
  *
  * Wired settings: path, transport, click, text (+ size / show text).
- * Reserved SP slots (documented for a later pass — not in Global UI yet):
- *   calculating  #0000FF  (SP #FF0000FF) — live A* heat
- *   unreachable  #C828F0  (SP #FFC828F0) — failed tiles
- *   collision    #0080FF  (SP #800080FF) — live collision overlay
+ * Reserved slots (not in Global UI yet): calculating, unreachable, collision.
  */
 
 import { SettingsStore, type SettingsBag } from '../runtime/Settings.js';
 
-/** Defaults match SP Path / Transports / Text (RGB); alphas applied at paint time. */
+/** Defaults: red path, green transports, white text/click; alphas applied at paint time. */
 export const NAV_PATH_PAINT_DEFAULTS = {
     path: '#FF0000',
     transport: '#00FF00',
@@ -20,7 +17,7 @@ export const NAV_PATH_PAINT_DEFAULTS = {
     showText: true
 } as const;
 
-/** SP roles we do not paint yet — keep in sync with docs/NAV.md. */
+/** Paint roles we do not wire yet (no live data). */
 export const NAV_PATH_PAINT_RESERVED = {
     calculating: '#0000FF',
     unreachable: '#C828F0',

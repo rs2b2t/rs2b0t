@@ -10,7 +10,7 @@ export interface PublishedPathTile {
     /** True when this step is a transport hop (door/ladder/tele). */
     transport?: boolean;
     /**
-     * Shortest Path–style display text for a hop (e.g. "Open Door", "Varrock teleport").
+     * Display text for a hop (e.g. "Open Door", "Varrock teleport").
      * Only set on transport tiles.
      */
     label?: string;

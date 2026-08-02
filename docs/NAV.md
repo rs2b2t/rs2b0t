@@ -228,7 +228,7 @@ at the gate wastes the whole walk.
 
 ## Exact transport loc metadata
 
-Location-backed transports may carry `locId` / `locX` / `locZ` from LostCity enrichment
+Location-backed transports may carry `locId` / `locX` / `locZ` from content-pack enrichment
 (`bun run gen:nav-transports`). `locId` is the **map placement** (closed trapdoor on
 the floor). When climb only exists on a transformed open loc, `openLocId` is set too;
 `matchesTransportLoc` accepts either id. PathFinder prefers that metadata; the executor

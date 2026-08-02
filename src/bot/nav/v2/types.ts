@@ -83,7 +83,7 @@ export interface TransportLanding {
 export interface TransportDebug {
     name?: string;
     options?: string[];
-    /** e.g. derived-door | derived-stair | lostcity-ladder | curated */
+    /** e.g. derived-door | derived-stair | pack-ladder | curated */
     source?: string;
 }
 

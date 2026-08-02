@@ -31,7 +31,7 @@ reaches that result differently.
 
 ## Applying this to `rs2b0t`
 
-`rs2b0t` wraps a real 2004scape client, so it should use that client's live
+`rs2b0t` wraps a real era client (for **rs2b2t**), so it should use that client's live
 scene rather than reproduce the headless state pipeline.
 
 ### What it already handles

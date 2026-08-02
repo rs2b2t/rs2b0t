@@ -5,7 +5,7 @@
  * Multi-destination / dialogue-state ladders (Horror, Watchtower maze, …) stay
  * disabled — wrong dest is worse than a long walk.
  *
- * Keyed by LostCity `debugName` (preferred) or `locName|action`.
+ * Keyed by content-pack `debugName` (preferred) or `locName|action`.
  */
 
 import type { TransportRequires } from './types.js';

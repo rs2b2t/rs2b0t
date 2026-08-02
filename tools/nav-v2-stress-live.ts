@@ -546,13 +546,20 @@ try {
         console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.id}: ${r.detail}`);
     }
 
+    if (results.length === 0) {
+        console.error('FAIL: no case results recorded (internal bug)');
+        process.exit(2);
+    }
+
     await proof.writeSuccess(page, {
         base,
         user,
+        cases,
         passed,
         total: results.length,
         results
     });
+    console.log(`wrote ${proof.paths.successProof} (${results.length} case result(s))`);
 
     if (failed.length > 0) {
         console.error(`FAIL nav-v2-stress-live ${failed.length} case(s)`);

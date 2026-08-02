@@ -17,7 +17,7 @@ export interface ToolTier {
  * - `tiered`: best usable tool from a level-ordered list (axes, pickaxes).
  * - `exact`: a named item (tinderbox, hammer, …).
  *
- * Fishing gear is handled separately in FishingMethods (not equippable in 2004scape).
+ * Fishing gear is handled separately in FishingMethods (not equippable on this era pack).
  */
 export type ToolReq =
     | {

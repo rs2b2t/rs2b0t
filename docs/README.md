@@ -2,6 +2,9 @@
 
 How the client works, how to run it, and how to write bots for it.
 
+**Target: [rs2b2t](https://rs2b2t.com) only.** This is not an official client for the
+pure Lost City or 2004scape projects and is not maintained for those targets.
+
 ## Start here
 
 | If you want to… | Read |

@@ -81,7 +81,7 @@ export interface TransportEdgeData {
     openLocId?: number;
     locX?: number;
     locZ?: number;
-    /** LostCity source metadata retained for auditing and regeneration. */
+    /** Content-pack source metadata retained for auditing and regeneration. */
     debugName?: string;
     options?: string[];
     /** Keep a known-invalid derived row documented without making it routable. */

@@ -2855,7 +2855,7 @@ export default class GatheringBot extends TaskBot {
         return this.toolReqs;
     }
 
-    /** Axes/picks that are held but not worn (2004scape wieldable tools). */
+    /** Axes/picks that are held but not worn (wieldable tools on this pack). */
     toolsToEquip(): string[] {
         if (this.toolReqs.length === 0) {
             return [];

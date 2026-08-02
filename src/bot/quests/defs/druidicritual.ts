@@ -101,7 +101,7 @@ interface RitualMeat {
     anchor: Tile;
 }
 
-// All four source NPCs have a guaranteed raw-meat drop in the LostCity content pack.
+// All four source NPCs have a guaranteed raw-meat drop on this content pack.
 // The order makes one continuous route from Falador through the Lumbridge area.
 const RITUAL_MEATS: readonly RitualMeat[] = [
     { raw: 'Raw bear meat', enchanted: 'Enchanted bear', npc: 'Bear', npcId: 105, anchor: new Tile(3159, 3233, 0) },

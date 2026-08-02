@@ -2,9 +2,12 @@
 
 # Running rs2b0t locally
 
-rs2b0t is a **client**. It has no server of its own: it renders the real 2004scape
-game client and drives it through a scripting API. To run it you need two things —
-a game engine, and this client deployed into that engine's `public/` directory.
+rs2b0t is a **client**. It has no server of its own: it renders the real era game
+client and drives it through a scripting API. **Production target is
+[rs2b2t](https://rs2b2t.com) only** — not the pure Lost City or 2004scape projects.
+
+For local development you need two things — a compatible game engine, and this
+client deployed into that engine's `public/` directory.
 
 Everything below uses only public resources. The maintainer's own engine is a
 private mirror; see [Maintainer appendix](#maintainer-appendix) if you have access
@@ -36,9 +39,13 @@ to it.
 
 ## Getting an engine
 
-Use the public [Lost City](https://github.com/LostCityRS) engine. Engine and content
-are separate repositories on matching version branches, and they **must be siblings** —
-the engine resolves content as `../content` (its own `WorldConfig.ts`, `srcDir`).
+Local dev often uses a public **rs2-274-compatible** open engine and content pack
+(revision branch **274**). Engine and content are separate repos on matching
+branches, and they **must be siblings** — the engine resolves content as
+`../content` (its own `WorldConfig.ts`, `srcDir`).
+
+This is only for local testing. **rs2b0t is built and supported for rs2b2t**, not
+as a general client for those upstream pure projects.
 
 ```sh
 git clone https://github.com/LostCityRS/Engine-TS -b 274 --single-branch engine
@@ -66,7 +73,7 @@ http://localhost:<web>/rs2.cgi`, which should print `200`.
 | Management (`/setup`) | 8898 | reads and writes `data/config/world.json` |
 | Game (node) | 43594 | the client's WebSocket target |
 
-If you already run another Lost City engine, these collide. Note that the engine
+If you already run another game engine on the same ports, these collide. Note that the engine
 reaches `World ready` **before** it binds the game port, so a successful-looking log
 line does not mean it is up — check for `EADDRINUSE` after it:
 

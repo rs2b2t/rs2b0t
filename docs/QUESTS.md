@@ -102,7 +102,7 @@ export interface QuestSnapshot {
 
 ### What the client can see
 
-The 2004scape protocol does **not** stream mid-quest stage numbers or bitfields to
+The era protocol does **not** stream mid-quest stage numbers or bitfields to
 the client for almost every quest. What actually lands in the bot process:
 
 | Signal | API | On the wire | Granularity |

@@ -1,9 +1,12 @@
 # rs2b0t
 
-A scriptable, direct-input bot client for **[rs2b2t](https://rs2b2t.com)** — a
-2004scape (Lost City) anarchy server. rs2b0t renders the real game client in the
-browser and drives it through a typed scripting API, so bots see and act on
-exactly what a player would.
+A scriptable, direct-input bot client for **[rs2b2t](https://rs2b2t.com)** (era
+~2004 anarchy). rs2b0t renders the real game client in the browser and drives it
+through a typed scripting API, so bots see and act on exactly what a player would.
+
+**Target:** **rs2b2t only.** This project is **not** an official or supported client
+for the pure Lost City or 2004scape projects, and it is not maintained for those
+targets.
 
 Project site: **[2004bot.com](https://2004bot.com)** — overview, screenshots, and
 rendered [API](https://2004bot.com/docs/api) / [dev](https://2004bot.com/docs/dev) docs.
@@ -44,8 +47,8 @@ tab visible; a backgrounded tab is throttled by the browser).
 
 ## Quick start (local development)
 
-Requires [Bun](https://bun.sh), Node 24+, and a Lost City game engine to deploy
-into.
+Requires [Bun](https://bun.sh), Node 24+, and a compatible local game engine to
+deploy into (for development — production use is against **rs2b2t**).
 
 ```bash
 bun install
@@ -117,7 +120,7 @@ src/
     scripts/      bundled example bots
     nav/          world-walking (collision pack, door/transport graph, A*)
     ui/           the in-client panel + overlay
-  client/         the 2004scape browser client
+  client/         the era browser client
   config/         build-time server target (local | live | prod)
 packages/
   rs2b0t-api/     the @rs2b0t/api shim external scripts compile against

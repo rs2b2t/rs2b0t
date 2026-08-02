@@ -1,7 +1,7 @@
 /**
  * Optional tick-manipulation methods for GatheringBot (#160).
  *
- * Server ground truth (Lost City / this revision), not OSRS wiki numbers:
+ * Server ground truth for this revision / rs2b2t content, not OSRS wiki numbers:
  * - Woodcutting default action_delay = map_clock + 3
  * - Fly fishing (freshfish) = +4
  * - Mining interval = pickaxe mining_rate (mith=4, rune=2, …)

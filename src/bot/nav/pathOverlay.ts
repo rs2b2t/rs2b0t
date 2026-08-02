@@ -1,7 +1,6 @@
 /**
  * Draw published nav path as ground-style tile quads on the bot #overlay canvas.
  *
- * Shortest Path paints tile footprints in the scene stack under UI chrome.
  * We only have HTML #overlay on top of the 3D canvas, so we approximate:
  *   - project each path tile's four corners (same Client.overlayPos as entities)
  *   - fill/stroke diamond quads

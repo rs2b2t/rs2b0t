@@ -136,8 +136,9 @@ is in scene (avoids false PASS from leftover fish after a stalled tele). Flip
 
 ### GatheringBot tick manip (#160)
 
-Optional Lost City–style methods live under each gather script’s **Tick manip**
-dropdown (forced **Off** under Location **None**). Server delays (not OSRS wiki):
+Optional tick-manip methods live under each gather script’s **Tick manip**
+dropdown (forced **Off** under Location **None**). Delays match this revision /
+rs2b2t content (not OSRS wiki):
 
 | Skill | Method | Notes |
 | --- | --- | --- |
