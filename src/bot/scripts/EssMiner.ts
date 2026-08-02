@@ -3,7 +3,7 @@ import { Execution } from '../api/Execution.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
-import { depositAllExcept } from '../api/Banking.js';
+import { depositAllExcept, purgePackAtBank } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
@@ -39,7 +39,19 @@ const MAX_BANK_FAILS = 6;
 const RUNE_MYSTERIES = 'Rune Mysteries Quest';
 
 export const SETTINGS: SettingsSchema = {
-    pickaxe: { type: 'string', default: BEST_AVAILABLE, options: PICK_OPTIONS, label: 'Pickaxe', help: 'Best available walks Rune→Bronze against your Mining level (worn → inventory → bank withdraw); a specific tier stops if you can\'t use or don\'t own it' }
+    pickaxe: {
+        type: 'string',
+        default: BEST_AVAILABLE,
+        options: PICK_OPTIONS,
+        label: 'Pickaxe',
+        help: "Best available walks Rune→Bronze against your Mining level (worn → inventory → bank withdraw); a specific tier stops if you can't use or don't own it"
+    },
+    purgePackOnStart: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank junk on start',
+        help: 'If the pack holds anything other than a usable pickaxe, bank it at Varrock East before mining (start from anywhere).'
+    }
 };
 
 let PICK_CHOICE: string = BEST_AVAILABLE;
@@ -79,6 +91,20 @@ export default class EssMiner extends TaskBot {
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('mining');
 
+        this.log(`EssMiner starting — pickaxe '${PICK_CHOICE}', bank ${BANK_STAND}, Aubury ${AUBURY_TILE}`);
+
+        // Purge before hard quest gate so a junk pack can be cleaned even when RM is incomplete.
+        if (this.settings.bool('purgePackOnStart', true)) {
+            const keepName = heldPickaxeToKeep(PICK_CHOICE, Skills.level('mining'), heldNames());
+            await purgePackAtBank({
+                keep: keepName ? [keepName] : [],
+                stand: BANK_STAND,
+                boothName: BOOTH.name,
+                boothOp: BOOTH.op,
+                log: m => this.log(m)
+            });
+        }
+
         if (Quests.status(RUNE_MYSTERIES) !== 'complete') {
             this.log('EssMiner needs Rune Mysteries completed for Aubury\'s teleport — complete it with the AIOQuester bot first.');
             throw new Error('EssMiner: Rune Mysteries required');
@@ -94,8 +120,6 @@ export default class EssMiner extends TaskBot {
                 this.questRefused = true;
             }
         });
-
-        this.log(`EssMiner starting — pickaxe '${PICK_CHOICE}', bank ${BANK_STAND}, Aubury ${AUBURY_TILE}`);
 
         this.add(
             new ContinueDialog(),
