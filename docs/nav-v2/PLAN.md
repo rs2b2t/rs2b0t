@@ -45,7 +45,9 @@ Product analogues:
      └────────────────────────────────────────────────┘
 ```
 
-**v1 keeps working** until `NAV_V2` dual-run is green.
+**Dual-run:** Global **World walker** = `classic` (default) | `v2`. Classic walk
+requests omit tele catalog and live WorldState. Shared data fixes (trapdoor
+`openLocId`, ladder edges) apply to both.
 
 ---
 

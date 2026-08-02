@@ -25,6 +25,7 @@ import { Game } from '../api/Game.js';
 import { snapshotWorldStateData } from './v2/worldStateLive.js';
 import type { PathPolicy } from './v2/types.js';
 import { formatHops } from './v2/hops.js';
+import { isNavV2, type NavEngineId } from './navEngine.js';
 
 const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
@@ -55,9 +56,17 @@ export interface WalkOptions {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    /** nav-v2 path policy (tele toggles, distanceBeforeTeleport, …). */
+    /**
+     * Force walker engine for this walk. Default: Global setting `navEngine`
+     * (`classic` | `v2`). Classic preserves pre–nav-v2 routing.
+     */
+    navEngine?: NavEngineId;
+    /** nav-v2 only: path policy (tele toggles, distanceBeforeTeleport, …). */
     policy?: PathPolicy;
-    /** Inject spell teleports into the graph when true. */
+    /**
+     * nav-v2 only: include spell/jewellery tele edges in A*.
+     * When navEngine is v2, defaults to true unless set false or policy.useTeleports is false.
+     */
     useTeleportCatalog?: boolean;
 }
 
@@ -152,19 +161,29 @@ class WalkExecutorImpl {
 
     private walkUseTeleports = false;
 
+    /** Resolved engine for the current walkTo (classic | v2). */
+    private walkEngine: NavEngineId = 'classic';
+
     async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
         const maxExpansions = opts?.maxExpansions;
-        this.walkPolicy = opts?.policy;
-        this.walkUseTeleports = opts?.useTeleportCatalog === true || opts?.policy?.useTeleports === true;
+        this.walkEngine = isNavV2(opts?.navEngine) ? 'v2' : 'classic';
+        this.walkPolicy = this.walkEngine === 'v2' ? opts?.policy : undefined;
+        // v2 defaults tele catalog on; classic never uses it.
+        this.walkUseTeleports =
+            this.walkEngine === 'v2'
+            && opts?.useTeleportCatalog !== false
+            && opts?.policy?.useTeleports !== false;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.resetAvoids();
-        log(
-            `nav-v2 walkTo tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? null)}`
-        );
+        if (this.walkEngine === 'v2') {
+            log(
+                `nav engine=v2 tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })}`
+            );
+        }
 
         try {
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
@@ -185,9 +204,17 @@ class WalkExecutorImpl {
                     return false;
                 }
                 const hops = path.hops ?? [];
-                log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`);
-                if (hops.length > 0) {
-                    log(`hops:\n${formatHops(hops)}`);
+                if (this.walkEngine === 'v2') {
+                    log(
+                        `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`
+                    );
+                    if (hops.length > 0) {
+                        log(`hops:\n${formatHops(hops)}`);
+                    }
+                } else {
+                    log(
+                        `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`
+                    );
                 }
 
                 const tiles = expandWaypoints(path.waypoints);
@@ -236,18 +263,6 @@ class WalkExecutorImpl {
 
     private async requestPath(from: WorldTile, to: WorldTile, maxExpansions?: number): Promise<PathResult> {
         let result: PathResult | null = null;
-        let state;
-        try {
-            state = snapshotWorldStateData();
-        } catch (e) {
-            state = undefined;
-            console.warn('[nav-v2] worldState snapshot failed', e);
-        }
-        if (this.walkUseTeleports && state) {
-            console.log(
-                `[nav-v2] state magic=${state.skills.magic ?? state.skills.Magic ?? '?'} law=${state.items['Law rune'] ?? state.items['law rune'] ?? 0} air=${state.items['Air rune'] ?? 0} fire=${state.items['Fire rune'] ?? 0}`
-            );
-        }
         const avoid = [
             ...this.avoidDoors,
             ...[...this.sessionBlacklistDoors].map(k => {
@@ -255,13 +270,29 @@ class WalkExecutorImpl {
                 return { x: x!, z: z! };
             })
         ];
-        const policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
+
+        // Classic: same request shape as pre–nav-v2 (avoid doors + expansions only).
+        // V2: live WorldState + optional tele catalog edges in A*.
+        let state;
+        let policy;
+        let useTeleportCatalog = false;
+        if (this.walkEngine === 'v2') {
+            try {
+                state = snapshotWorldStateData();
+            } catch (e) {
+                state = undefined;
+                console.warn('[nav-v2] worldState snapshot failed', e);
+            }
+            policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
+            useTeleportCatalog = this.walkUseTeleports;
+        }
+
         Navigator.findPath(from, to, {
             avoidDoors: avoid,
             maxExpansions,
             state,
             policy,
-            useTeleportCatalog: this.walkUseTeleports
+            useTeleportCatalog
         }).then(
             r => (result = r),
             err => (result = { ok: false, reason: err instanceof Error ? err.message : String(err), expanded: 0 })
@@ -297,6 +328,9 @@ class WalkExecutorImpl {
         if (!me) {
             return { ok: false, terminal: null };
         }
+        this.walkEngine = isNavV2() ? 'v2' : 'classic';
+        this.walkUseTeleports = this.walkEngine === 'v2';
+        this.walkPolicy = undefined;
         this.resetAvoids();
         const path = await this.requestPath(me, dest, maxExpansions);
         if (!path.ok || path.waypoints.length === 0) {
@@ -527,7 +561,8 @@ class WalkExecutorImpl {
     private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
         const transport = step.transport!;
 
-        if (transport.teleportId || transport.kind === 'teleport') {
+        // Spell/jewellery tele hops only exist under nav v2 path requests.
+        if (this.walkEngine === 'v2' && (transport.teleportId || transport.kind === 'teleport')) {
             return this.handleTeleportHop(transport, log);
         }
 

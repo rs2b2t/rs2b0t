@@ -141,7 +141,21 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     lampSkill: { type: 'string', default: 'strength', options: LAMP_SKILLS, label: 'Genie lamp skill', help: 'which skill genie/lamp random events train' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs/caskets (default)' },
     runAuto: { type: 'boolean', default: true, label: 'Auto re-enable run', help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)' },
-    runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' }
+    runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' },
+    navEngine: {
+        type: 'string',
+        default: 'classic',
+        options: ['classic', 'v2'],
+        optionLabels: {
+            classic: 'Classic (stable)',
+            v2: 'Nav v2 (experimental)'
+        },
+        label: 'World walker',
+        help:
+            'Classic is the long-standing pathfinder. Nav v2 may route through spell teleports, '
+            + 'logs transport hops, and filters skill/item-gated shortcuts using live stats. '
+            + 'Default classic so existing scripts keep prior behaviour. Change applies on the next walk.'
+    }
 };
 
 const hasSession = typeof sessionStorage !== 'undefined';

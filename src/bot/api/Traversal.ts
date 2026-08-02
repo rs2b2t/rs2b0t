@@ -22,6 +22,8 @@ export interface WalkResilientOptions {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
+    /** Forwarded to WalkExecutor (classic | v2). Default: Global `navEngine`. */
+    navEngine?: import('../nav/navEngine.js').NavEngineId;
 }
 
 const SCENE_TIMEOUT_MS = 6000;
@@ -46,6 +48,7 @@ export const Traversal = {
         const maxBudget = opts.maxBudget ?? DEFAULT_MAX_BUDGET;
         const bakedTimeout = opts.timeoutMs ?? 90000;
         const maxPasses = opts.attempts;
+        const navEngine = opts.navEngine;
 
         const dist = (): number => {
             const me = reader.worldTile();
@@ -94,7 +97,13 @@ export const Traversal = {
             }
 
             if (action.kind === 'baked') {
-                await WalkExecutor.walkTo(dest, { radius, timeoutMs: bakedTimeout, log, ...(action.bigBudget ? { maxExpansions: maxBudget } : {}) });
+                await WalkExecutor.walkTo(dest, {
+                    radius,
+                    timeoutMs: bakedTimeout,
+                    log,
+                    ...(navEngine ? { navEngine } : {}),
+                    ...(action.bigBudget ? { maxExpansions: maxBudget } : {})
+                });
                 const outcome = WalkExecutor.lastOutcome;
                 if (outcome === 'blocked') {
                     return true;

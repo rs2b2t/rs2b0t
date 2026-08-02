@@ -17,8 +17,10 @@ Built with the same love as the rest of rs2b0t: real client clicks, era-correct 
 ## Status
 
 **Phases 0–4 (partial).** Types, policy, Server tele catalog, PathFinder hops + state/tele
-filter, spell tele executor hop, pack tools (`route-probe --explain`, `mainland-corpus`,
-`component-report`). Jewellery Rub + full WalkExecutor split still open.
+filter, spell tele executor hop, pack tools. **End-user toggle:** Global settings →
+**World walker** = `Classic (stable)` (default) | `Nav v2 (experimental)`. Classic keeps
+pre–nav-v2 request shape; v2 enables tele edges, hop logs, and live state filters.
+WalkOptions may force `navEngine: 'v2' | 'classic'` per call.
 
 ```bash
 # pack / unit (upstream-safe; no live engine required)

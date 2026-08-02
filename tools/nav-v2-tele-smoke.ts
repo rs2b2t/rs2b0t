@@ -161,6 +161,8 @@ try {
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: 4,
                             timeoutMs: budget,
+                            // Force v2 for this smoke regardless of Global settings default (classic).
+                            navEngine: 'v2',
                             useTeleportCatalog: true,
                             policy: {
                                 useTeleports: true,
