@@ -11,6 +11,8 @@ export type FindPathOpts = {
     state?: WorldStateData;
     policy?: PathPolicy;
     useTeleportCatalog?: boolean;
+    /** Resolved danger-zone rects (use resolveDangerZones for ids). Idea @lolwut. */
+    avoidZones?: readonly import('./data/dangerZones.js').DangerZoneRect[];
 };
 
 const FIND_TIMEOUT_MS = 20_000;
@@ -92,7 +94,8 @@ class NavigatorImpl {
                 maxExpansions: opts?.maxExpansions,
                 state: opts?.state,
                 policy: opts?.policy,
-                useTeleportCatalog: opts?.useTeleportCatalog
+                useTeleportCatalog: opts?.useTeleportCatalog,
+                avoidZones: opts?.avoidZones
             });
         });
     }

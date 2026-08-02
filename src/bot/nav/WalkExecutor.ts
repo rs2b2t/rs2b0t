@@ -37,6 +37,7 @@ import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
 import { RouteState } from './v2/routeState.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
 import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
+import { resolveDangerZones, type DangerZoneRect } from './data/dangerZones.js';
 import {
     crossMultiTileDoor,
     isOpenableBarrier,
@@ -98,6 +99,13 @@ export interface WalkOptions {
      * counts only and never opens a bank just to probe.
      */
     bankItemCounts?: Record<string, number>;
+    /**
+     * Danger / no-go zones the pathfinder must not enter.
+     * Pass known ids (`'white-wolf-mountain'`) and/or ad-hoc rects.
+     * Applies to classic and v2. Idea credit: @lolwut.
+     * @see src/bot/nav/data/dangerZones.ts
+     */
+    avoidZones?: readonly (string | import('./data/dangerZones.js').DangerZoneRect)[];
 }
 
 interface PathStep extends WorldTile {
@@ -153,6 +161,9 @@ class WalkExecutorImpl {
 
     private walkBankItemCounts: Record<string, number> | undefined;
 
+    /** Danger zones for this walk (resolved rects). */
+    private walkAvoidZones: DangerZoneRect[] = [];
+
     async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
@@ -165,6 +176,7 @@ class WalkExecutorImpl {
             && opts?.useTeleportCatalog !== false
             && opts?.policy?.useTeleports !== false;
         this.walkBankItemCounts = this.walkEngine === 'v2' ? opts?.bankItemCounts : undefined;
+        this.walkAvoidZones = resolveDangerZones(opts?.avoidZones);
         this.bankLegDone = false;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
@@ -506,7 +518,8 @@ class WalkExecutorImpl {
             maxExpansions,
             state,
             policy,
-            useTeleportCatalog
+            useTeleportCatalog,
+            avoidZones: this.walkAvoidZones.length > 0 ? this.walkAvoidZones : undefined
         }).then(
             r => (result = r),
             err => (result = { ok: false, reason: err instanceof Error ? err.message : String(err), expanded: 0 })

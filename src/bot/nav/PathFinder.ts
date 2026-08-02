@@ -9,6 +9,7 @@ import { hopsFromWaypoints } from './v2/hops.js';
 import { SPELL_TELEPORTS, inventoryNameMatchesJewellery, JEWELLERY_TELEPORTS } from './v2/teleportCatalog.js';
 import { specialRequiresAt } from './v2/specialRequires.js';
 import { activateTransportRows } from './v2/activateStateAware.js';
+import { tileInDangerZones, type DangerZoneRect } from './data/dangerZones.js';
 
 export interface NavPoint {
     x: number;
@@ -58,6 +59,13 @@ export interface FindPathCallOptions {
      * Default false when policy.useTeleports is false; else true if policy set with useTeleports!==false.
      */
     useTeleportCatalog?: boolean;
+    /**
+     * Tiles inside these rects are never expanded into (walk or transport landing).
+     * Start tile may still sit inside — the bot can path *out*, not *in*.
+     * Resolve known ids via `resolveDangerZones` before calling.
+     * @see src/bot/nav/data/dangerZones.ts — idea @lolwut
+     */
+    avoidZones?: readonly DangerZoneRect[];
 }
 
 export interface DoorEdgeData {
@@ -100,6 +108,7 @@ export type NavRequest =
         state?: WorldStateData;
         policy?: PathPolicy;
         useTeleportCatalog?: boolean;
+        avoidZones?: readonly DangerZoneRect[];
     };
 
 export type NavResponse =
@@ -492,6 +501,8 @@ export class PathFinder {
     private buildSearchContext(from: NavPoint, to: NavPoint, opts: FindPathCallOptions): SearchContext {
         const state = opts.state ? worldStateFromData(opts.state) : undefined;
         const policy = opts.policy;
+        const avoidZones =
+            opts.avoidZones && opts.avoidZones.length > 0 ? opts.avoidZones : undefined;
         const routeSpan = routeSpanChebyshev(from, to);
         const injectTele =
             opts.useTeleportCatalog === true
@@ -557,7 +568,13 @@ export class PathFinder {
             }
         }
 
-        return { state, policy, teleFromStart: teleEdges, startId: nodeId(from.x, from.z, from.level) };
+        return {
+            state,
+            policy,
+            teleFromStart: teleEdges,
+            startId: nodeId(from.x, from.z, from.level),
+            avoidZones
+        };
     }
 
     private search(
@@ -611,6 +628,11 @@ export class PathFinder {
                 }
                 const nx = x + DX[dir];
                 const nz = z + DZ[dir];
+                // Never walk *into* a danger zone (escape from a start inside is fine —
+                // those tiles are already on the open set from earlier expansions).
+                if (ctx.avoidZones && tileInDangerZones(nx, nz, level, ctx.avoidZones)) {
+                    continue;
+                }
                 const neighbor = nodeId(nx, nz, level);
                 if (closed.has(neighbor)) {
                     continue;
@@ -646,6 +668,13 @@ export class PathFinder {
                     continue;
                 }
                 if (ctx.state && edge.requires && !meetsRequires(edge.requires, ctx.state).ok) {
+                    continue;
+                }
+                // Block transport landings / hops that enter a danger zone.
+                if (
+                    ctx.avoidZones
+                    && tileInDangerZones(nodeX(edge.to), nodeZ(edge.to), nodeLevel(edge.to), ctx.avoidZones)
+                ) {
                     continue;
                 }
                 const tentative = g + edge.cost;
@@ -710,4 +739,5 @@ interface SearchContext {
     policy: PathPolicy | undefined;
     teleFromStart: CompiledEdge[];
     startId: number;
+    avoidZones: readonly DangerZoneRect[] | undefined;
 }

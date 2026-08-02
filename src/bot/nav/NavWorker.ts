@@ -43,7 +43,8 @@ worker.addEventListener('message', event => {
                 maxExpansions: message.maxExpansions,
                 state: message.state,
                 policy: message.policy,
-                useTeleportCatalog: message.useTeleportCatalog
+                useTeleportCatalog: message.useTeleportCatalog,
+                avoidZones: message.avoidZones
             });
             if (message.useTeleportCatalog) {
                 const teleHops = outcome.ok ? outcome.hops.filter(h => h.kind === 'teleport').length : 0;

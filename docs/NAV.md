@@ -71,6 +71,24 @@ the game loop. [`Navigator`](../src/bot/nav/Navigator.ts) is the front end:
 const path = await Navigator.findPath(from, to, { avoidDoors, timeoutMs, maxExpansions });
 ```
 
+### Danger zones (optional avoid)
+
+Scripts can ban axis-aligned map rects from A\* so low-level accounts do not walk
+wolf packs (idea **@lolwut**). Known ids live in
+[`dangerZones.ts`](../src/bot/nav/data/dangerZones.ts); pass them on any walk:
+
+```ts
+await Traversal.walkTo(dest, {
+  avoidZones: ['white-wolf-mountain'],
+  // or ad-hoc: { minX, maxX, minZ, maxZ, level? }
+});
+```
+
+The pathfinder never expands *into* those tiles (walk or transport landing). A
+start tile already inside a zone can still path *out*. Off by default — no
+routing change unless a script (or future Global setting) opts in.
+
+
 The outcome is explicit about failure:
 
 ```ts

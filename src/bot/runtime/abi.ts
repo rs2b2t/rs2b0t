@@ -2,6 +2,13 @@
 import { reader } from '../adapter/ClientAdapter.js';
 import { PathPublish } from '../nav/pathPublish.js';
 import { isNavPathPaintEnabled } from '../nav/pathOverlay.js';
+import {
+    KNOWN_DANGER_ZONES,
+    knownDangerZone,
+    knownDangerZoneIds,
+    resolveDangerZones,
+    tileInDangerZones
+} from '../nav/data/dangerZones.js';
 import { SettingsStore } from './Settings.js';
 import { Area } from '../api/Area.js';
 import {
@@ -394,6 +401,13 @@ export function installAbi(): void {
         PathPublish,
         isNavPathPaintEnabled,
         SettingsStore,
+
+        // Danger zones (pathfinder avoid) — idea @lolwut
+        KNOWN_DANGER_ZONES,
+        knownDangerZone,
+        knownDangerZoneIds,
+        resolveDangerZones,
+        tileInDangerZones,
 
         reader
     });
