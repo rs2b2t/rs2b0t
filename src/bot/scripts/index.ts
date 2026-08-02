@@ -58,6 +58,14 @@ import RoguesPurse from './RoguesPurse.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
+import AgilityBrimBot from './AgilityBrimBot.js';
+
+ScriptRegistry.register({
+    name: 'Brimhaven agility',
+    description: 'single obstacle spam',
+    tags: ['agility'],
+    create: () => new AgilityBrimBot()
+});
 
 ScriptRegistry.register({
     name: 'TutorialBot',
