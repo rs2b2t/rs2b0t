@@ -8,6 +8,7 @@ import { kindAllowedByPolicy, routeSpanChebyshev, teleportAllowedByPolicy } from
 import { hopsFromWaypoints } from './v2/hops.js';
 import { SPELL_TELEPORTS, inventoryNameMatchesJewellery, JEWELLERY_TELEPORTS } from './v2/teleportCatalog.js';
 import { specialRequiresAt } from './v2/specialRequires.js';
+import { activateTransportRows } from './v2/activateStateAware.js';
 
 export interface NavPoint {
     x: number;
@@ -306,7 +307,8 @@ export class PathFinder {
             this.doorEdges++;
         }
 
-        for (const edge of [...transports, ...stairs]) {
+        const activated = activateTransportRows([...transports, ...stairs]);
+        for (const edge of activated) {
             if (edge.disabledReason) {
                 continue;
             }
@@ -335,7 +337,7 @@ export class PathFinder {
                         : undefined,
                 acceptAnyLanding: edge.kind === 'portal' ? true : undefined
             };
-            const requires = specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
+            const requires = edge.requires ?? specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
             this.addEdge(
                 nodeId(edge.from.x, edge.from.z, edge.from.level),
                 nodeId(edge.to.x, edge.to.z, edge.to.level),
@@ -630,6 +632,11 @@ export class PathFinder {
                     continue;
                 }
                 if (edge.kind && !kindAllowedByPolicy(edge.kind as never, ctx.policy)) {
+                    continue;
+                }
+                // Requires-gated edges (skill/quest/state) need a WorldState snapshot.
+                // Classic walks omit state → skip these edges (safe default).
+                if (edge.requires && !ctx.state) {
                     continue;
                 }
                 if (ctx.state && edge.requires && !meetsRequires(edge.requires, ctx.state).ok) {

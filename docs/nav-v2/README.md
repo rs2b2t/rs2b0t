@@ -16,11 +16,15 @@ Built with the same love as the rest of rs2b0t: real client clicks, era-correct 
 
 ## Status
 
-**Phases 0–4 (partial).** Types, policy, Server tele catalog, PathFinder hops + state/tele
-filter, spell tele executor hop, pack tools. **End-user toggle:** Global settings →
-**World walker** = `Classic (stable)` (default) | `Nav v2 (experimental)`. Classic keeps
-pre–nav-v2 request shape; v2 enables tele edges, hop logs, and live state filters.
-WalkOptions may force `navEngine: 'v2' | 'classic'` per call.
+**Plan complete** for first ship. **End-user toggle:** Global settings → **World walker**
+= `Classic (stable)` (default) | `Nav v2 (experimental)`.
+
+| Nav v2 includes | Still deferred |
+|---|---|
+| Spell + jewellery teles in A\* + execute | Bank-for-runes multi-leg |
+| Hop explain logs | Full WalkExecutor class split |
+| Live WorldState skill/item filters | Multi-dest quest ladders |
+| Curated monastary 31 Prayer activation | Upstream live CI suite |
 
 ```bash
 # pack / unit (upstream-safe; no live engine required)

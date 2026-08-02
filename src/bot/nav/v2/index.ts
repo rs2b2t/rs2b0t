@@ -13,4 +13,6 @@ export * from './worldStateData.js';
 export * from './hops.js';
 export * from './plannedEdge.js';
 export * from './specialRequires.js';
-// worldStateLive imports client adapter — import from path directly when needed in browser
+export * from './stateAwareRequires.js';
+export * from './activateStateAware.js';
+// worldStateLive / teleportExecute import client adapter — use direct paths when needed

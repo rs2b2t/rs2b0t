@@ -25,6 +25,11 @@ export interface TeleportDestination {
      * Spells use requires.items (runes) instead.
      */
     itemNameMatch?: string[];
+    /**
+     * Chat option substrings to pick after Rub (jewellery). Empty/omit for
+     * single-dest items that only offer that destination + Nowhere.
+     */
+    dialogueChoose?: string[];
     /** Debug / regenerate */
     source: string;
     notes?: string;
@@ -103,7 +108,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             quests: [{ quest: 'Watchtower', minStatus: 'complete' }]
         },
         source: 'magic_spell_teleport_watchtower',
-        notes: 'Landing is level 2; bot Game.teleport does not expose this yet.'
+        notes: 'Landing is level 2; requires Watchtower complete + scroll. Cast via Game.teleport.'
     },
     {
         teleportId: 'trollheim',
@@ -117,7 +122,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             quests: [{ quest: "Eadgar's Ruse", minStatus: 'complete' }]
         },
         source: 'magic_spell_teleport_trollheim',
-        notes: 'bot Game.teleport does not expose this yet.'
+        notes: 'Requires Eadgar\'s Ruse complete. Cast via Game.teleport.'
     }
 ];
 
@@ -132,6 +137,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Ring of dueling → Al Kharid Duel Arena',
         to: { x: 3315, z: 3235, level: 0 },
         itemNameMatch: ['Ring of dueling'],
+        dialogueChoose: ['Al Kharid', 'Duel Arena'],
         source: 'ring_of_dueling.rs2',
         notes: 'Charges 8→1. Inventory Rub only. Wildy >20 blocked. No Castle Wars on this Server.'
     },
@@ -142,6 +148,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 2207, z: 4940, level: 0 },
         requires: { members: true },
         itemNameMatch: ['Games necklace'],
+        dialogueChoose: ['Burthorpe', 'Games Room'],
         source: 'necklace_of_minigames.rs2',
         notes: 'Charges 8→1. Inventory Rub only. Wildy >20. Burthorpe only on this Server.'
     },
@@ -151,6 +158,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Amulet of glory → Edgeville',
         to: { x: 3087, z: 3496, level: 0 },
         itemNameMatch: ['Amulet of glory('],
+        dialogueChoose: ['Edgeville'],
         source: 'amulet_of_glory.rs2 case 1',
         notes: 'Requires charged glory (1–4). Wildy >30 blocked. Inventory Rub only.'
     },
@@ -160,6 +168,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Amulet of glory → Karamja',
         to: { x: 2918, z: 3176, level: 0 },
         itemNameMatch: ['Amulet of glory('],
+        dialogueChoose: ['Karamja'],
         source: 'amulet_of_glory.rs2 case 2'
     },
     {
@@ -168,6 +177,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Amulet of glory → Draynor Village',
         to: { x: 3105, z: 3251, level: 0 },
         itemNameMatch: ['Amulet of glory('],
+        dialogueChoose: ['Draynor'],
         source: 'amulet_of_glory.rs2 case 3'
     },
     {
@@ -176,6 +186,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Amulet of glory → Al Kharid',
         to: { x: 3293, z: 3163, level: 0 },
         itemNameMatch: ['Amulet of glory('],
+        dialogueChoose: ['Al Kharid'],
         source: 'amulet_of_glory.rs2 case 4'
     }
 ];
@@ -204,6 +215,11 @@ export const ALL_TELEPORT_DESTINATIONS: readonly TeleportDestination[] = [
     ...JEWELLERY_TELEPORTS,
     ...LEVER_TELEPORTS
 ];
+
+/** Lookup by teleportId (spell or jewellery). */
+export function teleportById(id: string): TeleportDestination | undefined {
+    return ALL_TELEPORT_DESTINATIONS.find(d => d.teleportId === id);
+}
 
 /** Originless spell + jewellery rows as TransportEdges for future graph load. */
 export function teleportDestinationsToEdges(

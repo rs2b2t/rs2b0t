@@ -21,11 +21,11 @@ import type { TransportInfo, Waypoint } from './PathFinder.js';
 import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget, shouldApproachClosedBarrier, starvedTerminalIndex } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
-import { Game } from '../api/Game.js';
 import { snapshotWorldStateData } from './v2/worldStateLive.js';
 import type { PathPolicy } from './v2/types.js';
 import { formatHops } from './v2/hops.js';
 import { isNavV2, type NavEngineId } from './navEngine.js';
+import { executeTeleportHop } from './v2/teleportExecute.js';
 
 const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
@@ -630,49 +630,9 @@ class WalkExecutorImpl {
         return false;
     }
 
-    /**
-     * Spell teleport hop (jewellery Rub is Phase D follow-up when dialog matching is wired).
-     * Maps teleportId → Game.teleport destination name.
-     */
+    /** Spell cast or jewellery Rub (nav v2 only). */
     private async handleTeleportHop(transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
-        const id = transport.teleportId ?? '';
-        const spellNames: Record<string, string> = {
-            varrock: 'Varrock',
-            lumbridge: 'Lumbridge',
-            falador: 'Falador',
-            camelot: 'Camelot',
-            ardougne: 'Ardougne',
-            watchtower: 'Watchtower',
-            trollheim: 'Trollheim'
-        };
-        const destName = spellNames[id];
-        if (!destName) {
-            log(`teleport hop ${id || transport.locName}: jewellery/unknown not castable yet — repath`);
-            return false;
-        }
-        const before = reader.worldTile();
-        log(`casting ${destName} teleport…`);
-        if (!(await Game.teleport(destName))) {
-            log(`${destName} teleport cast failed`);
-            return false;
-        }
-        const landed = await Execution.delayUntil(() => {
-            const t = reader.worldTile();
-            if (!t || !before) {
-                return false;
-            }
-            if (transport.toTile) {
-                return Math.max(Math.abs(t.x - transport.toTile.x), Math.abs(t.z - transport.toTile.z)) <= 3;
-            }
-            return t.x !== before.x || t.z !== before.z || t.level !== before.level;
-        }, TRANSPORT_WAIT_MS);
-        if (landed) {
-            await Execution.delayTicks(2);
-            log(`${destName} teleport ok`);
-            return true;
-        }
-        log(`${destName} teleport did not land`);
-        return false;
+        return executeTeleportHop(transport, log);
     }
 
     private async crossMultiTileDoor(approach: PathStep, step: PathStep, transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {

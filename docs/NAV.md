@@ -10,10 +10,8 @@ The hard part is not the search. It is that the client can only express movement
 *clicks on tiles it can see*, while the destination is usually off-screen, behind a
 shut door, or on another level.
 
-> **Nav v2 (experimental)** — Shortest Path–class planning + web-walker extras
-> (spell teleports in routes, hop explain, plan-time skill/item filters). Toggle under
-> **Global settings → World walker** (`classic` default, or `v2`). Details:
-> [`docs/nav-v2/`](nav-v2/README.md). **This document is the classic (v1) behavior manual.**
+> **Nav v2 (experimental)** — see [Nav v2](#nav-v2-experimental) below and
+> [`docs/nav-v2/`](nav-v2/README.md). Default walker remains **classic**.
 
 ## Contents
 
@@ -23,6 +21,7 @@ shut door, or on another level.
 - [Corridor snap](#corridor-snap)
 - [Doors](#doors)
 - [Special crossings](#special-crossings)
+- [Nav v2 (experimental)](#nav-v2-experimental)
 - [Level-change loc lag](#level-change-loc-lag)
 - [Arrival](#arrival)
 - [The Reach primitive](#the-reach-primitive)
@@ -237,8 +236,29 @@ falls back to nearby-name lookup when ids are absent. Special crossings resolve 
 `specialCrossingForTransport` (exact loc tile, then approach stand).
 
 Ladders with a single tele still wrapped in quest/skill/inv guards stay in the JSON as
-`disabledReason` audit rows (not active graph edges).
+`disabledReason` audit rows (not active graph edges), unless a curated activation in
+`src/bot/nav/v2/stateAwareRequires.ts` re-enables them with `requires` (nav v2 only —
+classic skips requires-gated edges when no WorldState snapshot is sent).
 
+## Nav v2 (experimental)
+
+Toggle: **Global settings → World walker** → `Classic (stable)` (default) or
+`Nav v2 (experimental)`. URL: `?Global.navEngine=v2`. Per call:
+`WalkExecutor.walkTo(dest, { navEngine: 'v2' })`.
+
+| | Classic | Nav v2 |
+|---|---|---|
+| Path request | avoid-doors + expansions | + live WorldState + tele catalog edges |
+| Spell teles in route | no | yes (when runes/level/policy allow) |
+| Jewellery Rub (duel/games/glory) | no | yes (inventory Rub + dialog) |
+| Hop explain logs | no | yes |
+| Skill/item edge `requires` | skipped (no state) | filtered at plan time |
+| Trapdoor `openLocId`, ladder data | yes | yes |
+
+Spell landings and jewellery destinations are catalogued in
+[`src/bot/nav/v2/teleportCatalog.ts`](../src/bot/nav/v2/teleportCatalog.ts) from Server
+content (see [`docs/nav-v2/TELEPORTS.md`](nav-v2/TELEPORTS.md)). Design notes:
+[`docs/nav-v2/PLAN.md`](nav-v2/PLAN.md).
 
 ## Level-change loc lag
 
