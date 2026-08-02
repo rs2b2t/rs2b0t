@@ -250,7 +250,7 @@ describe('MultiBoxController tabs', () => {
         expect(c.focusedId).toBe(snap.id);
     });
 
-    test('switching to an empty tab blanks focus and backgrounds every bot', () => {
+    test('switching to an empty tab blanks focus and stops every bot drawing', () => {
         const ops = new FakeOps();
         const c = new MultiBoxController(ops);
         c.add();
@@ -258,7 +258,7 @@ describe('MultiBoxController tabs', () => {
         expect(c.setActiveTab('empty')).toBe(true);
         expect(c.setActiveTab('ghost')).toBe(false);
         expect(c.focusedId).toBeNull();
-        expect(ops.handles[0].mode).toBe('background');
+        expect(ops.handles[0].mode).toBe('hidden');
     });
 
     test('switching back to a populated tab focuses its first bot', () => {
@@ -368,6 +368,77 @@ describe('MultiBoxController tabs', () => {
         c.focus(hidden.id);
         expect(c.activeTab()).toBe('alts');
         expect(c.focusedId).toBe(hidden.id);
+    });
+
+    test('bots in a background tab stop drawing and resume on return', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.addTab('alts');
+        c.add();
+        c.add({ username: 'hidden1', password: '', tab: 'alts' });
+        // Main is active: its bot draws, the other tab's bot does not
+        expect(ops.handles.map(h => h.mode)).toEqual(['focused', 'hidden']);
+
+        c.setActiveTab('alts');
+        expect(ops.handles.map(h => h.mode)).toEqual(['hidden', 'focused']);
+
+        c.setActiveTab('Main');
+        expect(ops.handles.map(h => h.mode)).toEqual(['focused', 'hidden']);
+    });
+
+    test('a second bot in the active tab still renders in the background', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.add();
+        c.add();
+        c.addTab('alts');
+        c.add({ username: 'away', password: '', tab: 'alts' });
+        expect(ops.handles.map(h => h.mode)).toEqual(['background', 'focused', 'hidden']);
+    });
+
+    test('suspending a tab never touches the per-bot renderer switch', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.addTab('alts');
+        c.add();
+        c.add({ username: 'hidden1', password: '', tab: 'alts' });
+        ops.handles.forEach(h => h.calls.splice(0));
+
+        c.setActiveTab('alts');
+        c.setActiveTab('Main');
+
+        // only render-mode changes; the user's renderer toggle is left alone
+        for (const handle of ops.handles) {
+            expect(handle.calls.filter(call => call.startsWith('renderer:'))).toEqual([]);
+            expect(handle.calls.every(call => call.startsWith('mode:'))).toBe(true);
+        }
+    });
+
+    test('moving a bot into a background tab stops its drawing', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.addTab('alts');
+        const a = c.add()!;
+        const b = c.add()!;
+        expect(ops.handles[1].mode).toBe('focused');
+
+        c.setSlotTab(b.id, 'alts');
+        expect(ops.handles[1].mode).toBe('hidden');
+        expect(c.focusedId).toBe(a.id);
+    });
+
+    test('a deleted tab folds its bots back into a drawing tab', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.addTab('alts');
+        c.setActiveTab('alts');
+        c.add();
+        c.setActiveTab('Main');
+        expect(ops.handles[0].mode).toBe('hidden');
+
+        c.setActiveTab('alts');
+        c.removeTab('alts');
+        expect(ops.handles[0].mode).toBe('focused');
     });
 
     test('setTabState replaces tabs and active for vault hydration', () => {

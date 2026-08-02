@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **43 scripts** across 19 categories. They double as worked
+The client ships **44 scripts** across 19 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -20,7 +20,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
-- [Herblore](#herblore) — 1
+- [Herblore](#herblore) — 2
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 1
@@ -448,7 +448,7 @@ Tags: `gathering`, `drop`, `banking`, `cooking`
 | `burntPolicy` | string | `"Drop"` | Burnt fish — one of: Drop, Bank |
 | `bankRawBeforeCook` | number (1–) | `56` | Bank N raw before cook |
 | `afterCookCycle` | string | `"Stop"` | After cook cycle — one of: Stop, Continue |
-| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule |
+| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule, Cooker, Supplier |
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
@@ -488,6 +488,20 @@ Infinite Herblore grind at the fungus-covered cavern wall under the Karamja jung
 
 Tags: `herblore`, `karamja`, `members`, `afk`
 
+### VialFiller
+
+Falador vial-filling loop — banks empty vials, fills them one by one at the fountain, and can restock from Jatix in Taverley every Nth trip
+
+Tags: `falador`, `vials`, `water`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `bank` | string | `"Falador West"` | Which Falador bank — one of: Falador West, Falador East |
+| `buyVials` | boolean | `false` | Buy vials at Jatix? |
+| `buyEveryRuns` | number (1–50) | `5` | Shop run every N trips |
+| `buyQty` | number (1–28) | `27` | Empty vials to buy |
+| `coinsPerTrip` | number (1–100000) | `1000` | Coins to top up to |
+
 ## Mining
 
 ### CoalTrucks
@@ -505,6 +519,7 @@ Tags: `varrock`, `mining`, `banking`, `afk`
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `pickaxe` | string | `"Best available"` | Pickaxe — one of: Best available, Rune, Adamant, Mithril, Steel, Iron, Bronze |
+| `purgePackOnStart` | boolean | `true` | Bank junk on start |
 
 ### Miner
 
@@ -518,7 +533,7 @@ Tags: `gathering`, `banking`, `drop`
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
 | `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, Legends Guild Iron (west), Legends Guild Iron (east), None |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
-| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule |
+| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule, Cooker, Supplier |
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
@@ -774,7 +789,7 @@ Tags: `gathering`, `banking`, `drop`, `firemaking`
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
 | `burnMode` | string | `"Off"` | Burn mode — one of: Off, Chop then burn |
 | `fireSpot` | string | `"Auto"` | Fire spot — one of: Auto, Varrock East, Varrock West, Draynor, Seers |
-| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule |
+| `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule, Cooker, Supplier |
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |

@@ -76,6 +76,11 @@ session, and slot position, because reparenting an iframe reloads its client.
 Focus and Up/Down keyboard navigation stay within the active tab; an empty active
 tab leaves the main pane blank.
 
+A background tab's bots stop painting altogether — they run at render mode
+`hidden`, which gates the same draw call the renderer switch does. That switch is
+the user's and is never touched, so a bot whose renderer was already off stays
+off, and returning to the tab resumes exactly what was drawing before.
+
 The tab list, per-account membership, and the active tab persist in the encrypted
 vault payload alongside the profiles — account and tab names never hit disk in
 plaintext — so a reload plus "load all profiles" restores the whole wall. Deleting

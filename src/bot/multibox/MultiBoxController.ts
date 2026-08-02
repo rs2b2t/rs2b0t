@@ -267,7 +267,12 @@ export class MultiBoxController {
             this.focusedId = visible[0]?.id ?? null;
         }
         for (const s of this.slots) {
-            this.setMode(s, s.id === this.focusedId ? 'focused' : 'background');
+            // A background tab shows nothing, so its bots stop painting entirely.
+            // 'hidden' gates the same draw call the renderer switch does, but it
+            // is the wall's own state — the user's per-bot switch is untouched,
+            // so returning to the tab resumes exactly what was running before.
+            const mode: RenderMode = s.tab !== this.active ? 'hidden' : s.id === this.focusedId ? 'focused' : 'background';
+            this.setMode(s, mode);
         }
     }
 
