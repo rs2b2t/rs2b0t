@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
     buildScriptRoutes,
+    dedupeByCorridor,
     dedupePaths,
     difficultyScore,
+    pathCorridorSignature,
     rankHardest,
     sameDirectedPath,
     sourcePriority,
@@ -37,7 +39,7 @@ describe('buildScriptRoutes', () => {
     });
 });
 
-describe('dedupePaths', () => {
+describe('dedupePaths (endpoints only)', () => {
     const leg = (
         id: string,
         source: string,
@@ -58,6 +60,70 @@ describe('dedupePaths', () => {
         const fwd = leg('f', 'WALK_DESTINATIONS', { x: 0, z: 0, level: 0 }, { x: 50, z: 0, level: 0 });
         const rev = leg('r', 'WALK_DESTINATIONS', { x: 50, z: 0, level: 0 }, { x: 0, z: 0, level: 0 });
         expect(dedupePaths([fwd, rev], 3)).toHaveLength(2);
+    });
+});
+
+describe('pathCorridorSignature / dedupeByCorridor', () => {
+    test('same hop sequence + coarse walk cells share a signature', () => {
+        // Two starts a few tiles apart, same tele hop, same corridor north.
+        const hops = [
+            {
+                kind: 'teleport',
+                locName: 'Camelot teleport',
+                from: { x: 3200, z: 3200, level: 0 },
+                to: { x: 2757, z: 3478, level: 0 }
+            }
+        ];
+        const a = [
+            { x: 3200, z: 3200, level: 0 },
+            { x: 2757, z: 3478, level: 0 },
+            { x: 2757, z: 3490, level: 0 },
+            { x: 2757, z: 3600, level: 0 },
+            { x: 2700, z: 3700, level: 0 }
+        ];
+        const b = [
+            { x: 3205, z: 3202, level: 0 },
+            { x: 2757, z: 3478, level: 0 },
+            { x: 2758, z: 3492, level: 0 },
+            { x: 2756, z: 3605, level: 0 },
+            { x: 2702, z: 3701, level: 0 }
+        ];
+        const sa = pathCorridorSignature(a, hops, { grid: 16, sampleEvery: 1 });
+        const sb = pathCorridorSignature(b, hops, { grid: 16, sampleEvery: 1 });
+        expect(sa).toBe(sb);
+    });
+
+    test('different tele destinations get different signatures', () => {
+        const w = [{ x: 0, z: 0, level: 0 }, { x: 100, z: 100, level: 0 }];
+        const camelot = pathCorridorSignature(w, [
+            { kind: 'teleport', locName: 'Camelot teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 2757, z: 3478, level: 0 } }
+        ]);
+        const varrock = pathCorridorSignature(w, [
+            { kind: 'teleport', locName: 'Varrock teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 3213, z: 3424, level: 0 } }
+        ]);
+        expect(camelot).not.toBe(varrock);
+    });
+
+    test('dedupeByCorridor keeps one row per signature', () => {
+        const base = {
+            from: { x: 0, z: 0, level: 0 },
+            to: { x: 1, z: 0, level: 0 },
+            note: 'n',
+            corridor: 'walk#0:0:0;0:1:1',
+            cost: 10,
+            expanded: 1,
+            hops: 0,
+            cheb: 1,
+            ms: 1,
+            difficulty: 10
+        };
+        const rows = [
+            { ...base, id: 'low', source: 'NAV_TARGETS', difficulty: 10 },
+            { ...base, id: 'high', source: 'mainland-routes.json', difficulty: 5 }
+        ];
+        const out = dedupeByCorridor(rows);
+        expect(out).toHaveLength(1);
+        expect(out[0]!.id).toBe('high'); // mainland preferred
     });
 });
 

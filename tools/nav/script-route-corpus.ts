@@ -6,19 +6,21 @@
  *   - NAV_TARGETS             (per-script stands from coverage tooling)
  *   - tools/nav/mainland-routes.json  (curated F2P/mine legs)
  *
- * Paths are **deduped** before pack probes / JSON write: exact from→to once, plus
- * near-duplicate directed legs (endpoints within `--dedupe-radius`, default 3)
- * collapsed to the higher-priority source (mainland > walk hubs > banks > commute
- * > bot mesh). Reverse directions are kept separate.
+ * **Path dedupe (what matters for stress):**
+ *   1. Exact from→to once at build time.
+ *   2. Optional near-endpoint collapse (`--endpoint-radius`, default 3) for
+ *      obvious generator twins (BOT camp↔bank vs COMMUTE).
+ *   3. After pack A*, collapse routes whose **corridor signature** matches —
+ *      same transport/tele hop sequence + coarse walk cells. Two starts that
+ *      both walk (or tele-then-walk) the same corridor count as one path.
  *
- *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts
- *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --explain
+ * Generated JSON / hardest list are written **after** pack corridor dedupe.
+ *
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write
- *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write --dedupe-radius=4
- *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --dedupe-radius=0  # raw mesh
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --endpoint-radius=0 --corridor-grid=8
  *
  * Preload is required: BankLocations pulls a tiny bit of client surface (happy-dom).
- * Live walk of a sample remains operator-only — this tool is pack-only.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,6 +54,8 @@ export interface RankedScriptRoute extends ScriptRoute {
     ms: number;
     /** Higher = harder. Primary: path cost; tie-break: expansions, then hops. */
     difficulty: number;
+    /** Corridor fingerprint from pack A* (transport hops + coarse walk cells). */
+    corridor?: string;
 }
 
 export function difficultyScore(m: { cost: number; expanded: number; hops: number; cheb: number }): number {
@@ -95,9 +99,8 @@ export function sameDirectedPath(a: ScriptRoute, b: ScriptRoute, radius: number)
 }
 
 /**
- * Drop near-duplicate paths across sources. Exact from→to already unique at add;
- * this collapses e.g. "bot stand A→bank" vs "COMMUTE A→nearest bank" when tiles
- * are within a few steps of each other.
+ * Drop near-duplicate **endpoints** across sources (generator twins).
+ * Does not know the actual walk corridor — see `pathCorridorSignature`.
  */
 export function dedupePaths(routes: ScriptRoute[], radius = 3): ScriptRoute[] {
     const sorted = [...routes].sort((a, b) => {
@@ -117,9 +120,95 @@ export function dedupePaths(routes: ScriptRoute[], radius = 3): ScriptRoute[] {
     return kept;
 }
 
+export type PathHopLike = {
+    kind: string;
+    locName?: string;
+    action?: string;
+    from: NavPoint;
+    to: NavPoint;
+};
+
+export type WaypointLike = { x: number; z: number; level: number };
+
+/**
+ * Fingerprint of the *executed* pack path: transport/tele hops + walk cells on a
+ * coarse grid. Two different from/to that share "tele Camelot then run north
+ * coast" collide here even when endpoints are far apart.
+ *
+ * `grid` = world-tile cell size (16 ≈ map-square quarter). `sampleEvery` = take
+ * every Nth waypoint so pure-walk corridors stay stable.
+ */
+export function pathCorridorSignature(
+    waypoints: WaypointLike[],
+    hops: PathHopLike[],
+    opts?: { grid?: number; sampleEvery?: number }
+): string {
+    const grid = Math.max(1, opts?.grid ?? 16);
+    const sampleEvery = Math.max(1, opts?.sampleEvery ?? 12);
+
+    const hopKey =
+        hops.length === 0
+            ? 'walk'
+            : hops
+                .map(h => {
+                    if (h.kind === 'teleport') {
+                        return `T:${h.locName ?? h.action ?? 'tele'}:${h.to.level}`;
+                    }
+                    return `${h.kind}:${h.locName ?? '?'}:${h.from.level}>${h.to.level}`;
+                })
+                .join('|');
+
+    if (waypoints.length === 0) {
+        return `${hopKey}#`;
+    }
+
+    const cells: string[] = [];
+    const pushCell = (w: WaypointLike): void => {
+        const c = `${w.level}:${(w.x / grid) | 0}:${(w.z / grid) | 0}`;
+        if (cells[cells.length - 1] !== c) {
+            cells.push(c);
+        }
+    };
+    for (let i = 0; i < waypoints.length; i += sampleEvery) {
+        pushCell(waypoints[i]!);
+    }
+    pushCell(waypoints[waypoints.length - 1]!);
+    return `${hopKey}#${cells.join(';')}`;
+}
+
+/**
+ * Keep one ranked route per corridor signature. Prefer higher source priority,
+ * then higher difficulty (harder representative of that journey).
+ */
+export function dedupeByCorridor<T extends ScriptRoute & { corridor: string; difficulty: number }>(
+    rows: T[]
+): T[] {
+    const sorted = [...rows].sort((a, b) => {
+        const dp = sourcePriority(b.source) - sourcePriority(a.source);
+        if (dp !== 0) {
+            return dp;
+        }
+        if (b.difficulty !== a.difficulty) {
+            return b.difficulty - a.difficulty;
+        }
+        return a.id.localeCompare(b.id);
+    });
+    const seen = new Set<string>();
+    const kept: T[] = [];
+    for (const r of sorted) {
+        if (seen.has(r.corridor)) {
+            continue;
+        }
+        seen.add(r.corridor);
+        kept.push(r);
+    }
+    return kept;
+}
+
 /** Build the route list — pure, unit-testable. */
 export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadius?: number }): ScriptRoute[] {
     const maxBankPairs = opts?.maxBankPairs ?? 24;
+    /** Endpoint near-dedupe only; 0 = exact from→to only. Corridor dedupe is pack-time. */
     const pathDedupeRadius = opts?.pathDedupeRadius ?? 3;
     const routes: ScriptRoute[] = [];
     const seen = new Set<string>();
@@ -273,45 +362,33 @@ if (isMain) {
     const write = process.argv.includes('--write');
     const limitArg = process.argv.find(a => a.startsWith('--limit='));
     const hardestArg = process.argv.find(a => a.startsWith('--hardest='));
-    const dedupeArg = process.argv.find(a => a.startsWith('--dedupe-radius='));
+    // legacy alias
+    const dedupeArg =
+        process.argv.find(a => a.startsWith('--endpoint-radius='))
+        ?? process.argv.find(a => a.startsWith('--dedupe-radius='));
+    const gridArg = process.argv.find(a => a.startsWith('--corridor-grid='));
+    const sampleArg = process.argv.find(a => a.startsWith('--corridor-sample='));
     const limit = limitArg ? Number(limitArg.split('=')[1]) : Number(process.env.LIMIT || 0);
     const hardestN = hardestArg
         ? Number(hardestArg.split('=')[1])
         : Number(process.env.HARDEST || 0);
-    const pathDedupeRadius = dedupeArg
+    const endpointRadius = dedupeArg
         ? Number(dedupeArg.split('=')[1])
-        : Number(process.env.DEDUPE_RADIUS ?? 3);
+        : Number(process.env.ENDPOINT_RADIUS ?? process.env.DEDUPE_RADIUS ?? 3);
+    const corridorGrid = gridArg
+        ? Number(gridArg.split('=')[1])
+        : Number(process.env.CORRIDOR_GRID ?? 16);
+    const corridorSample = sampleArg
+        ? Number(sampleArg.split('=')[1])
+        : Number(process.env.CORRIDOR_SAMPLE ?? 12);
 
     const rawCount = buildScriptRoutes({ pathDedupeRadius: 0 }).length;
-    const allRoutes = buildScriptRoutes({ pathDedupeRadius });
-    const routes = limit > 0 ? allRoutes.slice(0, limit) : allRoutes;
-    const dropped = Math.max(0, rawCount - allRoutes.length);
+    const seedRoutes = buildScriptRoutes({ pathDedupeRadius: endpointRadius });
+    const routes = limit > 0 ? seedRoutes.slice(0, limit) : seedRoutes;
     console.log(
-        `paths: ${allRoutes.length} after dedupe (radius=${pathDedupeRadius})`
-        + (pathDedupeRadius > 0 ? `; dropped ${dropped} near-duplicates of ${rawCount} raw` : ' (dedupe off)')
+        `seeds: ${seedRoutes.length} after endpoint-radius=${endpointRadius}`
+        + ` (raw ${rawCount}); pack will corridor-dedupe (grid=${corridorGrid}, sample=${corridorSample})`
     );
-
-    if (write) {
-        const outPath = path.join(process.cwd(), 'tools/nav/script-routes.generated.json');
-        fs.writeFileSync(
-            outPath,
-            JSON.stringify(
-                {
-                    description:
-                        'Generated from BANK_LOCATIONS + WALK_DESTINATIONS + NAV_TARGETS + mainland-routes.json. '
-                        + 'Directed paths deduped (exact + near endpoints). Do not hand-edit — run script-route-corpus.ts --write.',
-                    generatedAt: new Date().toISOString(),
-                    pathDedupeRadius,
-                    rawCount,
-                    count: allRoutes.length,
-                    routes: allRoutes
-                },
-                null,
-                2
-            )
-        );
-        console.log(`wrote ${allRoutes.length} deduped paths → ${outPath}`);
-    }
 
     const packPath = 'out/collision.lcnav.gz';
     if (!fs.existsSync(packPath)) {
@@ -343,6 +420,10 @@ if (isMain) {
         }
         pass++;
         const chebDist = cheb(r.from, r.to);
+        const corridor = pathCorridorSignature(outcome.waypoints, outcome.hops, {
+            grid: corridorGrid,
+            sampleEvery: corridorSample
+        });
         const row: RankedScriptRoute = {
             ...r,
             cost: outcome.cost,
@@ -355,7 +436,8 @@ if (isMain) {
                 expanded: outcome.expanded,
                 hops: outcome.hops.length,
                 cheb: chebDist
-            })
+            }),
+            corridor
         };
         ranked.push(row);
         if (explain) {
@@ -368,16 +450,21 @@ if (isMain) {
         }
     }
 
+    // One representative per pack corridor (same journey, different seeds).
+    const unique = dedupeByCorridor(
+        ranked.map(r => ({ ...r, corridor: r.corridor ?? r.id }))
+    );
+    const corridorDropped = ranked.length - unique.length;
+
     const elapsed = performance.now() - t0;
     console.log(
-        `\nscript-route-corpus: ${pass} pass, ${fail} fail, ${routes.length} run / ${allRoutes.length} paths`
-        + ` (dedupe r=${pathDedupeRadius}), ${elapsed.toFixed(0)}ms`
+        `\nscript-route-corpus: ${pass} pass, ${fail} fail, ${routes.length} seeds probed, `
+        + `${unique.length} unique corridors (−${corridorDropped}), ${elapsed.toFixed(0)}ms`
     );
 
     const nHard = hardestN > 0 ? hardestN : 25;
-    // Ranked rows already come from the deduped path list (same CLI build).
-    const hardest = rankHardest(ranked, nHard);
-    console.log(`\nhardest ${hardest.length} (by pack cost / expansions, no teles):`);
+    const hardest = rankHardest(unique, nHard);
+    console.log(`\nhardest ${hardest.length} unique corridors (pack cost / expansions, no teles):`);
     for (let i = 0; i < hardest.length; i++) {
         const h = hardest[i]!;
         console.log(
@@ -385,28 +472,60 @@ if (isMain) {
         );
     }
 
-    const hardPath = path.join(process.cwd(), 'tools/nav/script-routes.hardest.json');
-    // Always refresh precalc when a full (or limit) pack run completes — used by live HARD=1.
-    if (hardestN > 0 || !limit) {
-        fs.writeFileSync(
-            hardPath,
-            JSON.stringify(
-                {
-                    description:
-                        'Precalc: hardest pack paths (useTeleports:false), from the deduped path corpus. '
-                        + 'Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
-                    generatedAt: new Date().toISOString(),
-                    metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
-                    pathDedupeRadius,
-                    teleports: false,
-                    count: hardest.length,
-                    routes: hardest
-                },
-                null,
-                2
-            )
-        );
-        console.log(`\nwrote ${hardest.length} hardest paths → ${hardPath}`);
+    // JSON is always the corridor-unique set (what live HARD=1 and audits should use).
+    if (write || hardestN > 0 || !limit) {
+        const outPath = path.join(process.cwd(), 'tools/nav/script-routes.generated.json');
+        const hardPath = path.join(process.cwd(), 'tools/nav/script-routes.hardest.json');
+        const meta = {
+            generatedAt: new Date().toISOString(),
+            endpointRadius,
+            corridorGrid,
+            corridorSample,
+            teleports: false as const,
+            seedCount: routes.length,
+            passCount: ranked.length,
+            uniqueCorridors: unique.length
+        };
+        if (write || !limit) {
+            const jsonRoutes = unique.map(({ corridor: _c, ...rest }) => rest);
+            fs.writeFileSync(
+                outPath,
+                JSON.stringify(
+                    {
+                        description:
+                            'Pack-probed paths from BANK/WALK/NAV/mainland sources. '
+                            + 'Deduped by corridor signature (hops + coarse walk cells), not just endpoints. '
+                            + 'Do not hand-edit — run script-route-corpus.ts --write.',
+                        ...meta,
+                        count: jsonRoutes.length,
+                        routes: jsonRoutes
+                    },
+                    null,
+                    2
+                )
+            );
+            console.log(`\nwrote ${jsonRoutes.length} unique-corridor paths → ${outPath}`);
+        }
+        if (hardestN > 0 || !limit) {
+            const hardRoutes = hardest.map(({ corridor: _c, ...rest }) => rest);
+            fs.writeFileSync(
+                hardPath,
+                JSON.stringify(
+                    {
+                        description:
+                            'Hardest unique corridors (useTeleports:false). From corridor-deduped pack corpus. '
+                            + 'Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
+                        metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
+                        ...meta,
+                        count: hardRoutes.length,
+                        routes: hardRoutes
+                    },
+                    null,
+                    2
+                )
+            );
+            console.log(`wrote ${hardRoutes.length} hardest paths → ${hardPath}`);
+        }
     }
 
     process.exit(fail === 0 ? 0 : 1);
