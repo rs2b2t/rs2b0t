@@ -51,6 +51,7 @@ import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
+import CoalTrucks from './CoalTrucks.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter.js';
@@ -104,9 +105,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ChaosDruidKiller',
-    description: 'Kills Chaos druids in the Edgeville dungeon, loots herbs/law runes, banks them',
+    description: 'Kills Chaos druids — Edgeville dungeon, the picklocked Chaos Druid Tower (46 Thieving), or Yanille dungeon Chaos druid warriors past the 40 Agility ledge — loots Herb/Law/Nature rune drops, banks them',
     category: 'Combat',
-    tags: ['wilderness', 'edgeville', 'herbs', 'banking'],
+    tags: ['wilderness', 'edgeville', 'ardougne', 'yanille', 'herbs', 'banking'],
     settingsSchema: CHAOSDRUID_SETTINGS,
     create: () => new ChaosDruidKiller()
 });
@@ -234,6 +235,8 @@ ScriptRegistry.register({
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
         },
+        muleMode: GATHERING_SETTINGS.muleMode,
+        mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
     },
@@ -242,11 +245,19 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'EssMiner',
-    description: 'Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries + a usable pickaxe (picks your best by default)',
+    description: 'Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries; uses your best pickaxe and buys the exact best usable tier from Nurmof when banked coins cover it',
     category: 'Mining',
     tags: ['varrock', 'mining', 'banking', 'afk'],
     settingsSchema: ESSMINER_SETTINGS,
     create: () => new EssMiner()
+});
+
+ScriptRegistry.register({
+    name: 'CoalTrucks',
+    description: 'Mines coal at the Coal Trucks, buffers 120 in the trucks, then drains them into the Seers bank — needs Mining 30 and a pickaxe. No combat handling: the level-27 giant bats are aggressive below 55 combat.',
+    category: 'Mining',
+    tags: ['mining', 'coal', 'seers', 'banking'],
+    create: () => new CoalTrucks()
 });
 
 ScriptRegistry.register({
@@ -382,6 +393,8 @@ ScriptRegistry.register({
             help:
                 'Shown only for Bank raw then cook. Stop = end the script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N.'
         },
+        muleMode: GATHERING_SETTINGS.muleMode,
+        mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
     },
@@ -515,7 +528,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'ShopRunner',
-    description: 'World shop-run supply loop — cycles shop clusters buying feathers, runes, and arrows/arrowtips, banking between clusters with capped gp withdrawals; skips shops until stock regenerates',
+    description: 'World shop-run supply loop — cycles shop clusters buying Herblore supplies, feathers, runes, and arrows/arrowtips, banking between clusters with capped gp withdrawals; skips shops until stock regenerates',
     category: 'Money making',
     tags: ['shopping', 'banking', 'worldwalker'],
     settingsSchema: SHOPRUNNER_SETTINGS,

@@ -21,7 +21,11 @@ test('every bank centre is a plausible world tile', () => {
 
 test('Grand Tree bank is 1F at booths (no quest gate)', () => {
     const gt = BANK_LOCATIONS.find(b => b.name === 'Grand Tree');
-    expect(gt?.tile).toEqual({ x: 2449, z: 3482, level: 1 });
+    // Field-wise, like the Yanille case below: a Tile carries methods an object literal
+    // does not, so toEqual against a bare literal does not typecheck.
+    expect(gt?.tile.x).toBe(2449);
+    expect(gt?.tile.z).toBe(3482);
+    expect(gt?.tile.level).toBe(1);
     expect(gt?.requires).toBeUndefined();
 });
 

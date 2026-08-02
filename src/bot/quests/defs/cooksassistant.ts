@@ -1,4 +1,5 @@
 import { Execution } from '../../api/Execution.js';
+import { GameMessages } from '../../events/gameMessages.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Traversal } from '../../api/Traversal.js';
@@ -16,35 +17,100 @@ const POT_SPAWN = new Tile(3208, 3213, 0);
 const MILL_TOP = new Tile(3166, 3306, 2);
 const MILL_BASE = new Tile(3166, 3306, 0);
 
+const GRAIN_LOADED = /you put the grain in the hopper|there is already grain in the hopper/i;
+const GRAIN_GROUND = /the grain slides down the chute/i;
+const HOPPER_EMPTY = /you operate the empty hopper/i;
+const BIN_ALREADY_FULL = /flour bin downstairs is full, i should empty/i;
+
+/** Locs read blank for about a tick after a level change. */
+function sceneHas(name: string): Promise<boolean> {
+    return Execution.delayUntil(() => Locs.query().name(name).within(8).exists(), 6000);
+}
+
+async function fillHopper(log: (m: string) => void): Promise<boolean> {
+    const grain = Inventory.first('Grain');
+    if (!grain) {
+        return true;
+    }
+    const hopper = Locs.query().name('Hopper').within(8).nearest();
+    if (!hopper) {
+        log('no Hopper on the mill top floor');
+        return false;
+    }
+    const mark = GameMessages.mark();
+    log('putting the grain in the hopper');
+    if (!(await grain.useOn(hopper))) {
+        return false;
+    }
+    // The grain leaves the pack before the server walks us to the hopper, so
+    // only the closing message means the fill is really done. Acting on the
+    // pack instead sends the next op mid-walk and it is dropped.
+    return Execution.delayUntil(() => GameMessages.sawSince(mark, GRAIN_LOADED), 20_000);
+}
+
+type Grind = 'ground' | 'binFull' | 'failed';
+
+async function grindHopper(log: (m: string) => void): Promise<Grind> {
+    const controls = Locs.query().name('Hopper controls').action('Operate').within(8).nearest();
+    if (!controls) {
+        log('no Hopper controls on the top floor');
+        return 'failed';
+    }
+    const mark = GameMessages.mark();
+    log('operating the hopper controls to grind the flour');
+    if (!(await controls.interact('Operate'))) {
+        return 'failed';
+    }
+    const settled = await Execution.delayUntil(
+        () =>
+            GameMessages.sawSince(mark, GRAIN_GROUND) ||
+            GameMessages.sawSince(mark, BIN_ALREADY_FULL) ||
+            GameMessages.sawSince(mark, HOPPER_EMPTY),
+        20_000
+    );
+    if (!settled) {
+        log('the hopper controls never answered');
+        return 'failed';
+    }
+    if (GameMessages.sawSince(mark, GRAIN_GROUND)) {
+        return 'ground';
+    }
+    if (GameMessages.sawSince(mark, BIN_ALREADY_FULL)) {
+        log('the flour bin is already full downstairs');
+        return 'binFull';
+    }
+    log('the hopper was still empty when the controls were pulled');
+    return 'failed';
+}
+
 async function millFlour(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(MILL_TOP, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    const grain = Inventory.first('Grain');
-    const hopper = Locs.query().name('Hopper').within(4).nearest();
-    if (grain && hopper) {
-        log('putting the grain in the hopper');
-        await grain.useOn(hopper);
-        await Execution.delayTicks(2);
-    }
-    const controls = Locs.query().name('Hopper controls').action('Operate').within(4).nearest();
-    if (!controls) {
-        log('no Hopper controls on the top floor');
+    if (!(await sceneHas('Hopper controls'))) {
+        log('the mill top floor has not loaded');
         return false;
     }
-    log('operating the hopper controls to grind the flour');
-    await controls.interact('Operate');
-    await Execution.delayTicks(2);
+    if (!(await fillHopper(log))) {
+        return false;
+    }
+    if ((await grindHopper(log)) === 'failed') {
+        return false;
+    }
     log('heading down to the flour bin');
     if (!(await Traversal.walkResilient(MILL_BASE, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    const bin = Locs.query().name('Flour bin').within(4).nearest();
+    if (!(await sceneHas('Flour bin'))) {
+        log('the mill ground floor has not loaded');
+        return false;
+    }
+    const bin = Locs.query().name('Flour bin').action('Empty').within(8).nearest();
     if (!bin || !(await bin.interact('Empty'))) {
         return false;
     }
     log('emptying the flour bin into the pot');
-    return Execution.delayUntil(() => Inventory.contains('Pot of flour'), 8000);
+    return Execution.delayUntil(() => Inventory.contains('Pot of flour'), 15_000);
 }
 
 export function gatherFlour(snap: QuestSnapshot): QuestStep {

@@ -21,8 +21,9 @@ import { vampireslayer } from './vampireslayer.js';
 import { watchtower } from './watchtower/index.js';
 import { junglepotion } from './junglepotion.js';
 import { shilo } from './shilo/index.js';
+import { elementalworkshop } from './elementalworkshop/index.js';
 
-export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, hetty, romeojuliet, princeali, waterfall, goblindiplomacy, demonslayer, witchshouse, merlinscrystal, priestperil, blackknight, druidicritual, lostcity, touristtrap, watchtower, vampireslayer, junglepotion, shilo];
+export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, sheepshearer, restlessghost, cooksassistant, hetty, romeojuliet, princeali, waterfall, goblindiplomacy, demonslayer, witchshouse, merlinscrystal, priestperil, blackknight, druidicritual, lostcity, touristtrap, watchtower, vampireslayer, junglepotion, shilo, elementalworkshop];
 
 export function defById(id: string): QuestModule | undefined {
     return QUEST_DEFS.find(d => d.record.id === id);

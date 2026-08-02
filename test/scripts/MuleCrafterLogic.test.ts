@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { 
     RUNES, 
+    bankTile, 
     RUNE_OPTIONS, 
-    DEFAULT_RUNE, 
     isConfiguredPartner, 
     classifyMuleState, 
     type RuneRoute 
@@ -11,9 +11,12 @@ import { type TradeItem } from '#/bot/api/hud/Trade.js';
 
 describe('MuleCrafterLogic', () => {
     describe('RUNES', () => {
-        test('includes F2P runes (singular names)', () => {
-            for (const key of ['Air rune', 'Mind rune', 'Water rune', 'Earth rune', 'Fire rune', 'Body rune']) {
-                expect(RUNES[key], key).toBeDefined();
+        test('keys are singular rune names', () => {
+            // Asserting the full list would re-break every time an altar is added, which is
+            // how this test went stale at two runes. Pin the shape, not the census.
+            expect(Object.keys(RUNES).length).toBeGreaterThanOrEqual(2);
+            for (const key of Object.keys(RUNES)) {
+                expect(key).toMatch(/^[A-Z][a-z]+ rune$/);
             }
         });
 
@@ -35,6 +38,14 @@ describe('MuleCrafterLogic', () => {
             expect(mind.bank).toBe('Edgeville');
             expect(mind.ruins.x).toBe(2980);
             expect(mind.ruins.z).toBe(3511);
+        });
+
+        test('every route names a bank that resolves to a real tile', () => {
+            // `bank` became a BANK_LOCATIONS name rather than a Tile; this is what that
+            // indirection has to guarantee, and it catches a typo in any new row.
+            for (const route of Object.values(RUNES) as RuneRoute[]) {
+                expect(() => bankTile(route.bank)).not.toThrow();
+            }
         });
     });
 

@@ -729,7 +729,7 @@ export class Client extends GameShell {
                     error = 'checksum problem';
                     this.jagChecksum[8] = 0;
                 }
-            } catch (err) {
+            } catch (_err) {
                 error = 'connection problem';
                 this.jagChecksum[8] = 0;
             }
@@ -2180,6 +2180,7 @@ export class Client extends GameShell {
         }
 
         for (let i: number = 0; i < 5 && (await this.tcpIn()); i++) {
+            // tcpIn() is the body: drain up to five inbound packets per frame.
         }
 
         const now = performance.now();
@@ -6844,7 +6845,7 @@ export class Client extends GameShell {
 
                 if (this.lastAddress !== 0 && this.mainModalId === -1) {
                     this.dnsReq = null;
-                    let ipStr = JString.formatIPv4(this.lastAddress);
+                    const ipStr = JString.formatIPv4(this.lastAddress);
                     if (!ipStr.startsWith('127.')) {
                         reverseDnsLookup(ipStr).then(results => {
                             this.dnsReq = results[0];
@@ -8135,7 +8136,7 @@ export class Client extends GameShell {
         }
     }
 
-    private getNpcPosOldVis(buf: Packet, size: number): void {
+    private getNpcPosOldVis(buf: Packet, _size: number): void {
         buf.gBitStart();
 
         const count: number = buf.gBit(8);
@@ -10963,7 +10964,7 @@ export class Client extends GameShell {
 
                 com.text = `You last logged in ${text}`;
 
-                let ipStr = JString.formatIPv4(this.lastAddress);
+                const ipStr = JString.formatIPv4(this.lastAddress);
                 if (!ipStr.startsWith('127.')) {
                     com.text += ` from: ${this.dnsReq ?? ipStr}`;
                 }
@@ -11735,7 +11736,7 @@ export class Client extends GameShell {
         }
     }
 
-    override mouseUp(x: number, y: number, e: MouseEvent) {
+    override mouseUp(x: number, y: number, _e: MouseEvent) {
         this.idleTimer = performance.now();
         this.mouseButton = 0;
 
@@ -11855,6 +11856,7 @@ export class Client extends GameShell {
             this.ny = e.screenY | 0;
 
             if (this.dragging) {
+                // Dragging owns the pointer — no keyboard or pan handling while it does.
             } else if (MobileKeyboard.isWithinCanvasKeyboard(x, y) && this.exceedsGrabThreshold(20)) {
                 MobileKeyboard.notifyTouchMove(x, y);
             } else if (this.startedInGame && !this.isGameObscured() && this.exceedsGrabThreshold(20)) {

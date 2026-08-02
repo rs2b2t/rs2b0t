@@ -13,6 +13,7 @@ export interface TransportInfo {
     locId?: number;
     toLevel?: number;
     toTile?: { x: number; z: number };
+    acceptAnyLanding?: boolean;
 }
 
 export interface Waypoint extends NavPoint {
@@ -251,7 +252,8 @@ export class PathFinder {
                 locX: hasMidpointDoor ? edge.from.x + dx / 2 : edge.from.x,
                 locZ: hasMidpointDoor ? edge.from.z + dz / 2 : edge.from.z,
                 toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
-                toTile: edge.kind === 'dungeon' ? { x: edge.to.x, z: edge.to.z } : undefined
+                toTile: edge.kind === 'dungeon' || edge.kind === 'portal' ? { x: edge.to.x, z: edge.to.z } : undefined,
+                acceptAnyLanding: edge.kind === 'portal' ? true : undefined
             };
             this.addEdge(nodeId(edge.from.x, edge.from.z, edge.from.level), nodeId(edge.to.x, edge.to.z, edge.to.level), TRANSPORT_COST, transport);
             this.transportEdges++;

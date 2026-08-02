@@ -10,7 +10,7 @@ const FOOD_FORMS: Record<string, string[]> = {
     'plain pizza': ['plain pizza', '1/2 plain pizza'],
     'meat pizza': ['meat pizza', '1/2 meat pizza'],
     'anchovy pizza': ['anchovy pizza', '1/2 anchovy pizza'],
-    'pineapple pizza': ['pineapple pizza', '1/2 pineapple pizza'],
+    'pineapple pizza': ['pineapple pizza', '1/2pineapple pizza'],
     'redberry pie': ['redberry pie', 'half a redberry pie'],
     'meat pie': ['meat pie', 'half a meat pie'],
     'apple pie': ['apple pie', 'half an apple pie']

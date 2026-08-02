@@ -18,7 +18,7 @@ import { buyoutPlan } from '../shops/BuyoutLogic.js';
 import { clusterEligible, estimateClusterGp, nextCluster, withdrawFor } from '../shops/RingLogic.js';
 import { SHOP_DB } from '../shops/data/shopdb.js';
 import { ROUTE, SMOKE_ROUTE } from '../shops/data/route.js';
-import type { AccountView, NavPointLike, Route, RouteCluster } from '../shops/types.js';
+import type { AccountView, NavPointLike, Route } from '../shops/types.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const BUYABLE_NAMES: string[] = [...new Set(
@@ -52,6 +52,7 @@ export class ShopRunner extends TaskBot {
     toggles: Record<string, boolean> = {};
 
     lastClusterId: string | null = null;
+    repeatClusterId: string | null = null;
     cooldowns: Record<string, number> = {};
     openFails: Record<string, number> = {};
 
@@ -180,7 +181,9 @@ class RunCluster implements Task {
 
     async execute(): Promise<void> {
         const bot = this.bot;
-        const cluster = nextCluster(bot.route, bot.lastClusterId, bot.accountView(), bot.toggles);
+        const cluster = bot.repeatClusterId === null
+            ? nextCluster(bot.route, bot.lastClusterId, bot.accountView(), bot.toggles)
+            : bot.route.clusters.find(candidate => candidate.id === bot.repeatClusterId) ?? null;
         if (!cluster) {
             bot.log('[shoprun] no eligible cluster on the ring — stopping');
             ScriptRunner.stop();
@@ -243,6 +246,7 @@ class RunCluster implements Task {
             }
         }
         const now = Date.now();
+        let repeatWhileFull = false;
         for (const shop of cluster.shops) {
             if (EventSignal.pending()) {
                 return;
@@ -294,8 +298,19 @@ class RunCluster implements Task {
                     bot.log(`[shoprun] buy shop=${shop.shopId} item=${want2.obj} n=${bought} spent=${spent}`);
                 }
             }
+            repeatWhileFull ||= cluster.repeatWhileFull === true && Inventory.isFull() && Shop.stock().some(row => {
+                const item = rec.items.find(candidate => candidate.name.toLowerCase() === row.name.toLowerCase());
+                return row.count > 0 && item !== undefined && routeObjs.has(item.obj) && bot.chosen.has(item.name.toLowerCase());
+            });
             await Shop.close();
         }
+
+        if (repeatWhileFull) {
+            bot.repeatClusterId = cluster.id;
+            bot.log(`[shoprun] ${cluster.id}: backpack full with selected stock remaining — banking and returning`);
+            return;
+        }
+        bot.repeatClusterId = null;
 
         if (cluster.haulBank) {
             bot.status = `banking the haul with ${cluster.haulBank.banker}`;

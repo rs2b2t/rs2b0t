@@ -1,7 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 
 import { beyondLeash, createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash, type AnchorHost, type ReturnToAnchorOptions } from '#/bot/api/Anchor.js';
+import { Game } from '#/bot/api/Game.js';
 import Tile from '#/bot/api/Tile.js';
+
+/**
+ * Run `body` with no player position. Asserting on "there is no live tile" has to
+ * establish it: another test file mocking Game leaves a tile behind, and this assertion
+ * silently inverted whenever that file ran first.
+ */
+function withNoPlayerTile(body: () => void): void {
+    const realTile = Game.tile;
+    (Game as unknown as { tile: () => Tile | null }).tile = () => null;
+    try {
+        body();
+    } finally {
+        (Game as unknown as { tile: unknown }).tile = realTile;
+    }
+}
 
 function host(ax: number, az: number, leash: number): AnchorHost {
     const anchor = new Tile(ax, az, 0);
@@ -58,6 +74,8 @@ describe('Anchor helpers', () => {
         expect(typeof task.validate).toBe('function');
         expect(typeof task.execute).toBe('function');
         // Without a live Game.tile(), beyondLeash is false — task stays idle.
-        expect(task.validate()).toBe(false);
+        withNoPlayerTile(() => {
+            expect(task.validate()).toBe(false);
+        });
     });
 });

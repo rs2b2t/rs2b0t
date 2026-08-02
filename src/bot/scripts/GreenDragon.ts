@@ -25,7 +25,6 @@ import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Players } from '../api/queries/Players.js';
 import { Traversal } from '../api/Traversal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { actions } from '../adapter/ClientAdapter.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 const TARGET = 'Green dragon';
@@ -37,8 +36,6 @@ const THREAT_RADIUS = 6;
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 
-const MAGIC_TAB = 6;
-const VARROCK_TELE_COM = 1164;
 const TELE_SAFE_Z = 3665;
 const VARROCK_TELE_RUNES: { rune: string; count: number }[] = [
     { rune: 'Law rune', count: 1 }, { rune: 'Air rune', count: 3 }, { rune: 'Fire rune', count: 1 }
@@ -164,10 +161,9 @@ async function lootOnce(bot: GreenDragon): Promise<boolean> {
 
 async function castVarrockTele(_bot: GreenDragon): Promise<boolean> {
     const before = Game.tile();
-    if (!(await Game.openSideTab(MAGIC_TAB))) {
+    if (!(await Game.teleport('Varrock'))) {
         return false;
     }
-    actions.ifButton(VARROCK_TELE_COM);
     return Execution.delayUntil(() => {
         const t = Game.tile();
         return t !== null && before !== null && Tile.from(t).distanceTo(Tile.from(before)) > 40;

@@ -59,6 +59,7 @@ export class ScriptContext {
             try {
                 listener();
             } catch {
+                // A broken log listener must not take down the script it is watching.
             }
         }
     }

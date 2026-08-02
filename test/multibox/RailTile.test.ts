@@ -8,6 +8,7 @@ function slot(ingame: boolean, scriptState: string): SlotSnapshot {
         username: 'profile name',
         focused: true,
         mode: 'focused',
+        tab: 'Main',
         ready: true,
         ingame,
         player: 'Player Name',

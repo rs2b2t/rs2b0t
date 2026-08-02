@@ -80,7 +80,7 @@ function bwtReverse(src, primary) {
     }
     const links = [];
     for (let i = 0; i < src.length; i += 1) {
-        links.push(start[unsorted[i]]++); // eslint-disable-line no-plusplus
+        links.push(start[unsorted[i]]++);  
     }
     let i;
     const first = src[(i = primary)];
@@ -160,7 +160,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                     for (let j = 0; j < 16; j += 1) {
                         used.push(false);
                     }
-                    continue; // eslint-disable-line no-continue
+                    continue;  
                 }
                 const usedChars = read(16);
                 for (let j = 1 << 15; j > 0; j >>= 1) {
@@ -184,7 +184,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                 }
                 const v = mtf[c];
                 for (let j = c; j > 0; mtf[j] = mtf[--j]) {
-                    // eslint-disable-line no-plusplus
+                     
                     // nothing
                 }
                 selectors.push(v);
@@ -230,7 +230,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                 }
                 for (const b in t.fastAccess) {
                     if (!Object.prototype.hasOwnProperty.call(t.fastAccess, b)) {
-                        continue; // eslint-disable-line no-continue
+                        continue;  
                     }
                     if (bits < b) {
                         bitfield = (bitfield << 8) + bytes[index];
@@ -250,7 +250,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                     }
                     repeat += repeatPower << r;
                     repeatPower <<= 1;
-                    continue; // eslint-disable-line no-continue
+                    continue;  
                 } else {
                     const v = favourites[0];
                     for (; repeat > 0; repeat -= 1) {
@@ -261,7 +261,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                     break;
                 } else {
                     const v = favourites[r - 1];
-                    // eslint-disable-next-line no-plusplus
+                     
                     for (let j = r - 1; j > 0; favourites[j] = favourites[--j]) {
                         // nothing
                     }

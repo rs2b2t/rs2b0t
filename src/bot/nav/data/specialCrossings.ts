@@ -7,6 +7,7 @@ export interface SpecialCrossing {
     action: string;
     useItem?: { id: number; name: string };
     requires?: { item: string; count: number };
+    requiresSkill?: { name: string; level: number };
     dialogue?: { choose: string[] };
     npc?: string;
     toTile?: { x: number; z: number; level: number };
@@ -26,7 +27,10 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 2683, z: 3272, level: 1, npc: 'Captain Barnaby', locName: 'Captain Barnaby', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2775, z: 3234, level: 1 }, label: 'Ardougne->Brimhaven ship' },
     { x: 2772, z: 3234, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 2683, z: 3268, level: 1 }, label: 'Brimhaven->Ardougne ship' },
 
-    { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' }
+    { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
+
+    { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
+    { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' }
 ];
 
 export function specialCrossingAt(x: number, z: number, level: number): SpecialCrossing | null {
@@ -40,6 +44,10 @@ export function pickChoice(options: string[], choose: string[]): string | null {
 
 export function meetsRequirement(have: number, requires?: { item: string; count: number }): boolean {
     return !requires || have >= requires.count;
+}
+
+export function meetsSkill(level: number, requiresSkill?: SpecialCrossing['requiresSkill']): boolean {
+    return !requiresSkill || level >= requiresSkill.level;
 }
 
 export function matchesUseItem(item: { id: number }, useItem: NonNullable<SpecialCrossing['useItem']>): boolean {

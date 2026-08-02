@@ -26,7 +26,7 @@ import { Traversal } from '../api/Traversal.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { actions, reader } from '../adapter/ClientAdapter.js';
+import { reader } from '../adapter/ClientAdapter.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Locs } from '../api/queries/Locs.js';
 import {
@@ -462,8 +462,6 @@ class ArmAutocast implements Task {
     }
 }
 
-const MAGIC_TAB = 6;
-
 function hasEscapeRunes(): boolean {
     return USE_BARREL || TELE.runes.every(r => Inventory.count(r.rune) >= r.count);
 }
@@ -478,10 +476,9 @@ async function castEscape(bot: FireGiant): Promise<boolean> {
         return false;
     }
     bot.setStatus(`teleporting to ${TELE.name}`);
-    if (!(await Game.openSideTab(MAGIC_TAB))) {
+    if (!(await Game.teleport(TELE.name))) {
         return false;
     }
-    actions.ifButton(TELE.com);
     return Execution.delayUntil(() => !inDungeon(), 8000);
 }
 

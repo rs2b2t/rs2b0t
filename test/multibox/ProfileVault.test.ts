@@ -33,7 +33,7 @@ describe('ProfileVault', () => {
         const v2 = new ProfileVault();
         expect(v2.status()).toBe('locked');
         expect(await v2.unlock('pw')).toBe(true);
-        expect(v2.list()).toEqual([{ username: 'alice', password: 'hunter2' }]);
+        expect(v2.list()).toEqual([{ username: 'alice', password: 'hunter2', tab: 'Main' }]);
     });
 
     test('stored blob never contains plaintext', async () => {
@@ -101,7 +101,7 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         expect(v.status()).toBe('plaintext-legacy');
         await v.setup('pw');
-        expect(v.list()).toEqual([{ username: 'old', password: 'p' }]);
+        expect(v.list()).toEqual([{ username: 'old', password: 'p', tab: 'Main' }]);
         expect(localStorage.getItem(KEY)!).not.toContain('old');
     });
 
@@ -110,7 +110,7 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         expect(v.status()).toBe('plaintext-legacy');
         await v.setup('pw');
-        expect(v.list()).toEqual([{ username: 'old', password: 'p' }]);
+        expect(v.list()).toEqual([{ username: 'old', password: 'p', tab: 'Main' }]);
         expect(localStorage.getItem(LEGACY_KEY)).toBeNull();
     });
 
@@ -149,5 +149,104 @@ describe('ProfileVault', () => {
         await v.upsert({ username: 'b', password: '2' });
         const iv2 = (JSON.parse(localStorage.getItem(KEY)!) as { iv: string }).iv;
         expect(iv1).not.toBe(iv2);
+    });
+});
+
+// Encrypt an arbitrary payload exactly as ProfileVault does, so migration and
+// corruption paths can be exercised against blobs the current code never writes.
+async function writeBlob(pass: string, payload: unknown): Promise<void> {
+    const enc = new TextEncoder();
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const material = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(payload))));
+    const b64 = (bytes: Uint8Array) => btoa(Array.from(bytes, b => String.fromCharCode(b)).join(''));
+    localStorage.setItem(KEY, JSON.stringify({ v: 1, kdf: 'PBKDF2-SHA256', iter: 310000, salt: b64(salt), iv: b64(iv), ct: b64(ct) }));
+}
+
+describe('ProfileVault tabs', () => {
+    test('tab state round-trips through a real lock/unlock cycle', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await v.upsert({ username: 'bob', password: 'b' });
+        await v.saveTabState(['miners', 'mules'], new Map([['alice', 'miners']]), 'miners');
+        expect(v.tabState()).toEqual({ tabs: ['miners', 'mules'], activeTab: 'miners' });
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.tabState()).toEqual({ tabs: ['miners', 'mules'], activeTab: 'miners' });
+        expect(reopened.list()).toEqual([
+            { username: 'alice', password: 'a', tab: 'miners' },
+            { username: 'bob', password: 'b', tab: 'Main' }
+        ]);
+    });
+
+    test('upsert preserves the profile tab when re-saving a password', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'old' });
+        await v.saveTabState(['m'], new Map([['alice', 'm']]), 'Main');
+        await v.upsert({ username: 'alice', password: 'new' });
+        expect(v.list()).toEqual([{ username: 'alice', password: 'new', tab: 'm' }]);
+    });
+
+    test('reorder keeps tab assignments', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await v.upsert({ username: 'bob', password: 'b' });
+        await v.saveTabState(['m'], new Map([['alice', 'm']]), 'Main');
+        await v.reorder(['bob', 'alice']);
+        expect(v.list()).toEqual([
+            { username: 'bob', password: 'b', tab: 'Main' },
+            { username: 'alice', password: 'a', tab: 'm' }
+        ]);
+    });
+
+    test('deleting a tab clears it from profiles that are not loaded in the wall', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await v.upsert({ username: 'bob', password: 'b' });
+        await v.saveTabState(['m'], new Map([['alice', 'm'], ['bob', 'm']]), 'Main');
+        // wall session with only alice loaded deletes the tab
+        await v.saveTabState([], new Map([['alice', 'Main']]), 'Main');
+        expect(v.list()).toEqual([
+            { username: 'alice', password: 'a', tab: 'Main' },
+            { username: 'bob', password: 'b', tab: 'Main' }
+        ]);
+    });
+
+    test('saveTabState rejects invalid tab lists loudly', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a' });
+        await expect(v.saveTabState(['Main'], new Map(), 'Main')).rejects.toThrow();
+        await expect(v.saveTabState(['a', 'a'], new Map(), 'Main')).rejects.toThrow();
+        await expect(v.saveTabState(['a'], new Map(), 'ghost')).rejects.toThrow(/ghost/);
+        await expect(v.saveTabState(['a'], new Map([['alice', 'ghost']]), 'Main')).rejects.toThrow(/ghost/);
+    });
+
+    test('a v1 array payload unlocks with tabs migrated empty', async () => {
+        await writeBlob('pw', [{ username: 'old', password: 'p' }]);
+        const v = new ProfileVault();
+        expect(v.status()).toBe('locked');
+        expect(await v.unlock('pw')).toBe(true);
+        expect(v.list()).toEqual([{ username: 'old', password: 'p', tab: 'Main' }]);
+        expect(v.tabState()).toEqual({ tabs: [], activeTab: 'Main' });
+    });
+
+    test('a profile pointing at a missing tab fails the unlock loudly', async () => {
+        await writeBlob('pw', { profiles: [{ username: 'x', password: '', tab: 'ghost' }], tabs: [], activeTab: 'Main' });
+        const v = new ProfileVault();
+        await expect(v.unlock('pw')).rejects.toThrow(/ghost/);
+    });
+
+    test('an unrecognized decrypted payload fails the unlock loudly', async () => {
+        await writeBlob('pw', 'what');
+        const v = new ProfileVault();
+        await expect(v.unlock('pw')).rejects.toThrow();
     });
 });

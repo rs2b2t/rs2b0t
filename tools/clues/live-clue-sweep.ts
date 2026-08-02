@@ -145,14 +145,14 @@ async function resetPack(page: Page): Promise<void> {
         g.rs2b0t.runner.start(g.rs2b0t.registry.get('ProbeReset'));
     });
     await page.waitForFunction(() => (globalThis as never as R).__probeResult?.done === true, undefined, { timeout: 45000 }).catch(() => undefined);
-    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { } });
+    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { /* no runner to stop */ } });
     await page.waitForTimeout(600);
 }
 
 async function testClue(page: Page, id: number): Promise<{ ok: boolean; verdict: Verdict; ms: number; reason?: string; tail?: string[] }> {
     const row = CLUE_DB[id];
     const started = Date.now();
-    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { } });
+    await page.evaluate(() => { try { (globalThis as never as R).rs2b0t.runner.stop?.(); } catch { /* no runner to stop */ } });
     await page.waitForTimeout(400);
     await typeOn(page, 'tele 0,50,53,53,28');
     await resetPack(page);
@@ -240,7 +240,7 @@ try {
                 log(`w${w} ${r.verdict.toUpperCase()} [${id}] ${row.obj} (${Math.round(r.ms / 1000)}s)${r.reason ? ` — ${r.reason}` : ''}`);
             } catch (e) {
                 log(`w${w} worker error on [${id}]: ${e}`);
-                try { await page?.close(); } catch { }
+                try { await page?.close(); } catch { /* already gone */ }
                 page = null;
                 if (reboots++ < 4) {
                     queue.unshift(id);

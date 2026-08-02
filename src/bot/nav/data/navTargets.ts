@@ -32,6 +32,8 @@ export const NAV_TARGETS: NavTarget[] = [
     { bot: 'ShopRunner', label: "Betty's magic shop stand", tile: { x: 3012, z: 3258, level: 0 } },
     { bot: 'ShopRunner', label: "Gerrant's fishing shop stand", tile: { x: 3013, z: 3224, level: 0 } },
     { bot: 'ShopRunner', label: 'Draynor bank stand', tile: { x: 3092, z: 3243, level: 0 } },
+    { bot: 'ShopRunner', label: "Jatix's Herblore shop stand", tile: { x: 2899, z: 3427, level: 0 } },
+    { bot: 'ShopRunner', label: 'Falador West bank stand', tile: { x: 2946, z: 3369, level: 0 } },
     { bot: 'ShopRunner', label: "Hickton's archery stand", tile: { x: 2821, z: 3442, level: 0 } },
     { bot: 'ShopRunner', label: 'Fishing Guild shop stand', tile: { x: 2596, z: 3399, level: 0 } },
     { bot: 'ShopRunner', label: "Dargaud's bow shop stand", tile: { x: 2678, z: 3440, level: 0 } },

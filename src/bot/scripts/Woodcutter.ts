@@ -57,6 +57,8 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
         help:
             'Shown only when Burn mode is Chop then burn. Where to light fires. Auto = burn near where you started the script until the pack is empty (repaths/expands when tiles fill with fires). Named spots = fixed bank-side strips (Varrock East, Draynor, …).'
     },
+    muleMode: GATHERING_SETTINGS.muleMode,
+    mulePartner: GATHERING_SETTINGS.mulePartner,
     toolAcquire: TOOL_ACQUIRE_SETTING,
     forgetfulBank: FORGETFUL_BANK_SETTING
 };

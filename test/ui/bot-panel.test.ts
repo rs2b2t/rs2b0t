@@ -115,4 +115,9 @@ test('wall start and stop use the script selected in the bot panel', async () =>
 
     panel.stopScript();
     expect(ScriptRunner.state).toBe('stopped');
+
+    // ScriptRegistry is a process-wide singleton, so a fixture left registered leaks into
+    // every later test — it made docs/SCRIPTS.md read as stale against a registry holding
+    // a script that does not exist.
+    ScriptRegistry.unregister(name);
 });

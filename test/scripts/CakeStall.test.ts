@@ -1,5 +1,5 @@
-import { InvItem } from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach } from 'bun:test';
+import * as RealInventory from '#/bot/api/hud/Inventory.js';
+import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 
@@ -39,16 +39,18 @@ mock.module('#/bot/api/Game.js', () => ({
         ingame: () => true
     }
 }));
-mock.module('#/bot/api/hud/Inventory.js', () => ({
-    InvItem,
-    Inventory: {
-        items: () => Array.from({ length: cakeCount }, (_, i) => ({ id: 1891, name: 'Cake', count: 1, slot: i })),
-        isFull: () => cakeCount >= 28,
-        count: (name: string) => (name.toLowerCase().includes('cake') ? cakeCount : 0),
-        used: () => cakeCount,
-        first: () => null
-    }
-}));
+// Mutate the singleton instead of mock.module: a module replacement is global and
+// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
+const realInventoryFns = { ...RealInventory.Inventory };
+const stubInventory = {
+    items: () => Array.from({ length: cakeCount }, (_, i) => ({ id: 1891, name: 'Cake', count: 1, slot: i })),
+    isFull: () => cakeCount >= 28,
+    count: (name: string) => (name.toLowerCase().includes('cake') ? cakeCount : 0),
+    used: () => cakeCount,
+    first: () => null
+};
+beforeEach(() => Object.assign(RealInventory.Inventory, stubInventory));
+afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
 mock.module('#/bot/api/Traversal.js', () => ({
     Traversal: {
         walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {

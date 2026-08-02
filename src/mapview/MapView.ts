@@ -641,6 +641,11 @@ export class MapView extends GameShell {
 
     worldmap: JagFile | null = null;
 
+    /** Push the offscreen raster to the canvas; the bot's map picker restores it after drawing. */
+    refreshRaster(): void {
+        this.drawArea?.setPixels();
+    }
+
     async loadWorldmap(): Promise<JagFile> {
         if (this.worldmap) {
             return this.worldmap;

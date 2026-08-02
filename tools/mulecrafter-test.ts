@@ -222,7 +222,7 @@ async function setupAccount(page: Page, user: string, mode: 'Crafter' | 'Mule', 
     await clearInv(page);
     await seedItem(page, route.talisman, route.talisman.replace(/_/g, ' '), 1);
     // Keyboard ::give for cert_blankrune — requires keyboard path to stack properly.
-    await type(page, `::give cert_blankrune 1000`);
+    await type(page, '::give cert_blankrune 1000');
     await setSettings(page, 'MuleCrafter', { rune: RUNE, mode, partner });
     const arrived = await teleArrive(page, FALLY_EAST);
     if (!arrived) fail(`${user}: could not teleport to Falador East bank`);

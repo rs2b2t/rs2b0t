@@ -37,17 +37,14 @@ export default class VarpType {
                 dat.pos += 1;
             } else if (code === 2) {
                 dat.pos += 1;
-            } else if (code === 3) {
-            } else if (code === 4) {
             } else if (code === 5) {
                 this.clientcode = dat.g2();
-            } else if (code === 6) {
             } else if (code === 7) {
                 dat.pos += 4;
-            } else if (code === 8) {
             } else if (code === 10) {
                 dat.gjstr();
-            } else if (code === 11) {
+            } else if (code === 3 || code === 4 || code === 6 || code === 8 || code === 11) {
+                // Payload-less opcodes: recognised so the cursor stays aligned, nothing to read.
             } else {
                 console.log('Error unrecognised config code: ', code);
             }

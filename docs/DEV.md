@@ -165,6 +165,13 @@ bun run verify:gatheringbot -- fish-bank-raw-cook
 BUDGET_S=180 bun run verify:gatheringbot -- mine-bank
 HEADED=1 bun tools/gatheringbot-test.ts acquire
 HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
+# Two-account mule handoff (Gatherer + Mule at SE Varrock iron):
+HEADED=1 BUDGET_S=180 bun tools/gatheringbot-mule-pair-test.ts
+# Two-account Fisher: Gatherer raw → Cooker cook+bank at Catherby:
+HEADED=1 BUDGET_S=240 bun tools/gatheringbot-cooker-pair-test.ts
+# Path to every curated cook surface (pier + distinct bank ranges):
+HEADED=1 BUDGET_S=120 bun tools/gatheringbot-range-path-test.ts
+CAMPS=Seers,Catherby bun tools/gatheringbot-range-path-test.ts
 ```
 
 Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /
@@ -173,9 +180,19 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | id | what it proves |
 | --- | --- |
 | `mine-bank` / `mine-power` | SW Varrock tin bank loop vs drop mode |
-| `fish-bank` / `fish-cook-bank` / `fish-bank-raw-cook` | Draynor net bank; Catherby cook-then-bank (seed cooked); Catherby bank-raw-then-cook (`cert_raw_lobster` 973 → bank, pot+26 raw, N=1000 → catch→bank→cook batch) |
-| `wc-bank` / `wc-burn` | Draynor chop+bank; chop-then-burn |
-| `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
+| `mine-bank-rimmington` | Rimmington iron → Falador East (long soft-home / second mine camp) |
+| `mine-iron-se-varrock` / `mine-iron-dwarven-north` | Iron local-prefer: stay on near cluster (`maxDistToCamp`) |
+| `mine-mule-gatherer-meet` | Single-account gatherer mule: full pack → meet + wait (no bank) |
+| `fish-mule-gatherer-meet` | Fisher gatherer mule smoke at Draynor (raw haul, no bank) |
+| *(pair harness)* | `gatheringbot-mule-pair-test.ts` — two accounts, full Gatherer↔Mule iron handoff |
+| `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
+| `fish-cook-bank` / `fish-cook-barb` / `fish-cook-seers` | Catherby Range; Barb outdoor Fire; Seers fly Range (pathable camp tele) |
+| *(cooker pair)* | `gatheringbot-cooker-pair-test.ts` — Gatherer raw → Cooker cook+bank at Catherby |
+| *(range path)* | `gatheringbot-range-path-test.ts` — walk to every curated pier/bank cook surface |
+| `fish-cooker-solo` | Cooker mule with full raw pack → cook → bank (no partner trade needed once seeded) |
+| `fish-bank-raw-cook` | Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
+| `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
+| `mine-path-runite` / `fish-path-shark` | long path into Lava Maze (must mine runite — XP/ore, not flee-only) / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
 | `repair-axe-bob` | Seed broken steel axe → Bob item-on-NPC repair (`macro_broken_steel_hatchet`) |
 | `repair-pick-nurmof` | Seed broken steel pick → Nurmof repair (`macro_broken_steel_pickaxe`) |
@@ -185,14 +202,41 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `auto-freeform-fish-ardy-river` | Auto freeform at Ardougne river fly |
 | `smith-rune-axe` | Buy/repair smith path (bars + hammer → rune axe) |
 
+Tags: `mining` / `fishing` / `wc` / `mule` / `local` / `acquire` / `path` / `endgame` / `freeform`.
+
 **Location / leash (product behaviour, not just the harness):**
 
 - **Named camps** pin the **home** tile to the camp spot and floor **membership**
   (ReturnToAnchor / rock disk) to **64** (overridable per camp via `campRadius`).
   The UI `leashRadius` is ignored below that floor for membership. **Fishing spots**
-  chase from the **player** inside camp (`chaseRadius`, default 24) with a hunt pad
-  past chase — not a single pin disk for hops. Spots outside membership are rejected
-  so chase cannot leave the coastline.
+  are any matching spot inside membership (nearest to player); freeform fish uses a
+  hunt pad past the UI leash. Soft-home / prefer-local helpers live under `api/`
+  (`GatherCamp`, `TargetPick`, `Anchor`).
+- **Mine prefer-local:** matching rocks within 12 of the player win over far camp
+  membership hits; post-deplete tiles are not soft-cooled (iron respawn ~6t).
+- **Mule mode** (Miner/Fisher/Woodcutter): `muleMode` Off / Gatherer / Mule /
+  **Cooker** / **Supplier** + `mulePartner`. Shared policy: `api/mule/PartnerTrade`.
+  Disabled under location None.
+  - **Gatherer** — full haul → meet trade (no bank).
+  - **Mule** — accept → bank (demo for ore/logs; see processor sketch below).
+  - **Cooker** (Fisher) — accept raw → cook at camp range → bank cooked (`burntPolicy`).
+  - **Supplier** (Fisher) — when bank has N raw (`bankRawBeforeCook`), withdraw → meet → trade.
+  - Harness: `mine-mule-gatherer-meet`, `fish-mule-gatherer-meet`, `fish-cooker-solo`;
+    pair iron e2e `gatheringbot-mule-pair-test.ts`; pair cook e2e
+    `gatheringbot-cooker-pair-test.ts` (Gatherer raw → Cooker cook+bank).
+- **Cook surfaces:** `api/CookingRanges` catalogs map Ranges; fishing camps pin
+  Catherby / Seers fly / Barb Fire / Guild / Draynor fireplace when useful.
+  Harness: `fish-cook-bank` (Catherby), `fish-cook-barb`, `fish-cook-seers`.
+
+**Processor scripts (sketch — not shipped):** Ore/log **Mule** banking is only a
+demo. A realistic partner is a separate TaskBot that:
+
+1. Camps the same meet tile as the GatheringBot Gatherer (`location` camp spot).
+2. Uses `Trade` + `PartnerTrade.decideReceiverOfferScreen` / `isConfiguredPartner`.
+3. After accept: path to smelter / anvil / GE / own bank and process the haul.
+4. Returns to meet for the next trade.
+
+Fisher **Cooker** is the in-tree example of a “processor mule” for fish.
 - **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
   tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
   start-tile leash, nearest bank, player-relative fish). Auto is expert / may-die:
@@ -256,5 +300,7 @@ background throttling.
 - [Manual index](README.md)
 - [Running locally](RUNNING.md) — the from-scratch local setup
 - [Scripting API](API.md)
-- [Testing](TESTING.md) — unit tests and live harnesses
+- [Testing](TESTING.md) — unit tests, live harnesses, bank seeding (`givebank`)
+- [Quests](QUESTS.md#official-reqs-vs-bot-proven-floors-polish-goal) — bare-minimum
+  non-required stats and `warnReadiness`
 - [MultiBox](MULTIBOX.md) — the wall itself, and what the telemetry readings mean

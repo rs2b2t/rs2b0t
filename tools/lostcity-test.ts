@@ -1,8 +1,11 @@
-import { chromium, type Page } from 'playwright-core';
+import { type Page } from 'playwright-core';
+import { launchBrowser } from './lib/harness.js';
 import { cheatQuiet, getServerVarQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8990';
-const user = process.argv[3] ?? `lostcity101${Date.now().toString(36).slice(-5)}`;
+// Usernames cap at 12 chars (Client.ts:1460, engine World.ts:2201); the old
+// `lostcity101…` default was 16 and could never log in.
+const user = process.argv[3] ?? `lc${Date.now().toString(36).slice(-7)}`;
 const timeoutMs = (Number(process.argv[4]) || 6) * 60_000;
 
 type Item = { count: number; name: string | null };
@@ -53,11 +56,9 @@ function count(items: Item[], name: string): number {
     return items.filter(item => item.name === name).reduce((sum, item) => sum + item.count, 0);
 }
 
-const browser = await chromium.launch({
-    executablePath: '/opt/google/chrome/chrome',
-    headless: true,
-    args: ['--disable-dev-shm-usage', '--no-sandbox']
-});
+// launchBrowser resolves Chrome by channel; the old hardcoded /opt/google/chrome/chrome
+// meant this harness could only ever run on Linux.
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { height: 900, width: 1280 } });
 const pageErrors: string[] = [];
 page.on('pageerror', error => pageErrors.push(error.stack ?? error.message));

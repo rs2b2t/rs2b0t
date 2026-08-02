@@ -219,7 +219,7 @@ export default class ClientBuild {
                                 if (t1 > 0) {
                                     const hue: number = ((blendHue * 256) / blendCom) | 0;
                                     const sat: number = (blendSat / blendTot) | 0;
-                                    let lig: number = (blendLig / blendTot) | 0;
+                                    const lig: number = (blendLig / blendTot) | 0;
                                     t1Colour = ClientBuild.getTable(hue, sat, lig);
 
                                     const randomHue: number = (hue + ClientBuild.hueOff) & 0xff;

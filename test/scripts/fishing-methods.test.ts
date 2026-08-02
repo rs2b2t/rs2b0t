@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 
 import {
     ALL_FISHING_GEAR_NAMES,
@@ -84,7 +84,7 @@ test('gear helpers: keep names, has/missing, label, restock plan', () => {
     expect(gearLabel(rod)).toBe('Fishing rod + Fishing bait');
     expect(hasFishingGear(rod, n => (n === 'Fishing rod' ? 1 : 0))).toBe(false);
     expect(missingFishingGear(rod, n => (n === 'Fishing rod' ? 1 : 0)).map(g => g.name)).toEqual(['Fishing bait']);
-    expect(hasFishingGear(rod, n => 1)).toBe(true);
+    expect(hasFishingGear(rod, _n => 1)).toBe(true);
 
     const plan = fishingRestockPlan(
         rod,

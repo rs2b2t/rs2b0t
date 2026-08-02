@@ -6,6 +6,7 @@ import { ProfileChooser } from './ProfileChooser.js';
 import { vault, type Profile } from './ProfileVault.js';
 import { renderRailTile } from './RailTile.js';
 import { ResourcePanel } from './ResourcePanel.js';
+import { TabBar } from './TabBar.js';
 import { VaultPrompt } from './VaultPrompt.js';
 import type { Account } from './types.js';
 
@@ -61,6 +62,34 @@ function boot(): void {
         const usernames = controller.snapshot().map(slot => slot.username);
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
+
+    function persistTabState(): void {
+        if (vault.status() !== 'unlocked') {
+            return;
+        }
+        const customTabs = controller.tabs().slice(1);
+        const tabByUser = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
+        const activeTab = controller.activeTab();
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+    }
+
+    function mutateTabs(action: () => boolean): boolean {
+        const changed = action();
+        if (changed) {
+            renderRail();
+            persistTabState();
+        }
+        return changed;
+    }
+
+    const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
+        onSelect: name => void mutateTabs(() => controller.setActiveTab(name)),
+        onAdd: name => mutateTabs(() => controller.addTab(name)),
+        onRename: (oldName, newName) => mutateTabs(() => controller.renameTab(oldName, newName)),
+        onRemove: name => void mutateTabs(() => controller.removeTab(name)),
+        onMove: (name, toIndex) => void mutateTabs(() => controller.moveTab(name, toIndex)),
+        onDropBot: (id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab))
+    });
 
     function moveSlot(id: number, toIndex: number): boolean {
         if (!controller.move(id, toIndex)) {
@@ -120,6 +149,10 @@ function boot(): void {
 
     rail.addEventListener('dragstart', ev => {
         const target = ev.target as HTMLElement;
+        if (target.closest('#mbx-tabs')) {
+            // chip drags belong to the TabBar
+            return;
+        }
         const tile = target.closest('.mbx-slot');
         if (!tile || target.closest('.mbx-close')) {
             ev.preventDefault();
@@ -202,13 +235,35 @@ function boot(): void {
     const chooser = new ProfileChooser(p => {
         controller.add(p);
         renderRail();
+        // a fresh profile joins the active tab; record that membership
+        persistTabState();
     });
     document.body.appendChild(chooser.el);
 
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
+
+    let tabsHydrated = false;
+    function hydrateTabState(): void {
+        if (tabsHydrated) {
+            return;
+        }
+        tabsHydrated = true;
+        const { tabs, activeTab } = vault.tabState();
+        controller.setTabState(tabs, activeTab);
+        renderRail();
+    }
+
+    async function ensureUnlocked(): Promise<boolean> {
+        const ok = await prompt.ensureUnlocked();
+        if (ok) {
+            hydrateTabState();
+        }
+        return ok;
+    }
+
     addTile.addEventListener('click', () => {
-        void prompt.ensureUnlocked().then(ok => {
+        void ensureUnlocked().then(ok => {
             if (ok) {
                 chooser.open();
             }
@@ -219,7 +274,7 @@ function boot(): void {
         if (ev.origin !== location.origin) return;
         const d = ev.data as { type?: string; username?: string; password?: string };
         if (d?.type !== 'rs2b0t:profile-save' || typeof d.username !== 'string' || d.username.length === 0 || typeof d.password !== 'string') return;
-        void prompt.ensureUnlocked().then(ok => {
+        void ensureUnlocked().then(ok => {
             if (ok) {
                 void vault.upsert({ username: d.username!, password: d.password! });
             }
@@ -242,8 +297,10 @@ function boot(): void {
     }
 
     // Bind live status (name + running dot) onto the rail tiles, which DomSlotOps
-    // keeps in slot order — so snapshot[i] is tile[i].
+    // keeps in slot order — so snapshot[i] is tile[i]. Tabs filter by visibility
+    // only: hidden tiles stay in the DOM, keeping that mapping intact.
     function renderRail(): void {
+        tabBar.render(controller.tabs(), controller.activeTab());
         const snaps = controller.snapshot();
         resources.setBotCount(snaps.length);
         const empty = snaps.length === 0;
@@ -255,8 +312,10 @@ function boot(): void {
         if (tiles.length !== snaps.length) {
             throw new Error(`rail desync: ${tiles.length} tiles vs ${snaps.length} slots`);
         }
+        const activeTab = controller.activeTab();
         snaps.forEach((s, i) => {
             renderRailTile(tiles[i], s);
+            tiles[i].classList.toggle('mbx-tab-hidden', s.tab !== activeTab);
         });
     }
 
@@ -285,6 +344,14 @@ function boot(): void {
         },
         move: (id: number, toIndex: number) => moveSlot(id, toIndex),
         slots: () => controller.snapshot(),
+        tabs: () => controller.tabs(),
+        activeTab: () => controller.activeTab(),
+        addTab: (name: string) => mutateTabs(() => controller.addTab(name)),
+        renameTab: (oldName: string, newName: string) => mutateTabs(() => controller.renameTab(oldName, newName)),
+        removeTab: (name: string) => mutateTabs(() => controller.removeTab(name)),
+        moveTab: (name: string, toIndex: number) => mutateTabs(() => controller.moveTab(name, toIndex)),
+        setActiveTab: (name: string) => mutateTabs(() => controller.setActiveTab(name)),
+        setSlotTab: (id: number, tab: string) => mutateTabs(() => controller.setSlotTab(id, tab)),
         importProfiles: async (json: string | Profile[]): Promise<number> => {
             if (!(await prompt.ensureUnlocked())) {
                 return 0;

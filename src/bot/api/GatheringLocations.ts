@@ -40,8 +40,12 @@ export const DEFAULT_BOOTH_OP = 'Use-quickly';
 /** Default camp membership when a named location omits {@link GatheringLocation.campRadius}. */
 export const DEFAULT_CAMP_RADIUS = 64;
 
-/** Default player-relative fish chase when a named location omits {@link GatheringLocation.chaseRadius}. */
-export const DEFAULT_CHASE_RADIUS = 24;
+/**
+ * Soft prefer-near-player radius for named camps (not a hard exclusion).
+ * Any matching spot inside camp membership is still valid; this only ranks
+ * nearby hops first when both exist.
+ */
+export const DEFAULT_CHASE_RADIUS = 40;
 
 export function resolveCampRadius(campRadius: number | null | undefined, fallback = DEFAULT_CAMP_RADIUS): number {
     const raw = campRadius != null && Number.isFinite(campRadius) ? campRadius : fallback;

@@ -11,6 +11,9 @@ another bot.
 
 - [The shape of a quest](#the-shape-of-a-quest)
 - [Quest state](#quest-state)
+  - [What the client can see](#what-the-client-can-see)
+  - [Why not varps](#why-not-varps)
+  - [How modules should read progress](#how-modules-should-read-progress)
 - [Exec primitives](#exec-primitives)
 - [Provisioning](#provisioning)
 - [The queue and the watchdog](#the-queue-and-the-watchdog)
@@ -46,6 +49,7 @@ export interface QuestModule {
     ownsInventory?: boolean;                  // module manages every loadout itself
     readStage?: () => number | undefined | Promise<number | undefined>;
     sustain?: QuestSustain;                   // quest-specific food and eat threshold
+    warnReadiness?: () => string | null;      // soft: untested combat / power level
     decide(snap: QuestSnapshot): QuestStep;
 }
 ```
@@ -60,7 +64,8 @@ any point. Kill the bot mid-quest, start it again, and it re-derives where it is
 
 ## Quest state
 
-**State is read from the quest journal and from held items. Never from varps.**
+**State is read from the quest list colour, the opened journal text, and held
+items. Never from untransmitted quest varps.**
 
 ```ts
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -78,7 +83,7 @@ That is the whole of Cook's Assistant. The snapshot the engine hands it:
 
 ```ts
 export interface QuestSnapshot {
-    journal: QuestStatus;        // notStarted | started | complete | unknown
+    journal: QuestStatus;        // notStarted | inProgress | complete | unknown
     inv: Map<string, number>;
     invIds?: ReadonlyMap<number, number>;
     worn: Set<string>;
@@ -86,6 +91,7 @@ export interface QuestSnapshot {
     noProgress: number;
     bankCoins: number;
     stage?: number;              // exact journal stage from module.readStage()
+    progress?: QuestProgress;    // stage + flags from readProgress()
     bank?: ReadonlyMap<string, number>;
     bankIds?: ReadonlyMap<number, number>;
     bankKnown?: boolean;
@@ -94,28 +100,90 @@ export interface QuestSnapshot {
 }
 ```
 
+### What the client can see
+
+The 2004scape protocol does **not** stream mid-quest stage numbers or bitfields to
+the client for almost every quest. What actually lands in the bot process:
+
+| Signal | API | On the wire | Granularity |
+|---|---|---|---|
+| List colour | `Quests.status(name)` | `IF_SETCOLOUR` on the quest-tab name (red / yellow / green) | **three-way only**: not started / in progress / complete |
+| Quest points | `Quests.points()` | transmitted varp `qp` (index 101) | total QP |
+| Journal body | `Quests.journal(name)` | server builds text and **`if_openmain`** the scroll when you click the name | full stage narrative — **opens the log (the flash)** |
+| Inventory / worn | snapshot `inv` / `worn` | normal inv sync | item oracles |
+| Game messages | `GameMessages` | chat lines | last-action confirmation (ephemeral) |
+| Scene | locs / npcs | usual scene | doors, levers, rocks, NPCs |
+
+Server-side, `send_quest_progress` only recolours the quest-list entry and may
+focus the tab. `update_questlist` (login) recomputes colours from **server**
+`%varp`s. Neither pushes stage integers or journal lines into a persistent
+client field.
+
+Journal text is built only when the player opens a quest: the engine runs
+`if_button,questlist:…`, fills `questjournal_scroll` with `if_settext`, and
+opens that main modal. There is no side-tab mirror of that body. That is why
+`readStage` / `readProgress` flash the log — they are reading the only durable
+client view of mid-progress.
+
+### Why not varps
+
+`reader.varp(i)` / `Game` var access reflect `client.var[]`, filled only by
+`VARP_SMALL` / `VARP_LARGE` / `VARP_SYNC`. Content marks those with
+`transmit=yes`. **Typical quest progress varps do not:**
+
+| Example | Content | Transmitted? |
+|---|---|---|
+| `cookquest`, `zanaris`, `waterfall_quest` | `scope=perm` only | **no** |
+| `elemental_workshop_bits` (id 299), watchtower bits | `scope=perm` only | **no** |
+| `prince_keystatus` | `scope=perm`, no transmit | **no** (docs: do not branch on it) |
+| `qp` | `transmit=yes` | **yes** — total points only |
+| Rare UI/progress (e.g. some TBWT / still vars) | `transmit=yes` | **yes** — exceptions, not the rule |
+
+A non-transmitted index reads as **0**, which is indistinguishable from “never
+started.” Branching on it is not “cheating the journal” — it is reading silence.
+That is why the rule is absolute for normal quest progress: **never treat
+`reader.varp` as stage.**
+
+A clean `Quests.bits()`-style API would need **Content** to set `transmit=yes`
+on the progress varp(s), then a thin client wrapper. Client-only code cannot
+invent server-only state.
+
+### How modules should read progress
+
+Prefer oracles that do not open the log:
+
+1. **Held / worn / bank items** (ids when names collide).
+2. **Game messages** after an action (“water wheel starting up”, “already fixed”).
+3. **Scene behaviour** (valve locked ⇒ water already running; do not re-pull).
+4. **`Quests.status`** for coarse gates (started vs done).
+5. **`Quests.journal` via `readStage` / `readProgress`** only when nothing else
+   distinguishes the branch.
+
+When the stage number alone cannot say where a quest is — which of three tribes
+are satisfied, which words have been learned, how many monsters remain — a module
+implements `readProgress()` instead of `readStage()` and returns named flags
+alongside the stage. They arrive on the snapshot as `snap.progress`, so
+`decide()` stays a pure function; `hasFlag` and `flagValue` in
+[`engine/types.ts`](../src/bot/quests/engine/types.ts) read them.
+[`defs/watchtower/journal.ts`](../src/bot/quests/defs/watchtower/journal.ts) is
+the worked example. Opening the journal every decide tick is correct but
+expensive; cache or re-read only when inventory / coarse status / a confirmed
+message changes if you need fewer flashes.
+
 The name maps remain convenient for ordinary items. Use the ID maps for objects
 whose display names collide. A `withdraw` item can include `id`, and a `deposit`
 step can include `keepIds`; ID keeps are combined with, rather than replacing,
 the step's name-based `keep` list.
 
-When the stage number alone cannot say where a quest is — which of three tribes are
-satisfied, which words have been learned, how many monsters remain — a module implements
-`readProgress()` instead of `readStage()` and returns named flags alongside the stage.
-They arrive on the snapshot as `snap.progress`, so `decide()` stays a pure function;
-`hasFlag` and `flagValue` in [`engine/types.ts`](../src/bot/quests/engine/types.ts) read
-them. [`defs/watchtower/journal.ts`](../src/bot/quests/defs/watchtower/journal.ts) is the
-worked example.
-
 Two consequences worth stating plainly:
 
-- **`'unknown'` is not `'notStarted'`.** The journal is not loaded for the first
-  moments after login, and treating that as "not started" restarts a finished quest.
-  Every module returns `wait` for it.
-- Progress *within* a started quest is inferred from its rendered journal stage and
-  what the player is carrying. A held quest item is part of the state machine's
-  memory, which is why a step that hands an item over and a step that acquires it
-  must never both be reachable from the same snapshot.
+- **`'unknown'` is not `'notStarted'`.** The quest list is not loaded for the
+  first moments after login, and treating that as "not started" restarts a
+  finished quest. Every module returns `wait` for it.
+- Progress *within* a started quest is inferred from its rendered journal stage
+  and what the player is carrying. A held quest item is part of the state
+  machine's memory, which is why a step that hands an item over and a step that
+  acquires it must never both be reachable from the same snapshot.
 
 A held item can also route the bot into a wedge: carrying an item whose delivery is
 gated behind something else loops forever at the gate. When an oracle refuses, the
@@ -219,6 +287,37 @@ Items are `mustHave` or `acquirable` — the difference between "you cannot star
 and "the bot will go and get it". `QuestDashboard` renders the result; `AIOQuester`
 consumes it to choose what to run.
 
+### Official reqs vs bot-proven floors (polish goal)
+
+`data/quests.ts` lists **server / wiki gates** only (e.g. Elemental Workshop mining
+20). Many quests still need combat, food, or gear the server does not gate.
+
+**Polish iteration goal for every quest with non-required combat (or similar):**
+
+1. Green mid-quest loop (often max stats + ideal kit) — proves the script path.
+2. Realistic bank-seed + **official skill mins**, then probe **bare-minimum** for
+   non-required stats (combat, etc.) via headed harness — lower until red, keep
+   the lowest green profile in module constants.
+3. Record failed floors too (so we do not re-probe known deaths forever).
+4. Later: **power-level tactics** (safespot / kite / skip-fight vs melee) chosen
+   from the same snapshot skills, so low accounts still clear without grinding.
+
+Optional `warnReadiness(): string | null` runs **once** when a quest becomes the
+active runner. Soft advisory if the account is below a proven floor (or if no
+low floor is proven yet) — not a queue block.
+
+Elemental Workshop reference constants
+([`supplies.ts`](../src/bot/quests/defs/elementalworkshop/supplies.ts)):
+
+| Constant | Role |
+|---|---|
+| `EW_OFFICIAL_SKILLS` | Server gates (20 mining / smithing / crafting) |
+| `EW_PROVEN_COMBAT_FLOOR` | Lowest green headed combat (**50/50/40/50**, bank seed) |
+| `EW_FAILED_COMBAT` | Known red (40/40/25/40 died on Water elemental) |
+| `EW_PROBE_COMBAT` | Next lower search (45/45/30/45) |
+
+Harness recipes and bank seeding: [Testing](TESTING.md#seeding-inventory-vs-bank).
+
 ## Adding a quest
 
 1. Add the record to [`data/quests.ts`](../src/bot/quests/data/quests.ts) — id, name,
@@ -229,6 +328,12 @@ consumes it to choose what to run.
 3. Register it in [`defs/index.ts`](../src/bot/quests/defs/index.ts).
 4. Add a unit test for `decide()` — it is a pure function, so every branch is
    testable without a client. See [`test/quests/`](../test/quests/).
+5. Polish non-required stats: ideal smoke first, then realistic bank-seed, then
+   **lower combat (etc.) until red** — store proven floor + failed floor + next
+   probe in the module; wire `warnReadiness`; update [Testing](TESTING.md) when
+   a headed run moves the floor. Later add power-level tactics (safespots, …).
+6. Prefer bank-first realistic harnesses (`givebank` / `bank:` seeds) before
+   claiming the quest is done — inv+max only proves the mid-quest loop.
 
 Start from [`defs/cooksassistant.ts`](../src/bot/quests/defs/cooksassistant.ts) for
 the simple shape, [`defs/priestperil.ts`](../src/bot/quests/defs/priestperil.ts)

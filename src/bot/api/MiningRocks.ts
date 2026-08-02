@@ -1,8 +1,17 @@
+/**
+ * Ore rock loc type ids from Server content (`scripts/skill_mining/configs/rocks.loc`
+ * + `pack/loc.pack`). All share in-game name "Rocks" + op Mine; ore is distinguished
+ * only by id. Depleted stages become empty rocks1/rocks2 (ids 450/452) with
+ * `mining_rock_empty` — those must stay out of this map so findRock ignores empties.
+ *
+ * Dwarven iron spans two clusters (~3032,9825 and ~3044,9770) — pick by player
+ * distance + local prefer, not only camp-pin membership (see GatheringBot.findRock).
+ */
 export const ROCK_TYPES: Record<string, number[]> = {
     Clay: [2108, 2109],
     Copper: [2090, 2091],
     Tin: [2094, 2095],
-    Iron: [2092, 2093],
+    Iron: [2092, 2093], // ironrock1 / ironrock2 (mining_rock_fast, respawnrate ~6)
     Silver: [2100, 2101],
     Coal: [2096, 2097],
     Gold: [2098, 2099],

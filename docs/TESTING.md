@@ -64,10 +64,39 @@ from `WalkExecutor`, a quest's [`decide()`](QUESTS.md#quest-state) from the engi
 that executes it. Those pure functions are the specification, and their tests are the
 place to encode a bug you just fixed.
 
-**A note on module mocks.** `mock.module` is global in Bun and leaks across test
-files, so a partial mock can poison an unrelated file depending on run order. Either
-re-export everything from the mocked module, or do not mock something that already
-behaves correctly.
+**A note on module mocks.** `mock.module` is global in Bun and **permanent for the
+process** — there is no unmock — so a mock leaks into every file that runs after it.
+This caused every one of the suite's long-standing failures. Two distinct shapes:
+
+- **Missing exports.** A mock returning `{ Npcs: … }` drops `talkOp` and `Npc`, so the
+  next file importing them dies with `SyntaxError: Export named 'talkOp' not found`.
+  Only modules with more than one *runtime* export can do this — `Npcs`, `Locs`,
+  `GroundItems`, `Inventory`. Fix: `import * as Real from …` and spread it.
+- **Overridden behaviour.** Even a complete mock replaces the singleton, so a test that
+  needs the *real* implementation gets the stub. Spreading does not help here.
+  Fix: **mutate the singleton instead of replacing the module**, scoped to the file:
+
+  ```ts
+  import * as RealInventory from '#/bot/api/hud/Inventory.js';
+  const realFns = { ...RealInventory.Inventory };
+  const stub = { items: () => […] };
+  beforeEach(() => Object.assign(RealInventory.Inventory, stub));
+  afterAll(() => Object.assign(RealInventory.Inventory, realFns));
+  ```
+
+  Mutation without the `afterAll` restore is the same leak in a new coat.
+
+**Global singletons leak the same way.** `test/ui/bot-panel.test.ts` registered a fixture
+script and never removed it, so `docs/SCRIPTS.md` read as stale against a registry holding
+a script that does not exist. `ScriptRegistry.unregister(name)` exists for this.
+
+**A test that asserts absence must establish it.** `Anchor.test.ts` asserted a task stays
+idle "without a live `Game.tile()`" but never set that up — it silently inverted whenever
+a file mocking `Game` ran first. Control your own inputs.
+
+**Run a suspect file alone as well as in the suite.** These two disagreeing is the
+signature of a leak, and a file can fail alone while passing in the suite (another file's
+mock was covering for it).
 
 ## Live harnesses
 
@@ -113,10 +142,112 @@ Some hard-won details:
   level-93 boss. `Equipment.equip()` awaits `Execution.delayUntil`, which needs a
   running script context and throws from `page.evaluate` — drive the Wield/Wear
   held-op yourself; the direct input driver's is synchronous.
-- **`::give` reaches the inventory, never the bank** — but `::bank_f2p` stocks the bank
-  (coins included) and raises no dialog, so bank-withdraw paths *are* testable. Prefer it
-  to `::bank_preset`, which first asks "This clears your bank. Continue?" and needs the
-  choice answered before it does anything.
+- **`::give` → inventory; `::givebank` → bank.** Local engine cheats (no busy-guard).
+  Content debugprocs `~item` / `~bankitem` do the same but need `p_finduid` (seed after
+  dialogs, not mid-`~maxme`). Prefer engine cheats from Playwright; verify bank counts
+  with a booth open when the seed matters.
+- **`::bank_f2p` stocks a bulk bank** (coins, food, pickaxes, scimitars, …) with no
+  dialog. Prefer it to `::bank_preset`, which first asks "This clears your bank.
+  Continue?" and needs the choice answered before it does anything. It is a blunt
+  fixture, not a realistic kit for a low-level quest.
+- **Seeding the bank for realistic quest tests** is documented below.
+
+### Seeding inventory vs bank
+
+A full AIOQuester pass must exercise **provisioning**: empty pack, tools in the bank,
+min skill levels, scanBank → withdraw → enter. Pre-loading the pack and `~maxme` only
+proves the mid-quest loop. Live harnesses always run against a **local** engine, so
+Server debug cheats are fair game.
+
+| Goal | How (local Server) |
+|---|---|
+| Item in **inventory** | engine `give bronze_pickaxe 1` (or content `~item bronze_pickaxe 1`) |
+| Item in **bank** | engine `givebank bronze_pickaxe 1` (or content `~bankitem bronze_pickaxe 1`) |
+| Wipe pack | `~clearinv` / `clearinv inv` |
+| Wipe bank | `~clearbank` |
+| Bulk max bank | `~bank_f2p` (no dialog) — blunt fixture, not a realistic low-level kit |
+| Stats | `advancestat mining 20` (then clear level-up dialogs) or `statsCsv=max` |
+| Tick rate | `speed 300` (2×) in cheats |
+
+**Bank seed path** (`seedItemsToBank` in
+[`tools/tutorial/harness.ts`](../tools/tutorial/harness.ts)):
+
+1. `givebank <obj> <qty>` for each item (engine `ClientCheatHandler` — no busy-guard).
+2. If verify fails, retry with `~bankitem` (content debugproc; needs `p_finduid`).
+3. Tele next to a booth, open it once, assert `Bank.count(displayName)`.
+
+Do **not** invent give→deposit loops for food/coal: backpack unstackables fill the
+pack and the seed stalls. Direct bank cheats skip that entirely.
+
+[`tools/aio-quest-test.ts`](../tools/aio-quest-test.ts) exposes bank seeds as a
+**`bank:`** prefix on `giveCsv`:
+
+```text
+bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:coal:8
+```
+
+vs inventory-only `knife:1,hammer:1`. Display names for verification are mapped from
+engine debug names inside the harness (`bronze_pickaxe` → `Bronze pickaxe`).
+
+**Elemental Workshop — harness recipes and combat floor search**
+
+Polish goal (all quests with non-required combat): find the **bare minimum**
+stats that still clear, record fails, then later branch tactics by power level
+([Quests — proven floors](QUESTS.md#official-reqs-vs-bot-proven-floors-polish-goal)).
+
+| Recipe | What it proves | Status |
+|---|---|---|
+| Inv seed + `statsCsv=max` | Mid-quest loop | **PASS** |
+| Bank seed + skills 20 + combat 40/40/25/40 | Low combat | **FAIL** (Water elemental death) |
+| Bank seed + skills 20 + combat 50/50/40/50 | Bare-min combat (so far) | **PASS** (~270s, `givebank` seed) |
+| Bank seed + combat 45/45/30/45 | Next lower probe | not run yet |
+| Official skills only (20/20/20) | Server eligibility | required; combat not gated |
+
+Constants:
+[`EW_PROVEN_COMBAT_FLOOR`](../src/bot/quests/defs/elementalworkshop/supplies.ts)
+(50/50/40/50), `EW_FAILED_COMBAT` (40/40/25/40), `EW_PROBE_COMBAT` (45/…),
+`EW_OFFICIAL_SKILLS`. `warnReadiness` logs if the account is below the proven floor.
+
+Ideal smoke:
+
+```sh
+HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ew1 elemental_workshop 15 \
+  'knife:1,hammer:1,bronze_pickaxe:1,thread:1,leather:1,needle:1,coal:4,lobster:15,steel_scimitar:1' \
+  max Lobster 'speed 300' '2716,3481'
+```
+
+Realistic bank-seed at **proven floor** (safe default for writers):
+
+```sh
+HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ewreal elemental_workshop 25 \
+  'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:20,bank:steel_scimitar:1,bank:coins:50000' \
+  'mining:20,smithing:20,crafting:20,attack:50,strength:50,defence:40,hitpoints:50' \
+  Lobster 'speed 300' '2725,3491'
+```
+
+Next lower probe (update `EW_PROVEN_COMBAT_FLOOR` only if green):
+
+```sh
+HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ewprobe elemental_workshop 25 \
+  'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:25,bank:steel_scimitar:1,bank:coins:50000' \
+  'mining:20,smithing:20,crafting:20,attack:45,strength:45,defence:30,hitpoints:45' \
+  Lobster 'speed 300' '2725,3491'
+```
+
+Expect `check the bank` / `withdraw` after book/key. After journal **ENTERED**,
+death recovery re-enters with **Push** (no key) and re-withdraws bank tools.
+
+**Recipe for future quest harnesses:**
+
+1. Prefer `bank:obj:qty` / `givebank` / `~bankitem` — not invent give→deposit for
+   unstackable food.
+2. Ideal smoke → realistic bank-seed → **lower non-required stats until red**;
+   keep proven floor + failed floor + next probe in the module; `warnReadiness`.
+3. Leave the pack empty after bank seed so provisioning runs.
+4. Drain dialogs before `~bankitem`; prefer `givebank` mid-setup.
+5. Assert journal complete + clean stop.
+6. Later: power-level tactics (safespot vs melee) from the same skill snapshot.
+
 - **`::death` is a clean kill** (`~damage_self(999)`): respawn is Lumbridge `(3221,3218)`,
   and `move_priciest_item_on_hero_to_death` keeps *one* of each of the three priciest items
   — so a coin stack comes back as a single coin. Use it to test death recovery for real

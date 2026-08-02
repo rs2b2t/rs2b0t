@@ -3,11 +3,12 @@ import { BotHost } from '../BotHost.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Execution } from './Execution.js';
 import { CombatStyleController, type CombatStyleResolution, type MeleeCombatStyle } from './CombatStyle.js';
+import { resolveTeleport, resolveTeleportComponent } from './Teleport.js';
 import type { Npc } from './entities/index.js';
 
 const COM_MODE_VARP = 43;
-
 const RUN_VARP = 173;
+const MAGIC_TAB = 6;
 
 function offeredCombatModes() {
     const root = reader.sideTabInterface(0);
@@ -119,18 +120,30 @@ export const Game = {
     },
 
     async castOnNpc(spell: string, npc: Npc): Promise<boolean> {
-        const MAGIC_TAB = 6;
         const root = reader.sideTabInterface(MAGIC_TAB);
-        if (root === -1 || !(await Game.openSideTab(MAGIC_TAB))) {
-            return false;
-        }
-
         const comId = reader.targetButtonByBase(root, spell);
         if (comId === -1) {
             return false;
         }
 
         return ActionRouter.driver.castOnNpc(comId, npc.index);
+    },
+
+    /**
+     * Cast a standard spellbook teleport by destination name.
+     * Uses the magic root for live name lookup when available without activating
+     * its side tab, then falls back to the 2004 component ID. Success confirms
+     * dispatch, not arrival.
+     */
+    async teleport(name: string): Promise<boolean> {
+        const teleport = resolveTeleport(name);
+        if (teleport === null) {
+            return false;
+        }
+
+        const root = reader.sideTabInterface(MAGIC_TAB);
+        const comId = resolveTeleportComponent(teleport, label => reader.buttonByText(root, label));
+        return actions.ifButton(comId);
     }
 };
 

@@ -2,14 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import {
     DEFAULT_CHASE_RADIUS,
     HOME_ARRIVE_RADIUS,
+    LOCAL_MINE_PREFER_RADIUS,
     NAMED_CAMP_LEASH_FLOOR,
     effectiveGatherLeash,
     fishingSessionBroken,
     gatherHuntRadius,
     gatherSpotRangeOrigin,
     hostileAttackerNearby,
+    shouldFleeCombat,
     isAutoLocation,
+    pickNearestPreferLocal,
     resourceWithinCamp,
+    shouldCooldownGatherTile,
     shouldSoftHomeFromGatherMiss,
     shouldWalkHomeToGatherAnchor,
     shouldYieldGathering,
@@ -105,34 +109,27 @@ describe('resourceWithinCamp + chase (named camp hop fence)', () => {
         expect(resourceWithinCamp(72, 80)).toBe(true);
     });
 
-    test('player-relative chase accepts spots near the bot regardless of pin distance math', () => {
-        // Scenario: player mid-pier (dist 50 from pin), spot 3 tiles away.
-        // Chase disk from player: in range. Camp fence: pin→spot ~53 still in 64.
-        expect(spotWithinGatherRange(3, DEFAULT_CHASE_RADIUS)).toBe(true);
-        expect(resourceWithinCamp(53, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
-        // Spot next to player but outside membership → fence rejects (wrong coastline).
-        expect(spotWithinGatherRange(2, DEFAULT_CHASE_RADIUS)).toBe(true);
-        expect(resourceWithinCamp(70, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
-    });
-
-    test('camp scan covers far pier hops from home when chase-from-player would miss', () => {
-        // Player at home pin; spot at dist 50 (outside chase 24 / hunt 36, inside membership 64).
-        expect(spotWithinGatherRange(50, DEFAULT_CHASE_RADIUS)).toBe(false);
-        expect(spotWithinGatherRange(50, gatherHuntRadius(DEFAULT_CHASE_RADIUS))).toBe(false);
+    test('named camps accept any spot inside membership (no player-distance wall)', () => {
+        // Spot 50 from player is still valid if within camp membership of home.
         expect(resourceWithinCamp(50, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
-        // Old pin-disk stuck: spot at 72 > membership 64 needs a wider campRadius on that camp.
-        expect(resourceWithinCamp(72, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+        expect(resourceWithinCamp(64, NAMED_CAMP_LEASH_FLOOR)).toBe(true);
+        // Outside membership → wrong coastline / off-camp.
+        expect(resourceWithinCamp(70, NAMED_CAMP_LEASH_FLOOR)).toBe(false);
+        // Wider per-camp membership covers long piers past the old ~72 stuck.
         expect(resourceWithinCamp(72, 80)).toBe(true);
     });
 
-    test('resolveCampRadius / resolveChaseRadius defaults', () => {
+    test('resolveCampRadius / freeform hunt defaults', () => {
         expect(DEFAULT_CAMP_RADIUS).toBe(64);
-        expect(DEFAULT_CHASE_RADIUS).toBe(24);
+        expect(DEFAULT_CHASE_RADIUS).toBe(40);
         expect(resolveCampRadius(undefined)).toBe(64);
         expect(resolveCampRadius(48)).toBe(48);
-        expect(resolveChaseRadius(undefined)).toBe(24);
+        expect(resolveChaseRadius(undefined)).toBe(40);
         expect(resolveChaseRadius(30)).toBe(30);
-        expect(gatherHuntRadius(DEFAULT_CHASE_RADIUS)).toBe(DEFAULT_CHASE_RADIUS + 12);
+        // Freeform hunt: L+24 floor 48 — leash 28 → 52, not the old "40 of you" wall.
+        expect(gatherHuntRadius(28)).toBe(52);
+        expect(gatherHuntRadius(18)).toBe(48);
+        expect(gatherHuntRadius(40)).toBe(64);
     });
 });
 
@@ -212,6 +209,18 @@ describe('hostileAttackerNearby (post-kite camp suppress)', () => {
     });
 });
 
+describe('shouldFleeCombat (no blind kite on sticky combatCycle)', () => {
+    test('requires combat + real attacker, not sticky flag alone', () => {
+        expect(shouldFleeCombat({ inCombat: true, eventPending: false, hasAttacker: true })).toBe(true);
+        expect(shouldFleeCombat({ inCombat: true, eventPending: false, hasAttacker: false })).toBe(false);
+        expect(shouldFleeCombat({ inCombat: false, eventPending: false, hasAttacker: true })).toBe(false);
+    });
+
+    test('yields while a random event is pending', () => {
+        expect(shouldFleeCombat({ inCombat: true, eventPending: true, hasAttacker: true })).toBe(false);
+    });
+});
+
 describe('effectiveGatherLeash', () => {
     test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
@@ -245,11 +254,55 @@ describe('isAutoLocation', () => {
 });
 
 describe('gatherHuntRadius', () => {
-    test('extends past leash without a hard 40 cap', () => {
-        expect(gatherHuntRadius(18)).toBe(30);
-        expect(gatherHuntRadius(40)).toBe(52);
-        expect(gatherHuntRadius(NAMED_CAMP_LEASH_FLOOR)).toBeGreaterThan(NAMED_CAMP_LEASH_FLOOR);
-        expect(gatherHuntRadius(NAMED_CAMP_LEASH_FLOOR)).toBe(NAMED_CAMP_LEASH_FLOOR + 12);
+    test('extends past freeform leash without a hard 40 cap', () => {
+        expect(gatherHuntRadius(18)).toBe(48);
+        expect(gatherHuntRadius(28)).toBe(52);
+        expect(gatherHuntRadius(40)).toBe(64);
+        expect(gatherHuntRadius(NAMED_CAMP_LEASH_FLOOR)).toBe(NAMED_CAMP_LEASH_FLOOR + 24);
+    });
+});
+
+describe('pickNearestPreferLocal (mine/chop target pick)', () => {
+    const rock = (id: string, dist: number) => ({ id, dist });
+
+    test('prefers local cluster when any rock is within prefer radius', () => {
+        // Dwarven-style: iron 3 tiles away and iron 28 tiles across the tunnel.
+        const near = rock('near', 3);
+        const far = rock('far', 28);
+        expect(LOCAL_MINE_PREFER_RADIUS).toBe(12);
+        expect(pickNearestPreferLocal([far, near], r => r.dist)?.id).toBe('near');
+        // Far alone still returns far when nothing local is up.
+        expect(pickNearestPreferLocal([far], r => r.dist)?.id).toBe('far');
+    });
+
+    test('among local rocks picks the closest', () => {
+        const a = rock('a', 5);
+        const b = rock('b', 2);
+        const far = rock('far', 40);
+        expect(pickNearestPreferLocal([a, far, b], r => r.dist)?.id).toBe('b');
+    });
+
+    test('empty candidates → null', () => {
+        expect(pickNearestPreferLocal([], () => 0)).toBe(null);
+    });
+
+    test('preferRadius 0 falls back to global nearest', () => {
+        const near = rock('near', 3);
+        const far = rock('far', 28);
+        expect(pickNearestPreferLocal([far, near], r => r.dist, 0)?.id).toBe('near');
+    });
+});
+
+describe('shouldCooldownGatherTile (iron respawn thrash)', () => {
+    test('does not cooldown after a successful ore/log', () => {
+        // Iron respawn ~6t; old always-cooldown 8t sent the bot across the mine.
+        expect(shouldCooldownGatherTile(true, true)).toBe(false);
+        expect(shouldCooldownGatherTile(true, false)).toBe(false);
+    });
+
+    test('cools only failed clicks when other targets exist', () => {
+        expect(shouldCooldownGatherTile(false, true)).toBe(true);
+        expect(shouldCooldownGatherTile(false, false)).toBe(false);
     });
 });
 

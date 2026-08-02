@@ -37,6 +37,19 @@ export default class EntityQuery<E extends QueryableEntity> {
         return this;
     }
 
+    /**
+     * Chebyshev disk around an arbitrary tile (camp pin, booth stand, furnace).
+     * Prefer this over hand-rolling `tile.distanceTo(stand) <= leash` in scripts.
+     */
+    withinOf(origin: WorldTile, dist: number): this {
+        const r = Math.max(0, Math.floor(dist));
+        this.filters.push(e => {
+            const t = e.tile();
+            return Math.max(Math.abs(t.x - origin.x), Math.abs(t.z - origin.z)) <= r;
+        });
+        return this;
+    }
+
     inside(area: { minX: number; maxX: number; minZ: number; maxZ: number }): this {
         this.filters.push(e => {
             const t: WorldTile = e.tile();
@@ -62,6 +75,33 @@ export default class EntityQuery<E extends QueryableEntity> {
             }
         }
 
+        return best;
+    }
+
+    /**
+     * Nearest to the player among results; when any result is within
+     * {@link preferRadius} of the player, only that local set is considered.
+     * @see pickNearestPreferLocal in TargetPick.ts
+     */
+    nearestPreferLocal(preferRadius: number): E | null {
+        const r = Math.max(0, Math.floor(preferRadius));
+        const all = this.results();
+        if (all.length === 0) {
+            return null;
+        }
+        let pool = all;
+        if (r > 0) {
+            const local = all.filter(e => e.distance() <= r);
+            if (local.length > 0) {
+                pool = local;
+            }
+        }
+        let best: E | null = null;
+        for (const e of pool) {
+            if (!best || e.distance() < best.distance()) {
+                best = e;
+            }
+        }
         return best;
     }
 

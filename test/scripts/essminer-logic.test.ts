@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, PICK_TIERS, inEssMine, requiredMiningLevel, resolvePick, withdrawOneOp } from '#/bot/scripts/EssMinerLogic.js';
+import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, PICK_TIERS, desiredPickaxe, heldPickaxeToKeep, inEssMine, needsPickaxeCheck, requiredMiningLevel, resolvePick, withdrawOneOp } from '#/bot/scripts/EssMinerLogic.js';
 
 describe('PICK_TIERS', () => {
     test('best-first with the content levelrequire values (pickaxes.obj)', () => {
@@ -19,6 +19,26 @@ describe('requiredMiningLevel', () => {
         expect(requiredMiningLevel('steel')).toBe(6);
         expect(requiredMiningLevel(BEST_AVAILABLE)).toBeNull();
         expect(requiredMiningLevel('Dragon')).toBeNull();
+    });
+});
+
+describe('desiredPickaxe', () => {
+    test('Best available resolves the exact highest tier the level can use', () => {
+        expect(desiredPickaxe(BEST_AVAILABLE, 50)?.item).toBe('Rune pickaxe');
+        expect(desiredPickaxe(BEST_AVAILABLE, 40)?.item).toBe('Adamant pickaxe');
+        expect(desiredPickaxe(BEST_AVAILABLE, 20)?.item).toBe('Steel pickaxe');
+    });
+    test('specific selections remain exact and level-gated', () => {
+        expect(desiredPickaxe('Mithril', 50)?.item).toBe('Mithril pickaxe');
+        expect(desiredPickaxe('Mithril', 20)).toBeNull();
+    });
+});
+
+describe('needsPickaxeCheck', () => {
+    test('re-arms only when a Mining threshold unlocks another tier', () => {
+        expect(needsPickaxeCheck('Adamant pickaxe', BEST_AVAILABLE, 40)).toBe(false);
+        expect(needsPickaxeCheck('Adamant pickaxe', BEST_AVAILABLE, 41)).toBe(true);
+        expect(needsPickaxeCheck('Rune pickaxe', BEST_AVAILABLE, 42)).toBe(false);
     });
 });
 
@@ -59,6 +79,24 @@ describe('resolvePick', () => {
     });
     test('name matching is case-insensitive', () => {
         expect(resolvePick(BEST_AVAILABLE, 50, ['rune PICKAXE'], [])).toEqual({ kind: 'held', item: 'Rune pickaxe' });
+    });
+});
+
+describe('heldPickaxeToKeep', () => {
+    test('keeps only the best usable held tier for Best available', () => {
+        expect(heldPickaxeToKeep(BEST_AVAILABLE, 50, ['Bronze pickaxe', 'Rune pickaxe', 'Logs']))
+            .toBe('Rune pickaxe');
+    });
+    test('does not preserve a higher tier the miner cannot use', () => {
+        expect(heldPickaxeToKeep(BEST_AVAILABLE, 40, ['Rune pickaxe', 'Steel pickaxe']))
+            .toBe('Steel pickaxe');
+    });
+    test('specific tier settings remain authoritative', () => {
+        expect(heldPickaxeToKeep('Bronze', 50, ['Rune pickaxe', 'Bronze pickaxe']))
+            .toBe('Bronze pickaxe');
+    });
+    test('returns null when no selected usable pickaxe is held', () => {
+        expect(heldPickaxeToKeep(BEST_AVAILABLE, 50, ['Logs', 'Coins'])).toBeNull();
     });
 });
 

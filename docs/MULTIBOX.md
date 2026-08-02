@@ -11,6 +11,7 @@ bot starves. In a single tab they all hold full speed while that tab is visible.
 ## Contents
 
 - [Slots and iframes](#slots-and-iframes)
+- [Tabs](#tabs)
 - [Profiles and the vault](#profiles-and-the-vault)
 - [Login coordination](#login-coordination)
 - [Resource telemetry](#resource-telemetry)
@@ -60,6 +61,26 @@ Five details that are not guessable from the outside:
 
 Reordering slots preserves the client in each one. Rebuilding the iframe would drop
 the bot's session and force a re-login.
+
+## Tabs
+
+The strip above the tiles ([`TabBar`](../src/bot/multibox/TabBar.ts)) groups bots
+into tabs. `Main` always exists and cannot be renamed, deleted, or moved. `+` adds
+a tab; the gear on the active custom tab renames or deletes it, and deleting folds
+its bots into the tab to its left. Chips drag left/right to reorder. New bots join
+the active tab, and dropping a bot tile on a chip files that bot there — the way
+to organize bots that are already logged in.
+
+Tabs are a visibility filter over the one rail: a hidden tile keeps its iframe,
+session, and slot position, because reparenting an iframe reloads its client.
+Focus and Up/Down keyboard navigation stay within the active tab; an empty active
+tab leaves the main pane blank.
+
+The tab list, per-account membership, and the active tab persist in the encrypted
+vault payload alongside the profiles — account and tab names never hit disk in
+plaintext — so a reload plus "load all profiles" restores the whole wall. Deleting
+a tab also clears it from saved profiles that are not currently loaded; those land
+in Main.
 
 The renderer switch intentionally retains that iframe's scene and assets. It is a
 CPU optimization, not a headless-memory mode: correctness and instant restoration

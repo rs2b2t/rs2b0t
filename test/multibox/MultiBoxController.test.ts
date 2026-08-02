@@ -221,3 +221,160 @@ describe('MultiBoxController', () => {
         expect(c.snapshot()).toEqual([]);
     });
 });
+
+describe('MultiBoxController tabs', () => {
+    test('bots join the active tab and snapshots carry it', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.add();
+        expect(c.tabs()).toEqual(['Main']);
+        expect(c.activeTab()).toBe('Main');
+        expect(c.snapshot()[0].tab).toBe('Main');
+    });
+
+    test('addTab validates the name and stays on the current tab', () => {
+        const c = new MultiBoxController(new FakeOps());
+        expect(c.addTab('miners')).toBe(true);
+        expect(c.addTab('miners')).toBe(false);
+        expect(c.addTab('Main')).toBe(false);
+        expect(c.addTab('   ')).toBe(false);
+        expect(c.tabs()).toEqual(['Main', 'miners']);
+        expect(c.activeTab()).toBe('Main');
+    });
+
+    test('a bot added while a custom tab is active joins and focuses there', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('miners');
+        c.setActiveTab('miners');
+        const snap = c.add()!;
+        expect(snap.tab).toBe('miners');
+        expect(c.focusedId).toBe(snap.id);
+    });
+
+    test('switching to an empty tab blanks focus and backgrounds every bot', () => {
+        const ops = new FakeOps();
+        const c = new MultiBoxController(ops);
+        c.add();
+        c.addTab('empty');
+        expect(c.setActiveTab('empty')).toBe(true);
+        expect(c.setActiveTab('ghost')).toBe(false);
+        expect(c.focusedId).toBeNull();
+        expect(ops.handles[0].mode).toBe('background');
+    });
+
+    test('switching back to a populated tab focuses its first bot', () => {
+        const c = new MultiBoxController(new FakeOps());
+        const a = c.add()!;
+        c.add();
+        c.addTab('empty');
+        c.setActiveTab('empty');
+        c.setActiveTab('Main');
+        expect(c.focusedId).toBe(a.id);
+    });
+
+    test('a restored bot spawns into its own tab without stealing focus', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        const front = c.add()!;
+        const hidden = c.add({ username: 'x', password: '', tab: 'alts' })!;
+        expect(hidden.tab).toBe('alts');
+        expect(c.focusedId).toBe(front.id);
+        expect(c.activeTab()).toBe('Main');
+    });
+
+    test('adding to an unknown tab throws instead of mis-filing the bot', () => {
+        const c = new MultiBoxController(new FakeOps());
+        expect(() => c.add({ username: 'x', password: '', tab: 'ghost' })).toThrow(/ghost/);
+    });
+
+    test('focusAdjacent walks only the active tab', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        const a = c.add()!;
+        c.add({ username: 'mid', password: '', tab: 'alts' });
+        const b = c.add()!;
+        c.focus(a.id);
+        expect(c.focusAdjacent(1)).toBe(true);
+        expect(c.focusedId).toBe(b.id);
+        expect(c.focusAdjacent(1)).toBe(false);
+    });
+
+    test('moveFocused swaps with its same-tab neighbour across hidden bots', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        const a = c.add()!;
+        c.add({ username: 'mid', password: '', tab: 'alts' });
+        c.add();
+        c.focus(a.id);
+        expect(c.moveFocused(1)).toBe(true);
+        expect(c.snapshot().map(s => s.username)).toEqual(['mid', 'bot3', 'bot1']);
+        expect(c.focusedId).toBe(a.id);
+    });
+
+    test('renameTab renames the tab, its bots, and the active pointer', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        c.setActiveTab('alts');
+        const s = c.add()!;
+        expect(c.renameTab('alts', 'mules')).toBe(true);
+        expect(c.tabs()).toEqual(['Main', 'mules']);
+        expect(c.activeTab()).toBe('mules');
+        expect(c.snapshot().find(x => x.id === s.id)!.tab).toBe('mules');
+        expect(c.renameTab('Main', 'x')).toBe(false);
+        expect(c.renameTab('mules', 'Main')).toBe(false);
+    });
+
+    test('removeTab folds its bots into the prior tab', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('a');
+        c.addTab('b');
+        c.setActiveTab('b');
+        const s = c.add()!;
+        expect(c.removeTab('b')).toBe(true);
+        expect(c.tabs()).toEqual(['Main', 'a']);
+        expect(c.activeTab()).toBe('a');
+        expect(c.snapshot().find(x => x.id === s.id)!.tab).toBe('a');
+        expect(c.focusedId).toBe(s.id);
+        expect(c.removeTab('Main')).toBe(false);
+    });
+
+    test('moveTab reorders custom tabs but never displaces Main', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('a');
+        c.addTab('b');
+        expect(c.moveTab('b', 1)).toBe(true);
+        expect(c.tabs()).toEqual(['Main', 'b', 'a']);
+        expect(c.moveTab('a', 0)).toBe(true);
+        expect(c.tabs()).toEqual(['Main', 'a', 'b']);
+        expect(c.moveTab('Main', 2)).toBe(false);
+    });
+
+    test('setSlotTab moves a bot and refocuses when it leaves the active tab', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        const a = c.add()!;
+        const b = c.add()!;
+        c.focus(b.id);
+        expect(c.setSlotTab(b.id, 'alts')).toBe(true);
+        expect(c.snapshot().find(s => s.id === b.id)!.tab).toBe('alts');
+        expect(c.focusedId).toBe(a.id);
+        expect(c.setSlotTab(a.id, 'ghost')).toBe(false);
+        expect(c.setSlotTab(999, 'alts')).toBe(false);
+    });
+
+    test('focus on a bot in another tab activates that tab', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.addTab('alts');
+        const hidden = c.add({ username: 'x', password: '', tab: 'alts' })!;
+        c.focus(hidden.id);
+        expect(c.activeTab()).toBe('alts');
+        expect(c.focusedId).toBe(hidden.id);
+    });
+
+    test('setTabState replaces tabs and active for vault hydration', () => {
+        const c = new MultiBoxController(new FakeOps());
+        c.setTabState(['a', 'b'], 'b');
+        expect(c.tabs()).toEqual(['Main', 'a', 'b']);
+        expect(c.activeTab()).toBe('b');
+        expect(() => c.setTabState(['a'], 'ghost')).toThrow(/ghost/);
+    });
+});

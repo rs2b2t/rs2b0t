@@ -24,6 +24,15 @@ export const ROUTE: Route = {
             gates: []
         },
         {
+            id: 'taverley',
+            bank: { stand: { x: 2946, z: 3369, level: 0 }, ...BOOTH },
+            shops: [
+                { shopId: 'herbloreshop', keeperNpc: 'Jatix', stand: { x: 2899, z: 3427, level: 0 }, buys: [{ obj: 'eye_of_newt' }, { obj: 'vial_empty' }] }
+            ],
+            gates: [],
+            repeatWhileFull: true
+        },
+        {
             id: 'catherby',
             bank: { stand: { x: 2809, z: 3441, level: 0 }, ...BOOTH },
             shops: [
@@ -75,7 +84,7 @@ export const ROUTE: Route = {
             setting: 'mageArena'
         }
     ],
-    ring: ['varrock', 'portsarim', 'catherby', 'fishingguild', 'rangingguild', 'magicguild', 'magearena']
+    ring: ['varrock', 'portsarim', 'taverley', 'catherby', 'fishingguild', 'rangingguild', 'magicguild', 'magearena']
 };
 
 export const SMOKE_ROUTE: Route = {

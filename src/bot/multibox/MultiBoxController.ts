@@ -2,11 +2,14 @@ import type { Account, RenderMode, SlotHandle, SlotOps, SlotSnapshot } from './t
 import type { LoginCoordination } from '../runtime/LoginCoordination.js';
 import { LoginCoordinator } from './LoginCoordinator.js';
 
+export const MAIN_TAB = 'Main';
+
 interface Slot {
     id: number;
     account: Account;
     handle: SlotHandle;
     mode: RenderMode;
+    tab: string;
 }
 
 export type RailDirection = -1 | 1;
@@ -16,15 +19,26 @@ export class MultiBoxController {
 
     private slots: Slot[] = [];
     private nextId = 1;
+    private customTabs: string[] = [];
+    private active: string = MAIN_TAB;
 
     constructor(
         private ops: SlotOps,
         private loginCoordination: LoginCoordination = new LoginCoordinator()
     ) {}
 
+    tabs(): string[] {
+        return [MAIN_TAB, ...this.customTabs];
+    }
+
+    activeTab(): string {
+        return this.active;
+    }
+
     // A bot is added empty — its login is typed into the bot's own panel, so there
-    // is nothing to prompt for here. `account` is for automation, which injects
-    // credentials and arms auto-login (creds must land before auto-login is armed).
+    // is nothing to prompt for here. `account` is for automation and vault
+    // restores, which inject credentials and arm auto-login (creds must land
+    // before auto-login is armed).
     add(account?: Account): SlotSnapshot | null {
         const acct: Account = account ?? { username: `bot${this.nextId}`, password: '' };
         if (acct.username.length === 0) {
@@ -33,15 +47,22 @@ export class MultiBoxController {
         if (this.slots.some(s => s.account.username === acct.username)) {
             return null;
         }
+        const tab = account?.tab ?? this.active;
+        if (!this.tabs().includes(tab)) {
+            throw new Error(`unknown tab '${tab}' for bot '${acct.username}'`);
+        }
         const handle = this.ops.spawn(acct);
         handle.setLoginCoordination(this.loginCoordination);
-        const slot: Slot = { id: this.nextId++, account: acct, handle, mode: 'background' };
+        const slot: Slot = { id: this.nextId++, account: acct, handle, mode: 'background', tab };
         this.slots.push(slot);
         if (account) {
             handle.setCredentials(acct.username, acct.password);
         }
-        // a new bot is what you want to look at — it still needs its login
-        this.focusedId = slot.id;
+        // a new bot is what you want to look at — but only when it lands in the
+        // visible tab; a restored bot spawns into its saved (possibly hidden) tab
+        if (tab === this.active) {
+            this.focusedId = slot.id;
+        }
         this.applyModes();
         if (account) {
             handle.setAutoLogin(true);
@@ -59,23 +80,24 @@ export class MultiBoxController {
         if (this.focusedId === id) {
             this.focusedId = null;
         }
-        if (this.slots.length === 1) {
-            this.focusedId = this.slots[0].id;
-        }
         this.applyModes();
     }
 
     focus(id: number): void {
-        if (!this.slots.some(s => s.id === id)) {
+        const slot = this.slots.find(s => s.id === id);
+        if (!slot) {
             return;
         }
+        // focusing a bot means looking at it, so its tab becomes the active one
+        this.active = slot.tab;
         this.focusedId = id;
         this.applyModes();
     }
 
     focusAdjacent(direction: RailDirection): boolean {
-        const current = this.slots.findIndex(s => s.id === this.focusedId);
-        const target = this.slots[current + direction];
+        const visible = this.visibleSlots();
+        const current = visible.findIndex(s => s.id === this.focusedId);
+        const target = visible[current + direction];
         if (current < 0 || !target) {
             return false;
         }
@@ -84,11 +106,13 @@ export class MultiBoxController {
     }
 
     moveFocused(direction: RailDirection): boolean {
-        const current = this.slots.findIndex(s => s.id === this.focusedId);
-        if (current < 0) {
+        const visible = this.visibleSlots();
+        const current = visible.findIndex(s => s.id === this.focusedId);
+        const neighbour = visible[current + direction];
+        if (current < 0 || !neighbour) {
             return false;
         }
-        return this.move(this.slots[current].id, current + direction);
+        return this.move(visible[current].id, this.slots.findIndex(s => s.id === neighbour.id));
     }
 
     move(id: number, toIndex: number): boolean {
@@ -106,6 +130,107 @@ export class MultiBoxController {
         this.slots.splice(destination, 0, slot);
         this.ops.move(slot.handle, this.slots[destination + 1]?.handle ?? null);
         return true;
+    }
+
+    addTab(name: string): boolean {
+        const trimmed = name.trim();
+        if (trimmed.length === 0 || this.tabs().includes(trimmed)) {
+            return false;
+        }
+        this.customTabs.push(trimmed);
+        return true;
+    }
+
+    renameTab(oldName: string, newName: string): boolean {
+        const idx = this.customTabs.indexOf(oldName);
+        const trimmed = newName.trim();
+        if (idx < 0 || trimmed.length === 0 || this.tabs().includes(trimmed)) {
+            return false;
+        }
+        this.customTabs[idx] = trimmed;
+        for (const s of this.slots) {
+            if (s.tab === oldName) {
+                s.tab = trimmed;
+            }
+        }
+        if (this.active === oldName) {
+            this.active = trimmed;
+        }
+        return true;
+    }
+
+    removeTab(name: string): boolean {
+        const idx = this.customTabs.indexOf(name);
+        if (idx < 0) {
+            return false;
+        }
+        // Main sits pinned at 0, so every custom tab has a left neighbour
+        const prior = this.tabs()[idx];
+        this.customTabs.splice(idx, 1);
+        for (const s of this.slots) {
+            if (s.tab === name) {
+                s.tab = prior;
+            }
+        }
+        if (this.active === name) {
+            this.active = prior;
+        }
+        this.applyModes();
+        return true;
+    }
+
+    moveTab(name: string, toIndex: number): boolean {
+        const from = this.customTabs.indexOf(name);
+        if (from < 0 || !Number.isSafeInteger(toIndex)) {
+            return false;
+        }
+        // toIndex is in tabs() space, where Main is pinned at 0
+        const dest = Math.max(1, Math.min(this.customTabs.length, toIndex)) - 1;
+        if (dest === from) {
+            return false;
+        }
+        const [tab] = this.customTabs.splice(from, 1);
+        this.customTabs.splice(dest, 0, tab);
+        return true;
+    }
+
+    setActiveTab(name: string): boolean {
+        if (this.active === name || !this.tabs().includes(name)) {
+            return false;
+        }
+        this.active = name;
+        this.applyModes();
+        return true;
+    }
+
+    setSlotTab(id: number, tab: string): boolean {
+        const slot = this.slots.find(s => s.id === id);
+        if (!slot || slot.tab === tab || !this.tabs().includes(tab)) {
+            return false;
+        }
+        slot.tab = tab;
+        this.applyModes();
+        return true;
+    }
+
+    // Vault hydration replaces the tab config wholesale, so it validates loudly
+    // instead of returning false like the incremental mutators.
+    setTabState(customTabs: string[], activeTab: string): void {
+        const tabs = [MAIN_TAB, ...customTabs];
+        if (new Set(tabs).size !== tabs.length) {
+            throw new Error(`duplicate tab names in ${JSON.stringify(customTabs)}`);
+        }
+        if (!tabs.includes(activeTab)) {
+            throw new Error(`active tab '${activeTab}' is not in ${JSON.stringify(tabs)}`);
+        }
+        for (const s of this.slots) {
+            if (!tabs.includes(s.tab)) {
+                throw new Error(`bot '${s.account.username}' sits in tab '${s.tab}', which is not in ${JSON.stringify(tabs)}`);
+            }
+        }
+        this.customTabs = [...customTabs];
+        this.active = activeTab;
+        this.applyModes();
     }
 
     snapshot(): SlotSnapshot[] {
@@ -130,11 +255,16 @@ export class MultiBoxController {
         }
     }
 
+    private visibleSlots(): Slot[] {
+        return this.slots.filter(s => s.tab === this.active);
+    }
+
     private applyModes(): void {
-        // exactly one slot is focused whenever any exist; the rest render live
-        // (background) so their rail thumbnails keep painting.
-        if (this.slots.length > 0 && !this.slots.some(s => s.id === this.focusedId)) {
-            this.focusedId = this.slots[0].id;
+        // focus lives in the active tab: exactly one focused slot whenever the
+        // active tab has any; an empty active tab leaves the main pane blank.
+        const visible = this.visibleSlots();
+        if (!visible.some(s => s.id === this.focusedId)) {
+            this.focusedId = visible[0]?.id ?? null;
         }
         for (const s of this.slots) {
             this.setMode(s, s.id === this.focusedId ? 'focused' : 'background');
@@ -147,6 +277,6 @@ export class MultiBoxController {
     }
 
     private snap(slot: Slot): SlotSnapshot {
-        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, ...slot.handle.status() };
+        return { id: slot.id, username: slot.account.username, focused: slot.id === this.focusedId, mode: slot.mode, tab: slot.tab, ...slot.handle.status() };
     }
 }

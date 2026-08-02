@@ -25,7 +25,8 @@
         "gen:scriptdocs": "bun tools/gen-scriptdocs.ts",
         "verify:gather-locs": "bun tools/verify-gathering-locations.ts",
         "verify:gatheringbot": "bun tools/gatheringbot-test.ts",
-        "verify:thievingbot": "bun tools/thievingbot-test.ts"
+        "verify:thievingbot": "bun tools/thievingbot-test.ts",
+    "verify:coaltrucks": "bun tools/coaltrucks-test.ts"
     },
     "dependencies": {
         "fflate": "^0.8.2"

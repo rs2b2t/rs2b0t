@@ -10,8 +10,32 @@
         #mbx-app { display: flex; height: 100vh; }
         #mbx-main { flex: 1 1 auto; min-width: 0; position: relative; background: #0a0a0a; }
         /* RAIL_W below must match RAIL_W in DomSlotOps.ts (focused-slot geometry depends on it) */
-        #mbx-rail { flex: 0 0 264px; width: 264px; box-sizing: border-box; height: 100vh; overflow-y: auto; overflow-x: hidden; padding: 12px; background: #111; border-left: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
+        #mbx-rail { flex: 0 0 264px; width: 264px; box-sizing: border-box; height: 100vh; overflow-y: auto; overflow-x: hidden; padding: 0 12px 12px; background: #111; border-left: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
         #mbx-rail:focus { outline: 1px solid #04A800; outline-offset: -1px; }
+
+        /* tab strip: small chips pinned above the tiles, which scroll under it.
+           Slot tiles order themselves -N..-1 (DomSlotOps), so the strip needs an
+           order below any realistic bot count to stay first in the rail. */
+        #mbx-tabs { order: -100000; position: sticky; top: 0; z-index: 5; flex: 0 0 auto; margin: 0 -12px; padding: 8px 12px; background: #111; border-bottom: 1px solid #222; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+        .mbx-tabchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid #2c2c2c; border-radius: 3px; background: #1a1a1a; color: #999; cursor: pointer; user-select: none; }
+        .mbx-tabchip:hover { border-color: #04A800; }
+        .mbx-tabchip.is-active { background: #07330a; border-color: #04A800; color: #5be05b; }
+        .mbx-tabchip.is-dragging { opacity: 0.4; }
+        .mbx-tabchip.mbx-tabdrop-before { box-shadow: -4px 0 0 #04A800; }
+        .mbx-tabchip.mbx-tabdrop-after { box-shadow: 4px 0 0 #04A800; }
+        .mbx-tabchip.mbx-tabdrop-into { border-color: #04A800; box-shadow: inset 0 0 0 1px #04A800; }
+        .mbx-tabadd { color: #666; border-style: dashed; }
+        .mbx-tabadd:hover { color: #04A800; }
+        .mbx-tabgear { background: none; border: 0; padding: 0; color: #3f7a41; cursor: pointer; font: inherit; line-height: 1; }
+        .mbx-tabgear:hover { color: #5be05b; }
+        .mbx-tabinput { width: 90px; background: #000; border: 1px solid #333; color: #ddd; font: inherit; padding: 1px 4px; border-radius: 2px; }
+        .mbx-tabinput.is-invalid { border-color: #e05b5b; }
+        .mbx-tabmenu { position: absolute; z-index: 45; display: flex; flex-direction: column; background: #111; border: 1px solid #333; border-radius: 3px; }
+        .mbx-tabmenu button { background: none; border: 0; color: #999; padding: 4px 10px; cursor: pointer; font: inherit; text-align: left; }
+        .mbx-tabmenu button:hover { color: #5be05b; background: #101d11; }
+        /* a tile outside the active tab: hidden but never removed — DOM order is
+           the slot order, and reparenting an iframe would reload its client */
+        .mbx-slot.mbx-tab-hidden { display: none; }
 
         /* a rail tile: name + status dot over a live game frame cropped to the game viewport */
         .mbx-slot { width: 236px; flex: 0 0 auto; border: 1px solid #2c2c2c; border-radius: 4px; background: #000; cursor: grab; overflow: hidden; user-select: none; }
@@ -91,6 +115,7 @@
     <div id="mbx-app">
         <div id="mbx-main"></div>
         <div id="mbx-rail" tabindex="0" aria-label="running bots">
+            <div id="mbx-tabs" aria-label="bot tabs"></div>
             <div id="mbx-add" class="mbx-addtile">+ add bot</div>
             <div id="mbx-resources" class="mbx-resources">
                 <div id="mbx-resource-bots" class="mbx-resource-bots">0 bots</div>

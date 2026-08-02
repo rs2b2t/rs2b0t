@@ -1,4 +1,6 @@
+import { reader } from '../adapter/ClientAdapter.js';
 import type { AbstractBot } from '../api/Bot.js';
+import { Execution } from '../api/Execution.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Sustain } from '../api/Sustain.js';
 import type { PaintFrame } from '../api/hud/Paint.js';
@@ -11,12 +13,24 @@ import type { ScriptMeta } from './ScriptRegistry.js';
 import { SettingsBag, SettingsStore } from './Settings.js';
 import { Supervisor } from './Supervisor.js';
 
+/**
+ * Logged out (or mid scene load) the adapter serves stale or empty state, so a
+ * script reading it draws wrong conclusions — a stale tile, a blank inventory.
+ * Scripts only ever run behind this gate. With no client attached at all
+ * (unit tests) there is no game state to protect and the gate stays out of
+ * the way.
+ */
+function ingameOrDetached(): boolean {
+    return !reader.attached() || (reader.ingame() && reader.sceneState() === 2 && reader.worldTile() !== null);
+}
+
 class ScriptRunnerImpl {
     ctx: ScriptContext | null = null;
     bot: AbstractBot | null = null;
     meta: ScriptMeta | null = null;
 
     private changeListeners = new Set<() => void>();
+    private loggedOutSince = 0;
 
     constructor() {
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
@@ -64,8 +78,14 @@ class ScriptRunnerImpl {
         ctx.addLog('info', `${meta.name} started (input: ${ActionRouter.driver.mode})`);
         this.fireChange();
 
+        this.loggedOutSince = 0;
         ctx.loopInFlight = true;
         (async () => {
+            if (!ingameOrDetached()) {
+                ctx.addLog('warn', 'not ingame — waiting for login before the script reads game state (auto-login kicks in if credentials are saved)');
+                await Execution.delayUntil(ingameOrDetached, 0);
+                ctx.addLog('info', 'ingame — starting');
+            }
             await bot.onStart?.();
         })()
             .then(() => {
@@ -148,6 +168,21 @@ class ScriptRunnerImpl {
         const bot = this.bot;
         if (!bot || ctx !== this.ctx) {
             return;
+        }
+
+        if (!ingameOrDetached()) {
+            if (this.loggedOutSince === 0) {
+                this.loggedOutSince = performance.now();
+                ctx.addLog('warn', 'logged out — holding the loop until back ingame');
+            }
+            // deliberate wait, not a stall: keep StallGuard from churn-restarting
+            ctx.progress();
+            ctx.nextLoopAt = performance.now() + 600;
+            return;
+        }
+        if (this.loggedOutSince > 0) {
+            ctx.addLog('info', `back ingame after ${Math.round((performance.now() - this.loggedOutSince) / 1000)}s — resuming the loop`);
+            this.loggedOutSince = 0;
         }
 
         const takeover = Supervisor.intercept(ctx, bot);

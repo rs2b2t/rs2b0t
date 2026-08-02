@@ -1,5 +1,7 @@
-import { InvItem } from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach } from 'bun:test';
+import * as RealNpcs from '#/bot/api/queries/Npcs.js';
+import * as RealGroundItems from '#/bot/api/queries/GroundItems.js';
+import * as RealInventory from '#/bot/api/hud/Inventory.js';
+import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 
@@ -21,18 +23,20 @@ mock.module('#/bot/api/Execution.js', () => ({
         delayTicks: async (): Promise<void> => {}
     }
 }));
-mock.module('#/bot/api/hud/Inventory.js', () => ({
-    InvItem,
-    Inventory: {
-        items: () => {
-            const clue = coordClueId !== null ? [{ id: coordClueId, name: 'coord clue', count: 1, slot: 0 }] : [];
-            const tools = held.map((name, i) => ({ id: 5000 + i, name, count: 1, slot: i + 1 }));
-            return [...clue, ...tools];
-        },
-        first: (name: string) => (held.includes(name) ? { name } : null),
-        count: (name: string) => held.filter(n => n === name).length
-    }
-}));
+// Mutate the singleton instead of mock.module: a module replacement is global and
+// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
+// Mutation has to be scoped the same way — install per test, restore after the file.
+const realInventoryFns = { ...RealInventory.Inventory };
+const stubInventory = {
+    items: () => {
+        const clue = coordClueId !== null ? [{ id: coordClueId, name: 'coord clue', count: 1, slot: 0 }] : [];
+        const tools = held.map((name, i) => ({ id: 5000 + i, name, count: 1, slot: i + 1 }));
+        return [...clue, ...tools];
+    },
+    first: (name: string) => (held.includes(name) ? { name } : null),
+    count: (name: string) => held.filter(n => n === name).length
+};
+afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
 mock.module('#/bot/api/Traversal.js', () => ({
     Traversal: {
         walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
@@ -48,6 +52,7 @@ mock.module('#/bot/api/Traversal.js', () => ({
     }
 }));
 mock.module('#/bot/api/queries/GroundItems.js', () => ({
+    ...RealGroundItems,
     GroundItems: {
         query: () => {
             let list = groundSpades.map(t => ({
@@ -74,6 +79,7 @@ mock.module('#/bot/api/queries/GroundItems.js', () => ({
     }
 }));
 mock.module('#/bot/api/queries/Npcs.js', () => ({
+    ...RealNpcs,
     Npcs: {
         query: () => {
             let name = '';
@@ -100,6 +106,7 @@ mock.module('#/bot/api/queries/Npcs.js', () => ({
 const { ensureSpade, ensureCoordTools } = await import('#/bot/clues/AcquireTools.js');
 
 beforeEach(() => {
+    Object.assign(RealInventory.Inventory, stubInventory);
     held = [];
     coordClueId = COORD_CLUE_ID;
     playerTile = new Tile(2660, 3300, 0);

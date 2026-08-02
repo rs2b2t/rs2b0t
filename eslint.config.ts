@@ -32,6 +32,16 @@ export default defineConfig([
         }
     },
 
+    // The ported 2004 client swallows exceptions in dozens of places, faithfully to the
+    // original. It is a frozen port, so an empty catch there is intent rather than an
+    // oversight. Everything we write ourselves keeps the rule and comments the intent.
+    {
+        files: ['src/client/**/*.ts', 'src/dash3d/**/*.ts', 'src/graphics/**/*.ts', 'src/mapview/**/*.ts', 'src/config/**/*.ts', 'src/io/**/*.{ts,js}', 'src/sound/**/*.ts', 'src/datastruct/**/*.ts', 'src/wordfilter/**/*.ts'],
+        rules: {
+            'no-empty': ['error', { allowEmptyCatch: true }]
+        }
+    },
+
     // ---- rs2b0t fences ----
     // Only adapter/ may name client internals; everything else in src/bot/
     // imports the adapter. Protocol const-enums are exempt (inlined, no
@@ -60,9 +70,9 @@ export default defineConfig([
     // src/bot/multibox/ stays fenced.
     {
         files: ['src/bot/**/*.ts'],
-        ignores: ['src/bot/ui/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts'],
+        ignores: ['src/bot/ui/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/TabBar.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts'],
         rules: {
-            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,ProfileChooser,VaultPrompt,main}.ts.' }, { name: 'window', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,ProfileChooser,VaultPrompt,main}.ts.' }]
+            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts.' }, { name: 'window', message: 'DOM only in src/bot/ui/, main.ts, and src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts.' }]
         }
     }
 ]);

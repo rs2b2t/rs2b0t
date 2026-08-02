@@ -7,6 +7,8 @@ export interface Account {
     username: string;
     password: string;
     label?: string;
+    // rail tab this bot belongs to; set by vault restores, absent = active tab
+    tab?: string;
 }
 
 export interface SlotStatus {
@@ -25,6 +27,7 @@ export interface SlotSnapshot extends SlotStatus {
     username: string;
     focused: boolean;
     mode: RenderMode;
+    tab: string;
 }
 
 export interface SlotHandle {

@@ -1,3 +1,4 @@
+import * as RealNpcs from '#/bot/api/queries/Npcs.js';
 import { expect, test, describe, mock, beforeEach } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
@@ -53,7 +54,7 @@ mock.module('#/bot/api/Traversal.js', () => ({
     }
 }));
 mock.module('#/bot/api/queries/Locs.js', () => ({ Locs: { query: () => locChain } }));
-mock.module('#/bot/api/queries/Npcs.js', () => ({ Npcs: { query: () => npcChain } }));
+mock.module('#/bot/api/queries/Npcs.js', () => ({ ...RealNpcs, Npcs: { query: () => npcChain } }));
 
 const { gotoNpc } = await import('#/bot/quests/exec/primitives.js');
 

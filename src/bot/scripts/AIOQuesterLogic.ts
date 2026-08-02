@@ -1,3 +1,4 @@
+import { foodForms } from '../api/combat/food.js';
 import type { QuestSustain } from '../quests/engine/types.js';
 
 export interface ResolvedSustainPolicy {
@@ -14,7 +15,11 @@ export function resolveConsumeAction(actions: readonly string[]): string | null 
     return null;
 }
 
-/** Merge the user's general food choice with the active quest's survival policy. */
+/**
+ * Merge the user's general food choice with the active quest's survival policy.
+ * Each food expands to every form it is eaten down through, so a bitten cake is
+ * still recognised as food.
+ */
 export function resolveSustainPolicy(
     configuredFood: string | null,
     configuredEatBelowHp: number,
@@ -24,12 +29,16 @@ export function resolveSustainPolicy(
     const seen = new Set<string>();
     for (const candidate of [...(quest?.foods ?? []), configuredFood]) {
         const food = candidate?.trim();
-        const key = food?.toLowerCase();
-        if (!food || !key || seen.has(key)) {
+        if (!food) {
             continue;
         }
-        seen.add(key);
-        foods.push(food);
+        for (const form of foodForms(food)) {
+            if (seen.has(form)) {
+                continue;
+            }
+            seen.add(form);
+            foods.push(form);
+        }
     }
     return {
         foods,

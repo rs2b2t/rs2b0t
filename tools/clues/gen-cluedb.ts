@@ -154,6 +154,7 @@ if (process.argv.includes('--check')) {
     try {
         current = readFileSync(OUT, 'utf8');
     } catch {
+        // No file yet: an absent db is "stale", which is what the check should report.
     }
     if (current !== fresh) {
         console.error(`STALE: ${OUT} does not match the content pack — run: bun tools/clues/gen-cluedb.ts`);

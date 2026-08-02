@@ -123,7 +123,7 @@ function looksLikeBars(loc: Loc, preferredName?: string): boolean {
     return swingOp(loc.actions()) !== undefined;
 }
 
-function findMonkeyBars(bot: EdgevilleMonkeyBars): Loc | null {
+function findMonkeyBars(_bot: EdgevilleMonkeyBars): Loc | null {
     const radius = 15;
     const preferredName = 'Monkeybars';
     const preferredOp = 'Swing across';
@@ -418,7 +418,6 @@ class BankAndRestock implements Task {
         if (this.bot.died) {
             return true;
         }
-        const foodName = this.bot.settings.str('food', 'Lobster').toLowerCase();
         const fc = foodCount(this.bot.settings.str('food', 'Lobster'));
         const min = this.bot.settings.num('minFood', 1);
         if (fc < min && (Game.tile()?.z ?? 0) < UNDERGROUND_Z) {

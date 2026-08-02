@@ -44,18 +44,21 @@ function main(): void {
         if (!type.op || !type.op.some(op => op?.toLowerCase() === 'open')) {
             continue;
         }
-        // Doors a script refuses until a quest condition is met. Baking them as
+        // Doors whose script refuses the Open its ops advertise. Baking them as
         // ordinary edges makes the pathfinder route through a wall and the walker
         // repath forever against "This door is completely sealed".
-        const QUEST_LOCKED = new Set([
+        const SCRIPT_REFUSED = new Set([
             'closet_door', '1to2', '2to3', '4to5', '5to6', '8to9', '2to5', '3to6', '4to7', '5to8',
             // Rashiliyia's skeletal doors: three bones, or nothing.
             'thzq_tombrooml1', 'thzq_tombrooml2', 'thzq_tombrooml3', 'thzq_tombroomr1', 'thzq_tombroomr2',
             // Her tomb's outer gate: the Beads of the Dead, or she meets you at it.
-            'zombiequeengateclosedl', 'zombiequeengateclosedr'
+            'zombiequeengateclosedl', 'zombiequeengateclosedr',
+            // McGrubor's Wood: locked from inside, the Forester turns you away from
+            // outside. The Loose Railing is the way in, curated in transports.json.
+            'mcgruborgatel', 'mcgruborgater'
         ]);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
-        if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || QUEST_LOCKED.has(type.debugname ?? '')) {
+        if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || SCRIPT_REFUSED.has(type.debugname ?? '')) {
             lockedSkipped++;
             continue;
         }

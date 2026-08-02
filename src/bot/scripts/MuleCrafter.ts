@@ -59,7 +59,6 @@ const ALTAR = { name: 'Altar', op: 'Craft-rune' };
 const PORTAL = { name: 'Portal', op: 'Use' };
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const TEMPLE_Z = 4000;
-const TRADE_RANGE = 1;
 
 export const SETTINGS: SettingsSchema = {
     rune: { type: 'string', default: DEFAULT_RUNE, options: RUNE_OPTIONS, label: 'Rune', help: 'which rune the pair crafts. Air = Falador East bank; Mind = Edgeville bank.' },
@@ -232,7 +231,7 @@ export default class MuleCrafter extends TaskBot {
 
     cfg(): RuneRoute { return this.conf; }
     getMode(): string { return this.mode; }
-    getBankTile(): Tile {return this.bankTile}
+    getBankTile(): Tile {return this.bankTile;}
     fillBank(): boolean { return this.bankFill; }
     setStatus(s: string): void { this.status = s; }
     countCraft(n: number): void { this.crafted += n; }
@@ -427,7 +426,7 @@ class CrafterRequestTrade implements Task {
         if (await Execution.delayUntil(() => Trade.active(), 4000)) {
             this.bot.log(`CrafterRequestTrade: trade became active with ${muleName}`);
         } else {
-            this.bot.log(`CrafterRequestTrade: trade did not become active within 4s`);
+            this.bot.log('CrafterRequestTrade: trade did not become active within 4s');
         }
     }
 }
@@ -456,10 +455,10 @@ class CrafterTradeAtRuins implements Task {
                         this.bot.log(`marked ${who} as traded (confirm complete)`);
                     }
                 } else {
-                    this.bot.log(`CrafterTradeAtRuins: trade closed but got 0 essence — trade may have failed`);
+                    this.bot.log('CrafterTradeAtRuins: trade closed but got 0 essence — trade may have failed');
                 }
             } else {
-                this.bot.log(`CrafterTradeAtRuins: trade still active after 3s wait on confirm`);
+                this.bot.log('CrafterTradeAtRuins: trade still active after 3s wait on confirm');
             }
             return;
         }
@@ -532,7 +531,7 @@ class CrafterGoBank implements Task {
         if(!this.bot.fillBank()){
             this.bot.resetTradedMules();
             this.bot.setStatus('resetting traded mules (bankFill=false)');
-            return
+            return;
         }
 
         if (!isAtTile(this.bot.getBankTile(), 6)) {
@@ -695,7 +694,7 @@ class MuleTradeWithCrafter implements Task {
         if (await Execution.delayUntil(() => Trade.active(), 4000)) {
             this.bot.log(`MuleTradeWithCrafter: trade became active with ${crafter.name}`);
         } else {
-            this.bot.log(`MuleTradeWithCrafter: trade did not become active within 4s`);
+            this.bot.log('MuleTradeWithCrafter: trade did not become active within 4s');
         }
     }
 }
@@ -754,7 +753,7 @@ class MuleTradeExecute implements Task {
                 }
                 this.beforeEss = 0;
             } else {
-                this.bot.log(`MuleTradeExecute: trade still active or beforeEss was 0 after confirm accept`);
+                this.bot.log('MuleTradeExecute: trade still active or beforeEss was 0 after confirm accept');
             }
         }
     }

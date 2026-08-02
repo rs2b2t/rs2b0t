@@ -18,6 +18,20 @@ class ScriptRegistryImpl {
 
     register(meta: ScriptMeta): void {
         this.metas.set(meta.name, meta);
+        this.notify();
+    }
+
+    /** Drop a registration. External scripts and test fixtures both need to leave. */
+    unregister(name: string): boolean {
+        const removed = this.metas.delete(name);
+        if (removed) {
+            this.notify();
+        }
+
+        return removed;
+    }
+
+    private notify(): void {
         for (const listener of this.changeListeners) {
             try {
                 listener();

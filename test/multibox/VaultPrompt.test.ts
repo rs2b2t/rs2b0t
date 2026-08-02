@@ -67,7 +67,7 @@ describe('VaultPrompt', () => {
         q<HTMLInputElement>('#mbx-vault-pass').value = 'pw';
         submit();
         expect(await p).toBe(true);
-        expect(vault.list()).toEqual([{ username: 'alice', password: 'a' }]);
+        expect(vault.list()).toEqual([{ username: 'alice', password: 'a', tab: 'Main' }]);
     });
 
     test('dismissing the overlay resolves false', async () => {

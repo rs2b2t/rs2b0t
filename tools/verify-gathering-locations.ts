@@ -235,8 +235,8 @@ try {
             sample.me && sample.me.level === spot.level
                 ? ` d${chebyshev(sample.me, spot)}`
                 : sample.me
-                  ? ' (wrong level)'
-                  : '';
+                    ? ' (wrong level)'
+                    : '';
         console.log(
             `[${tag}] ${skill} · ${loc.name}  spot=${spot.x},${spot.z},${spot.level}  me=${me}${dist}  verified=${loc.verified}`
         );

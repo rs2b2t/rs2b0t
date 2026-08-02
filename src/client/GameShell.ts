@@ -342,7 +342,7 @@ export default abstract class GameShell {
         this.mouseUp(this.absMouseX, this.absMouseY, e);
     }
 
-    protected mouseUp(x: number, y: number, e: MouseEvent) {
+    protected mouseUp(x: number, y: number, _e: MouseEvent) {
         this.idleTimer = performance.now();
         this.mouseButton = 0;
 
@@ -399,16 +399,16 @@ export default abstract class GameShell {
         this.pointerMove(this.absMouseX, this.absMouseY, e);
     }
 
-    protected pointerMove(x: number, y: number, e: PointerEvent) {
+    protected pointerMove(x: number, y: number, _e: PointerEvent) {
         this.idleTimer = performance.now();
         this.mouseX = x;
         this.mouseY = y;
     }
 
-    protected windowMouseUp(e: MouseEvent) {
+    protected windowMouseUp(_e: MouseEvent) {
     }
 
-    protected windowMouseMove(e: MouseEvent) {
+    protected windowMouseMove(_e: MouseEvent) {
     }
 
     private onkeydown(e: KeyboardEvent) {
@@ -546,7 +546,7 @@ export default abstract class GameShell {
         return (
             this.hasTouchEvents ||
             navigator.maxTouchPoints > 0 ||
-            (navigator as any).msMaxTouchPoints > 0
+            ((navigator as unknown as { msMaxTouchPoints?: number }).msMaxTouchPoints ?? 0) > 0
         );
     }
 

@@ -8,7 +8,8 @@ import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
-import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, matchesUseItem, type SpecialCrossing } from './data/specialCrossings.js';
+import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, meetsSkill, matchesUseItem, type SpecialCrossing } from './data/specialCrossings.js';
+import { Skills } from '../api/hud/Skills.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
@@ -69,6 +70,23 @@ export function matchesTransportLoc(transport: TransportInfo, loc: { readonly id
         return loc.id === transport.locId && tile.x === transport.locX && tile.z === transport.locZ;
     }
     return Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
+}
+
+export function matchesTransportLanding(
+    transport: TransportInfo,
+    expectedLevel: number,
+    before: WorldTile | null,
+    current: WorldTile | null
+): boolean {
+    if (!current) {
+        return false;
+    }
+    if (transport.toTile && current.level === expectedLevel && chebyshev(current, transport.toTile) <= 3) {
+        return true;
+    }
+    return transport.acceptAnyLanding === true && before !== null && (
+        current.level !== before.level || chebyshev(current, before) > 64
+    );
 }
 
 function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
@@ -190,7 +208,9 @@ class WalkExecutorImpl {
         this.doorStrikes.clear();
         this.avoidDoors = [];
         for (const sc of SPECIAL_CROSSINGS) {
-            if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
+            const shortItem = sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires);
+            const shortSkill = sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill);
+            if (shortItem || shortSkill) {
                 this.avoidDoors.push({ x: sc.x, z: sc.z });
             }
         }
@@ -458,6 +478,7 @@ class WalkExecutorImpl {
                 return false;
             }
 
+            const before = reader.worldTile();
             const mark = GameMessages.mark();
             if (!loc.interact(transport.action)) {
                 log(`'${transport.action}' not offered by ${transport.locName} (ops: ${loc.actions().join(', ')})`);
@@ -471,11 +492,7 @@ class WalkExecutorImpl {
                 const climbed = (): boolean => reader.worldTile()?.level === toLevel;
                 crossed = (await Execution.delayUntil(() => climbed() || cantReach(), TRANSPORT_WAIT_MS)) && climbed();
             } else if (transport.toTile !== undefined) {
-                const toTile = transport.toTile;
-                const landed = (): boolean => {
-                    const me = reader.worldTile();
-                    return me !== null && me.level === step.level && chebyshev(me, toTile) <= 3;
-                };
+                const landed = (): boolean => matchesTransportLanding(transport, step.level, before, reader.worldTile());
                 crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
             } else {
                 const open = (): boolean => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step);
@@ -559,6 +576,11 @@ class WalkExecutorImpl {
     private async handleSpecialCrossing(approach: PathStep, step: PathStep, sc: SpecialCrossing, log: (msg: string) => void): Promise<boolean> {
         if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
             log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
+            return false;
+        }
+
+        if (sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill)) {
+            log(`${sc.label}: need ${sc.requiresSkill.name} ${sc.requiresSkill.level} — skipping`);
             return false;
         }
 

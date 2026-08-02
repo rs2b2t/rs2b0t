@@ -167,14 +167,20 @@ const ok = await Execution.delayUntil(() => Inventory.used() < before, 3000);
 Game.ingame(): boolean
 Game.tile(): WorldTile | null   // local player tile, null before login/scene load
 Game.energy(): number           // run energy
+Game.runEnabled(): boolean
 Game.weight(): number
 Game.inCombat(): boolean        // health bar showing
+Game.animating(): boolean
 Game.tick(): number             // server ticks since client boot
 Game.combatMode(): number       // current raw com_mode varp
 Game.combatStyleMode(style: 'attack' | 'strength' | 'controlled' | 'defence'): number | null
 Game.hasCombatStyle(style): boolean
 Game.setCombatStyle(style): boolean
 Game.setCombatMode(mode: number): boolean // exact numeric mode (for ranged styles)
+Game.myName(): string | null
+Game.openSideTab(tab: number): Promise<boolean>
+Game.castOnNpc(spell: string, npc: Npc): Promise<boolean>
+Game.teleport(name: string): Promise<boolean>
 ```
 
 Melee styles are resolved from the Accurate, Aggressive, Controlled, or
@@ -182,6 +188,34 @@ Defensive labels on the equipped weapon's combat interface. This handles
 duplicate and unusual layouts without guessing from the weapon name, button
 count, or ordinal order. If a requested style is unavailable, the last defensive
 button is selected (including controlled on a three-mode weapon).
+
+`Game.teleport()` accepts Varrock, Lumbridge, Falador, Camelot, Ardougne,
+Watchtower, or Trollheim. Names are case-insensitive and may include `Cast` and
+the `teleport` suffix. An unknown name returns `false` without opening a tab or
+clicking a component.
+
+Spell casting does not require magic side tab 6 to be active. The client keeps
+the loaded magic root addressable while another side tab is displayed, so both
+`Game.castOnNpc()` and `Game.teleport()` resolve and dispatch directly against
+that root without changing the player's current tab. There is no separate tab or
+root-availability gate: targeted casts return `false` naturally when their spell
+component cannot be resolved, while teleports can still use their static fallback
+component when live interface lookup is unavailable.
+
+For a recognised teleport, the current interface button is resolved by its
+displayed name. If that live lookup fails, the matching 2004 component ID is
+used as a compatibility fallback. A `true` result only means the component click
+was dispatched; it does not prove the server accepted the cast. Scripts should
+wait for the expected tile or plane change to confirm arrival.
+
+```ts
+if (await Game.teleport('Camelot')) {
+    await Execution.delayUntil(() => {
+        const tile = Game.tile();
+        return tile?.x === 2757 && tile.z === 3478;
+    }, 8000);
+}
+```
 
 ---
 
@@ -395,6 +429,19 @@ COMMON_BANK_LOOT: string[]            // 'uncut', gem names, 'strange fruit', �
 RANDOM_EVENT_CASKET_ID: number        // always treated as common loot
 ```
 
+> **Default to `depositAllExcept`.** Reach for an allow-list (`depositMatcher`, or
+> matching your own product by name) only when you can name every item the pack is
+> allowed to accumulate — and you usually can't. Random events, gem-table rolls, drops
+> and quest leavings all arrive unannounced, and anything the deposit misses **squats a
+> slot on every future trip**. That is a slow leak, not a crash: the bot keeps working
+> while each load quietly shrinks, so nothing fails and no test notices.
+>
+> Deny-listing inverts the failure. An unexpected item gets banked (harmless) instead of
+> hoarded (compounding). Keep the list to what the script genuinely needs to hold — and
+> keep the *specific* item, not the category: `CoalTrucks` keeps the one pickaxe
+> `bestPickaxe` selected, so a spare or an unusable tier is banked rather than squatting
+> a coal slot forever.
+
 **Periodic bank settings** (combat/loot scripts):
 
 ```ts
@@ -461,7 +508,8 @@ Shop.close(): Promise<void>
 ## Trade
 
 Player-to-player trade. Both sides must "Trade with" each other, then accept
-offer + confirm.
+offer + confirm. Any movement or combat closes the modal — own the loop with a
+dedicated task while `Trade.active()`.
 
 ```ts
 Trade.active(): boolean
@@ -477,13 +525,81 @@ Trade.accept(): Promise<boolean>
 Trade.decline(): Promise<void>
 ```
 
+### Partner trade policy (`api/mule/PartnerTrade`)
+
+Pure helpers shared by GatheringBot mule modes, FlaxRunner, and NatureCrafter:
+
+```ts
+parsePartnerList(raw: string): string[]
+isConfiguredPartner(name, partners): boolean
+decideReceiverOfferScreen({ partnerHeader, partners, myOfferSlots, theirProductCount })
+decideGiverOfferScreen(myOfferSlots): 'offer' | 'accept' | 'wait'
+parseMuleMode(raw): 'off' | 'gatherer' | 'mule' | 'cooker' | 'supplier'
+muleGathererHandoffActive / muleReceiverActive / muleCookerActive / muleSupplierActive
+```
+
+GatheringBot `muleMode` + `mulePartner`:
+
+| Mode | Role |
+| --- | --- |
+| Gatherer | Full haul → trade at camp meet (no bank) |
+| Mule | Accept → **bank** (demo for ore/logs; replace with a processor script) |
+| Cooker | Accept **raw fish** → cook at camp range → bank cooked (`burntPolicy`) |
+| Supplier | Withdraw raw from bank when N ready → trade at meet (pairs with Cooker) |
+
+### Cooking ranges (`api/CookingRanges`)
+
+Map-pack catalog of `debugname=range` ovens + curated surfaces for fishing camps:
+
+```ts
+COOKING_RANGE_LOCS          // all Range SW tiles from Server maps
+nearestCookingRange(origin, maxCheb?)
+cookSurfaceForFishCamp(name, role?) // role: 'pier' | 'bank'
+resolveFishCampCookSurface(name, spot, maxCheb?, role?)
+FISH_CAMP_COOK_PLANS        // pier + optional bank surface per camp
+```
+
+**Pier vs bank role:** cook-then-bank uses the pier surface (short walk with raw);
+bank-raw-then-cook prefers a surface near the bank when one is curated (e.g. Seers
+village range).
+
+**Two-step path:** a surface may set `approach` then `stand`. FishCook walks
+`approach` first (e.g. exterior of Sinclair Large door), then `stand` next to the
+Range — so pathfinding enters the building before aiming at the interior oven.
+
+### Entity query helpers
+
+```ts
+Locs.query().name('…').withinOf(tile, radius).nearest()
+Locs.query().… .nearestPreferLocal(preferRadius)  // local cluster first
+```
+
+See also `api/TargetPick` (`pickNearestPreferLocal`) and `api/GatherCamp` (membership disks).
+
 ## Quests
 
 ```ts
 Quests.all(): { name: string; status: QuestStatus }[]
 Quests.status(name: string): QuestStatus   // 'notStarted' | 'inProgress' | 'complete' | 'unknown'
-Quests.points(): number
+Quests.journal(name: string): Promise<string[]>  // opens the quest log modal
+Quests.points(): number                    // transmitted varp qp (101)
 ```
+
+**What these actually read.** Full rationale: [Quest state](QUESTS.md#quest-state).
+
+| Call | Source | Cost |
+|---|---|---|
+| `status` / `all` | Quest-tab **text colour** (`IF_SETCOLOUR`: red / yellow / green) | free — no modal |
+| `points` | `reader.varp(101)` (`qp`, `transmit=yes`) | free |
+| `journal` | Clicks the quest name, waits for main modal, reads scroll text | **opens the log** |
+
+Mid-quest stage integers and bitfields live in Content as `scope=perm` varps
+**without** `transmit=yes` (e.g. `cookquest`, `elemental_workshop_bits`). They
+never arrive in `client.var[]`, so `reader.varp` stays `0` and must not be used
+as progress. Yellow colour only means “in progress” — it does not encode which
+stage. Prefer inventory / game messages / scene oracles; open `journal` only when
+stage text is the sole discriminator. A future bit-level API needs Content to
+set `transmit=yes` on those varps first — it is not a missing client field.
 
 ---
 

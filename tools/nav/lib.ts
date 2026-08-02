@@ -174,6 +174,7 @@ export class LocDef {
         } else if (code === 19) {
             this.active = dat.g1();
         } else if (code === 21 || code === 22 || code === 23 || code === 25 || code === 62 || code === 64 || code === 73 || code === 74) {
+            // Payload-less opcodes: recognised so the cursor stays aligned, nothing to read.
         } else if (code === 24 || code === 60 || code === 61 || code === 65 || code === 66 || code === 67 || code === 68) {
             dat.g2();
         } else if (code === 28 || code === 69 || code === 75) {

@@ -53,7 +53,7 @@ describe('ProfileChooser', () => {
         const { chooser, loaded } = make();
         chooser.open();
         (chooser.el.querySelector('.mbx-profile-row') as HTMLElement).click();
-        expect(loaded).toEqual([{ username: 'alice', password: 'a' }]);
+        expect(loaded).toEqual([{ username: 'alice', password: 'a', tab: 'Main' }]);
         expect(chooser.el.hidden).toBe(true);
     });
 
@@ -74,7 +74,8 @@ describe('ProfileChooser', () => {
         (chooser.el.querySelector('#mbx-new-user') as HTMLInputElement).value = ' carol ';
         (chooser.el.querySelector('#mbx-new-pass') as HTMLInputElement).value = 'pw';
         (chooser.el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
-        expect(vault.list()).toEqual([{ username: 'carol', password: 'pw' }]);
+        expect(vault.list()).toEqual([{ username: 'carol', password: 'pw', tab: 'Main' }]);
+        // a fresh create carries no tab: the wall files it into the active tab
         expect(loaded).toEqual([{ username: 'carol', password: 'pw' }]);
         expect(chooser.el.hidden).toBe(true);
     });
@@ -86,8 +87,8 @@ describe('ProfileChooser', () => {
         chooser.open();
         (chooser.el.querySelector('#mbx-load-all') as HTMLElement).click();
         expect(loaded).toEqual([
-            { username: 'alice', password: 'a' },
-            { username: 'bob', password: 'b' }
+            { username: 'alice', password: 'a', tab: 'Main' },
+            { username: 'bob', password: 'b', tab: 'Main' }
         ]);
         expect(chooser.el.hidden).toBe(true);
     });

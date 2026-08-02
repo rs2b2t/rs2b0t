@@ -26,6 +26,7 @@ How the client works, how to run it, and how to write bots for it.
 | [Bundled scripts](SCRIPTS.md) | catalog of the shipped bots and their settings (generated) |
 | [Testing](TESTING.md) | unit tests, the live-harness ABI, the end-to-end smoke |
 | [Dev and deploy](DEV.md) | build targets, the three run modes, the hosting pipeline |
+| [Multi-state locs](LOCS.md) | external note on loc identity and state; partly a proposal, not built |
 
 ---
 

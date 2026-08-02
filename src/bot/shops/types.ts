@@ -47,6 +47,7 @@ export interface RouteCluster {
     waypoints?: NavPointLike[];
     setting?: string;
     haulBank?: { stand: NavPointLike; banker: string };
+    repeatWhileFull?: boolean;
 }
 
 export interface Route {

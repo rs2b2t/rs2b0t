@@ -145,6 +145,11 @@ database is reachable and well-formed — coordinates on walkable ground, named 
 present, NPCs that exist. It is gated by a test, so a content change that orphans a
 clue fails rather than being discovered live at the dig site.
 
+It audits the baked graph, not the server, so it cannot see a barrier that is baked
+open and refused in play — McGrubor's Wood audited clean for as long as its locked
+gate was an edge. A clue that walks all the way to a door and never gets through is
+that failure, and the fix belongs in the pack, not the solver.
+
 ## See also
 
 - [Manual index](README.md)

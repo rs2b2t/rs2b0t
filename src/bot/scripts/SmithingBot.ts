@@ -17,6 +17,9 @@ import { fmtDuration } from '../api/hud/paintLogic.js';
 const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
+const HAMMER = 'Hammer';
+const ANVIL = 'Anvil';
+const OPENABLE_OBSTACLES = ['door', 'gate'];
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
@@ -24,12 +27,9 @@ const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword',
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: BAR_OPTIONS, label: 'Bar tier' },
     product: { type: 'string', default: 'Dagger', options: PRODUCT_OPTIONS, label: 'Item to smith', help: 'matched against the anvil panel by keyword (the panel names are tier-specific, e.g. "Bronze dagger")' },
-    hammer: { type: 'string', default: 'Hammer', label: 'Tool (contains)', help: 'lives in the bank between cycles' },
-    anvilName: { type: 'string', default: 'Anvil', label: 'Anvil loc name' },
     anvilStand: { type: 'tile', default: DEFAULT_ANVIL_STAND, label: 'Anvil stand tile (x,z)' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
-    obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'the anvil building has a door' },
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Anvil search radius (tiles)' }
 };
 
@@ -44,12 +44,9 @@ export default class SmithingBot extends TaskBot {
 
     private bar = 'Bronze';
     private product = 'Dagger';
-    private hammer = 'Hammer';
-    private anvilName = 'Anvil';
     private anvilStand = DEFAULT_ANVIL_STAND;
     private bankStand = DEFAULT_BANK_STAND;
     private boothName = 'Bank booth';
-    private obstacle: string[] = ['door', 'gate'];
     private leash = 6;
 
     override async onStart(): Promise<void> {
@@ -57,12 +54,9 @@ export default class SmithingBot extends TaskBot {
 
         this.bar = this.settings.str('bar', 'Bronze');
         this.product = this.settings.str('product', 'Dagger');
-        this.hammer = this.settings.str('hammer', 'Hammer');
-        this.anvilName = this.settings.str('anvilName', 'Anvil');
         this.anvilStand = this.settings.tile('anvilStand', DEFAULT_ANVIL_STAND);
         this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
-        this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 6);
 
         this.startedAt = Date.now();
@@ -90,13 +84,13 @@ export default class SmithingBot extends TaskBot {
     recordMade(n: number): void { this.made += n; }
     countTrip(): void { this.trips++; }
     productName(): string { return this.product; }
-    hammerName(): string { return this.hammer; }
+    hammerName(): string { return HAMMER; }
     barItemName(): string { return `${this.bar} bar`; }
-    anvilLocName(): string { return this.anvilName; }
+    anvilLocName(): string { return ANVIL; }
     anvilTile(): Tile { return this.anvilStand; }
     bankTile(): Tile { return this.bankStand; }
     boothLocName(): string { return this.boothName; }
-    obstacleList(): string[] { return this.obstacle; }
+    obstacleList(): string[] { return OPENABLE_OBSTACLES; }
     leashRadius(): number { return this.leash; }
 
     barCount(): number {
@@ -116,7 +110,7 @@ export default class SmithingBot extends TaskBot {
     }
 
     hammerItem(): InvItem | null {
-        const pat = this.hammer.toLowerCase();
+        const pat = HAMMER.toLowerCase();
         return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
     }
 }
@@ -207,7 +201,8 @@ class Smith implements Task {
     constructor(private bot: SmithingBot) {}
     validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
     async execute(): Promise<void> {
-        const anvil = () => Locs.query().name(this.bot.anvilLocName()).where(l => l.tile().distanceTo(this.bot.anvilTile()) <= this.bot.leashRadius()).nearest();
+        const anvil = () =>
+            Locs.query().name(this.bot.anvilLocName()).withinOf(this.bot.anvilTile(), this.bot.leashRadius()).nearest();
         const here = Game.tile();
         if (!here || this.bot.anvilTile().distanceTo(here) > 1 || !anvil()) {
             this.bot.setStatus('walking to the anvil');

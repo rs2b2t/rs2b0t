@@ -1,5 +1,8 @@
-import { InvItem } from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach } from 'bun:test';
+import * as RealNpcs from '#/bot/api/queries/Npcs.js';
+import * as RealLocs from '#/bot/api/queries/Locs.js';
+import * as RealGroundItems from '#/bot/api/queries/GroundItems.js';
+import * as RealInventory from '#/bot/api/hud/Inventory.js';
+import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
 
 import Tile from '#/bot/api/Tile.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
@@ -52,13 +55,15 @@ mock.module('#/bot/api/hud/ChatDialog.js', () => ({
         chooseOption: async (): Promise<boolean> => false
     }
 }));
-mock.module('#/bot/api/hud/Inventory.js', () => ({
-    InvItem,
-    Inventory: {
-        items: () => inv.map(id => ({ id, count: 1 })),
-        first: (name: string) => (invNames.some(n => n.toLowerCase() === name.toLowerCase()) ? { id: 0, count: 1, interact: async (): Promise<boolean> => true } : null)
-    }
-}));
+// Mutate the singleton instead of mock.module: a module replacement is global and
+// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
+const realInventoryFns = { ...RealInventory.Inventory };
+const stubInventory = {
+    items: () => inv.map(id => ({ id, count: 1 })),
+    first: (name: string) => (invNames.some(n => n.toLowerCase() === name.toLowerCase()) ? { id: 0, count: 1, interact: async (): Promise<boolean> => true } : null)
+};
+beforeEach(() => Object.assign(RealInventory.Inventory, stubInventory));
+afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
 mock.module('#/bot/api/Execution.js', () => ({
     Execution: {
         delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
@@ -91,9 +96,9 @@ const queryStub = {
         return chain;
     }
 };
-mock.module('#/bot/api/queries/Npcs.js', () => ({ Npcs: queryStub }));
-mock.module('#/bot/api/queries/Locs.js', () => ({ Locs: queryStub }));
-mock.module('#/bot/api/queries/GroundItems.js', () => ({ GroundItems: queryStub }));
+mock.module('#/bot/api/queries/Npcs.js', () => ({ ...RealNpcs, Npcs: queryStub }));
+mock.module('#/bot/api/queries/Locs.js', () => ({ ...RealLocs, Locs: queryStub }));
+mock.module('#/bot/api/queries/GroundItems.js', () => ({ ...RealGroundItems, GroundItems: queryStub }));
 
 const { ClueExecutor } = await import('#/bot/clues/ClueExecutor.js');
 

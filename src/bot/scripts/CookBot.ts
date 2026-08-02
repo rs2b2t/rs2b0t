@@ -151,7 +151,8 @@ class CookTrip implements Task {
     constructor(private bot: CookBot) {}
     validate(): boolean { return this.bot.rawCount() > 0 && !ChatDialog.isOpen(); }
     async execute(): Promise<void> {
-        const range = () => Locs.query().name(this.bot.rangeLocName()).where(l => l.tile().distanceTo(this.bot.rangeTile()) <= this.bot.leashRadius()).nearest();
+        const range = () =>
+            Locs.query().name(this.bot.rangeLocName()).withinOf(this.bot.rangeTile(), this.bot.leashRadius()).nearest();
         const here = Game.tile();
         if (!here || this.bot.rangeTile().distanceTo(here) > 1 || !range()) {
             this.bot.setStatus('crossing to the range');
