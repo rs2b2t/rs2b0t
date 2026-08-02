@@ -173,6 +173,8 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | id | what it proves |
 | --- | --- |
 | `mine-bank` / `mine-power` | SW Varrock tin bank loop vs drop mode |
+| `mine-iron-se-varrock` / `mine-iron-dwarven-north` | Iron local-prefer: stay on near cluster (`maxDistToCamp`) |
+| `mine-mule-gatherer-meet` | **Single-account** gatherer mule smoke: full pack → meet + wait (no bank). Full two-client trade is a separate multi-harness flow (not in this suite) |
 | `fish-bank` / `fish-cook-bank` / `fish-bank-raw-cook` | Draynor net bank; Catherby cook-then-bank (seed cooked); Catherby bank-raw-then-cook (`cert_raw_lobster` 973 → bank, pot+26 raw, N=1000 → catch→bank→cook batch) |
 | `wc-bank` / `wc-burn` | Draynor chop+bank; chop-then-burn |
 | `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
@@ -185,14 +187,26 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `auto-freeform-fish-ardy-river` | Auto freeform at Ardougne river fly |
 | `smith-rune-axe` | Buy/repair smith path (bars + hammer → rune axe) |
 
+Tags: `mining` / `fishing` / `wc` / `mule` / `local` / `acquire` / `path` / `endgame` / `freeform`.
+
 **Location / leash (product behaviour, not just the harness):**
 
 - **Named camps** pin the **home** tile to the camp spot and floor **membership**
   (ReturnToAnchor / rock disk) to **64** (overridable per camp via `campRadius`).
   The UI `leashRadius` is ignored below that floor for membership. **Fishing spots**
-  chase from the **player** inside camp (`chaseRadius`, default 24) with a hunt pad
-  past chase — not a single pin disk for hops. Spots outside membership are rejected
-  so chase cannot leave the coastline.
+  are any matching spot inside membership (nearest to player); freeform fish uses a
+  hunt pad past the UI leash. Soft-home / prefer-local helpers live under `api/`
+  (`GatherCamp`, `TargetPick`, `Anchor`).
+- **Mine prefer-local:** matching rocks within 12 of the player win over far camp
+  membership hits; post-deplete tiles are not soft-cooled (iron respawn ~6t).
+- **Mule mode** (Miner/Fisher/Woodcutter): `muleMode` Off / Gatherer / Mule +
+  `mulePartner`. Gatherer trades full hauls at the camp meet instead of banking;
+  Mule accepts trades, banks, returns. Shared policy: `api/mule/PartnerTrade`.
+  Disabled under location None. **Two-client trade** (Gatherer + Mule) needs two
+  harnesses / accounts that can coordinate (e.g. PM or a shared ready file) —
+  keep that as a dedicated multi-box smoke, not part of the default
+  `verify:gatheringbot` loop. `mine-mule-gatherer-meet` only proves single-client
+  handoff posture (meet + hold haul + no bank).
 - **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
   tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
   start-tile leash, nearest bank, player-relative fish). Auto is expert / may-die:

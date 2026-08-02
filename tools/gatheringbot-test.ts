@@ -219,7 +219,17 @@ async function stopScript(page: Page): Promise<void> {
     await page.waitForTimeout(400);
 }
 
+/**
+ * Persist scenario settings for a script. Always clears mule keys first so a prior
+ * mule scenario cannot leak Gatherer/Mule into bank/path tests via sessionStorage.
+ */
 async function setSettings(page: Page, script: string, map: Record<string, string | number | boolean>): Promise<void> {
+    // Defaults for optional keys every Miner/Fisher/Woodcutter run should reset.
+    const withDefaults: Record<string, string | number | boolean> = {
+        muleMode: 'Off',
+        mulePartner: '',
+        ...map
+    };
     await page.evaluate(([name, entries]) => {
         for (const [k, v] of Object.entries(entries)) {
             sessionStorage.setItem(`rs2b0t:set:${name}:${k}`, String(v));
@@ -229,7 +239,7 @@ async function setSettings(page: Page, script: string, map: Record<string, strin
                 /* private mode */
             }
         }
-    }, [script, map] as const);
+    }, [script, withDefaults] as const);
 }
 
 /**
@@ -1229,6 +1239,56 @@ const SCENARIOS: Scenario[] = [
         failMsg: ({ start, cur, minDistToCamp, maxDistToCamp, productPeak }) =>
             `dwarven-north-iron xp ${start.xp.mining}→${cur.xp.mining} iron=${invMatch(cur, /^iron ore$/i)} ` +
             `peak=${productPeak} distCamp ${minDistToCamp}..${maxDistToCamp} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    /**
+     * Single-account mule gatherer smoke: full pack + muleMode Gatherer must NOT bank;
+     * hold at meet and wait for partner. Full Gatherer↔Mule trade needs two harnesses
+     * (separate multi-box smoke — coordinate via PM / ready file later).
+     */
+    {
+        id: 'mine-mule-gatherer-meet',
+        tags: ['mining', 'mine', 'mule', 'early'],
+        script: 'Miner',
+        start: offsetTile(SPOT.seVarrockIron, -2, -1),
+        camp: SPOT.seVarrockIron,
+        bank: { x: 3253, z: 3420, level: 0 }, // Varrock East — must NOT visit for handoff
+        settings: {
+            rocks: 'Iron',
+            location: 'Southeast Varrock Mine',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18,
+            muleMode: 'Gatherer',
+            mulePartner: 'HarnessMulePartner'
+        },
+        seed: [
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
+            { debug: 'iron_ore', name: 'Iron ore', qty: 27 }
+        ],
+        scene: 'rocks',
+        budgetMs: 90_000,
+        check: ({ cur, productPeak, minDistToBank, minDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            // Startup log always includes mode line; waiting/trade lines are status-only.
+            const muleOn = logHas(cur, /mule:\s*gatherer with/i);
+            const nearMeet = minDistToCamp <= 4;
+            const stillHolding = invMatch(cur, /ore/i) >= 20 || productPeak >= 20;
+            // Must not complete a bank deposit of the haul.
+            if (logHas(cur, /bank:\s*deposited/i) && elapsedMs >= 12_000) {
+                return 'fail';
+            }
+            if (muleOn && nearMeet && stillHolding && minDistToBank > 12 && elapsedMs >= 8_000) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ cur, minDistToCamp, minDistToBank, productPeak }) =>
+            `mule-gatherer ore=${invMatch(cur, /ore/i)} peak=${productPeak} ` +
+            `distCamp=${minDistToCamp} distBank=${minDistToBank} ` +
+            `muleOn=${logHas(cur, /mule:\s*gatherer with/i)} bankedLog=${logHas(cur, /bank:\s*deposited/i)} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
@@ -2283,7 +2343,16 @@ try {
 
             await setSettings(page, sc.script, sc.settings);
             const applied = await page.evaluate(name => {
-                const keys = ['rocks', 'treeName', 'fishMethod', 'location', 'leashRadius', 'toolAcquire'];
+                const keys = [
+                    'rocks',
+                    'treeName',
+                    'fishMethod',
+                    'location',
+                    'leashRadius',
+                    'toolAcquire',
+                    'muleMode',
+                    'mulePartner'
+                ];
                 const out: Record<string, string | null> = {};
                 for (const k of keys) {
                     out[k] = sessionStorage.getItem(`rs2b0t:set:${name}:${k}`);

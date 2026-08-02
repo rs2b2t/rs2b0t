@@ -508,7 +508,8 @@ Shop.close(): Promise<void>
 ## Trade
 
 Player-to-player trade. Both sides must "Trade with" each other, then accept
-offer + confirm.
+offer + confirm. Any movement or combat closes the modal — own the loop with a
+dedicated task while `Trade.active()`.
 
 ```ts
 Trade.active(): boolean
@@ -523,6 +524,31 @@ Trade.offer(itemName, n, pick?): Promise<boolean>   // Offer-X exact qty
 Trade.accept(): Promise<boolean>
 Trade.decline(): Promise<void>
 ```
+
+### Partner trade policy (`api/mule/PartnerTrade`)
+
+Pure helpers shared by GatheringBot mule modes, FlaxRunner, and NatureCrafter:
+
+```ts
+parsePartnerList(raw: string): string[]
+isConfiguredPartner(name, partners): boolean
+decideReceiverOfferScreen({ partnerHeader, partners, myOfferSlots, theirProductCount })
+decideGiverOfferScreen(myOfferSlots): 'offer' | 'accept' | 'wait'
+parseMuleMode(raw): 'off' | 'gatherer' | 'mule'
+muleGathererHandoffActive(mode, partners, powerMode): boolean
+```
+
+GatheringBot settings: `muleMode` (Off / Gatherer / Mule) + `mulePartner` (comma names).
+Gatherer trades full packs at the camp meet instead of banking; Mule accepts, banks, returns.
+
+### Entity query helpers
+
+```ts
+Locs.query().name('…').withinOf(tile, radius).nearest()
+Locs.query().… .nearestPreferLocal(preferRadius)  // local cluster first
+```
+
+See also `api/TargetPick` (`pickNearestPreferLocal`) and `api/GatherCamp` (membership disks).
 
 ## Quests
 

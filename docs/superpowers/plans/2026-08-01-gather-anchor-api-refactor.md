@@ -125,7 +125,8 @@ Bank path for mule reuses existing camp `bankStand` + booth fields. Meet must be
 - [ ] Decline trades from non-partners  
 - [ ] Power/None + mule: document (drop vs trade — prefer disable mule under None)  
 - [ ] Unit tests for mode decisions / product offer lists  
-- [ ] Headed smoke later (not blocking first code PR): one Miner gatherer+mule pair at SE Varrock  
+- [x] Single-account smoke: `mine-mule-gatherer-meet` (meet + no bank; harness resets mule settings)  
+- [ ] **Separate multi-harness e2e** (not in default suite): two accounts (Gatherer + Mule) coordinating via PM or shared ready flag; prove full trade + bank. Do not block Phase 2/3 on this.
 
 ---
 

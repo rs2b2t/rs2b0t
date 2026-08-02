@@ -235,6 +235,8 @@ ScriptRegistry.register({
             group: 'Tick manip',
             help: TICK_MANIP_UNSHIPPED_HELP
         },
+        muleMode: GATHERING_SETTINGS.muleMode,
+        mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
     },
@@ -391,6 +393,8 @@ ScriptRegistry.register({
             help:
                 'Shown only for Bank raw then cook. Stop = end the script after one cook cycle of the accumulated batch. Continue = keep fishing/banking/cooking in increments of N.'
         },
+        muleMode: GATHERING_SETTINGS.muleMode,
+        mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
         forgetfulBank: FORGETFUL_BANK_SETTING
     },

@@ -44,6 +44,21 @@ import {
     type GatheringLocation
 } from '../api/GatheringLocations.js';
 import { LOCAL_MINE_PREFER_RADIUS, shouldCooldownGatherTile } from '../api/TargetPick.js';
+import { Trade } from '../api/hud/Trade.js';
+import { Players } from '../api/queries/Players.js';
+import {
+    DEFAULT_TRADE_RANGE,
+    countOfferMatching,
+    decideGiverOfferScreen,
+    decideReceiverOfferScreen,
+    isConfiguredPartner,
+    muleGathererHandoffActive,
+    muleReceiverActive,
+    parseMuleMode,
+    parsePartnerList,
+    type MuleMode,
+    MULE_MODE_OPTIONS
+} from '../api/mule/PartnerTrade.js';
 import { resolveMiningLocation } from '../api/MiningLocations.js';
 import { resolveWoodcuttingLocation } from '../api/WoodcuttingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from '../api/MiningRocks.js';
@@ -227,6 +242,22 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Leash radius (tiles)',
         help:
             'Camp/start membership radius (ReturnToAnchor). Only Location Auto uses this as-is (freeform and unverified chunk snaps). Named camps and None floor to 64. Fishing spots at named camps chase from the player inside the camp, not from this pin disk alone.'
+    },
+    muleMode: {
+        type: 'string',
+        default: 'Off',
+        options: [...MULE_MODE_OPTIONS],
+        label: 'Mule mode',
+        group: 'Mule',
+        help:
+            'Off = bank/drop as usual. Gatherer = full pack trades product to partner instead of banking. Mule = wait at camp meet, accept product trades, bank, return. Needs Partner name(s). Disabled under location None (power).'
+    },
+    mulePartner: {
+        type: 'string',
+        default: '',
+        label: 'Mule partner name(s)',
+        group: 'Mule',
+        help: 'Comma-separated in-game names. Gatherer: the mule. Mule: gatherer name(s) to accept from.'
     }
 };
 
@@ -357,6 +388,11 @@ export default class GatheringBot extends TaskBot {
     /** Buy/withdraw target for bait & feathers when the method needs them. */
     private baitQty = 1000;
 
+    /** Off / gatherer (handoff) / mule (bank-side). See muleMode settings. */
+    private muleMode: MuleMode = 'off';
+    private mulePartners: string[] = [];
+    private muleTrades = 0;
+
     private xpStart: Record<string, number> = {};
 
     private rejected = new Set<string>();
@@ -477,6 +513,24 @@ export default class GatheringBot extends TaskBot {
         }
 
         this.powerMode = locSetting.toLowerCase() === 'none';
+
+        // Mule / partner trade (NatureCrafter-style). Power mode forces Off.
+        {
+            this.muleMode = parseMuleMode(this.settings.str('muleMode', 'Off'));
+            this.mulePartners = parsePartnerList(this.settings.str('mulePartner', ''));
+            if (this.muleMode !== 'off' && this.powerMode) {
+                this.log(`mule: '${this.muleMode}' disabled under location None (drop-only)`);
+                this.muleMode = 'off';
+            } else if (this.muleMode !== 'off' && this.mulePartners.length === 0) {
+                this.log('mule: no partner names — falling back to Off (bank/drop)');
+                this.muleMode = 'off';
+            } else if (this.muleMode !== 'off') {
+                this.log(
+                    `mule: ${this.muleMode} with [${this.mulePartners.join(', ')}] ` +
+                        `meet=${this.getMeetTile()}`
+                );
+            }
+        }
 
         // Tick manip (#160) — per-skill dropdown; forced Off under power mode.
         {
@@ -685,15 +739,26 @@ export default class GatheringBot extends TaskBot {
                 : []),
             ...(cookOn ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)] : []),
             ...(burnOn ? createChopBurnTasks(this) : []),
+            // Mule trade owns the loop while the modal is open (movement cancels trade).
+            ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
+            ...(this.isMuleReceiver()
+                ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)]
+                : []),
+            ...(this.isMuleGatherer()
+                ? [new MuleGoMeet(this), new MuleRequestOrWait(this)]
+                : []),
             this.powerMode || tannerPower ? new DropProduct(this) : new BankCatch(this),
-            new Gather(this),
+            // Mule receiver does not gather.
+            ...(this.isMuleReceiver() ? [] : [new Gather(this)]),
 
             createReturnToAnchorTask(this, {
                 slack: 4,
                 // Long bank→camp legs (Varrock W → SW mine ≈ 60+) need web path first.
                 longRangeTiles: 24,
                 suppress: () =>
-                    (this.burnEnabled() && this.isBurningLoad()) || this.shouldSuppressCampReentry()
+                    (this.burnEnabled() && this.isBurningLoad()) ||
+                    this.shouldSuppressCampReentry() ||
+                    this.muleMode !== 'off'
             })
         );
     }
@@ -2817,6 +2882,62 @@ export default class GatheringBot extends TaskBot {
         return this.location === null;
     }
 
+    /** Meet tile for mule handoff — camp spot when set, else run anchor. */
+    getMeetTile(): Tile {
+        return this.location?.spot ?? this.getAnchor();
+    }
+
+    getMuleMode(): MuleMode {
+        return this.muleMode;
+    }
+
+    getMulePartners(): readonly string[] {
+        return this.mulePartners;
+    }
+
+    isMuleGatherer(): boolean {
+        return muleGathererHandoffActive(this.muleMode, this.mulePartners, this.powerMode);
+    }
+
+    isMuleReceiver(): boolean {
+        return muleReceiverActive(this.muleMode, this.mulePartners);
+    }
+
+    atMuleMeet(radius = 2): boolean {
+        const here = Game.tile();
+        if (!here) {
+            return false;
+        }
+        return this.getMeetTile().distanceTo(here) <= radius;
+    }
+
+    nearestMulePartner() {
+        if (this.mulePartners.length === 0) {
+            return null;
+        }
+        return Players.query().name(...this.mulePartners).within(DEFAULT_TRADE_RANGE + 6).nearest();
+    }
+
+    noteMuleTrade(): void {
+        this.muleTrades++;
+    }
+
+    muleTradeCount(): number {
+        return this.muleTrades;
+    }
+
+    /** Product names currently held that should go to the mule / bank. */
+    depositableProductNames(): string[] {
+        const names = new Set<string>();
+        for (const i of Inventory.items()) {
+            const n = i.name ?? '';
+            if (n && this.shouldDeposit(n)) {
+                names.add(n);
+            }
+        }
+        return [...names];
+    }
+
     countTrip(n: number): void {
         this.trips++;
         this.banked += n;
@@ -3303,6 +3424,188 @@ function isFletchByproductName(name: string | null | undefined): boolean {
     );
 }
 
+// ── Mule / partner trade (shared policy: api/mule/PartnerTrade) ───────────────
+
+class HandleGatherMuleTrade implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        return this.bot.getMuleMode() !== 'off' && Trade.active();
+    }
+
+    async execute(): Promise<void> {
+        if (Trade.onConfirmScreen()) {
+            this.bot.setStatus('mule: confirming trade');
+            const before = Inventory.used();
+            await Trade.accept();
+            if (await Execution.delayUntil(() => !Trade.active(), 4000)) {
+                this.bot.noteMuleTrade();
+                const delta = Inventory.used() - before;
+                this.bot.log(
+                    `mule: trade complete (inv Δ${delta >= 0 ? '+' : ''}${delta}, trades=${this.bot.muleTradeCount()})`
+                );
+            }
+            return;
+        }
+
+        if (!Trade.onOfferScreen()) {
+            return;
+        }
+
+        if (this.bot.isMuleReceiver()) {
+            const decision = decideReceiverOfferScreen({
+                partnerHeader: Trade.partner(),
+                partners: this.bot.getMulePartners(),
+                myOfferSlots: Trade.myOffer().length,
+                theirProductCount: countOfferMatching(Trade.theirOffer(), n => this.bot.shouldDeposit(n))
+            });
+            if (decision.action === 'wait-header' || decision.action === 'wait-offer') {
+                this.bot.setStatus(
+                    decision.action === 'wait-header' ? 'mule: reading partner' : 'mule: waiting for product offer'
+                );
+                await Execution.delayTicks(1);
+                return;
+            }
+            if (decision.action === 'decline') {
+                this.bot.setStatus('mule: declining trade');
+                this.bot.log(`mule: ${decision.reason}`);
+                await Trade.decline();
+                return;
+            }
+            this.bot.setStatus('mule: accepting product');
+            await Trade.accept();
+            return;
+        }
+
+        // Gatherer: offer haul then accept.
+        const step = decideGiverOfferScreen(Trade.myOffer().length);
+        if (step === 'offer') {
+            const names = this.bot.depositableProductNames();
+            if (names.length === 0) {
+                this.bot.setStatus('mule: nothing to offer — declining');
+                await Trade.decline();
+                return;
+            }
+            this.bot.setStatus(`mule: offering ${names.join(', ')}`);
+            for (const name of names) {
+                await Trade.offerAll(name);
+            }
+            await Execution.delayUntil(
+                () => Trade.myOffer().length > 0 || Trade.onConfirmScreen() || !Trade.active(),
+                4000
+            );
+            return;
+        }
+        this.bot.setStatus('mule: accepting handoff');
+        await Trade.accept();
+        await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
+    }
+}
+
+class MuleGoMeet implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (Trade.active() || EventSignal.pending()) {
+            return false;
+        }
+        if (this.bot.atMuleMeet()) {
+            return false;
+        }
+        if (this.bot.isMuleGatherer()) {
+            return Inventory.isFull() && this.bot.hasDepositable();
+        }
+        if (this.bot.isMuleReceiver()) {
+            // Mule returns to meet when pack empty (after bank) or still empty.
+            return !this.bot.hasDepositable() || !Inventory.isFull();
+        }
+        return false;
+    }
+
+    async execute(): Promise<void> {
+        const meet = this.bot.getMeetTile();
+        this.bot.setStatus(`mule: walking to meet ${meet}`);
+        await Traversal.walkResilient(meet, {
+            radius: 2,
+            timeoutMs: 90_000,
+            log: m => this.bot.log(`  ${m}`)
+        });
+    }
+}
+
+class MuleRequestOrWait implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (Trade.active() || EventSignal.pending()) {
+            return false;
+        }
+        if (!this.bot.atMuleMeet()) {
+            return false;
+        }
+        if (this.bot.isMuleGatherer()) {
+            return Inventory.isFull() && this.bot.hasDepositable();
+        }
+        if (this.bot.isMuleReceiver()) {
+            // Idle at meet waiting for gatherer (bank when we hold product).
+            return !this.bot.hasDepositable();
+        }
+        return false;
+    }
+
+    async execute(): Promise<void> {
+        const partner = this.bot.nearestMulePartner();
+        if (!partner || partner.distance() > DEFAULT_TRADE_RANGE) {
+            const msg = this.bot.isMuleGatherer()
+                ? 'mule: waiting for partner at meet'
+                : 'mule: waiting for gatherer';
+            this.bot.setStatus(msg);
+            // Log once every few waits so harness/single-account smokes can assert.
+            this.bot.log(msg);
+            await Execution.delayTicks(2);
+            return;
+        }
+        const name = partner.name ?? this.bot.getMulePartners()[0] ?? '';
+        if (!isConfiguredPartner(name, this.bot.getMulePartners()) && name) {
+            // name from query should match
+        }
+        this.bot.setStatus(`mule: requesting trade with ${name || 'partner'}`);
+        await Trade.request(name);
+        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 4000);
+    }
+}
+
+class MuleBankHaul implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (!this.bot.isMuleReceiver() || Trade.active() || EventSignal.pending()) {
+            return false;
+        }
+        return this.bot.hasDepositable();
+    }
+
+    async execute(): Promise<void> {
+        const log = (m: string) => this.bot.log(`  ${m}`);
+        const had = this.bot.products().length;
+        this.bot.setStatus('mule: banking haul');
+        if (!(await this.bot.openScriptBank(log))) {
+            this.bot.log('mule: bank open failed — will retry');
+            return;
+        }
+        await Execution.delayTicks(1);
+        await Bank.depositAllMatching(name => this.bot.shouldDeposit(name));
+        await Execution.delayUntil(() => !this.bot.hasDepositable() || !Bank.isOpen(), 5000);
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+        this.bot.countTrip(had);
+        this.bot.log(`mule: deposited haul (${had} stacks, trades=${this.bot.muleTradeCount()})`);
+        // Walk back toward meet (camp).
+        await this.bot.walkHomeIfNeeded(log);
+    }
+}
+
 class DropProduct implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -3432,6 +3735,14 @@ class BankCatch implements Task {
 
     validate(): boolean {
         if (this.bot.bankCatchBlockedByCook() || this.bot.bankCatchBlockedByBurn()) {
+            return false;
+        }
+        // Gatherer mule: hand off via trade, do not bank the haul.
+        if (this.bot.isMuleGatherer()) {
+            return false;
+        }
+        // Mule receiver banks via MuleBankHaul when not full-pack gathering.
+        if (this.bot.isMuleReceiver()) {
             return false;
         }
         return Inventory.isFull() && this.bot.hasDepositable();
