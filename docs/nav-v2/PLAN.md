@@ -91,7 +91,7 @@ Product analogues:
 - [x] `tools/nav/component-report.ts` pairwise seeds  
 - [x] `tools/nav/route-probe.ts --explain`  
 - [x] `tools/nav/mainland-routes.json` + `mainland-corpus.ts`  
-- [ ] Live harness flag `NAV_V2=1` end-to-end
+- [ ] Optional local live suite (operator tooling; not upstream CI)
 
 ### Phase 5 — Cleanup
 

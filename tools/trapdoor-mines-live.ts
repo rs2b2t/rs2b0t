@@ -1,7 +1,8 @@
 /**
  * Live smoke: Edgeville trapdoor + Dwarven Mine (Falador party-room) trapdoor.
  *
- *   ~/redeploy.sh && HEADED=1 bun tools/trapdoor-mines-live.ts
+ * Operator tooling — not an upstream CI gate. Deploy bot client to your engine,
+ * then: HEADED=1 bun tools/trapdoor-mines-live.ts
  *
  * Asserts open→climb (or climb if already open) and arrival underground / surface.
  */

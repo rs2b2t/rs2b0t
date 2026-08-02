@@ -21,16 +21,16 @@ filter, spell tele executor hop, pack tools (`route-probe --explain`, `mainland-
 `component-report`). Jewellery Rub + full WalkExecutor split still open.
 
 ```bash
-# pack / unit
+# pack / unit (upstream-safe; no live engine required)
 bun tools/nav/mainland-corpus.ts --explain
 bun tools/nav/route-probe.ts --from 3222,3218,0 --to 3213,3424,0 --explain --tele --magic 99 --runes
 bun tools/nav/component-report.ts
 bun test test/nav/
-
-# live (must use ~/redeploy.sh — engine is experiments/Server/engine, not ~/code/rs2b2t-engine)
-~/redeploy.sh
-HEADED=1 bun tools/nav-v2-tele-smoke.ts
 ```
+
+Live harnesses (tele smoke, trapdoor mines, …) are **operator tooling** — not part of the
+upstream test story. Run them only against your own engine deploy; do not document or
+require a personal redeploy path in upstream PRs.
 
 ## Mental model (one picture)
 

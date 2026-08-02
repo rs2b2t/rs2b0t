@@ -1,6 +1,6 @@
 # Teleport catalog (LostCity Server scan)
 
-**Source tree:** `/Users/acfrazier/experiments/Server` (content scripts + magic DB)  
+**Source:** LostCity-style content scripts + `magic_spells.dbrow` (spell teles, jewellery rubs, levers) as implemented on the 2004scape/Server content tree you build against.  
 **Scan date:** 2026-08-02  
 **Purpose:** same role as trapdoor `openLocId` enrichment — ground nav-v2 tele edges in **what this engine actually implements**, not modern OSRS wiki memory.
 

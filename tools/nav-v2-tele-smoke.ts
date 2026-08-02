@@ -4,11 +4,11 @@
  * Lumbridge → Varrock with useTeleportCatalog + runes. Expect hop log
  * "casting Varrock teleport" and arrival near Varrock square.
  *
- * Local deploy (correct engine under experiments/Server/engine):
- *   ~/redeploy.sh
- *   HEADED=1 bun tools/nav-v2-tele-smoke.ts
+ * Operator tooling — not an upstream CI gate. Deploy the bot client into
+ * whatever engine you run (see docs/RUNNING.md / your local deploy script),
+ * then: HEADED=1 bun tools/nav-v2-tele-smoke.ts
  *
- * Optional: BASE=http://localhost:8890 BUDGET_S=90
+ * Optional: BASE=… BUDGET_S=90
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
