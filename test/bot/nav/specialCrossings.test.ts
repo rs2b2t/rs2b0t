@@ -126,4 +126,39 @@ describe('specialCrossingForTransport', () => {
         const approach = { x: 2461, z: 3385, level: 0 };
         expect(specialCrossingForTransport(transport, approach)).toBeNull();
     });
+
+    test('Port Sarim→Musa ship: approach L0 + step L1 resolves special (not approach-only)', () => {
+        // PathFinder stores ship loc at from stand (L0 edge origin); special is keyed at L1.
+        const transport = { locX: 3027, locZ: 3218 };
+        const approach = { x: 3027, z: 3218, level: 0 };
+        const step = { x: 2956, z: 3143, level: 1 };
+        expect(specialCrossingForTransport(transport, approach)).toBeNull();
+        const sc = specialCrossingForTransport(transport, approach, step);
+        expect(sc?.label).toBe('Port Sarim->Musa ship');
+        expect(sc?.npc).toBe('Seaman Thresnor');
+    });
+
+    test('Ardougne→Brimhaven ship: approach L0 + step L1 resolves special', () => {
+        const transport = { locX: 2683, locZ: 3272 };
+        const approach = { x: 2683, z: 3272, level: 0 };
+        const step = { x: 2775, z: 3234, level: 1 };
+        const sc = specialCrossingForTransport(transport, approach, step);
+        expect(sc?.label).toBe('Ardougne->Brimhaven ship');
+        expect(sc?.npc).toBe('Captain Barnaby');
+    });
+
+    test('return ships Musa/Brimhaven also resolve with dual levels', () => {
+        const musa = specialCrossingForTransport(
+            { locX: 2955, locZ: 3146 },
+            { x: 2955, z: 3146, level: 0 },
+            { x: 3032, z: 3217, level: 1 }
+        );
+        expect(musa?.label).toBe('Musa->Port Sarim ship');
+        const brim = specialCrossingForTransport(
+            { locX: 2772, locZ: 3234 },
+            { x: 2772, z: 3234, level: 0 },
+            { x: 2683, z: 3268, level: 1 }
+        );
+        expect(brim?.label).toBe('Brimhaven->Ardougne ship');
+    });
 });

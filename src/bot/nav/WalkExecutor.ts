@@ -779,7 +779,7 @@ class WalkExecutorImpl {
             return ok;
         }
 
-        const special = specialCrossingForTransport(transport, approach);
+        const special = specialCrossingForTransport(transport, approach, step);
         if (special) {
             const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
             if (ok) {
