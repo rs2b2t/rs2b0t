@@ -172,7 +172,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Hop labels',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
-        help: 'White Shortest Path–style captions on doors / ladders / teles (Open Door, Varrock teleport, …)'
+        help: 'Captions on doors / ladders / teles (Open Door, Varrock teleport, …)'
     },
     navPathTextSize: {
         type: 'number',

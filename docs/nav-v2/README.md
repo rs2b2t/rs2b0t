@@ -1,25 +1,17 @@
 # Nav v2
 
-Shortest Path–class planning + web-walker execution for the 2004 client.
+Opt-in walker: Global **World walker** = `classic` (default) | `v2`.
 
 | | |
 |---|---|
-| Toggle | Global **World walker** `classic` \| `v2` |
-| Code | [`src/bot/nav/v2/`](../../src/bot/nav/v2/), `exec/`, path paint |
-| Catalog | [`teleportCatalog.ts`](../../src/bot/nav/v2/teleportCatalog.ts) |
+| Code | `src/bot/nav/v2/`, `exec/`, `pathPublish` / `pathOverlay` / `pathPaintTheme` |
+| Tele catalog | `src/bot/nav/v2/teleportCatalog.ts` |
+| Manual | [docs/NAV.md](../NAV.md) § Nav v2 |
 | Unit | `bun test test/nav/` |
 | Pack corpus | `bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts` |
-| Manual | [docs/NAV.md](../NAV.md) |
 
-| Included | Out of scope (this ship) |
-|---|---|
-| Spell + jewellery in A\* + execute | Bank cache API / bank jewellery |
-| Path paint (tile quads + hop text) | Live collision / A\* heat paint |
-| Path-scoped bank for runes/tolls | Multi-dest quest ladders |
-| Quest-lock door blacklist | Upstream live CI suite |
-| Script-ripped pack route corpus | Fairy / cape / OSRS tele matrix |
+**v2 adds:** spell + jewellery tele edges (magic/runes/quests via WorldState; jewellery inventory only), hop logs, path-scoped bank for runes/tolls, optional path paint, quest-lock door blacklist.
 
-Live harnesses (`tools/nav-v2-*.ts`, `nav-script-routes-live.ts`) are operator-only.
-Do not put personal deploy paths in upstream docs.
+**Not in this ship:** bank cache API, multi-dest quest ladders, live CI harness suite.
 
-See [TELEPORTS.md](./TELEPORTS.md) for catalog fidelity notes; [PLAN.md](./PLAN.md) for phase history.
+Operator live tools live under `tools/nav-*.ts` (not CI). Do not document personal deploy paths here.

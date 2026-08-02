@@ -1,5 +1,5 @@
 // docs/NAV.md#pathfinding
-// nav-v2: docs/nav-v2/PLAN.md
+// nav-v2: docs/nav-v2/README.md
 import type { PathHop, PathPolicy, TransportRequires } from './v2/types.js';
 import type { WorldStateData } from './v2/worldStateData.js';
 import { worldStateFromData } from './v2/worldStateData.js';

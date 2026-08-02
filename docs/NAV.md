@@ -254,7 +254,7 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 | Path paint | optional | optional (`showNavPath`) |
 
 **Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads on
-`#overlay` (SP Path/Transports/Text colours; see `pathPaintTheme.ts`). Not under 3D depth.
+`#overlay` (see `pathPaintTheme.ts`). Not under 3D depth.
 
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
 (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
