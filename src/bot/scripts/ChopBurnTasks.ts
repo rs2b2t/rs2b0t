@@ -7,6 +7,7 @@ import { Reachability } from '../api/Reachability.js';
 import { Traversal } from '../api/Traversal.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
+import { Npcs } from '../api/queries/Npcs.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { GameMessages } from '../events/gameMessages.js';
 import {
@@ -25,6 +26,24 @@ import {
     type BurnDir,
     type FirePlot
 } from './FiremakingLogic.js';
+
+/** Same face-target filter as GatheringBot.FleeCombat — sticky combatCycle is ignored. */
+function hostileFaceTarget(): boolean {
+    return (
+        Npcs.query()
+            .where(n => n.inCombat && n.targetsMe() && n.actions().includes('Attack'))
+            .nearest() !== null
+        || Npcs.query()
+            .where(
+                n =>
+                    n.inCombat
+                    && !n.targetsAnotherPlayer()
+                    && n.actions().includes('Attack')
+                    && n.distance() <= 2
+            )
+            .nearest() !== null
+    );
+}
 
 export interface ChopBurnHost {
     log(msg: string): void;
@@ -63,7 +82,12 @@ class ChopBurnLoad implements Task {
         if (!this.bot.burnEnabled() || this.bot.isPowerMode()) {
             return false;
         }
-        if (EventSignal.pending() || Game.inCombat()) {
+        if (EventSignal.pending()) {
+            return false;
+        }
+        // Real attackers: FleeCombat owns the loop. Sticky combatCycle alone must not
+        // freeze chop-then-burn for minutes (Draynor harness thrash).
+        if (Game.inCombat() && hostileFaceTarget()) {
             return false;
         }
         if (this.bot.isBurningLoad()) {
@@ -97,7 +121,7 @@ class ChopBurnLoad implements Task {
         const local = this.bot.isLocalBurn?.() === true;
 
         while (this.bot.logCount() > 0) {
-            if (EventSignal.pending() || Game.inCombat()) {
+            if (EventSignal.pending() || (Game.inCombat() && hostileFaceTarget())) {
                 return;
             }
             plot = this.bot.burnPlotOrNull() ?? plot;

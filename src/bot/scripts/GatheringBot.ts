@@ -227,6 +227,21 @@ export function hostileAttackerNearby(
     });
 }
 
+/**
+ * Whether FleeCombat should take the loop (multi-combat kite).
+ *
+ * Sticky `inCombat` with no face target is common after randoms / login and used
+ * to trigger blind east walks that bung gather for tens of seconds. Only kite
+ * when a real attacker is in play; yield to random-event handling otherwise.
+ */
+export function shouldFleeCombat(opts: {
+    inCombat: boolean;
+    eventPending: boolean;
+    hasAttacker: boolean;
+}): boolean {
+    return opts.inCombat && !opts.eventPending && opts.hasAttacker;
+}
+
 export const GATHERING_SETTINGS: SettingsSchema = {
     targetType: { type: 'string', default: 'loc', label: "Target type ('loc' or 'npc')", help: 'loc = scenery (rocks/trees), npc = fishing spots' },
     target: { type: 'string', default: 'Rocks', label: 'Target name', help: 'in-game name, e.g. Rocks / Tree / Fishing spot' },
@@ -719,37 +734,39 @@ export default class GatheringBot extends TaskBot {
 
         const cookOn = this.fishing && this.cookMode !== 'off' && this.rangeStand !== null;
         const burnOn = this.burnEnabled();
-        const gatherTools = (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
+        // Bank-side mule only trades/banks — no pickaxe/axe restock thrash.
+        const muleRecv = this.isMuleReceiver();
+        const gatherTools =
+            !muleRecv && (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
         // Flee only for AFK named/None — Auto and retaliate tick-manip skip FleeCombat.
-        const mobFlee = !isAutoLocation(this.locationSetting) && !this.tickManip.allowCombat;
+        const mobFlee = !muleRecv && !isAutoLocation(this.locationSetting) && !this.tickManip.allowCombat;
         // Tannerfishing is a power-train (cook/eat on the pier) — drop haul, no bank loop.
         const tannerPower = this.tickManip.cookEatInterleave;
         this.add(
             new ContinueDialog(),
+            // Sticky combatCycle (no face target) — wait; do not thrash-walk.
+            ...(mobFlee ? [new WaitStickyCombat(this), new FleeCombat(this)] : []),
             // Named/None only: break multi-combat pulls (wildy spiders) by walking off.
             // Auto / retaliate tick-manip = may-die — no mob flee.
-            ...(mobFlee ? [new FleeCombat(this)] : []),
-            ...(this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
-            ...(this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
-            ...(this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
-            ...(this.mining() || this.woodcutting() ? [new RepairBrokenGatherTool(this)] : []),
-            ...(this.fishing ? [new RestockFishingGear(this)] : []),
+            ...(!muleRecv && this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
+            ...(!muleRecv && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
+            ...(!muleRecv && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
+            ...(!muleRecv && (this.mining() || this.woodcutting()) ? [new RepairBrokenGatherTool(this)] : []),
+            ...(!muleRecv && this.fishing ? [new RestockFishingGear(this)] : []),
             ...(gatherTools
                 ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this), new UpgradeGatherTool(this)]
                 : []),
-            ...(cookOn ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)] : []),
-            ...(burnOn ? createChopBurnTasks(this) : []),
+            ...(!muleRecv && cookOn
+                ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)]
+                : []),
+            ...(!muleRecv && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
-            ...(this.isMuleReceiver()
-                ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)]
-                : []),
-            ...(this.isMuleGatherer()
-                ? [new MuleGoMeet(this), new MuleRequestOrWait(this)]
-                : []),
+            ...(muleRecv ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
+            ...(this.isMuleGatherer() ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             this.powerMode || tannerPower ? new DropProduct(this) : new BankCatch(this),
             // Mule receiver does not gather.
-            ...(this.isMuleReceiver() ? [] : [new Gather(this)]),
+            ...(muleRecv ? [] : [new Gather(this)]),
 
             createReturnToAnchorTask(this, {
                 slack: 4,
@@ -3322,17 +3339,67 @@ class TannerfishSustain implements Task {
 }
 
 /**
+ * Sticky combatCycle with no face-target attacker: wait (do not east-kite).
+ * Lets burn/gather resume once the cycle drains instead of deadlocking the loop.
+ */
+class WaitStickyCombat implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        return (
+            Game.inCombat()
+            && !EventSignal.pending()
+            && !shouldFleeCombat({
+                inCombat: true,
+                eventPending: false,
+                hasAttacker: this.hasAttacker()
+            })
+        );
+    }
+
+    private hasAttacker(): boolean {
+        return (
+            Npcs.query()
+                .where(n => n.inCombat && n.targetsMe() && n.actions().includes('Attack'))
+                .nearest() !== null
+            || Npcs.query()
+                .where(
+                    n =>
+                        n.inCombat
+                        && !n.targetsAnotherPlayer()
+                        && n.actions().includes('Attack')
+                        && n.distance() <= 2
+                )
+                .nearest() !== null
+        );
+    }
+
+    async execute(): Promise<void> {
+        Game.setAutoRetaliate(false);
+        this.bot.setStatus('combat: waiting clear (no attacker)');
+        await Execution.delayUntil(() => !Game.inCombat() || this.hasAttacker(), 3_000);
+    }
+}
+
+/**
  * Break multi-combat pulls from aggressive NPCs (lava-maze spiders, dark wizards, etc.).
- * Not for random events — those are handled elsewhere.
+ * Not for random events — those are handled by Supervisor / RandomEvents first.
  * Auto Retaliate is off at start — walking away ends the fight instead of trading hits.
  * Always kite *away* from the attacker (never walk back onto the camp anchor while
  * spiders sit on it). Prefer east when the vector is ambiguous (Lava Maze exit).
+ *
+ * Sticky combatCycle with no face target: {@link WaitStickyCombat} — do not blind-kite east
+ * (that used to freeze chop-then-burn / pier gather for 60–90s).
  */
 class FleeCombat implements Task {
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
-        return Game.inCombat();
+        return shouldFleeCombat({
+            inCombat: Game.inCombat(),
+            eventPending: EventSignal.pending(),
+            hasAttacker: this.attacker() !== null
+        });
     }
 
     private attacker(): Npc | null {
@@ -3374,8 +3441,6 @@ class FleeCombat implements Task {
     async execute(): Promise<void> {
         // Re-assert off in case a death/relog restored the default.
         Game.setAutoRetaliate(false);
-        // Hold ReturnToAnchor / gather re-entry so we don't walk back onto the pack.
-        this.bot.noteCombatFlee(16_000);
 
         const here = Game.tile();
         if (!here) {
@@ -3383,22 +3448,33 @@ class FleeCombat implements Task {
             return;
         }
         const attacker = this.attacker();
+        if (!attacker) {
+            // validate should have filtered this; still avoid a blind kite.
+            this.bot.setStatus('combat: waiting clear (no attacker)');
+            await Execution.delayUntil(() => !Game.inCombat() || this.attacker() !== null, 4_000);
+            return;
+        }
+
+        // Hold ReturnToAnchor / gather re-entry so we don't walk back onto the pack.
+        this.bot.noteCombatFlee(12_000);
+
         const dest = this.fleeTile(here, attacker, FLEE_STEP);
-        const who = attacker?.name ?? 'attacker';
+        const who = attacker.name ?? 'attacker';
         this.bot.setStatus(`combat: fleeing ${who} → ${dest.x},${dest.z}`);
         this.bot.log(`combat: under attack by ${who} — walking off to ${dest.x},${dest.z}`);
 
-        await Traversal.walkTo(dest, { radius: 2, timeoutMs: 20_000 });
-        await Execution.delayUntil(() => !Game.inCombat(), 12_000);
+        await Traversal.walkTo(dest, { radius: 2, timeoutMs: 16_000 });
+        await Execution.delayUntil(() => !Game.inCombat(), 10_000);
         if (Game.inCombat()) {
             // Still stuck — longer kite away from whoever is on us.
             const still = Game.tile();
-            if (still) {
-                const again = this.fleeTile(still, this.attacker(), FLEE_STEP_HARD);
+            const againAtk = this.attacker();
+            if (still && againAtk) {
+                const again = this.fleeTile(still, againAtk, FLEE_STEP_HARD);
                 this.bot.log(`combat: still in combat — second kite to ${again.x},${again.z}`);
-                this.bot.noteCombatFlee(18_000);
-                await Traversal.walkTo(again, { radius: 2, timeoutMs: 15_000 });
-                await Execution.delayUntil(() => !Game.inCombat(), 10_000);
+                this.bot.noteCombatFlee(14_000);
+                await Traversal.walkTo(again, { radius: 2, timeoutMs: 12_000 });
+                await Execution.delayUntil(() => !Game.inCombat(), 8_000);
             }
         }
         // If hostiles are still stacked on us after the kite, hold camp longer.
@@ -3406,7 +3482,7 @@ class FleeCombat implements Task {
             Game.inCombat() ||
             hostileAttackerNearby(Npcs.query().action('Attack').within(6).results(), 6)
         ) {
-            this.bot.noteCombatFlee(12_000);
+            this.bot.noteCombatFlee(10_000);
         }
     }
 }

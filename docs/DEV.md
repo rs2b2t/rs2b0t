@@ -165,6 +165,8 @@ bun run verify:gatheringbot -- fish-bank-raw-cook
 BUDGET_S=180 bun run verify:gatheringbot -- mine-bank
 HEADED=1 bun tools/gatheringbot-test.ts acquire
 HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
+# Two-account mule handoff (Gatherer + Mule at SE Varrock iron):
+HEADED=1 BUDGET_S=180 bun tools/gatheringbot-mule-pair-test.ts
 ```
 
 Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /
@@ -174,8 +176,9 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | --- | --- |
 | `mine-bank` / `mine-power` | SW Varrock tin bank loop vs drop mode |
 | `mine-iron-se-varrock` / `mine-iron-dwarven-north` | Iron local-prefer: stay on near cluster (`maxDistToCamp`) |
-| `mine-mule-gatherer-meet` | **Single-account** gatherer mule smoke: full pack → meet + wait (no bank). Full two-client trade is a separate multi-harness flow (not in this suite) |
-| `fish-bank` / `fish-cook-bank` / `fish-bank-raw-cook` | Draynor net bank; Catherby cook-then-bank (seed cooked); Catherby bank-raw-then-cook (`cert_raw_lobster` 973 → bank, pot+26 raw, N=1000 → catch→bank→cook batch) |
+| `mine-mule-gatherer-meet` | Single-account gatherer mule: full pack → meet + wait (no bank) |
+| *(pair harness)* | `gatheringbot-mule-pair-test.ts` — two accounts, full Gatherer↔Mule iron handoff |
+| `fish-bank` / `fish-cook-bank` / `fish-bank-raw-cook` | Draynor net bank; Catherby cook-then-bank (seed cooked); Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000 → catch→bank→cook batch) |
 | `wc-bank` / `wc-burn` | Draynor chop+bank; chop-then-burn |
 | `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
@@ -202,11 +205,10 @@ Tags: `mining` / `fishing` / `wc` / `mule` / `local` / `acquire` / `path` / `end
 - **Mule mode** (Miner/Fisher/Woodcutter): `muleMode` Off / Gatherer / Mule +
   `mulePartner`. Gatherer trades full hauls at the camp meet instead of banking;
   Mule accepts trades, banks, returns. Shared policy: `api/mule/PartnerTrade`.
-  Disabled under location None. **Two-client trade** (Gatherer + Mule) needs two
-  harnesses / accounts that can coordinate (e.g. PM or a shared ready file) —
-  keep that as a dedicated multi-box smoke, not part of the default
-  `verify:gatheringbot` loop. `mine-mule-gatherer-meet` only proves single-client
-  handoff posture (meet + hold haul + no bank).
+  Disabled under location None.
+  - **Single-account** smoke in the main suite: `mine-mule-gatherer-meet` (meet + hold haul + no bank).
+  - **Two-account e2e:** `bun tools/gatheringbot-mule-pair-test.ts` boots Gatherer + Mule
+    on separate pages at SE Varrock iron and asserts product handoff.
 - **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
   tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
   start-tile leash, nearest bank, player-relative fish). Auto is expert / may-die:

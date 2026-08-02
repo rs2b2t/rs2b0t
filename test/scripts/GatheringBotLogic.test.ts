@@ -9,6 +9,7 @@ import {
     gatherHuntRadius,
     gatherSpotRangeOrigin,
     hostileAttackerNearby,
+    shouldFleeCombat,
     isAutoLocation,
     pickNearestPreferLocal,
     resourceWithinCamp,
@@ -205,6 +206,18 @@ describe('hostileAttackerNearby (post-kite camp suppress)', () => {
         expect(
             hostileAttackerNearby([npc({ dist: 1, inCombat: true, targetsAnother: true })])
         ).toBe(false);
+    });
+});
+
+describe('shouldFleeCombat (no blind kite on sticky combatCycle)', () => {
+    test('requires combat + real attacker, not sticky flag alone', () => {
+        expect(shouldFleeCombat({ inCombat: true, eventPending: false, hasAttacker: true })).toBe(true);
+        expect(shouldFleeCombat({ inCombat: true, eventPending: false, hasAttacker: false })).toBe(false);
+        expect(shouldFleeCombat({ inCombat: false, eventPending: false, hasAttacker: true })).toBe(false);
+    });
+
+    test('yields while a random event is pending', () => {
+        expect(shouldFleeCombat({ inCombat: true, eventPending: true, hasAttacker: true })).toBe(false);
     });
 });
 
