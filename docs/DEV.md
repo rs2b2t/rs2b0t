@@ -175,11 +175,14 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | id | what it proves |
 | --- | --- |
 | `mine-bank` / `mine-power` | SW Varrock tin bank loop vs drop mode |
+| `mine-bank-rimmington` | Rimmington iron → Falador East (long soft-home / second mine camp) |
 | `mine-iron-se-varrock` / `mine-iron-dwarven-north` | Iron local-prefer: stay on near cluster (`maxDistToCamp`) |
 | `mine-mule-gatherer-meet` | Single-account gatherer mule: full pack → meet + wait (no bank) |
+| `fish-mule-gatherer-meet` | Fisher gatherer mule smoke at Draynor (raw haul, no bank) |
 | *(pair harness)* | `gatheringbot-mule-pair-test.ts` — two accounts, full Gatherer↔Mule iron handoff |
-| `fish-bank` / `fish-cook-bank` / `fish-bank-raw-cook` | Draynor net bank; Catherby cook-then-bank (seed cooked); Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000 → catch→bank→cook batch) |
-| `wc-bank` / `wc-burn` | Draynor chop+bank; chop-then-burn |
+| `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
+| `fish-cook-bank` / `fish-bank-raw-cook` | Catherby cook-then-bank (seed cooked); bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
+| `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
 | `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
 | `repair-axe-bob` | Seed broken steel axe → Bob item-on-NPC repair (`macro_broken_steel_hatchet`) |

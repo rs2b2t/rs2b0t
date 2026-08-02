@@ -1047,6 +1047,13 @@ const SPOT = {
     edgevilleBank: { x: 3094, z: 3493, level: 0 },
     /** Barbarian Village fly/bait river (location bank = Edgeville). */
     barbVillageFish: { x: 3104, z: 3430, level: 0 },
+    /** Barbarian Village tin/coal rocks (catalog seed; bank Edgeville). */
+    barbVillageMine: { x: 3084, z: 3417, level: 0 },
+    /** Rimmington mine seed (Doric cluster; bank Falador East — long soft-home leg). */
+    rimmingtonMine: { x: 2978, z: 3247, level: 0 },
+    /** Seers normal trees south of bank. */
+    seersTrees: { x: 2724, z: 3474, level: 0 },
+    seersBank: { x: 2725, z: 3491, level: 0 },
     /** Willows NW of Crafting Guild — Auto freeform WC (outside every WC camp chunk). */
     // Was 2910,3328 (~25N of the stand); willows sit closer to the guild wall.
     willowsNwCg: { x: 2910, z: 3303, level: 0 },
@@ -1301,6 +1308,74 @@ const SCENARIOS: Scenario[] = [
             `muleOn=${logHas(cur, /mule:\s*gatherer with/i)} bankedLog=${logHas(cur, /bank:\s*deposited/i)} ` +
             `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
+    /**
+     * Second mine bank loop + long soft-home: Rimmington iron → Falador East (~100+ tiles).
+     * Catches bank preference / post-deposit return regressions not covered by SW Varrock.
+     */
+    {
+        id: 'mine-bank-rimmington',
+        tags: ['mining', 'mine', 'bank', 'camp', 'early'],
+        script: 'Miner',
+        start: offsetTile(SPOT.rimmingtonMine, -6, 3),
+        camp: SPOT.rimmingtonMine,
+        bank: SPOT.faladorEast,
+        settings: {
+            rocks: 'Iron',
+            location: 'Rimmington Mine',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        seed: [
+            { debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 },
+            { debug: 'iron_ore', name: 'Iron ore', qty: 26 }
+        ],
+        scene: 'skip',
+        budgetMs: 210_000,
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
+            const xpGain = cur.xp.mining - start.xp.mining;
+            const ore = invMatch(cur, /ore/i);
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                xpGain > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && ore <= 2
+                && minDistToBank <= 12
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `rimmington xp ${start.xp.mining}→${cur.xp.mining} distCamp=${minDistToCamp} distBank=${minDistToBank} ` +
+            `ore=${invMatch(cur, /ore/i)} peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} ` +
+            `homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
+    },
     {
         id: 'fish-bank',
         tags: ['fishing', 'fish', 'bank', 'early'],
@@ -1367,6 +1442,124 @@ const SCENARIOS: Scenario[] = [
             returnedToCampAfterBank
         }) =>
             `fishing xp ${start.xp.fishing}->${cur.xp.fishing}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, raw=${invMatch(cur, /^raw /i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank} homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
+    },
+    /**
+     * Barbarian Village fly → Edgeville bank. Wide campRadius (72) + off-camp bank:
+     * membership + soft home without Catherby cook complexity.
+     */
+    {
+        id: 'fish-bank-barb',
+        tags: ['fishing', 'fish', 'bank', 'camp', 'early'],
+        script: 'Fisher',
+        start: offsetTile(SPOT.barbVillageFish, -5, 4),
+        camp: SPOT.barbVillageFish,
+        bank: SPOT.edgevilleBank,
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Barbarian Village',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'feather', name: 'Feather', qty: 100 },
+            { debug: 'raw_trout', name: 'Raw trout', qty: 25 }
+        ],
+        scene: 'skip',
+        budgetMs: 200_000,
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
+            const xpGain = cur.xp.fishing - start.xp.fishing;
+            const raw = invMatch(cur, /^raw /i);
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                xpGain > 0
+                && productPeak >= 25
+                && bankedHint
+                && sawNearBank
+                && raw <= 3
+                && minDistToBank <= 12
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `barb-fish xp ${start.xp.fishing}→${cur.xp.fishing} distCamp=${minDistToCamp} distBank=${minDistToBank} ` +
+            `raw=${invMatch(cur, /^raw /i)} peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} ` +
+            `homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
+    },
+    /**
+     * Fisher gatherer mule smoke (Draynor): full raw haul → meet + hold, must not bank.
+     * Complements mine-mule-gatherer-meet so product keywords / depositable paths differ.
+     */
+    {
+        id: 'fish-mule-gatherer-meet',
+        tags: ['fishing', 'fish', 'mule', 'early'],
+        script: 'Fisher',
+        start: offsetTile(SPOT.draynorFish, 4, 3),
+        camp: SPOT.draynorFish,
+        bank: SPOT.draynorBank,
+        settings: {
+            fishMethod: 'Small net — shrimp/anchovy',
+            location: 'Draynor Village',
+            cookMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18,
+            muleMode: 'Gatherer',
+            mulePartner: 'HarnessMulePartner'
+        },
+        seed: [
+            { debug: 'net', name: 'Small fishing net', qty: 1 },
+            { debug: 'raw_shrimp', name: 'Raw shrimps', qty: 27 }
+        ],
+        scene: 'skip',
+        budgetMs: 90_000,
+        check: ({ cur, productPeak, minDistToBank, minDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const muleOn = logHas(cur, /mule:\s*gatherer with/i);
+            const nearMeet = minDistToCamp <= 6;
+            const stillHolding = invMatch(cur, /^raw /i) >= 20 || productPeak >= 20;
+            if (logHas(cur, /bank:\s*deposited/i) && elapsedMs >= 12_000) {
+                return 'fail';
+            }
+            if (muleOn && nearMeet && stillHolding && minDistToBank > 8 && elapsedMs >= 8_000) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ cur, minDistToCamp, minDistToBank, productPeak }) =>
+            `fish-mule-gatherer raw=${invMatch(cur, /^raw /i)} peak=${productPeak} ` +
+            `distCamp=${minDistToCamp} distBank=${minDistToBank} ` +
+            `muleOn=${logHas(cur, /mule:\s*gatherer with/i)} bankedLog=${logHas(cur, /bank:\s*deposited/i)} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
         // Cook then bank: seed cooked (not raw) so one catch fills the pack with
@@ -1572,6 +1765,75 @@ const SCENARIOS: Scenario[] = [
             returnedToCampAfterBank
         }) =>
             `wc xp ${start.xp.woodcutting}->${cur.xp.woodcutting}, distCamp=${minDistToCamp}, distBank=${minDistToBank}, logs=${invMatch(cur, /logs/i)}, peak=${productPeak}, banked=${bankedHint}, nearBank=${sawNearBank} homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
+    },
+    /**
+     * Second WC bank camp (Seers normal trees → Seers booth). Catches location table
+     * / bank stand regressions outside Draynor.
+     */
+    {
+        id: 'wc-bank-seers',
+        tags: ['woodcutting', 'wc', 'bank', 'camp', 'early'],
+        script: 'Woodcutter',
+        start: offsetTile(SPOT.seersTrees, -5, 3),
+        camp: SPOT.seersTrees,
+        bank: SPOT.seersBank,
+        settings: {
+            treeName: 'Tree',
+            location: 'Seers (trees)',
+            burnMode: 'Off',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 12
+        },
+        seed: [
+            { debug: 'rune_axe', name: 'Rune axe', qty: 1 },
+            { debug: 'logs', name: 'Logs', qty: 26 }
+        ],
+        scene: 'skip',
+        budgetMs: 180_000,
+        check: ({
+            start,
+            cur,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank,
+            minDistToBank,
+            minDistToCampAfterBank
+        }) => {
+            const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
+            const logs = invMatch(cur, /logs/i);
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                xpGain > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && logs <= 2
+                && minDistToBank <= 12
+                && returnedToCampAfterBank
+                && minDistToCampAfterBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({
+            start,
+            cur,
+            minDistToCamp,
+            minDistToBank,
+            minDistToCampAfterBank,
+            productPeak,
+            bankedHint,
+            sawNearBank,
+            returnedToCampAfterBank
+        }) =>
+            `seers-wc xp ${start.xp.woodcutting}→${cur.xp.woodcutting} distCamp=${minDistToCamp} distBank=${minDistToBank} ` +
+            `logs=${invMatch(cur, /logs/i)} peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} ` +
+            `homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
     },
     {
         id: 'wc-burn',
