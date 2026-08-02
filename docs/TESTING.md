@@ -18,6 +18,7 @@ Unit tests cannot see any of that; live harnesses cannot iterate quickly.
 - [Unit tests](#unit-tests)
 - [What makes this testable](#what-makes-this-testable)
 - [Live harnesses](#live-harnesses)
+- [Gold-standard issue harnesses](#gold-standard-issue-harnesses)
 - [The end-to-end smoke](#the-end-to-end-smoke)
 - [Writing a harness](#writing-a-harness)
 - [Known failures](#known-failures)
@@ -124,29 +125,6 @@ rs2b0t.actions
 | `type(page, text)` | click the canvas, then type — cheats go through this |
 | `bringUpOffIsland(page, opts)` | new account, teleported off tutorial island |
 | `startFromLibrary(page, category, script)` | pick and start a script from the panel |
-
-[`tools/lib/harnessProof.ts`](../tools/lib/harnessProof.ts) is the shared **proof artifact** helper
-(screenshot + JSON) used when a fix needs a paper trail:
-
-| Helper | Job |
-|---|---|
-| `createHarnessProof({ issue, slug })` | paths under `screenshots/` + `out/` |
-| `writeSuccess(page, body)` | full-page success shot + proof JSON |
-| `writeBaseline(page, body)` | **expected-unreachable** / pre-fix repro shot + proof |
-| `writeFailure(page)` | failure shot on throw |
-
-**Pattern (see `tools/shantay-pass-route-test.ts`, `tools/edgeville-dungeon-exit-test.ts`):**
-
-1. **Fixed path** — run the walk with the fix; assert arrival / XP / items; `writeSuccess`.
-2. **Baseline repro** — optional `--expect-unreachable` (or equivalent) that asserts the
-   *old* failure still looks like a failure when the fix is disabled, or documents that a
-   pre-fix build could not complete; `writeBaseline`. Useful for PR review: reviewers
-   see both “broken before” and “works after” without re-running history.
-3. **On throw** — `writeFailure` in `catch` so a red CI/local run still leaves a frame.
-
-Prefer asserting **game state** (tile, XP, coins spent) and only use log lines as supporting
-proof (e.g. `Climb-up Ladder at … ok`). Keep screenshots gitignored if they are bulky;
-JSON proofs under `out/` are enough for most PRs.
 
 Some hard-won details:
 
