@@ -272,6 +272,48 @@ def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
     )
 
 
+def closed_open_loc_ids(
+    configs: dict[int, LocConfig],
+    placement_loc_id: int,
+    action_config: LocConfig,
+) -> tuple:
+    """Map placement id + optional open-state id for trapdoor-style transforms.
+
+    Prefer closed id as locId (runtime default is usually closed). openLocId is the
+    climb/use-bearing open variant. Handles both:
+    - map places closed, action resolved via *_open config
+    - map places open (some content dumps), still pair to closed base debug name
+    """
+    placed = configs.get(placement_loc_id)
+    open_id: int | None = None
+    closed_id = placement_loc_id
+
+    if action_config.loc_id != placement_loc_id:
+        # Ranked open config against closed placement.
+        open_id = action_config.loc_id
+        closed_id = placement_loc_id
+        return closed_id, open_id
+
+    # Placement and action config share an id — may already be the open form.
+    debug = (placed.debug_name if placed else action_config.debug_name) or ""
+    if debug.endswith("_open"):
+        open_id = placement_loc_id
+        base = debug[: -len("_open")]
+        for cfg in configs.values():
+            if cfg.debug_name == base:
+                closed_id = cfg.loc_id
+                break
+        return closed_id, open_id
+
+    # Closed placement; look for conventional open partner.
+    open_debug = debug + "_open"
+    for cfg in configs.values():
+        if cfg.debug_name == open_debug:
+            open_id = cfg.loc_id
+            break
+    return closed_id, open_id
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--content", type=Path, required=True)
@@ -313,16 +355,14 @@ def main() -> None:
             resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
-                # Always bind the *map placement* id/tile (closed trapdoor on the map).
-                # When climb/use only exists on a transformed open loc, keep that as
-                # openLocId so the executor can match either state.
-                edge["locId"] = placement.loc_id
                 edge["locX"] = placement.x
                 edge["locZ"] = placement.z
                 edge["debugName"] = config.debug_name
                 edge["options"] = option_values(config) or [edge["action"]]
-                if config.loc_id != placement.loc_id:
-                    edge["openLocId"] = config.loc_id
+                closed_id, open_id = closed_open_loc_ids(configs, placement.loc_id, config)
+                edge["locId"] = closed_id
+                if open_id is not None and open_id != closed_id:
+                    edge["openLocId"] = open_id
                 else:
                     edge.pop("openLocId", None)
             else:
