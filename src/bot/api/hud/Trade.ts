@@ -21,6 +21,21 @@ function toItem(s: { id: number; name: string | null; count: number }): TradeIte
     return { id: s.id, name: s.name, count: s.count };
 }
 
+/** Strip `Trading With:` (and similar) to a bare display name. Exported for unit tests. */
+export function parseTradePartnerHeader(header: string): string | null {
+    let name = header.trim();
+    if (name.length === 0) {
+        return null;
+    }
+    const colon = name.indexOf(':');
+    if (colon !== -1) {
+        name = name.slice(colon + 1).trim();
+    } else {
+        name = name.replace(/^trading with\s+/i, '').trim();
+    }
+    return name.length > 0 ? name : null;
+}
+
 // Two-party: both players must "Trade with" each other to open the screen, then both accept offer + confirm.
 /**
  * Player-to-player trading. Any movement or combat closes the modal, so a
@@ -40,15 +55,16 @@ export const Trade = {
         return reader.tradeOfferOpen() || reader.tradeConfirmOpen();
     },
 
+    /**
+     * Other player's display name from the offer-screen header
+     * (`Trading With: <name>`). Returns null while the label has not filled.
+     */
     partner(): string | null {
         const header = reader.tradePartner();
         if (!header) {
             return null;
         }
-
-        const colon = header.indexOf(':');
-        const name = (colon === -1 ? header : header.slice(colon + 1)).trim();
-        return name || null;
+        return parseTradePartnerHeader(header);
     },
 
     myOffer(): TradeItem[] {

@@ -35,3 +35,5 @@ multibox-accounts.recovered.json
 
 # bot wall lockfiles — local state, never commit
 .b0t-launch.lock/
+# live-harness proof shots — attach to PRs, do not commit multi-MB PNGs
+screenshots/

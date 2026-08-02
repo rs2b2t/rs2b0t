@@ -185,8 +185,9 @@ export default class NatureCrafter extends TaskBot {
 }
 
 // master: the talisman, the runes it crafts and the essence it works on are the only things it
-// should ever hold. Anything else is random-event litter, and it eats the slots essence needs.
+// should ever hold. Anything else is random-event litter (banked on the timer trip).
 class HandleOpenTrade implements Task {
+    private partnerWait = 0;
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return Trade.active(); }
     async execute(): Promise<void> {
@@ -198,29 +199,47 @@ class HandleOpenTrade implements Task {
                 this.bot.countTrade(essCount() - before);
                 this.bot.log(`received ${essCount() - before} essence`);
             }
+            this.partnerWait = 0;
             return;
         }
 
-        // header can lag a tick — wait for it rather than declining a real runner
+        // Header can lag several ticks after the modal opens — do not treat blank as stranger.
         const who = Trade.partner();
         if (who === null) {
+            this.partnerWait++;
             this.bot.setStatus('reading trade partner');
-            await Execution.delayTicks(1);
+            if (this.partnerWait > 8) {
+                this.bot.log('trade partner name never appeared — declining stuck modal');
+                await Trade.decline();
+                this.partnerWait = 0;
+            } else {
+                await Execution.delayTicks(1);
+            }
             return;
         }
+        this.partnerWait = 0;
         if (!this.bot.isPartner(who)) {
             this.bot.setStatus(`declining trade from ${who}`);
             this.bot.log(`declining a trade from '${who}' — not a configured runner`);
             await Trade.decline();
             return;
         }
-        if (Trade.myOffer().length > 0) {
-            this.bot.log('safety: something is in MY trade offer — declining so nothing is given away');
+        // Real safety (regressed in bankEvery commit a660439): only refuse if precious
+        // items are on OUR offer. Declining any non-empty myOffer killed legitimate
+        // air/nature receives when the offer UI still held leftover slots / litter.
+        const offered = Trade.myOffer();
+        const precious = [this.bot.cfg().talisman, this.bot.cfg().rune, ESSENCE].map(n => n.toLowerCase());
+        if (offered.some(o => precious.includes((o.name ?? '').toLowerCase()))) {
+            this.bot.log(
+                `safety: ${offered.map(o => o.name).join(', ')} in MY offer includes talisman/runes/essence — declining`
+            );
             await Trade.decline();
             return;
         }
 
-        const theirEssence = Trade.theirOffer().filter(o => (o.name ?? '').toLowerCase() === ESSENCE.toLowerCase()).reduce((s, o) => s + Math.max(1, o.count), 0);
+        const theirEssence = Trade.theirOffer()
+            .filter(o => (o.name ?? '').toLowerCase() === ESSENCE.toLowerCase())
+            .reduce((s, o) => s + Math.max(1, o.count), 0);
         if (theirEssence <= 0) {
             this.bot.setStatus(`waiting for ${who} to offer essence`);
             await Execution.delayTicks(1);

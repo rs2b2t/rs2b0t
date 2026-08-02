@@ -378,16 +378,17 @@ from chat history. A **baseline** artifact shows the failure mode; a **success**
 shows the fix. Offline path unit tests (`test/nav/*Transport*.test.ts`) are first-class
 baseline when a live dual-mode is expensive.
 
-`out/` and large screenshots are typically gitignored — keep the **harness source** and
-the **unit tests** in git; attach PNG/JSON to the PR description or leave them local for
-the author. The harness must still *produce* them every green run.
+`out/` and **`screenshots/` are gitignored**. Do **not** commit proof PNGs. Keep harness
+**source** and **unit tests** in git. On green, **attach** the PNG (and JSON if useful)
+to the **PR conversation** — that is the house style for issue fixes. The harness must
+still *produce* the files every green run so the author can upload them.
 
 ### What not to do
 
 - Sleep a fixed 30s and hope — poll `worldTile` / XP / inventory.
 - PASS on “script is running” without state asserts.
 - Leave green runs with no screenshot/JSON when the bug is nav/door/world-state.
-- Commit multi‑MB screenshots into the repo without a deliberate choice.
+- Commit multi‑MB screenshots into the repo — attach them to the PR instead.
 
 ## Writing a harness
 
