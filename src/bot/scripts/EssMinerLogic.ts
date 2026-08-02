@@ -25,6 +25,20 @@ export function requiredMiningLevel(selection: string): number | null {
     return PICK_TIERS.find(t => t.tier.toLowerCase() === selection.trim().toLowerCase())?.level ?? null;
 }
 
+/** Exact tier EssMiner should own: the selected tier, or the level's best tier. */
+export function desiredPickaxe(selection: string, miningLevel: number): PickTier | null {
+    const specific = PICK_TIERS.find(t => t.tier.toLowerCase() === selection.trim().toLowerCase());
+    if (specific) {
+        return miningLevel >= specific.level ? specific : null;
+    }
+    return PICK_TIERS.find(t => miningLevel >= t.level) ?? null;
+}
+
+/** Re-check only when a setting change or Mining threshold changes the desired tier. */
+export function needsPickaxeCheck(lastCheckedItem: string | null, selection: string, miningLevel: number): boolean {
+    return lastCheckedItem !== (desiredPickaxe(selection, miningLevel)?.item ?? null);
+}
+
 export type PickResolution =
     | { kind: 'held'; item: string }
     | { kind: 'withdraw'; item: string }

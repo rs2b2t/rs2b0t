@@ -141,20 +141,16 @@ Tags: `combat`, `clues`, `banking`, `afk`
 
 ### ChaosDruidKiller
 
-Kills Chaos druids in the Edgeville dungeon, loots herbs/law runes, banks them
+Kills Chaos druids in the Edgeville dungeon, loots exact Herb/Law rune names, banks them
 
 Tags: `wilderness`, `edgeville`, `herbs`, `banking`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `loot` | string | `"herb, law rune"` | Loot (name contains, comma-sep) |
-| `leashRadius` | number (3–20) | `8` | Leash radius (tiles) |
-| `fightHpGate` | number (0–100) | `40` | Stop fighting below HP% |
-| `restUntilHp` | number (0–100) | `65` | Rest until HP% |
-| `bankStrategy` | string | `"Off"` | Periodic bank — one of: Off, Loot count, Time, Either |
-| `bankEveryItems` | number (1–27) | `15` | Bank at N loot items |
-| `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
-| `bankCommonJunk` | boolean | `true` | Also bank gems/fruit/beer/kebabs/caskets |
+| `food` | string | `"Lobster"` | Food — one of: Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
+| `foodWithdraw` | number (1–27) | `12` | Food per trip |
+| `eatAtHp` | number (1–99) | `55` | Eat below HP% |
+| `panicHp` | number (1–98) | `35` | Bank below HP% (no food) |
 
 ### ChickenKiller
 
@@ -499,7 +495,7 @@ Tags: `mining`, `coal`, `seers`, `banking`
 
 ### EssMiner
 
-Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries + a usable pickaxe (picks your best by default)
+Rune essence loop — Aubury teleport, one-click mine to a full pack, portal back, bank at Varrock East. Needs Rune Mysteries; uses your best pickaxe and buys the exact best usable tier from Nurmof when banked coins cover it
 
 Tags: `varrock`, `mining`, `banking`, `afk`
 

@@ -256,5 +256,7 @@ background throttling.
 - [Manual index](README.md)
 - [Running locally](RUNNING.md) — the from-scratch local setup
 - [Scripting API](API.md)
-- [Testing](TESTING.md) — unit tests and live harnesses
+- [Testing](TESTING.md) — unit tests, live harnesses, bank seeding (`givebank`)
+- [Quests](QUESTS.md#official-reqs-vs-bot-proven-floors-polish-goal) — bare-minimum
+  non-required stats and `warnReadiness`
 - [MultiBox](MULTIBOX.md) — the wall itself, and what the telemetry readings mean
