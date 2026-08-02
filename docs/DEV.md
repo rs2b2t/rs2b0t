@@ -169,6 +169,9 @@ HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
 HEADED=1 BUDGET_S=180 bun tools/gatheringbot-mule-pair-test.ts
 # Two-account Fisher: Gatherer raw → Cooker cook+bank at Catherby:
 HEADED=1 BUDGET_S=240 bun tools/gatheringbot-cooker-pair-test.ts
+# Path to every curated cook surface (pier + distinct bank ranges):
+HEADED=1 BUDGET_S=120 bun tools/gatheringbot-range-path-test.ts
+CAMPS=Seers,Catherby bun tools/gatheringbot-range-path-test.ts
 ```
 
 Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /
@@ -185,6 +188,7 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
 | `fish-cook-bank` / `fish-cook-barb` / `fish-cook-seers` | Catherby Range; Barb outdoor Fire; Seers fly Range (pathable camp tele) |
 | *(cooker pair)* | `gatheringbot-cooker-pair-test.ts` — Gatherer raw → Cooker cook+bank at Catherby |
+| *(range path)* | `gatheringbot-range-path-test.ts` — walk to every curated pier/bank cook surface |
 | `fish-cooker-solo` | Cooker mule with full raw pack → cook → bank (no partner trade needed once seeded) |
 | `fish-bank-raw-cook` | Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
 | `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |

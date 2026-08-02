@@ -3,6 +3,7 @@ import {
     COOKING_RANGE_LOCS,
     chebyshev,
     cookSurfaceForFishCamp,
+    listFishCampRangePathCases,
     nearestCookingRange,
     rangeStandFromLoc,
     resolveFishCampCookSurface
@@ -56,5 +57,19 @@ describe('CookingRanges catalog', () => {
         expect(c?.stand.x).toBe(2817);
         const free = resolveFishCampCookSurface(null, { x: 2817, z: 3444, level: 0 }, 8);
         expect(free?.kind).toBe('range');
+    });
+
+    test('listFishCampRangePathCases covers every plan (pier + distinct bank)', () => {
+        const cases = listFishCampRangePathCases();
+        const ids = cases.map(c => c.id);
+        expect(ids).toContain('range-path-catherby-pier');
+        expect(ids).toContain('range-path-seers-fly-fishing-pier');
+        expect(ids).toContain('range-path-seers-fly-fishing-bank');
+        expect(ids).toContain('range-path-barbarian-village-pier');
+        expect(ids).toContain('range-path-draynor-village-pier');
+        expect(ids).toContain('range-path-fishing-guild-pier');
+        // Catherby pier===bank → only one case
+        expect(ids.filter(i => i.includes('catherby'))).toHaveLength(1);
+        expect(cases.length).toBeGreaterThanOrEqual(6);
     });
 });

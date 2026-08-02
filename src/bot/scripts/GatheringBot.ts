@@ -27,7 +27,7 @@ import { isOpenableObstacle, openOp, walkOpening } from '../api/walkOpening.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
-import { resolveFishCampCookSurface } from '../api/CookingRanges.js';
+import { cookSurfaceForFishCamp, resolveFishCampCookSurface } from '../api/CookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../api/FishingLocations.js';
 import {
     effectiveGatherLeash,
@@ -1573,8 +1573,21 @@ export default class GatheringBot extends TaskBot {
 
     private resolveCookScene(): void {
         const fishLoc = this.fishingLocation();
-        // bank-raw-then-cook prefers a range near the bank; cook-then-bank prefers pier.
-        const role = this.cookMode === 'bank-raw-then-cook' ? 'bank' : 'pier';
+        // bank-raw-then-cook → bank surface; cook-then-bank → pier, unless the player
+        // is already much closer to a distinct bank oven (Seers village vs Sinclair).
+        let role: 'pier' | 'bank' = this.cookMode === 'bank-raw-then-cook' ? 'bank' : 'pier';
+        if (fishLoc && role === 'pier') {
+            const pier = cookSurfaceForFishCamp(fishLoc.name, 'pier');
+            const bank = cookSurfaceForFishCamp(fishLoc.name, 'bank');
+            const here = Game.tile();
+            if (here && pier && bank && (pier.stand.x !== bank.stand.x || pier.stand.z !== bank.stand.z)) {
+                const dp = Math.max(Math.abs(here.x - pier.stand.x), Math.abs(here.z - pier.stand.z));
+                const db = Math.max(Math.abs(here.x - bank.stand.x), Math.abs(here.z - bank.stand.z));
+                if (db + 12 < dp) {
+                    role = 'bank';
+                }
+            }
+        }
         const origin =
             role === 'bank' && fishLoc?.bankStand
                 ? fishLoc.bankStand

@@ -281,3 +281,47 @@ export function resolveFishCampCookSurface(
     }
     return nearestCookingRange(spot, maxCheb);
 }
+
+/** One harness row: path from a camp spot (or bank) to a curated cook surface. */
+export type FishCampRangePathCase = {
+    id: string;
+    camp: string;
+    role: CookSurfaceRole;
+    surface: CookingSurface;
+};
+
+/**
+ * Expand {@link FISH_CAMP_COOK_PLANS} into pier (+ distinct bank) path cases.
+ * Used by `tools/gatheringbot-range-path-test.ts`.
+ */
+export function listFishCampRangePathCases(): FishCampRangePathCase[] {
+    const out: FishCampRangePathCase[] = [];
+    for (const [camp, plan] of Object.entries(FISH_CAMP_COOK_PLANS)) {
+        const slug = camp.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+        if (plan.pier) {
+            out.push({
+                id: `range-path-${slug}-pier`,
+                camp,
+                role: 'pier',
+                surface: plan.pier
+            });
+        }
+        if (plan.bank) {
+            const sameAsPier =
+                plan.pier
+                && plan.bank.stand.x === plan.pier.stand.x
+                && plan.bank.stand.z === plan.pier.stand.z
+                && plan.bank.stand.level === plan.pier.stand.level
+                && plan.bank.locName === plan.pier.locName;
+            if (!sameAsPier) {
+                out.push({
+                    id: `range-path-${slug}-bank`,
+                    camp,
+                    role: 'bank',
+                    surface: plan.bank
+                });
+            }
+        }
+    }
+    return out;
+}
