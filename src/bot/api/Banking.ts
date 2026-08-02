@@ -11,6 +11,7 @@ import { Game } from './Game.js';
 import Tile from './Tile.js';
 import { Traversal } from './Traversal.js';
 import { Bank } from './hud/Bank.js';
+import { Inventory } from './hud/Inventory.js';
 import { Locs } from './queries/Locs.js';
 import { walkOpening } from './walkOpening.js';
 
@@ -102,6 +103,31 @@ export function matchesCommonBankLoot(name: string, id: number = -1): boolean {
     return COMMON_BANK_LOOT.some(p => n.includes(p));
 }
 
+/**
+ * Inventory junk that steals pack slots during long AFK loops (random-event
+ * leftovers, common bank loot). Callers must still exclude tools/gear/logs.
+ * Used by GatheringBot chop-then-burn when banking is deferred for a fire load.
+ */
+export function isDisposableGatherJunk(name: string | null | undefined, id: number = -1): boolean {
+    if (matchesCommonBankLoot(name ?? '', id)) {
+        return true;
+    }
+    const n = (name ?? '').toLowerCase().trim();
+    if (n.length === 0) {
+        return false;
+    }
+    // Misc event / world leftovers that are not gear and not a gather product.
+    return (
+        n === 'flier'
+        || n === 'spin ticket'
+        || n === 'security book'
+        || n.includes('discount certificate')
+        || n === 'half a meat pie'
+        || n === 'half a redberry pie'
+        || n === 'half an apple pie'
+    );
+}
+
 export function depositMatcher(own: (name: string) => boolean, includeCommon: boolean): (name: string, id?: number) => boolean {
     return (name: string, id: number = -1) => own(name) || (includeCommon && matchesCommonBankLoot(name, id));
 }
@@ -109,6 +135,57 @@ export function depositMatcher(own: (name: string) => boolean, includeCommon: bo
 export function depositAllExcept(keep: Iterable<string>): (name: string) => boolean {
     const set = new Set([...keep].map(s => s.toLowerCase()));
     return (name: string) => name.length > 0 && !set.has(name.toLowerCase());
+}
+
+/**
+ * Start-of-script pack cleanup (#170): if the inventory holds anything that is
+ * not on the keep list, open a bank and deposit the rest so the bot can start
+ * anywhere without a full junk pack.
+ *
+ * Returns true when nothing needed banking or the purge finished. False only
+ * when junk remains and the bank could not be opened / deposited.
+ */
+export async function purgePackAtBank(opts: {
+    /** Exact display names to keep (case-insensitive), e.g. pickaxe / rod. */
+    keep: Iterable<string>;
+    stand?: WorldTile | null;
+    boothName?: string;
+    boothOp?: string;
+    obstacles?: string[];
+    log?: (msg: string) => void;
+}): Promise<boolean> {
+    const log = opts.log ?? (() => {});
+    const deposit = depositAllExcept(opts.keep);
+    const junk = Inventory.items().filter(i => deposit(i.name ?? ''));
+    if (junk.length === 0) {
+        return true;
+    }
+    log(
+        `start purge: banking ${junk.length} stack(s) ` +
+            `(keep: ${[...opts.keep].join(', ') || 'none'})`
+    );
+    if (
+        !(await Banking.open({
+            stand: opts.stand ?? null,
+            boothName: opts.boothName,
+            boothOp: opts.boothOp,
+            obstacles: opts.obstacles,
+            log
+        }))
+    ) {
+        log('start purge: could not open bank — leaving pack as-is');
+        return false;
+    }
+    await Bank.depositAllMatching((name) => deposit(name));
+    await Execution.delayTicks(1);
+    await Bank.close().catch(() => undefined);
+    const left = Inventory.items().filter(i => deposit(i.name ?? ''));
+    if (left.length > 0) {
+        log(`start purge: still holding ${left.length} junk stack(s) after deposit`);
+        return false;
+    }
+    log('start purge: pack cleared');
+    return true;
 }
 
 function realBooth(boothName: string) {

@@ -148,7 +148,12 @@ import {
     shouldEatForTannerfish,
     type TickManipProfile
 } from './TickManipLogic.js';
-import { Banking, depositAllExcept } from '../api/Banking.js';
+import {
+    Banking,
+    depositAllExcept,
+    isDisposableGatherJunk,
+    purgePackAtBank
+} from '../api/Banking.js';
 import { parseRangeStyle } from '../api/CombatStyle.js';
 import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
@@ -278,6 +283,23 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         group: 'Mule',
         help:
             'Comma-separated names. Gatherer/Supplier → Cooker or Mule. Cooker/Mule → gatherer/supplier name(s).'
+    },
+    purgePackOnStart: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank junk on start',
+        group: 'Banking',
+        help:
+            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped under location None, Cooker (raw pack), and Supplier.'
+    },
+    packJunk: {
+        type: 'string',
+        default: 'Bank',
+        options: ['Bank', 'Drop', 'Off'],
+        label: 'Event junk while gathering',
+        group: 'Banking',
+        help:
+            'When random-event loot (caskets, fruit, gems, …) steals pack slots under chop-then-burn or power mode: Bank at the camp (default), Drop, or Off. Location None has no camp bank — Bank falls back to Drop. (Future: shared API helper for other scripts.)'
     }
 };
 
@@ -357,6 +379,8 @@ export default class GatheringBot extends TaskBot {
     private burntPolicy: BurntPolicy = 'drop';
     private afterCook: AfterCookCycle = 'stop';
     private bankRawTarget = 56;
+    /** How to clear random-event junk that steals slots under burn/power. */
+    private packJunkPolicy: 'bank' | 'drop' | 'off' = 'bank';
 
     private bankRawInBank = 0;
 
@@ -689,6 +713,42 @@ export default class GatheringBot extends TaskBot {
         this.gearKeep = this.rebuildGearKeep();
         this.captureXpStart();
 
+        {
+            const raw = this.settings.str('packJunk', 'Bank').trim().toLowerCase();
+            this.packJunkPolicy = raw === 'drop' ? 'drop' : raw === 'off' ? 'off' : 'bank';
+            if (this.packJunkPolicy !== 'off' && (this.burnEnabled() || this.powerMode)) {
+                this.log(
+                    `pack junk: ${this.packJunkPolicy}` +
+                        (this.powerMode && this.packJunkPolicy === 'bank' ? ' (None → drop if no bank)' : '')
+                );
+            }
+        }
+
+        // #170 — bank junk so gather can start with a full pack of trash.
+        // Skip power drop-only, Cooker (raw pack to cook), Supplier (empty/feeder).
+        if (
+            this.settings.bool('purgePackOnStart', true)
+            && !this.powerMode
+            && !this.isMuleCooker()
+            && !this.isMuleSupplier()
+        ) {
+            const keep = new Set(this.gearKeep.map(n => n));
+            for (const n of toolKeepNames(this.toolReqs)) {
+                keep.add(n);
+            }
+            for (const g of this.fishMethod?.gear ?? []) {
+                keep.add(g.name);
+            }
+            await purgePackAtBank({
+                keep: [...keep],
+                stand: this.location?.bankStand ?? null,
+                boothName: this.location?.boothName,
+                boothOp: this.location?.boothOp,
+                obstacles: this.location?.obstacles ?? ['door', 'gate'],
+                log: m => this.log(m)
+            });
+        }
+
         // Combat policy:
         // - Tick-manip retaliate methods: Auto Retaliate ON, no FleeCombat (may die).
         // - Location Auto: expert / may-die — leave combat alone (no flee babysitting).
@@ -791,6 +851,8 @@ export default class GatheringBot extends TaskBot {
             ...(cookTasks
                 ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)]
                 : []),
+            // Random-event junk steals log slots under chop-then-burn (BankCatch deferred).
+            ...(!muleSide ? [new ClearPackJunk(this)] : []),
             ...(!muleSide && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
@@ -2960,6 +3022,43 @@ export default class GatheringBot extends TaskBot {
     hasDepositable(): boolean {
         return Inventory.items().some(i => this.shouldDeposit(i.name ?? ''));
     }
+
+    /**
+     * Random-event / common junk that should not permanently occupy pack slots
+     * during chop-then-burn (BankCatch is blocked while a fire load is pending).
+     */
+    isPackJunk(name: string | null | undefined, id: number = -1): boolean {
+        if (!name) {
+            return false;
+        }
+        const n = name.toLowerCase();
+        if (this.gearKeep.length > 0 && !depositAllExcept(this.gearKeep)(name)) {
+            return false;
+        }
+        if (n === TINDERBOX.toLowerCase()) {
+            return false;
+        }
+        if (this.burnEnabled() && n === this.burnLogs.toLowerCase()) {
+            return false;
+        }
+        if (this.fishMethod?.gear.some(g => g.name.toLowerCase() === n)) {
+            return false;
+        }
+        // Keep intentional product (ore/raw) in bank mode — only drop true junk.
+        if (!this.powerMode && !this.burnEnabled() && this.isProduct(name)) {
+            return false;
+        }
+        return isDisposableGatherJunk(name, id);
+    }
+
+    packJunkItems() {
+        return Inventory.items().filter(i => this.isPackJunk(i.name, i.id));
+    }
+
+    packJunkPolicyMode(): 'bank' | 'drop' | 'off' {
+        return this.packJunkPolicy;
+    }
+
     getLocation(): GatheringLocation | null {
         return this.location;
     }
@@ -3852,6 +3951,86 @@ class MuleBankHaul implements Task {
         this.bot.log(`mule: deposited haul (${had} stacks, trades=${this.bot.muleTradeCount()})`);
         // Walk back toward meet (camp).
         await this.bot.walkHomeIfNeeded(log);
+    }
+}
+
+/**
+ * Clear random-event leftovers that steal slots. Critical for chop-then-burn:
+ * BankCatch is deferred while a log load is pending, so caskets/gems/fruit would
+ * otherwise permanently shrink free space for logs on long AFK runs.
+ *
+ * Default is **bank** at the camp; **drop** remains for power/None or preference.
+ * (Future: lift to api/ for other scripts — see plan docs.)
+ */
+class ClearPackJunk implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (EventSignal.pending()) {
+            return false;
+        }
+        if (this.bot.packJunkPolicyMode() === 'off') {
+            return false;
+        }
+        // Power + burn do not bank every full pack of product with the haul.
+        // Normal bank-mode gather already deposits junk via depositAllExcept(gear).
+        if (!this.bot.burnEnabled() && !this.bot.isPowerMode()) {
+            return false;
+        }
+        const junk = this.bot.packJunkItems();
+        if (junk.length === 0) {
+            return false;
+        }
+        const free = Inventory.free();
+        if (this.bot.burnEnabled()) {
+            return free <= 6 || Inventory.isFull();
+        }
+        return free <= 2 || Inventory.isFull();
+    }
+
+    async execute(): Promise<void> {
+        const junkN = this.bot.packJunkItems().length;
+        const preferBank = this.bot.packJunkPolicyMode() === 'bank' && !this.bot.isPowerMode();
+        if (preferBank) {
+            this.bot.setStatus('bank: event junk');
+            const log = (m: string) => this.bot.log(`  ${m}`);
+            if (await this.bot.openScriptBank(log)) {
+                await Bank.depositAllMatching((name, id) => this.bot.isPackJunk(name, id));
+                await Execution.delayTicks(1);
+                if (Bank.isOpen()) {
+                    await this.bot.closeScriptBank(log);
+                }
+                const left = this.bot.packJunkItems().length;
+                this.bot.log(
+                    `bank: deposited event junk (${junkN - left} stack(s); ${left} left)`
+                );
+                if (left === 0) {
+                    return;
+                }
+                this.bot.log('bank: some junk still held — falling back to drop');
+            } else {
+                this.bot.log('bank: could not open for event junk — falling back to drop');
+            }
+        }
+
+        this.bot.setStatus('dropping junk');
+        let dropped = 0;
+        for (let guard = 0; guard < 28; guard++) {
+            const item = this.bot.packJunkItems()[0];
+            if (!item) {
+                break;
+            }
+            const before = Inventory.used();
+            await item.interact('Drop');
+            if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+                dropped += before - Inventory.used();
+            } else {
+                break;
+            }
+        }
+        if (dropped > 0) {
+            this.bot.log(`drop: cleared ${dropped} random/common junk stack(s) (pack space)`);
+        }
     }
 }
 
