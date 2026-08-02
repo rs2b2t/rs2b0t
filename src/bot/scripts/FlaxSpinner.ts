@@ -184,8 +184,11 @@ class Spin implements Task {
             return;
         }
         if (!ChatDialog.isMakeMenu()) {
-            const wheel = Locs.query().name(this.bot.wheelLocName()).action(this.bot.spinOpName())
-                .where(l => l.tile().distanceTo(this.bot.wheelStand()) <= this.bot.leashRadius()).nearest();
+            const wheel = Locs.query()
+                .name(this.bot.wheelLocName())
+                .action(this.bot.spinOpName())
+                .withinOf(this.bot.wheelStand(), this.bot.leashRadius())
+                .nearest();
             if (!wheel) { await Execution.delayTicks(2); return; }
             this.bot.setStatus('opening the spinning wheel');
             if (!(await wheel.interact(this.bot.spinOpName()))) { await Execution.delayTicks(2); return; }

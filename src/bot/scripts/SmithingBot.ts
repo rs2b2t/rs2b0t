@@ -201,7 +201,8 @@ class Smith implements Task {
     constructor(private bot: SmithingBot) {}
     validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
     async execute(): Promise<void> {
-        const anvil = () => Locs.query().name(this.bot.anvilLocName()).where(l => l.tile().distanceTo(this.bot.anvilTile()) <= this.bot.leashRadius()).nearest();
+        const anvil = () =>
+            Locs.query().name(this.bot.anvilLocName()).withinOf(this.bot.anvilTile(), this.bot.leashRadius()).nearest();
         const here = Game.tile();
         if (!here || this.bot.anvilTile().distanceTo(here) > 1 || !anvil()) {
             this.bot.setStatus('walking to the anvil');

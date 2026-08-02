@@ -176,7 +176,12 @@ class SmeltTrip implements Task {
     constructor(private bot: SmelterBot) {}
     validate(): boolean { return this.bot.canSmelt() && !ChatDialog.canContinue(); }
     async execute(): Promise<void> {
-        const furnace = () => Locs.query().name(this.bot.furnaceLocName()).action('Smelt').where(l => l.tile().distanceTo(this.bot.furnaceTile()) <= this.bot.leashRadius()).nearest();
+        const furnace = () =>
+            Locs.query()
+                .name(this.bot.furnaceLocName())
+                .action('Smelt')
+                .withinOf(this.bot.furnaceTile(), this.bot.leashRadius())
+                .nearest();
         const here = Game.tile();
         if (!here || this.bot.furnaceTile().distanceTo(here) > 1 || !furnace()) {
             this.bot.setStatus('crossing to the furnace');

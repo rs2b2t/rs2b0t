@@ -1,4 +1,12 @@
-import { beyondLeash, createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash } from '../api/Anchor.js';
+import {
+    beyondLeash,
+    createReturnToAnchorTask,
+    HOME_ARRIVE_RADIUS,
+    resolveRunAnchor,
+    shouldSoftHomeFromGatherMiss,
+    shouldWalkHomeToGatherAnchor,
+    tileWithinLeash
+} from '../api/Anchor.js';
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
@@ -21,12 +29,21 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { resolveFishingLocation, type FishingLocation } from '../api/FishingLocations.js';
 import {
-    DEFAULT_CAMP_RADIUS,
+    effectiveGatherLeash,
+    gatherHuntRadius,
+    gatherSpotRangeOrigin,
+    isAutoLocation,
+    NAMED_CAMP_LEASH_FLOOR,
+    resourceWithinCamp,
+    spotWithinGatherRange
+} from '../api/GatherCamp.js';
+import {
     DEFAULT_CHASE_RADIUS,
     resolveCampRadius,
     resolveChaseRadius,
     type GatheringLocation
 } from '../api/GatheringLocations.js';
+import { LOCAL_MINE_PREFER_RADIUS, shouldCooldownGatherTile } from '../api/TargetPick.js';
 import { resolveMiningLocation } from '../api/MiningLocations.js';
 import { resolveWoodcuttingLocation } from '../api/WoodcuttingLocations.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS, ROCK_OPTIONS, resolveRockIds } from '../api/MiningRocks.js';
@@ -142,187 +159,28 @@ import {
 /** Default half-size of the Auto (start) burn box around the script start tile. */
 const LOCAL_BURN_HALF = 8;
 
-/**
- * Soft home arrive radius after bank/shop/repair.
- * Humans re-enter the camp disk — they do not pin the exact location.spot tile.
- */
-export const HOME_ARRIVE_RADIUS = 8;
-
-/**
- * Floor for non-Auto location modes (named camps + power None).
- * This is **camp membership** (ReturnToAnchor / wander bound from the home pin),
- * not the fishing-spot search disk. Spot hops use player-relative chase inside camp.
- * Auto keeps the raw setting so freeform / unverified snaps stay conservative.
- */
-export const NAMED_CAMP_LEASH_FLOOR = DEFAULT_CAMP_RADIUS;
-
-/** @deprecated Prefer {@link NAMED_CAMP_LEASH_FLOOR} — same value, kept for imports. */
-export const START_TILE_LEASH_FLOOR = NAMED_CAMP_LEASH_FLOOR;
-
-/** Default player-relative fish chase for named camps (re-export for tests). */
-export { DEFAULT_CHASE_RADIUS };
-
-/**
- * Effective gather leash from the UI value + location mode.
- * - Auto → respect setting (freeform / unverified chunk snaps).
- * - Named camp or None → at least {@link NAMED_CAMP_LEASH_FLOOR} (camp membership).
- */
-export function effectiveGatherLeash(settingLeash: number, locationSetting: string): number {
-    const raw = Math.max(2, Math.floor(Number.isFinite(settingLeash) ? settingLeash : 10));
-    if (locationSetting.trim().toLowerCase() === 'auto') {
-        return raw;
-    }
-    return Math.max(NAMED_CAMP_LEASH_FLOOR, raw);
-}
-
-/** True when Location is Auto — expert freeform; no mob-flee babysitting. */
-export function isAutoLocation(locationSetting: string): boolean {
-    return locationSetting.trim().toLowerCase() === 'auto';
-}
-
-/**
- * Origin for fishing-spot distance checks.
- *
- * - **Named camp**: measure from the **player** so pier/river hops beside the bot
- *   stay valid even when far from the home pin (resource fence is camp membership).
- * - **Freeform fish** (Auto with no preset / power None): same player origin —
- *   river hops after a hunt walk must not idle on "no spots near start-tile anchor".
- * - No player tile → fall back to anchor/home.
- */
-export function gatherSpotRangeOrigin(
-    freeformFish: boolean,
-    hasPlayerTile: boolean,
-    namedCamp = false
-): 'player' | 'anchor' {
-    if (!hasPlayerTile) {
-        return 'anchor';
-    }
-    if (namedCamp || freeformFish) {
-        return 'player';
-    }
-    return 'anchor';
-}
-
-/** Spot is inside the gather/hunt disk measured from {@link gatherSpotRangeOrigin}. */
-export function spotWithinGatherRange(distFromOrigin: number, maxDist: number): boolean {
-    return Number.isFinite(distFromOrigin) && distFromOrigin <= maxDist;
-}
-
-/**
- * Resource still belongs to the named camp (Chebyshev from home pin).
- * Freeform has no camp fence — callers skip this check.
- */
-export function resourceWithinCamp(distFromHome: number, campRadius: number): boolean {
-    const R = Math.max(2, Math.floor(Number.isFinite(campRadius) ? campRadius : NAMED_CAMP_LEASH_FLOOR));
-    return Number.isFinite(distFromHome) && distFromHome <= R;
-}
-
-/**
- * Freeform hunt radius past the UI/start leash.
- * Generous pad so river hops beyond the old "leash+12" wall still walk-to
- * (status used to idle on "no spots within 40 of you" with leash 28).
- * Named camps do not use this — they accept any spot in camp membership.
- */
-export function gatherHuntRadius(primaryDisk: number): number {
-    const L = Math.max(2, Math.floor(Number.isFinite(primaryDisk) ? primaryDisk : 10));
-    return Math.max(L + 24, 48);
-}
-
-/**
- * Prefer rocks/trees within this Chebyshev of the player when any match.
- * Dwarven / multi-tunnel mines: membership can be 64+ tiles with iron on both
- * wings — pure membership nearest still path-walks around walls to a slightly
- * nearer tile. Local prefer keeps the bot on the cluster underfoot.
- * Server iron rocks (ids 2092/2093) respawn on ~6t; see skill_mining mine.dbrow.
- */
-export const LOCAL_MINE_PREFER_RADIUS = 12;
-
-/**
- * Pick the best gather loc from candidates already filtered (type, camp, usable).
- * When any candidate sits within {@link preferRadius} of the player, ignore the rest
- * so we do not path across a mine for a far ore while a local one is up.
- */
-export function pickNearestPreferLocal<T>(
-    candidates: readonly T[],
-    distToPlayer: (c: T) => number,
-    preferRadius = LOCAL_MINE_PREFER_RADIUS
-): T | null {
-    if (candidates.length === 0) {
-        return null;
-    }
-    const r = Math.max(0, Math.floor(Number.isFinite(preferRadius) ? preferRadius : LOCAL_MINE_PREFER_RADIUS));
-    let pool = candidates;
-    if (r > 0) {
-        const local = candidates.filter(c => distToPlayer(c) <= r);
-        if (local.length > 0) {
-            pool = local;
-        }
-    }
-    let best: T | null = null;
-    let bestD = Infinity;
-    for (const c of pool) {
-        const d = distToPlayer(c);
-        if (d < bestD) {
-            best = c;
-            bestD = d;
-        }
-    }
-    return best;
-}
-
-/**
- * Whether to soft-cooldown a mine/chop tile after a session ends with no ore/log.
- * Successful depletes must NOT cool the tile — empty/stump already drops out of
- * matchesRock/name filters, and iron respawns (~6t) faster than the old 8t cooldown
- * (bot walked across Dwarven/SE Varrock while a nearby iron was already up).
- */
-export function shouldCooldownGatherTile(gotProduct: boolean, stillHasOtherTargets: boolean): boolean {
-    // Only soft-skip a tile after a failed click when other targets exist.
-    return !gotProduct && stillHasOtherTargets;
-}
-
-/**
- * Whether post-bank / no-target gather should walk toward the camp anchor.
- *
- * "Already home" is the soft {@link HOME_ARRIVE_RADIUS} disk — not camp membership.
- * Bank stands often sit inside the membership disk but far from resources
- * (Catherby bank→pier ≈ 36). Treating full membership as home left Fisher idling
- * on "no spots" at the bank (#154).
- */
-export function shouldWalkHomeToGatherAnchor(
-    distToAnchor: number | null | undefined,
-    arriveRadius = HOME_ARRIVE_RADIUS
-): boolean {
-    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
-        return false;
-    }
-    const r = Math.max(0, Math.floor(Number.isFinite(arriveRadius) ? arriveRadius : HOME_ARRIVE_RADIUS));
-    return distToAnchor > r;
-}
-
-/**
- * Backup soft-home from a gather miss (no spot/rock in scene).
- *
- * BankCatch / restock use the tight {@link HOME_ARRIVE_RADIUS} disk via
- * {@link shouldWalkHomeToGatherAnchor}. Gather must **not** — freeform pier-hops and
- * brief spot despawns sit just outside the 8-tile disk and thrash hunt↔home.
- * Only pull home when clearly off the resource pad (bank square / long wander).
- *
- * Uses a soft threshold (~20–28), not full camp membership — bank at ~36 must
- * still soft-home even when membership is 64.
- */
-export function shouldSoftHomeFromGatherMiss(
-    distToAnchor: number | null | undefined,
-    leash = NAMED_CAMP_LEASH_FLOOR
-): boolean {
-    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
-        return false;
-    }
-    const L = Math.max(2, Math.floor(Number.isFinite(leash) ? leash : NAMED_CAMP_LEASH_FLOOR));
-    // ≥20 tiles off anchor, or past half a tight freeform leash — not the soft arrive disk.
-    const threshold = Math.max(HOME_ARRIVE_RADIUS + 12, Math.min(L, 28));
-    return distToAnchor > threshold;
-}
+// Re-export pure policy from api/ so existing `#/bot/scripts/GatheringBot` imports keep working.
+export {
+    HOME_ARRIVE_RADIUS,
+    shouldSoftHomeFromGatherMiss,
+    shouldWalkHomeToGatherAnchor
+} from '../api/Anchor.js';
+export {
+    effectiveGatherLeash,
+    gatherHuntRadius,
+    gatherSpotRangeOrigin,
+    isAutoLocation,
+    NAMED_CAMP_LEASH_FLOOR,
+    resourceWithinCamp,
+    spotWithinGatherRange,
+    START_TILE_LEASH_FLOOR
+} from '../api/GatherCamp.js';
+export { DEFAULT_CHASE_RADIUS } from '../api/GatheringLocations.js';
+export {
+    LOCAL_MINE_PREFER_RADIUS,
+    pickNearestPreferLocal,
+    shouldCooldownGatherTile
+} from '../api/TargetPick.js';
 
 /** Hostile NPCs that should keep us from re-entering camp after a kite (wildy). */
 export function hostileAttackerNearby(
@@ -4623,7 +4481,7 @@ class Gather implements Task {
         // Camp membership fence (anchor leash) + ore/tree type filters, then prefer
         // rocks near the player so we do not path across Dwarven tunnels / SE Varrock
         // while a matching ore is already underfoot.
-        const candidates = Locs.query()
+        return Locs.query()
             .name(this.bot.targetName())
             .action(this.bot.actionName())
             .where(
@@ -4634,8 +4492,7 @@ class Gather implements Task {
                     !GAS_ROCK_IDS.has(l.id) &&
                     this.bot.usable(keyOf(l.tile()))
             )
-            .results();
-        return pickNearestPreferLocal(candidates, l => l.distance(), LOCAL_MINE_PREFER_RADIUS);
+            .nearestPreferLocal(LOCAL_MINE_PREFER_RADIUS);
     }
 
     validate(): boolean {

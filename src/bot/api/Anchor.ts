@@ -1,6 +1,7 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { Task } from './Bot.js';
 import { Game } from './Game.js';
+import { DEFAULT_CAMP_RADIUS } from './GatheringLocations.js';
 import Tile from './Tile.js';
 import { Traversal } from './Traversal.js';
 import { walkOpening } from './walkOpening.js';
@@ -11,6 +12,55 @@ export interface AnchorHost {
 
     setStatus?(s: string): void;
     log?(msg: string): void;
+}
+
+/**
+ * Soft home arrive radius after bank/shop/repair.
+ * Humans re-enter the camp disk — they do not pin the exact location.spot tile.
+ */
+export const HOME_ARRIVE_RADIUS = 8;
+
+/**
+ * Whether post-bank / no-target gather should walk toward the camp anchor.
+ *
+ * "Already home" is the soft {@link HOME_ARRIVE_RADIUS} disk — not camp membership.
+ * Bank stands often sit inside the membership disk but far from resources
+ * (Catherby bank→pier ≈ 36). Treating full membership as home left Fisher idling
+ * on "no spots" at the bank (#154).
+ */
+export function shouldWalkHomeToGatherAnchor(
+    distToAnchor: number | null | undefined,
+    arriveRadius = HOME_ARRIVE_RADIUS
+): boolean {
+    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
+        return false;
+    }
+    const r = Math.max(0, Math.floor(Number.isFinite(arriveRadius) ? arriveRadius : HOME_ARRIVE_RADIUS));
+    return distToAnchor > r;
+}
+
+/**
+ * Backup soft-home from a gather miss (no spot/rock in scene).
+ *
+ * BankCatch / restock use the tight {@link HOME_ARRIVE_RADIUS} disk via
+ * {@link shouldWalkHomeToGatherAnchor}. Gather must **not** — freeform pier-hops and
+ * brief spot despawns sit just outside the 8-tile disk and thrash hunt↔home.
+ * Only pull home when clearly off the resource pad (bank square / long wander).
+ *
+ * Uses a soft threshold (~20–28), not full camp membership — bank at ~36 must
+ * still soft-home even when membership is 64.
+ */
+export function shouldSoftHomeFromGatherMiss(
+    distToAnchor: number | null | undefined,
+    leash = DEFAULT_CAMP_RADIUS
+): boolean {
+    if (distToAnchor == null || !Number.isFinite(distToAnchor)) {
+        return false;
+    }
+    const L = Math.max(2, Math.floor(Number.isFinite(leash) ? leash : DEFAULT_CAMP_RADIUS));
+    // ≥20 tiles off anchor, or past half a tight freeform leash — not the soft arrive disk.
+    const threshold = Math.max(HOME_ARRIVE_RADIUS + 12, Math.min(L, 28));
+    return distToAnchor > threshold;
 }
 
 export interface ReturnToAnchorOptions {
