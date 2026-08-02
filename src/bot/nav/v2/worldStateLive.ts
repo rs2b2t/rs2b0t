@@ -44,8 +44,17 @@ export function snapshotWorldStateData(): WorldStateData {
             continue;
         }
         items[name] = (items[name] ?? 0) + item.count;
-        // substring-friendly: also store lower
         items[name.toLowerCase()] = (items[name.toLowerCase()] ?? 0) + item.count;
+        items[name.toLowerCase().replace(/\s+/g, '')] =
+            (items[name.toLowerCase().replace(/\s+/g, '')] ?? 0) + item.count;
+    }
+    // Explicit counts for tele-critical runes (names vary slightly by pack).
+    for (const rune of ['Law rune', 'Air rune', 'Fire rune', 'Water rune', 'Earth rune']) {
+        const c = Inventory.count(rune);
+        if (c > 0) {
+            items[rune] = Math.max(items[rune] ?? 0, c);
+            items[rune.toLowerCase()] = Math.max(items[rune.toLowerCase()] ?? 0, c);
+        }
     }
 
     return {

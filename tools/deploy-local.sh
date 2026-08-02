@@ -26,7 +26,11 @@ mkdir -p "$ENGINE/public/bot"
 cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/navworker.js out/navworker.js.map out/collision.lcnav.gz \
    out/tinymidipcm.wasm "$ENGINE/public/bot/"
-cp public-bot/bot.html "$ENGINE/public/bot.html"
+# Bust browser / Playwright cache of the ES module (otherwise tele path edges
+# never appear live while the pack probe offline is already green).
+BUST=$(date +%s)
+sed "s|botclient.js?v=nav-v2|botclient.js?v=${BUST}|g; s|botclient.js\"|botclient.js?v=${BUST}\"|g" \
+    public-bot/bot.html > "$ENGINE/public/bot.html"
 cp out/multibox.js out/multibox.js.map "$ENGINE/public/bot/"
 cp public-bot/multibox.html "$ENGINE/public/multibox.html"
 

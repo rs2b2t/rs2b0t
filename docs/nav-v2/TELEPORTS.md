@@ -111,7 +111,25 @@ Do not reclassify those as teleports.
 
 ---
 
-## 5. Planner / policy mapping
+## 5. How teleports enter path calculation (not a post-path hack)
+
+Spell/jewellery teleports are **originless**: you cast/rub from *wherever you stand*.
+They are not a baked ladder at a fixed tile. In A* they still behave like any other
+edge — same expansion loop, same costs, same hop list on the outcome.
+
+**What the code does at search time** (sometimes called “inject” in commits — poor word):
+
+1. Snapshot `WorldState` (skills, runes, members, quests).  
+2. Filter the teleport **catalog** with `PathPolicy` + `meetsRequires`.  
+3. For each allowed destination, add a temporary graph edge  
+   `startTile → landing` with `kind: 'teleport'`, cost ~40, `teleportId`.  
+4. A* runs on **walk + doors + stairs + dungeons + those tele edges**.  
+5. If the cheapest route uses a tele hop, the waypoint carries `teleportId` and
+   the executor casts/rubs it.
+
+There is no second phase that “injects a tele after walking.” If tele is not in the
+graph for that search, you get a pure walk (cost ~226 Lumbridge→Varrock). If it is,
+cost drops to ~40 and hops show `Cast Varrock teleport`.
 
 | Family | `kind` | `teleportId` examples | `requires` | `PathPolicy` |
 |---|---|---|---|---|
@@ -123,11 +141,11 @@ Do not reclassify those as teleports.
 
 **Inventory matching:** accept any charge stage (`ring_of_dueling_1`…`_8` or name regex `Ring of dueling(`).
 
-**Execution (later PR):**
+**Execution:**
 
-1. Spell → existing `Game.teleport`  
-2. Jewellery → open inv, Rub, pick dialogue option (substring match like special crossings)  
-3. Wait for tile near landing (`toTile` + radius 2, same as server `map_findsquare`)
+1. Spell → `Game.teleport`  
+2. Jewellery → open inv, Rub, pick dialogue (still open)  
+3. Wait near landing (`toTile` + radius ~2)
 
 ---
 

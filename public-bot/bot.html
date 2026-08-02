@@ -526,7 +526,8 @@
         })();
     </script>
 
-    <script type="module" src="./bot/botclient.js"></script>
+    <!-- cache-bust: redeploy rewrites this query so live harnesses never stick on an old walker -->
+    <script type="module" src="./bot/botclient.js?v=nav-v2"></script>
 </body>
 
 </html>

@@ -13,13 +13,31 @@ export interface WorldStateData {
     freeSlots: number;
 }
 
+function lookupItem(items: Record<string, number>, name: string): number {
+    if (items[name] !== undefined) {
+        return items[name]!;
+    }
+    const lower = name.toLowerCase();
+    if (items[lower] !== undefined) {
+        return items[lower]!;
+    }
+    // "Law rune" ↔ "lawrune" style
+    const compact = lower.replace(/\s+/g, '');
+    for (const [k, v] of Object.entries(items)) {
+        if (k.toLowerCase() === lower || k.toLowerCase().replace(/\s+/g, '') === compact) {
+            return v;
+        }
+    }
+    return 0;
+}
+
 export function worldStateFromData(data: WorldStateData): WorldState {
     return {
         members: data.members,
         skills: data.skills,
         freeSlots: data.freeSlots,
         questStatus: q => data.quests[q] ?? data.quests[q.toLowerCase()] ?? 'unknown',
-        itemCount: name => data.items[name] ?? data.items[name.toLowerCase()] ?? 0
+        itemCount: name => lookupItem(data.items, name)
     };
 }
 

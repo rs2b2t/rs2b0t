@@ -162,6 +162,9 @@ class WalkExecutorImpl {
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.resetAvoids();
+        log(
+            `nav-v2 walkTo tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? null)}`
+        );
 
         try {
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
@@ -181,9 +184,10 @@ class WalkExecutorImpl {
                     this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
-                log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`);
-                if (path.hops.length > 0) {
-                    log(`hops:\n${formatHops(path.hops)}`);
+                const hops = path.hops ?? [];
+                log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`);
+                if (hops.length > 0) {
+                    log(`hops:\n${formatHops(hops)}`);
                 }
 
                 const tiles = expandWaypoints(path.waypoints);
@@ -235,8 +239,14 @@ class WalkExecutorImpl {
         let state;
         try {
             state = snapshotWorldStateData();
-        } catch {
+        } catch (e) {
             state = undefined;
+            console.warn('[nav-v2] worldState snapshot failed', e);
+        }
+        if (this.walkUseTeleports && state) {
+            console.log(
+                `[nav-v2] state magic=${state.skills.magic ?? state.skills.Magic ?? '?'} law=${state.items['Law rune'] ?? state.items['law rune'] ?? 0} air=${state.items['Air rune'] ?? 0} fire=${state.items['Fire rune'] ?? 0}`
+            );
         }
         const avoid = [
             ...this.avoidDoors,
@@ -245,11 +255,12 @@ class WalkExecutorImpl {
                 return { x: x!, z: z! };
             })
         ];
+        const policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
         Navigator.findPath(from, to, {
             avoidDoors: avoid,
             maxExpansions,
             state,
-            policy: this.walkPolicy ?? { useTeleports: this.walkUseTeleports },
+            policy,
             useTeleportCatalog: this.walkUseTeleports
         }).then(
             r => (result = r),
