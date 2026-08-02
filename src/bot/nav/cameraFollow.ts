@@ -1,10 +1,16 @@
 /**
  * Optional orbit-camera path facing (client-only — no server/LC changes).
  *
- * Uses the same yaw math as the client's cinema look-at:
+ * Yaw math matches the client's cinema look-at:
  *   yaw = (atan2(dx, dz) * -325.949) & 0x7ff
- * so the view looks along the walk path the way a human arrow-key rotates.
+ *
+ * Smoothing runs on the game frame loop (not the walk tick) so turns ease like
+ * a human holding left/right rather than stepping once per path poll.
  */
+
+import { actions, reader } from '../adapter/ClientAdapter.js';
+import { BotHost } from '../BotHost.js';
+import { SettingsStore } from '../runtime/Settings.js';
 
 /** Scene-unit / tile delta → orbit camera yaw (0–2047). */
 export function yawTowardDelta(dx: number, dz: number): number {
@@ -23,7 +29,7 @@ export function yawDelta(from: number, to: number): number {
     return d;
 }
 
-/** Step current yaw toward target by at most maxStep units (smooth human-ish turn). */
+/** Step current yaw toward target by at most maxStep units (one-shot helper / tests). */
 export function stepYaw(current: number, target: number, maxStep: number): number {
     if (maxStep <= 0) {
         return target & 0x7ff;
@@ -38,6 +44,45 @@ export function stepYaw(current: number, target: number, maxStep: number): numbe
     return target & 0x7ff;
 }
 
+/**
+ * Ease toward target: blend of error + velocity damping (mirrors client keycam feel).
+ * Returns { yaw, velocity } after one frame.
+ */
+export function easeYaw(
+    current: number,
+    target: number,
+    velocity: number,
+    opts?: { gain?: number; maxSpeed?: number; damping?: number; deadzone?: number }
+): { yaw: number; velocity: number } {
+    const gain = opts?.gain ?? 0.14;
+    const maxSpeed = opts?.maxSpeed ?? 18;
+    const damping = opts?.damping ?? 0.72;
+    const deadzone = opts?.deadzone ?? 6;
+
+    const err = yawDelta(current, target);
+    if (Math.abs(err) <= deadzone && Math.abs(velocity) < 1) {
+        return { yaw: current & 0x7ff, velocity: 0 };
+    }
+
+    // Desired velocity proportional to remaining error (client yawVelocity ±24 scale).
+    let desired = err * gain;
+    if (desired > maxSpeed) {
+        desired = maxSpeed;
+    } else if (desired < -maxSpeed) {
+        desired = -maxSpeed;
+    }
+
+    // Blend previous velocity → desired (smooth accel/decel).
+    let v = velocity * damping + desired * (1 - damping);
+    if (Math.abs(v) < 0.15) {
+        v = 0;
+    }
+
+    // Client applies velocity/2 each frame when keys are held.
+    const next = (current + Math.round(v / 2)) & 0x7ff;
+    return { yaw: next, velocity: v };
+}
+
 export interface TileLike {
     x: number;
     z: number;
@@ -48,16 +93,48 @@ export interface TileLike {
  * Pick a look-ahead tile on the path so the camera tracks the route, not every
  * single footstep (less twitchy on diagonals / switchbacks).
  */
-export function lookAheadTile(
-    tiles: TileLike[],
-    pathIdx: number,
-    lookAhead = 8
-): TileLike | null {
+export function lookAheadTile(tiles: TileLike[], pathIdx: number, lookAhead = 12): TileLike | null {
     if (tiles.length === 0) {
         return null;
     }
     const i = Math.min(tiles.length - 1, Math.max(0, pathIdx) + Math.max(1, lookAhead));
     return tiles[i] ?? null;
+}
+
+/**
+ * Average heading from `from` across several path tiles ahead — smoother than a
+ * single far point on zigzags.
+ */
+export function pathFacingYaw(
+    from: TileLike,
+    tiles: TileLike[],
+    pathIdx: number,
+    lookAhead = 12
+): number | null {
+    if (tiles.length === 0) {
+        return null;
+    }
+    const start = Math.max(0, pathIdx) + 1;
+    const end = Math.min(tiles.length - 1, Math.max(0, pathIdx) + Math.max(2, lookAhead));
+    if (start > end) {
+        return null;
+    }
+    let dx = 0;
+    let dz = 0;
+    let n = 0;
+    for (let i = start; i <= end; i++) {
+        const t = tiles[i]!;
+        if (from.level !== undefined && t.level !== undefined && from.level !== t.level) {
+            continue;
+        }
+        dx += t.x - from.x;
+        dz += t.z - from.z;
+        n++;
+    }
+    if (n === 0 || (dx === 0 && dz === 0)) {
+        return null;
+    }
+    return yawTowardDelta(dx, dz);
 }
 
 /**
@@ -75,3 +152,89 @@ export function yawTowardTiles(from: TileLike, to: TileLike): number | null {
     }
     return yawTowardDelta(dx, dz);
 }
+
+/** How far desired yaw may jump before we retarget (reduces micro-chatter). */
+const TARGET_RETARGET_MIN = 28;
+/** Stop driving camera this long after the last path sample (walk ended / stalled). */
+const STALE_MS = 900;
+
+/**
+ * Frame-driven path camera. WalkExecutor only publishes a desired heading;
+ * this eases orbit yaw every client frame while Global.navCameraFollow is on.
+ */
+class PathCameraFollowImpl {
+    private hooked = false;
+    private active = false;
+    private desiredYaw: number | null = null;
+    private velocity = 0;
+    private lastSampleAt = 0;
+
+    enable(): void {
+        if (this.hooked) {
+            return;
+        }
+        this.hooked = true;
+        BotHost.addFrameListener(() => this.onFrame());
+    }
+
+    /**
+     * Called from the walk follow loop with the latest path-facing yaw.
+     * No-op when the setting is off.
+     */
+    samplePathYaw(yaw: number): void {
+        if (!SettingsStore.globalBag().bool('navCameraFollow', false)) {
+            this.release();
+            return;
+        }
+        this.enable();
+        this.active = true;
+        this.lastSampleAt = performance.now();
+
+        if (this.desiredYaw === null) {
+            this.desiredYaw = yaw & 0x7ff;
+            return;
+        }
+        // Only retarget when the path heading has moved enough — avoids
+        // re-aiming every tile on a nearly straight corridor.
+        if (Math.abs(yawDelta(this.desiredYaw, yaw)) >= TARGET_RETARGET_MIN) {
+            this.desiredYaw = yaw & 0x7ff;
+        }
+    }
+
+    /** Call when a walkTo finishes so the camera coasts to a stop. */
+    release(): void {
+        this.active = false;
+        this.desiredYaw = null;
+        this.velocity = 0;
+    }
+
+    private onFrame(): void {
+        if (!this.active || this.desiredYaw === null) {
+            return;
+        }
+        if (!SettingsStore.globalBag().bool('navCameraFollow', false)) {
+            this.release();
+            return;
+        }
+        if (!reader.ingame()) {
+            return;
+        }
+        if (performance.now() - this.lastSampleAt > STALE_MS) {
+            // Walk stopped sampling — let residual velocity die, then idle.
+            this.velocity *= 0.6;
+            if (Math.abs(this.velocity) < 0.5) {
+                this.release();
+            }
+            return;
+        }
+
+        const current = reader.cameraYaw();
+        const next = easeYaw(current, this.desiredYaw, this.velocity);
+        this.velocity = next.velocity;
+        if (next.yaw !== current || Math.abs(this.velocity) > 0.2) {
+            actions.setCameraYaw(next.yaw);
+        }
+    }
+}
+
+export const PathCameraFollow = new PathCameraFollowImpl();

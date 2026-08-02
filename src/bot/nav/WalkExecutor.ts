@@ -1,5 +1,5 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
-import { actions, reader } from '../adapter/ClientAdapter.js';
+import { reader } from '../adapter/ClientAdapter.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { Execution } from '../api/Execution.js';
@@ -36,8 +36,7 @@ import { virtualizeWithItems } from './v2/virtualState.js';
 import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
 import { RouteState } from './v2/routeState.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
-import { lookAheadTile, yawTowardTiles } from './cameraFollow.js';
-import { SettingsStore } from '../runtime/Settings.js';
+import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
 import {
     crossMultiTileDoor,
     isOpenableBarrier,
@@ -263,6 +262,7 @@ class WalkExecutorImpl {
             this.remaining = 0;
             PathPublish.clear();
             RouteState.reset();
+            PathCameraFollow.release();
         }
     }
 
@@ -293,24 +293,15 @@ class WalkExecutorImpl {
     }
 
     /**
-     * Optional orbit-camera facing along the published path (Global.navCameraFollow).
-     * Client-only: steps yaw toward look-ahead tile so long runs feel human, not snap.
+     * Publish desired path-facing yaw; PathCameraFollow eases on the frame loop
+     * while Global.navCameraFollow is on (smooth, not walk-tick snap).
      */
     private maybeFacePathCamera(me: WorldTile, tiles: PathStep[], pathIdx: number): void {
-        if (!SettingsStore.globalBag().bool('navCameraFollow', false)) {
+        const yaw = pathFacingYaw(me, tiles, pathIdx, 12);
+        if (yaw === null) {
             return;
         }
-        const look = lookAheadTile(tiles, pathIdx, 8);
-        if (!look) {
-            return;
-        }
-        const target = yawTowardTiles(me, look);
-        if (target === null) {
-            return;
-        }
-        // ~32 units/step ≈ a human holding left/right; walk loop is slower than frame rate
-        // so this is intentionally a bit snappier than one key-frame of followCamera.
-        actions.stepCameraYaw(target, 48);
+        PathCameraFollow.samplePathYaw(yaw);
     }
 
     /**

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    easeYaw,
     lookAheadTile,
+    pathFacingYaw,
     stepYaw,
     yawDelta,
     yawTowardDelta,
@@ -31,7 +33,6 @@ describe('yawDelta / stepYaw', () => {
 
     test('stepYaw clamps max step', () => {
         expect(stepYaw(0, 200, 32)).toBe(32);
-        expect(stepYaw(0, 200, 32)).not.toBe(200);
         expect(stepYaw(0, 20, 32)).toBe(20);
     });
 
@@ -44,7 +45,51 @@ describe('yawDelta / stepYaw', () => {
     });
 });
 
-describe('lookAheadTile / yawTowardTiles', () => {
+describe('easeYaw (frame smoothing)', () => {
+    test('reduces absolute error each frame without overshooting past target on small steps', () => {
+        let yaw = 0;
+        let velocity = 0;
+        const target = 200;
+        let prevErr = Math.abs(yawDelta(yaw, target));
+        for (let i = 0; i < 40; i++) {
+            const next = easeYaw(yaw, target, velocity);
+            yaw = next.yaw;
+            velocity = next.velocity;
+            const err = Math.abs(yawDelta(yaw, target));
+            // Monotonic approach (allow plateaus near deadzone)
+            expect(err).toBeLessThanOrEqual(prevErr + 1);
+            prevErr = err;
+        }
+        expect(Math.abs(yawDelta(yaw, target))).toBeLessThan(40);
+    });
+
+    test('settles near target with velocity → 0', () => {
+        let yaw = 100;
+        let velocity = 0;
+        const target = 100;
+        for (let i = 0; i < 10; i++) {
+            const next = easeYaw(yaw, target, velocity);
+            yaw = next.yaw;
+            velocity = next.velocity;
+        }
+        expect(yaw).toBe(100);
+        expect(velocity).toBe(0);
+    });
+
+    test('handles wrap-around (near 0/2048 boundary)', () => {
+        let yaw = 10;
+        let velocity = 0;
+        const target = 2030; // short path is leftward across wrap
+        for (let i = 0; i < 60; i++) {
+            const next = easeYaw(yaw, target, velocity);
+            yaw = next.yaw;
+            velocity = next.velocity;
+        }
+        expect(Math.abs(yawDelta(yaw, target))).toBeLessThan(50);
+    });
+});
+
+describe('lookAheadTile / pathFacingYaw', () => {
     const path = [
         { x: 3200, z: 3200, level: 0 },
         { x: 3201, z: 3200, level: 0 },
@@ -64,9 +109,10 @@ describe('lookAheadTile / yawTowardTiles', () => {
         expect(yawTowardTiles({ x: 1, z: 1, level: 0 }, { x: 2, z: 2, level: 1 })).toBeNull();
     });
 
-    test('yawTowardTiles faces along the path', () => {
-        const y = yawTowardTiles(path[0]!, path[3]!);
+    test('pathFacingYaw averages ahead of the player', () => {
+        const y = pathFacingYaw(path[0]!, path, 0, 4);
         expect(y).not.toBeNull();
-        expect(y).toBe(yawTowardDelta(10, 0));
+        // Sum of (tile - me) for pathIdx+1 .. pathIdx+4: dx=1+5+10+10, dz=0+0+0+10
+        expect(y).toBe(yawTowardDelta(26, 10));
     });
 });

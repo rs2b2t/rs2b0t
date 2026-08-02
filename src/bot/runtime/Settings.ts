@@ -170,8 +170,9 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         default: false,
         label: 'Camera follows path',
         help:
-            'While world-walking, rotate the orbit camera to face along the route '
-            + '(client-only; like arrow-key turns). Off by default. URL: ?Global.navCameraFollow=true.'
+            'While world-walking, ease the orbit camera toward the path heading '
+            + '(client-only, smoothed each frame like arrow-key turns). Off by default. '
+            + 'URL: ?Global.navCameraFollow=true.'
     },
     // ── Nav path paint (visible when showNavPath) — SP-aligned colours ──
     navPathShowText: {
