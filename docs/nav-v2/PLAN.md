@@ -73,12 +73,12 @@ Product analogues:
 - Migrate coal-trucks log / toll coins / members hops onto `requires`  
 - Re-enable selected `disabledReason: state-aware…` rows as `requires`  
 - **Teleport policy (first-class, not deferred):**  
-  - catalog standard spell teleports (Varrock / Lumbridge / Falador / Camelot / Ardougne — we already cast via `Game.teleport`) as originless `kind: 'teleport'` edges with rune/level `requires`  
-  - `PathPolicy.useTeleports` (and later per-destination toggles if useful)  
-  - `PathPolicy.distanceBeforeTeleport` — do not burn a tele when the remaining walk is short (Microbot’s `distanceBeforeUsingTeleport`; **easier here**: ~5 destinations, not 200 TSV rows)  
-  - tele cost uses `duration`/fixed tele cost so A\* does not treat them as free zero-distance cheats  
+  - catalog from **Server content** (see [TELEPORTS.md](./TELEPORTS.md) / `teleportCatalog.ts`):  
+    spells (7) + jewellery (duel ring, games neck, glory dests) — **as implemented**, not modern OSRS wiki  
+  - `PathPolicy.useTeleports` / `allowTeleportIds` / `distanceBeforeTeleport`  
+  - tele cost fixed so A\* does not treat them as free  
 
-**Explicitly still later:** bank-for-missing-runes / `TransportRouteAnalysis` (direct vs bank-then-tele). Useful someday; not Phase 2.
+**Explicitly still later:** bank-for-missing-runes / `TransportRouteAnalysis`; duel-ring anim run-energy stall (local post-impl note in TELEPORTS.md).
 
 ### Phase 3 — Executor modularization (Microbot P2 spirit, strangler)
 
@@ -161,7 +161,7 @@ each script hand-rolling escape. Toggles exist so a nature runner or pure-walk q
 | **A** | Docs + types + requires + v1 adapters + tests (Phase 0) |
 | **B** | PathFinder consumes `TransportEdge[]`; hop explain on outcomes |
 | **C** | Live `WorldState` + `PathPolicy` (skill/toll + **tele toggles / distanceBeforeTeleport**) |
-| **D** | Spell teleport catalog edges + executor cast hop (`Game.teleport`) |
+| **D** | Teleport catalog (spells + jewellery from Server scan) + executor cast/rub hops |
 | **E** | Handler extraction + PlannedEdge recovery stub |
 | **F** | Route corpus + component report |
 

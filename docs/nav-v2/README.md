@@ -7,6 +7,7 @@ Built with the same love as the rest of rs2b0t: real client clicks, era-correct 
 | Doc | What |
 |---|---|
 | [PLAN.md](./PLAN.md) | Architecture, phases, success metrics |
+| [TELEPORTS.md](./TELEPORTS.md) | Server-scanned spell + jewellery + lever catalog |
 | [MICROBOT_SHORTEST_PATH.md](./MICROBOT_SHORTEST_PATH.md) | Patterns from RuneLite SP + Microbot walker → our 2004 mapping |
 | v1 manual | [docs/NAV.md](../NAV.md) (still authoritative for current behavior) |
 | Code | [`src/bot/nav/v2/`](../../src/bot/nav/v2/) |

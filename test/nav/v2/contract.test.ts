@@ -5,10 +5,14 @@ import {
     compileV1Graph,
     doorToTransportEdges,
     ensureEdgeId,
+    inventoryNameMatchesJewellery,
+    JEWELLERY_TELEPORTS,
     kindAllowedByPolicy,
     meetsRequires,
     routeSpanChebyshev,
+    SPELL_TELEPORTS,
     teleportAllowedByPolicy,
+    teleportDestinationsToEdges,
     transportEdgeId,
     v1TransportToEdge,
     type TransportEdge,
@@ -154,6 +158,44 @@ describe('nav v2 path policy (teleports)', () => {
             locZ: 9850
         });
         expect(teleportAllowedByPolicy(ladder, { distanceBeforeTeleport: 9999 }, 1).ok).toBe(true);
+    });
+});
+
+describe('nav v2 teleport catalog (Server scan)', () => {
+    test('includes core spell destinations with magic+rune requires', () => {
+        const ids = SPELL_TELEPORTS.map(t => t.teleportId);
+        expect(ids).toEqual(
+            expect.arrayContaining(['varrock', 'lumbridge', 'falador', 'camelot', 'ardougne', 'watchtower', 'trollheim'])
+        );
+        const varrock = SPELL_TELEPORTS.find(t => t.teleportId === 'varrock')!;
+        expect(varrock.to).toEqual({ x: 3213, z: 3424, level: 0 });
+        expect(varrock.requires?.skills?.[0]).toEqual({ name: 'magic', level: 25 });
+    });
+
+    test('jewellery matches Server single-dest duel ring and games neck', () => {
+        const duel = JEWELLERY_TELEPORTS.find(t => t.teleportId === 'dueling_arena')!;
+        const games = JEWELLERY_TELEPORTS.find(t => t.teleportId === 'games_burthorpe')!;
+        expect(duel.to).toEqual({ x: 3315, z: 3235, level: 0 });
+        expect(games.to).toEqual({ x: 2207, z: 4940, level: 0 });
+        expect(inventoryNameMatchesJewellery('Ring of dueling(5)', duel)).toBe(true);
+        expect(inventoryNameMatchesJewellery('Games necklace(8)', games)).toBe(true);
+        expect(inventoryNameMatchesJewellery('Amulet of glory(4)', duel)).toBe(false);
+    });
+
+    test('glory has four destinations; uncharged name does not match charged prefix', () => {
+        const glory = JEWELLERY_TELEPORTS.filter(t => t.teleportId.startsWith('glory_'));
+        expect(glory).toHaveLength(4);
+        expect(inventoryNameMatchesJewellery('Amulet of glory(2)', glory[0]!)).toBe(true);
+        // uncharged "Amulet of glory" has no '(' — inventory matcher requires charged form
+        expect(inventoryNameMatchesJewellery('Amulet of glory', glory[0]!)).toBe(false);
+    });
+
+    test('originless edges compile with kind teleport and acceptAnyLanding', () => {
+        const edges = teleportDestinationsToEdges();
+        expect(edges.length).toBe(SPELL_TELEPORTS.length + JEWELLERY_TELEPORTS.length);
+        expect(edges.every(e => e.kind === 'teleport')).toBe(true);
+        expect(edges.every(e => e.landing?.acceptAnyLanding === true)).toBe(true);
+        expect(edges.some(e => e.teleportId === 'dueling_arena')).toBe(true);
     });
 });
 
