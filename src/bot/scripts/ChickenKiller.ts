@@ -6,11 +6,23 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, depositAllExcept, parseBankStrategy, type BankDestination } from '../api/Banking.js';
-import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
+import {
+    COMBAT_STYLE_OPTIONS,
+    RANGE_STYLE_OPTIONS,
+    describeCombatStyle,
+    parseCombatStyle,
+    parseRangeStyle,
+    type MeleeCombatStyle
+} from '../api/CombatStyle.js';
+import { Autocast } from '../api/combat/Autocast.js';
+import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
+import { SPELL_DB } from '../api/combat/data/spelldb.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { Equipment } from '../api/hud/Equipment.js';
+import { Bank } from '../api/hud/Bank.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
@@ -21,7 +33,14 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { Reach } from '../api/Reach.js';
 
-const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints'];
+const COMBAT_SKILLS = ['attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic'];
+
+const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
+const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
+const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
+
+/** Legacy ChickenKiller saved `combatStyle` as a melee training style. */
+const LEGACY_MELEE = new Set(['attack', 'strength', 'controlled', 'defence', 'accurate', 'aggressive', 'defensive', 'shared']);
 
 export const SETTINGS: SettingsSchema = {
     leashRadius: { type: 'number', default: 12, min: 3, max: 30, label: 'Leash radius (tiles)' },
@@ -32,13 +51,70 @@ export const SETTINGS: SettingsSchema = {
     buryBones: { type: 'boolean', default: true, label: 'Bury bones?' },
     combatStyle: {
         type: 'string',
+        default: 'melee',
+        options: ['melee', 'mage', 'range'],
+        label: 'Combat style',
+        help:
+            'melee / mage / range — same shape as AutoFighter. '
+            + 'Older saves that stored attack/strength/controlled/defence still work as melee.'
+    },
+    meleeStyle: {
+        type: 'string',
         default: 'strength',
         options: COMBAT_STYLE_OPTIONS,
-        label: 'Combat style',
-        help: 'which combat stat to train (unarmed); re-applied each login since com_mode is not saved'
+        label: 'Melee style',
+        group: 'Combat',
+        showIf: SHOW_MELEE,
+        help: 'which melee stat to train; re-applied each login since com_mode is not saved'
+    },
+    spell: {
+        type: 'string',
+        default: 'Wind Strike',
+        options: Object.keys(SPELL_DB),
+        label: 'Autocast spell',
+        group: 'Combat',
+        showIf: SHOW_MAGE,
+        help: 'kept armed via autocast — a staff must be wielded'
+    },
+    runesWithdraw: {
+        type: 'number',
+        default: 100,
+        min: 1,
+        max: 1000,
+        label: 'Casts of runes per bank trip',
+        group: 'Combat',
+        showIf: SHOW_MAGE,
+        help: 'when periodic banking is on, top runes up to this many casts (staff free runes skipped)'
+    },
+    rangeStyle: {
+        type: 'string',
+        default: 'rapid',
+        options: RANGE_STYLE_OPTIONS,
+        label: 'Ranged style',
+        group: 'Combat',
+        showIf: SHOW_RANGE
+    },
+    ammo: {
+        type: 'string',
+        default: 'Bronze arrow',
+        label: 'Ammo (kept + bank withdraw)',
+        group: 'Combat',
+        showIf: SHOW_RANGE
+    },
+    ammoWithdraw: {
+        type: 'number',
+        default: 200,
+        min: 1,
+        max: 5000,
+        label: 'Ammo per bank trip',
+        group: 'Combat',
+        showIf: SHOW_RANGE,
+        help: 'when periodic banking is on, withdraw ammo up to this count after deposit'
     },
     ...PERIODIC_BANK_SETTINGS
 };
+
+export type FightKind = 'melee' | 'mage' | 'range';
 
 export default class ChickenKiller extends TaskBot {
     override loopDelay = 600;
@@ -58,7 +134,15 @@ export default class ChickenKiller extends TaskBot {
     private target = 'Chicken';
     private loot = ['bones'];
     private buryEnabled = true;
-    private combatStyle: MeleeCombatStyle = 'strength';
+
+    private fightKind: FightKind = 'melee';
+    private meleeStyle: MeleeCombatStyle = 'strength';
+    private rangeMode = 1;
+    private spell = 'Wind Strike';
+    private runesWithdraw = 100;
+    private ammo = 'Bronze arrow';
+    private ammoWithdraw = 200;
+    private trackedGear: string[] = [];
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -67,9 +151,17 @@ export default class ChickenKiller extends TaskBot {
         this.fightHpGate = this.settings.num('fightHpGate', 45) / 100;
         this.restHp = this.settings.num('restUntilHp', 70) / 100;
         this.target = this.settings.str('targetName', 'Chicken');
-        this.loot = this.settings.str('lootMatch', 'bones').toLowerCase().split('|').map(s => s.trim()).filter(s => s.length > 0);
+        this.loot = this.settings
+            .str('lootMatch', 'bones')
+            .toLowerCase()
+            .split('|')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
         this.buryEnabled = this.settings.bool('buryBones', true);
-        this.combatStyle = parseCombatStyle(this.settings.str('combatStyle', 'strength'));
+        this.parseCombatSettings();
+        this.trackedGear = Equipment.items()
+            .map(i => i.name ?? '')
+            .filter(n => n.length > 0);
 
         const hinted = RecoveryHints.takeAnchor();
         const here = Game.tile()!;
@@ -80,7 +172,14 @@ export default class ChickenKiller extends TaskBot {
         }
         this.startedAt = Date.now();
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.log(`anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}`);
+        this.log(
+            `anchored at ${this.anchor}, hunting ${this.target}, leash ${this.leash}, style ${this.fightKind}`
+                + (this.fightKind === 'mage'
+                    ? ` (${this.spell})`
+                    : this.fightKind === 'range'
+                        ? ` (${this.rangeMode === 0 ? 'accurate' : this.rangeMode === 1 ? 'rapid' : 'longrange'}, ${this.ammo})`
+                        : ` (${this.meleeStyle})`)
+        );
 
         await this.prepareForTravel(new Tile(here.x, here.z, here.level));
 
@@ -114,16 +213,37 @@ export default class ChickenKiller extends TaskBot {
                 afterDeposit: () => this.afterBankDeposit(),
                 destination: () => this.bankDestination(),
                 returnTo: () => this.getAnchor(),
-                setStatus: (s) => this.setStatus(s),
-                log: (m) => this.log(m)
+                setStatus: s => this.setStatus(s),
+                log: m => this.log(m)
             }),
             new BuryBones(this),
             new LootDrops(this),
             new Rest(this),
+            new ReequipGear(this),
             new SetCombatStyle(this),
+            new ArmAutocast(this),
             new Fight(this),
             new ReturnToAnchor(this)
         );
+    }
+
+    private parseCombatSettings(): void {
+        const raw = this.settings.str('combatStyle', 'melee').trim().toLowerCase();
+        if (LEGACY_MELEE.has(raw)) {
+            this.fightKind = 'melee';
+            this.meleeStyle = parseCombatStyle(raw);
+        } else if (raw === 'mage' || raw === 'range' || raw === 'melee') {
+            this.fightKind = raw;
+            this.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        } else {
+            this.fightKind = 'melee';
+            this.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
+        }
+        this.spell = this.settings.str('spell', 'Wind Strike');
+        this.runesWithdraw = this.settings.num('runesWithdraw', 100);
+        this.rangeMode = parseRangeStyle(this.settings.str('rangeStyle', 'rapid'));
+        this.ammo = this.settings.str('ammo', 'Bronze arrow');
+        this.ammoWithdraw = this.settings.num('ammoWithdraw', 200);
     }
 
     override grindTargets(): string[] {
@@ -140,7 +260,13 @@ export default class ChickenKiller extends TaskBot {
 
     protected async prepareForTravel(_start: Tile): Promise<void> {}
 
-    protected async afterBankDeposit(): Promise<void> {}
+    /**
+     * After periodic bank deposit: restock ammo/runes when fighting with style supplies.
+     * CowKiller chains toll coins via override + super.
+     */
+    protected async afterBankDeposit(): Promise<void> {
+        await this.restockStyleSupplies();
+    }
 
     protected bankDestination(): BankDestination | null {
         return null;
@@ -172,7 +298,24 @@ export default class ChickenKiller extends TaskBot {
         return Inventory.items().filter(i => this.wantsLoot(i.name)).length;
     }
     keepList(): string[] {
-        return this.shouldBury() ? ['Bones'] : [];
+        const keep: string[] = [];
+        if (this.shouldBury()) {
+            keep.push('Bones');
+        }
+        if (this.fightKind === 'range') {
+            keep.push(this.ammo);
+        }
+        if (this.fightKind === 'mage') {
+            for (const { rune } of runeWithdrawList(this.spell, this.wieldedNames(), 1)) {
+                keep.push(rune);
+            }
+        }
+        for (const g of this.trackedGear) {
+            if (!keep.some(k => k.toLowerCase() === g.toLowerCase())) {
+                keep.push(g);
+            }
+        }
+        return keep;
     }
     depositables(): number {
         const keep = new Set(this.keepList().map(s => s.toLowerCase()));
@@ -182,15 +325,90 @@ export default class ChickenKiller extends TaskBot {
         return this.buryEnabled;
     }
 
+    fightStyle(): FightKind {
+        return this.fightKind;
+    }
+    targetMeleeStyle(): MeleeCombatStyle {
+        return this.meleeStyle;
+    }
+    targetRangeMode(): number {
+        return this.rangeMode;
+    }
+    targetSpell(): string {
+        return this.spell;
+    }
+    ammoName(): string {
+        return this.ammo;
+    }
+    ammoWithdrawCount(): number {
+        return this.ammoWithdraw;
+    }
+    runesWithdrawCount(): number {
+        return this.runesWithdraw;
+    }
+    trackedGearNames(): string[] {
+        return this.trackedGear;
+    }
+    wieldedNames(): string[] {
+        return Equipment.items().map(i => i.name ?? '');
+    }
+    castsLeft(): number {
+        return castsAvailable(this.spell, this.wieldedNames(), rune => Inventory.count(rune));
+    }
+    wieldedAmmo(): number {
+        return Equipment.items().find(i => (i.name ?? '').toLowerCase() === this.ammo.toLowerCase())?.count ?? 0;
+    }
+    totalAmmo(): number {
+        return Inventory.count(this.ammo) + this.wieldedAmmo();
+    }
+
+    protected async restockStyleSupplies(): Promise<void> {
+        if (!Bank.isOpen()) {
+            return;
+        }
+        if (this.fightKind === 'melee') {
+            return;
+        }
+        if (this.fightKind === 'mage') {
+            this.setStatus('withdrawing runes');
+            for (const { rune, count } of runeWithdrawList(this.spell, this.wieldedNames(), this.runesWithdraw)) {
+                if (Inventory.count(rune) < count) {
+                    const got = await withdrawTo(rune, count);
+                    this.log(`withdrew ${got} ${rune} (${Inventory.count(rune)}/${count})`);
+                }
+            }
+            this.log(`runes restocked: ${this.castsLeft()} casts left`);
+            return;
+        }
+        this.setStatus(`restocking ${this.ammo}`);
+        const got = await withdrawTo(this.ammo, this.ammoWithdraw);
+        if (got > 0) {
+            this.log(`withdrew ${got} ${this.ammo} (${this.totalAmmo()} total in quiver + inventory)`);
+        }
+        if (Inventory.count(this.ammo) > 0 && this.wieldedAmmo() === 0) {
+            if (await Equipment.equip(this.ammo)) {
+                this.log(`equipped ${this.ammo} (${this.wieldedAmmo()} in quiver)`);
+            } else {
+                this.log(`WARNING: could not equip ${this.ammo} — will retry from inventory`);
+            }
+        }
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#5be05b' });
         p.title(`${this.target} Killer — ${this.status}`);
 
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
-        const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        const xph = mins > 0.5 ? `${(((xpGained / mins) * 60) / 1000).toFixed(1)}k` : '—';
         p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
-        p.row(`Buried: ${this.buried}`, `Deaths: ${this.deaths}`);
+        const supply =
+            this.fightKind === 'mage'
+                ? `Casts: ${this.castsLeft()}`
+                : this.fightKind === 'range'
+                    ? `Ammo: ${this.totalAmmo()}`
+                    : `Style: ${this.meleeStyle}`;
+        p.row(supply, `Buried: ${this.buried}`, `Deaths: ${this.deaths}`);
         p.bar('HP', Skills.hpFraction());
 
         p.gap();
@@ -217,28 +435,139 @@ export default class ChickenKiller extends TaskBot {
     getAnchor(): Tile {
         return this.anchor!;
     }
-    targetCombatStyle(): MeleeCombatStyle {
-        return this.combatStyle;
+}
+
+async function withdrawTo(name: string, target: number): Promise<number> {
+    const start = Inventory.count(name);
+    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
+        const before = Inventory.count(name);
+        const need = target - before;
+        if (need > 10 && (await Bank.withdrawX(name, need))) {
+            if (Inventory.count(name) > before) {
+                continue;
+            }
+            break;
+        }
+        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
+        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
+            break;
+        }
     }
+    return Inventory.count(name) - start;
 }
 
 class SetCombatStyle implements Task {
     private announced = false;
+    private fails = 0;
+    private retryAt = 0;
     constructor(private bot: ChickenKiller) {}
 
+    private selected(): boolean {
+        const kind = this.bot.fightStyle();
+        if (kind === 'mage') {
+            return true;
+        }
+        if (kind === 'range') {
+            return Game.combatMode() === this.bot.targetRangeMode();
+        }
+        return Game.hasCombatStyle(this.bot.targetMeleeStyle());
+    }
+
     validate(): boolean {
-        return !Game.inCombat() && !Game.hasCombatStyle(this.bot.targetCombatStyle());
+        return this.bot.fightStyle() !== 'mage' && !Game.inCombat() && !this.selected() && Date.now() >= this.retryAt;
     }
 
     async execute(): Promise<void> {
-        const style = this.bot.targetCombatStyle();
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(style);
-        const ok = await Execution.delayUntil(() => Game.hasCombatStyle(style), 3000);
-        const resolution = Game.combatStyleResolution(style);
-        if (ok && resolution && !this.announced) {
-            this.announced = true;
-            this.bot.log(`combat style set to ${describeCombatStyle(resolution)}`);
+        if (this.bot.fightStyle() === 'range') {
+            Game.setCombatMode(this.bot.targetRangeMode());
+        } else {
+            Game.setCombatStyle(this.bot.targetMeleeStyle());
+        }
+        const ok = await Execution.delayUntil(() => this.selected(), 3000);
+        if (ok) {
+            this.fails = 0;
+            if (!this.announced) {
+                this.announced = true;
+                if (this.bot.fightStyle() === 'range') {
+                    const mode = this.bot.targetRangeMode();
+                    this.bot.log(
+                        `ranged style set to ${mode === 0 ? 'accurate' : mode === 1 ? 'rapid' : 'longrange'}`
+                    );
+                } else {
+                    const resolution = Game.combatStyleResolution(this.bot.targetMeleeStyle());
+                    if (resolution) {
+                        this.bot.log(`combat style set to ${describeCombatStyle(resolution)}`);
+                    }
+                }
+            }
+        } else if (++this.fails >= 5) {
+            this.fails = 0;
+            this.retryAt = Date.now() + 60_000;
+            this.bot.log(`could not set the ${this.bot.fightStyle()} attack style — retrying in 60s`);
+        }
+    }
+}
+
+class ArmAutocast implements Task {
+    private fails = 0;
+    private retryAt = 0;
+    constructor(private bot: ChickenKiller) {}
+    validate(): boolean {
+        if (this.bot.fightStyle() !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
+            return false;
+        }
+        if (this.bot.castsLeft() < 1) {
+            return false;
+        }
+        return Autocast.staffTabAttached();
+    }
+    async execute(): Promise<void> {
+        const spell = this.bot.targetSpell();
+        this.bot.setStatus(`arming autocast: ${spell}`);
+        await Execution.delayTicks(3);
+        if (await Autocast.arm(spell, m => this.bot.log(m))) {
+            this.fails = 0;
+        } else if (++this.fails >= 5) {
+            this.fails = 0;
+            this.retryAt = Date.now() + 60_000;
+            this.bot.log(`WARNING: could not arm autocast for '${spell}' — retrying in 60s`);
+        }
+    }
+}
+
+class ReequipGear implements Task {
+    private lastFailLogAt = 0;
+    constructor(private bot: ChickenKiller) {}
+    private candidates(): string[] {
+        const gear = [...this.bot.trackedGearNames()];
+        if (this.bot.fightStyle() === 'range') {
+            const ammo = this.bot.ammoName();
+            if (!gear.some(g => g.toLowerCase() === ammo.toLowerCase())) {
+                gear.push(ammo);
+            }
+        }
+        return gear;
+    }
+    validate(): boolean {
+        return this.candidates().some(g => !Equipment.contains(g) && Inventory.first(g) !== null);
+    }
+    async execute(): Promise<void> {
+        for (const item of this.candidates()) {
+            if (Equipment.contains(item)) {
+                continue;
+            }
+            const inv = Inventory.first(item);
+            if (!inv) {
+                continue;
+            }
+            this.bot.setStatus(`re-equipping ${item}`);
+            if (await Equipment.equip(item)) {
+                this.bot.log(`equipped ${item}`);
+            } else if (Date.now() > this.lastFailLogAt) {
+                this.lastFailLogAt = Date.now() + 30_000;
+                this.bot.log(`WARNING: could not equip ${item} — retrying`);
+            }
         }
     }
 }
@@ -288,9 +617,10 @@ class LootDrops implements Task {
         this.bot.setStatus(`looting ${name} at ${drop.tile()}`);
         const id = drop.id;
         const tile = drop.tile();
-        const find = () => GroundItems.query()
-            .where(item => item.id === id && item.tile().equals(tile))
-            .nearest();
+        const find = () =>
+            GroundItems.query()
+                .where(item => item.id === id && item.tile().equals(tile))
+                .nearest();
         const before = Inventory.used();
         const status = await Reach.entityOp({
             find,
@@ -326,7 +656,10 @@ class Rest implements Task {
 
     async execute(): Promise<void> {
         this.bot.setStatus(`resting (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
-        await Execution.delayUntil(() => Skills.hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(), 120000);
+        await Execution.delayUntil(
+            () => Skills.hpFraction() >= this.bot.restTarget() || Game.inCombat() || ChatDialog.canContinue(),
+            120000
+        );
     }
 }
 
@@ -336,7 +669,16 @@ class Fight implements Task {
     constructor(private bot: ChickenKiller) {}
 
     validate(): boolean {
-        return !Game.inCombat() && Skills.hpFraction() >= this.bot.hpGate() && this.findTarget() !== null;
+        if (Game.inCombat() || Skills.hpFraction() < this.bot.hpGate()) {
+            return false;
+        }
+        if (this.bot.fightStyle() === 'mage' && this.bot.castsLeft() < 1) {
+            return false;
+        }
+        if (this.bot.fightStyle() === 'range' && this.bot.totalAmmo() < 1) {
+            return false;
+        }
+        return this.findTarget() !== null;
     }
 
     async execute(): Promise<void> {
@@ -359,7 +701,12 @@ class Fight implements Task {
             if (!engaged && (GameMessages.sawSince(mark, CANT_REACH) || ++this.misses >= 2)) {
                 this.bot.log(`can't engage ${name} — a shut gate/fence in the way; walking through it`);
                 this.bot.setStatus('crossing the pen gate');
-                await Traversal.walkResilient(mob.tile(), { radius: 1, attempts: 3, timeoutMs: 45_000, log: m => this.bot.log(`  ${m}`) });
+                await Traversal.walkResilient(mob.tile(), {
+                    radius: 1,
+                    attempts: 3,
+                    timeoutMs: 45_000,
+                    log: m => this.bot.log(`  ${m}`)
+                });
                 this.misses = 0;
             }
             return;
@@ -372,6 +719,19 @@ class Fight implements Task {
 
         while (performance.now() < deadline) {
             if (ChatDialog.canContinue() || this.bot.died) {
+                return;
+            }
+
+            if (this.bot.fightStyle() === 'range' && this.bot.wieldedAmmo() === 0 && Inventory.count(this.bot.ammoName()) > 0) {
+                this.bot.log('ammo left inventory — reloading quiver');
+                return;
+            }
+            if (this.bot.fightStyle() === 'range' && this.bot.totalAmmo() < 1) {
+                this.bot.log('out of ammo — breaking off');
+                return;
+            }
+            if (this.bot.fightStyle() === 'mage' && this.bot.castsLeft() < 1) {
+                this.bot.log('out of runes — breaking off');
                 return;
             }
 

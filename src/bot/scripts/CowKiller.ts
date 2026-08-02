@@ -101,6 +101,8 @@ export default class CowKiller extends ChickenKiller {
     }
 
     protected override async afterBankDeposit(): Promise<void> {
+        // Ammo / runes (ChickenKiller base), then toll float.
+        await super.afterBankDeposit();
         if (this.usesTollCoins()) {
             await this.topUpTollCoins();
         }

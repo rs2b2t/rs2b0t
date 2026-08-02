@@ -167,7 +167,13 @@ Tags: `lumbridge`, `bones`, `feathers`, `afk`
 | `targetName` | string | `"Chicken"` | Target NPC name |
 | `lootMatch` | string | `"bones"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `true` | Bury bones? |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
+| `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–1000) | `100` | Casts of runes per bank trip |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Bronze arrow"` | Ammo (kept + bank withdraw) |
+| `ammoWithdraw` | number (1–5000) | `200` | Ammo per bank trip |
 | `bankStrategy` | string | `"Off"` | Periodic bank — one of: Off, Loot count, Time, Either |
 | `bankEveryItems` | number (1–27) | `15` | Bank at N loot items |
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
@@ -189,7 +195,13 @@ Tags: `lumbridge`, `falador`, `cowhide`, `bones`, `banking`, `afk`
 | `targetName` | string | `"Cow"` | Target NPC name |
 | `lootMatch` | string | `"cow hide\|bones"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `false` | Bury bones? |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
+| `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–1000) | `100` | Casts of runes per bank trip |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Bronze arrow"` | Ammo (kept + bank withdraw) |
+| `ammoWithdraw` | number (1–5000) | `200` | Ammo per bank trip |
 | `bankStrategy` | string | `"Off"` | Periodic bank — one of: Off, Loot count, Time, Either |
 | `bankEveryItems` | number (1–27) | `15` | Bank at N loot items |
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
