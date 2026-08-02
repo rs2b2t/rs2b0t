@@ -1878,7 +1878,7 @@ const SCENARIOS: Scenario[] = [
         id: 'mine-path-runite',
         tags: ['mining', 'mine', 'endgame', 'path', 'wildy'],
         script: 'Miner',
-        // Brief walk into the lava-maze runite pocket (not standing on the rocks).
+        // Walk into the lava-maze runite pocket (not standing on the rocks).
         start: offsetTile(SPOT.lavaRunite, -14, -10),
         camp: SPOT.lavaRunite,
         settings: {
@@ -1891,28 +1891,31 @@ const SCENARIOS: Scenario[] = [
         // Independent path loop: rune pick; acquire scenarios wipe/buy separately.
         seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
         scene: 'skip',
-        // Spiders + flee can eat wall-clock; keep room after redeployed combat fix.
-        budgetMs: 180_000,
-        check: ({ start, cur, sawProduct, minDistToCamp, startDistToCamp, elapsedMs }) => {
+        // Spiders + flee can eat wall-clock; must still land a real ore before pass.
+        budgetMs: 300_000,
+        check: ({ start, cur, sawProduct, productPeak, minDistToCamp, startDistToCamp }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
             const xpGain = cur.xp.mining - start.xp.mining;
-            // Spiders force kite loops; allow a soft approach (within 12) without needing a 5-tile shrink.
-            const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 3;
-            const nearCamp = minDistToCamp <= 12;
-            // Wildy: approach camp and either gather or show combat kite (not elapsed-only).
-            const fled = logHas(cur, /combat:\s*under attack|combat:\s*still in combat/i);
-            if (nearCamp && (xpGain > 0 || sawProduct || fled)) {
-                return 'pass';
+            const runite = invMatch(cur, /runite ore/i);
+            // Must actually mine — flee/near-camp alone used to false-PASS with 0 XP.
+            const gathered = xpGain > 0 || sawProduct || runite > 0 || productPeak > 0;
+            if (!gathered) {
+                return 'wait';
             }
-            if (pathed && fled && elapsedMs >= 40_000) {
+            // Path into the pocket (or already near after kite).
+            const pathed = startDistToCamp >= 8 && minDistToCamp <= startDistToCamp - 3;
+            const nearCamp = minDistToCamp <= 14;
+            if (nearCamp || pathed) {
                 return 'pass';
             }
             return 'wait';
         },
-        failMsg: ({ start, cur, minDistToCamp }) =>
-            `runite path xp ${start.xp.mining}→${cur.xp.mining}, distCamp=${minDistToCamp}, tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+        failMsg: ({ start, cur, minDistToCamp, productPeak }) =>
+            `runite path xp ${start.xp.mining}→${cur.xp.mining} ore=${invMatch(cur, /runite ore/i)} ` +
+            `peak=${productPeak} distCamp=${minDistToCamp} fled=${logHas(cur, /combat:\s*under attack/i)} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
         id: 'fish-path-shark',

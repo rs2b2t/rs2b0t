@@ -183,7 +183,7 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
 | `fish-cook-bank` / `fish-bank-raw-cook` | Catherby cook-then-bank (seed cooked); bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
 | `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
-| `mine-path-runite` / `fish-path-shark` | long path into Lava Maze / Fishing Guild |
+| `mine-path-runite` / `fish-path-shark` | long path into Lava Maze (must mine runite — XP/ore, not flee-only) / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
 | `repair-axe-bob` | Seed broken steel axe → Bob item-on-NPC repair (`macro_broken_steel_hatchet`) |
 | `repair-pick-nurmof` | Seed broken steel pick → Nurmof repair (`macro_broken_steel_pickaxe`) |
