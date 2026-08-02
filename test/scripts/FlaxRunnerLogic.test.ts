@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
     FLAX,
+    canReceiveFlaxOffer,
     flaxUnitsInOffer,
     partnerNameMatches,
+    spinnerNeedsClearPack,
     TRADE_FAIL_COOLDOWN_MS,
     TRADE_REQUEST_COOLDOWN_MS
 } from '#/bot/scripts/FlaxRunnerLogic.js';
@@ -45,5 +47,23 @@ describe('trade cooldowns', () => {
     test('fail backoff is longer than request cooldown', () => {
         expect(TRADE_FAIL_COOLDOWN_MS).toBeGreaterThan(TRADE_REQUEST_COOLDOWN_MS);
         expect(TRADE_REQUEST_COOLDOWN_MS).toBeGreaterThanOrEqual(3000);
+    });
+});
+
+describe('spinnerNeedsClearPack / canReceiveFlaxOffer', () => {
+    test('empty pack does not need bank; junk without flax does', () => {
+        expect(spinnerNeedsClearPack(0, 0)).toBe(false);
+        expect(spinnerNeedsClearPack(0, 5)).toBe(true); // random-event garbage
+        expect(spinnerNeedsClearPack(0, 28)).toBe(true);
+    });
+    test('still holding flax is not a clear-pack bank (go spin / climb)', () => {
+        expect(spinnerNeedsClearPack(10, 10)).toBe(false);
+        expect(spinnerNeedsClearPack(1, 28)).toBe(false);
+    });
+    test('receive needs at least one free slot for a flax stack', () => {
+        expect(canReceiveFlaxOffer(0, 28)).toBe(false);
+        expect(canReceiveFlaxOffer(1, 28)).toBe(true);
+        expect(canReceiveFlaxOffer(28, 28)).toBe(true);
+        expect(canReceiveFlaxOffer(0, 0)).toBe(true);
     });
 });

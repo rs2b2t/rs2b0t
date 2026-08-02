@@ -25,7 +25,7 @@ import {
     FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
     BOOTH_NAME, LADDER_NAME, CLIMB_UP, CLIMB_DOWN, FIELD_SCOPE, FIELD_ARRIVE,
     LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
-    partnerNameMatches, flaxUnitsInOffer,
+    partnerNameMatches, flaxUnitsInOffer, spinnerNeedsClearPack, canReceiveFlaxOffer,
 } from './FlaxRunnerLogic.js';
 
 const LEASH = 8;
@@ -130,7 +130,11 @@ export default class FlaxRunner extends TaskBot {
     }
 
     override recoveryAnchor(): Tile | null {
-        if (this.mode === 'Spinner') return SPINNING_WHEEL_AREA;
+        if (this.mode === 'Spinner') {
+            // Random-event junk / leftover strings: clear pack before handoff.
+            if (this.spinnerNeedsBank()) return BANK_STAND;
+            return SPINNING_WHEEL_AREA;
+        }
         // Junk bank mid-trip: prefer the bank so watchdog doesn't yank us to the field first.
         if (this.needsJunkBank()) return BANK_STAND;
         // Waiting on trade must not walk a full pack back to the field.
@@ -185,6 +189,19 @@ export default class FlaxRunner extends TaskBot {
     noteTradeOk(): void {
         // Short quiet period after a successful handoff so both sides don't re-open.
         this.nextTradeRequestAt = Date.now() + TRADE_REQUEST_COOLDOWN_MS;
+    }
+
+    /**
+     * Spinner: any non-flax in the pack with no flax held blocks a full runner
+     * delivery (random-event garbage, bow strings, etc.).
+     */
+    spinnerNeedsBank(): boolean {
+        return spinnerNeedsClearPack(flaxCount(), Inventory.used());
+    }
+
+    /** Spinner is ready to receive a full flax pack (empty inventory). */
+    spinnerReadyForHandoff(): boolean {
+        return flaxCount() === 0 && Inventory.used() === 0;
     }
 
     /** Pack is full and still holds flax — deliver, do not pick or return to the field. */
@@ -595,7 +612,11 @@ class GoToMeet implements Task {
         if (this.bot.atMeet()) return false;
         // Runner only leaves the field when the pack is ready to hand off.
         if (this.bot.getMode() === 'Runner') return this.bot.readyToDeliver();
-        // Spinner: fall-through task when not spinning/banking/trading.
+        // Spinner: clear pack first (BankStrings), then meet only when empty.
+        if (this.bot.getMode() === 'Spinner') {
+            if (this.bot.spinnerNeedsBank()) return false;
+            return this.bot.spinnerReadyForHandoff();
+        }
         return true;
     }
     async execute(): Promise<void> {
@@ -700,7 +721,9 @@ class RequestTrade implements Task {
     validate(): boolean {
         if (this.bot.getMode() !== 'Spinner') return false;
         if (Trade.active()) return false;
-        if (flaxCount() > 0) return false;
+        // Empty pack only — junk/strings must bank first or the runner's full
+        // offer cannot land and both sides re-trade forever.
+        if (!this.bot.spinnerReadyForHandoff()) return false;
         if (!this.bot.canRequestTrade()) return false;
         return this.bot.atMeet();
     }
@@ -753,16 +776,26 @@ class HandleTrade implements Task {
                 return;
             }
 
-            // Spinner never places items — only accept when runner has offered flax.
+            // Spinner never places items — only accept when runner has offered flax
+            // and we have room (empty pack; one free slot receives a flax stack).
             const theirFlax = flaxUnitsInOffer(Trade.theirOffer());
-            if (theirFlax > 0) {
-                this.bot.setStatus('accepting flax from runner');
-                this.pending = theirFlax;
-                await Trade.accept();
-            } else {
+            if (theirFlax <= 0) {
                 this.bot.setStatus('waiting for runner to offer flax');
                 await Execution.delayTicks(1);
+                return;
             }
+            if (!canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
+                this.bot.log(
+                    `cannot take ${theirFlax} flax — only ${Inventory.free()} free slot(s) `
+                    + `(random-event junk?). Declining and banking.`
+                );
+                await Trade.decline();
+                this.bot.noteTradeFailed();
+                return;
+            }
+            this.bot.setStatus('accepting flax from runner');
+            this.pending = theirFlax;
+            await Trade.accept();
             return;
         }
         if (Trade.onConfirmScreen()) {
@@ -844,16 +877,29 @@ class SpinFlax implements Task {
     }
 }
 
+/**
+ * Spinner pack clear before handoff / after spinning.
+ * Previously only ran when bow strings were held — random-event garbage alone
+ * left the spinner at the meet with no free slots, so the runner's full flax
+ * offer could never land and both sides re-traded forever.
+ */
 class BankStrings implements Task {
     constructor(private bot: FlaxRunner) {}
     validate(): boolean {
         if (this.bot.getMode() !== 'Spinner') return false;
         if (Trade.active()) return false;
-        if (bowStringCount() === 0) return false;
-        return Inventory.isFull() || flaxCount() === 0;
+        return this.bot.spinnerNeedsBank();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('banking bow strings');
+        const strings = bowStringCount();
+        const used = Inventory.used();
+        this.bot.setStatus(
+            strings > 0 ? 'banking bow strings' : 'banking junk before handoff'
+        );
+        this.bot.log(
+            `spinner banking pack (${used} slot(s) used, ${strings} string(s), `
+            + `${flaxCount()} flax) so the next trade can take a full flax load`
+        );
         await Traversal.walkResilient(BANK_ENTRANCE, {
             radius: 3,
             attempts: 4,
@@ -869,7 +915,9 @@ class BankStrings implements Task {
         // Deposit everything — strings, leftover fibre, and random-event trash.
         await Bank.depositInventory();
         await Bank.close();
-        this.bot.countTrip();
+        if (strings > 0) {
+            this.bot.countTrip();
+        }
     }
 }
 

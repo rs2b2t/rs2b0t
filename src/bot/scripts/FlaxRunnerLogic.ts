@@ -42,6 +42,32 @@ export function flaxUnitsInOffer(items: readonly { name: string | null; count: n
     }
     return n;
 }
+
+/**
+ * Spinner must bank before handoff when the pack is not empty of non-flax
+ * (bow strings, random-event junk). A full runner pack cannot land if the
+ * spinner only has a few free slots — trade fails and both sides re-request.
+ */
+export function spinnerNeedsClearPack(flaxHeld: number, slotsUsed: number): boolean {
+    return flaxHeld === 0 && slotsUsed > 0;
+}
+
+/** True if free inventory slots can hold `units` of offered flax (1 slot per stack item in trade). */
+export function canReceiveFlaxOffer(freeSlots: number, offeredFlaxUnits: number): boolean {
+    // Flax stacks in trade still need one free slot per offered stack line; a full
+    // runner pack is typically one stack ≤28. Require freeSlots >= 1 when any flax
+    // is offered, and freeSlots >= offered units when they would not stack (we
+    // treat needed slots as min(offered, free needed for one stack) = 1 if free>0
+    // for a single stack). Safest for 2004 one-stack offers: need freeSlots >= 1
+    // for a stack that merges into empty inv, but if inv has partial flax stack
+    // free can be 0 and still receive into existing stack — spinner should be
+    // empty of flax at handoff (flaxHeld===0), so one free slot receives one stack.
+    if (offeredFlaxUnits <= 0) {
+        return true;
+    }
+    return freeSlots >= 1;
+}
+
 export const BOW_STRING = 'Bow string';
 export const SPINNING_WHEEL = 'Spinning wheel';
 export const SPIN_OP = 'Spin';
