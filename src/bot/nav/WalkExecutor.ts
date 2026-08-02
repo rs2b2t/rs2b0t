@@ -857,6 +857,15 @@ class WalkExecutorImpl {
         }
         return false;
     }
+
+    /**
+     * Open a closed door/gate next to the player (walkResilient unstick ladder).
+     * Delegates to exec/doorCrossing — kept on the facade so Traversal callers
+     * do not import the split module.
+     */
+    tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
+        return tryNearbyDoor(log);
+    }
 }
 
 export const WalkExecutor = new WalkExecutorImpl();
