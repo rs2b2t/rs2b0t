@@ -1,8 +1,11 @@
 /**
- * Pack-level regression over tools/nav/mainland-routes.json
+ * Pack-level regression over curated mainland legs only.
  *
- *   bun tools/nav/mainland-corpus.ts
- *   bun tools/nav/mainland-corpus.ts --explain
+ * Thin filter over the shared path corpus (same builder + path dedupe as
+ * script-route-corpus). Prefer that tool for the full mesh / hardest precalc.
+ *
+ *   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts
+ *   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts --explain
  */
 import fs from 'node:fs';
 
@@ -14,11 +17,23 @@ import stairsJson from '#/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
 import { formatHops } from '#/bot/nav/v2/hops.js';
 
+import { buildScriptRoutes } from './script-route-corpus.ts';
+
 const explain = process.argv.includes('--explain');
 const packPath = 'out/collision.lcnav.gz';
-const corpus = JSON.parse(fs.readFileSync('tools/nav/mainland-routes.json', 'utf8')) as {
-    routes: { id: string; from: { x: number; z: number; level: number }; to: { x: number; z: number; level: number }; note: string }[];
-};
+
+// Mainland JSON is source of truth for these legs; buildScriptRoutes already
+// injects them first and path-dedupes anything that would shadow them.
+const routes = buildScriptRoutes().filter(r => r.source === 'mainland-routes.json');
+if (routes.length === 0) {
+    console.error('no mainland-routes.json legs in corpus — is tools/nav/mainland-routes.json present?');
+    process.exit(2);
+}
+
+if (!fs.existsSync(packPath)) {
+    console.error(`missing ${packPath} — run collision pack build first`);
+    process.exit(2);
+}
 
 let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
 if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
@@ -28,7 +43,7 @@ const finder = new PathFinder(bytes);
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
 
 let fail = 0;
-for (const r of corpus.routes) {
+for (const r of routes) {
     const outcome = finder.findPath(r.from, r.to, { policy: { useTeleports: false } });
     if (!outcome.ok) {
         console.log(`FAIL ${r.id} ${r.note}: ${outcome.reason}`);
@@ -40,5 +55,5 @@ for (const r of corpus.routes) {
         console.log(formatHops(outcome.hops));
     }
 }
-console.log(fail === 0 ? `all ${corpus.routes.length} routes ok` : `${fail}/${corpus.routes.length} failed`);
+console.log(fail === 0 ? `all ${routes.length} mainland paths ok` : `${fail}/${routes.length} failed`);
 process.exit(fail === 0 ? 0 : 1);

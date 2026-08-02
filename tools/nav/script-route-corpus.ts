@@ -6,12 +6,19 @@
  *   - NAV_TARGETS             (per-script stands from coverage tooling)
  *   - tools/nav/mainland-routes.json  (curated F2P/mine legs)
  *
+ * Paths are **deduped** before pack probes / JSON write: exact from→to once, plus
+ * near-duplicate directed legs (endpoints within `--dedupe-radius`, default 3)
+ * collapsed to the higher-priority source (mainland > walk hubs > banks > commute
+ * > bot mesh). Reverse directions are kept separate.
+ *
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --explain
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write --dedupe-radius=4
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --dedupe-radius=0  # raw mesh
  *
  * Preload is required: BankLocations pulls a tiny bit of client surface (happy-dom).
- * Live walk of a sample remains operator-only (nav-v2-stress-live) — this tool is pack-only.
+ * Live walk of a sample remains operator-only — this tool is pack-only.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -61,9 +68,59 @@ const cheb = (a: NavPoint, b: NavPoint): number =>
 
 const keyOf = (p: NavPoint): string => `${p.x},${p.z},${p.level}`;
 
+/**
+ * Prefer curated / hub sources when two generators emit nearly the same leg
+ * (e.g. BOT camp↔bank vs COMMUTE to nearest bank — same path for stress).
+ * Higher = keep. Reverse directions are never collapsed into each other.
+ */
+const SOURCE_PRIORITY: Record<string, number> = {
+    'mainland-routes.json': 100,
+    WALK_DESTINATIONS: 80,
+    BANK_LOCATIONS: 70,
+    'NAV_TARGETS→BANK': 55,
+    'BANK→NAV_TARGETS': 55,
+    NAV_TARGETS: 40
+};
+
+export function sourcePriority(source: string): number {
+    return SOURCE_PRIORITY[source] ?? 10;
+}
+
+/** Same directed leg if both endpoints lie within `radius` (same levels). */
+export function sameDirectedPath(a: ScriptRoute, b: ScriptRoute, radius: number): boolean {
+    if (a.from.level !== b.from.level || a.to.level !== b.to.level) {
+        return false;
+    }
+    return cheb(a.from, b.from) <= radius && cheb(a.to, b.to) <= radius;
+}
+
+/**
+ * Drop near-duplicate paths across sources. Exact from→to already unique at add;
+ * this collapses e.g. "bot stand A→bank" vs "COMMUTE A→nearest bank" when tiles
+ * are within a few steps of each other.
+ */
+export function dedupePaths(routes: ScriptRoute[], radius = 3): ScriptRoute[] {
+    const sorted = [...routes].sort((a, b) => {
+        const dp = sourcePriority(b.source) - sourcePriority(a.source);
+        if (dp !== 0) {
+            return dp;
+        }
+        return a.id.localeCompare(b.id);
+    });
+    const kept: ScriptRoute[] = [];
+    for (const r of sorted) {
+        if (kept.some(k => sameDirectedPath(k, r, radius))) {
+            continue;
+        }
+        kept.push(r);
+    }
+    return kept;
+}
+
 /** Build the route list — pure, unit-testable. */
-export function buildScriptRoutes(opts?: { maxBankPairs?: number }): ScriptRoute[] {
+export function buildScriptRoutes(opts?: { maxBankPairs?: number; pathDedupeRadius?: number }): ScriptRoute[] {
     const maxBankPairs = opts?.maxBankPairs ?? 24;
+    const pathDedupeRadius = opts?.pathDedupeRadius ?? 3;
     const routes: ScriptRoute[] = [];
     const seen = new Set<string>();
 
@@ -133,7 +190,40 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number }): ScriptRoute
         bankN++;
     }
 
-    // 4) Per-script NAV_TARGETS: chain stands for the same bot (as scripts hop camp→bank).
+    // 4) Each NAV_TARGET → nearest bank (the commute every gatherer/fighter does).
+    //    Before full bot meshes so path-dedupe prefers COMMUTE over redundant BOT-*-bank legs.
+    for (let ti = 0; ti < NAV_TARGETS.length; ti++) {
+        const t = NAV_TARGETS[ti]!;
+        if (t.expected === 'island') {
+            continue;
+        }
+        let best: { name: string; tile: NavPoint; d: number } | null = null;
+        for (const b of banks) {
+            const d = cheb(t.tile, b.tile);
+            if (!best || d < best.d) {
+                best = { name: b.name, tile: b.tile, d };
+            }
+        }
+        if (!best || best.d === 0 || best.d > 400) {
+            continue;
+        }
+        add(
+            `COMMUTE-${ti}`,
+            t.tile,
+            best.tile,
+            `${t.bot} ${t.label} → nearest bank ${best.name}`,
+            'NAV_TARGETS→BANK'
+        );
+        add(
+            `COMMUTE-${ti}-R`,
+            best.tile,
+            t.tile,
+            `${best.name} bank → ${t.bot} ${t.label}`,
+            'BANK→NAV_TARGETS'
+        );
+    }
+
+    // 5) Per-script NAV_TARGETS: chain stands for the same bot (as scripts hop camp→bank).
     const byBot = new Map<string, { label: string; tile: NavPoint }[]>();
     for (const t of NAV_TARGETS) {
         if (t.expected === 'island') {
@@ -168,39 +258,8 @@ export function buildScriptRoutes(opts?: { maxBankPairs?: number }): ScriptRoute
         }
     }
 
-    // 5) Each NAV_TARGET → nearest bank (the commute every gatherer/fighter does).
-    for (let ti = 0; ti < NAV_TARGETS.length; ti++) {
-        const t = NAV_TARGETS[ti]!;
-        if (t.expected === 'island') {
-            continue;
-        }
-        let best: { name: string; tile: NavPoint; d: number } | null = null;
-        for (const b of banks) {
-            const d = cheb(t.tile, b.tile);
-            if (!best || d < best.d) {
-                best = { name: b.name, tile: b.tile, d };
-            }
-        }
-        if (!best || best.d === 0 || best.d > 400) {
-            continue;
-        }
-        add(
-            `COMMUTE-${ti}`,
-            t.tile,
-            best.tile,
-            `${t.bot} ${t.label} → nearest bank ${best.name}`,
-            'NAV_TARGETS→BANK'
-        );
-        add(
-            `COMMUTE-${ti}-R`,
-            best.tile,
-            t.tile,
-            `${best.name} bank → ${t.bot} ${t.label}`,
-            'BANK→NAV_TARGETS'
-        );
-    }
-
-    return routes;
+    // Collapse near-identical directed legs across generators (not reverse pairs).
+    return pathDedupeRadius <= 0 ? routes : dedupePaths(routes, pathDedupeRadius);
 }
 
 // ── CLI (only when executed as a script — importable for unit tests) ─────
@@ -214,13 +273,23 @@ if (isMain) {
     const write = process.argv.includes('--write');
     const limitArg = process.argv.find(a => a.startsWith('--limit='));
     const hardestArg = process.argv.find(a => a.startsWith('--hardest='));
+    const dedupeArg = process.argv.find(a => a.startsWith('--dedupe-radius='));
     const limit = limitArg ? Number(limitArg.split('=')[1]) : Number(process.env.LIMIT || 0);
     const hardestN = hardestArg
         ? Number(hardestArg.split('=')[1])
         : Number(process.env.HARDEST || 0);
+    const pathDedupeRadius = dedupeArg
+        ? Number(dedupeArg.split('=')[1])
+        : Number(process.env.DEDUPE_RADIUS ?? 3);
 
-    const allRoutes = buildScriptRoutes();
+    const rawCount = buildScriptRoutes({ pathDedupeRadius: 0 }).length;
+    const allRoutes = buildScriptRoutes({ pathDedupeRadius });
     const routes = limit > 0 ? allRoutes.slice(0, limit) : allRoutes;
+    const dropped = Math.max(0, rawCount - allRoutes.length);
+    console.log(
+        `paths: ${allRoutes.length} after dedupe (radius=${pathDedupeRadius})`
+        + (pathDedupeRadius > 0 ? `; dropped ${dropped} near-duplicates of ${rawCount} raw` : ' (dedupe off)')
+    );
 
     if (write) {
         const outPath = path.join(process.cwd(), 'tools/nav/script-routes.generated.json');
@@ -229,8 +298,11 @@ if (isMain) {
             JSON.stringify(
                 {
                     description:
-                        'Generated from BANK_LOCATIONS + WALK_DESTINATIONS + NAV_TARGETS + mainland-routes.json. Do not hand-edit — run script-route-corpus.ts --write.',
+                        'Generated from BANK_LOCATIONS + WALK_DESTINATIONS + NAV_TARGETS + mainland-routes.json. '
+                        + 'Directed paths deduped (exact + near endpoints). Do not hand-edit — run script-route-corpus.ts --write.',
                     generatedAt: new Date().toISOString(),
+                    pathDedupeRadius,
+                    rawCount,
                     count: allRoutes.length,
                     routes: allRoutes
                 },
@@ -238,7 +310,7 @@ if (isMain) {
                 2
             )
         );
-        console.log(`wrote ${allRoutes.length} routes → ${outPath}`);
+        console.log(`wrote ${allRoutes.length} deduped paths → ${outPath}`);
     }
 
     const packPath = 'out/collision.lcnav.gz';
@@ -298,10 +370,12 @@ if (isMain) {
 
     const elapsed = performance.now() - t0;
     console.log(
-        `\nscript-route-corpus: ${pass} pass, ${fail} fail, ${routes.length} run / ${allRoutes.length} built, ${elapsed.toFixed(0)}ms`
+        `\nscript-route-corpus: ${pass} pass, ${fail} fail, ${routes.length} run / ${allRoutes.length} paths`
+        + ` (dedupe r=${pathDedupeRadius}), ${elapsed.toFixed(0)}ms`
     );
 
     const nHard = hardestN > 0 ? hardestN : 25;
+    // Ranked rows already come from the deduped path list (same CLI build).
     const hardest = rankHardest(ranked, nHard);
     console.log(`\nhardest ${hardest.length} (by pack cost / expansions, no teles):`);
     for (let i = 0; i < hardest.length; i++) {
@@ -319,9 +393,11 @@ if (isMain) {
             JSON.stringify(
                 {
                     description:
-                        'Precalc: hardest pack paths (useTeleports:false). Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
+                        'Precalc: hardest pack paths (useTeleports:false), from the deduped path corpus. '
+                        + 'Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
                     generatedAt: new Date().toISOString(),
                     metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
+                    pathDedupeRadius,
                     teleports: false,
                     count: hardest.length,
                     routes: hardest
@@ -330,7 +406,7 @@ if (isMain) {
                 2
             )
         );
-        console.log(`\nwrote ${hardest.length} hardest routes → ${hardPath}`);
+        console.log(`\nwrote ${hardest.length} hardest paths → ${hardPath}`);
     }
 
     process.exit(fail === 0 ? 0 : 1);
