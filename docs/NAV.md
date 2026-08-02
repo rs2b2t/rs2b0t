@@ -222,6 +222,14 @@ executor waits to land near that tile instead of watching for an adjacent move. 
 crossing the bot cannot afford should be avoided **during planning**; discovering it
 at the gate wastes the whole walk.
 
+## Exact transport loc metadata
+
+Location-backed transports may carry `locId` / `locX` / `locZ` from LostCity enrichment
+(`bun run gen:nav-transports`). PathFinder prefers those for clickable identity; the
+executor falls back to nearby-name lookup when `locId` is absent. Special crossings
+resolve via `specialCrossingForTransport` (exact loc tile, then approach stand).
+
+
 ## Level-change loc lag
 
 **Every scene query is empty for about a tick after the level changes.** Climb a

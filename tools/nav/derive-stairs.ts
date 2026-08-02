@@ -9,6 +9,10 @@ import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/nav/Pat
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 import { parseSwitchStairs } from './stairsParse.js';
 
+// This is the first stage of transport generation and intentionally emits
+// bare source edges. Use tools/nav/derive-transports.sh to follow it with full
+// ladder derivation and exact LostCity loc enrichment in the required order.
+
 function argVal(name: string): string | undefined {
     const i = process.argv.indexOf(name);
     return i >= 0 ? process.argv[i + 1] : undefined;
@@ -20,6 +24,14 @@ const out = argVal('--out') ?? 'src/bot/nav/data/stairEdges.json';
 const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 
 const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
+
+// These destinations contain Castle Wars spawn trapdoors rather than a
+// Climb-down ladder. Keep the rejected auto-reverses in stairEdges.json as
+// documentation, but PathFinder must not route through them.
+const DISABLED_AUTO_REVERSES = new Map<string, string>([
+    ['2370,3134,2>2370,3134,1', 'Castle Wars Zamorak spawn trapdoor (loc 4472) only offers Open; revision 274 has no Climb-down loc or handler.'],
+    ['2429,3075,2>2429,3075,1', 'Castle Wars Saradomin spawn trapdoor (loc 4471) only offers Open; revision 274 has no Climb-down loc or handler.']
+]);
 
 function edge(from: NavPoint, to: NavPoint, locName: string, action: string): TransportEdgeData {
     return { from, to, locName, action, kind: 'stair' };
@@ -101,7 +113,9 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
     }
     for (const e of snapped) {
         if (e.from.level !== e.to.level && /-(up|down)/i.test(e.action)) {
-            add({ from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: e.kind });
+            const reverse: TransportEdgeData = { from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: e.kind };
+            const disabledReason = DISABLED_AUTO_REVERSES.get(key(reverse));
+            add(disabledReason ? { ...reverse, disabledReason } : reverse);
         }
     }
 

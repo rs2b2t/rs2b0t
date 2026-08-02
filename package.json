@@ -9,6 +9,7 @@
         "#/*": "./src/*"
     },
     "scripts": {
+        "gen:nav-transports": "sh tools/nav/derive-transports.sh",
         "build": "bun run bundle.ts",
         "build:dev": "bun run bundle.ts dev",
         "build:bot": "bun run bot.bundle.ts",

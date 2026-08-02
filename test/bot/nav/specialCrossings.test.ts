@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { specialCrossingAt, pickChoice, meetsRequirement, matchesUseItem, SPECIAL_CROSSINGS } from '../../../src/bot/nav/data/specialCrossings.js';
+import { specialCrossingAt, specialCrossingForTransport, pickChoice, meetsRequirement, matchesUseItem, SPECIAL_CROSSINGS } from '../../../src/bot/nav/data/specialCrossings.js';
 
 describe('specialCrossingAt', () => {
     test('matches both Al Kharid toll gate tiles', () => {
@@ -110,5 +110,20 @@ describe('meetsRequirement', () => {
         expect(meetsRequirement(9, { item: 'Coins', count: 10 })).toBe(false);
         expect(meetsRequirement(10, { item: 'Coins', count: 10 })).toBe(true);
         expect(meetsRequirement(11, { item: 'Coins', count: 10 })).toBe(true);
+    });
+});
+
+describe('specialCrossingForTransport', () => {
+    test('Femi enter: exact loc tile falls back to approach stand special', () => {
+        const transport = { locX: 2459, locZ: 3383 };
+        const approach = { x: 2461, z: 3382, level: 0 };
+        const sc = specialCrossingForTransport(transport, approach);
+        expect(sc?.label).toBe('Gnome Stronghold gate (Femi boxes)');
+    });
+
+    test('Femi leave approach is not a special crossing', () => {
+        const transport = { locX: 2459, locZ: 3383 };
+        const approach = { x: 2461, z: 3385, level: 0 };
+        expect(specialCrossingForTransport(transport, approach)).toBeNull();
     });
 });

@@ -82,10 +82,25 @@ describe("McGrubor's Wood loose railing", () => {
     const curated = (transports as TransportEdgeData[]).filter(t => t.locName === 'Loose Railing' && t.from.z === OUTSIDE.z);
 
     test('a Squeeze-through edge each way across the fence', () => {
-        expect(curated).toEqual([
-            { from: OUTSIDE, to: INSIDE, locName: 'Loose Railing', action: 'Squeeze-through', kind: 'gate' },
-            { from: INSIDE, to: OUTSIDE, locName: 'Loose Railing', action: 'Squeeze-through', kind: 'gate' }
-        ]);
+        expect(curated).toHaveLength(2);
+        expect(curated).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    from: OUTSIDE,
+                    to: INSIDE,
+                    locName: 'Loose Railing',
+                    action: 'Squeeze-through',
+                    kind: 'gate'
+                }),
+                expect.objectContaining({
+                    from: INSIDE,
+                    to: OUTSIDE,
+                    locName: 'Loose Railing',
+                    action: 'Squeeze-through',
+                    kind: 'gate'
+                })
+            ])
+        );
     });
 
     test('routes both ways through the railing', () => {

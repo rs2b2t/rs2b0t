@@ -8,21 +8,36 @@ const EXPECTED = [
         to: { x: 2566, z: 9901, level: 0 },
         locName: 'Door',
         action: 'Open',
-        kind: 'dungeon'
+        kind: 'dungeon',
+        locId: 2002,
+        locX: 2604,
+        locZ: 9900,
+        debugName: 'baxtorian_door_2_waterfall_quest',
+        options: ['Open']
     },
     {
         from: { x: 2575, z: 9861, level: 0 },
         to: { x: 2511, z: 3463, level: 0 },
         locName: 'Door',
         action: 'Open',
-        kind: 'dungeon'
+        kind: 'dungeon',
+        locId: 2000,
+        locX: 2575,
+        locZ: 9861,
+        debugName: 'baxtorian_door_waterfall_quest',
+        options: ['Open']
     },
     {
         from: { x: 2511, z: 3463, level: 0 },
         to: { x: 2527, z: 3413, level: 0 },
         locName: 'Barrel',
         action: 'Get in',
-        kind: 'dungeon'
+        kind: 'dungeon',
+        locId: 2022,
+        locX: 2512,
+        locZ: 3463,
+        debugName: 'barrel_waterfall_quest',
+        options: ['Get in']
     }
 ] as const satisfies readonly TransportEdgeData[];
 
@@ -142,9 +157,9 @@ describe('Waterfall instance exit transports', () => {
             action: step.transport!.action,
             to: step.transport!.toTile
         }))).toEqual([
-            { from: [2604, 9901], action: 'Open', to: { x: 2566, z: 9901 } },
+            { from: [2604, 9900], action: 'Open', to: { x: 2566, z: 9901 } },
             { from: [2575, 9861], action: 'Open', to: { x: 2511, z: 3463 } },
-            { from: [2511, 3463], action: 'Get in', to: { x: 2527, z: 3413 } }
+            { from: [2512, 3463], action: 'Get in', to: { x: 2527, z: 3413 } }
         ]);
     });
 

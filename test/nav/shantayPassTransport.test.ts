@@ -10,7 +10,12 @@ const SHANTAY_EXIT = {
     to: { x: 3304, z: 3118, level: 0 },
     locName: 'Shantay pass',
     action: 'Go-through',
-    kind: 'dungeon'
+    kind: 'dungeon',
+    locId: 4031,
+    locX: 3302,
+    locZ: 3116,
+    debugName: 'shantay_pass_henge_doorway',
+    options: ['Go-through', 'Look-at']
 } as const satisfies TransportEdgeData;
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1] as const;
@@ -115,7 +120,7 @@ describe('Shantay Pass desert exit transport', () => {
                 }))
         ).toEqual([
             {
-                from: [SHANTAY_EXIT.from.x, SHANTAY_EXIT.from.z],
+                from: [SHANTAY_EXIT.locX, SHANTAY_EXIT.locZ],
                 action: 'Go-through',
                 to: { x: SHANTAY_EXIT.to.x, z: SHANTAY_EXIT.to.z }
             }
