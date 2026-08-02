@@ -16,7 +16,32 @@ export const MEET_TILE = new Tile(2719, 3471, 0);
 
 export const TRADE_RANGE = 2;
 
+/** Min delay between Trade.request attempts — both roles used to spam every loop. */
+export const TRADE_REQUEST_COOLDOWN_MS = 5_000;
+
+/** After a trade closes with no flax moved, back off longer before re-requesting. */
+export const TRADE_FAIL_COOLDOWN_MS = 8_000;
+
 export const FLAX = 'Flax';
+
+/** Configured partner name matches trade-header / player display name (case-insensitive). */
+export function partnerNameMatches(configured: string, seen: string | null | undefined): boolean {
+    if (!configured || !seen) {
+        return false;
+    }
+    return configured.trim().toLowerCase() === seen.trim().toLowerCase();
+}
+
+/** Total flax units on a trade offer side (stacks use count). */
+export function flaxUnitsInOffer(items: readonly { name: string | null; count: number }[]): number {
+    let n = 0;
+    for (const o of items) {
+        if ((o.name ?? '').toLowerCase() === FLAX.toLowerCase()) {
+            n += Math.max(1, o.count);
+        }
+    }
+    return n;
+}
 export const BOW_STRING = 'Bow string';
 export const SPINNING_WHEEL = 'Spinning wheel';
 export const SPIN_OP = 'Spin';
