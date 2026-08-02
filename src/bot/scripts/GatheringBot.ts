@@ -4131,46 +4131,67 @@ class FishCookLoad implements Task {
                 .name(this.bot.rangeLocName(), 'Range', 'Cooking range', 'Fire', 'Fireplace')
                 .nearest();
 
-        // Two-step path when curated: approach (e.g. Large door exterior) then range stand.
-        // Without approach, pathing straight at an interior range soft-locks on Seers Sinclair.
+        // Two-step path when curated: approach (door exterior) then interior stand.
+        // Street-side stands path without doors; useOn then clicks the oven through a wall.
         const approach = this.bot.rangeApproachTile();
         const obs = this.bot.cookObstacleList();
-        if (approach) {
-            const at = Game.tile();
-            if (!at || approach.distanceTo(at) > 2) {
-                this.bot.setStatus(`cook: approach ${approach.x},${approach.z}`);
-                this.bot.log(`cook: walking to approach ${approach}`);
-                await walkOpening(approach, 1, obs, m => this.bot.log(m));
+
+        const walkToOven = async (why: string): Promise<void> => {
+            const tag = why ? ` (${why})` : '';
+            this.bot.setStatus(`cook: walking to range${tag}`);
+            if (approach) {
+                const at = Game.tile();
+                if (!at || approach.distanceTo(at) > 2) {
+                    this.bot.log(`cook: walking to approach ${approach}${why ? ` — ${why}` : ''}`);
+                    await walkOpening(approach, 1, obs, m => this.bot.log(m));
+                }
+                // Proactively open Large door / house Door at the approach tile.
+                const shut = Locs.query()
+                    .where(l => isOpenableObstacle(l.name, l.actions(), obs))
+                    .where(l => l.distance() <= 3)
+                    .nearest();
+                if (shut) {
+                    const op = openOp(shut.actions());
+                    if (op) {
+                        this.bot.log(`cook: opening ${shut.name} at approach`);
+                        await shut.interact(op);
+                        await Execution.delayTicks(2);
+                    }
+                }
             }
-            // Proactively open any still-shut door next to the approach (Large door).
-            const shut = Locs.query()
+            await walkOpening(rangeTile, 0, obs, m => this.bot.log(m));
+            if (!findRange()) {
+                const loc = this.bot.rangeLocMapTile();
+                if (loc) {
+                    this.bot.log(`cook: no oven in leash — closing on loc ${loc}`);
+                    await walkOpening(loc, 1, obs, m => this.bot.log(m));
+                }
+            }
+            // Open any still-shut door next to us (street-side stand → house door).
+            const nearDoor = Locs.query()
                 .where(l => isOpenableObstacle(l.name, l.actions(), obs))
                 .where(l => l.distance() <= 3)
                 .nearest();
-            if (shut) {
-                const op = openOp(shut.actions());
+            if (nearDoor) {
+                const op = openOp(nearDoor.actions());
                 if (op) {
-                    this.bot.log(`cook: opening ${shut.name} at approach`);
-                    await shut.interact(op);
+                    this.bot.log(`cook: opening ${nearDoor.name} near stand`);
+                    await nearDoor.interact(op);
                     await Execution.delayTicks(2);
+                    await walkOpening(rangeTile, 0, obs, m => this.bot.log(m));
                 }
             }
-        }
+        };
 
         const here = Game.tile();
         if (!here || rangeTile.distanceTo(here) > 1 || !findRange()) {
-            this.bot.setStatus('cook: walking to range');
-            await walkOpening(rangeTile, 0, obs, m => this.bot.log(m));
-        }
-        // If still no oven, nudge toward curated loc tile.
-        if (!findRange()) {
-            const loc = this.bot.rangeLocMapTile();
-            if (loc) {
-                this.bot.log(`cook: no oven in leash — closing on loc ${loc}`);
-                await walkOpening(loc, 1, obs, m => this.bot.log(m));
-            }
+            await walkToOven(approach ? 'approach→stand' : '');
         }
 
+        // useOn can "click" the oven through a wall; cooking then never starts.
+        // A real cook starts within ~2 ticks (XP / raw drop / make-X). After that,
+        // assume the stand is wrong-side and re-path through doors.
+        let wallRecoveries = 0;
         for (let n = 0; n < 32 && this.bot.cookableRawCount() > 0; n++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
                 return;
@@ -4184,26 +4205,63 @@ class FishCookLoad implements Task {
                 this.bot.log(
                     `cook: cannot cook (raw=${raw?.name ?? 'none'} oven=${oven ? 'yes' : 'no'})`
                 );
+                if (wallRecoveries < 3) {
+                    wallRecoveries++;
+                    await walkToOven('no oven');
+                    continue;
+                }
                 await Execution.delayTicks(2);
                 return;
             }
             this.bot.setStatus(`cook: ${raw.name}`);
-            const before = this.bot.cookableRawCount();
+            const beforeRaw = this.bot.cookableRawCount();
+            const beforeXp = Skills.xp('cooking');
             if (!(await raw.useOn(oven))) {
                 await Execution.delayTicks(2);
                 continue;
             }
-            if (
-                await Execution.delayUntil(
-                    () => this.bot.cookableRawCount() < before || ChatDialog.isMakeMenu() || ChatDialog.canContinue(),
-                    6000
-                )
-            ) {
-                if (this.bot.cookableRawCount() < before) {
-                    // cooked/burnt counters update from inventory.changed
-                    await Execution.delay(cookHumanDelayMs());
+            // One cook action finishes in a few ticks. Wait that long for any progress
+            // (XP, raw drop, make-X). If still nothing while on the stand, treat as a
+            // wall-side / wrong-room useOn and re-path through doors.
+            const cookStarted = (): boolean =>
+                this.bot.cookableRawCount() < beforeRaw
+                || Skills.xp('cooking') > beforeXp
+                || ChatDialog.isMakeMenu()
+                || ChatDialog.canContinue();
+            // ~4 game ticks — short enough to fail-fast on street-side stands, long
+            // enough that a real adjacent cook is not aborted mid-animation.
+            const started = await Execution.delayUntil(cookStarted, 2400);
+            if (started || cookStarted()) {
+                // Batch may still be running — wait out more of the pack cook.
+                if (
+                    await Execution.delayUntil(
+                        () =>
+                            this.bot.cookableRawCount() === 0
+                            || ChatDialog.isMakeMenu()
+                            || ChatDialog.canContinue()
+                            || EventSignal.pending()
+                            || Game.inCombat(),
+                        6000
+                    )
+                ) {
+                    if (this.bot.cookableRawCount() < beforeRaw) {
+                        await Execution.delay(cookHumanDelayMs());
+                    }
                 }
+                wallRecoveries = 0;
+                continue;
             }
+            const at = Game.tile();
+            const atStand = at !== null && rangeTile.distanceTo(at) <= 2;
+            if (atStand && wallRecoveries < 3) {
+                wallRecoveries++;
+                this.bot.log(
+                    `cook: useOn produced no cook progress at stand — re-path (try ${wallRecoveries})`
+                );
+                await walkToOven('useOn stall');
+                continue;
+            }
+            await Execution.delayTicks(1);
         }
 
         if (this.bot.cookableRawCount() === 0) {

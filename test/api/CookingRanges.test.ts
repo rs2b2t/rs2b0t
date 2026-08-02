@@ -46,10 +46,21 @@ describe('CookingRanges catalog', () => {
         expect(pier?.stand.x).toBe(2735);
         expect(pier?.stand.z).toBe(3581);
         const bank = cookSurfaceForFishCamp('Seers (fly fishing)', 'bank');
-        expect(bank?.stand.x).toBe(2715);
-        expect(bank?.stand.z).toBe(3475);
-        expect(bank?.approach).toBeUndefined();
+        // Interior north of range via Door@2713,3483 (south street stand is unusable).
+        expect(bank?.approach?.x).toBe(2713);
+        expect(bank?.approach?.z).toBe(3484);
+        expect(bank?.stand.x).toBe(2716);
+        expect(bank?.stand.z).toBe(3477);
         expect(bank?.label).toMatch(/village|bank/i);
+    });
+
+    test('Draynor fireplace uses east-door approach and interior stand', () => {
+        const pier = cookSurfaceForFishCamp('Draynor Village', 'pier');
+        expect(pier?.approach?.x).toBe(3102);
+        expect(pier?.approach?.z).toBe(3258);
+        expect(pier?.stand.x).toBe(3100);
+        expect(pier?.stand.z).toBe(3257);
+        expect(pier?.locName).toBe('Fireplace');
     });
 
     test('resolveFishCampCookSurface prefers curated then nearest', () => {

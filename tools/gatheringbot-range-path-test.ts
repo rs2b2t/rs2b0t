@@ -22,7 +22,13 @@
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
-import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
+import {
+    cheatQuiet,
+    clearChatDialogs,
+    mainlandAccount,
+    maxmeAndClearDialogs,
+    startScript
+} from './tutorial/harness.js';
 
 const { base, rest } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
@@ -88,7 +94,8 @@ const CASES_ALL: Case[] = [
         id: 'range-path-seers-fly-fishing-bank',
         camp: 'Seers (fly fishing)',
         role: 'bank',
-        stand: { x: 2715, z: 3475, level: 0 },
+        approach: { x: 2713, z: 3484, level: 0 },
+        stand: { x: 2716, z: 3477, level: 0 },
         locName: 'Range',
         label: 'Seers village range (near bank)',
         spot: { x: 2716, z: 3532, level: 0 },
@@ -127,7 +134,8 @@ const CASES_ALL: Case[] = [
         id: 'range-path-draynor-village-pier',
         camp: 'Draynor Village',
         role: 'pier',
-        stand: { x: 3100, z: 3255, level: 0 },
+        approach: { x: 3102, z: 3258, level: 0 },
+        stand: { x: 3100, z: 3257, level: 0 },
         locName: 'Fireplace',
         label: 'Draynor house fireplace',
         spot: { x: 3086, z: 3231, level: 0 },
@@ -233,8 +241,11 @@ async function sample(
     distApproach: number;
     cookXp: number;
     raw: number;
+    used: number;
     state: string;
+    logs: string[];
     lastLog: string;
+    invNames: string[];
 }> {
     return page.evaluate(
         ([st, ap]) => {
@@ -255,12 +266,28 @@ async function sample(
                 distApproach: ap ? d(tile, ap as Tile) : 999,
                 cookXp: g.__rs2b0t.Skills.xp('cooking'),
                 raw,
+                used: items.length,
                 state: g.rs2b0t.runner.state,
-                lastLog: (logs[logs.length - 1] ?? '').slice(0, 90)
+                logs,
+                lastLog: (logs[logs.length - 1] ?? '').slice(0, 90),
+                invNames: items.map(i => `${i.count}×${i.name ?? '?'}`).slice(0, 8)
             };
         },
         [stand, approach ?? null] as const
     );
+}
+
+function logHas(msgs: string[], re: RegExp): boolean {
+    return msgs.some(m => re.test(m));
+}
+
+/** How many raw stacks fit with tool (+ feathers for fly). */
+function rawSeedQty(toolDebug: string): number {
+    // 28-slot pack: tool [+ feather stack] + raw.
+    if (toolDebug === 'fly_fishing_rod') {
+        return 26; // rod + feather + 26 raw = 28
+    }
+    return 27; // pot/net + 27 raw = 28
 }
 
 const CASES = selectCases();
@@ -288,8 +315,10 @@ try {
     const user = process.env.USER_NAME || `gbrp${Date.now().toString(36).slice(-6)}`;
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
-    await cheatQuiet(page, '~maxme');
-    await page.waitForTimeout(1500);
+    // Same proven path as gatheringbot-test: ~maxme floods level-up chat that
+    // blocks movement / cheats until drained.
+    console.log(`${stamp()} base stats → 99 (maxme + clear dialogs)`);
+    await maxmeAndClearDialogs(page);
     if (
         !(await page.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('Fisher'))))
     ) {
@@ -300,16 +329,26 @@ try {
         const sc0 = Date.now();
         console.log(`\n══ ${c.id} ══`);
         await stopScript(page);
+        await clearChatDialogs(page);
+        await page.waitForTimeout(400);
         await cheatQuiet(page, '~clearinv');
-        // Cooker skips gear restock thrash; still seed tool for non-cooker fallbacks.
+        await page.waitForTimeout(400);
+        // Exact pack seed: tool [+ feathers] + raw = 28. Oversized packs drop / confuse give.
         await cheatQuiet(page, `give ${c.toolDebug} 1`);
+        await page.waitForTimeout(200);
         if (c.toolDebug === 'fly_fishing_rod') {
-            await cheatQuiet(page, 'give feather 50');
+            await cheatQuiet(page, 'give feather 20');
+            await page.waitForTimeout(200);
         }
-        await cheatQuiet(page, `give ${c.rawDebug} 27`);
+        const rawQty = rawSeedQty(c.toolDebug);
+        await cheatQuiet(page, `give ${c.rawDebug} ${rawQty}`);
+        await page.waitForTimeout(400);
+
         const start = c.role === 'bank' ? c.bank : c.spot;
         await teleArrive(page, start);
-        // Cooker + full raw → path to range/cook without fishing gear restock loops.
+        await page.waitForTimeout(600);
+
+        // Cooker + raw pack → path to range and cook (no fishing restock thrash).
         await setFisher(page, {
             fishMethod: c.fishMethod,
             location: c.camp,
@@ -323,7 +362,19 @@ try {
             muleMode: 'Cooker',
             mulePartner: 'RangePathPartner'
         });
-        const cook0 = (await sample(page, c.stand, c.approach)).cookXp;
+
+        const pre = await sample(page, c.stand, c.approach);
+        if (pre.raw < 10) {
+            const detail = `seed failed: raw=${pre.raw} used=${pre.used} inv=[${pre.invNames.join(', ')}]`;
+            results.push({ id: c.id, ok: false, detail, ms: Date.now() - sc0 });
+            console.log(`FAIL ${c.id} (0s) ${detail}`);
+            continue;
+        }
+        console.log(
+            `${stamp()} seed ok raw=${pre.raw} used=${pre.used} inv=[${pre.invNames.join(', ')}]`
+        );
+
+        const cook0 = pre.cookXp;
         await startScript(page, 'Fisher');
         console.log(
             `${stamp()} Fisher @ ${start.x},${start.z} → stand ${c.stand.x},${c.stand.z}` +
@@ -333,8 +384,12 @@ try {
         const deadline = Date.now() + PER_CAMP_MS;
         let ok = false;
         let detail = '';
+        /** Consecutive polls at/near stand with no cook XP (stall gate). */
+        let stallAtOven = 0;
+        /** Consecutive polls after cook/use logs with no XP. */
+        let stallCookAttempt = 0;
         while (Date.now() < deadline) {
-            await page.waitForTimeout(2500);
+            await page.waitForTimeout(2000);
             const s = await sample(page, c.stand, c.approach);
             if (s.state === 'crashed') {
                 detail = `crashed: ${s.lastLog}`;
@@ -342,26 +397,65 @@ try {
             }
             const cookXp = s.cookXp - cook0;
             const atStand = s.distStand <= 2;
-            const cooked = cookXp > 0;
+            const nearOven = s.distStand <= 4;
+            const sawCookLog = logHas(
+                s.logs,
+                /cook:\s*(walking to range|walking to approach|opening |cannot cook)/i
+            );
+            const sawUseAttempt = logHas(s.logs, /cook:\s*Raw |cook:\s*cannot cook/i);
+
             console.log(
                 `${stamp()} distStand=${s.distStand} distAppr=${s.distApproach} cookXpΔ=${cookXp} raw=${s.raw} ` +
                     `| ${s.lastLog.slice(0, 72)}`
             );
-            if (atStand || cooked) {
+
+            // Success requires real cooking XP — standing on the stand alone is a false pass
+            // (Draynor fireplace / Seers bank were at tile with 0 cook XP).
+            if (cookXp > 0) {
                 ok = true;
                 detail =
-                    `distStand=${s.distStand} cookXpΔ=${cookXp} raw=${s.raw} ` +
+                    `cookXpΔ=${cookXp} distStand=${s.distStand} raw=${s.raw} ` +
                     `tile=${s.tile ? `${s.tile.x},${s.tile.z}` : '?'}`;
+                break;
+            }
+
+            if (nearOven) {
+                stallAtOven++;
+            } else {
+                stallAtOven = 0;
+            }
+            if (sawUseAttempt || (nearOven && sawCookLog && s.raw > 0)) {
+                stallCookAttempt++;
+            } else if (!nearOven) {
+                stallCookAttempt = 0;
+            }
+
+            // Fail fast: at oven ~8s without XP, or cook attempts ~10s without XP.
+            if (stallAtOven >= 4) {
+                detail =
+                    `stall at oven (no cook XP) distStand=${s.distStand} raw=${s.raw} ` +
+                    `log=${s.lastLog}`;
+                break;
+            }
+            if (stallCookAttempt >= 5) {
+                detail =
+                    `stall cook attempts (no cook XP) distStand=${s.distStand} raw=${s.raw} ` +
+                    `log=${s.lastLog}`;
+                break;
+            }
+            if (logHas(s.logs, /cook:\s*cannot cook/i) && nearOven && stallAtOven >= 2) {
+                detail = `cannot cook at oven distStand=${s.distStand} raw=${s.raw} log=${s.lastLog}`;
                 break;
             }
         }
         await stopScript(page);
+        await page.waitForTimeout(400);
         if (!ok) {
             const s = await sample(page, c.stand, c.approach);
             detail =
                 detail
                 || `timeout distStand=${s.distStand} distAppr=${s.distApproach} ` +
-                    `cookXpΔ=${s.cookXp - cook0} log=${s.lastLog}`;
+                    `cookXpΔ=${s.cookXp - cook0} raw=${s.raw} log=${s.lastLog}`;
         }
         const ms = Date.now() - sc0;
         results.push({ id: c.id, ok, detail, ms });

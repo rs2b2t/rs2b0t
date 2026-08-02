@@ -14,7 +14,13 @@
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
-import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
+import {
+    cheatQuiet,
+    clearChatDialogs,
+    mainlandAccount,
+    maxmeAndClearDialogs,
+    startScript
+} from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 240) * 1000;
@@ -134,8 +140,9 @@ try {
 
     console.log(`${stampFn()} bring up gatherer '${G_USER}'`);
     await mainlandAccount(pageG, base, G_USER);
-    await cheatQuiet(pageG, '~maxme');
-    await pageG.waitForTimeout(1200);
+    console.log(`${stampFn()} gatherer maxme + clear level-up dialogs`);
+    await maxmeAndClearDialogs(pageG);
+    await clearChatDialogs(pageG);
     await cheatQuiet(pageG, '~clearinv');
     await cheatQuiet(pageG, 'give lobster_pot 1');
     await cheatQuiet(pageG, 'give raw_lobster 27');
@@ -154,8 +161,9 @@ try {
 
     console.log(`${stampFn()} bring up cooker '${C_USER}'`);
     await mainlandAccount(pageC, base, C_USER);
-    await cheatQuiet(pageC, '~maxme');
-    await pageC.waitForTimeout(1200);
+    console.log(`${stampFn()} cooker maxme + clear level-up dialogs`);
+    await maxmeAndClearDialogs(pageC);
+    await clearChatDialogs(pageC);
     await cheatQuiet(pageC, '~clearinv');
     await teleArrive(pageC, MEET);
     await setFisher(pageC, {

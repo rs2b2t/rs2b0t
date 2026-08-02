@@ -14,7 +14,13 @@
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
-import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
+import {
+    cheatQuiet,
+    clearChatDialogs,
+    mainlandAccount,
+    maxmeAndClearDialogs,
+    startScript
+} from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 180) * 1000;
@@ -125,8 +131,9 @@ try {
 
     console.log(`${stampFn()} bring up gatherer '${G_USER}'`);
     await mainlandAccount(pageG, base, G_USER);
-    await cheatQuiet(pageG, '~maxme');
-    await pageG.waitForTimeout(1200);
+    console.log(`${stampFn()} gatherer maxme + clear level-up dialogs`);
+    await maxmeAndClearDialogs(pageG);
+    await clearChatDialogs(pageG);
     await cheatQuiet(pageG, '~clearinv');
     await cheatQuiet(pageG, 'give rune_pickaxe 1');
     await cheatQuiet(pageG, 'give iron_ore 27');
@@ -144,8 +151,9 @@ try {
 
     console.log(`${stampFn()} bring up mule '${M_USER}'`);
     await mainlandAccount(pageM, base, M_USER);
-    await cheatQuiet(pageM, '~maxme');
-    await pageM.waitForTimeout(1200);
+    console.log(`${stampFn()} mule maxme + clear level-up dialogs`);
+    await maxmeAndClearDialogs(pageM);
+    await clearChatDialogs(pageM);
     await cheatQuiet(pageM, '~clearinv');
     // Mule holds nothing — empty pack to receive iron.
     await teleArrive(pageM, MEET);

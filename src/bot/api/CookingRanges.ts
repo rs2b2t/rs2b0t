@@ -194,14 +194,16 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
             label: 'Sinclair mansion range (Large-door approach)',
             notes: 'approach→open Large door→east-of-range stand'
         },
-        // Town range SW of Seers bank — shorter withdraw→cook→deposit for bank-raw mode.
+        // Town range SW of Seers bank — interior of the house (south of range is street).
+        // Door@2713,3483 from the bank; stand north of the range (inside).
         bank: {
-            stand: new Tile(2715, 3475, 0),
+            approach: new Tile(2713, 3484, 0),
+            stand: new Tile(2716, 3477, 0),
             loc: new Tile(2715, 3476, 0),
             locName: 'Range',
             kind: 'range',
             label: 'Seers village range (near bank)',
-            notes: 'Prefer for bank-raw-then-cook'
+            notes: 'approach Door@2713,3483 → stand north of range (interior)'
         }
     },
     'Fishing Guild': {
@@ -225,21 +227,25 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
         }
     },
     'Draynor Village': {
+        // Fireplace is inside the house; 3100,3255 (south) is street-side and useOn can't reach.
+        // Enter via Door@3101,3258 (east wall), stand north of the fireplace.
         pier: {
-            stand: new Tile(3100, 3255, 0),
+            approach: new Tile(3102, 3258, 0),
+            stand: new Tile(3100, 3257, 0),
             loc: new Tile(3100, 3256, 0),
             locName: 'Fireplace',
             kind: 'fireplace',
             label: 'Draynor house fireplace',
-            notes: 'Near bank; unproven for mass fish cook'
+            notes: 'approach Door@3101,3258 → stand north of fireplace (interior)'
         },
         bank: {
-            stand: new Tile(3100, 3255, 0),
+            approach: new Tile(3102, 3258, 0),
+            stand: new Tile(3100, 3257, 0),
             loc: new Tile(3100, 3256, 0),
             locName: 'Fireplace',
             kind: 'fireplace',
             label: 'Draynor house fireplace',
-            notes: 'Near bank'
+            notes: 'approach Door@3101,3258 → stand north of fireplace (interior)'
         }
     }
 };
