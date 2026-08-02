@@ -15,8 +15,16 @@ import Tile from "./Tile.js";
 export type CookSurfaceKind = "range" | "fire" | "fireplace";
 
 export interface CookingSurface {
-    /** Player stand tile for pathing / walkOpening. */
+    /**
+     * Final stand next to the cook surface (path destination after any approach).
+     * FishCook walks here (via walkOpening) and then uses the Range/Fire in leash.
+     */
     stand: Tile;
+    /**
+     * Optional intermediate waypoint (e.g. exterior of a Large door). Walked first so
+     * pathfinding enters a building complex before aiming at the interior range tile.
+     */
+    approach?: Tile;
     /** Loc query name (Range / Fire / Fireplace). */
     locName: string;
     kind: CookSurfaceKind;
@@ -140,65 +148,136 @@ export function nearestCookingRange(
 }
 
 /**
- * Curated cook surfaces next to fishing camps (hand-checked stands).
- * Prefer these over pure nearest when named camp is selected.
+ * Which surface to prefer for a cook mode:
+ * - **pier** — cook-then-bank: cook near the fishing spot (full raw pack walk short)
+ * - **bank** — bank-raw-then-cook: cook near the bank (withdraw → cook → re-bank)
  */
-export const FISH_CAMP_COOK_SURFACES: Readonly<Record<string, CookingSurface>> = {
+export type CookSurfaceRole = 'pier' | 'bank';
+
+export interface FishCampCookPlan {
+    /** Near the pier / camp spot (cook-then-bank). */
+    pier?: CookingSurface;
+    /** Near the bank booth (bank-raw-then-cook). Falls back to pier if omitted. */
+    bank?: CookingSurface;
+}
+
+const CATHERBY_RANGE: CookingSurface = {
+    stand: new Tile(2817, 3443, 0),
+    loc: new Tile(2817, 3444, 0),
+    locName: 'Range',
+    kind: 'range',
+    label: 'Catherby range (bank house)',
+    notes: 'Door/gate; good for both pier and bank cook modes'
+};
+
+/**
+ * Curated cook surfaces for fishing camps.
+ *
+ * Seers pier range uses a stand **outside the Sinclair Large door** so pathing
+ * walks through the gate complex instead of aiming at the interior range tile
+ * and getting stuck on the wrong side of doors.
+ */
+export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = {
     Catherby: {
-        stand: new Tile(2817, 3443, 0),
-        loc: new Tile(2817, 3444, 0),
-        locName: "Range",
-        kind: "range",
-        label: "Catherby range (bank house)",
-        notes: "Door/gate obstacles; proven cook-then-bank"
+        pier: CATHERBY_RANGE,
+        bank: CATHERBY_RANGE
     },
-    "Seers (fly fishing)": {
-        stand: new Tile(2732, 3581, 0),
-        loc: new Tile(2733, 3582, 0),
-        locName: "Range",
-        kind: "range",
-        label: "Sinclair mansion range (N of Seers river)",
-        notes: "Within campRadius 80 of fly pier"
+    'Seers (fly fishing)': {
+        pier: {
+            // Two-step path: (1) exterior of Large door (2) stand east of range
+            // (Range forceapproach=east in cooking_sources.loc).
+            approach: new Tile(2740, 3570, 0),
+            stand: new Tile(2735, 3581, 0),
+            loc: new Tile(2733, 3582, 0),
+            locName: 'Range',
+            kind: 'range',
+            label: 'Sinclair mansion range (Large-door approach)',
+            notes: 'approach→open Large door→east-of-range stand'
+        },
+        // Town range SW of Seers bank — shorter withdraw→cook→deposit for bank-raw mode.
+        bank: {
+            stand: new Tile(2715, 3475, 0),
+            loc: new Tile(2715, 3476, 0),
+            locName: 'Range',
+            kind: 'range',
+            label: 'Seers village range (near bank)',
+            notes: 'Prefer for bank-raw-then-cook'
+        }
     },
-    "Fishing Guild": {
-        stand: new Tile(2616, 3395, 0),
-        loc: new Tile(2616, 3396, 0),
-        locName: "Range",
-        kind: "range",
-        label: "Ardougne range S of guild",
-        notes: "Outside guild fence; walk after bank/dock"
+    'Fishing Guild': {
+        pier: {
+            stand: new Tile(2616, 3395, 0),
+            loc: new Tile(2616, 3396, 0),
+            locName: 'Range',
+            kind: 'range',
+            label: 'Ardougne range S of guild',
+            notes: 'Outside guild fence; walk after bank/dock'
+        }
     },
-    "Barbarian Village": {
-        stand: new Tile(3079, 3444, 0),
-        loc: new Tile(3078, 3445, 0),
-        locName: "Fire",
-        kind: "fire",
-        label: "Barb outdoor fires",
-        notes: "No Range in village; cook on Fire"
+    'Barbarian Village': {
+        pier: {
+            stand: new Tile(3079, 3444, 0),
+            loc: new Tile(3078, 3445, 0),
+            locName: 'Fire',
+            kind: 'fire',
+            label: 'Barb outdoor fires',
+            notes: 'No Range in village; cook on Fire'
+        }
     },
-    "Draynor Village": {
-        stand: new Tile(3100, 3255, 0),
-        loc: new Tile(3100, 3256, 0),
-        locName: "Fireplace",
-        kind: "fireplace",
-        label: "Draynor house fireplace",
-        notes: "Near bank; unproven for mass fish cook"
+    'Draynor Village': {
+        pier: {
+            stand: new Tile(3100, 3255, 0),
+            loc: new Tile(3100, 3256, 0),
+            locName: 'Fireplace',
+            kind: 'fireplace',
+            label: 'Draynor house fireplace',
+            notes: 'Near bank; unproven for mass fish cook'
+        },
+        bank: {
+            stand: new Tile(3100, 3255, 0),
+            loc: new Tile(3100, 3256, 0),
+            locName: 'Fireplace',
+            kind: 'fireplace',
+            label: 'Draynor house fireplace',
+            notes: 'Near bank'
+        }
     }
 };
 
-export function cookSurfaceForFishCamp(campName: string): CookingSurface | null {
-    return FISH_CAMP_COOK_SURFACES[campName] ?? null;
+/** @deprecated Prefer {@link FISH_CAMP_COOK_PLANS} + role; kept for simple pier lookup. */
+export const FISH_CAMP_COOK_SURFACES: Readonly<Record<string, CookingSurface>> = Object.fromEntries(
+    Object.entries(FISH_CAMP_COOK_PLANS).map(([k, v]) => [k, v.pier ?? v.bank!])
+);
+
+export function cookSurfaceForFishCamp(
+    campName: string,
+    role: CookSurfaceRole = 'pier'
+): CookingSurface | null {
+    const plan = FISH_CAMP_COOK_PLANS[campName];
+    if (!plan) {
+        return null;
+    }
+    if (role === 'bank') {
+        return plan.bank ?? plan.pier ?? null;
+    }
+    return plan.pier ?? plan.bank ?? null;
 }
 
-/** Prefer curated camp surface, else nearest Range within maxCheb of spot. */
+/**
+ * Prefer curated camp surface for the cook role, else nearest Range to `spot`.
+ * Pass camp bank stand as `spot` when role is `bank` to prefer nearby ovens.
+ */
 export function resolveFishCampCookSurface(
     campName: string | null | undefined,
     spot: { x: number; z: number; level?: number },
-    maxCheb = 64
+    maxCheb = 64,
+    role: CookSurfaceRole = 'pier'
 ): CookingSurface | null {
     if (campName) {
-        const curated = cookSurfaceForFishCamp(campName);
-        if (curated) return curated;
+        const curated = cookSurfaceForFishCamp(campName, role);
+        if (curated) {
+            return curated;
+        }
     }
     return nearestCookingRange(spot, maxCheb);
 }

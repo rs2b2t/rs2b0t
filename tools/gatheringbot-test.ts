@@ -1054,7 +1054,10 @@ const SPOT = {
     /** Seers normal trees south of bank. */
     seersTrees: { x: 2724, z: 3474, level: 0 },
     seersBank: { x: 2725, z: 3491, level: 0 },
-    /** Seers fly fishing pier (river N of bank). */
+    /**
+     * Seers fly fishing shore stand (catalog camp). Collision: exitMask≠0.
+     * Do not offset W/N into the river — e.g. (2712,3535) is unpathable.
+     */
     seersFly: { x: 2716, z: 3532, level: 0 },
     /** Sinclair range stand for Seers fly cook loops. */
     seersFlyRange: { x: 2732, z: 3581, level: 0 },
@@ -1695,6 +1698,58 @@ const SCENARIOS: Scenario[] = [
             `barb-cook fish ${start.xp.fishing}→${cur.xp.fishing} cook ${start.xp.cooking}→${cur.xp.cooking} ` +
             `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
             `cookAt=${logHas(cur, /cook: cook-then-bank @ Fire/i)}`
+    },
+    /**
+     * Seers fly + catalog Range (Sinclair) cook-then-bank. Start on the pathable
+     * camp stand (2716,3532) — offset into the river used to soft-lock the harness.
+     */
+    {
+        id: 'fish-cook-seers',
+        tags: ['fishing', 'fish', 'cook', 'bank', 'camp', 'early'],
+        script: 'Fisher',
+        start: SPOT.seersFly,
+        camp: SPOT.seersFly,
+        bank: SPOT.seersBank,
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Seers (fly fishing)',
+            cookMode: 'Cook then bank',
+            cookFish: 'All raw',
+            burntPolicy: 'Drop',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        // Rod + feathers + 25 cooked = 27 used, free 1 for last raw (same as Catherby).
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'feather', name: 'Feather', qty: 50 },
+            { debug: 'trout', name: 'Trout', qty: 25 }
+        ],
+        scene: 'skip',
+        budgetMs: 300_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+            const fishXp = cur.xp.fishing - start.xp.fishing;
+            const cookXp = cur.xp.cooking - start.xp.cooking;
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                fishXp > 0
+                && cookXp > 0
+                && productPeak >= 25
+                && bankedHint
+                && sawNearBank
+                && minDistToBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `seers-cook fish ${start.xp.fishing}→${cur.xp.fishing} cook ${start.xp.cooking}→${cur.xp.cooking} ` +
+            `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     /**
      * Cooker mule solo: full raw pack + muleMode Cooker + cook-then-bank → cook at camp

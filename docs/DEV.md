@@ -167,6 +167,8 @@ HEADED=1 bun tools/gatheringbot-test.ts acquire
 HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
 # Two-account mule handoff (Gatherer + Mule at SE Varrock iron):
 HEADED=1 BUDGET_S=180 bun tools/gatheringbot-mule-pair-test.ts
+# Two-account Fisher: Gatherer raw → Cooker cook+bank at Catherby:
+HEADED=1 BUDGET_S=240 bun tools/gatheringbot-cooker-pair-test.ts
 ```
 
 Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /
@@ -181,7 +183,8 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `fish-mule-gatherer-meet` | Fisher gatherer mule smoke at Draynor (raw haul, no bank) |
 | *(pair harness)* | `gatheringbot-mule-pair-test.ts` — two accounts, full Gatherer↔Mule iron handoff |
 | `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
-| `fish-cook-bank` / `fish-cook-barb` | Catherby cook-then-bank; Barb outdoor Fire cook-then-bank (catalog surface) |
+| `fish-cook-bank` / `fish-cook-barb` / `fish-cook-seers` | Catherby Range; Barb outdoor Fire; Seers fly Range (pathable camp tele) |
+| *(cooker pair)* | `gatheringbot-cooker-pair-test.ts` — Gatherer raw → Cooker cook+bank at Catherby |
 | `fish-cooker-solo` | Cooker mule with full raw pack → cook → bank (no partner trade needed once seeded) |
 | `fish-bank-raw-cook` | Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
 | `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
@@ -215,10 +218,11 @@ Tags: `mining` / `fishing` / `wc` / `mule` / `local` / `acquire` / `path` / `end
   - **Cooker** (Fisher) — accept raw → cook at camp range → bank cooked (`burntPolicy`).
   - **Supplier** (Fisher) — when bank has N raw (`bankRawBeforeCook`), withdraw → meet → trade.
   - Harness: `mine-mule-gatherer-meet`, `fish-mule-gatherer-meet`, `fish-cooker-solo`;
-    pair iron e2e `gatheringbot-mule-pair-test.ts`.
+    pair iron e2e `gatheringbot-mule-pair-test.ts`; pair cook e2e
+    `gatheringbot-cooker-pair-test.ts` (Gatherer raw → Cooker cook+bank).
 - **Cook surfaces:** `api/CookingRanges` catalogs map Ranges; fishing camps pin
   Catherby / Seers fly / Barb Fire / Guild / Draynor fireplace when useful.
-  Harness: `fish-cook-bank` (Catherby), `fish-cook-seers`.
+  Harness: `fish-cook-bank` (Catherby), `fish-cook-barb`, `fish-cook-seers`.
 
 **Processor scripts (sketch — not shipped):** Ore/log **Mule** banking is only a
 demo. A realistic partner is a separate TaskBot that:

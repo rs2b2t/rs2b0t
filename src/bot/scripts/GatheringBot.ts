@@ -23,10 +23,11 @@ import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
-import { walkOpening } from '../api/walkOpening.js';
+import { isOpenableObstacle, openOp, walkOpening } from '../api/walkOpening.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { resolveFishCampCookSurface } from '../api/CookingRanges.js';
 import { resolveFishingLocation, type FishingLocation } from '../api/FishingLocations.js';
 import {
     effectiveGatherLeash,
@@ -365,6 +366,10 @@ export default class GatheringBot extends TaskBot {
 
     private inCookBatch = false;
     private rangeStand: Tile | null = null;
+    /** Optional waypoint before rangeStand (e.g. exterior of a Large door). */
+    private rangeApproach: Tile | null = null;
+    /** Map loc SW of the oven when known (helps findRange after multi-step walk). */
+    private rangeLocTile: Tile | null = null;
     private rangeName = 'Range';
     private cookObstacles: string[] = ['door', 'gate'];
     private rangeSearchRadius = 14;
@@ -1568,6 +1573,30 @@ export default class GatheringBot extends TaskBot {
 
     private resolveCookScene(): void {
         const fishLoc = this.fishingLocation();
+        // bank-raw-then-cook prefers a range near the bank; cook-then-bank prefers pier.
+        const role = this.cookMode === 'bank-raw-then-cook' ? 'bank' : 'pier';
+        const origin =
+            role === 'bank' && fishLoc?.bankStand
+                ? fishLoc.bankStand
+                : (fishLoc?.spot ?? this.anchor);
+        if (fishLoc && origin) {
+            const curated = resolveFishCampCookSurface(fishLoc.name, origin, 64, role);
+            if (curated) {
+                this.rangeStand = curated.stand;
+                this.rangeApproach = curated.approach ?? null;
+                this.rangeLocTile = curated.loc ?? null;
+                this.rangeName = curated.locName;
+                this.cookObstacles = fishLoc.obstacles ?? ['door', 'gate'];
+                this.log(
+                    `cook: ${role} surface ${curated.label ?? curated.locName} ` +
+                        `stand=${curated.stand}` +
+                        (curated.approach ? ` approach=${curated.approach}` : '')
+                );
+                return;
+            }
+        }
+        this.rangeApproach = null;
+        this.rangeLocTile = null;
         if (fishLoc?.rangeStand) {
             this.rangeStand = fishLoc.rangeStand;
             this.rangeName = fishLoc.rangeName ?? 'Range';
@@ -1575,9 +1604,10 @@ export default class GatheringBot extends TaskBot {
             return;
         }
 
-        const range = Locs.query().name('Range', 'Cooking range', 'Fire').nearest();
+        const range = Locs.query().name('Range', 'Cooking range', 'Fire', 'Fireplace').nearest();
         if (range) {
             this.rangeStand = range.tile();
+            this.rangeLocTile = range.tile();
             this.rangeName = range.name ?? 'Range';
             this.cookObstacles = this.location?.obstacles ?? ['door', 'gate'];
             this.log(`cook: found ${this.rangeName} @ ${this.rangeStand}`);
@@ -3104,6 +3134,13 @@ export default class GatheringBot extends TaskBot {
     rangeTile(): Tile | null {
         return this.rangeStand;
     }
+    /** Intermediate waypoint before {@link rangeTile} (building entrances). */
+    rangeApproachTile(): Tile | null {
+        return this.rangeApproach;
+    }
+    rangeLocMapTile(): Tile | null {
+        return this.rangeLocTile;
+    }
     rangeLocName(): string {
         return this.rangeName;
     }
@@ -4074,17 +4111,51 @@ class FishCookLoad implements Task {
 
         const findRange = () =>
             Locs.query()
-                .name(this.bot.rangeLocName(), 'Range', 'Cooking range', 'Fire')
+                .name(this.bot.rangeLocName(), 'Range', 'Cooking range', 'Fire', 'Fireplace')
                 .where(l => l.tile().distanceTo(rangeTile) <= this.bot.rangeLeash())
                 .nearest() ??
             Locs.query()
-                .name('Range', 'Cooking range', 'Fire')
+                .name(this.bot.rangeLocName(), 'Range', 'Cooking range', 'Fire', 'Fireplace')
                 .nearest();
+
+        // Two-step path when curated: approach (e.g. Large door exterior) then range stand.
+        // Without approach, pathing straight at an interior range soft-locks on Seers Sinclair.
+        const approach = this.bot.rangeApproachTile();
+        const obs = this.bot.cookObstacleList();
+        if (approach) {
+            const at = Game.tile();
+            if (!at || approach.distanceTo(at) > 2) {
+                this.bot.setStatus(`cook: approach ${approach.x},${approach.z}`);
+                this.bot.log(`cook: walking to approach ${approach}`);
+                await walkOpening(approach, 1, obs, m => this.bot.log(m));
+            }
+            // Proactively open any still-shut door next to the approach (Large door).
+            const shut = Locs.query()
+                .where(l => isOpenableObstacle(l.name, l.actions(), obs))
+                .where(l => l.distance() <= 3)
+                .nearest();
+            if (shut) {
+                const op = openOp(shut.actions());
+                if (op) {
+                    this.bot.log(`cook: opening ${shut.name} at approach`);
+                    await shut.interact(op);
+                    await Execution.delayTicks(2);
+                }
+            }
+        }
 
         const here = Game.tile();
         if (!here || rangeTile.distanceTo(here) > 1 || !findRange()) {
             this.bot.setStatus('cook: walking to range');
-            await walkOpening(rangeTile, 0, this.bot.cookObstacleList(), m => this.bot.log(m));
+            await walkOpening(rangeTile, 0, obs, m => this.bot.log(m));
+        }
+        // If still no oven, nudge toward curated loc tile.
+        if (!findRange()) {
+            const loc = this.bot.rangeLocMapTile();
+            if (loc) {
+                this.bot.log(`cook: no oven in leash — closing on loc ${loc}`);
+                await walkOpening(loc, 1, obs, m => this.bot.log(m));
+            }
         }
 
         for (let n = 0; n < 32 && this.bot.cookableRawCount() > 0; n++) {
@@ -4097,6 +4168,9 @@ class FishCookLoad implements Task {
             const raw = this.bot.lastRawFish();
             const oven = findRange();
             if (!raw || !oven) {
+                this.bot.log(
+                    `cook: cannot cook (raw=${raw?.name ?? 'none'} oven=${oven ? 'yes' : 'no'})`
+                );
                 await Execution.delayTicks(2);
                 return;
             }

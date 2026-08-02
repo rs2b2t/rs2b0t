@@ -38,6 +38,19 @@ describe('CookingRanges catalog', () => {
         expect(cookSurfaceForFishCamp('Fishing Guild')?.locName).toBe('Range');
     });
 
+    test('Seers pier uses Large-door approach then interior stand; bank role uses village range', () => {
+        const pier = cookSurfaceForFishCamp('Seers (fly fishing)', 'pier');
+        expect(pier?.approach?.x).toBe(2740);
+        expect(pier?.approach?.z).toBe(3570);
+        expect(pier?.stand.x).toBe(2735);
+        expect(pier?.stand.z).toBe(3581);
+        const bank = cookSurfaceForFishCamp('Seers (fly fishing)', 'bank');
+        expect(bank?.stand.x).toBe(2715);
+        expect(bank?.stand.z).toBe(3475);
+        expect(bank?.approach).toBeUndefined();
+        expect(bank?.label).toMatch(/village|bank/i);
+    });
+
     test('resolveFishCampCookSurface prefers curated then nearest', () => {
         const c = resolveFishCampCookSurface('Catherby', { x: 2845, z: 3431, level: 0 });
         expect(c?.stand.x).toBe(2817);

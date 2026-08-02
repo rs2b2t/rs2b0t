@@ -25,7 +25,9 @@ function withCampCook(loc: FishingLocation): FishingLocation {
     if (loc.rangeStand) {
         return loc;
     }
-    const cook = cookSurfaceForFishCamp(loc.name);
+    // Default pin is pier surface (cook-then-bank). bank-raw-then-cook re-resolves
+    // at runtime via resolveCookScene + CookSurfaceRole 'bank'.
+    const cook = cookSurfaceForFishCamp(loc.name, 'pier');
     if (!cook) {
         return loc;
     }
@@ -103,7 +105,7 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
         },
         {
             name: 'Seers (fly fishing)',
-            // Bank-side of river — previous 2715,3530 was unpathable water; +4 N of 2716,3528.
+            // Pathable shore stand (2716,3532) — do not offset into the river.
             spot: new Tile(2716, 3532, 0),
             bankStand: BANK.seers,
             boothName: 'Bank booth',
@@ -112,6 +114,8 @@ export const FISHING_LOCATIONS: FishingLocation[] = (
             chaseRadius: 28,
             verified: true,
             resources: ['trout', 'salmon', 'pike'],
+            // Sinclair range approach: Gate + Door + Large door (walkOpening).
+            obstacles: ['door', 'gate'],
             notes: 'River north of Seers toward Rellekka; shore stand'
         },
         {

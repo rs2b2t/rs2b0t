@@ -6,7 +6,8 @@ import type Tile from './Tile.js';
 import { Traversal } from './Traversal.js';
 import { Locs } from './queries/Locs.js';
 
-const ESCAPE_RADIUS = 10;
+/** How far to search for a shut door after a walk segment stalls. */
+const ESCAPE_RADIUS = 14;
 
 const TOWARD_SLACK = 4;
 
@@ -40,11 +41,21 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
             return true;
         }
 
-        const door = Locs.query()
-            .where(l => isOpenableObstacle(l.name, l.actions(), obstacles))
-            .where(l => l.distance() <= ESCAPE_RADIUS && Reachability.canReach(l.tile(), { adjacentOk: true }))
-            .where(l => after === null || towardDest(l.tile(), after, dest))
-            .nearest();
+        // Prefer barriers that still look "toward" the destination (avoid opening
+        // doors behind us). If none match — e.g. Seers Sinclair Large door sits
+        // slightly off the pure toward vector when stuck at the house Door —
+        // fall back to any openable obstacle in range so we do not soft-lock.
+        // (EntityQuery.where mutates; build two independent chains.)
+        const openableInRange = (l: { name: string | null; actions: () => string[]; distance: () => number; tile: () => WorldTile }) =>
+            isOpenableObstacle(l.name, l.actions(), obstacles)
+            && l.distance() <= ESCAPE_RADIUS
+            && Reachability.canReach(l.tile(), { adjacentOk: true });
+        const door =
+            Locs.query()
+                .where(l => openableInRange(l))
+                .where(l => after === null || towardDest(l.tile(), after, dest))
+                .nearest()
+            ?? Locs.query().where(l => openableInRange(l)).nearest();
         if (!door) {
             return false;
         }

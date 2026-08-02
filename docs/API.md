@@ -554,12 +554,18 @@ Map-pack catalog of `debugname=range` ovens + curated surfaces for fishing camps
 ```ts
 COOKING_RANGE_LOCS          // all Range SW tiles from Server maps
 nearestCookingRange(origin, maxCheb?)
-cookSurfaceForFishCamp(name) // Catherby, Seers fly, Barb Fire, Guild, Draynor fireplace
-resolveFishCampCookSurface(name, spot, maxCheb?)
+cookSurfaceForFishCamp(name, role?) // role: 'pier' | 'bank'
+resolveFishCampCookSurface(name, spot, maxCheb?, role?)
+FISH_CAMP_COOK_PLANS        // pier + optional bank surface per camp
 ```
 
-Fisher camps attach `rangeStand` / `rangeName` from this catalog when a useful cook
-surface is near the pier (not only Catherby).
+**Pier vs bank role:** cook-then-bank uses the pier surface (short walk with raw);
+bank-raw-then-cook prefers a surface near the bank when one is curated (e.g. Seers
+village range).
+
+**Two-step path:** a surface may set `approach` then `stand`. FishCook walks
+`approach` first (e.g. exterior of Sinclair Large door), then `stand` next to the
+Range — so pathfinding enters the building before aiming at the interior oven.
 
 ### Entity query helpers
 
