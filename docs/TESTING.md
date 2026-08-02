@@ -18,6 +18,7 @@ Unit tests cannot see any of that; live harnesses cannot iterate quickly.
 - [Unit tests](#unit-tests)
 - [What makes this testable](#what-makes-this-testable)
 - [Live harnesses](#live-harnesses)
+- [Gold-standard issue harnesses](#gold-standard-issue-harnesses)
 - [The end-to-end smoke](#the-end-to-end-smoke)
 - [Writing a harness](#writing-a-harness)
 - [Known failures](#known-failures)
@@ -302,7 +303,96 @@ Location Auto respects a tight `leashRadius` (and skips mob flee). See
 notes. Mainland setup always relogs after tutorial unlock (`RELOG_*` env overrides
 in `tools/tutorial/harness.ts`).
 
+## Gold-standard issue harnesses
+
+For **nav fixes, door/transport bugs, and other issue-linked regressions**, treat these
+patterns as the default — not optional polish. They are the bar used on recent PRs
+(Shantay #182, Edgeville dungeon exit #285, Rock Crab / Doric / Romeo stage tests).
+
+### Reference harnesses
+
+| Harness | Issue / role | What to copy |
+|---|---|---|
+| [`tools/shantay-pass-route-test.ts`](../tools/shantay-pass-route-test.ts) | #182 Shantay → Varrock | Dual mode: fixed pass **and** `--expect-unreachable` baseline; fixture inventory; success + baseline + failure screenshots; JSON proof |
+| [`tools/edgeville-dungeon-exit-test.ts`](../tools/edgeville-dungeon-exit-test.ts) | #285 dungeon → Falador | `createHarnessProof`; success shot + proof JSON; unit test as offline baseline (NO PATH without edges) |
+| [`tools/rockcrab-dart-test.ts`](../tools/rockcrab-dart-test.ts) | combat e2e | Success PNG + proof path; failure shot in `catch` |
+| [`tools/doric-level3-test.ts`](../tools/doric-level3-test.ts) | quest stage | Complete screenshot on green |
+| [`tools/waterfall-exit-test.ts`](../tools/waterfall-exit-test.ts) | multi-leg exit | Milestone screenshots (start / room / bank) |
+
+Shared helpers:
+
+| Module | Job |
+|---|---|
+| [`tools/lib/harness.ts`](../tools/lib/harness.ts) | browser, boot, login, parseArgs |
+| [`tools/lib/harnessProof.ts`](../tools/lib/harnessProof.ts) | `createHarnessProof` → success / baseline / failure artifacts |
+| [`tools/tutorial/harness.ts`](../tools/tutorial/harness.ts) | mainland account, maxme + dialog drain, cheats |
+
+### Required shape of a gold-standard run
+
+1. **Redeploy first** — `~/redeploy.sh` or `bun run b0t` so the harness hits *this* worktree’s
+   bot bundle, not a stale `bot.html`.
+2. **Fresh account** — generate a unique username; do not share state with other runs.
+3. **Tight fixture** — seed only what the bug needs (exact coins for a toll, tele to the
+   failing start tile, empty bank when banking is under test). Prefer engine cheats
+   (`give` / `givebank` / `tele` / `speed`).
+4. **Assert game state, not vibes** — tile within radius, XP delta, item counts, coins
+   spent. Log lines (e.g. `Climb-up Ladder at (3096,9868) ok`) are *supporting* proof.
+5. **Proof artifacts on green** — full-page screenshot + JSON under `screenshots/` and
+   `out/` (use `harnessProof.writeSuccess`). Include start/dest, elapsedMs, key logs,
+   and any transport flags in the JSON body.
+6. **Failure screenshot on red** — `writeFailure` (or `page.screenshot`) in `catch` so a
+   hang still leaves a frame for the PR or chat dump.
+7. **Baseline / pre-fix repro when possible** — either:
+   - a live flag such as `--expect-unreachable` that asserts the *old* failure mode
+     (no arrival, no special-crossing log, coins unspent), via `writeBaseline`; or
+   - an **offline unit test** that encodes the broken graph (NO PATH without the new
+     transport). Prefer both when cheap.
+8. **Print artifact paths** on PASS so humans can open them without hunting the tree.
+
+```sh
+# Fixed path (after the fix)
+HEADED=1 bun tools/edgeville-dungeon-exit-test.ts
+# → proof=out/issue285-edgeville-exit-proof.json
+# → screenshot=screenshots/issue285-edgeville-exit-success.png
+
+# Baseline-style live (when the harness supports it)
+HEADED=1 bun tools/shantay-pass-route-test.ts --base http://127.0.0.1:8990 --expect-unreachable
+# → screenshots/issue182-shantay-baseline-unreachable.png + out/*-baseline-proof.json
+```
+
+```ts
+import { createHarnessProof } from './lib/harnessProof.js';
+
+const proof = createHarnessProof({ issue: 285, slug: 'edgeville-exit' });
+await proof.ensureDirs();
+// …
+await proof.writeSuccess(page, { start, destination, walkOk, finalTile, logs, elapsedMs });
+// in catch:
+await proof.writeFailure(page).catch(() => undefined);
+```
+
+### Why baseline + success matters
+
+Reviewers and future maintainers should not re-discover “it used to soft-lock underground”
+from chat history. A **baseline** artifact shows the failure mode; a **success** artifact
+shows the fix. Offline path unit tests (`test/nav/*Transport*.test.ts`) are first-class
+baseline when a live dual-mode is expensive.
+
+`out/` and **`screenshots/` are gitignored**. Do **not** commit proof PNGs. Keep harness
+**source** and **unit tests** in git. On green, **attach** the PNG (and JSON if useful)
+to the **PR conversation** — that is the house style for issue fixes. The harness must
+still *produce* the files every green run so the author can upload them.
+
+### What not to do
+
+- Sleep a fixed 30s and hope — poll `worldTile` / XP / inventory.
+- PASS on “script is running” without state asserts.
+- Leave green runs with no screenshot/JSON when the bug is nav/door/world-state.
+- Commit multi‑MB screenshots into the repo — attach them to the PR instead.
+
 ## Writing a harness
+
+Minimal skeleton (smoke / simple script start):
 
 ```ts
 import { boot, fail, launchBrowser, parseArgs } from './lib/harness.js';
@@ -321,6 +411,10 @@ try {
     await browser.close();
 }
 ```
+
+For **issue fixes**, start from the [gold-standard](#gold-standard-issue-harnesses) section
+instead of this minimal skeleton: fixture → assert state → `harnessProof` artifacts →
+optional baseline mode.
 
 Seed preconditions with cheats rather than waiting for the world to provide them, and
 poll for a condition instead of sleeping a fixed time — a fixed wait is the most
