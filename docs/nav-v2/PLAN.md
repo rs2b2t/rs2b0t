@@ -52,7 +52,8 @@ Shared across both: collision pack, doors, trapdoor `openLocId`, ladder transpor
 - [x] Curated state-aware ladder activations (`stateAwareRequires` — monastary 31 Prayer)  
 - [x] Multi-dest deferred ladders stay disabled (documented)
 
-**Still later (not ship blockers):** bank-for-missing-runes; duel-ring run-stall.
+**Deferred follow-ups shipped in session work:** path-scoped bank planner, route
+recovery, `exec/*` split, quest-lock blacklist, optional `showNavPath` overlay.
 
 ### Phase 3 — Executor ✅
 

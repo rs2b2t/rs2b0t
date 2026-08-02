@@ -15,4 +15,8 @@ export * from './plannedEdge.js';
 export * from './specialRequires.js';
 export * from './stateAwareRequires.js';
 export * from './activateStateAware.js';
+export * from './virtualState.js';
+export * from './bankPlan.js';
+export * from './routeRecovery.js';
+export * from './routeState.js';
 // worldStateLive / teleportExecute import client adapter — use direct paths when needed

@@ -1,4 +1,5 @@
 import { BotHost } from '../BotHost.js';
+import { paintNavPath } from '../nav/pathOverlay.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 
 export default class Overlay {
@@ -18,6 +19,16 @@ export default class Overlay {
         }
 
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Path paint is independent of script onPaint (operator toggle).
+        try {
+            ctx.save();
+            paintNavPath(ctx);
+        } catch (err) {
+            console.error('[rs2b0t] path overlay error', err);
+        } finally {
+            ctx.restore();
+        }
 
         const state = ScriptRunner.state;
         const active = state === 'running' || state === 'paused';

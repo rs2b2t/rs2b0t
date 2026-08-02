@@ -253,7 +253,18 @@ Toggle: **Global settings → World walker** → `Classic (stable)` (default) or
 | Jewellery Rub (duel/games/glory) | no | yes (inventory Rub + dialog) |
 | Hop explain logs | no | yes |
 | Skill/item edge `requires` | skipped (no state) | filtered at plan time |
+| Path-scoped bank for tele/toll items | no | yes (when bank open or `bankItemCounts` supplied; one leg max) |
 | Trapdoor `openLocId`, ladder data | yes | yes |
+
+**Optional path paint:** Global **Show nav path** (`showNavPath`, default off) draws the
+active route on the `#overlay` canvas. Does not change routing.
+`?Global.showNavPath=true`.
+
+**Quest-locked doors:** after Open with a lock mesbox and no passage, the door tile is
+session-blacklisted and the walker repaths (classic and v2).
+
+Executor pieces live under `src/bot/nav/exec/` (doors, specials, transport loc match);
+path publish is `pathPublish.ts` + `pathOverlay.ts`.
 
 Spell landings and jewellery destinations are catalogued in
 [`src/bot/nav/v2/teleportCatalog.ts`](../src/bot/nav/v2/teleportCatalog.ts) from Server

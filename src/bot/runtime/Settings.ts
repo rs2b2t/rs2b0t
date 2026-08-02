@@ -155,6 +155,14 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
             'Classic is the long-standing pathfinder. Nav v2 may route through spell teleports, '
             + 'logs transport hops, and filters skill/item-gated shortcuts using live stats. '
             + 'Default classic so existing scripts keep prior behaviour. Change applies on the next walk.'
+    },
+    showNavPath: {
+        type: 'boolean',
+        default: false,
+        label: 'Show nav path',
+        help:
+            'Draw the current world-walk route on the game overlay (debug / operator). '
+            + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true'
     }
 };
 

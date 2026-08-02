@@ -4,28 +4,57 @@ import { EventSignal } from '../api/EventSignal.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { Execution } from '../api/Execution.js';
 import { Sustain } from '../api/Sustain.js';
-import { Locs, type Loc } from '../api/queries/Locs.js';
-import { Npcs } from '../api/queries/Npcs.js';
+import { Locs } from '../api/queries/Locs.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
-import { ChatDialog } from '../api/hud/ChatDialog.js';
-import { Quests } from '../api/hud/Quests.js';
-import { Banking, isDisposableGatherJunk } from '../api/Banking.js';
-import { SPECIAL_CROSSINGS, specialCrossingAt, specialCrossingForTransport, pickChoice, meetsRequirement, meetsSkill, matchesUseItem, type SpecialCrossing } from './data/specialCrossings.js';
+import { Banking } from '../api/Banking.js';
+import { nearestBank } from '../api/BankLocations.js';
+import { SPECIAL_CROSSINGS, specialCrossingForTransport, meetsRequirement, meetsSkill } from './data/specialCrossings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { Navigator, type PathResult } from './Navigator.js';
 import { DirectNavigator } from './DirectNavigator.js';
 import type { TransportInfo, Waypoint } from './PathFinder.js';
-import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget, shouldApproachClosedBarrier, starvedTerminalIndex } from './followMath.js';
+import {
+    chebyshev,
+    crossingEligible,
+    locateOnPath,
+    selectClickTarget,
+    starvedTerminalIndex
+} from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 import { snapshotWorldStateData } from './v2/worldStateLive.js';
 import type { PathPolicy } from './v2/types.js';
+import type { WorldStateData } from './v2/worldStateData.js';
 import { formatHops } from './v2/hops.js';
 import { isNavV2, type NavEngineId } from './navEngine.js';
 import { executeTeleportHop } from './v2/teleportExecute.js';
+import { missingItemsForPath, pathHasTeleport, planBankLeg } from './v2/bankPlan.js';
+import { virtualizeWithItems } from './v2/virtualState.js';
+import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
+import { RouteState } from './v2/routeState.js';
+import { PathPublish } from './pathPublish.js';
+import {
+    crossMultiTileDoor,
+    isOpenableBarrier,
+    isOpenBarrierLeaf,
+    noteFailedDoor,
+    questLockDoorTileNearPlayer,
+    tryNearbyDoor
+} from './exec/doorCrossing.js';
+import { handleSpecialCrossing } from './exec/specialCrossing.js';
+import {
+    findTransportLoc,
+    matchesTransportLanding,
+    matchesTransportLoc,
+    openShutTrapdoor
+} from './exec/transportLoc.js';
+import { chatShowsQuestLock, dismissQuestLockDialogue } from './exec/questLock.js';
+
+// Re-export for existing tests
+export { isOpenableBarrier, isOpenBarrierLeaf, matchesTransportLoc, matchesTransportLanding };
 
 const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
@@ -42,13 +71,7 @@ const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000;
 const TRANSPORT_WAIT_MS = 8000;
-const MULTI_DOOR_CROSS_MS = 36_000;
-const OPEN_WAIT_MS = 4000;
 const SCENE_STEP_MS = 8000;
-const APPROACH_WALK_MS = 3000;
-const DIALOGUE_STEPS = 24;
-const SHIP_DIALOGUE_STEPS = 40;
-const GATE_REOPENS = 2;
 const REACH_CHECK_STEPS = 1200;
 
 export interface WalkOptions {
@@ -68,6 +91,12 @@ export interface WalkOptions {
      * When navEngine is v2, defaults to true unless set false or policy.useTeleports is false.
      */
     useTeleportCatalog?: boolean;
+    /**
+     * nav-v2 only: optional known bank item counts for the bank planner
+     * (tests / when bank is not open). When omitted, planner uses open-bank
+     * counts only and never opens a bank just to probe.
+     */
+    bankItemCounts?: Record<string, number>;
 }
 
 interface PathStep extends WorldTile {
@@ -75,52 +104,6 @@ interface PathStep extends WorldTile {
 }
 
 type FollowResult = 'arrived' | 'closest' | 'blocked' | 'repath' | 'failed' | 'interrupted';
-
-export function isOpenableBarrier(name: string | null, ops: readonly (string | null)[]): boolean {
-    return /(door|gate)/i.test(name ?? '') && ops.some(op => op !== null && /^open/i.test(op));
-}
-
-export function isOpenBarrierLeaf(name: string | null, ops: readonly (string | null)[]): boolean {
-    return /(door|gate)/i.test(name ?? '') && ops.some(op => op !== null && /^close/i.test(op));
-}
-
-export function matchesTransportLoc(transport: TransportInfo, loc: { readonly id: number; tile(): { x: number; z: number } }): boolean {
-    const tile = loc.tile();
-    const near =
-        Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
-    if (transport.locId === undefined && transport.openLocId === undefined) {
-        return near;
-    }
-    // Map placement (closed) or action-bearing open variant after Open.
-    const idOk =
-        (transport.locId !== undefined && loc.id === transport.locId)
-        || (transport.openLocId !== undefined && loc.id === transport.openLocId);
-    if (!idOk) {
-        return false;
-    }
-    // Closed placement is exact; open variant may shift a tile after transform.
-    if (loc.id === transport.locId) {
-        return tile.x === transport.locX && tile.z === transport.locZ;
-    }
-    return near;
-}
-
-export function matchesTransportLanding(
-    transport: TransportInfo,
-    expectedLevel: number,
-    before: WorldTile | null,
-    current: WorldTile | null
-): boolean {
-    if (!current) {
-        return false;
-    }
-    if (transport.toTile && current.level === expectedLevel && chebyshev(current, transport.toTile) <= 3) {
-        return true;
-    }
-    return transport.acceptAnyLanding === true && before !== null && (
-        current.level !== before.level || chebyshev(current, before) > 64
-    );
-}
 
 function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
     const tiles: PathStep[] = [];
@@ -164,6 +147,11 @@ class WalkExecutorImpl {
     /** Resolved engine for the current walkTo (classic | v2). */
     private walkEngine: NavEngineId = 'classic';
 
+    /** At most one bank-for-route leg per walkTo. */
+    private bankLegDone = false;
+
+    private walkBankItemCounts: Record<string, number> | undefined;
+
     async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
@@ -171,14 +159,16 @@ class WalkExecutorImpl {
         const maxExpansions = opts?.maxExpansions;
         this.walkEngine = isNavV2(opts?.navEngine) ? 'v2' : 'classic';
         this.walkPolicy = this.walkEngine === 'v2' ? opts?.policy : undefined;
-        // v2 defaults tele catalog on; classic never uses it.
         this.walkUseTeleports =
             this.walkEngine === 'v2'
             && opts?.useTeleportCatalog !== false
             && opts?.policy?.useTeleports !== false;
+        this.walkBankItemCounts = this.walkEngine === 'v2' ? opts?.bankItemCounts : undefined;
+        this.bankLegDone = false;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.resetAvoids();
+        RouteState.reset();
         if (this.walkEngine === 'v2') {
             log(
                 `nav engine=v2 tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })}`
@@ -203,6 +193,16 @@ class WalkExecutorImpl {
                     this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
+
+                // Path-scoped bank planner (v2 only, at most once).
+                if (this.walkEngine === 'v2' && !this.bankLegDone) {
+                    const banked = await this.maybeBankForRoute(me, dest, path, maxExpansions, log);
+                    if (banked) {
+                        this.bankLegDone = true;
+                        continue;
+                    }
+                }
+
                 const hops = path.hops ?? [];
                 if (this.walkEngine === 'v2') {
                     log(
@@ -218,6 +218,7 @@ class WalkExecutorImpl {
                 }
 
                 const tiles = expandWaypoints(path.waypoints);
+                this.publishPath(tiles, 0, -1);
 
                 const terminal = tiles[tiles.length - 1];
                 if (terminal && me.level === terminal.level && me.x === terminal.x && me.z === terminal.z) {
@@ -258,10 +259,200 @@ class WalkExecutorImpl {
             return false;
         } finally {
             this.remaining = 0;
+            PathPublish.clear();
+            RouteState.reset();
         }
     }
 
-    private async requestPath(from: WorldTile, to: WorldTile, maxExpansions?: number): Promise<PathResult> {
+    private publishPath(tiles: PathStep[], pathIdx: number, clickIdx: number): void {
+        PathPublish.set(
+            tiles.map(t => ({
+                x: t.x,
+                z: t.z,
+                level: t.level,
+                transport: t.transport !== undefined
+            })),
+            pathIdx,
+            clickIdx
+        );
+        RouteState.setPathIdx(pathIdx);
+        if (clickIdx >= 0 && tiles[clickIdx]) {
+            RouteState.setInterimClick(tiles[clickIdx]!);
+        } else {
+            RouteState.setInterimClick(null);
+        }
+    }
+
+    /**
+     * If bank items (open bank or opts.bankItemCounts) enable a cheaper tele/toll
+     * route, walk bank once, withdraw only path-scoped missing items, return true
+     * so walkTo repaths.
+     */
+    private async maybeBankForRoute(
+        from: WorldTile,
+        dest: WorldTile,
+        directPath: PathResult & { ok: true },
+        maxExpansions: number | undefined,
+        log: (msg: string) => void
+    ): Promise<boolean> {
+        if (pathHasTeleport(directPath.waypoints)) {
+            return false;
+        }
+
+        const bankItems = this.readBankItemCounts();
+        if (!bankItems || Object.keys(bankItems).length === 0) {
+            return false;
+        }
+
+        let state: WorldStateData | undefined;
+        try {
+            state = snapshotWorldStateData();
+        } catch {
+            return false;
+        }
+
+        const virtual = virtualizeWithItems(state, bankItems);
+        const pathVirtual = await this.requestPath(from, dest, maxExpansions, virtual);
+        if (!pathVirtual.ok) {
+            return false;
+        }
+
+        const missing = missingItemsForPath(pathVirtual.waypoints, state);
+        if (missing.length === 0) {
+            return false;
+        }
+
+        // Virtual path must actually use something that needed those items.
+        if (!pathHasTeleport(pathVirtual.waypoints) && missing.every(m => !/rune|coins/i.test(m.name))) {
+            // Still allow toll coins etc. if specials appear — already in missing via bankPlan.
+        }
+
+        const bank = nearestBank(from);
+        if (!bank) {
+            return false;
+        }
+        const stand: WorldTile = { x: bank.tile.x, z: bank.tile.z, level: bank.tile.level };
+
+        const toBank = await this.requestPath(from, stand, maxExpansions);
+        if (!toBank.ok) {
+            return false;
+        }
+        const bankToDest = await this.requestPath(stand, dest, maxExpansions, virtual);
+        if (!bankToDest.ok) {
+            return false;
+        }
+
+        const plan = planBankLeg({
+            directCost: directPath.cost,
+            directHasTeleport: false,
+            toBankCost: toBank.cost,
+            bankToDestCost: bankToDest.cost,
+            missing
+        });
+        if (plan.action !== 'bank') {
+            return false;
+        }
+
+        log(
+            `bank plan: withdraw ${plan.missing.map(m => `${m.count}×${m.name}`).join(', ')} `
+                + `(est cost ${plan.estimatedCost} < direct ${directPath.cost})`
+        );
+
+        // Walk to bank (classic path, no nested bank plan).
+        this.bankLegDone = true; // prevent recursion while walking to bank
+        const reached = await this.walkToBankOnly(stand, log);
+        if (!reached) {
+            log('bank plan: could not reach bank — continuing direct');
+            return false;
+        }
+
+        if (!(await Banking.open({ preferNearby: true, log: m => log(`  ${m}`) }))) {
+            log('bank plan: could not open bank — continuing direct');
+            return false;
+        }
+
+        for (const item of plan.missing) {
+            const have = Inventory.count(item.name);
+            const need = item.count;
+            if (have >= need) {
+                continue;
+            }
+            const take = need - have;
+            const ok = await Bank.withdrawX(item.name, take);
+            if (!ok) {
+                log(`bank plan: failed to withdraw ${take}×${item.name}`);
+            } else {
+                log(`bank plan: withdrew ${take}×${item.name}`);
+            }
+        }
+        if (Bank.isOpen()) {
+            await Bank.close().catch(() => undefined);
+        }
+        await Execution.delayTicks(1);
+        return true;
+    }
+
+    /** Walk to bank without re-entering bank planner. */
+    private async walkToBankOnly(stand: WorldTile, log: (msg: string) => void): Promise<boolean> {
+        const saved = this.bankLegDone;
+        this.bankLegDone = true;
+        try {
+            // Use a nested walk with same engine but bank leg already "done".
+            const radius = 4;
+            const timeoutMs = 120_000;
+            const deadline = performance.now() + timeoutMs;
+            for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
+                const me = reader.worldTile();
+                if (!me) {
+                    return false;
+                }
+                if (isArrived(me, stand, radius, Reachability.arrivalProbe())) {
+                    return true;
+                }
+                const path = await this.requestPath(me, stand);
+                if (!path.ok) {
+                    log(`bank plan: no path to bank: ${path.reason}`);
+                    return false;
+                }
+                const tiles = expandWaypoints(path.waypoints);
+                this.publishPath(tiles, 0, -1);
+                const result = await this.followPath(tiles, stand, radius, deadline, m => log(`  ${m}`));
+                if (result === 'arrived' || result === 'closest' || result === 'blocked') {
+                    return true;
+                }
+                if (result === 'failed' || result === 'interrupted') {
+                    return false;
+                }
+            }
+            return false;
+        } finally {
+            this.bankLegDone = saved;
+        }
+    }
+
+    private readBankItemCounts(): Record<string, number> | null {
+        if (this.walkBankItemCounts && Object.keys(this.walkBankItemCounts).length > 0) {
+            return this.walkBankItemCounts;
+        }
+        if (!Bank.isOpen()) {
+            return null;
+        }
+        const out: Record<string, number> = {};
+        for (const item of Bank.items()) {
+            if (!item.name) {
+                continue;
+            }
+            out[item.name] = (out[item.name] ?? 0) + item.count;
+        }
+        return out;
+    }
+
+    private async requestPath(
+        from: WorldTile,
+        to: WorldTile,
+        maxExpansions?: number,
+        stateOverride?: WorldStateData
+    ): Promise<PathResult> {
         let result: PathResult | null = null;
         const avoid = [
             ...this.avoidDoors,
@@ -271,17 +462,19 @@ class WalkExecutorImpl {
             })
         ];
 
-        // Classic: same request shape as pre–nav-v2 (avoid doors + expansions only).
-        // V2: live WorldState + optional tele catalog edges in A*.
-        let state;
+        let state: WorldStateData | undefined;
         let policy;
         let useTeleportCatalog = false;
         if (this.walkEngine === 'v2') {
-            try {
-                state = snapshotWorldStateData();
-            } catch (e) {
-                state = undefined;
-                console.warn('[nav-v2] worldState snapshot failed', e);
+            if (stateOverride) {
+                state = stateOverride;
+            } else {
+                try {
+                    state = snapshotWorldStateData();
+                } catch (e) {
+                    state = undefined;
+                    console.warn('[nav-v2] worldState snapshot failed', e);
+                }
             }
             policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
             useTeleportCatalog = this.walkUseTeleports;
@@ -340,7 +533,13 @@ class WalkExecutorImpl {
         return { ok: true, terminal: { x: last.x, z: last.z, level: last.level } };
     }
 
-    private async followPath(tiles: PathStep[], dest: WorldTile, radius: number, deadline: number, log: (msg: string) => void): Promise<FollowResult> {
+    private async followPath(
+        tiles: PathStep[],
+        dest: WorldTile,
+        radius: number,
+        deadline: number,
+        log: (msg: string) => void
+    ): Promise<FollowResult> {
         let pathIdx = 0;
         let offCorridor = 0;
         let stallTicks = 0;
@@ -351,7 +550,8 @@ class WalkExecutorImpl {
         let lastTile: WorldTile | null = null;
         let stillIters = 0;
 
-        const clickable = (t: WorldTile): boolean => reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
+        const clickable = (t: WorldTile): boolean =>
+            reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
 
         while (performance.now() < deadline) {
             if (EventSignal.pending()) {
@@ -374,12 +574,15 @@ class WalkExecutorImpl {
                 return 'closest';
             }
 
-            // A path can fold back within the spatial corridor while a wall or
-            // door still separates its sections. Never localize beyond the
-            // next unhandled transport, or a dungeon landing can skip the door
-            // that actually leads out of its room (Lumbridge cellar, #12).
             const progressLimit = tiles.findIndex((tile, index) => index >= pathIdx && tile.transport !== undefined);
-            const found = locateOnPath(tiles, me, pathIdx, PROGRESS_WINDOW, CORRIDOR, progressLimit === -1 ? tiles.length - 1 : progressLimit);
+            const found = locateOnPath(
+                tiles,
+                me,
+                pathIdx,
+                PROGRESS_WINDOW,
+                CORRIDOR,
+                progressLimit === -1 ? tiles.length - 1 : progressLimit
+            );
             if (found !== -1) {
                 pathIdx = found;
                 offCorridor = 0;
@@ -388,15 +591,17 @@ class WalkExecutorImpl {
                 return 'repath';
             }
             this.remaining = tiles.length - 1 - pathIdx;
+            RouteState.setPathIdx(pathIdx);
+            this.publishPath(tiles, pathIdx, clickIdx);
 
             const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
             stillIters = moved ? 0 : stillIters + 1;
             const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]) > ARRIVE_RADIUS;
-            const noMoveStall = !moved && (
-                shortOfTarget ||
-                stillIters >= STUCK_ITERS ||
-                (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx], { maxSteps: STALL_REACH_STEPS }))
-            );
+            const noMoveStall =
+                !moved
+                && (shortOfTarget
+                    || stillIters >= STUCK_ITERS
+                    || (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx], { maxSteps: STALL_REACH_STEPS })));
             stallTicks = noMoveStall ? stallTicks + 2 : 0;
             lastTile = me;
 
@@ -408,7 +613,8 @@ class WalkExecutorImpl {
                 }
             }
             let crossingIdx = -1;
-            const approachable = (t: WorldTile): boolean => Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
+            const approachable = (t: WorldTile): boolean =>
+                Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
             const scanHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
             for (let i = Math.max(1, pathIdx - 5); i < scanHi; i++) {
                 if (tiles[i].transport && crossingEligible(me, tiles[i - 1], tiles[i], TRANSPORT_TRIGGER, approachable)) {
@@ -427,13 +633,33 @@ class WalkExecutorImpl {
                     lastTile = null;
                     continue;
                 }
-                this.failedDoor(tiles[crossingIdx]);
+                noteFailedDoor(tiles[crossingIdx], this.doorStrikes, this.avoidDoors);
                 return 'repath';
             }
 
             if (stallTicks >= STALL_TICKS) {
                 stallTicks = 0;
                 if (stallRetries === 0) {
+                    // First stall: pure forward recovery on published path.
+                    const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
+                    const recover = findForwardRecoveryIndex(tiles, me, pathIdx, clickable, {
+                        corridor: CORRIDOR,
+                        window: PROGRESS_WINDOW + 20,
+                        limitIdx: limit
+                    });
+                    if (recover !== -1) {
+                        const local = reader.toLocal(tiles[recover].x, tiles[recover].z);
+                        if (local) {
+                            log(`stall recovery → path idx ${recover} (${tiles[recover].x},${tiles[recover].z})`);
+                            ActionRouter.driver.walk(local.lx, local.lz);
+                            clickIdx = recover;
+                            clicks++;
+                            stallRetries = 1;
+                            this.publishPath(tiles, pathIdx, clickIdx);
+                            await Execution.delayTicks(2);
+                            continue;
+                        }
+                    }
                     stallRetries = 1;
                     clickIdx = -1;
                 } else if (reader.inCombat()) {
@@ -464,11 +690,22 @@ class WalkExecutorImpl {
                             continue;
                         }
                     }
-                    if (await this.tryNearbyDoor(log)) {
+                    if (await tryNearbyDoor(log)) {
                         stallRetries = 0;
                         clickIdx = -1;
                         lastTile = null;
                         continue;
+                    }
+                    // Quest-lock after nearby door open attempt.
+                    const lockTile = questLockDoorTileNearPlayer();
+                    if (lockTile) {
+                        log(`quest-locked door at (${lockTile.x},${lockTile.z}) — blacklisting`);
+                        this.blacklistDoor(lockTile.x, lockTile.z);
+                        await dismissQuestLockDialogue();
+                        return 'repath';
+                    }
+                    if (chatShowsQuestLock()) {
+                        await dismissQuestLockDialogue();
                     }
                     if (adjacentToEnd) {
                         log(`(${end.x},${end.z}) blocked live — as close as reachable`);
@@ -484,15 +721,17 @@ class WalkExecutorImpl {
                 const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
                 const target = selectClickTarget(tiles, pathIdx, steps, limit, me.level, clickable);
-                const chosen = target !== -1 || nextCrossingIdx !== -1 || pathIdx !== tiles.length - 1 || clickIdx === tiles.length - 1
-                    ? target
-                    : starvedTerminalIndex(tiles, me, clickable);
+                const chosen =
+                    target !== -1 || nextCrossingIdx !== -1 || pathIdx !== tiles.length - 1 || clickIdx === tiles.length - 1
+                        ? target
+                        : starvedTerminalIndex(tiles, me, clickable);
                 if (chosen !== -1 && !(tiles[chosen].x === me.x && tiles[chosen].z === me.z)) {
                     const local = reader.toLocal(tiles[chosen].x, tiles[chosen].z)!;
                     ActionRouter.driver.walk(local.lx, local.lz);
                     clickIdx = chosen;
                     clicks++;
                     stallTicks = 0;
+                    this.publishPath(tiles, pathIdx, clickIdx);
                 } else if (target === -1) {
                     if (nextCrossingIdx !== -1) {
                         const appr = tiles[nextCrossingIdx - 1];
@@ -507,7 +746,7 @@ class WalkExecutorImpl {
                                 lastTile = null;
                                 continue;
                             }
-                            this.failedDoor(tiles[nextCrossingIdx]);
+                            noteFailedDoor(tiles[nextCrossingIdx], this.doorStrikes, this.avoidDoors);
                             return 'repath';
                         }
                     }
@@ -522,61 +761,36 @@ class WalkExecutorImpl {
         return 'failed';
     }
 
-    async tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
-        const door = Locs.query()
-            .where(l => isOpenableBarrier(l.name, l.actions()))
-            .within(3)
-            .nearest();
-        if (!door) {
-            return false;
-        }
-
-        const op = door.actions().find(a => /^open/i.test(a));
-        const t = door.tile();
-        log(`stalled next to closed '${door.name}' at (${t.x},${t.z}) — opening it`);
-        if (!op || !door.interact(op)) {
-            return false;
-        }
-        return Execution.delayUntil(() => {
-            const cur = Locs.query()
-                .where(l => l.tile().x === t.x && l.tile().z === t.z && (l.name ?? '') === (door.name ?? '') && isOpenableBarrier(l.name, l.actions()))
-                .nearest();
-            return cur === null || Reachability.canReach(t, { maxSteps: 200, adjacentOk: true });
-        }, 5000);
-    }
-
-    private failedDoor(step: PathStep): void {
-        const t = step.transport;
-        if (!t) {
-            return;
-        }
-        const key = `${t.locX}|${t.locZ}`;
-        const strikes = (this.doorStrikes.get(key) ?? 0) + 1;
-        this.doorStrikes.set(key, strikes);
-        if (strikes >= 2) {
-            this.avoidDoors.push({ x: t.locX, z: t.locZ });
-        }
-    }
-
     private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
         const transport = step.transport!;
 
-        // Spell/jewellery tele hops only exist under nav v2 path requests.
         if (this.walkEngine === 'v2' && (transport.teleportId || transport.kind === 'teleport')) {
-            return this.handleTeleportHop(transport, log);
+            const ok = await executeTeleportHop(transport, log);
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+            }
+            return ok;
         }
 
         const special = specialCrossingForTransport(transport, approach);
         if (special) {
-            return this.handleSpecialCrossing(approach, step, special, log);
+            const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+            }
+            return ok;
         }
 
         if (transport.toLevel === undefined && transport.toTile === undefined && chebyshev(approach, step) >= 1) {
-            return this.crossMultiTileDoor(approach, step, transport, log);
+            const ok = await crossMultiTileDoor(approach, step, transport, log, (x, z) => this.blacklistDoor(x, z));
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+            }
+            return ok;
         }
 
         for (let attempt = 0; attempt < 2; attempt++) {
-            const loc = this.findTransportLoc(transport);
+            const loc = findTransportLoc(transport);
             if (!loc) {
                 if (transport.toLevel === undefined && transport.toTile === undefined) {
                     if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
@@ -586,7 +800,7 @@ class WalkExecutorImpl {
                     log(`transport loc '${transport.locName}' not found but the way is blocked`);
                     return false;
                 }
-                if (transport.toTile !== undefined && await this.openShutTrapdoor(transport, log)) {
+                if (transport.toTile !== undefined && (await openShutTrapdoor(transport, log, Execution.delayUntil.bind(Execution)))) {
                     continue;
                 }
                 log(`transport loc '${transport.locName}' not found near (${transport.locX},${transport.locZ})`);
@@ -610,8 +824,8 @@ class WalkExecutorImpl {
                 const landed = (): boolean => matchesTransportLanding(transport, step.level, before, reader.worldTile());
                 crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
             } else {
-                const open = (): boolean => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step);
-                crossed = (await Execution.delayUntil(() => open() || cantReach(), TRANSPORT_WAIT_MS)) && open();
+                const open = (): boolean => findTransportLoc(transport) === null || Reachability.canStep(approach, step);
+                crossed = (await Execution.delayUntil(() => open() || cantReach() || chatShowsQuestLock(), TRANSPORT_WAIT_MS)) && open();
             }
             if (crossed) {
                 if (transport.toLevel !== undefined) {
@@ -619,7 +833,14 @@ class WalkExecutorImpl {
                     await Execution.delayTicks(2);
                 }
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
+                RouteState.noteTransport(approach, step);
                 return true;
+            }
+            if (chatShowsQuestLock()) {
+                log(`quest-locked '${transport.locName}' at (${transport.locX},${transport.locZ}) — blacklisting`);
+                this.blacklistDoor(transport.locX, transport.locZ);
+                await dismissQuestLockDialogue();
+                return false;
             }
             if (cantReach()) {
                 log(`server says can't reach ${transport.locName} at (${transport.locX},${transport.locZ}) — repathing`);
@@ -628,335 +849,6 @@ class WalkExecutorImpl {
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
         return false;
-    }
-
-    /** Spell cast or jewellery Rub (nav v2 only). */
-    private async handleTeleportHop(transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
-        return executeTeleportHop(transport, log);
-    }
-
-    private async crossMultiTileDoor(approach: PathStep, step: PathStep, transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
-        const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
-        const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
-        const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
-        while (performance.now() < deadline) {
-            const here = reader.worldTile();
-            if (isOnFarSide(here, approach, step)) {
-                log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
-                return true;
-            }
-            const shut = this.findTransportLoc(transport);
-            // A diagonal wall leaf rotates onto the approach tile as it opens.
-            // Only insist on that tile while the *closed* leaf still exists;
-            // afterwards it is blocked and we must click through the opening.
-            if (shouldApproachClosedBarrier(here, approach, shut !== null)) {
-                DirectNavigator.walk(approach);
-                await Execution.delayUntil(() => {
-                    const p = reader.worldTile();
-                    return p !== null && p.x === approach.x && p.z === approach.z && p.level === approach.level;
-                }, APPROACH_WALK_MS);
-                continue;
-            }
-            if (shut) {
-                const mark = GameMessages.mark();
-                // This era's servers only honour a Slash click from an equipped
-                // slash weapon; a carried knife must be used on the web instead.
-                const knife = transport.action === 'Slash' ? Inventory.first('Knife') : null;
-                if (knife !== null) {
-                    log(`using the ${knife.name} on ${transport.locName} at (${transport.locX},${transport.locZ})`);
-                }
-                const sent = knife !== null ? await Promise.resolve(knife.useOn(shut)) : shut.interact(transport.action);
-                if (!sent) {
-                    log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
-                    return false;
-                }
-                await Execution.delayUntil(
-                    () => this.findTransportLoc(transport) === null || Reachability.canStep(approach, step) || GameMessages.sawSince(mark, CANT_REACH),
-                    OPEN_WAIT_MS
-                );
-                if (GameMessages.sawSince(mark, CANT_REACH)) {
-                    log(`server says can't reach ${transport.locName} — repathing`);
-                    return false;
-                }
-                continue;
-            }
-            const canStepEdge = Reachability.canStep(approach, step);
-            const landingLocal = reader.toLocal(landing.x, landing.z);
-            const canReachLanding = landingLocal !== null && Reachability.canReach(landing, { maxSteps: 128 });
-            const choice = chooseCrossClick(canStepEdge, canReachLanding);
-            if (choice === 'step') {
-                DirectNavigator.walk(step);
-                await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 3000);
-            } else if (choice === 'landing-click') {
-                ActionRouter.driver.walk(landingLocal!.lx, landingLocal!.lz);
-                await Execution.delayTicks(2);
-            } else {
-                log(`leaf blocks landing — scene-stepping through '${transport.locName}'`);
-                DirectNavigator.walk(landing);
-                await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), SCENE_STEP_MS);
-            }
-        }
-        log(`${transport.locName} at (${transport.locX},${transport.locZ}) did not cross in time, repathing`);
-        return false;
-    }
-
-    private async handleSpecialCrossing(approach: PathStep, step: PathStep, sc: SpecialCrossing, log: (msg: string) => void): Promise<boolean> {
-        if (sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires)) {
-            log(`${sc.label}: need ${sc.requires.count} ${sc.requires.item} — skipping`);
-            return false;
-        }
-
-        if (sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill)) {
-            log(`${sc.label}: need ${sc.requiresSkill.name} ${sc.requiresSkill.level} — skipping`);
-            return false;
-        }
-
-        if (sc.unlockQuest) {
-            const st = Quests.status(sc.unlockQuest.quest);
-            if (st === 'notStarted' || st === 'unknown') {
-                if (!(await this.unlockQuestForCrossing(sc, approach, log))) {
-                    return false;
-                }
-            }
-        }
-
-        if (sc.npc) {
-            const npc = Npcs.query().name(sc.npc).action('Talk-to').nearest();
-            if (!npc || !(await npc.interact('Talk-to'))) {
-                log(`${sc.label}: '${sc.npc}' not talkable`);
-                return false;
-            }
-            const arrived = (): boolean => {
-                const me = reader.worldTile();
-                return me !== null && sc.toTile !== undefined && me.level === sc.toTile.level && chebyshev(me, sc.toTile) <= 2;
-            };
-            for (let i = 0; i < SHIP_DIALOGUE_STEPS && !arrived(); i++) {
-                const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
-                if (pick) {
-                    await ChatDialog.chooseOption(pick);
-                } else if (ChatDialog.canContinue()) {
-                    await ChatDialog.continue();
-                } else {
-                    await Execution.delayTicks(1);
-                }
-            }
-            if (arrived()) {
-                log(`${sc.label}: sailed`);
-                return true;
-            }
-            log(`${sc.label}: voyage did not resolve — repathing`);
-            return false;
-        }
-
-        const crossed = (): boolean => isOnFarSide(reader.worldTile(), approach, step);
-        const maxOpens = sc.reopenAfterDialogue ? GATE_REOPENS : 1;
-        for (let open = 0; open < maxOpens && !crossed(); open++) {
-            const loc = this.findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });
-            if (!loc) {
-                log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
-                return false;
-            }
-            if (sc.useItem) {
-                const item = Inventory.items().find(candidate => matchesUseItem(candidate, sc.useItem!));
-                if (!item) {
-                    log(`${sc.label}: need ${sc.useItem.name} (id ${sc.useItem.id}) — skipping`);
-                    return false;
-                }
-                if (!(await item.useOn(loc))) {
-                    log(`${sc.label}: could not use ${sc.useItem.name} on ${sc.locName}`);
-                    return false;
-                }
-            } else if (!loc.interact(sc.action)) {
-                log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
-                return false;
-            }
-            for (let i = 0; i < DIALOGUE_STEPS && !crossed(); i++) {
-                const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
-                if (pick) {
-                    await ChatDialog.chooseOption(pick);
-                } else if (ChatDialog.canContinue()) {
-                    await ChatDialog.continue();
-                } else {
-                    await Execution.delayTicks(1);
-                }
-            }
-        }
-        if (crossed()) {
-            log(`${sc.label}: crossed`);
-            return true;
-        }
-        log(`${sc.label}: dialogue did not resolve — repathing`);
-        return false;
-    }
-
-    /**
-     * Permanent unlock via starting a quest at a nearby NPC (e.g. Drezel → Nature Spirit
-     * so Mort Myre gate opens forever). Nested walkTo is intentional: outer path resumes
-     * after we return to the approach tile and open the barrier.
-     *
-     * Pack space: NPCs may grant items on accept (Drezel: 6 unstackable pies). Free
-     * disposable junk at a bank first; if still short of freeSlots, give up rather than
-     * half-start the quest or drop gear.
-     */
-    private async unlockQuestForCrossing(
-        sc: SpecialCrossing,
-        approach: PathStep,
-        log: (msg: string) => void
-    ): Promise<boolean> {
-        const u = sc.unlockQuest!;
-        if (u.requireComplete) {
-            const req = Quests.status(u.requireComplete);
-            if (req !== 'complete') {
-                log(`${sc.label}: need ${u.requireComplete} complete before ${u.quest} — skipping`);
-                return false;
-            }
-        }
-
-        const needSlots = u.freeSlots ?? 0;
-        if (needSlots > 0 && !(await this.ensureUnlockPackSpace(sc, needSlots, log))) {
-            return false;
-        }
-
-        log(`${sc.label}: ${u.quest} not started — walking to ${u.npc} to unlock`);
-        const toNpc = await this.walkTo(u.stand, {
-            radius: 4,
-            timeoutMs: 180_000,
-            log: m => log(`  ${m}`)
-        });
-        if (!toNpc) {
-            log(`${sc.label}: could not reach ${u.npc} at (${u.stand.x},${u.stand.z})`);
-            return false;
-        }
-
-        // Re-check after the walk (random-event loot / full pack from elsewhere).
-        if (needSlots > 0 && Inventory.free() < needSlots) {
-            log(
-                `${sc.label}: pack only ${Inventory.free()} free after walk (need ${needSlots} for ${u.npc} rewards) — giving up`
-            );
-            return false;
-        }
-
-        const npc = Npcs.query().name(u.npc).nearest();
-        if (!npc || !(await npc.interact('Talk-to'))) {
-            log(`${sc.label}: '${u.npc}' not talkable near unlock stand`);
-            return false;
-        }
-
-        const unlocked = (): boolean => {
-            const st = Quests.status(u.quest);
-            return st === 'inProgress' || st === 'complete';
-        };
-        for (let i = 0; i < 80 && !unlocked(); i++) {
-            const pick = pickChoice(ChatDialog.options(), u.dialogue.choose);
-            if (pick) {
-                await ChatDialog.chooseOption(pick);
-            } else if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
-            } else {
-                await Execution.delayTicks(1);
-            }
-        }
-        // Close leftover pie/continue boxes
-        for (let i = 0; i < 20 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
-            if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
-            } else {
-                await Execution.delayTicks(1);
-            }
-        }
-
-        if (!unlocked()) {
-            log(`${sc.label}: talked to ${u.npc} but ${u.quest} still ${Quests.status(u.quest)}`);
-            return false;
-        }
-        log(`${sc.label}: ${u.quest} started — returning to gate`);
-
-        const back = await this.walkTo(approach, {
-            radius: 2,
-            timeoutMs: 180_000,
-            log: m => log(`  ${m}`)
-        });
-        if (!back) {
-            log(`${sc.label}: could not return to gate after unlock`);
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * Ensure `need` free pack slots before an unlock NPC grants items.
-     * Banks disposable junk only (common loot / event leftovers); never drops gear.
-     * Returns false when still short after that attempt.
-     */
-    private async ensureUnlockPackSpace(
-        sc: SpecialCrossing,
-        need: number,
-        log: (msg: string) => void
-    ): Promise<boolean> {
-        if (Inventory.free() >= need) {
-            return true;
-        }
-
-        const junk = Inventory.items().filter(i => isDisposableGatherJunk(i.name, i.id));
-        if (junk.length === 0) {
-            log(
-                `${sc.label}: need ${need} free slots for quest items ` +
-                    `(have ${Inventory.free()}, no bankable junk) — giving up`
-            );
-            return false;
-        }
-
-        log(
-            `${sc.label}: pack tight (${Inventory.free()}/${need} free) — banking ${junk.length} junk stack(s)`
-        );
-        if (
-            !(await Banking.open({
-                preferNearby: true,
-                log: m => log(`  ${m}`)
-            }))
-        ) {
-            log(`${sc.label}: could not open bank to free space — giving up`);
-            return false;
-        }
-        await Bank.depositAllMatching((name, id) => isDisposableGatherJunk(name, id));
-        await Execution.delayTicks(1);
-        if (Bank.isOpen()) {
-            await Bank.close().catch(() => undefined);
-        }
-
-        if (Inventory.free() < need) {
-            log(
-                `${sc.label}: still ${Inventory.free()} free after banking junk (need ${need}) — giving up`
-            );
-            return false;
-        }
-        log(`${sc.label}: pack ok (${Inventory.free()} free) after banking junk`);
-        return true;
-    }
-
-    private findTransportLoc(transport: TransportInfo): Loc | null {
-        return Locs.query()
-            .name(transport.locName)
-            .action(transport.action)
-            .where(loc => matchesTransportLoc(transport, loc))
-            .nearest();
-    }
-
-    private async openShutTrapdoor(transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
-        const shut = Locs.query()
-            .name(transport.locName)
-            .where(loc => Math.max(Math.abs(loc.tile().x - transport.locX), Math.abs(loc.tile().z - transport.locZ)) <= 3
-                && loc.actions().some(a => a !== null && /^open/i.test(a)))
-            .nearest();
-        if (!shut) {
-            return false;
-        }
-        const op = shut.actions().find(a => a !== null && /^open/i.test(a));
-        if (!op || !(await shut.interact(op))) {
-            return false;
-        }
-        log(`opened the shut '${transport.locName}' at (${shut.tile().x},${shut.tile().z}) before descending`);
-        return Execution.delayUntil(() => this.findTransportLoc(transport) !== null, 4000);
     }
 }
 

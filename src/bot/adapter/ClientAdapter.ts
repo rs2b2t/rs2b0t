@@ -141,6 +141,32 @@ export const reader = {
         };
     },
 
+    /** Current map-build origin (world tile of local scene 0,0). */
+    mapBuildBase(): { x: number; z: number } | null {
+        if (!raw) {
+            return null;
+        }
+        return { x: raw.mapBuildBaseX, z: raw.mapBuildBaseZ };
+    },
+
+    /**
+     * Project a world tile centre onto the bot overlay canvas (pixels), or null
+     * when off-scene. Same projection as npcBox / Client.overlayPos.
+     */
+    overlayPosWorld(x: number, z: number, height = 0): { x: number; y: number } | null {
+        if (!raw) {
+            return null;
+        }
+        const lx = x - raw.mapBuildBaseX;
+        const lz = z - raw.mapBuildBaseZ;
+        if (lx < 0 || lz < 0 || lx >= SCENE_SIZE || lz >= SCENE_SIZE) {
+            return null;
+        }
+        const sceneX = (lx << 7) + 64;
+        const sceneZ = (lz << 7) + 64;
+        return raw.overlayPos(sceneX, sceneZ, height);
+    },
+
     selfAnim(): number {
         return raw?.localPlayer?.primaryAnim ?? -1;
     },
