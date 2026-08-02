@@ -48,6 +48,7 @@ function asKind(raw: string): TransportKind {
         case 'gangplank':
         case 'shortcut':
         case 'portal':
+        case 'teleport':
             return raw;
         default:
             return 'other';

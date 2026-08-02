@@ -26,7 +26,8 @@ PathFinder + WalkExecutor still run **v1**. Dual-run and `NAV_V2` come in later 
   collision map       +      execute every hop    =   pack + worker A*
   transport catalog          doors / transports         TransportEdge graph
   skill/quest filter         stall + repath             WorldState filter
-  (overlay for humans)       live harness               Walk* handlers + corpus
+  tele toggles / min dist    live harness               PathPolicy (early — few 2004 teles)
+  (overlay for humans)                                  Walk* handlers + corpus
 ```
 
 ## Import

@@ -103,10 +103,29 @@ Cache key fingerprints inventory so **spending coins invalidates** usable transp
 **rs2b0t:** `WorldState` + `meetsRequires` (Phase 0 landed). Next: snapshot from Skills/Quests/Inventory
 and filter edges inside `PathFinder` before search — same job as `PathfinderConfig.refresh`.
 
-Optional later (OSRS-heavy, low priority for 2004):
+### Teleport toggles + distance-before-teleport — **early, not deferred**
 
-- direct path vs bank-for-missing-items (`TransportRouteAnalysis`)  
-- teleport toggles / distance-before-teleport  
+Microbot’s `distanceBeforeUsingTeleport` and use-teleport config flags are **more important for us
+than the research first assumed**, and **easier** on 2004:
+
+| | OSRS / Microbot | 2004 rs2b0t |
+|---|---|---|
+| Tele inventory | dozens of TSV families (items, spells, diaries, POH, …) | Standard spellbook: Varrock, Lumbridge, Falador, Camelot, Ardougne (+ sparse quest/NPC teles) |
+| Already in client | SP catalogs | `Game.teleport` / `api/Teleport.ts` already cast by name |
+| Policy value | avoid burning a glory on a 15-tile hop | same: don’t Varrock-tele when the bank is 40 tiles away; **do** tele when walking half the map |
+| Implementation size | large allow/deny matrix | one `kind: 'teleport'` catalog + `PathPolicy` |
+
+**In Phase 2 with WorldState** (see PLAN.md):
+
+- `PathPolicy.useTeleports` (default true once edges exist; scripts can force walk-only)  
+- `PathPolicy.distanceBeforeTeleport` — min remaining Chebyshev (or estimated walk cost) before a
+  teleport edge is admissible (same idea as Microbot)  
+- optional later: per-destination allowlist (`varrock` only, etc.) when scripts need it  
+
+**Still deferred (agree out of initial phases):**
+
+- direct path vs bank-for-missing-runes (`TransportRouteAnalysis`) — nice for “I don’t have law runes
+  but the bank does”; multi-step planner, not required to get tele-aware walking
 
 ---
 
@@ -163,7 +182,8 @@ v2 elevates a **mainland route table** (F2P 2004 corpus) + pack-level component 
 
 | Microbot / SP | Why not for us |
 |---|---|
-| 20+ teleport TSV families | 2004 has almost none; keep simple hops |
+| 20+ teleport TSV families | **Catalog is small** — still do spell teles + policy; skip OSRS item/diary/POH matrix |
+| Bank-for-missing-tele route analysis | Valuable later; multi-leg planner out of initial phases |
 | 9k-line monolithic walker | We already feel `WalkExecutor` pressure — extract early |
 | Live collision overlay + learn-blocked edges | Later; baked pack + doors first |
 | Bidirectional A\* / path smoother | Only if expansion budgets hurt on 2004 map |

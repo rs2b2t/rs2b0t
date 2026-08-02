@@ -7,3 +7,4 @@ export * from './types.js';
 export * from './edgeId.js';
 export * from './requires.js';
 export * from './fromV1.js';
+export * from './policy.js';

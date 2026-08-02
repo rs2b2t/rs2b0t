@@ -5,7 +5,10 @@ import {
     compileV1Graph,
     doorToTransportEdges,
     ensureEdgeId,
+    kindAllowedByPolicy,
     meetsRequires,
+    routeSpanChebyshev,
+    teleportAllowedByPolicy,
     transportEdgeId,
     v1TransportToEdge,
     type TransportEdge,
@@ -95,6 +98,62 @@ describe('nav v2 meetsRequires', () => {
         const req = { members: true };
         expect(meetsRequires(req, state({ members: false })).ok).toBe(false);
         expect(meetsRequires(req, state({ members: true })).ok).toBe(true);
+    });
+});
+
+describe('nav v2 path policy (teleports)', () => {
+    const varrockTele: TransportEdge = {
+        id: 'teleport|varrock',
+        from: { x: 0, z: 0, level: 0 },
+        to: { x: 3213, z: 3424, level: 0 },
+        kind: 'teleport',
+        cost: 40,
+        teleportId: 'varrock',
+        requires: {
+            skills: [{ name: 'magic', level: 25 }],
+            items: [
+                { name: 'Law rune', count: 1, consumed: true },
+                { name: 'Air rune', count: 3, consumed: true },
+                { name: 'Fire rune', count: 1, consumed: true }
+            ]
+        }
+    };
+
+    test('useTeleports false blocks teleport kind', () => {
+        expect(kindAllowedByPolicy('teleport', { useTeleports: false })).toBe(false);
+        expect(kindAllowedByPolicy('teleport', { useTeleports: true })).toBe(true);
+        expect(kindAllowedByPolicy('dungeon', { useTeleports: false })).toBe(true);
+    });
+
+    test('distanceBeforeTeleport blocks short routes, allows long ones', () => {
+        const policy = { distanceBeforeTeleport: 100 };
+        const short = routeSpanChebyshev({ x: 3222, z: 3218, level: 0 }, { x: 3225, z: 3220, level: 0 });
+        const long = routeSpanChebyshev({ x: 3222, z: 3218, level: 0 }, { x: 2965, z: 3378, level: 0 });
+        expect(short).toBeLessThan(100);
+        expect(long).toBeGreaterThan(100);
+        expect(teleportAllowedByPolicy(varrockTele, policy, short).ok).toBe(false);
+        expect(teleportAllowedByPolicy(varrockTele, policy, long).ok).toBe(true);
+    });
+
+    test('allowTeleportIds restrict to escape tele only', () => {
+        const policy = { allowTeleportIds: ['varrock'] as const };
+        expect(teleportAllowedByPolicy(varrockTele, policy, 500).ok).toBe(true);
+        const camelot = { ...varrockTele, id: 'teleport|camelot', teleportId: 'camelot' };
+        expect(teleportAllowedByPolicy(camelot, policy, 500).ok).toBe(false);
+    });
+
+    test('non-teleport edges ignore tele distance gate', () => {
+        const ladder = v1TransportToEdge({
+            from: { x: 3019, z: 9851, level: 0 },
+            to: { x: 3019, z: 3451, level: 0 },
+            locName: 'Ladder',
+            action: 'Climb-up',
+            kind: 'dungeon',
+            locId: 1755,
+            locX: 3019,
+            locZ: 9850
+        });
+        expect(teleportAllowedByPolicy(ladder, { distanceBeforeTeleport: 9999 }, 1).ok).toBe(true);
     });
 });
 

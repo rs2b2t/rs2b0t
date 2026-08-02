@@ -23,7 +23,9 @@ export type TransportKind =
     | 'gangplank'
     | 'shortcut'
     | 'portal'
-    | 'other';
+    /** Originless spell/item hop (player tile → fixed landing). See PathPolicy. */
+    | 'teleport'
+    | 'other'
 
 export type QuestProgress = 'not_started' | 'started' | 'complete' | 'unknown';
 
@@ -88,6 +90,10 @@ export interface TransportDebug {
 /**
  * Unified non-walk edge. Compiled from doors / stairs / transports (and later
  * a single transportGraph artifact). Rows with disabledReason are audit-only.
+ *
+ * Teleports: `from` is a placeholder (often ignored); search attaches the edge
+ * from the *player* node when policy allows. Prefer `landing.toTile` / `to` as
+ * the arrival stand (e.g. Varrock square).
  */
 export interface TransportEdge {
     id: string;
@@ -100,6 +106,11 @@ export interface TransportEdge {
     requires?: TransportRequires;
     debug?: TransportDebug;
     disabledReason?: string;
+    /**
+     * Stable teleport id for policy allowlists (`varrock`, `lumbridge`, …).
+     * Aligns with `Game.teleport` / `api/Teleport.ts` keys when kind is teleport.
+     */
+    teleportId?: string;
 }
 
 /**
@@ -114,8 +125,31 @@ export interface WorldState {
     freeSlots: number;
 }
 
+/**
+ * Planner preferences (Microbot PathfinderConfig toggles, 2004-sized).
+ * Teleport policy is intentionally first-class: few destinations, high value.
+ */
+export interface PathPolicy {
+    /** When false, all kind==='teleport' edges are excluded. Default true when unset. */
+    useTeleports?: boolean;
+    /**
+     * Min Chebyshev distance (start→goal, or remaining estimate) before a teleport
+     * edge may be used. 0 = always allowed when other gates pass.
+     * Same role as Microbot `distanceBeforeUsingTeleport`.
+     */
+    distanceBeforeTeleport?: number;
+    /**
+     * If set, only these teleportId values are admissible (e.g. `['varrock']` for wildy escape).
+     * Empty/undefined = all catalogued teleports that pass requires.
+     */
+    allowTeleportIds?: readonly string[];
+    useShips?: boolean;
+    useShortcuts?: boolean;
+}
+
 export interface FindPathOptions {
     state?: WorldState;
+    policy?: PathPolicy;
     avoidDoors?: readonly { x: number; z: number }[];
     maxExpansions?: number;
     timeoutMs?: number;
@@ -144,7 +178,7 @@ export interface CrossingRecipe {
     label?: string;
 }
 
-/** Default edge costs (v1 parity: door 4, transport 10). */
+/** Default edge costs (v1 parity: door 4, transport 10). Teleports cost more than a door. */
 export const DEFAULT_EDGE_COST: Readonly<Record<TransportKind, number>> = {
     door: 4,
     gate: 4,
@@ -154,5 +188,12 @@ export const DEFAULT_EDGE_COST: Readonly<Record<TransportKind, number>> = {
     gangplank: 10,
     shortcut: 10,
     portal: 10,
+    /** Spell cast + load; tuned later against walk tiles. */
+    teleport: 40,
     other: 10
 };
+
+/** True for originless spell/item teleports (not world portals like essence exit). */
+export function isTeleportKind(kind: TransportKind): boolean {
+    return kind === 'teleport';
+}
