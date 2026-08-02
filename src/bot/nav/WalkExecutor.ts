@@ -21,6 +21,10 @@ import type { TransportInfo, Waypoint } from './PathFinder.js';
 import { chebyshev, chooseCrossClick, crossingEligible, isOnFarSide, locateOnPath, selectClickTarget, shouldApproachClosedBarrier, starvedTerminalIndex } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
+import { Game } from '../api/Game.js';
+import { snapshotWorldStateData } from './v2/worldStateLive.js';
+import type { PathPolicy } from './v2/types.js';
+import { formatHops } from './v2/hops.js';
 
 const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
@@ -51,6 +55,10 @@ export interface WalkOptions {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
+    /** nav-v2 path policy (tele toggles, distanceBeforeTeleport, …). */
+    policy?: PathPolicy;
+    /** Inject spell teleports into the graph when true. */
+    useTeleportCatalog?: boolean;
 }
 
 interface PathStep extends WorldTile {
@@ -137,11 +145,20 @@ class WalkExecutorImpl {
 
     private doorStrikes = new Map<string, number>();
 
+    /** Session blacklist for quest-locked doors (Microbot pattern). */
+    private sessionBlacklistDoors = new Set<string>();
+
+    private walkPolicy: PathPolicy | undefined;
+
+    private walkUseTeleports = false;
+
     async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
         const maxExpansions = opts?.maxExpansions;
+        this.walkPolicy = opts?.policy;
+        this.walkUseTeleports = opts?.useTeleportCatalog === true || opts?.policy?.useTeleports === true;
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.resetAvoids();
@@ -165,6 +182,9 @@ class WalkExecutorImpl {
                     return false;
                 }
                 log(`path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`);
+                if (path.hops.length > 0) {
+                    log(`hops:\n${formatHops(path.hops)}`);
+                }
 
                 const tiles = expandWaypoints(path.waypoints);
 
@@ -212,7 +232,26 @@ class WalkExecutorImpl {
 
     private async requestPath(from: WorldTile, to: WorldTile, maxExpansions?: number): Promise<PathResult> {
         let result: PathResult | null = null;
-        Navigator.findPath(from, to, { avoidDoors: this.avoidDoors, maxExpansions }).then(
+        let state;
+        try {
+            state = snapshotWorldStateData();
+        } catch {
+            state = undefined;
+        }
+        const avoid = [
+            ...this.avoidDoors,
+            ...[...this.sessionBlacklistDoors].map(k => {
+                const [x, z] = k.split('|').map(Number);
+                return { x: x!, z: z! };
+            })
+        ];
+        Navigator.findPath(from, to, {
+            avoidDoors: avoid,
+            maxExpansions,
+            state,
+            policy: this.walkPolicy ?? { useTeleports: this.walkUseTeleports },
+            useTeleportCatalog: this.walkUseTeleports
+        }).then(
             r => (result = r),
             err => (result = { ok: false, reason: err instanceof Error ? err.message : String(err), expanded: 0 })
         );
@@ -230,6 +269,16 @@ class WalkExecutorImpl {
                 this.avoidDoors.push({ x: sc.x, z: sc.z });
             }
         }
+        for (const key of this.sessionBlacklistDoors) {
+            const [x, z] = key.split('|').map(Number);
+            this.avoidDoors.push({ x: x!, z: z! });
+        }
+    }
+
+    /** Blacklist a door for this walk session after quest-lock dialogue. */
+    blacklistDoor(x: number, z: number): void {
+        this.sessionBlacklistDoors.add(`${x}|${z}`);
+        this.avoidDoors.push({ x, z });
     }
 
     async probeDest(dest: WorldTile, maxExpansions: number): Promise<{ ok: boolean; terminal: WorldTile | null }> {
@@ -467,6 +516,10 @@ class WalkExecutorImpl {
     private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
         const transport = step.transport!;
 
+        if (transport.teleportId || transport.kind === 'teleport') {
+            return this.handleTeleportHop(transport, log);
+        }
+
         const special = specialCrossingForTransport(transport, approach);
         if (special) {
             return this.handleSpecialCrossing(approach, step, special, log);
@@ -528,6 +581,51 @@ class WalkExecutorImpl {
             }
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
+        return false;
+    }
+
+    /**
+     * Spell teleport hop (jewellery Rub is Phase D follow-up when dialog matching is wired).
+     * Maps teleportId → Game.teleport destination name.
+     */
+    private async handleTeleportHop(transport: TransportInfo, log: (msg: string) => void): Promise<boolean> {
+        const id = transport.teleportId ?? '';
+        const spellNames: Record<string, string> = {
+            varrock: 'Varrock',
+            lumbridge: 'Lumbridge',
+            falador: 'Falador',
+            camelot: 'Camelot',
+            ardougne: 'Ardougne',
+            watchtower: 'Watchtower',
+            trollheim: 'Trollheim'
+        };
+        const destName = spellNames[id];
+        if (!destName) {
+            log(`teleport hop ${id || transport.locName}: jewellery/unknown not castable yet — repath`);
+            return false;
+        }
+        const before = reader.worldTile();
+        log(`casting ${destName} teleport…`);
+        if (!(await Game.teleport(destName))) {
+            log(`${destName} teleport cast failed`);
+            return false;
+        }
+        const landed = await Execution.delayUntil(() => {
+            const t = reader.worldTile();
+            if (!t || !before) {
+                return false;
+            }
+            if (transport.toTile) {
+                return Math.max(Math.abs(t.x - transport.toTile.x), Math.abs(t.z - transport.toTile.z)) <= 3;
+            }
+            return t.x !== before.x || t.z !== before.z || t.level !== before.level;
+        }, TRANSPORT_WAIT_MS);
+        if (landed) {
+            await Execution.delayTicks(2);
+            log(`${destName} teleport ok`);
+            return true;
+        }
+        log(`${destName} teleport did not land`);
         return false;
     }
 

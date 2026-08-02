@@ -1,4 +1,14 @@
 // docs/NAV.md#pathfinding
+// nav-v2: docs/nav-v2/PLAN.md
+import type { PathHop, PathPolicy, TransportRequires } from './v2/types.js';
+import type { WorldStateData } from './v2/worldStateData.js';
+import { worldStateFromData } from './v2/worldStateData.js';
+import { meetsRequires } from './v2/requires.js';
+import { kindAllowedByPolicy, routeSpanChebyshev, teleportAllowedByPolicy } from './v2/policy.js';
+import { hopsFromWaypoints } from './v2/hops.js';
+import { SPELL_TELEPORTS, inventoryNameMatchesJewellery, JEWELLERY_TELEPORTS } from './v2/teleportCatalog.js';
+import { specialRequiresAt } from './v2/specialRequires.js';
+
 export interface NavPoint {
     x: number;
     z: number;
@@ -21,13 +31,33 @@ export interface TransportInfo {
     toTile?: { x: number; z: number };
     /** Portal multi-exit landings (e.g. essence mine). */
     acceptAnyLanding?: boolean;
+    /** nav-v2: edge kind for hops / tele executor. */
+    kind?: string;
+    /** nav-v2: spell/jewellery teleport id (varrock, dueling_arena, …). */
+    teleportId?: string;
 }
 
 export interface Waypoint extends NavPoint {
     transport?: TransportInfo;
 }
 
-export type PathOutcome = { ok: true; waypoints: Waypoint[]; cost: number; expanded: number } | { ok: false; reason: string; expanded: number };
+export type PathOutcome =
+    | { ok: true; waypoints: Waypoint[]; cost: number; expanded: number; hops: PathHop[] }
+    | { ok: false; reason: string; expanded: number };
+
+/** Options object for findPath (preferred over positional avoid/max). */
+export interface FindPathCallOptions {
+    avoidDoors?: Set<string>;
+    maxExpansions?: number;
+    /** Serialized world snapshot — worker-safe. */
+    state?: WorldStateData;
+    policy?: PathPolicy;
+    /**
+     * When true, inject catalogued originless teleports from the start tile.
+     * Default false when policy.useTeleports is false; else true if policy set with useTeleports!==false.
+     */
+    useTeleportCatalog?: boolean;
+}
 
 export interface DoorEdgeData {
     x: number;
@@ -57,7 +87,19 @@ export interface TransportEdgeData {
     disabledReason?: string;
 }
 
-export type NavRequest = { type: 'init'; pack: ArrayBuffer } | { type: 'path'; id: number; from: NavPoint; to: NavPoint; avoid?: { x: number; z: number }[]; maxExpansions?: number };
+export type NavRequest =
+    | { type: 'init'; pack: ArrayBuffer }
+    | {
+        type: 'path';
+        id: number;
+        from: NavPoint;
+        to: NavPoint;
+        avoid?: { x: number; z: number }[];
+        maxExpansions?: number;
+        state?: WorldStateData;
+        policy?: PathPolicy;
+        useTeleportCatalog?: boolean;
+    };
 
 export type NavResponse =
     | { type: 'ready'; mapsquares: number; doorEdges: number; transportEdges: number }
@@ -98,6 +140,9 @@ interface CompiledEdge {
     to: number;
     cost: number;
     transport: TransportInfo;
+    requires?: TransportRequires;
+    kind?: string;
+    teleportId?: string;
 }
 
 class MinHeap {
@@ -248,9 +293,16 @@ export class PathFinder {
             if (!this.walkable(ax, az, door.level) || !this.walkable(bx, bz, door.level)) {
                 continue;
             }
-            const transport: TransportInfo = { locName: door.locName, action: 'Open', locX: door.x, locZ: door.z, locId: door.locId };
-            this.addEdge(nodeId(ax, az, door.level), nodeId(bx, bz, door.level), DOOR_COST, transport);
-            this.addEdge(nodeId(bx, bz, door.level), nodeId(ax, az, door.level), DOOR_COST, transport);
+            const transport: TransportInfo = {
+                locName: door.locName,
+                action: 'Open',
+                locX: door.x,
+                locZ: door.z,
+                locId: door.locId,
+                kind: 'door'
+            };
+            this.addEdge(nodeId(ax, az, door.level), nodeId(bx, bz, door.level), DOOR_COST, transport, undefined, 'door');
+            this.addEdge(nodeId(bx, bz, door.level), nodeId(ax, az, door.level), DOOR_COST, transport, undefined, 'door');
             this.doorEdges++;
         }
 
@@ -274,26 +326,43 @@ export class PathFinder {
                 locZ: edge.locZ ?? (hasMidpointDoor ? edge.from.z + dz / 2 : edge.from.z),
                 locId: edge.locId,
                 openLocId: edge.openLocId,
+                kind: edge.kind,
                 toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
                 // Portals land on a fixed tile (or any tile for multi-exit) — executor waits on toTile.
                 toTile:
-                    edge.kind === 'dungeon' || edge.kind === 'portal'
+                    edge.kind === 'dungeon' || edge.kind === 'portal' || edge.kind === 'ship' || edge.kind === 'gangplank'
                         ? { x: edge.to.x, z: edge.to.z }
                         : undefined,
                 acceptAnyLanding: edge.kind === 'portal' ? true : undefined
             };
-            this.addEdge(nodeId(edge.from.x, edge.from.z, edge.from.level), nodeId(edge.to.x, edge.to.z, edge.to.level), TRANSPORT_COST, transport);
+            const requires = specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
+            this.addEdge(
+                nodeId(edge.from.x, edge.from.z, edge.from.level),
+                nodeId(edge.to.x, edge.to.z, edge.to.level),
+                TRANSPORT_COST,
+                transport,
+                requires,
+                edge.kind
+            );
             this.transportEdges++;
         }
     }
 
-    private addEdge(from: number, to: number, cost: number, transport: TransportInfo): void {
+    private addEdge(
+        from: number,
+        to: number,
+        cost: number,
+        transport: TransportInfo,
+        requires?: TransportRequires,
+        kind?: string,
+        teleportId?: string
+    ): void {
         let list = this.edges.get(from);
         if (!list) {
             list = [];
             this.edges.set(from, list);
         }
-        list.push({ to, cost, transport });
+        list.push({ to, cost, transport, requires, kind, teleportId });
     }
 
     snapWalkable(p: NavPoint, radius: number): NavPoint | null {
@@ -382,15 +451,29 @@ export class PathFinder {
         return goals;
     }
 
-    findPath(fromRaw: NavPoint, toRaw: NavPoint, avoidDoors?: Set<string>, maxExpansions: number = MAX_EXPANSIONS): PathOutcome {
+    findPath(
+        fromRaw: NavPoint,
+        toRaw: NavPoint,
+        avoidDoorsOrOpts?: Set<string> | FindPathCallOptions,
+        maxExpansionsArg: number = MAX_EXPANSIONS
+    ): PathOutcome {
+        const opts: FindPathCallOptions =
+            avoidDoorsOrOpts instanceof Set || avoidDoorsOrOpts === undefined
+                ? { avoidDoors: avoidDoorsOrOpts, maxExpansions: maxExpansionsArg }
+                : avoidDoorsOrOpts;
+        const avoidDoors = opts.avoidDoors;
+        const maxExpansions = opts.maxExpansions ?? MAX_EXPANSIONS;
+
         const from = this.snapWalkable(fromRaw, 2);
         if (!from) {
             return { ok: false, reason: `start (${fromRaw.x},${fromRaw.z},${fromRaw.level}) not walkable`, expanded: 0 };
         }
 
+        const ctx = this.buildSearchContext(from, toRaw, opts);
+
         const cardinal = this.cardinalGoals(toRaw);
         if (cardinal.size > 0) {
-            const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions);
+            const direct = this.search(from, toRaw, cardinal, 1, avoidDoors, maxExpansions, ctx);
             if (direct.ok) {
                 return direct;
             }
@@ -401,10 +484,83 @@ export class PathFinder {
             return { ok: false, reason: `target (${toRaw.x},${toRaw.z},${toRaw.level}) not walkable within 5 tiles`, expanded: 0 };
         }
         const goalSlack = goals.size === 1 && goals.has(nodeId(toRaw.x, toRaw.z, toRaw.level)) ? 0 : 5;
-        return this.search(from, toRaw, goals, goalSlack, avoidDoors, maxExpansions);
+        return this.search(from, toRaw, goals, goalSlack, avoidDoors, maxExpansions, ctx);
     }
 
-    private search(from: NavPoint, toRaw: NavPoint, goals: Set<number>, goalSlack: number, avoidDoors: Set<string> | undefined, maxExpansions: number): PathOutcome {
+    private buildSearchContext(from: NavPoint, to: NavPoint, opts: FindPathCallOptions): SearchContext {
+        const state = opts.state ? worldStateFromData(opts.state) : undefined;
+        const policy = opts.policy;
+        const routeSpan = routeSpanChebyshev(from, to);
+        const injectTele =
+            opts.useTeleportCatalog === true
+            || (opts.useTeleportCatalog !== false && policy !== undefined && policy.useTeleports !== false);
+
+        const teleEdges: CompiledEdge[] = [];
+        if (injectTele && policy?.useTeleports !== false) {
+            for (const dest of [...SPELL_TELEPORTS, ...JEWELLERY_TELEPORTS]) {
+                if (!this.walkable(dest.to.x, dest.to.z, dest.to.level)) {
+                    continue;
+                }
+                const edgeProbe = {
+                    id: dest.teleportId,
+                    from,
+                    to: dest.to,
+                    kind: 'teleport' as const,
+                    cost: dest.cost ?? 40,
+                    teleportId: dest.teleportId,
+                    requires: dest.requires
+                };
+                if (!teleportAllowedByPolicy(edgeProbe, policy, routeSpan).ok) {
+                    continue;
+                }
+                if (state && dest.requires && !meetsRequires(dest.requires, state).ok) {
+                    continue;
+                }
+                if (dest.family === 'jewellery') {
+                    if (opts.useTeleportCatalog !== true) {
+                        continue;
+                    }
+                    if (state && opts.state) {
+                        const has = Object.keys(opts.state.items).some(name => inventoryNameMatchesJewellery(name, dest));
+                        if (!has) {
+                            continue;
+                        }
+                    }
+                }
+                const transport: TransportInfo = {
+                    locName: dest.label,
+                    action: dest.family === 'spell' ? 'Cast' : 'Rub',
+                    locX: from.x,
+                    locZ: from.z,
+                    kind: 'teleport',
+                    teleportId: dest.teleportId,
+                    toTile: { x: dest.to.x, z: dest.to.z },
+                    toLevel: dest.to.level !== from.level ? dest.to.level : undefined,
+                    acceptAnyLanding: true
+                };
+                teleEdges.push({
+                    to: nodeId(dest.to.x, dest.to.z, dest.to.level),
+                    cost: dest.cost ?? 40,
+                    transport,
+                    requires: dest.requires,
+                    kind: 'teleport',
+                    teleportId: dest.teleportId
+                });
+            }
+        }
+
+        return { state, policy, teleFromStart: teleEdges, startId: nodeId(from.x, from.z, from.level) };
+    }
+
+    private search(
+        from: NavPoint,
+        toRaw: NavPoint,
+        goals: Set<number>,
+        goalSlack: number,
+        avoidDoors: Set<string> | undefined,
+        maxExpansions: number,
+        ctx: SearchContext
+    ): PathOutcome {
         const start = nodeId(from.x, from.z, from.level);
         const goalX = toRaw.x;
         const goalZ = toRaw.z;
@@ -462,25 +618,32 @@ export class PathFinder {
                 open.push((tentative + heuristic(nx, nz)) * 1048576 - tentative, neighbor);
             }
 
-            const extra = this.edges.get(current);
-            if (extra) {
-                for (const edge of extra) {
-                    if (closed.has(edge.to)) {
-                        continue;
-                    }
-                    if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
-                        continue;
-                    }
-                    const tentative = g + edge.cost;
-                    const known = gScore.get(edge.to);
-                    if (known !== undefined && known <= tentative) {
-                        continue;
-                    }
-                    gScore.set(edge.to, tentative);
-                    cameFrom.set(edge.to, current);
-                    viaEdge.set(edge.to, edge.transport);
-                    open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative, edge.to);
+            const extras: CompiledEdge[] = [...(this.edges.get(current) ?? [])];
+            if (current === ctx.startId) {
+                extras.push(...ctx.teleFromStart);
+            }
+            for (const edge of extras) {
+                if (closed.has(edge.to)) {
+                    continue;
                 }
+                if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
+                    continue;
+                }
+                if (edge.kind && !kindAllowedByPolicy(edge.kind as never, ctx.policy)) {
+                    continue;
+                }
+                if (ctx.state && edge.requires && !meetsRequires(edge.requires, ctx.state).ok) {
+                    continue;
+                }
+                const tentative = g + edge.cost;
+                const known = gScore.get(edge.to);
+                if (known !== undefined && known <= tentative) {
+                    continue;
+                }
+                gScore.set(edge.to, tentative);
+                cameFrom.set(edge.to, current);
+                viaEdge.set(edge.to, edge.transport);
+                open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative, edge.to);
             }
         }
 
@@ -525,6 +688,13 @@ export class PathFinder {
             }
         }
 
-        return { ok: true, waypoints, cost, expanded };
+        return { ok: true, waypoints, cost, expanded, hops: hopsFromWaypoints(waypoints) };
     }
+}
+
+interface SearchContext {
+    state: ReturnType<typeof worldStateFromData> | undefined;
+    policy: PathPolicy | undefined;
+    teleFromStart: CompiledEdge[];
+    startId: number;
 }

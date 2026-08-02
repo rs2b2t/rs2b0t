@@ -1,0 +1,14 @@
+{
+  "description": "2004 mainland route corpus for nav-v2 Phase 4 (pack + live harness seeds)",
+  "routes": [
+    { "id": "F2P-01", "from": { "x": 3222, "z": 3218, "level": 0 }, "to": { "x": 3208, "z": 3220, "level": 2 }, "note": "Lumbridge castle stairs" },
+    { "id": "F2P-02", "from": { "x": 3208, "z": 3220, "level": 2 }, "to": { "x": 3092, "z": 3245, "level": 0 }, "note": "Castle to Draynor" },
+    { "id": "F2P-03", "from": { "x": 3092, "z": 3245, "level": 0 }, "to": { "x": 2965, "z": 3378, "level": 0 }, "note": "Draynor to Falador" },
+    { "id": "F2P-04", "from": { "x": 2965, "z": 3378, "level": 0 }, "to": { "x": 3093, "z": 3493, "level": 0 }, "note": "Falador to Edgeville" },
+    { "id": "F2P-05", "from": { "x": 3093, "z": 3493, "level": 0 }, "to": { "x": 3213, "z": 3424, "level": 0 }, "note": "Edgeville to Varrock" },
+    { "id": "F2P-06", "from": { "x": 3213, "z": 3424, "level": 0 }, "to": { "x": 3222, "z": 3218, "level": 0 }, "note": "Varrock to Lumbridge" },
+    { "id": "MINE-01", "from": { "x": 3019, "z": 9849, "level": 0 }, "to": { "x": 2965, "z": 3378, "level": 0 }, "note": "Dwarven party under → Falador" },
+    { "id": "MINE-02", "from": { "x": 3015, "z": 3449, "level": 0 }, "to": { "x": 3019, "z": 9849, "level": 0 }, "note": "Party trap surface → under" },
+    { "id": "DUN-01", "from": { "x": 3111, "z": 9937, "level": 0 }, "to": { "x": 2965, "z": 3378, "level": 0 }, "note": "Edgeville dungeon → Falador" }
+  ]
+}

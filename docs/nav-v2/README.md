@@ -16,8 +16,16 @@ Built with the same love as the rest of rs2b0t: real client clicks, era-correct 
 
 ## Status
 
-**Phase 0 — foundation.** Types, `meetsRequires`, v1→edge adapters, research docs.  
-PathFinder + WalkExecutor still run **v1**. Dual-run and `NAV_V2` come in later phases.
+**Phases 0–4 (partial).** Types, policy, Server tele catalog, PathFinder hops + state/tele
+filter, spell tele executor hop, pack tools (`route-probe --explain`, `mainland-corpus`,
+`component-report`). Jewellery Rub + full WalkExecutor split still open.
+
+```bash
+bun tools/nav/mainland-corpus.ts --explain
+bun tools/nav/route-probe.ts --from 3222,3218,0 --to 3213,3424,0 --explain --tele --magic 99 --runes
+bun tools/nav/component-report.ts
+bun test test/nav/
+```
 
 ## Mental model (one picture)
 

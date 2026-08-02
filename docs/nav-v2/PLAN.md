@@ -1,8 +1,8 @@
 # Nav v2 — Shortest Path quality, web-walker execution, 2004 soul
 
 **Branch:** `feat/nav-v2`  
-**Status:** Phase 0 foundation (+ Microbot/SP research folded in)  
-**Companion:** [MICROBOT_SHORTEST_PATH.md](./MICROBOT_SHORTEST_PATH.md) · [README](./README.md)
+**Status:** Phases 0–4 in progress (pathfinder hops/policy/teles, executor tele hop, tools)  
+**Companion:** [MICROBOT_SHORTEST_PATH.md](./MICROBOT_SHORTEST_PATH.md) · [TELEPORTS.md](./TELEPORTS.md) · [README](./README.md)
 
 ---
 
@@ -59,40 +59,39 @@ Product analogues:
 - [x] Unit tests `test/nav/v2/contract.test.ts`  
 - [x] Pointer from `docs/NAV.md`
 
-### Phase 1 — Unified graph in the planner
+### Phase 1 — Unified graph in the planner ✅ (partial)
 
-- Compile doors + stairs + transports → `TransportEdge[]` at pack load  
-- `PathFinder.addTransportEdges(edges)` path (keep v1 loaders as input)  
-- Emit `PathHop[]` on successful outcomes for explain tooling  
-- Typed `FindPathOptions` only on `Navigator.findPath` (no positional avoid/max mixup)
+- [x] Emit `PathHop[]` on successful outcomes  
+- [x] Typed `FindPathCallOptions` on `PathFinder.findPath` / `Navigator.findPath`  
+- [x] v1 edges carry `kind` + specialCrossing `requires` at compile  
+- [ ] Single on-disk `TransportEdge[]` artifact (still compile from JSON)
 
-### Phase 2 — WorldState + path policy (Microbot PathfinderConfig.refresh)
+### Phase 2 — WorldState + path policy ✅ (partial)
 
-- Snapshot: members, skills, quest status, item counts, freeSlots  
-- Filter edges with `meetsRequires` before A\*  
-- Migrate coal-trucks log / toll coins / members hops onto `requires`  
-- Re-enable selected `disabledReason: state-aware…` rows as `requires`  
-- **Teleport policy (first-class, not deferred):**  
-  - catalog from **Server content** (see [TELEPORTS.md](./TELEPORTS.md) / `teleportCatalog.ts`):  
-    spells (7) + jewellery (duel ring, games neck, glory dests) — **as implemented**, not modern OSRS wiki  
-  - `PathPolicy.useTeleports` / `allowTeleportIds` / `distanceBeforeTeleport`  
-  - tele cost fixed so A\* does not treat them as free  
+- [x] `WorldStateData` + live snapshot (`worldStateLive.ts`)  
+- [x] Filter edges with `meetsRequires` / policy in search  
+- [x] Special crossings skill/item → plan-time requires  
+- [x] Spell tele inject + `PathPolicy` (toggles, distanceBeforeTeleport, allowlist)  
+- [x] Jewellery catalog gated (needs `useTeleportCatalog: true` + item)  
+- [ ] Re-enable disabled state-aware ladder rows as requires  
 
-**Explicitly still later:** bank-for-missing-runes / `TransportRouteAnalysis`; duel-ring anim run-energy stall (local post-impl note in TELEPORTS.md).
+**Explicitly still later:** bank-for-missing-runes; duel-ring anim run stall.
 
-### Phase 3 — Executor modularization (Microbot P2 spirit, strangler)
+### Phase 3 — Executor modularization ✅ (partial / strangler)
 
-- Extract pure decision helpers + thin handlers; keep behavior  
-- Optional `PlannedEdge` recovery registry for stuck frontier  
-- Trapdoor Open → Climb (`openLocId`) stays first-class  
-- Session blacklist for quest-locked doors + repath (SP/Microbot pattern)
+- [x] Spell tele hop via `Game.teleport` when waypoint has `teleportId`  
+- [x] Hop logging in `walkTo`  
+- [x] Session door blacklist API  
+- [x] `PlannedEdge` types for recovery  
+- [ ] Full handler extraction (Door/Transport/Special still in WalkExecutor)  
+- [ ] Jewellery Rub dialog executor  
 
-### Phase 4 — Connectivity + harness (Microbot F2P harness shape)
+### Phase 4 — Connectivity + harness ✅ (pack tools)
 
-- Component flood-fill report (party mine vs guild under, …)  
-- `route-probe --explain` hop list  
-- Mainland 2004 route table (Lumbridge ↔ Falador ↔ Edgeville ↔ Varrock …)  
-- Live: trapdoor mines, Edgeville dungeon, existing quests under `NAV_V2=1`
+- [x] `tools/nav/component-report.ts` pairwise seeds  
+- [x] `tools/nav/route-probe.ts --explain`  
+- [x] `tools/nav/mainland-routes.json` + `mainland-corpus.ts`  
+- [ ] Live harness flag `NAV_V2=1` end-to-end
 
 ### Phase 5 — Cleanup
 

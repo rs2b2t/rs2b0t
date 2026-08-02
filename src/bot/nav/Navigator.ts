@@ -1,6 +1,17 @@
 import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
+import type { PathPolicy } from './v2/types.js';
+import type { WorldStateData } from './v2/worldStateData.js';
 
 export type PathResult = PathOutcome & { elapsedMs?: number };
+
+export type FindPathOpts = {
+    avoidDoors?: { x: number; z: number }[];
+    timeoutMs?: number;
+    maxExpansions?: number;
+    state?: WorldStateData;
+    policy?: PathPolicy;
+    useTeleportCatalog?: boolean;
+};
 
 const FIND_TIMEOUT_MS = 20_000;
 
@@ -54,7 +65,7 @@ class NavigatorImpl {
             .catch(err => this.fail(err instanceof Error ? err.message : String(err)));
     }
 
-    async findPath(from: NavPoint, to: NavPoint, opts?: { avoidDoors?: { x: number; z: number }[]; timeoutMs?: number; maxExpansions?: number }): Promise<PathResult> {
+    async findPath(from: NavPoint, to: NavPoint, opts?: FindPathOpts): Promise<PathResult> {
         this.start();
 
         if (this.state === 'starting') {
@@ -72,7 +83,17 @@ class NavigatorImpl {
                 resolve({ ok: false, reason: `path request timed out after ${timeoutMs}ms`, expanded: 0 });
             }, timeoutMs);
             this.pending.set(id, { resolve, timer });
-            this.worker!.postMessage({ type: 'path', id, from, to, avoid: opts?.avoidDoors, maxExpansions: opts?.maxExpansions });
+            this.worker!.postMessage({
+                type: 'path',
+                id,
+                from,
+                to,
+                avoid: opts?.avoidDoors,
+                maxExpansions: opts?.maxExpansions,
+                state: opts?.state,
+                policy: opts?.policy,
+                useTeleportCatalog: opts?.useTeleportCatalog
+            });
         });
     }
 
