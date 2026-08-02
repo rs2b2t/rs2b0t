@@ -10,9 +10,17 @@ export interface TransportInfo {
     action: string;
     locX: number;
     locZ: number;
+    /** Map placement / closed-state loc identity (for lookup). */
     locId?: number;
+    /**
+     * Action-bearing open-state loc id when the map placement is a closed
+     * trapdoor (or similar) that transforms after Open. Executor matches either.
+     */
+    openLocId?: number;
     toLevel?: number;
     toTile?: { x: number; z: number };
+    /** Portal multi-exit landings (e.g. essence mine). */
+    acceptAnyLanding?: boolean;
 }
 
 export interface Waypoint extends NavPoint {
@@ -36,8 +44,10 @@ export interface TransportEdgeData {
     locName: string;
     action: string;
     kind: string;
-    /** Exact cache loc identity and map tile, when the edge is loc-backed. */
+    /** Map placement / closed-state loc identity, when the edge is loc-backed. */
     locId?: number;
+    /** Action-bearing open-state loc id (closed trapdoor → trapdoor_open). */
+    openLocId?: number;
     locX?: number;
     locZ?: number;
     /** LostCity source metadata retained for auditing and regeneration. */
@@ -263,6 +273,7 @@ export class PathFinder {
                 locX: edge.locX ?? (hasMidpointDoor ? edge.from.x + dx / 2 : edge.from.x),
                 locZ: edge.locZ ?? (hasMidpointDoor ? edge.from.z + dz / 2 : edge.from.z),
                 locId: edge.locId,
+                openLocId: edge.openLocId,
                 toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
                 // Portals land on a fixed tile (or any tile for multi-exit) — executor waits on toTile.
                 toTile:

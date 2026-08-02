@@ -313,13 +313,18 @@ def main() -> None:
             resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
-                edge["locId"] = config.loc_id
+                # Always bind the *map placement* id/tile (closed trapdoor on the map).
+                # When climb/use only exists on a transformed open loc, keep that as
+                # openLocId so the executor can match either state.
+                edge["locId"] = placement.loc_id
                 edge["locX"] = placement.x
                 edge["locZ"] = placement.z
-                # Preserve the original display name byte-for-byte for drop-in
-                # compatibility; debugName carries LostCity's symbolic name.
                 edge["debugName"] = config.debug_name
                 edge["options"] = option_values(config) or [edge["action"]]
+                if config.loc_id != placement.loc_id:
+                    edge["openLocId"] = config.loc_id
+                else:
+                    edge.pop("openLocId", None)
             else:
                 edge["options"] = [edge["action"]]
             enriched.append(edge)

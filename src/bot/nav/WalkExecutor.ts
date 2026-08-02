@@ -69,10 +69,23 @@ export function isOpenBarrierLeaf(name: string | null, ops: readonly (string | n
 
 export function matchesTransportLoc(transport: TransportInfo, loc: { readonly id: number; tile(): { x: number; z: number } }): boolean {
     const tile = loc.tile();
-    if (transport.locId !== undefined) {
-        return loc.id === transport.locId && tile.x === transport.locX && tile.z === transport.locZ;
+    const near =
+        Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
+    if (transport.locId === undefined && transport.openLocId === undefined) {
+        return near;
     }
-    return Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
+    // Map placement (closed) or action-bearing open variant after Open.
+    const idOk =
+        (transport.locId !== undefined && loc.id === transport.locId)
+        || (transport.openLocId !== undefined && loc.id === transport.openLocId);
+    if (!idOk) {
+        return false;
+    }
+    // Closed placement is exact; open variant may shift a tile after transform.
+    if (loc.id === transport.locId) {
+        return tile.x === transport.locX && tile.z === transport.locZ;
+    }
+    return near;
 }
 
 export function matchesTransportLanding(

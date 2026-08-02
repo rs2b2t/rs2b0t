@@ -225,9 +225,14 @@ at the gate wastes the whole walk.
 ## Exact transport loc metadata
 
 Location-backed transports may carry `locId` / `locX` / `locZ` from LostCity enrichment
-(`bun run gen:nav-transports`). PathFinder prefers those for clickable identity; the
-executor falls back to nearby-name lookup when `locId` is absent. Special crossings
-resolve via `specialCrossingForTransport` (exact loc tile, then approach stand).
+(`bun run gen:nav-transports`). `locId` is the **map placement** (closed trapdoor on
+the floor). When climb only exists on a transformed open loc, `openLocId` is set too;
+`matchesTransportLoc` accepts either id. PathFinder prefers that metadata; the executor
+falls back to nearby-name lookup when ids are absent. Special crossings resolve via
+`specialCrossingForTransport` (exact loc tile, then approach stand).
+
+Ladders with a single tele still wrapped in quest/skill/inv guards stay in the JSON as
+`disabledReason` audit rows (not active graph edges).
 
 
 ## Level-change loc lag

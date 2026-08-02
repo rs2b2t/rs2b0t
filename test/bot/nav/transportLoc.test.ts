@@ -35,4 +35,19 @@ describe('matchesTransportLoc', () => {
         expect(matchesTransportLoc(legacy, loc(3197, 3315, 3238))).toBe(true);
         expect(matchesTransportLoc(legacy, loc(3197, 3316, 3235))).toBe(false);
     });
+
+    test('openLocId matches the open trapdoor after transform (near placement tile)', () => {
+        const trap: TransportInfo = {
+            locName: 'Trapdoor',
+            action: 'Climb-down',
+            locX: 3097,
+            locZ: 3468,
+            locId: 1568, // closed map placement
+            openLocId: 1570 // trapdoor_open
+        };
+        expect(matchesTransportLoc(trap, loc(1568, 3097, 3468))).toBe(true);
+        expect(matchesTransportLoc(trap, loc(1570, 3097, 3468))).toBe(true);
+        expect(matchesTransportLoc(trap, loc(1570, 3096, 3468))).toBe(true); // open may shift
+        expect(matchesTransportLoc(trap, loc(1571, 3097, 3468))).toBe(false);
+    });
 });

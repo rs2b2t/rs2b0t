@@ -364,6 +364,13 @@ def destinations(debug_name: str, body: str, placement: EffectivePlacement, stan
             return unique, "This action opens an up/down choice; use a direct Climb-up or Climb-down option instead."
         return unique, "Destination depends on player or world state; state-aware transports are deferred."
     if unique:
+        # Single tele still gated by quest/skill/inv checks must not be active edges.
+        # (Watchtower ups, Horror ladders, etc. — see review on #267.)
+        if has_runtime_destination_guard(body) and debug_name not in ALWAYS_ACTIVE_LADDER_DEBUGS:
+            return unique, (
+                "Destination is behind a runtime quest/skill/inv guard; "
+                "state-aware transports are deferred."
+            )
         return unique, None
     if "@ladder_options" in body:
         return [], "This action opens an up/down choice; use a direct Climb-up or Climb-down option instead."
@@ -372,6 +379,40 @@ def destinations(debug_name: str, body: str, placement: EffectivePlacement, stan
     if re.search(r"(?:chat|mes|npc_find)", body):
         return [], "This ladder starts dialogue but LostCity has no movement destination on the loc action."
     return [], "LostCity has no statically identifiable movement destination for this ladder action."
+
+
+# Ladders whose single tele is always safe despite nearby script noise.
+ALWAYS_ACTIVE_LADDER_DEBUGS = frozenset(
+    {
+        "ladder",
+        "laddertop",
+        "laddermiddle",
+        "ladder_directional",
+        "laddertop_directional",
+        "ladder_from_cellar",
+        "ladder_cellar",
+        "miningguildladder",
+        "wizards_tower_ladder",
+        "wizards_tower_laddertop",
+    }
+)
+
+
+def has_runtime_destination_guard(body: str) -> bool:
+    """True when movement is wrapped in quest/skill/inv/var conditions.
+
+    Plain `if (map_blocked(...))` fallbacks are OK (still deterministic).
+    """
+    # Strip map_blocked / coord occupancy style checks — those are collision, not quest state.
+    stripped = re.sub(r"if\s*\(\s*map_blocked\s*\([^)]*\)\s*\)\s*\{[^}]*\}", "", body, flags=re.I)
+    stripped = re.sub(r"if\s*\(\s*~\w*blocked\w*\s*\([^)]*\)\s*\)\s*\{[^}]*\}", "", stripped, flags=re.I)
+    return bool(
+        re.search(r"if\s*\(\s*%[a-zA-Z0-9_]+", stripped)  # player varp
+        or re.search(r"if\s*\(\s*stat\s*\(", stripped)  # skill gate
+        or re.search(r"if\s*\(\s*inv_(?:total|count)\s*\(", stripped)
+        or re.search(r"if\s*\(\s*testbit\s*\(\s*%", stripped)
+        or re.search(r"if\s*\(\s*~\w*quest\w*\s*\(", stripped, re.I)
+    )
 
 
 def is_ladder_config(config) -> bool:
