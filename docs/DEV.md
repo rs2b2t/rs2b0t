@@ -181,7 +181,9 @@ Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path`
 | `fish-mule-gatherer-meet` | Fisher gatherer mule smoke at Draynor (raw haul, no bank) |
 | *(pair harness)* | `gatheringbot-mule-pair-test.ts` — two accounts, full Gatherer↔Mule iron handoff |
 | `fish-bank` / `fish-bank-barb` | Draynor net bank; Barbarian fly → Edgeville (wide membership + bank) |
-| `fish-cook-bank` / `fish-bank-raw-cook` | Catherby cook-then-bank (seed cooked); bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
+| `fish-cook-bank` / `fish-cook-barb` | Catherby cook-then-bank; Barb outdoor Fire cook-then-bank (catalog surface) |
+| `fish-cooker-solo` | Cooker mule with full raw pack → cook → bank (no partner trade needed once seeded) |
+| `fish-bank-raw-cook` | Catherby bank-raw-then-cook (`givebank raw_lobster` 973 + pot+26 raw, N=1000) |
 | `wc-bank` / `wc-bank-seers` / `wc-burn` | Draynor chop+bank; Seers trees bank; chop-then-burn |
 | `mine-path-runite` / `fish-path-shark` | long path into Lava Maze (must mine runite — XP/ore, not flee-only) / Fishing Guild |
 | `buy-pick` / `buy-axe` / `buy-net` | Buy/repair with **coins only** (no pre-granted tools) |
@@ -205,13 +207,28 @@ Tags: `mining` / `fishing` / `wc` / `mule` / `local` / `acquire` / `path` / `end
   (`GatherCamp`, `TargetPick`, `Anchor`).
 - **Mine prefer-local:** matching rocks within 12 of the player win over far camp
   membership hits; post-deplete tiles are not soft-cooled (iron respawn ~6t).
-- **Mule mode** (Miner/Fisher/Woodcutter): `muleMode` Off / Gatherer / Mule +
-  `mulePartner`. Gatherer trades full hauls at the camp meet instead of banking;
-  Mule accepts trades, banks, returns. Shared policy: `api/mule/PartnerTrade`.
+- **Mule mode** (Miner/Fisher/Woodcutter): `muleMode` Off / Gatherer / Mule /
+  **Cooker** / **Supplier** + `mulePartner`. Shared policy: `api/mule/PartnerTrade`.
   Disabled under location None.
-  - **Single-account** smoke in the main suite: `mine-mule-gatherer-meet` (meet + hold haul + no bank).
-  - **Two-account e2e:** `bun tools/gatheringbot-mule-pair-test.ts` boots Gatherer + Mule
-    on separate pages at SE Varrock iron and asserts product handoff.
+  - **Gatherer** — full haul → meet trade (no bank).
+  - **Mule** — accept → bank (demo for ore/logs; see processor sketch below).
+  - **Cooker** (Fisher) — accept raw → cook at camp range → bank cooked (`burntPolicy`).
+  - **Supplier** (Fisher) — when bank has N raw (`bankRawBeforeCook`), withdraw → meet → trade.
+  - Harness: `mine-mule-gatherer-meet`, `fish-mule-gatherer-meet`, `fish-cooker-solo`;
+    pair iron e2e `gatheringbot-mule-pair-test.ts`.
+- **Cook surfaces:** `api/CookingRanges` catalogs map Ranges; fishing camps pin
+  Catherby / Seers fly / Barb Fire / Guild / Draynor fireplace when useful.
+  Harness: `fish-cook-bank` (Catherby), `fish-cook-seers`.
+
+**Processor scripts (sketch — not shipped):** Ore/log **Mule** banking is only a
+demo. A realistic partner is a separate TaskBot that:
+
+1. Camps the same meet tile as the GatheringBot Gatherer (`location` camp spot).
+2. Uses `Trade` + `PartnerTrade.decideReceiverOfferScreen` / `isConfiguredPartner`.
+3. After accept: path to smelter / anvil / GE / own bank and process the haul.
+4. Returns to meet for the next trade.
+
+Fisher **Cooker** is the in-tree example of a “processor mule” for fish.
 - **Location Auto** alone keeps the raw `leashRadius`. Auto snaps only when the start
   tile shares a preset’s **64×64 map square**; otherwise freeform (null location,
   start-tile leash, nearest bank, player-relative fish). Auto is expert / may-die:

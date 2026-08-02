@@ -5,8 +5,11 @@ import {
     decideGiverOfferScreen,
     decideReceiverOfferScreen,
     isConfiguredPartner,
+    muleCookerActive,
     muleGathererHandoffActive,
+    muleNonGathererActive,
     muleReceiverActive,
+    muleSupplierActive,
     parseMuleMode,
     parsePartnerList
 } from '#/bot/api/mule/PartnerTrade.js';
@@ -115,6 +118,8 @@ describe('mule mode flags', () => {
     test('parseMuleMode', () => {
         expect(parseMuleMode('Gatherer')).toBe('gatherer');
         expect(parseMuleMode('mule')).toBe('mule');
+        expect(parseMuleMode('Cooker')).toBe('cooker');
+        expect(parseMuleMode('Supplier')).toBe('supplier');
         expect(parseMuleMode('Off')).toBe('off');
     });
 
@@ -125,5 +130,15 @@ describe('mule mode flags', () => {
         expect(muleGathererHandoffActive('off', ['Mule'], false)).toBe(false);
         expect(muleReceiverActive('mule', ['G'])).toBe(true);
         expect(muleReceiverActive('mule', [])).toBe(false);
+    });
+
+    test('cooker / supplier / non-gatherer roles', () => {
+        expect(muleCookerActive('cooker', ['Fish'])).toBe(true);
+        expect(muleCookerActive('mule', ['Fish'])).toBe(false);
+        expect(muleSupplierActive('supplier', ['Cook'], false)).toBe(true);
+        expect(muleSupplierActive('supplier', ['Cook'], true)).toBe(false);
+        expect(muleNonGathererActive('cooker', ['A'])).toBe(true);
+        expect(muleNonGathererActive('supplier', ['A'])).toBe(true);
+        expect(muleNonGathererActive('gatherer', ['A'])).toBe(false);
     });
 });

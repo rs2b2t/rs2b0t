@@ -94,7 +94,14 @@ export function decideGiverOfferScreen(myOfferSlots: number): GiverOfferDecision
     return 'accept';
 }
 
-export type MuleMode = 'off' | 'gatherer' | 'mule';
+/**
+ * GatheringBot partner roles:
+ * - gatherer: produce haul → trade at camp meet (no bank)
+ * - mule: accept haul → bank (demo for ore/logs; processors should replace this)
+ * - cooker: accept raw fish → cook at camp range → bank cooked (burntPolicy)
+ * - supplier: withdraw raw from bank when N ready → trade at meet (bank-raw feeder)
+ */
+export type MuleMode = 'off' | 'gatherer' | 'mule' | 'cooker' | 'supplier';
 
 export function parseMuleMode(raw: string): MuleMode {
     switch (raw.trim().toLowerCase()) {
@@ -102,13 +109,17 @@ export function parseMuleMode(raw: string): MuleMode {
             return 'gatherer';
         case 'mule':
             return 'mule';
+        case 'cooker':
+            return 'cooker';
+        case 'supplier':
+            return 'supplier';
         default:
             return 'off';
     }
 }
 
 /** UI labels for settings dropdowns. */
-export const MULE_MODE_OPTIONS = ['Off', 'Gatherer', 'Mule'] as const;
+export const MULE_MODE_OPTIONS = ['Off', 'Gatherer', 'Mule', 'Cooker', 'Supplier'] as const;
 
 /**
  * Whether gatherer should hand off instead of banking when the pack is full.
@@ -118,7 +129,26 @@ export function muleGathererHandoffActive(mode: MuleMode, partners: readonly str
     return mode === 'gatherer' && partners.length > 0 && !powerMode;
 }
 
-/** Whether this bot is the bank-side mule (no gathering). */
+/** Bank-side accept → bank (ore/logs demo mule). */
 export function muleReceiverActive(mode: MuleMode, partners: readonly string[]): boolean {
     return mode === 'mule' && partners.length > 0;
+}
+
+/** Fish cooker: accept raw → cook → bank cooked. */
+export function muleCookerActive(mode: MuleMode, partners: readonly string[]): boolean {
+    return mode === 'cooker' && partners.length > 0;
+}
+
+/** Bank feeder: withdraw raw → meet → trade (pairs with Cooker). */
+export function muleSupplierActive(mode: MuleMode, partners: readonly string[], powerMode: boolean): boolean {
+    return mode === 'supplier' && partners.length > 0 && !powerMode;
+}
+
+/** Any non-gathering partner role (skips Gather task / tool restock). */
+export function muleNonGathererActive(mode: MuleMode, partners: readonly string[]): boolean {
+    return (
+        muleReceiverActive(mode, partners)
+        || muleCookerActive(mode, partners)
+        || (mode === 'supplier' && partners.length > 0)
+    );
 }

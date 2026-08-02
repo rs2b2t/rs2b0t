@@ -534,12 +534,32 @@ parsePartnerList(raw: string): string[]
 isConfiguredPartner(name, partners): boolean
 decideReceiverOfferScreen({ partnerHeader, partners, myOfferSlots, theirProductCount })
 decideGiverOfferScreen(myOfferSlots): 'offer' | 'accept' | 'wait'
-parseMuleMode(raw): 'off' | 'gatherer' | 'mule'
-muleGathererHandoffActive(mode, partners, powerMode): boolean
+parseMuleMode(raw): 'off' | 'gatherer' | 'mule' | 'cooker' | 'supplier'
+muleGathererHandoffActive / muleReceiverActive / muleCookerActive / muleSupplierActive
 ```
 
-GatheringBot settings: `muleMode` (Off / Gatherer / Mule) + `mulePartner` (comma names).
-Gatherer trades full packs at the camp meet instead of banking; Mule accepts, banks, returns.
+GatheringBot `muleMode` + `mulePartner`:
+
+| Mode | Role |
+| --- | --- |
+| Gatherer | Full haul → trade at camp meet (no bank) |
+| Mule | Accept → **bank** (demo for ore/logs; replace with a processor script) |
+| Cooker | Accept **raw fish** → cook at camp range → bank cooked (`burntPolicy`) |
+| Supplier | Withdraw raw from bank when N ready → trade at meet (pairs with Cooker) |
+
+### Cooking ranges (`api/CookingRanges`)
+
+Map-pack catalog of `debugname=range` ovens + curated surfaces for fishing camps:
+
+```ts
+COOKING_RANGE_LOCS          // all Range SW tiles from Server maps
+nearestCookingRange(origin, maxCheb?)
+cookSurfaceForFishCamp(name) // Catherby, Seers fly, Barb Fire, Guild, Draynor fireplace
+resolveFishCampCookSurface(name, spot, maxCheb?)
+```
+
+Fisher camps attach `rangeStand` / `rangeName` from this catalog when a useful cook
+surface is near the pier (not only Catherby).
 
 ### Entity query helpers
 

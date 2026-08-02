@@ -52,8 +52,11 @@ import {
     decideGiverOfferScreen,
     decideReceiverOfferScreen,
     isConfiguredPartner,
+    muleCookerActive,
     muleGathererHandoffActive,
+    muleNonGathererActive,
     muleReceiverActive,
+    muleSupplierActive,
     parseMuleMode,
     parsePartnerList,
     type MuleMode,
@@ -265,14 +268,15 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         label: 'Mule mode',
         group: 'Mule',
         help:
-            'Off = bank/drop as usual. Gatherer = full pack trades product to partner instead of banking. Mule = wait at camp meet, accept product trades, bank, return. Needs Partner name(s). Disabled under location None (power).'
+            'Off = bank/drop. Gatherer = trade full haul at camp meet. Mule = accept→bank (demo for ore/logs). Cooker = accept raw fish→cook→bank cooked (Fisher + cook mode). Supplier = withdraw raw from bank→trade at meet (pairs with Cooker). Needs Partner. Disabled under location None.'
     },
     mulePartner: {
         type: 'string',
         default: '',
         label: 'Mule partner name(s)',
         group: 'Mule',
-        help: 'Comma-separated in-game names. Gatherer: the mule. Mule: gatherer name(s) to accept from.'
+        help:
+            'Comma-separated names. Gatherer/Supplier → Cooker or Mule. Cooker/Mule → gatherer/supplier name(s).'
     }
 };
 
@@ -544,6 +548,24 @@ export default class GatheringBot extends TaskBot {
                     `mule: ${this.muleMode} with [${this.mulePartners.join(', ')}] ` +
                         `meet=${this.getMeetTile()}`
                 );
+                // Cooker needs a cook path + range; default cook-then-bank when Off.
+                if (this.isMuleCooker() && this.fishing) {
+                    if (this.cookMode === 'off') {
+                        this.cookMode = 'cook-then-bank';
+                        this.log('mule: cooker forced cookMode=cook-then-bank');
+                    }
+                    if (!this.rangeStand) {
+                        this.resolveCookScene();
+                    }
+                    if (!this.rangeStand) {
+                        this.log('mule: cooker has no range — falling back to Off');
+                        this.muleMode = 'off';
+                    }
+                }
+                if (this.isMuleSupplier() && !this.fishing) {
+                    this.log('mule: supplier is Fisher-only — falling back to Off');
+                    this.muleMode = 'off';
+                }
             }
         }
 
@@ -734,39 +756,48 @@ export default class GatheringBot extends TaskBot {
 
         const cookOn = this.fishing && this.cookMode !== 'off' && this.rangeStand !== null;
         const burnOn = this.burnEnabled();
-        // Bank-side mule only trades/banks — no pickaxe/axe restock thrash.
-        const muleRecv = this.isMuleReceiver();
+        // Non-gatherer partner roles skip gather / tool restock thrash.
+        const muleSide = this.isMuleNonGatherer();
+        const cooker = this.isMuleCooker();
+        const supplier = this.isMuleSupplier();
+        const bankMule = this.isMuleReceiver();
         const gatherTools =
-            !muleRecv && (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
+            !muleSide && (this.mining() || this.woodcutting() || this.toolReqs.length > 0) && !this.fishing;
         // Flee only for AFK named/None — Auto and retaliate tick-manip skip FleeCombat.
-        const mobFlee = !muleRecv && !isAutoLocation(this.locationSetting) && !this.tickManip.allowCombat;
+        const mobFlee = !muleSide && !isAutoLocation(this.locationSetting) && !this.tickManip.allowCombat;
         // Tannerfishing is a power-train (cook/eat on the pier) — drop haul, no bank loop.
         const tannerPower = this.tickManip.cookEatInterleave;
+        // Cooker always runs cook tasks; gatherer/solo use cookOn when enabled.
+        const cookTasks = cookOn || cooker;
         this.add(
             new ContinueDialog(),
             // Sticky combatCycle (no face target) — wait; do not thrash-walk.
             ...(mobFlee ? [new WaitStickyCombat(this), new FleeCombat(this)] : []),
             // Named/None only: break multi-combat pulls (wildy spiders) by walking off.
             // Auto / retaliate tick-manip = may-die — no mob flee.
-            ...(!muleRecv && this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
-            ...(!muleRecv && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
-            ...(!muleRecv && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
-            ...(!muleRecv && (this.mining() || this.woodcutting()) ? [new RepairBrokenGatherTool(this)] : []),
-            ...(!muleRecv && this.fishing ? [new RestockFishingGear(this)] : []),
+            ...(!muleSide && this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
+            ...(!muleSide && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
+            ...(!muleSide && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
+            ...(!muleSide && (this.mining() || this.woodcutting()) ? [new RepairBrokenGatherTool(this)] : []),
+            ...(!muleSide && this.fishing ? [new RestockFishingGear(this)] : []),
             ...(gatherTools
                 ? [new EnsureGatherToolEquipped(this), new RestockGatherTool(this), new UpgradeGatherTool(this)]
                 : []),
-            ...(!muleRecv && cookOn
+            ...(cookTasks
                 ? [new FishCookDialog(this), new FishCookLoad(this), new FishBankCooked(this), new FishWithdrawCookBatch(this)]
                 : []),
-            ...(!muleRecv && burnOn ? createChopBurnTasks(this) : []),
+            ...(!muleSide && burnOn ? createChopBurnTasks(this) : []),
             // Mule trade owns the loop while the modal is open (movement cancels trade).
             ...(this.muleMode !== 'off' ? [new HandleGatherMuleTrade(this)] : []),
-            ...(muleRecv ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
+            ...(bankMule ? [new MuleBankHaul(this), new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
+            ...(cooker ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
+            ...(supplier
+                ? [new SupplierWithdrawRaw(this), new MuleGoMeet(this), new MuleRequestOrWait(this)]
+                : []),
             ...(this.isMuleGatherer() ? [new MuleGoMeet(this), new MuleRequestOrWait(this)] : []),
             this.powerMode || tannerPower ? new DropProduct(this) : new BankCatch(this),
-            // Mule receiver does not gather.
-            ...(muleRecv ? [] : [new Gather(this)]),
+            // Partner bank/cook/supplier sides do not gather.
+            ...(muleSide ? [] : [new Gather(this)]),
 
             createReturnToAnchorTask(this, {
                 slack: 4,
@@ -2920,6 +2951,19 @@ export default class GatheringBot extends TaskBot {
         return muleReceiverActive(this.muleMode, this.mulePartners);
     }
 
+    isMuleCooker(): boolean {
+        return muleCookerActive(this.muleMode, this.mulePartners);
+    }
+
+    isMuleSupplier(): boolean {
+        return muleSupplierActive(this.muleMode, this.mulePartners, this.powerMode);
+    }
+
+    /** Bank mule / cooker / supplier — no Gather task. */
+    isMuleNonGatherer(): boolean {
+        return muleNonGathererActive(this.muleMode, this.mulePartners);
+    }
+
     atMuleMeet(radius = 2): boolean {
         const here = Game.tile();
         if (!here) {
@@ -2963,6 +3007,7 @@ export default class GatheringBot extends TaskBot {
     cookEnabled(): boolean {
         return this.fishing && this.cookMode !== 'off' && this.rangeStand !== null;
     }
+
     getCookMode(): CookMode {
         return this.cookMode;
     }
@@ -3528,12 +3573,16 @@ class HandleGatherMuleTrade implements Task {
             return;
         }
 
-        if (this.bot.isMuleReceiver()) {
+        if (this.bot.isMuleReceiver() || this.bot.isMuleCooker()) {
+            const matchOffer = (n: string) =>
+                this.bot.isMuleCooker()
+                    ? this.bot.shouldDepositRawCatch(n) || this.bot.shouldDeposit(n)
+                    : this.bot.shouldDeposit(n);
             const decision = decideReceiverOfferScreen({
                 partnerHeader: Trade.partner(),
                 partners: this.bot.getMulePartners(),
                 myOfferSlots: Trade.myOffer().length,
-                theirProductCount: countOfferMatching(Trade.theirOffer(), n => this.bot.shouldDeposit(n))
+                theirProductCount: countOfferMatching(Trade.theirOffer(), matchOffer)
             });
             if (decision.action === 'wait-header' || decision.action === 'wait-offer') {
                 this.bot.setStatus(
@@ -3548,12 +3597,12 @@ class HandleGatherMuleTrade implements Task {
                 await Trade.decline();
                 return;
             }
-            this.bot.setStatus('mule: accepting product');
+            this.bot.setStatus(this.bot.isMuleCooker() ? 'mule: accepting raw for cook' : 'mule: accepting product');
             await Trade.accept();
             return;
         }
 
-        // Gatherer: offer haul then accept.
+        // Gatherer / supplier: offer haul then accept.
         const step = decideGiverOfferScreen(Trade.myOffer().length);
         if (step === 'offer') {
             const names = this.bot.depositableProductNames();
@@ -3588,12 +3637,16 @@ class MuleGoMeet implements Task {
         if (this.bot.atMuleMeet()) {
             return false;
         }
-        if (this.bot.isMuleGatherer()) {
+        if (this.bot.isMuleGatherer() || this.bot.isMuleSupplier()) {
             return Inventory.isFull() && this.bot.hasDepositable();
         }
         if (this.bot.isMuleReceiver()) {
             // Mule returns to meet when pack empty (after bank) or still empty.
             return !this.bot.hasDepositable() || !Inventory.isFull();
+        }
+        if (this.bot.isMuleCooker()) {
+            // Idle empty → meet; if holding cookable raw, cook tasks own the loop.
+            return this.bot.cookableRawCount() === 0 && this.bot.cookedFishCount() === 0;
         }
         return false;
     }
@@ -3619,12 +3672,15 @@ class MuleRequestOrWait implements Task {
         if (!this.bot.atMuleMeet()) {
             return false;
         }
-        if (this.bot.isMuleGatherer()) {
+        if (this.bot.isMuleGatherer() || this.bot.isMuleSupplier()) {
             return Inventory.isFull() && this.bot.hasDepositable();
         }
-        if (this.bot.isMuleReceiver()) {
-            // Idle at meet waiting for gatherer (bank when we hold product).
-            return !this.bot.hasDepositable();
+        if (this.bot.isMuleReceiver() || this.bot.isMuleCooker()) {
+            // Idle at meet waiting for gatherer/supplier (cook when we hold raw).
+            if (this.bot.isMuleCooker() && this.bot.cookableRawCount() > 0) {
+                return false;
+            }
+            return !this.bot.hasDepositable() || this.bot.isMuleCooker();
         }
         return false;
     }
@@ -3632,9 +3688,12 @@ class MuleRequestOrWait implements Task {
     async execute(): Promise<void> {
         const partner = this.bot.nearestMulePartner();
         if (!partner || partner.distance() > DEFAULT_TRADE_RANGE) {
-            const msg = this.bot.isMuleGatherer()
-                ? 'mule: waiting for partner at meet'
-                : 'mule: waiting for gatherer';
+            const msg =
+                this.bot.isMuleGatherer() || this.bot.isMuleSupplier()
+                    ? 'mule: waiting for partner at meet'
+                    : this.bot.isMuleCooker()
+                      ? 'mule: cooker waiting for raw'
+                      : 'mule: waiting for gatherer';
             this.bot.setStatus(msg);
             // Log once every few waits so harness/single-account smokes can assert.
             this.bot.log(msg);
@@ -3648,6 +3707,70 @@ class MuleRequestOrWait implements Task {
         this.bot.setStatus(`mule: requesting trade with ${name || 'partner'}`);
         await Trade.request(name);
         await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 4000);
+    }
+}
+
+/**
+ * Supplier: bank holds raw → withdraw a pack → meet → trade (pairs with Cooker).
+ * bankRawBeforeCook is the "N ready" gate (default 28) before a trip starts.
+ */
+class SupplierWithdrawRaw implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        if (!this.bot.isMuleSupplier() || Trade.active() || EventSignal.pending()) {
+            return false;
+        }
+        // Already carrying raw for the handoff.
+        if (this.bot.rawFishCount() > 0) {
+            return false;
+        }
+        return true;
+    }
+
+    async execute(): Promise<void> {
+        const log = (m: string) => this.bot.log(`  ${m}`);
+        const target = Math.max(1, this.bot.getBankRawTarget() || 28);
+        this.bot.setStatus(`mule: supplier withdraw raw (need bank ≥${target})`);
+        if (!(await this.bot.openScriptBank(log))) {
+            this.bot.log('mule: supplier bank open failed — retry');
+            return;
+        }
+        await Execution.delayTicks(1);
+        // Count raw stacks in open bank (same filter as cook).
+        const bankRaw = Bank.items()
+            .filter(i => this.bot.isCookableRaw(i.name))
+            .reduce((s, i) => s + Math.max(1, i.count), 0);
+        if (bankRaw < target) {
+            this.bot.log(`mule: supplier bank raw ${bankRaw} < ${target} — waiting`);
+            if (Bank.isOpen()) {
+                await Bank.close();
+            }
+            await Execution.delayTicks(8);
+            return;
+        }
+        this.bot.log(`mule: supplier withdrawing raw (bank ${bankRaw})`);
+        for (let i = 0; i < 40 && Inventory.free() > 0; i++) {
+            const stack = Bank.items().find(it => this.bot.isCookableRaw(it.name) && it.count > 0);
+            if (!stack?.name) {
+                break;
+            }
+            const before = this.bot.rawFishCount();
+            await Bank.withdraw(stack.name, 'Withdraw-All');
+            await Execution.delayUntil(() => this.bot.rawFishCount() > before || Inventory.isFull(), 2500);
+            if (this.bot.rawFishCount() === before) {
+                // Try single withdraw if All failed.
+                await Bank.withdraw(stack.name, 'Withdraw-1');
+                await Execution.delayUntil(() => this.bot.rawFishCount() > before || Inventory.isFull(), 2000);
+                if (this.bot.rawFishCount() === before) {
+                    break;
+                }
+            }
+        }
+        if (Bank.isOpen()) {
+            await Bank.close();
+        }
+        this.bot.log(`mule: supplier pack raw=${this.bot.rawFishCount()} free=${Inventory.free()}`);
     }
 }
 
@@ -3813,12 +3936,13 @@ class BankCatch implements Task {
         if (this.bot.bankCatchBlockedByCook() || this.bot.bankCatchBlockedByBurn()) {
             return false;
         }
-        // Gatherer mule: hand off via trade, do not bank the haul.
-        if (this.bot.isMuleGatherer()) {
-            return false;
-        }
-        // Mule receiver banks via MuleBankHaul when not full-pack gathering.
-        if (this.bot.isMuleReceiver()) {
+        // Partner modes: hand off / cooker / supplier — not BankCatch.
+        if (
+            this.bot.isMuleGatherer()
+            || this.bot.isMuleReceiver()
+            || this.bot.isMuleCooker()
+            || this.bot.isMuleSupplier()
+        ) {
             return false;
         }
         return Inventory.isFull() && this.bot.hasDepositable();
@@ -3932,6 +4056,10 @@ class FishCookLoad implements Task {
         }
 
         if (this.bot.getCookMode() === 'bank-raw-then-cook' && this.bot.isCookBatchReady() && cookable > 0) {
+            return true;
+        }
+        // Cooker mule: cook any received raw even when the pack is not full.
+        if (this.bot.isMuleCooker() && cookable > 0) {
             return true;
         }
         return false;

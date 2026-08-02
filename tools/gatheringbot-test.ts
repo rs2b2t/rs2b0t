@@ -1054,6 +1054,10 @@ const SPOT = {
     /** Seers normal trees south of bank. */
     seersTrees: { x: 2724, z: 3474, level: 0 },
     seersBank: { x: 2725, z: 3491, level: 0 },
+    /** Seers fly fishing pier (river N of bank). */
+    seersFly: { x: 2716, z: 3532, level: 0 },
+    /** Sinclair range stand for Seers fly cook loops. */
+    seersFlyRange: { x: 2732, z: 3581, level: 0 },
     /** Willows NW of Crafting Guild — Auto freeform WC (outside every WC camp chunk). */
     // Was 2910,3328 (~25N of the stand); willows sit closer to the guild wall.
     willowsNwCg: { x: 2910, z: 3303, level: 0 },
@@ -1639,6 +1643,110 @@ const SCENARIOS: Scenario[] = [
             `rawLob=${invMatch(cur, /^raw lobster$/i)} cookedLob=${invMatch(cur, /^lobster$/i)} ` +
             `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
             `homeAfterBank=${returnedToCampAfterBank} distCampAfterBank=${minDistToCampAfterBank}`
+    },
+    /**
+     * Barbarian Village cook surface (outdoor Fire from CookingRanges) — cook-then-bank
+     * without Catherby. Start with nearly full cooked + one free slot: fish last raw,
+     * cook on Fire, bank at Edgeville.
+     */
+    {
+        id: 'fish-cook-barb',
+        tags: ['fishing', 'fish', 'cook', 'bank', 'camp', 'early'],
+        script: 'Fisher',
+        start: offsetTile(SPOT.barbVillageFish, -3, 2),
+        camp: SPOT.barbVillageFish,
+        bank: SPOT.edgevilleBank,
+        settings: {
+            fishMethod: 'Fly fishing — trout/salmon',
+            location: 'Barbarian Village',
+            cookMode: 'Cook then bank',
+            cookFish: 'All raw',
+            burntPolicy: 'Drop',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        seed: [
+            { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
+            { debug: 'feather', name: 'Feather', qty: 50 },
+            { debug: 'trout', name: 'Trout', qty: 26 }
+        ],
+        scene: 'skip',
+        budgetMs: 270_000,
+        check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
+            const fishXp = cur.xp.fishing - start.xp.fishing;
+            const cookXp = cur.xp.cooking - start.xp.cooking;
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                fishXp > 0
+                && cookXp > 0
+                && productPeak >= 26
+                && bankedHint
+                && sawNearBank
+                && minDistToBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToBank, productPeak, bankedHint, sawNearBank }) =>
+            `barb-cook fish ${start.xp.fishing}→${cur.xp.fishing} cook ${start.xp.cooking}→${cur.xp.cooking} ` +
+            `peak=${productPeak} banked=${bankedHint} nearBank=${sawNearBank} distBank=${minDistToBank} ` +
+            `cookAt=${logHas(cur, /cook: cook-then-bank @ Fire/i)}`
+    },
+    /**
+     * Cooker mule solo: full raw pack + muleMode Cooker + cook-then-bank → cook at camp
+     * range and bank cooked (no partner needed once raw is held; trade tasks idle).
+     */
+    {
+        id: 'fish-cooker-solo',
+        tags: ['fishing', 'fish', 'cook', 'mule', 'early'],
+        script: 'Fisher',
+        start: offsetTile(SPOT.catherbyFish, -4, 2),
+        camp: SPOT.catherbyFish,
+        bank: SPOT.catherbyBank,
+        settings: {
+            fishMethod: 'Lobster cage — lobster',
+            location: 'Catherby',
+            cookMode: 'Cook then bank',
+            cookFish: 'Lobster',
+            burntPolicy: 'Drop',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18,
+            muleMode: 'Cooker',
+            mulePartner: 'HarnessCookPartner'
+        },
+        seed: [
+            { debug: 'raw_lobster', name: 'Raw lobster', qty: 28 }
+        ],
+        scene: 'skip',
+        budgetMs: 240_000,
+        check: ({ start, cur, bankedHint, sawNearBank, minDistToBank }) => {
+            const cookXp = cur.xp.cooking - start.xp.cooking;
+            const raw = invMatch(cur, /^raw lobster$/i);
+            const cooked = invMatch(cur, /^lobster$/i);
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            if (
+                logHas(cur, /mule:\s*cooker with/i)
+                && cookXp > 0
+                && raw === 0
+                && (bankedHint || cooked === 0)
+                && sawNearBank
+                && minDistToBank <= 14
+            ) {
+                return 'pass';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToBank, bankedHint, sawNearBank }) =>
+            `cooker cookXp ${start.xp.cooking}→${cur.xp.cooking} raw=${invMatch(cur, /^raw lobster$/i)} ` +
+            `cooked=${invMatch(cur, /^lobster$/i)} banked=${bankedHint} nearBank=${sawNearBank} ` +
+            `mule=${logHas(cur, /mule:\s*cooker/i)} distBank=${minDistToBank}`
     },
     {
         // Bank raw then cook: givebank 973 raw + inv pot + 26 raw → catch last →
