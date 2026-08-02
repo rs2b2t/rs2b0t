@@ -35,6 +35,21 @@ class AutoReloginImpl {
 
     setAutoLogin(on: boolean): void {
         this.autoLogin = on;
+        if (!on) {
+            // Title-screen checkbox off must stop in-flight reconnect attempts (#215).
+            // Script-active reconnect still uses scriptActive() separately.
+            this.reconnecting = false;
+            this.waitingForPermit = false;
+            this.attempts = 0;
+            this.nextAttemptAt = 0;
+            this.rateLimitedAttempt = 0;
+            this.backoff.reset();
+        }
+    }
+
+    /** Whether title-screen auto-login is armed (UI should mirror this). */
+    isAutoLogin(): boolean {
+        return this.autoLogin;
     }
 
     setLoginCoordination(coordination: LoginCoordination | null): void {

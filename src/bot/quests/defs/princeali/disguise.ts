@@ -1,6 +1,7 @@
 import { Execution } from '../../../api/Execution.js';
 import type Tile from '../../../api/Tile.js';
 import { Traversal } from '../../../api/Traversal.js';
+import { Bank } from '../../../api/hud/Bank.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
 import { Npcs } from '../../../api/queries/Npcs.js';
 import { driveUntil, settleScene } from '../../exec/prompts.js';
@@ -179,6 +180,16 @@ async function burnLogs(log: (m: string) => void): Promise<boolean> {
         log('burnLogs: no tinderbox or no logs');
         return false;
     }
+    // Bank tiles (and an open bank) refuse firemaking — walk outside first (#278).
+    if (Bank.isOpen()) {
+        await Bank.close();
+    }
+    log(`burnLogs: lighting outside near ${PA_TILE.LOGS_SPAWN.x},${PA_TILE.LOGS_SPAWN.z}`);
+    if (!(await Traversal.walkResilient(PA_TILE.LOGS_SPAWN, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
+        log('burnLogs: could not reach an outdoor fire tile');
+        return false;
+    }
+    await settleScene();
     if (!(await tinder.useOn(logs))) {
         return false;
     }

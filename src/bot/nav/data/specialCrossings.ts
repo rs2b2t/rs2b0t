@@ -29,6 +29,29 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
 
     { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
 
+    // Mort Myre / Nature Spirit gate (Ulizius). Plain Open stalls on dialog; need re-Open after
+    // choosing the Drezel line when Nature Spirit is started (#115). Both leaves share the gate.
+    {
+        x: 3443,
+        z: 3458,
+        level: 0,
+        locName: 'Gate',
+        action: 'Open',
+        dialogue: { choose: ['quest for Drezel', 'doing a quest for Drezel'] },
+        reopenAfterDialogue: true,
+        label: 'Mort Myre gate (Ulizius)'
+    },
+    {
+        x: 3444,
+        z: 3458,
+        level: 0,
+        locName: 'Gate',
+        action: 'Open',
+        dialogue: { choose: ['quest for Drezel', 'doing a quest for Drezel'] },
+        reopenAfterDialogue: true,
+        label: 'Mort Myre gate (Ulizius)'
+    },
+
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
     { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' }
 ];

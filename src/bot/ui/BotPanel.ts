@@ -291,10 +291,13 @@ export default class BotPanel {
         const autoRow = el('div', 'rs2b0t-setting rs2b0t-setting-bool');
         const auto = document.createElement('input');
         auto.type = 'checkbox';
+        // Mirror runtime state (?autologin=1 / multibox arm) so off is one click (#215).
+        auto.checked = AutoRelogin.isAutoLogin();
         auto.addEventListener('change', () => AutoRelogin.setAutoLogin(auto.checked));
         const autoLabel = el('span', 'rs2b0t-setting-label');
         autoLabel.textContent = 'auto-login on title screen';
-        autoLabel.title = 'Unattended: log in by itself whenever sitting on the title screen with saved creds';
+        autoLabel.title =
+            'Unattended: log in by itself whenever sitting on the title screen with saved creds. A running script may still reconnect after a disconnect.';
         autoRow.appendChild(auto);
         autoRow.appendChild(autoLabel);
         sec.appendChild(autoRow);

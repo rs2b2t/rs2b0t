@@ -41,6 +41,22 @@ describe('specialCrossingAt', () => {
         expect(specialCrossingAt(2461, 3385, 0)).toBeNull();
     });
 
+    test('Mort Myre Ulizius gate: both leaves reopen after Drezel dialog (#115)', () => {
+        const a = specialCrossingAt(3443, 3458, 0);
+        const b = specialCrossingAt(3444, 3458, 0);
+        expect(a?.label).toBe('Mort Myre gate (Ulizius)');
+        expect(b?.label).toBe('Mort Myre gate (Ulizius)');
+        expect(a?.locName).toBe('Gate');
+        expect(a?.action).toBe('Open');
+        expect(a?.reopenAfterDialogue).toBe(true);
+        expect(
+            pickChoice(
+                ["No one gets in without Drezel's say so!", "But I'm doing a quest for Drezel!", 'Ok, thanks.'],
+                a!.dialogue!.choose
+            )
+        ).toBe("But I'm doing a quest for Drezel!");
+    });
+
     test('every crossing carries the fields the executor reads', () => {
         for (const c of SPECIAL_CROSSINGS) {
             expect(c.locName.length).toBeGreaterThan(0);

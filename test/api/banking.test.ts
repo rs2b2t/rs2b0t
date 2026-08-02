@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { shouldBankNow, parseBankStrategy } from '#/bot/api/Banking.js';
+import { depositAllExcept, shouldBankNow, parseBankStrategy } from '#/bot/api/Banking.js';
 
 const state = (o: Partial<{ lootCount: number; minutesSinceLastBank: number; itemsThreshold: number; minutesThreshold: number }>) => ({
     lootCount: 20, minutesSinceLastBank: 0, itemsThreshold: 15, minutesThreshold: 10, ...o
@@ -33,4 +33,12 @@ test('parseBankStrategy maps labels, unknown -> off', () => {
     expect(parseBankStrategy('Time')).toBe('time');
     expect(parseBankStrategy('Either')).toBe('either');
     expect(parseBankStrategy('nonsense')).toBe('off');
+});
+
+test('depositAllExcept keeps exact tool names and deposits junk (#170)', () => {
+    const deposit = depositAllExcept(['Rune pickaxe', 'Feather']);
+    expect(deposit('Rune pickaxe')).toBe(false);
+    expect(deposit('Feather')).toBe(false);
+    expect(deposit('Iron ore')).toBe(true);
+    expect(deposit('Coins')).toBe(true);
 });

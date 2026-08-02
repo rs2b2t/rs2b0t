@@ -163,7 +163,9 @@ class FletchDialog implements Task {
             return;
         }
         const start = this.bot.logCount();
-        const picked = await ChatDialog.make(match);
+        // Prefer Make-X (full pack / cap 30) over Make-10 so one menu drains the inv (#177).
+        const count = Math.max(1, Math.min(start, 30));
+        const picked = (await ChatDialog.makeX(match, count)) || (await ChatDialog.make(match));
         if (!picked) {
             this.bot.log(`make menu open but couldn't pick *${this.bot.productName()}* — products: [${products.join(', ')}]`);
             await Execution.delayTicks(1);

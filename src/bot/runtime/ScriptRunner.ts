@@ -1,8 +1,11 @@
 import type { AbstractBot } from '../api/Bot.js';
+import { Execution } from '../api/Execution.js';
+import { Game } from '../api/Game.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Sustain } from '../api/Sustain.js';
 import type { PaintFrame } from '../api/hud/Paint.js';
 import { paintState } from '../api/hud/paintLogic.js';
+import { reader } from '../adapter/ClientAdapter.js';
 import { ActionRouter } from '../input/ActionRouter.js';
 import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
@@ -66,6 +69,17 @@ class ScriptRunnerImpl {
 
         ctx.loopInFlight = true;
         (async () => {
+            // Platform gate: never enter onStart / game reads while logged out (#281).
+            // Unit tests have no attached client — skip so fixtures do not hang forever.
+            if (reader.attached()) {
+                if (!Game.ingame() || Game.tile() === null) {
+                    ctx.addLog('info', 'waiting for login / world tile…');
+                }
+                await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+                if (ctx.state === 'stopping') {
+                    return;
+                }
+            }
             await bot.onStart?.();
         })()
             .then(() => {

@@ -148,7 +148,7 @@ import {
     shouldEatForTannerfish,
     type TickManipProfile
 } from './TickManipLogic.js';
-import { Banking, depositAllExcept } from '../api/Banking.js';
+import { Banking, depositAllExcept, purgePackAtBank } from '../api/Banking.js';
 import { parseRangeStyle } from '../api/CombatStyle.js';
 import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
@@ -278,6 +278,14 @@ export const GATHERING_SETTINGS: SettingsSchema = {
         group: 'Mule',
         help:
             'Comma-separated names. Gatherer/Supplier → Cooker or Mule. Cooker/Mule → gatherer/supplier name(s).'
+    },
+    purgePackOnStart: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank junk on start',
+        group: 'Banking',
+        help:
+            'Deposit non-tool stacks at the camp bank before gathering so you can start with a junk pack. Skipped under location None, Cooker (raw pack), and Supplier.'
     }
 };
 
@@ -688,6 +696,31 @@ export default class GatheringBot extends TaskBot {
 
         this.gearKeep = this.rebuildGearKeep();
         this.captureXpStart();
+
+        // #170 — bank junk so gather can start with a full pack of trash.
+        // Skip power drop-only, Cooker (raw pack to cook), Supplier (empty/feeder).
+        if (
+            this.settings.bool('purgePackOnStart', true)
+            && !this.powerMode
+            && !this.isMuleCooker()
+            && !this.isMuleSupplier()
+        ) {
+            const keep = new Set(this.gearKeep.map(n => n));
+            for (const n of toolKeepNames(this.toolReqs)) {
+                keep.add(n);
+            }
+            for (const g of this.fishMethod?.gear ?? []) {
+                keep.add(g.name);
+            }
+            await purgePackAtBank({
+                keep: [...keep],
+                stand: this.location?.bankStand ?? null,
+                boothName: this.location?.boothName,
+                boothOp: this.location?.boothOp,
+                obstacles: this.location?.obstacles ?? ['door', 'gate'],
+                log: m => this.log(m)
+            });
+        }
 
         // Combat policy:
         // - Tick-manip retaliate methods: Auto Retaliate ON, no FleeCombat (may die).
