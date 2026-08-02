@@ -11,17 +11,18 @@
  * (player not mid protected script); refill retries a few times if busy.
  *
  *   ~/redeploy.sh
- *   HEADED=1 bun tools/nav-script-routes-live.ts
- *   HEADED=1 LIMIT=8 BUDGET_S=180 bun tools/nav-script-routes-live.ts
  *   HEADED=1 HARD=1 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 LIMIT=8 BUDGET_S=180 bun tools/nav-script-routes-live.ts
  *
- * Pack-only (no browser): bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts
+ * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
+ * Non-HARD builds seeds from script-route-corpus (happy-dom registered on demand).
+ * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
-import { buildScriptRoutes, type ScriptRoute } from './nav/script-route-corpus.ts';
+import type { ScriptRoute } from './nav/script-route-corpus.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -208,6 +209,19 @@ export function loadHardestRoutes(limit: number, file = HARDEST_JSON): ScriptRou
     return limit > 0 ? list.slice(0, limit) : list;
 }
 
+/**
+ * Seed list for non-HARD runs. Registers happy-dom when needed so BankLocations
+ * (and friends) can import without a manual --preload.
+ */
+async function loadSeedRoutes(): Promise<ScriptRoute[]> {
+    if (typeof globalThis.document === 'undefined') {
+        const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
+        GlobalRegistrator.register();
+    }
+    const { buildScriptRoutes } = await import('./nav/script-route-corpus.ts');
+    return buildScriptRoutes();
+}
+
 type WalkOpts = {
     dest: Tile;
     budget: number;
@@ -383,7 +397,7 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
     return out;
 }
 
-const all = buildScriptRoutes();
+const all = USE_HARDEST ? [] : await loadSeedRoutes();
 const routes = USE_HARDEST ? loadHardestRoutes(LIVE_LIMIT || 25) : pickLiveRoutes(all, LIVE_LIMIT);
 
 console.log(

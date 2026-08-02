@@ -1,5 +1,5 @@
 /**
- * Microbot-style PlannedEdge: the frontier step the walker cannot yet cross.
+ * PlannedEdge: the frontier hop the walker cannot yet cross (door, ladder, tele).
  * Used by recovery resolvers (Phase 3).
  */
 

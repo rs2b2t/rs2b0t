@@ -30,10 +30,9 @@ export function kindAllowedByPolicy(kind: TransportKind, policy: PathPolicy | un
 /**
  * Teleport-specific gates: allowlist + distance-before-teleport.
  *
- * `routeSpan` is typically Chebyshev(start, goal). Microbot compares against
- * distance remaining; for A* admission we use the full route span so short
- * same-city walks never open the tele graph. Callers may pass a tighter
- * remaining estimate later.
+ * `routeSpan` is typically Chebyshev(start, goal). For A* admission we use the
+ * full route span so short same-city walks never open the tele graph. Callers
+ * may pass a tighter remaining estimate later.
  */
 export function teleportAllowedByPolicy(
     edge: TransportEdge,

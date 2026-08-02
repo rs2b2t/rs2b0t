@@ -138,7 +138,7 @@ class WalkExecutorImpl {
 
     private doorStrikes = new Map<string, number>();
 
-    /** Session blacklist for quest-locked doors (Microbot pattern). */
+    /** Session blacklist for quest-locked doors. */
     private sessionBlacklistDoors = new Set<string>();
 
     private walkPolicy: PathPolicy | undefined;

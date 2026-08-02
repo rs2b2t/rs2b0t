@@ -174,7 +174,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
             + '(client-only, smoothed each frame like arrow-key turns). Off by default. '
             + 'URL: ?Global.navCameraFollow=true.'
     },
-    // ── Nav path paint (visible when showNavPath) — SP-aligned colours ──
+    // ── Nav path paint (visible when showNavPath) ──
     navPathShowText: {
         type: 'boolean',
         default: true,
@@ -198,7 +198,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Path colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
-        help: 'HTML #RGB / #RRGGBB — remaining walk tiles (SP Path default red)'
+        help: 'HTML #RGB / #RRGGBB — remaining walk tiles (default red)'
     },
     navPathColorTransport: {
         type: 'string',
@@ -206,7 +206,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Transport colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
-        help: 'HTML #RGB / #RRGGBB — door / ladder / tele hops (SP Transports default green)'
+        help: 'HTML #RGB / #RRGGBB — door / ladder / tele hops (default green)'
     },
     navPathColorClick: {
         type: 'string',
@@ -222,7 +222,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Hop label colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
-        help: 'HTML #RGB / #RRGGBB — transport captions (SP Text default white)'
+        help: 'HTML #RGB / #RRGGBB — transport captions (default white)'
     }
 };
 

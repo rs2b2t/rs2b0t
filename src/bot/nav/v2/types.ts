@@ -1,11 +1,10 @@
 /**
  * Nav v2 transport contract.
  *
- * Docs: docs/nav-v2/PLAN.md · docs/nav-v2/MICROBOT_SHORTEST_PATH.md
+ * Docs: docs/nav-v2/README.md · docs/NAV.md
  *
- * Shape inspired by Microbot/ShortestPath `Transport` + TSV catalogs (origin,
- * destination, skills, items, quests, currency, objectId/action), sized for a
- * 2004 bot that must *execute* every hop (web walker), not only draw it.
+ * Unified edge shape (origin, destination, skills, items, quests, currency,
+ * loc id/action) for a 2004 bot that must *execute* every hop, not only plan it.
  */
 
 export interface NavPoint {
@@ -56,7 +55,7 @@ export interface TransportRequires {
     quests?: QuestRequirement[];
     freeSlots?: number;
     /**
-     * Toll / charter style cost (Microbot Transport.currency*).
+     * Toll / charter style cost.
      * Equivalent to items[] but kept explicit for explain output.
      */
     currency?: { name: string; amount: number };
@@ -126,7 +125,7 @@ export interface WorldState {
 }
 
 /**
- * Planner preferences (Microbot PathfinderConfig toggles, 2004-sized).
+ * Planner preferences (2004-sized toggles).
  * Teleport policy is intentionally first-class: few destinations, high value.
  */
 export interface PathPolicy {
@@ -135,7 +134,6 @@ export interface PathPolicy {
     /**
      * Min Chebyshev distance (start→goal, or remaining estimate) before a teleport
      * edge may be used. 0 = always allowed when other gates pass.
-     * Same role as Microbot `distanceBeforeUsingTeleport`.
      */
     distanceBeforeTeleport?: number;
     /**

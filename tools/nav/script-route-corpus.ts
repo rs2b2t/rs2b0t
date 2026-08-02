@@ -10,18 +10,18 @@
  *   1. Exact from→to once at build time.
  *   2. Optional near-endpoint collapse (`--endpoint-radius`, default 3) for
  *      obvious generator twins (BOT camp↔bank vs COMMUTE).
- *   3. After pack A*, collapse routes whose **corridor signature** matches —
- *      same transport/tele hop sequence + coarse walk cells. Two starts that
- *      both walk (or tele-then-walk) the same corridor count as one path.
+ *   3. After pack A*, collapse routes whose **journey signature** matches —
+ *      destination map-square only (not approach, doors, or tele vs walk).
+ *      Any seed that finishes at Grand Tree bank = one HARD leg.
  *
- * Generated JSON / hardest list are written **after** pack corridor dedupe.
+ * Generated JSON / hardest list are written **after** pack journey dedupe.
  * **Hardest ranking uses teleports by default** (full runes + magic 99 WorldState),
  * matching live v2 stress. Pass `--no-tele` for pure-walk cost ranking only.
  *
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --no-tele --hardest=25
- *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --endpoint-radius=0 --corridor-grid=8
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --endpoint-radius=0 --corridor-grid=32
  *
  * Preload is required: BankLocations pulls a tiny bit of client surface (happy-dom).
  */
@@ -59,7 +59,7 @@ export interface RankedScriptRoute extends ScriptRoute {
     ms: number;
     /** Higher = harder. Primary: path cost; tie-break: expansions, then hops. */
     difficulty: number;
-    /** Corridor fingerprint from pack A* (transport hops + coarse walk cells). */
+    /** Journey fingerprint from pack A* (destination map-square). */
     corridor?: string;
 }
 
@@ -136,53 +136,34 @@ export type PathHopLike = {
 export type WaypointLike = { x: number; z: number; level: number };
 
 /**
- * Fingerprint of the *executed* pack path: transport/tele hops + walk cells on a
- * coarse grid. Two different from/to that share "tele Camelot then run north
- * coast" collide here even when endpoints are far apart.
+ * Journey fingerprint for stress dedupe — **destination map-square only**.
  *
- * `grid` = world-tile cell size (16 ≈ map-square quarter). `sampleEvery` = take
- * every Nth waypoint so pure-walk corridors stay stable.
+ * HARD stress cares about *where you end up thrashing*, not how you got there.
+ * Tele vs pure-walk into Grand Tree, Seers vs Catherby approaches, and local
+ * door order all collapse to one representative (highest difficulty kept).
+ *
+ * Reverse legs stay distinct (different end square). `hops` is unused but kept
+ * so call sites stay stable. `grid` default **64** = one map square.
  */
 export function pathCorridorSignature(
     waypoints: WaypointLike[],
     hops: PathHopLike[],
     opts?: { grid?: number; sampleEvery?: number }
 ): string {
-    const grid = Math.max(1, opts?.grid ?? 16);
-    const sampleEvery = Math.max(1, opts?.sampleEvery ?? 12);
-
-    const hopKey =
-        hops.length === 0
-            ? 'walk'
-            : hops
-                .map(h => {
-                    if (h.kind === 'teleport') {
-                        return `T:${h.locName ?? h.action ?? 'tele'}:${h.to.level}`;
-                    }
-                    return `${h.kind}:${h.locName ?? '?'}:${h.from.level}>${h.to.level}`;
-                })
-                .join('|');
+    const grid = Math.max(1, opts?.grid ?? 64);
+    void hops;
+    void opts?.sampleEvery;
 
     if (waypoints.length === 0) {
-        return `${hopKey}#`;
+        return 'end:';
     }
 
-    const cells: string[] = [];
-    const pushCell = (w: WaypointLike): void => {
-        const c = `${w.level}:${(w.x / grid) | 0}:${(w.z / grid) | 0}`;
-        if (cells[cells.length - 1] !== c) {
-            cells.push(c);
-        }
-    };
-    for (let i = 0; i < waypoints.length; i += sampleEvery) {
-        pushCell(waypoints[i]!);
-    }
-    pushCell(waypoints[waypoints.length - 1]!);
-    return `${hopKey}#${cells.join(';')}`;
+    const end = waypoints[waypoints.length - 1]!;
+    return `end:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`;
 }
 
 /**
- * Keep one ranked route per corridor signature. Prefer higher source priority,
+ * Keep one ranked route per journey signature. Prefer higher source priority,
  * then higher difficulty (harder representative of that journey).
  */
 export function dedupeByCorridor<T extends ScriptRoute & { corridor: string; difficulty: number }>(
@@ -389,9 +370,11 @@ if (isMain) {
     const endpointRadius = dedupeArg
         ? Number(dedupeArg.split('=')[1])
         : Number(process.env.ENDPOINT_RADIUS ?? process.env.DEDUPE_RADIUS ?? 3);
+    // End-region size for journey keys (64 = map square). Coarser = more collapse.
     const corridorGrid = gridArg
         ? Number(gridArg.split('=')[1])
-        : Number(process.env.CORRIDOR_GRID ?? 16);
+        : Number(process.env.CORRIDOR_GRID ?? 64);
+    // Kept for CLI/meta compatibility; journey key does not sample the polyline.
     const corridorSample = sampleArg
         ? Number(sampleArg.split('=')[1])
         : Number(process.env.CORRIDOR_SAMPLE ?? 12);
@@ -551,7 +534,7 @@ if (isMain) {
                     {
                         description:
                             'Pack-probed paths from BANK/WALK/NAV/mainland sources. '
-                            + 'Deduped by corridor signature (hops + coarse walk cells). '
+                            + 'Deduped by journey signature (destination map-square). '
                             + `Path cost ${useTele ? 'with' : 'without'} tele catalog. `
                             + 'Do not hand-edit — run script-route-corpus.ts --write.',
                         ...meta,
@@ -571,7 +554,8 @@ if (isMain) {
                 JSON.stringify(
                     {
                         description:
-                            `Hardest unique corridors (useTeleports=${useTele}). Corridor-deduped pack corpus. `
+                            `Hardest unique journeys (useTeleports=${useTele}). `
+                            + 'Journey-deduped (destination map-square). '
                             + 'Regenerate with script-route-corpus.ts [--hardest=N] [--no-tele]. '
                             + 'Live: HARD=1 bun tools/nav-script-routes-live.ts',
                         metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',

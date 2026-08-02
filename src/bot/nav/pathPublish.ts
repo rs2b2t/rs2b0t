@@ -1,5 +1,5 @@
 /**
- * Session store for the active nav path (Microbot-style path publish).
+ * Session store for the active nav path.
  * Paint and recovery subscribe; walk never forges client path packets.
  */
 
@@ -25,7 +25,7 @@ export interface PublishedPath {
 
 let active: PublishedPath | null = null;
 
-/** SP-like hop caption from executor transport metadata. */
+/** Hop caption from executor transport metadata. */
 export function formatHopLabel(t: {
     locName: string;
     action: string;

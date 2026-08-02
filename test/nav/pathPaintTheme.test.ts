@@ -20,7 +20,7 @@ describe('parseHtmlColor', () => {
 });
 
 describe('resolveNavPathPaintTheme', () => {
-    test('defaults match SP path/transport/text', () => {
+    test('defaults match path/transport/text colours', () => {
         const t = resolveNavPathPaintTheme(new SettingsBag({}));
         expect(t.showText).toBe(true);
         expect(t.textSize).toBe(11);
@@ -52,7 +52,7 @@ describe('resolveNavPathPaintTheme', () => {
     });
 });
 
-describe('reserved SP slots', () => {
+describe('reserved paint slots', () => {
     test('documented for later (not wired to paint)', () => {
         expect(NAV_PATH_PAINT_RESERVED.calculating).toBe('#0000FF');
         expect(NAV_PATH_PAINT_RESERVED.unreachable).toBe('#C828F0');

@@ -1,5 +1,5 @@
 /**
- * Quest-locked door dialogue detection (Microbot #19).
+ * Quest-locked door dialogue detection.
  * After Open with no movement, mesbox/chat phrases → session blacklist + repath.
  */
 

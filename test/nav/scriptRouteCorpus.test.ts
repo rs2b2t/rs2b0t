@@ -64,44 +64,51 @@ describe('dedupePaths (endpoints only)', () => {
 });
 
 describe('pathCorridorSignature / dedupeByCorridor', () => {
-    test('same hop sequence + coarse walk cells share a signature', () => {
-        // Two starts a few tiles apart, same tele hop, same corridor north.
-        const hops = [
+    test('same end map-square shares a journey (ignores approach and teles)', () => {
+        // Seers tele-in vs Ardougne pure-walk into Grand Tree bank.
+        const seersTele = [
+            { x: 2716, z: 3473, level: 1 },
+            { x: 2662, z: 3305, level: 0 },
+            { x: 2449, z: 3482, level: 1 }
+        ];
+        const ardyWalk = [
+            { x: 2656, z: 3322, level: 1 },
+            { x: 2455, z: 3488, level: 1 }
+        ];
+        const teleHops = [
             {
                 kind: 'teleport',
-                locName: 'Camelot teleport',
-                from: { x: 3200, z: 3200, level: 0 },
-                to: { x: 2757, z: 3478, level: 0 }
+                locName: 'Ardougne teleport',
+                from: { x: 2716, z: 3473, level: 1 },
+                to: { x: 2662, z: 3305, level: 0 }
             }
         ];
-        const a = [
-            { x: 3200, z: 3200, level: 0 },
-            { x: 2757, z: 3478, level: 0 },
-            { x: 2757, z: 3490, level: 0 },
-            { x: 2757, z: 3600, level: 0 },
-            { x: 2700, z: 3700, level: 0 }
-        ];
-        const b = [
-            { x: 3205, z: 3202, level: 0 },
-            { x: 2757, z: 3478, level: 0 },
-            { x: 2758, z: 3492, level: 0 },
-            { x: 2756, z: 3605, level: 0 },
-            { x: 2702, z: 3701, level: 0 }
-        ];
-        const sa = pathCorridorSignature(a, hops, { grid: 16, sampleEvery: 1 });
-        const sb = pathCorridorSignature(b, hops, { grid: 16, sampleEvery: 1 });
+        const sa = pathCorridorSignature(seersTele, teleHops, { grid: 64 });
+        const sb = pathCorridorSignature(ardyWalk, [], { grid: 64 });
         expect(sa).toBe(sb);
+        expect(sa).toBe('end:1:38:54');
     });
 
-    test('different tele destinations get different signatures', () => {
-        const w = [{ x: 0, z: 0, level: 0 }, { x: 100, z: 100, level: 0 }];
-        const camelot = pathCorridorSignature(w, [
-            { kind: 'teleport', locName: 'Camelot teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 2757, z: 3478, level: 0 } }
-        ]);
-        const varrock = pathCorridorSignature(w, [
-            { kind: 'teleport', locName: 'Varrock teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 3213, z: 3424, level: 0 } }
-        ]);
-        expect(camelot).not.toBe(varrock);
+    test('different end map-squares get different signatures', () => {
+        const rellekka = pathCorridorSignature(
+            [{ x: 0, z: 0, level: 0 }, { x: 2668, z: 3660, level: 0 }],
+            [{ kind: 'teleport', locName: 'Camelot teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 2757, z: 3478, level: 0 } }],
+            { grid: 64 }
+        );
+        const varrock = pathCorridorSignature(
+            [{ x: 0, z: 0, level: 0 }, { x: 3213, z: 3424, level: 0 }],
+            [{ kind: 'teleport', locName: 'Varrock teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 3213, z: 3424, level: 0 } }],
+            { grid: 64 }
+        );
+        expect(rellekka).toBe('end:0:41:57');
+        expect(varrock).toBe('end:0:50:53');
+        expect(rellekka).not.toBe(varrock);
+    });
+
+    test('reverse direction is a different journey (different end)', () => {
+        const toGt = pathCorridorSignature([{ x: 2716, z: 3473, level: 1 }, { x: 2449, z: 3482, level: 1 }], []);
+        const fromGt = pathCorridorSignature([{ x: 2449, z: 3482, level: 1 }, { x: 2716, z: 3473, level: 1 }], []);
+        expect(toGt).not.toBe(fromGt);
     });
 
     test('dedupeByCorridor keeps one row per signature', () => {
@@ -109,7 +116,7 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
             from: { x: 0, z: 0, level: 0 },
             to: { x: 1, z: 0, level: 0 },
             note: 'n',
-            corridor: 'walk#0:0:0;0:1:1',
+            corridor: 'end:0:41:57',
             cost: 10,
             expanded: 1,
             hops: 0,

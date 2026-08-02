@@ -26,7 +26,7 @@ describe('yawTowardDelta', () => {
 });
 
 describe('yawDelta / stepYaw', () => {
-    test('shortest path wraps around 0/2048', () => {
+    test('shortest yaw delta wraps around 0/2048', () => {
         expect(yawDelta(10, 2040)).toBe(-18);
         expect(yawDelta(2040, 10)).toBe(18);
     });

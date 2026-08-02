@@ -1,7 +1,6 @@
 /**
- * Pure forward recovery (Microbot RouteRecovery idea).
- * On stall, prefer the furthest clickable tile ahead on the same path chain
- * instead of immediately repathing.
+ * Pure forward recovery on stall: prefer the furthest clickable tile ahead on
+ * the same path chain instead of immediately repathing.
  */
 
 import { chebyshev, type PathTileLike } from '../followMath.js';

@@ -1,5 +1,5 @@
 /**
- * Path-scoped bank planner (Microbot banking planner shape).
+ * Path-scoped bank planner.
  *
  * Pathfind as if bank items were held, inspect **only** items required by
  * transports on the chosen route, withdraw only those — never random tele runes.

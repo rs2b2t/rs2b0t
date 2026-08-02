@@ -77,7 +77,7 @@ describe('nav v2 meetsRequires', () => {
         expect(meetsRequires(req, state({ items: { Coins: 10 } })).ok).toBe(true);
     });
 
-    test('toll coins via currency (Microbot-style field)', () => {
+    test('toll coins via currency field', () => {
         const req = { currency: { name: 'Coins', amount: 10 } };
         expect(meetsRequires(req, state({ items: { Coins: 9 } })).ok).toBe(false);
         expect(meetsRequires(req, state({ items: { Coins: 10 } })).ok).toBe(true);
