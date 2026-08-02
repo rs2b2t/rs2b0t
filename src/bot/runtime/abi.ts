@@ -1,5 +1,8 @@
 // docs/ARCHITECTURE.md#the-abi-boundary
 import { reader } from '../adapter/ClientAdapter.js';
+import { PathPublish } from '../nav/pathPublish.js';
+import { isNavPathPaintEnabled } from '../nav/pathOverlay.js';
+import { SettingsStore } from './Settings.js';
 import { Area } from '../api/Area.js';
 import {
     BANK_LOCATIONS,
@@ -386,6 +389,11 @@ export function installAbi(): void {
         TreeBot,
         BranchTask,
         LeafTask,
+
+        // Nav v2 debug / live harness surface
+        PathPublish,
+        isNavPathPaintEnabled,
+        SettingsStore,
 
         reader
     });

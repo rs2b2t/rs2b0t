@@ -149,22 +149,14 @@ cost drops to ~40 and hops show `Cast Varrock teleport`.
 
 ---
 
-## 6. Local note (post-implementation — not Phase 0–2)
+## 6. Fidelity warnings
 
-**Duel ring / tele anim “run energy stall”:** cast/rub tele animation can be abused to effectively ignore run drain (classic bot pattern). Useful for long mainland walks **after** tele catalog + executor are solid. Keep **out of nav-v2 graph design**; track as a follow-on sustain/energy hack if we want it at all. Do not confuse with duel arena **wall lean** camera (`duel_arena_lean.rs2`) — different feature.
+1. Server destinations are incomplete vs modern OSRS for duel ring / games neck — catalog Server truth.  
+2. Glory Rub is **inventory-only**; worn glory does not expose Rub.  
+3. Uncharged glory cannot tele.  
+4. Landings use `map_findsquare` radius 2 — planner uses `acceptAnyLanding` / slack.  
+5. Jewellery is **not** path-scoped bank-withdraw (bank cache API is separate work).
 
----
+## 7. Code
 
-## 7. Fidelity warnings
-
-1. **Server destinations are incomplete vs modern OSRS** for duel ring and games necklace — catalog Server truth.  
-2. **Glory rub is inventory-only** in scripts; wearing glory does not expose rub.  
-3. **Uncharged glory** cannot tele; Heroes’ fountain is the recharge path.  
-4. Landing tiles use `map_findsquare(..., 0, 2, lineofwalk)` — planner `toTile` should allow ±2 slack (`acceptAnyLanding` or radius).  
-5. Bot `Teleport.ts` lacks Watchtower / Trollheim until extended.
-
----
-
-## 8. Code
-
-Structured catalog: [`src/bot/nav/v2/teleportCatalog.ts`](../../src/bot/nav/v2/teleportCatalog.ts).
+[`src/bot/nav/v2/teleportCatalog.ts`](../../src/bot/nav/v2/teleportCatalog.ts) · execute: `teleportExecute.ts`.

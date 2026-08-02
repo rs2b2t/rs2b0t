@@ -162,7 +162,58 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Show nav path',
         help:
             'Draw the current world-walk route on the game overlay (debug / operator). '
-            + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true'
+            + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true. '
+            + 'Sub-options appear when enabled (path/transport/text colours, hop labels).'
+    },
+    // ── Nav path paint (visible when showNavPath) — SP-aligned colours ──
+    navPathShowText: {
+        type: 'boolean',
+        default: true,
+        label: 'Hop labels',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'White Shortest Path–style captions on doors / ladders / teles (Open Door, Varrock teleport, …)'
+    },
+    navPathTextSize: {
+        type: 'number',
+        default: 11,
+        min: 8,
+        max: 28,
+        label: 'Hop label size (px)',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] }
+    },
+    navPathColorPath: {
+        type: 'string',
+        default: '#FF0000',
+        label: 'Path colour',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'HTML #RGB / #RRGGBB — remaining walk tiles (SP Path default red)'
+    },
+    navPathColorTransport: {
+        type: 'string',
+        default: '#00FF00',
+        label: 'Transport colour',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'HTML #RGB / #RRGGBB — door / ladder / tele hops (SP Transports default green)'
+    },
+    navPathColorClick: {
+        type: 'string',
+        default: '#FFFFFF',
+        label: 'Click target colour',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'Outline on the next walk click tile'
+    },
+    navPathColorText: {
+        type: 'string',
+        default: '#FFFFFF',
+        label: 'Hop label colour',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'HTML #RGB / #RRGGBB — transport captions (SP Text default white)'
     }
 };
 

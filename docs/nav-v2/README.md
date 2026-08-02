@@ -1,63 +1,25 @@
 # Nav v2
 
-**Shortest Path–class planning + web-walker execution for a 2004 TypeScript bot.**
+Shortest Path–class planning + web-walker execution for the 2004 client.
 
-Built with the same love as the rest of rs2b0t: real client clicks, era-correct map, honest failures.
-
-| Doc | What |
+| | |
 |---|---|
-| [PLAN.md](./PLAN.md) | Architecture, phases, success metrics |
-| [TELEPORTS.md](./TELEPORTS.md) | Server-scanned spell + jewellery + lever catalog |
-| [MICROBOT_SHORTEST_PATH.md](./MICROBOT_SHORTEST_PATH.md) | Patterns from RuneLite SP + Microbot walker → our 2004 mapping |
-| v1 manual | [docs/NAV.md](../NAV.md) (still authoritative for current behavior) |
-| Code | [`src/bot/nav/v2/`](../../src/bot/nav/v2/) |
-| Tests | [`test/nav/v2/`](../../test/nav/v2/) |
-| Branch | `feat/nav-v2` |
+| Toggle | Global **World walker** `classic` \| `v2` |
+| Code | [`src/bot/nav/v2/`](../../src/bot/nav/v2/), `exec/`, path paint |
+| Catalog | [`teleportCatalog.ts`](../../src/bot/nav/v2/teleportCatalog.ts) |
+| Unit | `bun test test/nav/` |
+| Pack corpus | `bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts` |
+| Manual | [docs/NAV.md](../NAV.md) |
 
-## Status
-
-**Plan complete** for first ship. **End-user toggle:** Global settings → **World walker**
-= `Classic (stable)` (default) | `Nav v2 (experimental)`.
-
-| Nav v2 includes | Still deferred |
+| Included | Out of scope (this ship) |
 |---|---|
-| Spell + jewellery teles in A\* + execute | Bank-for-runes multi-leg |
-| Hop explain logs | Full WalkExecutor class split |
-| Live WorldState skill/item filters | Multi-dest quest ladders |
-| Curated monastary 31 Prayer activation | Upstream live CI suite |
+| Spell + jewellery in A\* + execute | Bank cache API / bank jewellery |
+| Path paint (tile quads + hop text) | Live collision / A\* heat paint |
+| Path-scoped bank for runes/tolls | Multi-dest quest ladders |
+| Quest-lock door blacklist | Upstream live CI suite |
+| Script-ripped pack route corpus | Fairy / cape / OSRS tele matrix |
 
-```bash
-# pack / unit (upstream-safe; no live engine required)
-bun tools/nav/mainland-corpus.ts --explain
-bun tools/nav/route-probe.ts --from 3222,3218,0 --to 3213,3424,0 --explain --tele --magic 99 --runes
-bun tools/nav/component-report.ts
-bun test test/nav/
-```
+Live harnesses (`tools/nav-v2-*.ts`, `nav-script-routes-live.ts`) are operator-only.
+Do not put personal deploy paths in upstream docs.
 
-Live harnesses (tele smoke, trapdoor mines, …) are **operator tooling** — not part of the
-upstream test story. Run them only against your own engine deploy; do not document or
-require a personal redeploy path in upstream PRs.
-
-## Mental model (one picture)
-
-```
-  Shortest Path idea          Microbot idea              rs2b0t v2
-  ─────────────────          ─────────────              ─────────
-  collision map       +      execute every hop    =   pack + worker A*
-  transport catalog          doors / transports         TransportEdge graph
-  skill/quest filter         stall + repath             WorldState filter
-  tele toggles / min dist    live harness               PathPolicy (early — few 2004 teles)
-  (overlay for humans)                                  Walk* handlers + corpus
-```
-
-## Import
-
-```ts
-import {
-    compileV1Graph,
-    activeEdges,
-    meetsRequires,
-    type TransportEdge,
-    type WorldState
-} from '#/bot/nav/v2/index.js';
-```
+See [TELEPORTS.md](./TELEPORTS.md) for catalog fidelity notes; [PLAN.md](./PLAN.md) for phase history.

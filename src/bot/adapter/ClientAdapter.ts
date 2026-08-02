@@ -150,10 +150,12 @@ export const reader = {
     },
 
     /**
-     * Project a world tile centre onto the bot overlay canvas (pixels), or null
-     * when off-scene. Same projection as npcBox / Client.overlayPos.
+     * Project a point on a world tile onto the bot overlay canvas (pixels).
+     * `u`/`v` are fractional offsets within the tile (0 = west/south edge, 1 = east/north),
+     * clamped to the tile interior so edge-of-scene tiles still project. Default 0.5,0.5 = centre.
+     * Same projection as npcBox / Client.overlayPos.
      */
-    overlayPosWorld(x: number, z: number, height = 0): { x: number; y: number } | null {
+    overlayPosWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
         if (!raw) {
             return null;
         }
@@ -162,8 +164,11 @@ export const reader = {
         if (lx < 0 || lz < 0 || lx >= SCENE_SIZE || lz >= SCENE_SIZE) {
             return null;
         }
-        const sceneX = (lx << 7) + 64;
-        const sceneZ = (lz << 7) + 64;
+        // Stay inside this tile's 128 scene units (u/v=1 → 127) so map-edge tiles work.
+        const uu = Math.max(0, Math.min(1, u));
+        const vv = Math.max(0, Math.min(1, v));
+        const sceneX = (lx << 7) + Math.min(127, Math.floor(uu * 128));
+        const sceneZ = (lz << 7) + Math.min(127, Math.floor(vv * 128));
         return raw.overlayPos(sceneX, sceneZ, height);
     },
 

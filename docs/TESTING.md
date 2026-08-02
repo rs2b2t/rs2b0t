@@ -119,11 +119,20 @@ rs2b0t.actions
 |---|---|
 | `parseArgs(argv, defaults)` | `--base`, `--minutes`, positional rest |
 | `launchBrowser({ swiftshader })` | a configured Playwright browser |
+| `HARNESS_VIEWPORT` | preferred page size **1280×720** (Playwright default) |
 | `boot(page)` | wait until `client.constructor.loopCycle > 10` |
 | `login(page, user, pass)` | log in and wait for `ingame && sceneState === 2` |
 | `type(page, text)` | click the canvas, then type — cheats go through this |
 | `bringUpOffIsland(page, opts)` | new account, teleported off tutorial island |
 | `startFromLibrary(page, category, script)` | pick and start a script from the panel |
+
+**Viewport (local preference).** Headed Chrome should use the **smaller** client scale
+used by GatheringBot / `verify-gather-locs` / plain `browser.newPage()` — Playwright’s
+default **1280×720**, exported as `HARNESS_VIEWPORT`. Do **not** set
+`{ width: 1500, height: 1000 }` (or similar). `bot.html` scales the fixed **765×503**
+game stage to fill the page; a large viewport makes the game look blown up and
+flip-flops between harness prototypes. Prefer omitting `setViewportSize` /
+`viewport` entirely so the default applies.
 
 Some hard-won details:
 

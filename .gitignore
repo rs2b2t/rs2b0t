@@ -37,3 +37,6 @@ multibox-accounts.recovered.json
 .b0t-launch.lock/
 # live-harness proof shots — attach to PRs, do not commit multi-MB PNGs
 screenshots/
+
+# operator-only notes (not for token-hungry upstream clones)
+docs/local/

@@ -35,7 +35,7 @@ import { missingItemsForPath, pathHasTeleport, planBankLeg } from './v2/bankPlan
 import { virtualizeWithItems } from './v2/virtualState.js';
 import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
 import { RouteState } from './v2/routeState.js';
-import { PathPublish } from './pathPublish.js';
+import { PathPublish, formatHopLabel } from './pathPublish.js';
 import {
     crossMultiTileDoor,
     isOpenableBarrier,
@@ -266,12 +266,19 @@ class WalkExecutorImpl {
 
     private publishPath(tiles: PathStep[], pathIdx: number, clickIdx: number): void {
         PathPublish.set(
-            tiles.map(t => ({
-                x: t.x,
-                z: t.z,
-                level: t.level,
-                transport: t.transport !== undefined
-            })),
+            tiles.map(t => {
+                const tr = t.transport;
+                if (!tr) {
+                    return { x: t.x, z: t.z, level: t.level };
+                }
+                return {
+                    x: t.x,
+                    z: t.z,
+                    level: t.level,
+                    transport: true,
+                    label: formatHopLabel(tr)
+                };
+            }),
             pathIdx,
             clickIdx
         );

@@ -1,8 +1,8 @@
 # Nav v2 — Shortest Path quality, web-walker execution, 2004 soul
 
 **Branch:** `feat/nav-v2`  
-**Status:** **Complete** (product scope for first ship)  
-**Companion:** [MICROBOT_SHORTEST_PATH.md](./MICROBOT_SHORTEST_PATH.md) · [TELEPORTS.md](./TELEPORTS.md) · [README](./README.md)
+**Status:** **Shipped on `feat/nav-v2`** (see PR for test matrix)  
+**Companion:** [TELEPORTS.md](./TELEPORTS.md) · [README](./README.md)
 
 ---
 

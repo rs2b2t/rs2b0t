@@ -117,8 +117,8 @@ try {
         };
         await route.continue({ headers });
     });
+    // Prefer Playwright default (1280×720) — see HARNESS_VIEWPORT in tools/lib/harness.ts
     page = await context.newPage();
-    page.setViewportSize({ width: 1500, height: 1000 }).catch(() => undefined);
     page.on('console', msg => {
         const t = msg.type();
         if (t === 'log' || t === 'warning' || t === 'error') {

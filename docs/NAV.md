@@ -242,34 +242,26 @@ classic skips requires-gated edges when no WorldState snapshot is sent).
 
 ## Nav v2 (experimental)
 
-Toggle: **Global settings → World walker** → `Classic (stable)` (default) or
-`Nav v2 (experimental)`. URL: `?Global.navEngine=v2`. Per call:
-`WalkExecutor.walkTo(dest, { navEngine: 'v2' })`.
+**Global → World walker:** `classic` (default) | `v2`. Override: `?Global.navEngine=v2`
+or `walkTo(dest, { navEngine: 'v2' })`.
 
-| | Classic | Nav v2 |
+| | Classic | v2 |
 |---|---|---|
-| Path request | avoid-doors + expansions | + live WorldState + tele catalog edges |
-| Spell teles in route | no | yes (when runes/level/policy allow) |
-| Jewellery Rub (duel/games/glory) | no | yes (inventory Rub + dialog) |
-| Hop explain logs | no | yes |
-| Skill/item edge `requires` | skipped (no state) | filtered at plan time |
-| Path-scoped bank for tele/toll items | no | yes (when bank open or `bankItemCounts` supplied; one leg max) |
-| Trapdoor `openLocId`, ladder data | yes | yes |
+| Tele catalog (spell + jewellery) | no | yes |
+| Live WorldState / `requires` | no | yes |
+| Hop logs | no | yes |
+| Path-scoped bank (runes/tolls; inv jewellery only) | no | yes (one leg max) |
+| Path paint | optional | optional (`showNavPath`) |
 
-**Optional path paint:** Global **Show nav path** (`showNavPath`, default off) draws the
-active route on the `#overlay` canvas. Does not change routing.
-`?Global.showNavPath=true`.
+**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads on
+`#overlay` (SP Path/Transports/Text colours; see `pathPaintTheme.ts`). Not under 3D depth.
 
-**Quest-locked doors:** after Open with a lock mesbox and no passage, the door tile is
-session-blacklisted and the walker repaths (classic and v2).
+**Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
+(bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
 
-Executor pieces live under `src/bot/nav/exec/` (doors, specials, transport loc match);
-path publish is `pathPublish.ts` + `pathOverlay.ts`.
-
-Spell landings and jewellery destinations are catalogued in
-[`src/bot/nav/v2/teleportCatalog.ts`](../src/bot/nav/v2/teleportCatalog.ts) from Server
-content (see [`docs/nav-v2/TELEPORTS.md`](nav-v2/TELEPORTS.md)). Design notes:
-[`docs/nav-v2/PLAN.md`](nav-v2/PLAN.md).
+**Code:** `src/bot/nav/v2/`, `exec/`, `pathPublish.ts`, `pathOverlay.ts`. Tele catalog:
+`teleportCatalog.ts`. Pack stress: `tools/nav/script-route-corpus.ts`. Live/operator tools
+under `tools/nav-*.ts` (not CI). Index: [docs/nav-v2/](nav-v2/).
 
 ## Level-change loc lag
 

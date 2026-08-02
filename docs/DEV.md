@@ -123,7 +123,10 @@ HEADED=1 SLOWMO=400 bun tools/verify-gathering-locations.ts mining
 ```
 
 `HEADED=1` is read by `tools/lib/harness.ts` (`launchBrowser`) and opens a real
-Chrome window (default `SLOWMO=200`). Headless is the default.
+Chrome window (default `SLOWMO=200`). Headless is the default. Prefer the **small**
+Playwright viewport (**1280×720** / omit `setViewportSize`) so the game stage
+matches GatheringBot harnesses — not a forced 1500×1000 window (see
+`HARNESS_VIEWPORT` and [TESTING.md](TESTING.md#live-harnesses)).
 
 The helper teles to each camp, waits until `me` is near the seed tile, samples
 rocks/trees/fish in scene, and prints PASS/FAIL only — it never edits the

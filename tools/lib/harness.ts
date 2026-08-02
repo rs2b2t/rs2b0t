@@ -27,6 +27,19 @@ export function parseArgs(argv: string[], defaults?: { base?: string; minutes?: 
     };
 }
 
+/**
+ * Preferred Playwright viewport for live harnesses (local operator preference).
+ *
+ * Matches Playwright's default and tools that call `browser.newPage()` with no
+ * override (GatheringBot suite, verify-gather-locs, open-client, …).
+ *
+ * Do **not** force `{ width: 1500, height: 1000 }` — bot.html scales the 765×503
+ * game stage to fill the page; a large viewport makes the client look blown up
+ * relative to the smaller harnesses. Prefer omitting `setViewportSize` / `viewport`
+ * so this default applies, or pass `HARNESS_VIEWPORT` explicitly.
+ */
+export const HARNESS_VIEWPORT = { width: 1280, height: 720 } as const;
+
 export async function launchBrowser(opts?: { swiftshader?: boolean }): Promise<Browser> {
     // HEADED=1 opens a visible window (slowed down) so a human can watch/diagnose.
     const headed = !!process.env.HEADED;

@@ -62,8 +62,11 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
                     bump(it.name, it.count);
                 }
             }
-            // Jewellery itself must be held — not banked as a one-shot tele plan
-            // unless it's already in bankItemCounts; skip auto bank of glory rings.
+            // Jewellery: plan-time requires the ring/glory **in inventory**
+            // (PathFinder scans state.items via inventoryNameMatchesJewellery).
+            // We do **not** path-scoped bank-withdraw jewellery here (runes/tolls only).
+            // There is no bank-cache of jewellery for routing unless a caller passes
+            // bankItemCounts and PathFinder is given a virtualized state.
             continue;
         }
         // Door / special crossing tolls keyed at approach tile.
