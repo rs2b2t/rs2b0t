@@ -103,6 +103,31 @@ export function matchesCommonBankLoot(name: string, id: number = -1): boolean {
     return COMMON_BANK_LOOT.some(p => n.includes(p));
 }
 
+/**
+ * Inventory junk that steals pack slots during long AFK loops (random-event
+ * leftovers, common bank loot). Callers must still exclude tools/gear/logs.
+ * Used by GatheringBot chop-then-burn when banking is deferred for a fire load.
+ */
+export function isDisposableGatherJunk(name: string | null | undefined, id: number = -1): boolean {
+    if (matchesCommonBankLoot(name ?? '', id)) {
+        return true;
+    }
+    const n = (name ?? '').toLowerCase().trim();
+    if (n.length === 0) {
+        return false;
+    }
+    // Misc event / world leftovers that are not gear and not a gather product.
+    return (
+        n === 'flier'
+        || n === 'spin ticket'
+        || n === 'security book'
+        || n.includes('discount certificate')
+        || n === 'half a meat pie'
+        || n === 'half a redberry pie'
+        || n === 'half an apple pie'
+    );
+}
+
 export function depositMatcher(own: (name: string) => boolean, includeCommon: boolean): (name: string, id?: number) => boolean {
     return (name: string, id: number = -1) => own(name) || (includeCommon && matchesCommonBankLoot(name, id));
 }

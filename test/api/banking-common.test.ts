@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { COMMON_BANK_LOOT, RANDOM_EVENT_CASKET_ID, matchesCommonBankLoot, depositMatcher, depositAllExcept, PERIODIC_BANK_SETTINGS } from '#/bot/api/Banking.js';
+import {
+    COMMON_BANK_LOOT,
+    RANDOM_EVENT_CASKET_ID,
+    depositAllExcept,
+    depositMatcher,
+    isDisposableGatherJunk,
+    matchesCommonBankLoot,
+    PERIODIC_BANK_SETTINGS
+} from '#/bot/api/Banking.js';
 
 describe('matchesCommonBankLoot', () => {
     test('matches each junk category (case-insensitive contains)', () => {
@@ -54,6 +62,25 @@ describe('depositMatcher', () => {
     test('the caller predicate still banks its own Casket when common rewards are disabled', () => {
         const ownCasket = (name: string): boolean => name.toLowerCase() === 'casket';
         expect(depositMatcher(ownCasket, false)('Casket', RANDOM_EVENT_CASKET_ID)).toBe(true);
+    });
+});
+
+describe('isDisposableGatherJunk', () => {
+    test('includes common bank loot and random-event casket id', () => {
+        expect(isDisposableGatherJunk('Uncut sapphire', -1)).toBe(true);
+        expect(isDisposableGatherJunk('Strange fruit', -1)).toBe(true);
+        expect(isDisposableGatherJunk('Casket', RANDOM_EVENT_CASKET_ID)).toBe(true);
+    });
+    test('includes other event leftovers', () => {
+        expect(isDisposableGatherJunk('Flier', -1)).toBe(true);
+        expect(isDisposableGatherJunk('Spin ticket', -1)).toBe(true);
+        expect(isDisposableGatherJunk('Half a meat pie', -1)).toBe(true);
+    });
+    test('rejects tools, coins, logs', () => {
+        expect(isDisposableGatherJunk('Rune axe', -1)).toBe(false);
+        expect(isDisposableGatherJunk('Coins', 995)).toBe(false);
+        expect(isDisposableGatherJunk('Willow logs', -1)).toBe(false);
+        expect(isDisposableGatherJunk('Tinderbox', -1)).toBe(false);
     });
 });
 
