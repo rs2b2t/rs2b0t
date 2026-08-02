@@ -41,6 +41,7 @@ import TutorialBot from './TutorialBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
 import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility.js';
 import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot.js';
+import HillGiant, { HILL_GIANT_SETTINGS } from './HillGiant.js';
 import TannerBot, { TANNER_SETTINGS } from './TannerBot.js';
 import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller.js';
 import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter.js';
@@ -561,6 +562,15 @@ ScriptRegistry.register({
     tags: ['alkharid', 'leather', 'dragonhide', 'banking', 'afk'],
     settingsSchema: TANNER_SETTINGS,
     create: () => new TannerBot()
+});
+
+ScriptRegistry.register({
+    name: 'HillGiant',
+    description: 'Edgeville dungeon hill giants — fetches the brass key if the bank has none, unlocks the hut, and banks limpwurt roots and big bones at Varrock East',
+    category: 'Combat',
+    tags: ['combat', 'giants', 'edgeville', 'varrock', 'banking', 'looting'],
+    settingsSchema: HILL_GIANT_SETTINGS,
+    create: () => new HillGiant()
 });
 
 ScriptRegistry.register({

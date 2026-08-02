@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **44 scripts** across 19 categories. They double as worked
+The client ships **45 scripts** across 19 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -14,7 +14,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 ## Contents
 
 - [Agility](#agility) — 3
-- [Combat](#combat) — 9
+- [Combat](#combat) — 10
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 5
 - [Firemaking](#firemaking) — 1
@@ -251,6 +251,24 @@ Tags: `wilderness`, `dragons`, `hides`
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
 | `anchorTile` | tile | `{"x":3096,"z":3814,"level":0}` | Dragon field tile |
 | `bankTile` | tile | `{"x":3094,"z":3493,"level":0}` | Bank stand tile (Edgeville) |
+
+### HillGiant
+
+Edgeville dungeon hill giants — fetches the brass key if the bank has none, unlocks the hut, and banks limpwurt roots and big bones at Varrock East
+
+Tags: `combat`, `giants`, `edgeville`, `varrock`, `banking`, `looting`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `weapon` | string | `""` | Weapon to wield |
+| `food` | string | `"Trout"` | Food — one of: Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
+| `foodWithdraw` | number (1–27) | `12` | Food per trip |
+| `eatAtHp` | number (1–99) | `50` | Eat below HP% |
+| `loot` | string[] | `["Limpwurt root","Big bones"]` | Loot to pick up — one of: Beer, Big bones, Body talisman, Chaos rune, Chaos talisman, Coins, Cosmic rune, Death rune, Dragon spear, Fire rune, Half of a key, Herb, Iron arrow, Iron dagger, Iron full helm, Iron kiteshield, Law rune, Limpwurt root, Mind rune, Nature rune, Nature talisman, Rune javelin, Rune spear, Shield left half, Steel arrow, Steel longsword, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `buryBones` | boolean | `false` | Bury big bones |
+| `lootSlots` | number (1–27) | `14` | Bank after this many loot slots |
 
 ### MossGiant
 
