@@ -311,7 +311,12 @@ screenshot + JSON via [`tools/lib/harnessProof.ts`](../tools/lib/harnessProof.ts
 `--expect-unreachable` or offline path unit test). Attach proof PNGs to the PR —
 `screenshots/` is gitignored; do not commit them.
 
-Copy from: `tools/shantay-pass-route-test.ts`, `tools/edgeville-dungeon-exit-test.ts`.
+| Harness | Role |
+|---|---|
+| [`tools/shantay-pass-route-test.ts`](../tools/shantay-pass-route-test.ts) | dual success/baseline pattern |
+| [`tools/edgeville-dungeon-exit-test.ts`](../tools/edgeville-dungeon-exit-test.ts) | #285 dungeon → Falador |
+| [`tools/cleanup-verify-live.ts`](../tools/cleanup-verify-live.ts) | multi-fix live suite |
+| [`tools/naturecrafter-trade-smoke.ts`](../tools/naturecrafter-trade-smoke.ts) | dual-account NatureCrafter trade |
 
 ## Writing a harness
 
