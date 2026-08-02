@@ -7,7 +7,10 @@ import { Sustain } from '../api/Sustain.js';
 import { Locs, type Loc } from '../api/queries/Locs.js';
 import { Npcs } from '../api/queries/Npcs.js';
 import { Inventory } from '../api/hud/Inventory.js';
+import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Quests } from '../api/hud/Quests.js';
+import { Banking, isDisposableGatherJunk } from '../api/Banking.js';
 import { SPECIAL_CROSSINGS, specialCrossingAt, pickChoice, meetsRequirement, meetsSkill, matchesUseItem, type SpecialCrossing } from './data/specialCrossings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Reachability } from '../api/Reachability.js';
@@ -584,6 +587,15 @@ class WalkExecutorImpl {
             return false;
         }
 
+        if (sc.unlockQuest) {
+            const st = Quests.status(sc.unlockQuest.quest);
+            if (st === 'notStarted' || st === 'unknown') {
+                if (!(await this.unlockQuestForCrossing(sc, approach, log))) {
+                    return false;
+                }
+            }
+        }
+
         if (sc.npc) {
             const npc = Npcs.query().name(sc.npc).action('Talk-to').nearest();
             if (!npc || !(await npc.interact('Talk-to'))) {
@@ -651,6 +663,151 @@ class WalkExecutorImpl {
         }
         log(`${sc.label}: dialogue did not resolve — repathing`);
         return false;
+    }
+
+    /**
+     * Permanent unlock via starting a quest at a nearby NPC (e.g. Drezel → Nature Spirit
+     * so Mort Myre gate opens forever). Nested walkTo is intentional: outer path resumes
+     * after we return to the approach tile and open the barrier.
+     *
+     * Pack space: NPCs may grant items on accept (Drezel: 6 unstackable pies). Free
+     * disposable junk at a bank first; if still short of freeSlots, give up rather than
+     * half-start the quest or drop gear.
+     */
+    private async unlockQuestForCrossing(
+        sc: SpecialCrossing,
+        approach: PathStep,
+        log: (msg: string) => void
+    ): Promise<boolean> {
+        const u = sc.unlockQuest!;
+        if (u.requireComplete) {
+            const req = Quests.status(u.requireComplete);
+            if (req !== 'complete') {
+                log(`${sc.label}: need ${u.requireComplete} complete before ${u.quest} — skipping`);
+                return false;
+            }
+        }
+
+        const needSlots = u.freeSlots ?? 0;
+        if (needSlots > 0 && !(await this.ensureUnlockPackSpace(sc, needSlots, log))) {
+            return false;
+        }
+
+        log(`${sc.label}: ${u.quest} not started — walking to ${u.npc} to unlock`);
+        const toNpc = await this.walkTo(u.stand, {
+            radius: 4,
+            timeoutMs: 180_000,
+            log: m => log(`  ${m}`)
+        });
+        if (!toNpc) {
+            log(`${sc.label}: could not reach ${u.npc} at (${u.stand.x},${u.stand.z})`);
+            return false;
+        }
+
+        // Re-check after the walk (random-event loot / full pack from elsewhere).
+        if (needSlots > 0 && Inventory.free() < needSlots) {
+            log(
+                `${sc.label}: pack only ${Inventory.free()} free after walk (need ${needSlots} for ${u.npc} rewards) — giving up`
+            );
+            return false;
+        }
+
+        const npc = Npcs.query().name(u.npc).nearest();
+        if (!npc || !(await npc.interact('Talk-to'))) {
+            log(`${sc.label}: '${u.npc}' not talkable near unlock stand`);
+            return false;
+        }
+
+        const unlocked = (): boolean => {
+            const st = Quests.status(u.quest);
+            return st === 'inProgress' || st === 'complete';
+        };
+        for (let i = 0; i < 80 && !unlocked(); i++) {
+            const pick = pickChoice(ChatDialog.options(), u.dialogue.choose);
+            if (pick) {
+                await ChatDialog.chooseOption(pick);
+            } else if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+            } else {
+                await Execution.delayTicks(1);
+            }
+        }
+        // Close leftover pie/continue boxes
+        for (let i = 0; i < 20 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
+            if (ChatDialog.canContinue()) {
+                await ChatDialog.continue();
+            } else {
+                await Execution.delayTicks(1);
+            }
+        }
+
+        if (!unlocked()) {
+            log(`${sc.label}: talked to ${u.npc} but ${u.quest} still ${Quests.status(u.quest)}`);
+            return false;
+        }
+        log(`${sc.label}: ${u.quest} started — returning to gate`);
+
+        const back = await this.walkTo(approach, {
+            radius: 2,
+            timeoutMs: 180_000,
+            log: m => log(`  ${m}`)
+        });
+        if (!back) {
+            log(`${sc.label}: could not return to gate after unlock`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Ensure `need` free pack slots before an unlock NPC grants items.
+     * Banks disposable junk only (common loot / event leftovers); never drops gear.
+     * Returns false when still short after that attempt.
+     */
+    private async ensureUnlockPackSpace(
+        sc: SpecialCrossing,
+        need: number,
+        log: (msg: string) => void
+    ): Promise<boolean> {
+        if (Inventory.free() >= need) {
+            return true;
+        }
+
+        const junk = Inventory.items().filter(i => isDisposableGatherJunk(i.name, i.id));
+        if (junk.length === 0) {
+            log(
+                `${sc.label}: need ${need} free slots for quest items ` +
+                    `(have ${Inventory.free()}, no bankable junk) — giving up`
+            );
+            return false;
+        }
+
+        log(
+            `${sc.label}: pack tight (${Inventory.free()}/${need} free) — banking ${junk.length} junk stack(s)`
+        );
+        if (
+            !(await Banking.open({
+                preferNearby: true,
+                log: m => log(`  ${m}`)
+            }))
+        ) {
+            log(`${sc.label}: could not open bank to free space — giving up`);
+            return false;
+        }
+        await Bank.depositAllMatching((name, id) => isDisposableGatherJunk(name, id));
+        await Execution.delayTicks(1);
+        if (Bank.isOpen()) {
+            await Bank.close().catch(() => undefined);
+        }
+
+        if (Inventory.free() < need) {
+            log(
+                `${sc.label}: still ${Inventory.free()} free after banking junk (need ${need}) — giving up`
+            );
+            return false;
+        }
+        log(`${sc.label}: pack ok (${Inventory.free()} free) after banking junk`);
+        return true;
     }
 
     private findTransportLoc(transport: TransportInfo): Loc | null {

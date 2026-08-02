@@ -12,6 +12,25 @@ export interface SpecialCrossing {
     npc?: string;
     toTile?: { x: number; z: number; level: number };
     reopenAfterDialogue?: boolean;
+    /**
+     * When `quest` is notStarted, walk to `npc` at `stand`, run `dialogue`, then
+     * re-attempt the crossing. Used when a permanent unlock is granted by starting
+     * a quest (Mort Myre / Nature Spirit via Drezel).
+     */
+    unlockQuest?: {
+        quest: string;
+        /** Must already be complete (e.g. Priest in Peril before Nature Spirit). */
+        requireComplete?: string;
+        npc: string;
+        stand: { x: number; z: number; level: number };
+        dialogue: { choose: string[] };
+        /**
+         * Free inventory slots required before talking (NPC may grant items).
+         * Drezel hands 3 meat pie + 3 apple pie (unstackable) = 6.
+         * Short packs try to bank disposable junk first; if still tight, give up.
+         */
+        freeSlots?: number;
+    };
     label: string;
 }
 
@@ -28,6 +47,58 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 2772, z: 3234, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 2683, z: 3268, level: 1 }, label: 'Brimhaven->Ardougne ship' },
 
     { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
+
+    // Mort Myre gate (#115). Server: Open is a hard mesbox while Nature Spirit is not
+    // started; once started/complete the gate opens with no dialog. Unlock = walk back
+    // to Drezel (post–Priest in Peril mausoleum), start Nature Spirit, return.
+    // Both leaves share the gate (PathFinder keys edge origin).
+    {
+        x: 3443,
+        z: 3458,
+        level: 0,
+        locName: 'Gate',
+        action: 'Open',
+        unlockQuest: {
+            quest: 'Nature Spirit',
+            requireComplete: 'Priest in Peril',
+            npc: 'Drezel',
+            stand: { x: 3439, z: 9895, level: 0 },
+            // 3× meat pie + 3× apple pie (unstackable)
+            freeSlots: 6,
+            dialogue: {
+                choose: [
+                    'anything else interesting',
+                    'what is it, I may be able to help',
+                    "I'll go and look for him",
+                    "Yes, I'm sure"
+                ]
+            }
+        },
+        label: 'Mort Myre gate (Ulizius)'
+    },
+    {
+        x: 3444,
+        z: 3458,
+        level: 0,
+        locName: 'Gate',
+        action: 'Open',
+        unlockQuest: {
+            quest: 'Nature Spirit',
+            requireComplete: 'Priest in Peril',
+            npc: 'Drezel',
+            stand: { x: 3439, z: 9895, level: 0 },
+            freeSlots: 6,
+            dialogue: {
+                choose: [
+                    'anything else interesting',
+                    'what is it, I may be able to help',
+                    "I'll go and look for him",
+                    "Yes, I'm sure"
+                ]
+            }
+        },
+        label: 'Mort Myre gate (Ulizius)'
+    },
 
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
     { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' }

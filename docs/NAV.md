@@ -188,6 +188,17 @@ Those are curated in
 and `pickChoice` matches a dialogue option case-insensitively by substring so small
 wording differences do not break a route.
 
+Some barriers need a **permanent quest unlock** rather than a one-shot dialog at the
+gate. Mort Myre’s Ulizius gate is a hard mesbox while Nature Spirit is not started;
+once started the gate opens with no dialog. Those crossings carry `unlockQuest`: if
+the quest is red, the executor walks to the NPC (`Drezel` in the Paterdomus mausoleum
+after Priest in Peril), drives the start dialogue, returns to the gate, then opens it.
+
+When the unlock NPC **grants items** on accept (Drezel: six unstackable pies), set
+`freeSlots`. The executor banks disposable junk first if the pack is tight; if there
+is still not enough space (or no bankable junk / bank unreachable), it **gives up**
+rather than half-starting the quest or dropping gear.
+
 A crossing can also gate on a **skill**, which is how Agility shortcuts are modelled:
 
 ```ts

@@ -41,6 +41,49 @@ describe('specialCrossingAt', () => {
         expect(specialCrossingAt(2461, 3385, 0)).toBeNull();
     });
 
+    test('Mort Myre Ulizius gate: Drezel unlockQuest detour for Nature Spirit (#115)', () => {
+        const a = specialCrossingAt(3443, 3458, 0);
+        const b = specialCrossingAt(3444, 3458, 0);
+        expect(a?.label).toBe('Mort Myre gate (Ulizius)');
+        expect(b?.label).toBe('Mort Myre gate (Ulizius)');
+        expect(a?.locName).toBe('Gate');
+        expect(a?.action).toBe('Open');
+        // Gate Open itself has no dialog once NS is started; unlock is a Drezel detour.
+        expect(a?.dialogue).toBeUndefined();
+        expect(a?.reopenAfterDialogue).toBeUndefined();
+        expect(a?.unlockQuest?.quest).toBe('Nature Spirit');
+        expect(a?.unlockQuest?.requireComplete).toBe('Priest in Peril');
+        expect(a?.unlockQuest?.npc).toBe('Drezel');
+        expect(a?.unlockQuest?.stand).toEqual({ x: 3439, z: 9895, level: 0 });
+        // Drezel grants 3 meat pie + 3 apple pie (unstackable) on accept.
+        expect(a?.unlockQuest?.freeSlots).toBe(6);
+        expect(
+            pickChoice(
+                [
+                    "Well, I'm going to look around a bit more.",
+                    'Is there anything else interesting to do around here?'
+                ],
+                a!.unlockQuest!.dialogue.choose
+            )
+        ).toBe('Is there anything else interesting to do around here?');
+        expect(
+            pickChoice(
+                ["Sorry, not interested...", 'Well, what is it, I may be able to help?'],
+                a!.unlockQuest!.dialogue.choose
+            )
+        ).toBe('Well, what is it, I may be able to help?');
+        expect(
+            pickChoice(
+                ["Yes, I'll go and look for him.", "Sorry, I don't think I can help."],
+                a!.unlockQuest!.dialogue.choose
+            )
+        ).toBe("Yes, I'll go and look for him.");
+        expect(
+            pickChoice(["Yes, I'm sure.", "Who is this Filliman?"], a!.unlockQuest!.dialogue.choose)
+        ).toBe("Yes, I'm sure.");
+        expect(b?.unlockQuest?.quest).toBe('Nature Spirit');
+    });
+
     test('every crossing carries the fields the executor reads', () => {
         for (const c of SPECIAL_CROSSINGS) {
             expect(c.locName.length).toBeGreaterThan(0);
