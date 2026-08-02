@@ -103,7 +103,8 @@ export function createHarnessProof(opts: CreateHarnessProofOpts): HarnessProof {
         console.log(
             mode === 'failure'
                 ? `screenshot=${screenshot}`
-                : `proof=${proofFile} screenshot=${screenshot}`
+                : `proof=${proofFile} screenshot=${screenshot}` +
+                      (typeof body.total === 'number' ? ` results=${body.total}` : '')
         );
     }
 

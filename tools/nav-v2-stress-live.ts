@@ -15,7 +15,8 @@ import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 120) * 1000;
-const proof = createHarnessProof({ issue: 0, slug: 'nav-v2-stress' });
+// No issue number → out/nav-v2-stress-proof.json (not issue0-…).
+const proof = createHarnessProof({ slug: 'nav-v2-stress' });
 
 const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
@@ -266,7 +267,19 @@ function selectedCases(): CaseId[] {
     return ALL_CASES.filter(c => want.includes(c));
 }
 
-console.log(`nav-v2-stress-live base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s cases=${selectedCases().join(',')}`);
+const cases = selectedCases();
+if (cases.length === 0) {
+    console.error(
+        `FAIL: CASES matched nothing. Want one of: ${ALL_CASES.join(', ')}\n` +
+            `  got CASES=${JSON.stringify(process.env.CASES ?? '')}`
+    );
+    process.exit(2);
+}
+
+console.log(
+    `nav-v2-stress-live base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s cases=${cases.join(',')}`
+);
+console.log(`  proof → ${proof.paths.successProof}  screenshot → ${proof.paths.successScreenshot}`);
 await proof.ensureDirs();
 const browser = await launchBrowser({ swiftshader: true });
 const t0 = Date.now();
@@ -319,8 +332,6 @@ try {
     if (!paintOn) {
         console.warn('WARNING: showNavPath still false after setSettings — paint case may soft-fail');
     }
-
-    const cases = selectedCases();
 
     // ── path-paint: pure walk, sample PathPublish mid-route ─────────────
     if (cases.includes('path-paint')) {
