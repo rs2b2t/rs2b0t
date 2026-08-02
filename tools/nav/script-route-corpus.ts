@@ -15,9 +15,12 @@
  *      both walk (or tele-then-walk) the same corridor count as one path.
  *
  * Generated JSON / hardest list are written **after** pack corridor dedupe.
+ * **Hardest ranking uses teleports by default** (full runes + magic 99 WorldState),
+ * matching live v2 stress. Pass `--no-tele` for pure-walk cost ranking only.
  *
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --write
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
+ *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --no-tele --hardest=25
  *   bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --endpoint-radius=0 --corridor-grid=8
  *
  * Preload is required: BankLocations pulls a tiny bit of client surface (happy-dom).
@@ -35,6 +38,8 @@ import stairsJson from '#/bot/nav/data/stairEdges.json';
 import transportsJson from '#/bot/nav/data/transports.json';
 import { PathFinder, type DoorEdgeData, type NavPoint } from '#/bot/nav/PathFinder.js';
 import { formatHops } from '#/bot/nav/v2/hops.js';
+import type { PathPolicy } from '#/bot/nav/v2/types.js';
+import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
 
 export interface ScriptRoute {
     id: string;
@@ -368,6 +373,15 @@ if (isMain) {
         ?? process.argv.find(a => a.startsWith('--dedupe-radius='));
     const gridArg = process.argv.find(a => a.startsWith('--corridor-grid='));
     const sampleArg = process.argv.find(a => a.startsWith('--corridor-sample='));
+    const useTele =
+        !process.argv.includes('--no-tele')
+        && process.env.NO_TELE !== '1'
+        && process.env.NO_TELE !== 'true';
+    const distanceBeforeTeleport = Number(
+        process.argv.find(a => a.startsWith('--distanceBeforeTeleport='))?.split('=')[1]
+        ?? process.env.DISTANCE_BEFORE_TELEPORT
+        ?? 40
+    );
     const limit = limitArg ? Number(limitArg.split('=')[1]) : Number(process.env.LIMIT || 0);
     const hardestN = hardestArg
         ? Number(hardestArg.split('=')[1])
@@ -389,6 +403,11 @@ if (isMain) {
         `seeds: ${seedRoutes.length} after endpoint-radius=${endpointRadius}`
         + ` (raw ${rawCount}); pack will corridor-dedupe (grid=${corridorGrid}, sample=${corridorSample})`
     );
+    console.log(
+        useTele
+            ? `path cost: with tele catalog (magic 99 + runes, distanceBeforeTeleport=${distanceBeforeTeleport})`
+            : 'path cost: pure walk only (--no-tele)'
+    );
 
     const packPath = 'out/collision.lcnav.gz';
     if (!fs.existsSync(packPath)) {
@@ -408,10 +427,42 @@ if (isMain) {
     const ranked: RankedScriptRoute[] = [];
     const t0 = performance.now();
 
-    // Pure pack walk (no tele catalog) so “hard” means long graph cost, not tele shortcuts.
+    // Match live v2 stress: spell/jewellery catalog + full rune bag so “hard”
+    // is remaining graph cost after teles, not pure Lumb→Rellekka footpaths.
+    const teleState: WorldStateData | undefined = useTele
+        ? {
+            members: true,
+            skills: { magic: 99, Magic: 99 },
+            quests: {
+                'Plague City': 'complete',
+                Watchtower: 'complete',
+                "Eadgar's Ruse": 'complete'
+            },
+            items: {
+                'Law rune': 200,
+                'Air rune': 500,
+                'Fire rune': 200,
+                'Water rune': 200,
+                'Earth rune': 200,
+                // jewellery charge names matched loosely by catalog
+                'Ring of dueling(8)': 1,
+                'Games necklace(8)': 1,
+                'Amulet of glory(4)': 1
+            },
+            freeSlots: 20
+        }
+        : undefined;
+    const policy: PathPolicy = useTele
+        ? { useTeleports: true, distanceBeforeTeleport }
+        : { useTeleports: false };
+
     for (const r of routes) {
         const started = performance.now();
-        const outcome = finder.findPath(r.from, r.to, { policy: { useTeleports: false } });
+        const outcome = finder.findPath(r.from, r.to, {
+            policy,
+            state: teleState,
+            useTeleportCatalog: useTele
+        });
         const ms = performance.now() - started;
         if (!outcome.ok) {
             console.log(`FAIL ${r.id} [${r.source}] ${r.note}: ${outcome.reason} (${ms.toFixed(1)}ms)`);
@@ -420,6 +471,7 @@ if (isMain) {
         }
         pass++;
         const chebDist = cheb(r.from, r.to);
+        const teleHops = outcome.hops.filter(h => h.kind === 'teleport').length;
         const corridor = pathCorridorSignature(outcome.waypoints, outcome.hops, {
             grid: corridorGrid,
             sampleEvery: corridorSample
@@ -442,7 +494,8 @@ if (isMain) {
         ranked.push(row);
         if (explain) {
             console.log(
-                `PASS ${r.id} cost=${outcome.cost} exp=${outcome.expanded} hops=${outcome.hops.length} ${ms.toFixed(1)}ms — ${r.note}`
+                `PASS ${r.id} cost=${outcome.cost} exp=${outcome.expanded} hops=${outcome.hops.length}`
+                + ` tele=${teleHops} ${ms.toFixed(1)}ms — ${r.note}`
             );
             if (outcome.hops.length) {
                 console.log(formatHops(outcome.hops));
@@ -464,7 +517,10 @@ if (isMain) {
 
     const nHard = hardestN > 0 ? hardestN : 25;
     const hardest = rankHardest(unique, nHard);
-    console.log(`\nhardest ${hardest.length} unique corridors (pack cost / expansions, no teles):`);
+    console.log(
+        `\nhardest ${hardest.length} unique corridors `
+        + `(pack cost / expansions, teles=${useTele ? 'on' : 'off'}):`
+    );
     for (let i = 0; i < hardest.length; i++) {
         const h = hardest[i]!;
         console.log(
@@ -481,7 +537,8 @@ if (isMain) {
             endpointRadius,
             corridorGrid,
             corridorSample,
-            teleports: false as const,
+            teleports: useTele,
+            distanceBeforeTeleport: useTele ? distanceBeforeTeleport : undefined,
             seedCount: routes.length,
             passCount: ranked.length,
             uniqueCorridors: unique.length
@@ -494,7 +551,8 @@ if (isMain) {
                     {
                         description:
                             'Pack-probed paths from BANK/WALK/NAV/mainland sources. '
-                            + 'Deduped by corridor signature (hops + coarse walk cells), not just endpoints. '
+                            + 'Deduped by corridor signature (hops + coarse walk cells). '
+                            + `Path cost ${useTele ? 'with' : 'without'} tele catalog. `
                             + 'Do not hand-edit — run script-route-corpus.ts --write.',
                         ...meta,
                         count: jsonRoutes.length,
@@ -513,8 +571,9 @@ if (isMain) {
                 JSON.stringify(
                     {
                         description:
-                            'Hardest unique corridors (useTeleports:false). From corridor-deduped pack corpus. '
-                            + 'Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
+                            `Hardest unique corridors (useTeleports=${useTele}). Corridor-deduped pack corpus. `
+                            + 'Regenerate with script-route-corpus.ts [--hardest=N] [--no-tele]. '
+                            + 'Live: HARD=1 bun tools/nav-script-routes-live.ts',
                         metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
                         ...meta,
                         count: hardRoutes.length,

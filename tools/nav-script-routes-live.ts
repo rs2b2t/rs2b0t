@@ -29,7 +29,7 @@ const TICK_MS = 300;
 const TICK_RESTORE_MS = 600;
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 180) * 1000;
 const LIVE_LIMIT = Number(process.env.LIMIT) || 14;
-/** HARD=1 → walk precalc hardest list (tools/nav/script-routes.hardest.json). */
+/** HARD=1 → walk precalc hardest list (tools/nav/script-routes.hardest.json; ranked with teles by default). */
 const USE_HARDEST = process.env.HARD === '1' || process.env.HARD === 'true';
 const ARRIVAL = 8;
 /** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
