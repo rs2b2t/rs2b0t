@@ -165,8 +165,11 @@ class FletchDialog implements Task {
         const start = this.bot.logCount();
         // Prefer Make-X (full pack / cap 30) over Make-10 so one menu drains the inv (#177).
         const count = Math.max(1, Math.min(start, 30));
+        let usedMakeX = false;
         let picked = await ChatDialog.makeX(match, count);
-        if (!picked && ChatDialog.isMakeMenu()) {
+        if (picked) {
+            usedMakeX = true;
+        } else if (ChatDialog.isMakeMenu()) {
             // No Make-X / count dialog failed — fall back to largest fixed qty once.
             this.bot.log(`Make-X failed for *${this.bot.productName()}* — falling back to fixed qty`);
             picked = await ChatDialog.make(match);
@@ -177,8 +180,8 @@ class FletchDialog implements Task {
             return;
         }
 
-        // Do NOT treat "make menu still open" as production started — that was the thrash:
-        // wait ended immediately, loop returned, next tick re-clicked Make-X forever.
+        // Do NOT treat "make menu still open" as production started — that thrashed Make-X
+        // every tick. Wait for the menu to leave and work to begin.
         const started = await Execution.delayUntil(
             () =>
                 !ChatDialog.isMakeMenu()
@@ -186,31 +189,31 @@ class FletchDialog implements Task {
             5000
         );
         if (!started) {
-            // Menu stuck open or count dialog never resolved — yield; next tick retries.
             return;
         }
 
+        // Ride the batch to completion (#177): Make-X should consume `count` logs without
+        // reopening the menu. Do not bail on brief !animating gaps (old loop left logs).
+        // Fixed-qty fallback: ride until menu reopens / true idle stall.
+        const floor = usedMakeX ? Math.max(0, start - count) : 0;
         let mark = this.bot.logCount();
-        for (let guard = 0; guard < 200; guard++) {
-            if (this.bot.logCount() === 0 || ChatDialog.canContinue()) {
+        let idle = 0;
+        const idleLimit = 12; // ~ticks without a log consume → real stall
+        for (let guard = 0; guard < 400 && this.bot.logCount() > floor; guard++) {
+            if (ChatDialog.canContinue()) {
                 return;
             }
-            // Make menu re-open mid-run = interruption (level-up / random) — re-pick next tick.
+            // Menu back = batch finished or interrupted — re-pick next tick if logs remain.
             if (ChatDialog.isMakeMenu()) {
                 return;
             }
-            const progressed = await Execution.delayUntil(
-                () =>
-                    this.bot.logCount() < mark
-                    || ChatDialog.isMakeMenu()
-                    || ChatDialog.canContinue(),
-                4000
-            );
+            await Execution.delayTicks(1);
             const now = this.bot.logCount();
             if (now < mark) {
                 this.bot.recordMade(mark - now);
                 mark = now;
-            } else if (!progressed || !Game.animating()) {
+                idle = 0;
+            } else if (++idle >= idleLimit) {
                 return;
             }
         }
