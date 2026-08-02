@@ -90,6 +90,11 @@ export const ChatDialog = {
         }, 3000);
     },
 
+    /**
+     * Click Make-X for a product, type `count` into the amount dialog.
+     * Waits for the count dialog to open **and** close so callers do not race
+     * a still-open make-menu (BankFletcher thrash after #177).
+     */
     async makeX(match: string, count: number): Promise<boolean> {
         const products = reader.makeProducts();
         const want = match.toLowerCase();
@@ -101,10 +106,15 @@ export const ChatDialog = {
         if (!actions.ifButton(xBtn.comId)) {
             return false;
         }
-        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 3000))) {
+        // Count dialog can lag a tick behind the Make-X click on this client.
+        if (!(await Execution.delayUntil(() => reader.countDialogOpen(), 5000))) {
             return false;
         }
-        return actions.answerCountDialog(count);
+        if (!actions.answerCountDialog(count)) {
+            return false;
+        }
+        await Execution.delayUntil(() => !reader.countDialogOpen(), 3000);
+        return true;
     },
 
     isMainMakePanel(): boolean {

@@ -165,17 +165,47 @@ class FletchDialog implements Task {
         const start = this.bot.logCount();
         // Prefer Make-X (full pack / cap 30) over Make-10 so one menu drains the inv (#177).
         const count = Math.max(1, Math.min(start, 30));
-        const picked = (await ChatDialog.makeX(match, count)) || (await ChatDialog.make(match));
+        let picked = await ChatDialog.makeX(match, count);
+        if (!picked && ChatDialog.isMakeMenu()) {
+            // No Make-X / count dialog failed — fall back to largest fixed qty once.
+            this.bot.log(`Make-X failed for *${this.bot.productName()}* — falling back to fixed qty`);
+            picked = await ChatDialog.make(match);
+        }
         if (!picked) {
             this.bot.log(`make menu open but couldn't pick *${this.bot.productName()}* — products: [${products.join(', ')}]`);
             await Execution.delayTicks(1);
             return;
         }
-        await Execution.delayUntil(() => Game.animating() || this.bot.logCount() < start || ChatDialog.isMakeMenu(), 3000);
+
+        // Do NOT treat "make menu still open" as production started — that was the thrash:
+        // wait ended immediately, loop returned, next tick re-clicked Make-X forever.
+        const started = await Execution.delayUntil(
+            () =>
+                !ChatDialog.isMakeMenu()
+                && (Game.animating() || this.bot.logCount() < start || ChatDialog.canContinue()),
+            5000
+        );
+        if (!started) {
+            // Menu stuck open or count dialog never resolved — yield; next tick retries.
+            return;
+        }
+
         let mark = this.bot.logCount();
         for (let guard = 0; guard < 200; guard++) {
-            if (this.bot.logCount() === 0 || ChatDialog.isMakeMenu() || ChatDialog.canContinue()) { return; }
-            const progressed = await Execution.delayUntil(() => this.bot.logCount() < mark || ChatDialog.isMakeMenu() || ChatDialog.canContinue(), 4000);
+            if (this.bot.logCount() === 0 || ChatDialog.canContinue()) {
+                return;
+            }
+            // Make menu re-open mid-run = interruption (level-up / random) — re-pick next tick.
+            if (ChatDialog.isMakeMenu()) {
+                return;
+            }
+            const progressed = await Execution.delayUntil(
+                () =>
+                    this.bot.logCount() < mark
+                    || ChatDialog.isMakeMenu()
+                    || ChatDialog.canContinue(),
+                4000
+            );
             const now = this.bot.logCount();
             if (now < mark) {
                 this.bot.recordMade(mark - now);
