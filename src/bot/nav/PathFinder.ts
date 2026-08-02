@@ -515,18 +515,24 @@ export class PathFinder {
                 if (!teleportAllowedByPolicy(edgeProbe, policy, routeSpan).ok) {
                     continue;
                 }
-                if (state && dest.requires && !meetsRequires(dest.requires, state).ok) {
-                    continue;
+                // Fail closed: spell/jewellery requires (magic level, runes, quests, …)
+                // need a WorldState. Without one, do not inject the edge.
+                if (dest.requires) {
+                    if (!state || !meetsRequires(dest.requires, state).ok) {
+                        continue;
+                    }
                 }
                 if (dest.family === 'jewellery') {
                     if (opts.useTeleportCatalog !== true) {
                         continue;
                     }
-                    if (state && opts.state) {
-                        const has = Object.keys(opts.state.items).some(name => inventoryNameMatchesJewellery(name, dest));
-                        if (!has) {
-                            continue;
-                        }
+                    // Jewellery also needs a matching inventory item name (charge stages).
+                    if (!opts.state) {
+                        continue;
+                    }
+                    const has = Object.keys(opts.state.items).some(name => inventoryNameMatchesJewellery(name, dest));
+                    if (!has) {
+                        continue;
                     }
                 }
                 const transport: TransportInfo = {

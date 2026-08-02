@@ -105,6 +105,63 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(formatHops(r.hops).toLowerCase()).toContain('varrock');
     });
 
+    test('spell tele requires magic level (fail closed below gate)', () => {
+        const finder = loadFinder();
+        if (!finder) {
+            return;
+        }
+        const runes = { 'Law rune': 50, 'Air rune': 150, 'Fire rune': 50 };
+        const lowMage: WorldStateData = {
+            members: true,
+            skills: { magic: 24, Magic: 24 },
+            quests: {},
+            items: runes,
+            freeSlots: 20
+        };
+        const highMage: WorldStateData = {
+            members: true,
+            skills: { magic: 25, Magic: 25 },
+            quests: {},
+            items: runes,
+            freeSlots: 20
+        };
+        const from = { x: 3222, z: 3218, level: 0 };
+        const to = { x: 3213, z: 3424, level: 0 };
+        const opts = {
+            policy: { useTeleports: true, distanceBeforeTeleport: 50 } as const,
+            useTeleportCatalog: true as const
+        };
+        const rLow = finder.findPath(from, to, { ...opts, state: lowMage });
+        const rHigh = finder.findPath(from, to, { ...opts, state: highMage });
+        expect(rLow.ok).toBe(true);
+        expect(rHigh.ok).toBe(true);
+        if (!rLow.ok || !rHigh.ok) {
+            return;
+        }
+        expect(rLow.waypoints.some(w => w.transport?.teleportId === 'varrock')).toBe(false);
+        expect(rHigh.waypoints.some(w => w.transport?.teleportId === 'varrock')).toBe(true);
+    });
+
+    test('spell tele without WorldState does not inject (fail closed)', () => {
+        const finder = loadFinder();
+        if (!finder) {
+            return;
+        }
+        const r = finder.findPath(
+            { x: 3222, z: 3218, level: 0 },
+            { x: 3213, z: 3424, level: 0 },
+            {
+                policy: { useTeleports: true, distanceBeforeTeleport: 50 },
+                useTeleportCatalog: true
+            }
+        );
+        expect(r.ok).toBe(true);
+        if (!r.ok) {
+            return;
+        }
+        expect(r.waypoints.every(w => !w.transport?.teleportId)).toBe(true);
+    });
+
     test('useTeleports false never injects spell hops', () => {
         const finder = loadFinder();
         if (!finder) {
