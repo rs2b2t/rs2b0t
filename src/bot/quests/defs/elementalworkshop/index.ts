@@ -10,12 +10,14 @@ import {
 import { EW_FLAG, EW_STAGE, readElementalWorkshopProgress } from './journal.js';
 import {
     COAL_NEED,
+    bestBankWeapon,
     bestHeldPickaxe,
     fromBank,
+    hasHeldSlashTool,
     hasPickaxe,
-    hasSlashTool,
     held,
-    surfaceLoadout
+    surfaceLoadout,
+    warnElementalWorkshopReadiness
 } from './supplies.js';
 import {
     enterWorkshop,
@@ -54,13 +56,14 @@ function needFurnaceWork(snap: QuestSnapshot): boolean {
 }
 
 function sourceKnife(snap: QuestSnapshot): QuestStep | null {
-    if (held(snap, EW_ITEM.BATTERED_KEY.id) > 0 || hasSlashTool(snap)) {
+    // useOn needs a pack item — worn-only does not count (slashBookForKey unequips if needed).
+    if (held(snap, EW_ITEM.BATTERED_KEY.id) > 0 || hasHeldSlashTool(snap)) {
         return null;
     }
-    // Bank first (knife or any slash weapon from e.g. ~bank_f2p), then ground spawn.
+    // Bank first (knife or any slash weapon from e.g. bank_f2p / realistic seed), then ground.
+    const bankWeapon = bestBankWeapon(snap);
     return fromBank(snap, EW_ITEM.KNIFE, 1)
-        ?? fromBank(snap, { id: 1333, name: 'Rune scimitar' }, 1)
-        ?? fromBank(snap, { id: 1321, name: 'Bronze scimitar' }, 1)
+        ?? (bankWeapon ? fromBank(snap, bankWeapon, 1) : null)
         ?? { kind: 'grabGround', item: EW_ITEM.KNIFE.name, anchor: KNIFE_SPAWN, waitIfMissing: true };
 }
 
@@ -142,11 +145,19 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('smith the Elemental shield', smithElementalShield);
     }
 
-    // Surface provisioning before first entry (and when forced out for missing tools).
+    // Surface provisioning before first entry (and when forced out for missing tools / death).
     if (area !== 'workshop') {
+        // First open needs the Battered key. After ENTERED, Push works without it
+        // (death piles often leave the key in Lumbridge — re-bank/withdraw if held).
         if (held(snap, EW_ITEM.BATTERED_KEY.id) === 0) {
-            return fromBank(snap, EW_ITEM.BATTERED_KEY, 1)
-                ?? { kind: 'wait', reason: 'need the Battered key to open the smithy wall' };
+            const bankKey = fromBank(snap, EW_ITEM.BATTERED_KEY, 1);
+            if (bankKey) {
+                return bankKey;
+            }
+            if (stage < EW_STAGE.ENTERED) {
+                return { kind: 'wait', reason: 'need the Battered key to open the smithy wall' };
+            }
+            // Stage already entered: enterWorkshop will Push the odd wall.
         }
         // Before entered, journal has no machinery flags — assume all workshop work remains.
         const bellows = stage < EW_STAGE.ENTERED || needBellowsWork(snap);
@@ -209,11 +220,28 @@ export const elementalworkshop: QuestModule = {
     ownsInventory: true,
     tools: ['knife', 'hammer', 'needle', 'thread', 'leather', 'coal', 'battered book', 'battered key'],
     readProgress: readElementalWorkshopProgress,
-    sustain: { foods: ['Swordfish', 'Lobster', 'Salmon', 'Trout'], eatBelowHp: 0.5 },
+    sustain: { foods: ['Swordfish', 'Lobster', 'Salmon', 'Trout'], eatBelowHp: 0.45 },
+    warnReadiness: warnElementalWorkshopReadiness,
     decide
 };
 
 // Re-export test seams.
 export { parseElementalWorkshopJournal, EW_STAGE, EW_FLAG, ELEMENTAL_WORKSHOP_QUEST } from './journal.js';
 export { ewArea, EW_ITEM, SEERS_BANK } from './areas.js';
-export { held, hasPickaxe, COAL_NEED } from './supplies.js';
+export {
+    held,
+    hasPickaxe,
+    hasHeldSlashTool,
+    hasSlashTool,
+    hasWeapon,
+    COAL_NEED,
+    FOOD_WITHDRAW,
+    EW_OFFICIAL_SKILLS,
+    EW_PROVEN_COMBAT_FLOOR,
+    EW_FAILED_COMBAT,
+    EW_PROBE_COMBAT,
+    EW_TESTED_COMBAT,
+    EW_RECOMMENDED_COMBAT,
+    warnElementalWorkshopReadiness,
+    surfaceLoadout
+} from './supplies.js';

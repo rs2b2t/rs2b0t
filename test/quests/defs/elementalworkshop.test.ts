@@ -7,13 +7,19 @@ import {
     decide,
     elementalworkshop,
     ewArea,
-    parseElementalWorkshopJournal
+    hasHeldSlashTool,
+    hasSlashTool,
+    hasWeapon,
+    parseElementalWorkshopJournal,
+    surfaceLoadout
 } from '#/bot/quests/defs/elementalworkshop/index.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
 
 const SEERS: WorldTile = { x: 2725, z: 3491, level: 0 };
 const WORKSHOP: WorldTile = { x: 2716, z: 9888, level: 0 };
+const BRONZE_PICK = 1265;
+const STEEL_SCIM = 1325;
 
 function invIds(...entries: [number, number][]): Map<number, number> {
     return new Map(entries);
@@ -39,25 +45,58 @@ function snap(options: {
     invIds?: [number, number][];
     inv?: string[];
     bankIds?: [number, number][];
+    bank?: [string, number][];
     bankKnown?: boolean;
     tile?: WorldTile | null;
+    freeSlots?: number;
+    worn?: string[];
+    wornIds?: number[];
 } = {}): QuestSnapshot {
     const stage = options.stage ?? EW_STAGE.NOT_STARTED;
     return {
         journal: options.journal ?? (stage === EW_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
         inv: invNames(...(options.inv ?? [])),
         invIds: invIds(...(options.invIds ?? [])),
-        worn: new Set(),
-        wornIds: new Set(),
+        worn: new Set((options.worn ?? []).map(n => n.toLowerCase())),
+        wornIds: new Set(options.wornIds ?? []),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage,
         progress: progress(stage, options.flags ?? []),
-        bank: new Map(),
+        bank: new Map((options.bank ?? []).map(([n, q]) => [n.toLowerCase(), q])),
         bankIds: invIds(...(options.bankIds ?? [])),
         bankKnown: options.bankKnown ?? true,
         tile: options.tile === undefined ? SEERS : options.tile,
-        freeSlots: 20
+        freeSlots: options.freeSlots ?? 20
+    };
+}
+
+/** Full bank kit for a realistic low-level EW account (tools not held). */
+function realisticBank(): { bankIds: [number, number][]; bank: [string, number][] } {
+    return {
+        bankIds: [
+            [EW_ITEM.KNIFE.id, 1],
+            [EW_ITEM.HAMMER.id, 1],
+            [BRONZE_PICK, 1],
+            [EW_ITEM.THREAD.id, 2],
+            [EW_ITEM.LEATHER.id, 1],
+            [EW_ITEM.NEEDLE.id, 1],
+            [EW_ITEM.COAL.id, 8],
+            [STEEL_SCIM, 1],
+            [EW_ITEM.COINS.id, 50_000]
+        ],
+        bank: [
+            ['knife', 1],
+            ['hammer', 1],
+            ['bronze pickaxe', 1],
+            ['thread', 2],
+            ['leather', 1],
+            ['needle', 1],
+            ['coal', 8],
+            ['lobster', 20],
+            ['steel scimitar', 1],
+            ['coins', 50_000]
+        ]
     };
 }
 
@@ -163,18 +202,94 @@ describe('Elemental Workshop decide()', () => {
     });
 
     test('with key, provisions tools from the bank before entering', () => {
+        const kit = realisticBank();
         const step = decide(snap({
             stage: EW_STAGE.SLASHED,
             invIds: [[EW_ITEM.BATTERED_KEY.id, 1], [EW_ITEM.BATTERED_BOOK.id, 1]],
-            bankIds: [
+            bankIds: kit.bankIds,
+            bank: kit.bank
+        }));
+        // Hammer/thread/coal/pickaxe/food/weapon withdrawals come before enter.
+        expect(step.kind).toBe('withdraw');
+    });
+
+    test('empty pack + bank kit scans bank when bank is unknown', () => {
+        const step = decide(snap({
+            stage: EW_STAGE.SLASHED,
+            invIds: [[EW_ITEM.BATTERED_KEY.id, 1], [EW_ITEM.BATTERED_BOOK.id, 1]],
+            bankKnown: false
+        }));
+        expect(step.kind).toBe('scanBank');
+    });
+
+    test('waits when bank is known empty of a pickaxe', () => {
+        const step = decide(snap({
+            stage: EW_STAGE.SLASHED,
+            invIds: [
+                [EW_ITEM.BATTERED_KEY.id, 1],
+                [EW_ITEM.BATTERED_BOOK.id, 1],
+                [EW_ITEM.KNIFE.id, 1],
                 [EW_ITEM.HAMMER.id, 1],
                 [EW_ITEM.THREAD.id, 1],
                 [EW_ITEM.COAL.id, COAL_NEED],
-                [1265, 1]
-            ]
+                [STEEL_SCIM, 1]
+            ],
+            bankKnown: true,
+            bankIds: [],
+            bank: []
         }));
-        // Hammer/thread/coal/pickaxe withdrawals come before enter.
-        expect(step.kind === 'withdraw' || customName(step) === 'enter the Elemental Workshop').toBe(true);
+        expect(step.kind).toBe('wait');
+        expect(step.kind === 'wait' && step.reason).toMatch(/pickaxe/i);
+    });
+
+    test('after death (ENTERED, no key on surface) still re-enters via Push when loadout is ready', () => {
+        // Journal already entered: odd wall Push works without the Battered key.
+        const step = decide(snap({
+            stage: EW_STAGE.ENTERED,
+            flags: [],
+            invIds: [
+                [EW_ITEM.BATTERED_BOOK.id, 1],
+                [EW_ITEM.KNIFE.id, 1],
+                [EW_ITEM.HAMMER.id, 1],
+                [EW_ITEM.THREAD.id, 1],
+                [EW_ITEM.LEATHER.id, 1],
+                [EW_ITEM.NEEDLE.id, 1],
+                [EW_ITEM.COAL.id, COAL_NEED],
+                [BRONZE_PICK, 1],
+                [STEEL_SCIM, 1]
+            ],
+            inv: ['lobster', 'lobster', 'lobster'],
+            bankKnown: true,
+            bankIds: [],
+            bank: []
+        }));
+        expect(customName(step)).toBe('enter the Elemental Workshop');
+    });
+
+    test('before ENTERED, missing key re-slashes the book when a knife is held', () => {
+        // Journal can already be SLASHED while the key was lost before first entry —
+        // re-cut the spine rather than hard-wait (Push only works after ENTERED).
+        const step = decide(snap({
+            stage: EW_STAGE.SLASHED,
+            invIds: [[EW_ITEM.BATTERED_BOOK.id, 1], [EW_ITEM.KNIFE.id, 1]],
+            bankKnown: true,
+            bankIds: [],
+            bank: []
+        }));
+        expect(customName(step)).toBe('slash the Battered book for the key');
+    });
+
+    test('after reading, withdraws steel scimitar from bank when knife is missing', () => {
+        const step = decide(snap({
+            stage: EW_STAGE.READ_BOOK,
+            invIds: [[EW_ITEM.BATTERED_BOOK.id, 1]],
+            bankIds: [[STEEL_SCIM, 1]],
+            bank: [['steel scimitar', 1]]
+        }));
+        expect(step.kind).toBe('withdraw');
+        if (step.kind === 'withdraw') {
+            expect(step.items.some(i => i.id === STEEL_SCIM || /scimitar/i.test(i.name))).toBe(true);
+        }
     });
 
     test('inside workshop without water flag starts the water wheel', () => {
@@ -251,5 +366,54 @@ describe('Elemental Workshop decide()', () => {
     test('empty and full stone bowls share a display name, so ids must differ', () => {
         expect(EW_ITEM.STONE_BOWL.name).toBe(EW_ITEM.STONE_BOWL_FULL.name);
         expect(EW_ITEM.STONE_BOWL.id).not.toBe(EW_ITEM.STONE_BOWL_FULL.id);
+    });
+});
+
+describe('Elemental Workshop supplies helpers', () => {
+    test('knife counts as slash tool but not as combat weapon', () => {
+        const s = snap({ invIds: [[EW_ITEM.KNIFE.id, 1]], inv: ['Knife'] });
+        expect(hasHeldSlashTool(s)).toBe(true);
+        expect(hasSlashTool(s)).toBe(true);
+        expect(hasWeapon(s)).toBe(false);
+    });
+
+    test('worn scimitar counts as slash/weapon but not held slash for book useOn', () => {
+        const s = snap({ worn: ['Steel scimitar'], wornIds: [STEEL_SCIM] });
+        expect(hasHeldSlashTool(s)).toBe(false);
+        expect(hasSlashTool(s)).toBe(true);
+        expect(hasWeapon(s)).toBe(true);
+    });
+
+    test('surfaceLoadout withdraws a full entry kit from a realistic bank seed', () => {
+        const kit = realisticBank();
+        const step = surfaceLoadout(snap({
+            stage: EW_STAGE.SLASHED,
+            invIds: [[EW_ITEM.BATTERED_KEY.id, 1], [EW_ITEM.BATTERED_BOOK.id, 1]],
+            bankIds: kit.bankIds,
+            bank: kit.bank,
+            freeSlots: 28
+        }), true, true);
+        expect(step?.kind).toBe('withdraw');
+        if (step?.kind === 'withdraw') {
+            const names = step.items.map(i => i.name.toLowerCase());
+            expect(names.some(n => n.includes('hammer'))).toBe(true);
+            expect(names.some(n => n.includes('pickaxe'))).toBe(true);
+            expect(names.some(n => n.includes('coal'))).toBe(true);
+            expect(names.some(n => n.includes('lobster'))).toBe(true);
+            expect(names.some(n => n.includes('scimitar') || n === 'knife')).toBe(true);
+        }
+    });
+
+    test('surfaceLoadout deposits junk when free slots cannot fit the kit', () => {
+        const kit = realisticBank();
+        const step = surfaceLoadout(snap({
+            stage: EW_STAGE.SLASHED,
+            invIds: [[EW_ITEM.BATTERED_KEY.id, 1]],
+            inv: ['Bones', 'Bones', 'Bones'],
+            bankIds: kit.bankIds,
+            bank: kit.bank,
+            freeSlots: 2
+        }), true, true);
+        expect(step?.kind).toBe('deposit');
     });
 });

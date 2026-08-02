@@ -87,5 +87,11 @@ export interface QuestModule {
     readProgress?: () => QuestProgress | undefined | Promise<QuestProgress | undefined>;
     /** Optional quest-specific survival policy applied while this module is active. */
     sustain?: QuestSustain;
+    /**
+     * Optional one-shot advisory when this module becomes the active runner.
+     * Use for “live harness only proved X stats” warnings — not hard gates.
+     * Return null when the account looks fine.
+     */
+    warnReadiness?: () => string | null;
     decide(snap: QuestSnapshot): QuestStep;
 }

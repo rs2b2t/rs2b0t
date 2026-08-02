@@ -322,6 +322,8 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'elemental_workshop', name: 'Elemental Workshop', questPoints: 1,
+        // Official skill gates only. Combat is not a server req but elementals hit hard —
+        // see EW_TESTED_COMBAT / warnReadiness in defs/elementalworkshop and docs/TESTING.md.
         requirements: { skills: [
             { skill: 'mining', level: 20 },
             { skill: 'smithing', level: 20 },
@@ -329,6 +331,7 @@ export const QUESTS: QuestRecord[] = [
         ] },
         items: [
             // Needle/leather also spawn in workshop crates; thread and coal must be brought.
+            // Knife or any slash weapon opens the book; melee weapon + food for elementals.
             { name: 'Leather', qty: 1, kind: 'acquirable' },
             { name: 'Needle', qty: 1, kind: 'acquirable' },
             { name: 'Thread', qty: 1, kind: 'acquirable' },

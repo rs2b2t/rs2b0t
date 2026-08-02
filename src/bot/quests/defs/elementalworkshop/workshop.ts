@@ -91,15 +91,43 @@ export async function readBatteredBook(log: (m: string) => void): Promise<boolea
     return true;
 }
 
+function isSlashToolName(name: string | null | undefined): boolean {
+    const n = name?.toLowerCase() ?? '';
+    return n === 'knife'
+        || n.includes('scimitar')
+        || n.includes('sword')
+        || n.includes('longsword')
+        || n.includes('dagger')
+        || n.includes('battleaxe');
+}
+
+function findHeldSlashTool(): ReturnType<typeof Inventory.items>[number] | undefined {
+    return Inventory.items().find(i => i.id === EW_ITEM.KNIFE.id)
+        ?? Inventory.items().find(i => isSlashToolName(i.name));
+}
+
 export async function slashBookForKey(log: (m: string) => void): Promise<boolean> {
     if (heldId(EW_ITEM.BATTERED_KEY.id) > 0) {
         return true;
     }
     const book = Inventory.items().find(i => i.id === EW_ITEM.BATTERED_BOOK.id);
-    const knife = Inventory.items().find(i => i.id === EW_ITEM.KNIFE.id)
-        ?? Inventory.items().find(i => i.name?.toLowerCase().includes('sword') || i.name?.toLowerCase().includes('scimitar') || i.name?.toLowerCase() === 'knife');
-    if (!book || !knife) {
-        log('need the Battered book and a Knife (or slash weapon) to cut the spine');
+    if (!book) {
+        log('need the Battered book to cut the spine');
+        return false;
+    }
+
+    let knife = findHeldSlashTool();
+    // useOn needs a pack item — if the only blade is worn, remove it first.
+    if (!knife) {
+        const wornBlade = Equipment.items().find(i => isSlashToolName(i.name));
+        if (wornBlade?.name) {
+            log(`removing ${wornBlade.name} so it can cut the book spine`);
+            await Equipment.unequip(wornBlade.name);
+            knife = findHeldSlashTool();
+        }
+    }
+    if (!knife) {
+        log('need a Knife (or slash weapon) in the pack to cut the book spine');
         return false;
     }
     log('cutting the spine of the Battered book for the key');
@@ -216,6 +244,7 @@ function waterLever(): Loc | null {
 }
 
 async function clearNearbyWaterThreat(log: (m: string) => void): Promise<void> {
+    await ensureMeleeWeapon(log);
     if (!Game.inCombat()) {
         const pest = Npcs.query().name('Water elemental').within(8).nearest();
         if (pest && !pest.targetsAnotherPlayer()) {
@@ -225,7 +254,8 @@ async function clearNearbyWaterThreat(log: (m: string) => void): Promise<void> {
         }
     }
     if (Game.inCombat()) {
-        await Execution.delayUntil(() => !Game.inCombat(), 60_000);
+        // Low-combat accounts can take a long time; still bound so death/respawn can resume.
+        await Execution.delayUntil(() => !Game.inCombat(), 120_000);
     }
 }
 
