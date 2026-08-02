@@ -966,6 +966,11 @@ type Scenario = {
         /** Closest camp distance observed after the bank trip signals fired. */
         minDistToCampAfterBank: number;
         minDistToCamp: number;
+        /**
+         * Farthest camp distance while the script ran (local-prefer thrash detector).
+         * Dwarven/SE iron clusters should keep this small if we stay on the near wing.
+         */
+        maxDistToCamp: number;
         minDistToBank: number;
         startDistToCamp: number;
     }) => 'pass' | 'wait' | 'fail';
@@ -973,6 +978,7 @@ type Scenario = {
         start: Snap;
         cur: Snap;
         minDistToCamp: number;
+        maxDistToCamp?: number;
         minDistToBank?: number;
         minDistToCampAfterBank?: number;
         productPeak?: number;
@@ -985,6 +991,18 @@ type Scenario = {
 const SPOT = {
     swVarrockMine: { x: 3181, z: 3371, level: 0 },
     seVarrockMine: { x: 3285, z: 3366, level: 0 },
+    /**
+     * SE Varrock iron rocks (~3285–3288, 3368–3370) — tight 4-rock cluster.
+     * Used as camp for local-prefer thrash checks (stay on the iron pad).
+     */
+    seVarrockIron: { x: 3286, z: 3369, level: 0 },
+    /**
+     * Dwarven Mine northern iron wing (~3032–3033, 9825–9826). Southern iron sits
+     * ~50 tiles S (~3036–3045, 9769–9777); thrash walks that gap after a deplete.
+     */
+    dwarvenIronNorth: { x: 3032, z: 9825, level: 0 },
+    /** Catalog camp seed near Nurmof (underground). */
+    dwarvenMineSeed: { x: 3021, z: 9800, level: 0 },
     draynorFish: { x: 3086, z: 3231, level: 0 },
     catherbyFish: { x: 2845, z: 3431, level: 0 },
     /** Catherby bank booth stand (cook→bank deposit). */
@@ -1133,6 +1151,85 @@ const SCENARIOS: Scenario[] = [
         },
         failMsg: ({ start, cur, productPeak, bankedHint }) =>
             `power-mine xp ${start.xp.mining}→${cur.xp.mining}, ore=${invMatch(cur, /ore/i)}, peak=${productPeak}, dropped=${bankedHint}`
+    },
+    // ── iron local-prefer (Dwarven / SE Varrock thrash) ───────────────────────
+    {
+        id: 'mine-iron-se-varrock',
+        tags: ['mining', 'mine', 'iron', 'local', 'early'],
+        script: 'Miner',
+        // Stand a couple tiles off the iron pad so we walk in, not sit on a loc.
+        start: offsetTile(SPOT.seVarrockIron, -3, -2),
+        camp: SPOT.seVarrockIron,
+        settings: {
+            rocks: 'Iron',
+            location: 'Southeast Varrock Mine',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            leashRadius: 18
+        },
+        seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
+        scene: 'rocks',
+        budgetMs: 120_000,
+        check: ({ start, cur, productPeak, maxDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const xpGain = cur.xp.mining - start.xp.mining;
+            const iron = invMatch(cur, /^iron ore$/i);
+            // Tight pad: stay on the SE iron cluster (prefer-local radius 12 + slack).
+            const stayedLocal = maxDistToCamp <= 14;
+            if (xpGain > 0 && (iron >= 2 || productPeak >= 2) && stayedLocal) {
+                return 'pass';
+            }
+            // Gathered but wandered — fail early so thrash does not wait the budget.
+            if (xpGain > 0 && maxDistToCamp > 18 && elapsedMs >= 20_000) {
+                return 'fail';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp, maxDistToCamp, productPeak }) =>
+            `se-iron xp ${start.xp.mining}→${cur.xp.mining} iron=${invMatch(cur, /^iron ore$/i)} ` +
+            `peak=${productPeak} distCamp ${minDistToCamp}..${maxDistToCamp} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
+    },
+    {
+        id: 'mine-iron-dwarven-north',
+        tags: ['mining', 'mine', 'iron', 'local', 'dwarven'],
+        script: 'Miner',
+        // Northern iron wing — not the southern cluster (~50 tiles S of this pin).
+        start: offsetTile(SPOT.dwarvenIronNorth, -2, 1),
+        camp: SPOT.dwarvenIronNorth,
+        settings: {
+            rocks: 'Iron',
+            location: 'Dwarven Mine',
+            toolAcquire: 'Off',
+            forgetfulBank: false,
+            // Membership floors to 64 for named camps; UI leash is irrelevant for ore pick.
+            leashRadius: 18
+        },
+        seed: [{ debug: 'rune_pickaxe', name: 'Rune pickaxe', qty: 1 }],
+        scene: 'rocks',
+        budgetMs: 150_000,
+        check: ({ start, cur, productPeak, maxDistToCamp, elapsedMs }) => {
+            if (cur.runner === 'crashed') {
+                return 'fail';
+            }
+            const xpGain = cur.xp.mining - start.xp.mining;
+            const iron = invMatch(cur, /^iron ore$/i);
+            // Southern wing is ~cheb 50 from this camp — thrash trips exceed ~22.
+            const stayedNorth = maxDistToCamp <= 16;
+            if (xpGain > 0 && (iron >= 2 || productPeak >= 2) && stayedNorth) {
+                return 'pass';
+            }
+            if (maxDistToCamp > 22 && elapsedMs >= 25_000) {
+                return 'fail';
+            }
+            return 'wait';
+        },
+        failMsg: ({ start, cur, minDistToCamp, maxDistToCamp, productPeak }) =>
+            `dwarven-north-iron xp ${start.xp.mining}→${cur.xp.mining} iron=${invMatch(cur, /^iron ore$/i)} ` +
+            `peak=${productPeak} distCamp ${minDistToCamp}..${maxDistToCamp} ` +
+            `tile=${cur.tile ? `${cur.tile.x},${cur.tile.z}` : '?'}`
     },
     {
         id: 'fish-bank',
@@ -2200,6 +2297,7 @@ try {
             const start = await snap(page);
             const startDistToCamp = start.tile && sc.camp ? chebyshev(start.tile, sc.camp) : 0;
             let minDistToCamp = startDistToCamp;
+            let maxDistToCamp = startDistToCamp;
             let minDistToBank = start.tile && sc.bank ? chebyshev(start.tile, sc.bank) : 999;
             // Post-bank home (#154): only count camp approach after deposit signals.
             // Soft arrive disk is 8; allow a little pier slack so path end still counts.
@@ -2225,6 +2323,9 @@ try {
                     const d = chebyshev(cur.tile, sc.camp);
                     if (d < minDistToCamp) {
                         minDistToCamp = d;
+                    }
+                    if (d > maxDistToCamp) {
+                        maxDistToCamp = d;
                     }
                 }
                 if (cur.tile && sc.bank) {
@@ -2293,6 +2394,7 @@ try {
                     returnedToCampAfterBank,
                     minDistToCampAfterBank,
                     minDistToCamp,
+                    maxDistToCamp,
                     minDistToBank,
                     startDistToCamp
                 });
@@ -2317,6 +2419,7 @@ try {
                             start,
                             cur,
                             minDistToCamp,
+                            maxDistToCamp,
                             minDistToBank,
                             minDistToCampAfterBank,
                             productPeak,
@@ -2357,6 +2460,7 @@ try {
                                     start,
                                     cur,
                                     minDistToCamp,
+                                    maxDistToCamp,
                                     minDistToBank,
                                     minDistToCampAfterBank,
                                     productPeak,
@@ -2379,6 +2483,7 @@ try {
                             start,
                             cur,
                             minDistToCamp,
+                            maxDistToCamp,
                             minDistToBank,
                             minDistToCampAfterBank,
                             productPeak,
