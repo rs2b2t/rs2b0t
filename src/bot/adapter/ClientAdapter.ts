@@ -180,6 +180,21 @@ export const reader = {
         return raw?.runenergy ?? 0;
     },
 
+    /**
+     * Orbit camera yaw 0–2047 (client-only; TS-private on Client, plain property at runtime).
+     * Used by optional nav path-facing — no server/LC dependency.
+     */
+    cameraYaw(): number {
+        const c = raw as (RawClient & { orbitCameraYaw?: number }) | null;
+        return (c?.orbitCameraYaw ?? 0) & 0x7ff;
+    },
+
+    /** Orbit camera pitch 128–383. */
+    cameraPitch(): number {
+        const c = raw as (RawClient & { orbitCameraPitch?: number }) | null;
+        return c?.orbitCameraPitch ?? 128;
+    },
+
     weight(): number {
         return raw?.runweight ?? 0;
     },
@@ -867,6 +882,53 @@ export const actions = {
         }
 
         return actions.ifButton(on ? controls.onComId : controls.offComId);
+    },
+
+    /**
+     * Set orbit camera yaw (0–2047). Client-side only — flags the periodic
+     * camera report packet when available. Does not touch LC/engine code.
+     */
+    setCameraYaw(yaw: number): boolean {
+        if (!raw || !raw.ingame) {
+            return false;
+        }
+        const c = raw as RawClient & { orbitCameraYaw?: number; sendCamera?: boolean };
+        if (typeof c.orbitCameraYaw !== 'number') {
+            return false;
+        }
+        c.orbitCameraYaw = yaw & 0x7ff;
+        if ('sendCamera' in c) {
+            c.sendCamera = true;
+        }
+        return true;
+    },
+
+    /**
+     * Smoothly step orbit yaw toward a target (maxStep units per call, default ~32).
+     * Returns the yaw after the step, or -1 if camera is unavailable.
+     */
+    stepCameraYaw(target: number, maxStep = 32): number {
+        if (!raw || !raw.ingame) {
+            return -1;
+        }
+        const c = raw as RawClient & { orbitCameraYaw?: number; sendCamera?: boolean };
+        if (typeof c.orbitCameraYaw !== 'number') {
+            return -1;
+        }
+        let d = ((target & 0x7ff) - (c.orbitCameraYaw & 0x7ff)) & 0x7ff;
+        if (d > 1024) {
+            d -= 2048;
+        }
+        if (d > maxStep) {
+            d = maxStep;
+        } else if (d < -maxStep) {
+            d = -maxStep;
+        }
+        c.orbitCameraYaw = (c.orbitCameraYaw + d) & 0x7ff;
+        if ('sendCamera' in c) {
+            c.sendCamera = true;
+        }
+        return c.orbitCameraYaw;
     },
 
     /** Toggle Auto Retaliate on the combat tab (same panel as run). */

@@ -1,5 +1,5 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
-import { reader } from '../adapter/ClientAdapter.js';
+import { actions, reader } from '../adapter/ClientAdapter.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { CANT_REACH, GameMessages } from '../events/gameMessages.js';
 import { Execution } from '../api/Execution.js';
@@ -36,6 +36,8 @@ import { virtualizeWithItems } from './v2/virtualState.js';
 import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
 import { RouteState } from './v2/routeState.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
+import { lookAheadTile, yawTowardTiles } from './cameraFollow.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import {
     crossMultiTileDoor,
     isOpenableBarrier,
@@ -288,6 +290,27 @@ class WalkExecutorImpl {
         } else {
             RouteState.setInterimClick(null);
         }
+    }
+
+    /**
+     * Optional orbit-camera facing along the published path (Global.navCameraFollow).
+     * Client-only: steps yaw toward look-ahead tile so long runs feel human, not snap.
+     */
+    private maybeFacePathCamera(me: WorldTile, tiles: PathStep[], pathIdx: number): void {
+        if (!SettingsStore.globalBag().bool('navCameraFollow', false)) {
+            return;
+        }
+        const look = lookAheadTile(tiles, pathIdx, 8);
+        if (!look) {
+            return;
+        }
+        const target = yawTowardTiles(me, look);
+        if (target === null) {
+            return;
+        }
+        // ~32 units/step ≈ a human holding left/right; walk loop is slower than frame rate
+        // so this is intentionally a bit snappier than one key-frame of followCamera.
+        actions.stepCameraYaw(target, 48);
     }
 
     /**
@@ -600,6 +623,7 @@ class WalkExecutorImpl {
             this.remaining = tiles.length - 1 - pathIdx;
             RouteState.setPathIdx(pathIdx);
             this.publishPath(tiles, pathIdx, clickIdx);
+            this.maybeFacePathCamera(me, tiles, pathIdx);
 
             const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
             stillIters = moved ? 0 : stillIters + 1;

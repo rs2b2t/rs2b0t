@@ -47,6 +47,24 @@ export const Game = {
         return reader.energy();
     },
 
+    /** Orbit camera yaw 0–2047 (client-only). */
+    cameraYaw(): number {
+        return reader.cameraYaw();
+    },
+
+    /** Orbit camera pitch 128–383 (client-only). */
+    cameraPitch(): number {
+        return reader.cameraPitch();
+    },
+
+    /**
+     * Snap orbit camera yaw (0–2047). Client-only; no LC/engine change.
+     * Prefer Global.navCameraFollow for path auto-facing during walks.
+     */
+    setCameraYaw(yaw: number): boolean {
+        return actions.setCameraYaw(yaw);
+    },
+
     runEnabled(): boolean {
         return reader.varp(RUN_VARP) === 1;
     },

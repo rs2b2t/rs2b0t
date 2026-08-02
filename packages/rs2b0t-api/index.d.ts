@@ -96,6 +96,15 @@ export const Game: {
     /** Local player's world tile, or null before login/scene load. */
     tile(): WorldTile | null;
     energy(): number;
+    /** Orbit camera yaw 0–2047 (client-only). */
+    cameraYaw(): number;
+    /** Orbit camera pitch 128–383 (client-only). */
+    cameraPitch(): number;
+    /**
+     * Snap orbit camera yaw (0–2047). Client-only.
+     * Prefer Global.navCameraFollow for path auto-facing during walks.
+     */
+    setCameraYaw(yaw: number): boolean;
     /** The run toggle is on. */
     runEnabled(): boolean;
     weight(): number;

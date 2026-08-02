@@ -26,6 +26,11 @@ describe('GLOBAL_SETTINGS', () => {
         expect(GLOBAL_SETTINGS.runEnergyMin.max).toBe(100);
     });
 
+    test('exposes navCameraFollow (bool, default off) for optional path-facing camera', () => {
+        expect(GLOBAL_SETTINGS.navCameraFollow.type).toBe('boolean');
+        expect(GLOBAL_SETTINGS.navCameraFollow.default).toBe(false);
+    });
+
     test('runEnergyMin saved values clamp to 0-100 through the global bag', () => {
         sessionStorage.setItem(K('Global', 'runEnergyMin'), '250');
         expect(SettingsStore.globalBag().num('runEnergyMin', 20)).toBe(100);

@@ -165,6 +165,14 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
             + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true. '
             + 'Sub-options appear when enabled (path/transport/text colours, hop labels).'
     },
+    navCameraFollow: {
+        type: 'boolean',
+        default: false,
+        label: 'Camera follows path',
+        help:
+            'While world-walking, rotate the orbit camera to face along the route '
+            + '(client-only; like arrow-key turns). Off by default. URL: ?Global.navCameraFollow=true.'
+    },
     // ── Nav path paint (visible when showNavPath) — SP-aligned colours ──
     navPathShowText: {
         type: 'boolean',

@@ -8,6 +8,7 @@
  *   HEADED=1 bun tools/nav-v2-stress-live.ts
  *
  * Optional: BASE=…  CASES=spell-varrock,jewellery-duel,path-paint  BUDGET_S=120
+ * Mid-walk: ENERGY_REFILL_AT=25 (default) — poll ~1s, `~energy` when run ≤ threshold.
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
@@ -15,6 +16,8 @@ import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 120) * 1000;
+/** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
+const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
 // No issue number → out/nav-v2-stress-proof.json (not issue0-…).
 const proof = createHarnessProof({ slug: 'nav-v2-stress' });
 
@@ -26,7 +29,12 @@ type Tile = { x: number; z: number; level: number };
 
 type Abi = {
     __rs2b0t: {
-        reader: { worldTile(): Tile | null };
+        reader: {
+            worldTile(): Tile | null;
+            /** Client run energy 0–100 (packet g1). */
+            energy(): number;
+        };
+        Game: { energy(): number };
         Inventory: { count(name: string): number; items(): { name: string | null }[] };
         Skills: { level(name: string): number };
         LoopingBot: new () => { loop(): unknown; log(m: string): void };
@@ -125,6 +133,54 @@ async function seedRunes(page: Page): Promise<void> {
 async function clearInv(page: Page): Promise<void> {
     await cheatQuiet(page, '~clearinv');
     await page.waitForTimeout(400);
+}
+
+/**
+ * Full energy + run on via content debugproc `[debugproc,energy]` → `~energy`.
+ * Plain `energy` is not an engine cheat and is silently ignored.
+ */
+async function restoreRunEnergy(page: Page): Promise<boolean> {
+    if (!(await cheatQuiet(page, '~energy', 400))) {
+        return false;
+    }
+    for (let attempt = 0; attempt < 4; attempt++) {
+        await page.waitForTimeout(250);
+        const e = await readRunEnergy(page);
+        if (e >= 90) {
+            return true;
+        }
+        await cheatQuiet(page, '~energy', 300);
+    }
+    return (await readRunEnergy(page)) >= 90;
+}
+
+/** Client energy is 0–100 (packet g1 = server runenergy/100). Prefer Game. */
+async function readRunEnergy(page: Page): Promise<number> {
+    return page.evaluate(() => {
+        const g = globalThis as never as Abi;
+        try {
+            return g.__rs2b0t.Game.energy();
+        } catch {
+            return g.__rs2b0t.reader.energy();
+        }
+    });
+}
+
+/**
+ * While a walk is in flight, poll energy each second and top up at ENERGY_REFILL_AT.
+ * `~energy` only — no LC/engine changes. Retries if p_finduid fails mid-walk.
+ */
+async function maybeRefillEnergy(page: Page, lowAt = ENERGY_REFILL_AT): Promise<boolean> {
+    const e = await readRunEnergy(page);
+    if (e > lowAt) {
+        return false;
+    }
+    const ok = await restoreRunEnergy(page);
+    const after = await readRunEnergy(page);
+    console.log(
+        `    energy refill: ${e}% → ${after}% (threshold ≤${lowAt}${ok ? '' : ', ~energy may have been busy/p_finduid'})`
+    );
+    return ok;
 }
 
 type WalkOpts = {
@@ -230,9 +286,12 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
         if (done) {
             break;
         }
+        // Periodic energy watch (~1s): refill at low run so long pure-walk legs keep running.
+        await maybeRefillEnergy(page).catch(() => undefined);
         if (i > 0 && i % 15 === 0) {
             const mid = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            console.log(`    …still walking ${mid ? `${mid.x},${mid.z}` : '?'}`);
+            const e = await readRunEnergy(page).catch(() => -1);
+            console.log(`    …still walking ${mid ? `${mid.x},${mid.z}` : '?'} energy=${e}%`);
         }
         await page.waitForTimeout(1000);
     }
@@ -315,12 +374,13 @@ try {
     await mainlandAccount(page, base, user);
 
     // Global toggles for path paint + default engine preference (walk opts still force v2).
-    await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2' });
+    await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2', navCameraFollow: true });
     // Re-read via SettingsStore after save (sessionStorage).
     await page.evaluate(() => {
         const g = globalThis as never as Abi;
         g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
         g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
+        g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
     });
 
     console.log(`${stamp()} seed runes + maxme`);
