@@ -1,90 +1,161 @@
-# Gathering / Anchor API Refactor
+# Gathering / Anchor API Refactor + Shared Mule Loop
 
-> **Status:** in progress on `refactor/gather-anchor-api` (Phase 1 started after #282 landed).  
-> Phase 1: helpers moved to `api/`; Cook/Smelt/Smith/Flax use `withinOf`.
+> **Status:** in progress on `refactor/gather-anchor-api`.  
+> Phase 1 (pure extract) landed in `c85966f`.  
+> **Scope expansion:** every gathering script gets a mule/partner loop in the style of NatureCrafter + FlaxRunner, including GatheringBot’s Miner / Fisher / Woodcutter.
 
-**Goal:** Pull duplicated leash / soft-home / nearest-target policy out of fat scripts (especially `GatheringBot`) into `src/bot/api/`, so mine/fish/cook/thieve/fighter scripts share one implementation instead of re-copying Chebyshev disks and “return to pin” walks.
+**Goal:**  
+1. Shared leash / soft-home / nearest-target policy in `api/` (Phase 1).  
+2. Shared **mule/partner trade loop** API extracted from Nature/Flax, then adopted by GatheringBot and remaining gather scripts.
 
-**Context (2026-08):** Fishing camp membership + player chase and mine local-prefer / post-deplete cooldown fixes landed (or are landing) as product PRs. Those pure helpers currently live in `GatheringBot.ts` exports; they are the first extraction targets.
+## Why mule is related (and not free)
 
-## Why
+NatureCrafter and FlaxRunner each reimplement:
 
-| Already API | Script-local / duplicated |
-| --- | --- |
-| `api/Anchor.ts` — `beyondLeash`, `tileWithinLeash`, `createReturnToAnchorTask` | Soft home (`HOME_ARRIVE_RADIUS`, `shouldWalkHomeToGatherAnchor`, `shouldSoftHomeFromGatherMiss`) only in GatheringBot |
-| `api/GatheringLocations.ts` — camps, `campRadius` / `chaseRadius` | `pickNearestPreferLocal`, tile cooldown policy only in GatheringBot |
-| `Query.nearest()` — global player distance | Cook/Smelt/Smith/Flax hand-roll `tile.distanceTo(stand) <= leash` |
-| | Chicken/Chaos/AutoFighter reimplement return-to-anchor with different slack (`+4` / `+8` / `+10`) |
+| Concern | NatureCrafter | FlaxRunner | GatheringBot today |
+| --- | --- | --- | --- |
+| Mode | Master / Runner | Runner / Spinner | none |
+| Partner name(s) | comma-separated | single | — |
+| Meet / trade range | altar / ruins | `MEET_TILE` + `TRADE_RANGE` | — |
+| Trade protocol | request → offer → accept ×2 | same via `Trade` | — |
+| Safety | decline non-partners; empty own offer | similar | — |
+| Haul | essence in / runes hold | flax → string | ore / fish / logs |
 
-`GatheringBot.ts` is ~5k+ lines and exports ~15 pure policy functions that are not “bot class” concerns.
+`Trade` HUD API already exists (`api/hud/Trade.ts`). What’s missing is a **reusable task/policy layer** (partner filter, open-trade ownership, offer-all product, confirm, decline strangers) so GatheringBot doesn’t grow another 600 lines of copy-paste.
 
-## Sequencing (less effort)
+## Feasibility
 
-1. **Land product fixes first** (mine nearest, any remaining gather thrash) as small PRs.  
-2. **Then** open `refactor/gather-anchor-api` from that `main`.  
-3. Do **not** start the refactor under unfinished gather branches — same files (`findRock` / `executeMine` / helpers) thrash on rebase.
+| Approach | Effort | Risk |
+| --- | --- | --- |
+| Same **commit** as Phase 1 pure extract | High | Mixes behavior-preserving move with new product feature; hard review |
+| Same **branch**, sequential commits/PRs | Medium | **Recommended** — API extract first, then mule API, then GatheringBot modes |
+| Separate branch after Phase 1 PR | Medium | Fine if Phase 1 should land alone |
+
+**Recommendation:** bake mule into this **refactor program**, not into the already-committed Phase 1 diff. Next commits on `refactor/gather-anchor-api` (or a stacked PR) own mule.
 
 ## Branch
 
-- **Name:** `refactor/gather-anchor-api`  
-- **Base:** `main` after mine/fish gather fixes merge  
-- **PR style:** behavior-preserving extract + thin adopters; no headed suite required for Phase 1
+- **Name:** `refactor/gather-anchor-api` (current)  
+- **Base:** `main` after #282  
+- Optional stack: `feat/gatheringbot-mule` on top if mule needs longer review
 
-## Phase 1 — API surface (no behavior change)
+---
 
-Move pure helpers + unit tests; GatheringBot re-exports aliases if anything still imports from the script path.
+## Phase 1 — API surface ✅
 
-| Destination | Contents |
-| --- | --- |
-| Extend `api/Anchor.ts` (or `api/SoftHome.ts`) | `HOME_ARRIVE_RADIUS`, `shouldWalkHomeToGatherAnchor`, `shouldSoftHomeFromGatherMiss` |
-| New `api/TargetPick.ts` (or extend `Query.ts`) | `LOCAL_MINE_PREFER_RADIUS`, `pickNearestPreferLocal`, `shouldCooldownGatherTile` |
-| Optional `api/GatherCamp.ts` / keep in `GatheringLocations.ts` | `resourceWithinCamp`, `effectiveGatherLeash`, `gatherHuntRadius`, `spotWithinGatherRange`, `gatherSpotRangeOrigin` |
-| Extend `api/queries/Query.ts` | `nearestPreferLocal(preferRadius)`, `withinOf(tile, r)` so scripts stop hand-rolling distance filters |
-| Tests | Move from `test/scripts/GatheringBotLogic.test.ts` → `test/api/…` |
+- [x] Soft-home → `api/Anchor.ts`  
+- [x] Camp disks → `api/GatherCamp.ts`  
+- [x] Prefer-local / cooldown → `api/TargetPick.ts`  
+- [x] `Query.withinOf` + `nearestPreferLocal`  
+- [x] Cook / Smelt / Smith / Flax use `withinOf`  
+- [x] GatheringBot re-exports + unit tests green  
+
+---
+
+## Phase 2 — Shared mule partner API (new)
+
+Extract the common trade choreography; leave world-specific meet tiles in each script.
+
+### Proposed API
+
+```
+api/mule/
+  PartnerTrade.ts     # parse partners, isConfiguredPartner, nearestPartner
+  MuleTradeTasks.ts   # Task factories: AcceptPartnerTrade, OfferProductTrade, DeclineStrangers
+  types.ts            # MuleMode, PartnerConfig, OfferSpec
+```
+
+Rough surface (names flexible):
+
+```ts
+parsePartnerList(raw: string): string[]
+isConfiguredPartner(name: string | null, partners: string[]): boolean
+nearestPartner(partners: string[], within?: number): Player | null
+
+// While Trade.active(), own the loop (movement cancels trade)
+createAcceptIncomingTradeTask(opts: {
+  partners: string[];
+  /** What we expect them to offer (name match / predicate) */
+  acceptOffer?: (their: TradeItem[]) => boolean;
+  onComplete?: (their: TradeItem[]) => void;
+}): Task
+
+createOfferAllTradeTask(opts: {
+  partner: string;
+  itemName: string;       // 'Iron ore' | 'Raw lobster' | 'Flax' | …
+  meetWithin?: number;
+}): Task
+```
 
 ### Checklist
 
-- [x] Create branch from updated `main`
-- [x] Extract pure functions; keep GatheringBot imports working (re-export or update imports)
-- [x] Move/adjust unit tests under `test/api/` (added TargetPick + GatherCamp tests; GatheringBotLogic still re-exports)
-- [x] `bun test` green for api + GatheringBotLogic
+- [ ] Design PartnerTrade against NatureCrafter + FlaxRunner (diff both trade paths)  
+- [ ] Implement pure helpers + unit tests (no live client)  
+- [ ] Implement task factories using `Trade`  
+- [ ] Refactor **FlaxRunner** to call shared tasks (behavior-preserving)  
+- [ ] Refactor **NatureCrafter** (or one side only) if cost is low; else leave as second adopter  
 
-## Phase 2 — adopters (behavior-preserving)
+**Non-goal here:** change Nature altar routing or Flax field carve logic.
 
-- [x] **GatheringBot** — fish + mine paths call API only
-- [ ] **ThievingBot** — soft-home / return-to-anchor options aligned with Anchor helpers
-- [x] **Cook / Smelt / Smith / Flax** — `Locs.query()…withinOf(stand, leash).nearest()`
-- [ ] **Chicken / Chaos / AutoFighter** (optional, lower priority) — shared leash+slack target filter
+---
 
-## Phase 3 — only if still sloppy
+## Phase 3 — GatheringBot mule modes (Miner / Fisher / Woodcutter)
 
-- [ ] Split GatheringBot into `scripts/gather/*` without product behavior change
-- [ ] Document membership vs player-prefer vs soft-home in `docs/API.md`
+Add settings + tasks on top of existing gather loop.
 
-## Explicit non-goals (first PR)
+### Product shape (proposed)
 
-- No new gather features  
-- No headed / deploy verification required for pure moves  
-- No forced rewrite of every fighter on day one  
-- No tick-manip shipping changes (`TICK_MANIP_SHIPPED`)
+| Setting | Values | Notes |
+| --- | --- | --- |
+| `muleMode` | `Off` / `Gatherer` / `Mule` | Off = today’s bank/drop only |
+| `partner` | string (comma-ok) | Gatherer: mule name(s). Mule: gatherer name(s) |
+| `meetTile` | tile or `Auto` | Auto = camp spot / bank stand / soft disk near camp |
+| `tradeProduct` | Auto | Auto = product keywords already known (ore/raw fish/logs) |
+
+**Gatherer loop:** gather until pack full (or threshold) → walk meet → trade all product → resume gather.  
+**Mule loop:** wait at meet → accept trade from partner → bank product → return to meet.
+
+Bank path for mule reuses existing camp `bankStand` + booth fields. Meet must be trade-safe (walkable, not behind a door-only trap — FlaxRunner lesson: meet *outside* the wheel house).
+
+### Checklist
+
+- [ ] Settings schema on Miner / Fisher / Woodcutter (via GatheringBot)  
+- [ ] Gatherer: full-pack → meet → offer product (skip BankCatch when mule on)  
+- [ ] Mule: idle at meet → accept → bank → return  
+- [ ] Decline trades from non-partners  
+- [ ] Power/None + mule: document (drop vs trade — prefer disable mule under None)  
+- [ ] Unit tests for mode decisions / product offer lists  
+- [ ] Headed smoke later (not blocking first code PR): one Miner gatherer+mule pair at SE Varrock  
+
+---
+
+## Phase 4 — Other gather scripts (optional follow-ons)
+
+- [ ] CoalTrucks, EssMiner, CookBot (cooked product mule), etc.  
+- [ ] ThievingBot soft-home alignment (from original Phase 2)  
+- [ ] Fighter leash helpers (low priority)  
+
+---
+
+## Explicit non-goals (near term)
+
+- Tick manip shipping  
+- Rewriting Nature jungle pathing  
+- Multibox orchestration UI (script settings + player names only)  
+- Path-distance rock pick (still Chebyshev prefer-local)  
 
 ## Success criteria
 
-- Target-pick / soft-home helpers have **one** implementation under `api/`  
-- GatheringBot loses the pure-function block (or only re-exports)  
-- At least 2–3 non-gather scripts use the same query helpers  
-- Unit tests pass; mine/fish regression tests still green  
+- One trade-partner implementation under `api/mule/` (or equivalent)  
+- FlaxRunner (and ideally Nature) thinner after adopt  
+- GatheringBot supports Off / Gatherer / Mule without tripling BankCatch  
+- Unit tests green; headed mule smoke optional  
 
-## Related product work (do not re-litigate here)
-
-- Named-camp fish: membership + no player-distance wall; freeform hunt pad  
-- Mine: prefer rocks within 12 of player; no post-deplete tile cooldown (iron respawn ~6t vs old 8t skip)  
-- Server rock ids: `api/MiningRocks.ts` / Server `skill_mining` `rocks.loc` + `loc.pack` (iron 2092/2093)
-
-## Resume prompt (for a future agent)
+## Resume prompt
 
 ```
-Implement docs/superpowers/plans/2026-08-01-gather-anchor-api-refactor.md
-Phase 1 only: extract gather/anchor pure helpers into api/, move tests, keep behavior.
-Branch from main after gather mine/fish fixes are merged.
+Continue docs/superpowers/plans/2026-08-01-gather-anchor-api-refactor.md
+Phase 2: extract shared mule PartnerTrade + trade tasks from FlaxRunner/NatureCrafter.
+Then Phase 3: GatheringBot muleMode for Miner/Fisher/Woodcutter.
+Branch: refactor/gather-anchor-api (already has Phase 1).
 ```
