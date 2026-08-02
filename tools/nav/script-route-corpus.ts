@@ -36,6 +36,26 @@ export interface ScriptRoute {
     source: string;
 }
 
+/** Pack metrics for ranking “hard” routes (no tele catalog — pure graph walk). */
+export interface RankedScriptRoute extends ScriptRoute {
+    cost: number;
+    expanded: number;
+    hops: number;
+    cheb: number;
+    ms: number;
+    /** Higher = harder. Primary: path cost; tie-break: expansions, then hops. */
+    difficulty: number;
+}
+
+export function difficultyScore(m: { cost: number; expanded: number; hops: number; cheb: number }): number {
+    // Cost dominates (tile + door/transport weights). Expansions capture “search thrash”.
+    return m.cost * 1000 + Math.min(m.expanded, 500_000) + m.hops * 10 + m.cheb;
+}
+
+export function rankHardest(rows: RankedScriptRoute[], n: number): RankedScriptRoute[] {
+    return [...rows].sort((a, b) => b.difficulty - a.difficulty).slice(0, Math.max(0, n));
+}
+
 const cheb = (a: NavPoint, b: NavPoint): number =>
     a.level !== b.level ? 9999 : Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 
@@ -193,7 +213,11 @@ if (isMain) {
     const explain = process.argv.includes('--explain');
     const write = process.argv.includes('--write');
     const limitArg = process.argv.find(a => a.startsWith('--limit='));
+    const hardestArg = process.argv.find(a => a.startsWith('--hardest='));
     const limit = limitArg ? Number(limitArg.split('=')[1]) : Number(process.env.LIMIT || 0);
+    const hardestN = hardestArg
+        ? Number(hardestArg.split('=')[1])
+        : Number(process.env.HARDEST || 0);
 
     const allRoutes = buildScriptRoutes();
     const routes = limit > 0 ? allRoutes.slice(0, limit) : allRoutes;
@@ -232,9 +256,10 @@ if (isMain) {
 
     let fail = 0;
     let pass = 0;
-    const slow: { id: string; ms: number; cost: number; note: string }[] = [];
+    const ranked: RankedScriptRoute[] = [];
     const t0 = performance.now();
 
+    // Pure pack walk (no tele catalog) so “hard” means long graph cost, not tele shortcuts.
     for (const r of routes) {
         const started = performance.now();
         const outcome = finder.findPath(r.from, r.to, { policy: { useTeleports: false } });
@@ -245,12 +270,25 @@ if (isMain) {
             continue;
         }
         pass++;
-        if (ms > 40) {
-            slow.push({ id: r.id, ms, cost: outcome.cost, note: r.note });
-        }
+        const chebDist = cheb(r.from, r.to);
+        const row: RankedScriptRoute = {
+            ...r,
+            cost: outcome.cost,
+            expanded: outcome.expanded,
+            hops: outcome.hops.length,
+            cheb: chebDist,
+            ms,
+            difficulty: difficultyScore({
+                cost: outcome.cost,
+                expanded: outcome.expanded,
+                hops: outcome.hops.length,
+                cheb: chebDist
+            })
+        };
+        ranked.push(row);
         if (explain) {
             console.log(
-                `PASS ${r.id} cost=${outcome.cost} hops=${outcome.hops.length} ${ms.toFixed(1)}ms — ${r.note}`
+                `PASS ${r.id} cost=${outcome.cost} exp=${outcome.expanded} hops=${outcome.hops.length} ${ms.toFixed(1)}ms — ${r.note}`
             );
             if (outcome.hops.length) {
                 console.log(formatHops(outcome.hops));
@@ -262,12 +300,38 @@ if (isMain) {
     console.log(
         `\nscript-route-corpus: ${pass} pass, ${fail} fail, ${routes.length} run / ${allRoutes.length} built, ${elapsed.toFixed(0)}ms`
     );
-    if (slow.length) {
-        slow.sort((a, b) => b.ms - a.ms);
-        console.log('slowest pack paths (p>40ms):');
-        for (const s of slow.slice(0, 12)) {
-            console.log(`  ${s.ms.toFixed(1)}ms cost=${s.cost} ${s.id} — ${s.note}`);
-        }
+
+    const nHard = hardestN > 0 ? hardestN : 25;
+    const hardest = rankHardest(ranked, nHard);
+    console.log(`\nhardest ${hardest.length} (by pack cost / expansions, no teles):`);
+    for (let i = 0; i < hardest.length; i++) {
+        const h = hardest[i]!;
+        console.log(
+            `  ${String(i + 1).padStart(2)}. cost=${h.cost} exp=${h.expanded} hops=${h.hops} cheb=${h.cheb} ${h.id} — ${h.note}`
+        );
     }
+
+    const hardPath = path.join(process.cwd(), 'tools/nav/script-routes.hardest.json');
+    // Always refresh precalc when a full (or limit) pack run completes — used by live HARD=1.
+    if (hardestN > 0 || !limit) {
+        fs.writeFileSync(
+            hardPath,
+            JSON.stringify(
+                {
+                    description:
+                        'Precalc: hardest pack paths (useTeleports:false). Regenerate with script-route-corpus.ts [--hardest=N]. Live: HARD=1 bun tools/nav-script-routes-live.ts',
+                    generatedAt: new Date().toISOString(),
+                    metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
+                    teleports: false,
+                    count: hardest.length,
+                    routes: hardest
+                },
+                null,
+                2
+            )
+        );
+        console.log(`\nwrote ${hardest.length} hardest routes → ${hardPath}`);
+    }
+
     process.exit(fail === 0 ? 0 : 1);
 }
