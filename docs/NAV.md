@@ -10,6 +10,11 @@ The hard part is not the search. It is that the client can only express movement
 *clicks on tiles it can see*, while the destination is usually off-screen, behind a
 shut door, or on another level.
 
+> **Nav v2 (in progress)** — Shortest Path–class planning + web-walker execution for
+> this 2004 bot (patterns from RuneLite SP + Microbot `Rs2Walker`, sized for our era).
+> Start at [`docs/nav-v2/`](nav-v2/README.md); types in `src/bot/nav/v2/`.
+> **This document remains the v1 behavior manual** until dual-run lands.
+
 ## Contents
 
 - [The collision pack](#the-collision-pack)
