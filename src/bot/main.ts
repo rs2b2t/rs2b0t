@@ -82,6 +82,7 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),
         setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),
+        isAutoLogin: () => AutoRelogin.isAutoLogin(),
         setLoginCoordination: (coordination: LoginCoordination | null) => AutoRelogin.setLoginCoordination(coordination),
         startSelectedScript: () => panel?.startSelectedScript(),
         stopScript: () => panel?.stopScript(),
