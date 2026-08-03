@@ -64,6 +64,32 @@ function reverseAction(action: string): string {
     return action;
 }
 
+// Underground is not another level — the engine p_telejumps you to the same
+// level 6400 squares north (`movecoord(coord, 0, 0, 6400)`). So a cellar hop
+// looks like a same-level walk to anything that only inspects `level`, which is
+// why these were never auto-reversed and every cellar could be climbed out of
+// but not into.
+const UNDERGROUND_SHIFT = 6400;
+
+function underground(p: NavPoint): boolean {
+    return p.z >= UNDERGROUND_SHIFT;
+}
+
+/** A hop that changes floor, whether by level or by the underground band. */
+function changesFloor(e: TransportEdgeData): boolean {
+    return e.from.level !== e.to.level || underground(e.from) !== underground(e.to);
+}
+
+/**
+ * Same-level underground hops must be `dungeon`, not `stair`: PathFinder only
+ * hands the executor a `toTile` for dungeon-kind edges, and without one it has
+ * no arrival condition and cannot drive the Open-then-descend two-step that a
+ * shut trapdoor or manhole needs.
+ */
+function edgeKind(e: TransportEdgeData): TransportEdgeData['kind'] {
+    return e.from.level === e.to.level && underground(e.from) !== underground(e.to) ? 'dungeon' : e.kind;
+}
+
 function snapWalkable(finder: PathFinder, x: number, z: number, level: number): NavPoint | null {
     for (const [dx, dz] of SNAP_OFFSETS) {
         if (finder.walkable(x + dx, z + dz, level)) return { x: x + dx, z: z + dz, level };
@@ -109,11 +135,11 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
         }
     };
     for (const e of snapped) {
-        add(e);
+        add({ ...e, kind: edgeKind(e) });
     }
     for (const e of snapped) {
-        if (e.from.level !== e.to.level && /-(up|down)/i.test(e.action)) {
-            const reverse: TransportEdgeData = { from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: e.kind };
+        if (changesFloor(e) && /-(up|down)/i.test(e.action)) {
+            const reverse: TransportEdgeData = { from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: edgeKind(e) };
             const disabledReason = DISABLED_AUTO_REVERSES.get(key(reverse));
             add(disabledReason ? { ...reverse, disabledReason } : reverse);
         }
