@@ -240,8 +240,9 @@ The recurring causes are worth knowing, because they affect more than clues:
 - **Double doors and gates are not derived.** `derive-doors` emits single
   `WALL_STRAIGHT` doors, so paired gates — the Varrock sewer gates, the West
   Ardougne wall — leave whole regions islanded.
-- **State-aware crossings are deferred.** Entering the Kharidian desert consumes a
-  bought Shantay pass, which the graph does not model.
+- **Item-gated crossings.** Entering the Kharidian desert southbound consumes a
+  Shantay pass (edge is baked; `SolveClue.bankFirst` keeps/withdraws one — #371).
+  Offline pack audit still treats desert as closed without virtual WorldState.
 
 ## Tracing a failure
 

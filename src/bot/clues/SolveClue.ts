@@ -142,10 +142,14 @@ export class SolveClue implements Task {
         const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
         const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
         const keepTeleports = this.host.useTeleports?.() ?? true;
+        // Southbound Shantay Pass is baked but consumes a pass (#371). Keep/withdraw
+        // one so desert digs (3552/3554) can plan the requires-gated edge.
+        const SHANTAY_PASS = 'Shantay pass';
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket') || this.host.isFood(name)
-                || n === spade || n === 'coins' || coordItems.has(n) || rowItemNames.has(n) || (weapon !== '' && n === weapon)
+                || n === spade || n === 'coins' || n === SHANTAY_PASS.toLowerCase() || coordItems.has(n)
+                || rowItemNames.has(n) || (weapon !== '' && n === weapon)
                 || (keepTeleports && isTeleportItem(name));
         };
         await Bank.depositAllMatching(name => !isKeep(name));
@@ -168,6 +172,14 @@ export class SolveClue implements Task {
         const coinsShort = CLUE_COINS - Inventory.count('Coins');
         if (coinsShort > 0 && !(await Bank.withdrawX('Coins', coinsShort))) {
             this.host.log('[clue] no Coins in the bank — toll-gate routes will detour');
+        }
+
+        if (Inventory.count(SHANTAY_PASS) < 1) {
+            if (!(await Bank.withdraw(SHANTAY_PASS, 'Withdraw-1'))) {
+                this.host.log('[clue] no Shantay pass in the bank — Kharidian desert digs will stay closed (#371)');
+            } else if (!(await Execution.delayUntil(() => Inventory.count(SHANTAY_PASS) >= 1, 2500))) {
+                this.host.log('[clue] Shantay pass withdraw did not land');
+            }
         }
 
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
