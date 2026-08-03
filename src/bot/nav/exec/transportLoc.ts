@@ -6,32 +6,30 @@ import type { TransportInfo } from '../PathFinder.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { Locs, type Loc } from '../../api/queries/Locs.js';
 import { chebyshev } from '../followMath.js';
+import {
+    locRefFromTransport,
+    locRefValid,
+    matchesLocRef,
+    type LocSceneSnap
+} from '../v2/locRef.js';
 
 export function matchesTransportLoc(
     transport: TransportInfo,
     loc: { readonly id: number; tile(): { x: number; z: number } }
 ): boolean {
-    const tile = loc.tile();
-    const near = Math.max(Math.abs(tile.x - transport.locX), Math.abs(tile.z - transport.locZ)) <= 3;
-    if (transport.locId === undefined && transport.openLocId === undefined) {
-        return near;
-    }
-    const idOk =
-        (transport.locId !== undefined && loc.id === transport.locId)
-        || (transport.openLocId !== undefined && loc.id === transport.openLocId);
-    if (!idOk) {
-        return false;
-    }
-    // Prefer exact placement when known, but allow a small slack: ship teleports
-    // land a tile off the stand, and content pack locX/Z for gangplanks is often
-    // one tile from the walkable approach. Live combo failed with exact-only.
-    if (loc.id === transport.locId) {
-        return (
-            (tile.x === transport.locX && tile.z === transport.locZ)
-            || near
-        );
-    }
-    return near;
+    return matchesLocRef(locRefFromTransport(transport), loc);
+}
+
+/** Live scene still has this transport placement (or open leaf for Open actions). */
+export function transportLocValid(transport: TransportInfo, level = 0): boolean {
+    const ref = locRefFromTransport(transport, level);
+    const scene: LocSceneSnap[] = Locs.query()
+        .results()
+        .map(l => {
+            const t = l.tile();
+            return { id: l.id, name: l.name, actions: l.actions(), x: t.x, z: t.z };
+        });
+    return locRefValid(ref, scene);
 }
 
 export function matchesTransportLanding(

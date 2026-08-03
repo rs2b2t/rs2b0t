@@ -709,6 +709,10 @@ through the mine** as a free teleport between wizards. Scripts that enter via
 NPC without the walker should call `__rs2b0t.EssenceSession.noteEntryFromNpc('Aubury')`
 (or `noteEntry('aubury')`) after a successful teleport.
 
+**Loc placement (`locRef`):** transport/door edges refer to scenery by placement
+(tile + optional loc id / open id). Helpers in `nav/v2/locRef.ts` match live locs
+and probe validity (including already-open barriers).
+
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
 script bank runs and long unattended walks**. Pass `avoidZones: ['white-wolf-mountain']`
 (or ad-hoc rects) so low-level accounts skip wolf-heavy corridors; off by default.

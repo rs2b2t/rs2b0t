@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { matchesTransportLoc } from '#/bot/nav/WalkExecutor.js';
+import { matchesTransportLoc } from '#/bot/nav/exec/transportLoc.js';
 import type { TransportInfo } from '#/bot/nav/PathFinder.js';
 
 const gate: TransportInfo = {
@@ -17,17 +17,20 @@ const loc = (id: number, x: number, z: number): { id: number; tile(): { x: numbe
 });
 
 describe('matchesTransportLoc', () => {
-    test('an ID-defined transport requires the exact ID and recorded tile', () => {
+    test('an ID-defined transport requires the id and near placement (slack 3)', () => {
         expect(matchesTransportLoc(gate, loc(3198, 3312, 3235))).toBe(true);
         expect(matchesTransportLoc(gate, loc(3197, 3312, 3234))).toBe(false);
-        expect(matchesTransportLoc(gate, loc(3198, 3312, 3234))).toBe(false);
+        // 1 tile off still matches — pack stands / gangplanks drift.
+        expect(matchesTransportLoc(gate, loc(3198, 3312, 3234))).toBe(true);
+        expect(matchesTransportLoc(gate, loc(3198, 3312, 3240))).toBe(false);
     });
 
-    test('locId 0 takes the strict branch rather than the legacy radius branch', () => {
+    test('locId 0 still requires that id (near placement)', () => {
         const zeroId = { ...gate, locId: 0 };
         expect(matchesTransportLoc(zeroId, loc(0, 3312, 3235))).toBe(true);
         expect(matchesTransportLoc(zeroId, loc(3198, 3312, 3235))).toBe(false);
-        expect(matchesTransportLoc(zeroId, loc(0, 3313, 3235))).toBe(false);
+        expect(matchesTransportLoc(zeroId, loc(0, 3313, 3235))).toBe(true);
+        expect(matchesTransportLoc(zeroId, loc(0, 3320, 3235))).toBe(false);
     });
 
     test('a legacy no-ID transport retains the three-tile radius lookup', () => {

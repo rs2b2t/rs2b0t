@@ -15,6 +15,7 @@ export * from './wilderness.js';
 export * from './lcCoord.js';
 export * from './essenceExit.js';
 export * from './essenceSession.js';
+export * from './locRef.js';
 export * from './travelCatalog.js';
 export * from './transportQuestReqs.js';
 export * from './worldStateData.js';

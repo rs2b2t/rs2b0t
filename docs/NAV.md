@@ -351,6 +351,11 @@ matching `essenceExitReturn`; live `EssenceSession` (server varp 64 is not on th
 the **path corridor** ahead of the player, not merely the nearest Open-door within 3
 tiles (wrong doorway / same loc type).
 
+**Loc placement ref (`v2/locRef.ts`):** scenery-backed edges are keyed by **placement**
+(level + tile) plus optional closed/open ids — not by name alone. `matchesLocRef` /
+`locRefValid` / `locRefStale` support “is this edge still real in the scene?” checks
+(open leaf counts as valid for Open-actions).
+
 **Code map:** shared stack under `src/bot/nav/` (`PathFinder`, `WalkExecutor`, `exec/`, `data/`).
 Folder `v2/` holds tele catalog, travel catalog, WorldState helpers, bank plan — **most of
 that is used by classic too**; only tele inject / bank-for-route / hop logs are mode-gated.
