@@ -37,6 +37,22 @@ export function toCanvasPoint(clientX: number, clientY: number, rect: { left: nu
 
 const inRect = (r: Rect, x: number, y: number): boolean => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 
+/**
+ * Wrap-around option cycle for paint steppers / selects.
+ * `delta` of −1 is previous, +1 is next. Unknown `current` starts at index 0.
+ */
+export function cycleOption(options: readonly string[], current: string, delta: number): string {
+    if (options.length === 0) {
+        return current;
+    }
+    const at = options.findIndex(o => o.toLowerCase() === current.toLowerCase());
+    const from = at >= 0 ? at : 0;
+    const step = Math.trunc(delta) || 1;
+    const n = options.length;
+    const next = ((from + step) % n + n) % n;
+    return options[next]!;
+}
+
 export function hitRegion(regions: readonly Region[], x: number, y: number): Region | null {
     let hit: Region | null = null;
     for (const region of regions) {

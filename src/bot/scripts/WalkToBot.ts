@@ -64,7 +64,9 @@ export default class WalkToBot extends TaskBot {
         p.bar('Trip', progress, '#6cb6ff');
         p.row(`Walker queue: ${Traversal.remaining()}`, `Arrive within: ${this.radius}`);
         p.gap();
-        const picked = p.select('dest', 'dest', WALK_OPTIONS, WALK_OPTIONS.includes(this.label) ? this.label : WALK_OPTIONS[0]);
+        // Prev/Next stepper (issue #327) — single-click select overshot when spam-cycling.
+        const destNow = WALK_OPTIONS.includes(this.label) ? this.label : WALK_OPTIONS[0]!;
+        const picked = p.stepper('dest', 'Destination', WALK_OPTIONS, destNow);
         if (picked) {
             this.switchDestination(picked);
         }

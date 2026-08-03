@@ -1,4 +1,4 @@
-import { paintState, resolveDock, type Dock, type Rect, type Region } from '#/bot/api/hud/paintLogic.js';
+import { cycleOption, paintState, resolveDock, type Dock, type Rect, type Region } from '#/bot/api/hud/paintLogic.js';
 
 /**
  * Layout and behaviour of an overlay HUD.
@@ -183,10 +183,53 @@ export class PaintFrame {
         this.regions.push({ id: `sel:${id}`, ...r, kind: 'widget' });
         this.cursorY += BUTTON_H + 4;
         if (paintState.consumeClick(`sel:${id}`)) {
-            const at = options.findIndex(o => o.toLowerCase() === current.toLowerCase());
-            return options[(at + 1) % options.length];
+            return cycleOption(options, current, 1);
         }
         return null;
+    }
+
+    /**
+     * Prev / label / Next stepper — one click moves one option (no spam overshoot).
+     * Layout: `[◀] label: current [▶]`. Returns the newly selected option or null.
+     */
+    stepper(id: string, label: string, options: string[], current: string): string | null {
+        if (this.collapsed || options.length === 0) {
+            return null;
+        }
+        const y = this.cursorY + 2;
+        let x = this.panel.x + PAD;
+        let picked: string | null = null;
+
+        const prevW = this.ctx.measureText('◀').width + 14;
+        const prevR = { x, y, w: prevW, h: BUTTON_H };
+        this.drawButton(prevR, '◀');
+        this.regions.push({ id: `step:${id}:prev`, ...prevR, kind: 'widget' });
+        if (paintState.consumeClick(`step:${id}:prev`)) {
+            picked = cycleOption(options, current, -1);
+        }
+        x += prevW + 4;
+
+        const mid = `${label}: ${current}`;
+        const midW = Math.min(
+            this.ctx.measureText(mid).width + 14,
+            this.panel.w - PAD * 2 - prevW - 40
+        );
+        const midR = { x, y, w: Math.max(midW, 40), h: BUTTON_H };
+        this.drawButton(midR, mid);
+        // Mid is display-only (no cycle on click) so spam does not skip destinations.
+        this.regions.push({ id: `step:${id}:mid`, ...midR, kind: 'widget' });
+        x += midR.w + 4;
+
+        const nextW = this.ctx.measureText('▶').width + 14;
+        const nextR = { x, y, w: nextW, h: BUTTON_H };
+        this.drawButton(nextR, '▶');
+        this.regions.push({ id: `step:${id}:next`, ...nextR, kind: 'widget' });
+        if (paintState.consumeClick(`step:${id}:next`)) {
+            picked = cycleOption(options, current, 1);
+        }
+
+        this.cursorY += BUTTON_H + 4;
+        return picked;
     }
 
     gap(px = 6): void {
