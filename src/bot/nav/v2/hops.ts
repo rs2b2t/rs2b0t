@@ -16,7 +16,15 @@ function kindOf(t: TransportInfo): TransportKind | 'walk' {
     return 'door';
 }
 
-/** Collapse waypoints into first-class transport hops for explain tooling. */
+/**
+ * Collapse waypoints into first-class transport hops for explain tooling.
+ *
+ * Transport metadata is attached to the **arrival** waypoint (PathFinder
+ * reconstruct). Hop endpoints are therefore:
+ *   from = previous waypoint (approach), to = current waypoint (landing).
+ * Prefer `t.toTile` / `t.toLevel` when present for the landing coords.
+ * Prefer `t.edgeCost` when reconstruction preserved the real graph cost (#337).
+ */
 export function hopsFromWaypoints(waypoints: Waypoint[]): PathHop[] {
     const hops: PathHop[] = [];
     for (let i = 0; i < waypoints.length; i++) {
@@ -25,15 +33,22 @@ export function hopsFromWaypoints(waypoints: Waypoint[]): PathHop[] {
             continue;
         }
         const t = w.transport;
+        const prev = i > 0 ? waypoints[i - 1]! : w;
+        const from = { x: prev.x, z: prev.z, level: prev.level };
         const to = t.toTile
             ? { x: t.toTile.x, z: t.toTile.z, level: t.toLevel ?? w.level }
-            : i + 1 < waypoints.length
-                ? { x: waypoints[i + 1]!.x, z: waypoints[i + 1]!.z, level: waypoints[i + 1]!.level }
-                : { x: w.x, z: w.z, level: w.level };
+            : { x: w.x, z: w.z, level: w.level };
+        const cost =
+            t.edgeCost
+            ?? (t.kind === 'teleport' || t.teleportId
+                ? 40
+                : t.toLevel !== undefined || t.toTile
+                  ? 10
+                  : 4);
         hops.push({
             kind: kindOf(t),
-            cost: t.kind === 'teleport' || t.teleportId ? 40 : t.toLevel !== undefined || t.toTile ? 10 : 4,
-            from: { x: w.x, z: w.z, level: w.level },
+            cost,
+            from,
             to,
             locId: t.locId,
             locName: t.locName,
