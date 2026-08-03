@@ -75,10 +75,12 @@ const path = await Navigator.findPath(from, to, { avoidDoors, timeoutMs, maxExpa
 
 Scripts can ban axis-aligned map rects from A\* so low-level accounts do not walk
 wolf packs (idea **@lolwut**). Known ids live in
-[`dangerZones.ts`](../src/bot/nav/data/dangerZones.ts); pass them on any walk:
+[`dangerZones.ts`](../src/bot/nav/data/dangerZones.ts); pass them on any walk
+(`walkTo` or `walkResilient` — resilient forwards them on every baked repath):
 
 ```ts
-await Traversal.walkTo(dest, {
+await Traversal.walkResilient(dest, {
+  radius: 2,
   avoidZones: ['white-wolf-mountain'],
   // or ad-hoc: { minX, maxX, minZ, maxZ, level? }
 });

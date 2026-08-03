@@ -24,6 +24,11 @@ export interface WalkResilientOptions {
     log?: (msg: string) => void;
     /** Forwarded to WalkExecutor (classic | v2). Default: Global `navEngine`. */
     navEngine?: import('../nav/navEngine.js').NavEngineId;
+    /**
+     * Danger / no-go zones for every baked repath (same as WalkOptions.avoidZones).
+     * Known ids and/or ad-hoc rects. @see src/bot/nav/data/dangerZones.ts
+     */
+    avoidZones?: WalkOptions['avoidZones'];
 }
 
 const SCENE_TIMEOUT_MS = 6000;
@@ -49,6 +54,7 @@ export const Traversal = {
         const bakedTimeout = opts.timeoutMs ?? 90000;
         const maxPasses = opts.attempts;
         const navEngine = opts.navEngine;
+        const avoidZones = opts.avoidZones;
 
         const dist = (): number => {
             const me = reader.worldTile();
@@ -102,6 +108,7 @@ export const Traversal = {
                     timeoutMs: bakedTimeout,
                     log,
                     ...(navEngine ? { navEngine } : {}),
+                    ...(avoidZones && avoidZones.length > 0 ? { avoidZones } : {}),
                     ...(action.bigBudget ? { maxExpansions: maxBudget } : {})
                 });
                 const outcome = WalkExecutor.lastOutcome;

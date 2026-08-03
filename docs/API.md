@@ -613,6 +613,8 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     radius?: number;    // arrive within N tiles (default 2)
     timeoutMs?: number;
     log?: (msg: string) => void;
+    // Optional: ban map rects from A* (ids or ad-hoc). See docs/NAV.md#danger-zones
+    avoidZones?: readonly (string | { minX: number; maxX: number; minZ: number; maxZ: number; level?: number })[];
 }): Promise<boolean>
 
 // Prefer for unattended walks — escalates re-path / big-budget / scene bridge
@@ -624,6 +626,7 @@ Traversal.walkResilient(dest: WorldTile, opts: {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
+    avoidZones?: WalkOptions['avoidZones']; // forwarded on every baked repath
 }): Promise<boolean>
 
 Traversal.preload(): void      // warm the nav worker before the first walk
@@ -634,7 +637,8 @@ Traversal.remaining(): number  // path tiles left in the active walk
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
-script bank runs and long unattended walks**.
+script bank runs and long unattended walks**. Pass `avoidZones: ['white-wolf-mountain']`
+(or ad-hoc rects) so low-level accounts skip wolf-heavy corridors; off by default.
 
 For same-scene clicks, `DirectNavigator.walk(dest)` / `walkTo(dest, radius?,
 timeoutMs?)` are available, but prefer `Traversal.walkTo` / `walkResilient`.
