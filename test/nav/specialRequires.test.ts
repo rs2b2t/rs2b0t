@@ -22,8 +22,13 @@ describe('specialRequiresAt — guild skill gates (content-backed)', () => {
         expect(r?.worn).toEqual([{ name: "Chef's hat", count: 1 }]);
     });
 
-    test('Ranging Guild door requires ranged 40', () => {
-        expect(specialRequiresAt(2658, 3438, 0)?.skills).toEqual([{ name: 'ranged', level: 40 }]);
+    test('Ranging Guild door requires ranged 40 on loc and transport stands', () => {
+        const r40 = [{ name: 'ranged', level: 40 }];
+        // doors.json loc tile
+        expect(specialRequiresAt(2658, 3438, 0)?.skills).toEqual(r40);
+        // transports.json from-stands (PathFinder attaches via edge.from)
+        expect(specialRequiresAt(2657, 3439, 0)?.skills).toEqual(r40);
+        expect(specialRequiresAt(2659, 3437, 0)?.skills).toEqual(r40);
     });
 
     test('Mining Guild ladder descent requires mining 60 on all four surface stands', () => {

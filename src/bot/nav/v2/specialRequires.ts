@@ -40,7 +40,8 @@ const DOOR_SKILL_GATES: readonly {
         worn: [{ name: "Chef's hat", count: 1 }],
         note: "chef's hat worn"
     },
-    // ranging_guild_door.rs2 — ranged 40 (map m41_53 lx34 lz46 → 2658,3438)
+    // ranging_guild_door.rs2 — ranged 40 (map loc 2658,3438). doors.json uses loc tile;
+    // transports.json uses diagonal stands — gate both so PathFinder from-tile attach works.
     { x: 2658, z: 3438, level: 0, skill: 'ranged', levelReq: 40 }
 ];
 
@@ -65,7 +66,10 @@ const TRANSPORT_SKILL_GATES: readonly {
     // tree_ropeswing2 (brim south, from 2705,3205) intentionally has NO level check
     // so players cannot softlock on the island (content: loc_type ! tree_ropeswing2).
     { x: 2709, z: 3209, level: 0, skill: 'agility', levelReq: 10 }, // tree_ropeswing1 north
-    { x: 2511, z: 3091, level: 0, skill: 'agility', levelReq: 10 } // tree_ropeswing3 ogre
+    { x: 2511, z: 3091, level: 0, skill: 'agility', levelReq: 10 }, // tree_ropeswing3 ogre
+    // ranging_guild_door diagonal stands (transports.json from-tiles; loc at 2658,3438)
+    { x: 2657, z: 3439, level: 0, skill: 'ranged', levelReq: 40 },
+    { x: 2659, z: 3437, level: 0, skill: 'ranged', levelReq: 40 }
 ];
 
 /**
