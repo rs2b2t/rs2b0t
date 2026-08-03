@@ -1987,6 +1987,126 @@
   },
   {
     "from": {
+      "x": 2836,
+      "z": 9599,
+      "level": 0
+    },
+    "to": {
+      "x": 2836,
+      "z": 9601,
+      "level": 0
+    },
+    "locName": "Wall",
+    "action": "Open",
+    "kind": "door",
+    "locId": 2606,
+    "locX": 2836,
+    "locZ": 9600,
+    "debugName": "dragonsecretdoor",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Dragon Slayer",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2836,
+      "z": 9601,
+      "level": 0
+    },
+    "to": {
+      "x": 2836,
+      "z": 9599,
+      "level": 0
+    },
+    "locName": "Wall",
+    "action": "Open",
+    "kind": "door",
+    "locId": 2606,
+    "locX": 2836,
+    "locZ": 9600,
+    "debugName": "dragonsecretdoor",
+    "options": [
+      "Open"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Dragon Slayer",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2833,
+      "z": 3257,
+      "level": 0
+    },
+    "to": {
+      "x": 2833,
+      "z": 9658,
+      "level": 0
+    },
+    "locName": "Rock opening",
+    "action": "Climb-down",
+    "kind": "dungeon",
+    "locId": 2609,
+    "locX": 2833,
+    "locZ": 3255,
+    "debugName": "crandor_rock_opening",
+    "options": [
+      "Climb-down"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Dragon Slayer",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2833,
+      "z": 9656,
+      "level": 0
+    },
+    "to": {
+      "x": 2833,
+      "z": 3257,
+      "level": 0
+    },
+    "locName": "Climbing rope",
+    "action": "Climb",
+    "kind": "dungeon",
+    "locId": 2610,
+    "locX": 2833,
+    "locZ": 9657,
+    "debugName": "crandor_climbing_rope",
+    "options": [
+      "Climb"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Dragon Slayer",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
       "x": 2183,
       "z": 4951,
       "level": 0

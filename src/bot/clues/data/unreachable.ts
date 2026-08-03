@@ -33,7 +33,9 @@ export const PACK_UNREACHABLE: Record<number, string> = {
     3546: "Gu'Tanoth: ogre guard gates (ogre_guard.rs2, %gutanoth_gold) — requires Watch Tower",
     3548: "Gu'Tanoth: ogre guard gates (ogre_guard.rs2, %gutanoth_gold) — requires Watch Tower",
     3522: 'West Ardougne: squeeze the sewer pipe with a rope tied to its grill (sewerpipe.rs2) — requires Plague City',
-    2815: 'Crandor: reached by the quest ship — requires Dragon Slayer',
+    // 2815 Crandor: secret wall + rock/rope baked (#367); still needs Dragon Slayer complete
+    // (ship is one-shot during the quest; post-quest access is Karamja volcano wall).
+    2815: 'Crandor: baked secret wall + rock/rope — requires Dragon Slayer complete',
     3526: 'Trollheim/Death Plateau: death_climbingrocks need climbing boots worn — requires Death Plateau',
     3528: 'Trollheim/Death Plateau: death_climbingrocks need climbing boots worn — requires Death Plateau',
 

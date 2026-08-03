@@ -93,6 +93,14 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
             'baxtorian rope rock/tree approach after raft crash (#369)'
         ]
     }
+    {
+        // Post-quest Crandor: secret wall + rock/rope (ship is one-shot during the quest).
+        journal: 'Dragon Slayer',
+        varp: 'dragonquest',
+        // ^dragon_complete = 10
+        complete: 10,
+        usedBy: ['dragonsecretdoor', 'crandor_rock_opening', 'crandor_climbing_rope']
+    }
 ] as const;
 
 /** Short names used in older catalog strings → quest-list display name. */
@@ -108,7 +116,8 @@ export const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
     'watch tower': 'Watch Tower',
     "eadgar's ruse": "Eadgar's Ruse",
     waterfall: 'Waterfall Quest',
-    'waterfall quest': 'Waterfall Quest'
+    'waterfall quest': 'Waterfall Quest',
+    'dragon slayer': 'Dragon Slayer'
 };
 
 export function canonicalQuestName(name: string): string {
@@ -141,6 +150,9 @@ export const REQ = {
     waterfallStarted: {
         members: true,
         quests: [{ quest: 'Waterfall Quest', minStatus: 'started' as const }]
+    },
+    dragonSlayerComplete: {
+        quests: [{ quest: 'Dragon Slayer', minStatus: 'complete' as const }]
     }
 } as const satisfies Record<string, TransportRequires>;
 
