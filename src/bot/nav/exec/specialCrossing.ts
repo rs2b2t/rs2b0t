@@ -14,6 +14,7 @@ import { Quests } from '../../api/hud/Quests.js';
 import { Skills } from '../../api/hud/Skills.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
+import { Reachability } from '../../api/Reachability.js';
 import {
     matchesUseItem,
     meetsRequirement,
@@ -21,6 +22,7 @@ import {
     pickChoice,
     type SpecialCrossing
 } from '../data/specialCrossings.js';
+import { DirectNavigator } from '../DirectNavigator.js';
 import { isOnFarSide } from '../followMath.js';
 import type { TransportInfo } from '../PathFinder.js';
 import { findTransportLoc } from './transportLoc.js';
@@ -182,10 +184,42 @@ export async function handleSpecialCrossing(
     }
 
     const crossed = (): boolean => isOnFarSide(reader.worldTile(), approach, step);
+    // Already-open gate (Close leaf only): do not fail "not found" — walk through.
+    if (/^open$/i.test(sc.action) && !sc.useItem) {
+        const shutProbe = findTransportLoc({
+            locName: sc.locName,
+            action: sc.action,
+            locX: sc.x,
+            locZ: sc.z
+        });
+        if (!shutProbe) {
+            if (crossed()) {
+                log(`${sc.label}: already past open '${sc.locName}'`);
+                return true;
+            }
+            const me = reader.worldTile();
+            if (me && Reachability.canStep(approach, step)) {
+                log(`${sc.label}: '${sc.locName}' already open — continuing`);
+                if (me.x === approach.x && me.z === approach.z && me.level === approach.level) {
+                    DirectNavigator.walk(step);
+                    await Execution.delayUntil(() => crossed(), 2500);
+                }
+                return crossed() || Reachability.canStep(approach, step);
+            }
+        }
+    }
     const maxOpens = sc.reopenAfterDialogue ? GATE_REOPENS : 1;
     for (let open = 0; open < maxOpens && !crossed(); open++) {
         const loc = findTransportLoc({ locName: sc.locName, action: sc.action, locX: sc.x, locZ: sc.z });
         if (!loc) {
+            // Open leaf mid-loop: succeed if we can pass rather than repath-fail.
+            if (
+                /^open$/i.test(sc.action)
+                && (crossed() || Reachability.canStep(approach, step))
+            ) {
+                log(`${sc.label}: '${sc.locName}' already open`);
+                return true;
+            }
             log(`${sc.label}: '${sc.locName}' not found at (${sc.x},${sc.z})`);
             return false;
         }

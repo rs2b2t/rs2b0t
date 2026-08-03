@@ -901,8 +901,10 @@ class WalkExecutorImpl {
             const loc = findTransportLoc(transport);
             if (!loc) {
                 if (transport.toLevel === undefined && transport.toTile === undefined) {
+                    // Already open / no shut Open-target: do not burn TRANSPORT_WAIT.
                     if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
                         log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
+                        RouteState.noteTransport(approach, step);
                         return true;
                     }
                     log(`transport loc '${transport.locName}' not found but the way is blocked`);

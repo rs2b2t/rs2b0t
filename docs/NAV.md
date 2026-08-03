@@ -203,6 +203,10 @@ Doors that are scripted to refuse entry from one side are **never** baked as
 bidirectional — a one-way door baked both ways lures paths into dead ends. Double
 doors are opened from the **exterior** stand; standing on a leaf wedges the crossing.
 
+**Already open:** if the hop's Open-target is gone and a Close leaf is nearby (or
+passage is free), the walker **skips Open waits** and continues — no multi-second
+pause re-opening doors already swung open earlier on the route.
+
 A door that refuses from *both* sides is not a door at all, and `derive-doors` skips
 the type outright. `Open` in a loc's ops says nothing about whether the script honours
 it: McGrubor's Wood's front gate is locked from inside the wood and guarded by the

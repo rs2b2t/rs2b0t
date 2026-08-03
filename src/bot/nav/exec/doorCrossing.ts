@@ -108,6 +108,14 @@ export function questLockDoorTileNearPlayer(): { x: number; z: number } | null {
     return { x: t.x, z: t.z };
 }
 
+/**
+ * True when the barrier is not a shut Open-target (open leaf with Close, or
+ * no matching loc). Caller still verifies passage with Reachability.
+ */
+export function barrierLooksOpen(transport: TransportInfo): boolean {
+    return findTransportLoc(transport) === null;
+}
+
 export async function crossMultiTileDoor(
     approach: PathStepTile,
     step: PathStepTile,
@@ -117,6 +125,41 @@ export async function crossMultiTileDoor(
 ): Promise<boolean> {
     const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
     const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
+
+    // Fast path: already open (or gone). Skip approach-Open-wait loops that feel
+    // like a multi-second pause at every previously-opened door on the route.
+    if (barrierLooksOpen(transport)) {
+        const here0 = reader.worldTile();
+        if (isOnFarSide(here0, approach, step)) {
+            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ}) (already past)`);
+            return true;
+        }
+        const passage =
+            Reachability.canStep(approach, step)
+            || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true });
+        if (passage) {
+            log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open — continuing`);
+            // Only nudge through if we are already on the approach tile; otherwise
+            // clear the hop and let the path follower walk the open corridor.
+            if (
+                here0
+                && here0.level === approach.level
+                && here0.x === approach.x
+                && here0.z === approach.z
+            ) {
+                DirectNavigator.walk(step);
+                await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 2500);
+                if (isOnFarSide(reader.worldTile(), approach, step)) {
+                    log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+                    return true;
+                }
+            }
+            return true;
+        }
+        // No shut Open-target but passage still blocked — fall through to scene-step.
+        log(`${transport.locName} open-loc missing but edge blocked — scene-stepping`);
+    }
+
     const deadline = performance.now() + MULTI_DOOR_CROSS_MS;
     while (performance.now() < deadline) {
         const here = reader.worldTile();
