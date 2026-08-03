@@ -50,6 +50,47 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
 
     { x: 2568, z: 9893, level: 0, locName: 'Door', action: 'Open', useItem: { id: 298, name: 'A key' }, label: 'Baxtorian keyed door' },
 
+    // Baxtorian Falls approach (#369 / #320) — same stands as FireGiantLogic:
+    //   Board Log raft @ ~2510,3493 → crash mound 2512,3481
+    //   Walk south to throw stand 2512,3477 (in THROW_ZONE z 3476–3481)
+    //   Rope on Rock @ 2512,3468 → PastRock (~2513,3468, r≤3)
+    //   Walk south to 2512,3466, Rope on Dead tree → ledge 2511,3463
+    // One Rope, not consumed. Barrel exit already in transports.json.
+    {
+        x: 2509,
+        z: 3493,
+        level: 0,
+        locName: 'Log raft',
+        action: 'Board',
+        toTile: { x: 2512, z: 3481, level: 0 },
+        arrivalRadius: 2,
+        label: 'Baxtorian log raft (#369)'
+    },
+    {
+        x: 2512,
+        z: 3468,
+        level: 0,
+        locName: 'Rock',
+        action: 'Swim to',
+        useItem: { id: 954, name: 'Rope' },
+        requires: { item: 'Rope', count: 1 },
+        toTile: { x: 2513, z: 3468, level: 0 },
+        arrivalRadius: 3, // FireGiant PastRock = cheb(POST_ROCK) ≤ 3
+        label: 'Baxtorian rope → rock (#369)'
+    },
+    {
+        x: 2512,
+        z: 3465,
+        level: 0,
+        locName: 'Dead tree',
+        action: 'Climb',
+        useItem: { id: 954, name: 'Rope' },
+        requires: { item: 'Rope', count: 1 },
+        toTile: { x: 2511, z: 3463, level: 0 },
+        arrivalRadius: 1,
+        label: 'Baxtorian rope → ledge (#369)'
+    },
+
     { x: 3027, z: 3218, level: 1, npc: 'Seaman Thresnor', locName: 'Seaman Thresnor', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2956, z: 3143, level: 1 }, label: 'Port Sarim->Musa ship' },
     { x: 2955, z: 3146, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 3032, z: 3217, level: 1 }, label: 'Musa->Port Sarim ship' },
 

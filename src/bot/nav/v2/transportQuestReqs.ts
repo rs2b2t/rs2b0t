@@ -81,6 +81,17 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         varp: 'eadgar_quest',
         complete: 110,
         usedBy: ['spell: Trollheim teleport']
+    },
+    {
+        // questlist.if text=Waterfall Quest; raft needs ≥ started (not 0).
+        // complete = 10; log raft boards for any stage ≥ 1 (FireGiant parks if notStarted).
+        journal: 'Waterfall Quest',
+        varp: 'waterfall_quest',
+        complete: 10,
+        usedBy: [
+            'baxtorian_log_raft (Board — refuses if not started)',
+            'baxtorian rope rock/tree approach after raft crash (#369)'
+        ]
     }
 ] as const;
 
@@ -95,7 +106,9 @@ export const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
     'plague city': 'Plague City',
     watchtower: 'Watch Tower',
     'watch tower': 'Watch Tower',
-    "eadgar's ruse": "Eadgar's Ruse"
+    "eadgar's ruse": "Eadgar's Ruse",
+    waterfall: 'Waterfall Quest',
+    'waterfall quest': 'Waterfall Quest'
 };
 
 export function canonicalQuestName(name: string): string {
@@ -123,6 +136,11 @@ export const REQ = {
     shiloComplete: {
         members: true,
         quests: [{ quest: 'Shilo Village', minStatus: 'complete' as const }]
+    },
+    /** Log raft boards once Waterfall is started (content: not_started refuses Board). */
+    waterfallStarted: {
+        members: true,
+        quests: [{ quest: 'Waterfall Quest', minStatus: 'started' as const }]
     }
 } as const satisfies Record<string, TransportRequires>;
 
