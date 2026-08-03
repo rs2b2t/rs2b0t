@@ -41,12 +41,12 @@ function findEdge(expected: typeof EDGEVILLE_TRAP | typeof DWARVEN_TRAP): Transp
     );
 }
 
-function loadPack(): PathFinder | null {
-    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-    if (!fs.existsSync(packPath)) {
-        return null;
-    }
-    let bytes = new Uint8Array(fs.readFileSync(packPath));
+const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
+/** Pack is gitignored — pack-dependent tests must skip, never silent-pass (#341). */
+const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
+
+function loadPack(): PathFinder {
+    let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
         bytes = gunzipSync(bytes);
     }
@@ -95,11 +95,8 @@ describe('Trapdoor closed/open metadata', () => {
 });
 
 describe('Dwarven Mine + Edgeville trapdoor paths', () => {
-    test('pack: surface near Dwarven trapdoor reaches underground landing', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('pack: surface near Dwarven trapdoor reaches underground landing', () => {
         const finder = loadPack();
-        if (!finder) {
-            return;
-        }
         const edge = findEdge(DWARVEN_TRAP);
         expect(edge).toBeDefined();
         expect(finder.walkable(DWARVEN_TRAP.from.x, DWARVEN_TRAP.from.z, 0)).toBe(true);
@@ -119,11 +116,8 @@ describe('Dwarven Mine + Edgeville trapdoor paths', () => {
         expect(hop!.transport!.openLocId ?? hop!.transport!.locId).toBeDefined();
     });
 
-    test('pack: Edgeville dungeon field still exits via ladder after trapdoor metadata', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('pack: Edgeville dungeon field still exits via ladder after trapdoor metadata', () => {
         const finder = loadPack();
-        if (!finder) {
-            return;
-        }
         const field = { x: 3111, z: 9937, level: 0 };
         const falador = { x: 2965, z: 3378, level: 0 };
         const route = finder.findPath(field, falador);

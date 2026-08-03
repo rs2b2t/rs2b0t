@@ -11,12 +11,12 @@ import { hopsFromWaypoints, formatHops } from '#/bot/nav/v2/hops.js';
 import { plannedEdge, isAdjacentSameLevel } from '#/bot/nav/v2/plannedEdge.js';
 import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
 
-function loadFinder(): PathFinder | null {
-    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-    if (!fs.existsSync(packPath)) {
-        return null;
-    }
-    let bytes = new Uint8Array(fs.readFileSync(packPath));
+const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
+/** Pack is gitignored — pack-dependent tests must skip, never silent-pass (#341). */
+const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
+
+function loadFinder(): PathFinder {
+    let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
         bytes = gunzipSync(bytes);
     }
@@ -40,11 +40,8 @@ const richMage: WorldStateData = {
 };
 
 describe('nav v2 phase 2–4 pathfinder', () => {
-    test('ok outcomes include hops array', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('ok outcomes include hops array', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const r = finder.findPath({ x: 3222, z: 3218, level: 0 }, { x: 3225, z: 3220, level: 0 });
         expect(r.ok).toBe(true);
         if (!r.ok) {
@@ -54,11 +51,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(hopsFromWaypoints(r.waypoints)).toEqual(r.hops);
     });
 
-    test('skill gate: low agility avoids coal trucks log when state provided', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('skill gate: low agility avoids coal trucks log when state provided', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         // Seers-ish → coal trucks area path that would use the log at 20 agi
         const from = { x: 2725, z: 3485, level: 0 };
         const to = { x: 2580, z: 3480, level: 0 };
@@ -81,11 +75,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         }
     });
 
-    test('teleport catalog: long route with runes may use Varrock tele', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('teleport catalog: long route with runes may use Varrock tele', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         // Lumbridge → Varrock with tele catalog
         const r = finder.findPath(
             { x: 3222, z: 3218, level: 0 },
@@ -105,11 +96,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(formatHops(r.hops).toLowerCase()).toContain('varrock');
     });
 
-    test('spell tele requires magic level (fail closed below gate)', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('spell tele requires magic level (fail closed below gate)', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const runes = { 'Law rune': 50, 'Air rune': 150, 'Fire rune': 50 };
         const lowMage: WorldStateData = {
             members: true,
@@ -142,11 +130,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(rHigh.waypoints.some(w => w.transport?.teleportId === 'varrock')).toBe(true);
     });
 
-    test('spell tele without WorldState does not inject (fail closed)', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('spell tele without WorldState does not inject (fail closed)', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const r = finder.findPath(
             { x: 3222, z: 3218, level: 0 },
             { x: 3213, z: 3424, level: 0 },
@@ -162,11 +147,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(r.waypoints.every(w => !w.transport?.teleportId)).toBe(true);
     });
 
-    test('useTeleports false never injects spell hops', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('useTeleports false never injects spell hops', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const r = finder.findPath(
             { x: 3222, z: 3218, level: 0 },
             { x: 3213, z: 3424, level: 0 },
@@ -183,11 +165,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(r.waypoints.every(w => !w.transport?.teleportId)).toBe(true);
     });
 
-    test('distanceBeforeTeleport blocks short hops', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('distanceBeforeTeleport blocks short hops', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const r = finder.findPath(
             { x: 3222, z: 3218, level: 0 },
             { x: 3225, z: 3220, level: 0 },
@@ -204,11 +183,8 @@ describe('nav v2 phase 2–4 pathfinder', () => {
         expect(r.waypoints.every(w => !w.transport?.teleportId)).toBe(true);
     });
 
-    test('party under → falador still climbs ladder (no tele needed)', () => {
+    test.skipIf(!HAS_COLLISION_PACK)('party under → falador still climbs ladder (no tele needed)', () => {
         const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
         const r = finder.findPath(
             { x: 3019, z: 9849, level: 0 },
             { x: 2965, z: 3378, level: 0 },

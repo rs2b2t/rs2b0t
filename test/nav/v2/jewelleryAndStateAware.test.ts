@@ -35,12 +35,11 @@ describe('state-aware ladder activation', () => {
         expect(active.every(e => e.requires?.skills?.some(s => s.name === 'prayer' && s.level === 31))).toBe(true);
     });
 
-    test('pack loads monastary edges when prayer 31 in state (v2 filter path)', () => {
-        const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-        if (!fs.existsSync(packPath)) {
-            return;
-        }
-        let bytes = new Uint8Array(fs.readFileSync(packPath));
+    const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
+    const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
+
+    test.skipIf(!HAS_COLLISION_PACK)('pack loads monastary edges when prayer 31 in state (v2 filter path)', () => {
+        let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
         if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
             bytes = gunzipSync(bytes);
         }
@@ -49,9 +48,8 @@ describe('state-aware ladder activation', () => {
         // Edgeville monastery approach → upper floor tile near ladder top
         const from = { x: 3051, z: 3483, level: 0 };
         const to = { x: 3046, z: 3484, level: 1 };
-        if (!finder.walkable(from.x, from.z, 0) || !finder.walkable(to.x, to.z, 1)) {
-            return;
-        }
+        expect(finder.walkable(from.x, from.z, 0)).toBe(true);
+        expect(finder.walkable(to.x, to.z, 1)).toBe(true);
         const low = finder.findPath(from, to, {
             state: {
                 members: true,
@@ -73,7 +71,8 @@ describe('state-aware ladder activation', () => {
             maxExpansions: 80_000
         });
         // With prayer 31 the monastary climb may be available; without, should not use that edge.
-        // Don't require high to succeed (collision layout), but if both ok high should be cheaper or equal.
+        // When both succeed, high skill must not be more expensive than low.
+        expect(low.ok || high.ok).toBe(true);
         if (low.ok && high.ok) {
             expect(high.cost).toBeLessThanOrEqual(low.cost);
         }

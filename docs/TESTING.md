@@ -45,6 +45,14 @@ bun test test/docs       # the manual's own integrity
 | [`test/shops/`](../test/shops/) | 4 | stock model, ring logic |
 | [`test/config/`](../test/config/) · [`test/events/`](../test/events/) · [`test/input/`](../test/input/) · [`test/io/`](../test/io/) · [`test/client/`](../test/client/) · [`test/util/`](../test/util/) · [`test/docs/`](../test/docs/) | 1–2 each | targeted |
 
+### Collision pack (nav)
+
+`out/collision.lcnav.gz` is gitignored. Pack-backed nav tests use
+`test.skipIf(!HAS_COLLISION_PACK)` so a fresh checkout reports **skipped** coverage,
+not silent green passes (#341). Build the pack via
+[`tools/nav/build-collision.ts`](../tools/nav/build-collision.ts) or
+[`tools/deploy-local.sh`](../tools/deploy-local.sh), then re-run `bun test test/nav`.
+
 ## What makes this testable
 
 `bunfig.toml` preloads [`test/setup-dom.ts`](../test/setup-dom.ts), which registers
