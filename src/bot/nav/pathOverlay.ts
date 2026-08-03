@@ -492,8 +492,7 @@ export function paintNavPath(
                 }
             }
 
-            // Explore: client-walk trail (tryMove tiles). Solid when walking;
-            // alternate primary / run-alt when running. No centre-line.
+            // Experimental: client-walk trail. Solid when walking; checkerboard when running.
             const segRaw = path.clientSegment;
             if (segRaw && segRaw.length > 0) {
                 let clientColor = '#00D4FF';
@@ -509,7 +508,6 @@ export function paintNavPath(
                 const runAlt = parseHtmlColor(runAltColor, '#FFFF00');
                 const runOn = Game.runEnabled();
                 const seg = remainingPathFromPlayer(segRaw, me);
-                let tileI = 0;
                 for (const t of seg) {
                     if (t.level !== me.level) {
                         continue;
@@ -518,9 +516,8 @@ export function paintNavPath(
                     if (!corners) {
                         continue;
                     }
-                    const c = runOn && tileI % 2 === 1 ? runAlt : primary;
+                    const c = runOn && ((t.x + t.z) & 1) === 1 ? runAlt : primary;
                     fillQuad(ctx, corners, rgba(c, 0.45), rgba(c, 0.95), 1.5);
-                    tileI++;
                 }
             }
         }

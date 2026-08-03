@@ -289,11 +289,8 @@ class WalkExecutorImpl {
     }
 
     /**
-     * Explore: paint the route the client actually took on the last walk click.
-     * Prefer Client.tryMove's recorded local path (matches MOVE_GAMECLICK); fall back
-     * to scene-flag BFS only when the buffer is empty. Never clear a previous cyan
-     * segment on soft failure — Draynor-area doors often block a naive re-BFS while
-     * tryMove already succeeded with tryNearest.
+     * Experimental debug: paint the route the client took on the last walk click.
+     * Prefer tryMove's recorded path; fall back to scene BFS. Never throws into followPath.
      */
     private publishClientWalkSegment(
         from: WorldTile,
@@ -304,39 +301,38 @@ class WalkExecutorImpl {
                 PathPublish.setClientSegment(null);
                 return;
             }
+
+            // Exact client path (includes tryNearest landing) — primary.
+            const clientPath =
+                typeof reader.lastWalkPathWorld === 'function' ? reader.lastWalkPathWorld() : [];
+            if (clientPath.length >= 2) {
+                PathPublish.setClientSegment(clientPath);
+                return;
+            }
+
+            // Fallback: scene BFS (may fail on closed gates the pack path still lists).
+            if (from.level !== to.level) {
+                return;
+            }
+            const a = reader.toLocal(from.x, from.z);
+            const b = reader.toLocal(to.x, to.z);
+            if (!a || !b) {
+                return;
+            }
+            const path = localBfsPath((lx, lz) => reader.collisionFlags(lx, lz), a, b, 2000);
+            if (!path || path.length < 2) {
+                return;
+            }
+            PathPublish.setClientSegment(
+                path.map(p => ({
+                    x: from.x + (p.lx - a.lx),
+                    z: from.z + (p.lz - a.lz),
+                    level: from.level
+                }))
+            );
         } catch {
-            return;
+            // Paint must never abort a walk.
         }
-
-        // Exact client path (includes tryNearest landing) — primary.
-        // Guard: older deploys may lack the reader method (must not kill the walk).
-        const clientPath =
-            typeof reader.lastWalkPathWorld === 'function' ? reader.lastWalkPathWorld() : [];
-        if (clientPath.length >= 2) {
-            PathPublish.setClientSegment(clientPath);
-            return;
-        }
-
-        // Fallback: scene BFS (may fail on closed gates the pack path still lists).
-        if (from.level !== to.level) {
-            return;
-        }
-        const a = reader.toLocal(from.x, from.z);
-        const b = reader.toLocal(to.x, to.z);
-        if (!a || !b) {
-            return;
-        }
-        const path = localBfsPath((lx, lz) => reader.collisionFlags(lx, lz), a, b, 2000);
-        if (!path || path.length < 2) {
-            return;
-        }
-        PathPublish.setClientSegment(
-            path.map(p => ({
-                x: from.x + (p.lx - a.lx),
-                z: from.z + (p.lz - a.lz),
-                level: from.level
-            }))
-        );
     }
 
     private publishPath(tiles: PathStep[], pathIdx: number, clickIdx: number): void {

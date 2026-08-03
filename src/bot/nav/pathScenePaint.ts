@@ -203,12 +203,11 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Explore: client walk trail (exact tryMove tiles). No centre-line.
-    // Walk: solid primary. Run: alternate primary / run-alt between consecutive tiles.
+    // Experimental: client walk trail (exact tryMove tiles). No centre-line.
+    // Walk: solid primary. Run: checkerboard by world tile (stable as path trims).
     const segRaw = path.clientSegment;
     if (segRaw && segRaw.length > 0) {
         const seg = remainingPathFromPlayer(segRaw, me);
-        let tileI = 0;
         for (const t of seg) {
             if (t.level !== me.level) {
                 continue;
@@ -217,10 +216,9 @@ export function paintNavPathInGame(_client: Client): void {
             if (!corners) {
                 continue;
             }
-            const rgb = runOn && tileI % 2 === 1 ? clientRunAltRgb : clientSegRgb;
+            const rgb = runOn && ((t.x + t.z) & 1) === 1 ? clientRunAltRgb : clientSegRgb;
             fillQuadPix(corners, rgb, 0.5);
             strokeQuadPix(corners, rgb, 0.95);
-            tileI++;
         }
     }
 
