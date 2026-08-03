@@ -19,6 +19,7 @@ import {
 } from './pathOverlay.js';
 import { parseHtmlColor, NAV_PATH_PAINT_DEFAULTS } from './pathPaintTheme.js';
 import { PathPublish } from './pathPublish.js';
+import { remainingPathFromPlayer } from './pathExpand.js';
 import { SettingsStore } from '../runtime/Settings.js';
 
 function rgbInt(c: { r: number; g: number; b: number }): number {
@@ -197,9 +198,12 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Explore dual-paint: client-like BFS segment for the active walk click
-    const seg = path.clientSegment;
-    if (seg && seg.length > 0) {
+    // Explore: continuous client walk trail (tiles the client actually MOVE-routed).
+    // Trim to the player so the trail shrinks as you walk (shortest-path style).
+    const segRaw = path.clientSegment;
+    if (segRaw && segRaw.length > 0) {
+        const seg = remainingPathFromPlayer(segRaw, me);
+        const centers: { x: number; y: number }[] = [];
         for (const t of seg) {
             if (t.level !== me.level) {
                 continue;
@@ -208,8 +212,22 @@ export function paintNavPathInGame(_client: Client): void {
             if (!corners) {
                 continue;
             }
-            fillQuadPix(corners, clientSegRgb, 0.4);
+            fillQuadPix(corners, clientSegRgb, 0.45);
             strokeQuadPix(corners, clientSegRgb, 0.95);
+            // Tile centre for path line (average of four corners)
+            centers.push({
+                x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
+                y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
+            });
+        }
+        // Polyline through centres — continuous ribbon like in-game route overlays
+        for (let i = 0; i + 1 < centers.length; i++) {
+            const a = centers[i]!;
+            const b = centers[i + 1]!;
+            drawLineTrans(a.x | 0, a.y | 0, b.x | 0, b.y | 0, clientSegRgb, alphaByte(0.95));
+            // thicker stroke
+            drawLineTrans((a.x | 0) + 1, a.y | 0, (b.x | 0) + 1, b.y | 0, clientSegRgb, alphaByte(0.7));
+            drawLineTrans(a.x | 0, (a.y | 0) + 1, b.x | 0, (b.y | 0) + 1, clientSegRgb, alphaByte(0.7));
         }
     }
 

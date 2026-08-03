@@ -289,8 +289,11 @@ class WalkExecutorImpl {
     }
 
     /**
-     * Explore: paint scene-BFS polyline for the current walk click (cyan).
-     * Approximates Client.tryMove when both ends are in the loaded scene.
+     * Explore: paint the route the client actually took on the last walk click.
+     * Prefer Client.tryMove's recorded local path (matches MOVE_GAMECLICK); fall back
+     * to scene-flag BFS only when the buffer is empty. Never clear a previous cyan
+     * segment on soft failure — Draynor-area doors often block a naive re-BFS while
+     * tryMove already succeeded with tryNearest.
      */
     private publishClientWalkSegment(
         from: WorldTile,
@@ -304,19 +307,25 @@ class WalkExecutorImpl {
         } catch {
             return;
         }
+
+        // Exact client path (includes tryNearest landing) — primary.
+        const clientPath = reader.lastWalkPathWorld();
+        if (clientPath.length >= 2) {
+            PathPublish.setClientSegment(clientPath);
+            return;
+        }
+
+        // Fallback: scene BFS (may fail on closed gates the pack path still lists).
         if (from.level !== to.level) {
-            PathPublish.setClientSegment(null);
             return;
         }
         const a = reader.toLocal(from.x, from.z);
         const b = reader.toLocal(to.x, to.z);
         if (!a || !b) {
-            PathPublish.setClientSegment(null);
             return;
         }
-        const path = localBfsPath((lx, lz) => reader.collisionFlags(lx, lz), a, b, 800);
+        const path = localBfsPath((lx, lz) => reader.collisionFlags(lx, lz), a, b, 2000);
         if (!path || path.length < 2) {
-            PathPublish.setClientSegment(null);
             return;
         }
         PathPublish.setClientSegment(

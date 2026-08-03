@@ -31,8 +31,8 @@ accepts for gameclick movement.
 | Control | Default | Effect |
 |---|---|---|
 | `Global.navPathSceneExpand` | **true** (explore) | Pack path segments expanded with scene-flag BFS when both ends are in the loaded scene (`pathExpand.ts` → `WalkExecutor.expandWaypoints`) |
-| `Global.navPathClientSegment` | **true** (explore) | After each successful walk click, paint a **cyan** scene-BFS polyline player→click tile |
-| `Global.navPathColorClient` | `#00D4FF` | Colour for that segment |
+| `Global.navPathClientSegment` | **true** (explore) | After each successful walk click, paint a **cyan** trail of the **exact** `tryMove` tiles |
+| `Global.navPathColorClient` | `#00D4FF` | Colour for that trail |
 
 **How to try live**
 
@@ -42,7 +42,10 @@ accepts for gameclick movement.
 ```
 
 - **Red** = pack path (scene-expanded when possible).
-- **Cyan** = last walk-click client-like BFS (compare curves around walls).
+- **Cyan** = last walk-click route as the **client** routed it (`Client.lastWalkPathLocal` from
+  `tryMove`), trimmed to the player as you move, with a continuous centre-line.
+  Falls back to scene-flag BFS only if the client buffer is empty; does **not** clear
+  cyan when re-BFS fails (gates/doors near Draynor used to wipe the trail).
 - **Green** = transports; **white outline** = click target.
 
 ### Live harnesses (operator)
@@ -67,21 +70,20 @@ Env toggles (all three harnesses): `PATH_PAINT_SCENE_EXPAND=0|1`, `PATH_PAINT_CL
 
 ### Known limits (why not upstream yet)
 
-1. Scene BFS is **our** `canStepLocal`, not a dump of `Client.dirMap` after `tryMove`
-   (client buffers are private and discarded after the MOVE packet is built).
-2. `tryNearest` may land one tile off the click; we still BFS to the **intended**
-   pack path tile.
-3. Scene expand changes the dense tile list used for **corridor snap**, not only paint —
+1. Cyan is the **current walk-click** only (not the entire remaining pack path). Pack red
+   still shows the long plan; cyan is “what this click will walk”.
+2. Scene expand changes the dense tile list used for **corridor snap**, not only paint —
    behaviour change beyond cosmetics (needs live soak).
-4. Off-scene / multi-level / transport segments still Chebyshev.
-5. HTML overlay may not yet dual-paint cyan (scene paint is the primary).
+3. Off-scene / multi-level / transport pack segments still Chebyshev.
+4. `tryMove` records at most the scene-local path (104×104); far-off destinations still
+   use tryNearest / multi-click.
 
 ## Follow-ups
 
-1. Expose last walk polyline from client (`tryMove` save route before packet) for exact match.
+1. Paint the full remaining plan as one continuous trail (merge pack ahead-of-scene with
+   client route for the active hop) for a single “shortest path” look.
 2. Gate scene expand behind a “paint only” mode that does not affect corridor snap.
 3. Diff metric: % of cyan tiles not on red (and vice versa) for automated probes.
-4. Optional HTML overlay cyan segment for operators who use overlay-only.
 
 ## Code map
 
@@ -90,7 +92,8 @@ Env toggles (all three harnesses): `PATH_PAINT_SCENE_EXPAND=0|1`, `PATH_PAINT_CL
 | Scene/Chebyshev expand | `src/bot/nav/pathExpand.ts` |
 | Publish + client segment | `src/bot/nav/pathPublish.ts` |
 | Walk expand + segment publish | `src/bot/nav/WalkExecutor.ts` |
-| Scene cyan paint | `src/bot/nav/pathScenePaint.ts` |
+| Scene cyan paint + path line | `src/bot/nav/pathScenePaint.ts` |
 | Settings | `src/bot/runtime/Settings.ts` (`navPathSceneExpand`, …) |
-| Client BFS walk | `src/client/Client.ts` `tryMove` |
-| Step flags | `src/bot/nav/localReach.ts` `canStepLocal` |
+| Client walk + path capture | `src/client/Client.ts` `tryMove` / `lastWalkPathLocal` |
+| Adapter world path | `src/bot/adapter/ClientAdapter.ts` `lastWalkPathWorld` |
+| Step flags (fallback BFS) | `src/bot/nav/localReach.ts` `canStepLocal` |

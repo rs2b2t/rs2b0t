@@ -245,6 +245,12 @@ export class Client extends GameShell {
     private distMap: Int32Array = new Int32Array(BuildArea.SIZE * BuildArea.SIZE);
     private routeX: Int32Array = new Int32Array(4000);
     private routeZ: Int32Array = new Int32Array(4000);
+    /**
+     * Full local-scene tile sequence of the last successful tryMove (src→dest inclusive).
+     * Used by nav path paint so the overlay matches the route the client actually sent.
+     * Empty when the last tryMove failed or produced no steps.
+     */
+    lastWalkPathLocal: { x: number; z: number }[] = [];
 
     private macroCameraX: number = 0;
     private macroCameraXModifier: number = 2;
@@ -5752,6 +5758,7 @@ export class Client extends GameShell {
     }
 
     private tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean {
+        this.lastWalkPathLocal = [];
         const collisionMap: CollisionMap | null = this.collision[this.minusedlevel];
         if (!collisionMap) {
             return false;
@@ -5948,6 +5955,9 @@ export class Client extends GameShell {
         this.routeX[length] = x;
         this.routeZ[length++] = z;
 
+        // Full tile path dest→src for paint (every step); corner path for the packet.
+        const fullRev: { x: number; z: number }[] = [{ x, z }];
+
         let dir: number = this.dirMap[CollisionMap.index(x, z)];
         let next: number = dir;
         while (x !== srcX || z !== srcZ) {
@@ -5969,6 +5979,7 @@ export class Client extends GameShell {
                 z--;
             }
 
+            fullRev.push({ x, z });
             next = this.dirMap[CollisionMap.index(x, z)];
         }
 
@@ -6008,9 +6019,12 @@ export class Client extends GameShell {
                 this.out.p1(this.routeZ[length] - startZ);
             }
 
+            // src→dest inclusive (fullRev is dest→src and already ends at src)
+            this.lastWalkPathLocal = fullRev.slice().reverse();
             return true;
         }
 
+        this.lastWalkPathLocal = [];
         return type !== 1;
     }
 

@@ -4,7 +4,8 @@ import {
     expandChebyshevSegment,
     expandSegment,
     expandWaypoints,
-    localBfsPath
+    localBfsPath,
+    remainingPathFromPlayer
 } from '#/bot/nav/pathExpand.js';
 import type { FlagsAt } from '#/bot/nav/localReach.js';
 
@@ -85,6 +86,19 @@ describe('localBfsPath', () => {
 
     test('null when dest out of flags', () => {
         expect(localBfsPath(openFlags(), { lx: 1, lz: 1 }, { lx: 20, lz: 20 })).toBeNull();
+    });
+});
+
+describe('remainingPathFromPlayer', () => {
+    test('trims to closest tile forward', () => {
+        const path = [
+            { x: 0, z: 0, level: 0 },
+            { x: 1, z: 0, level: 0 },
+            { x: 2, z: 0, level: 0 },
+            { x: 3, z: 0, level: 0 }
+        ];
+        const rem = remainingPathFromPlayer(path, { x: 2, z: 0, level: 0 });
+        expect(rem.map(t => t.x)).toEqual([2, 3]);
     });
 });
 

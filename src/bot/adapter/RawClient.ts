@@ -58,6 +58,8 @@ export interface RawClient {
 
     doAction(optionId: number): void;
     tryMove(srcX: number, srcZ: number, dx: number, dz: number, tryNearest: boolean, locWidth: number, locLength: number, locAngle: number, locShape: number, forceapproach: number, type: number): boolean;
+    /** Set by Client after a successful tryMove — local scene tiles src→dest. */
+    lastWalkPathLocal?: { x: number; z: number }[];
 
     out: Packet;
 
@@ -121,6 +123,7 @@ export const SELF_TEST = [
     'dialogInputOpen',
     'doAction',
     'tryMove',
+    'lastWalkPathLocal',
     'out',
     'ptype0',
     'tcpIn',

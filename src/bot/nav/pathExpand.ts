@@ -177,6 +177,33 @@ export function expandSegment(
 }
 
 /**
+ * Drop tiles already behind the player on an ordered path (for continuous trail paint).
+ * Finds the closest path index to `me` and returns that tile forward.
+ */
+export function remainingPathFromPlayer<T extends { x: number; z: number; level: number }>(
+    path: readonly T[],
+    me: { x: number; z: number; level: number }
+): T[] {
+    if (path.length === 0) {
+        return [];
+    }
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < path.length; i++) {
+        const t = path[i]!;
+        if (t.level !== me.level) {
+            continue;
+        }
+        const d = Math.max(Math.abs(t.x - me.x), Math.abs(t.z - me.z));
+        if (d < bestD) {
+            bestD = d;
+            best = i;
+        }
+    }
+    return path.slice(best) as T[];
+}
+
+/**
  * Full waypoint expand (transport / level change = single tile, no interpolate).
  */
 export function expandWaypoints<T extends ExpandTile>(

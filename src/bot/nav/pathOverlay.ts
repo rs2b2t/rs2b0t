@@ -21,14 +21,15 @@ import {
     rgba,
     type NavPathPaintTheme
 } from './pathPaintTheme.js';
+import { remainingPathFromPlayer } from './pathExpand.js';
 
 /** areaGame surface blitted at (4,4) — see Client.overlayPos. */
 export const GAME_VIEW_CLIP = { x: 4, y: 4, w: 512, h: 334 } as const;
 
-/** Max tile quads to draw (far path is subsampled). */
-const MAX_DRAW_TILES = 80;
+/** Max tile quads to draw (far path is subsampled). Explore: denser for continuous look. */
+const MAX_DRAW_TILES = 160;
 /** Always paint this many steps ahead of pathIdx at full density. */
-const NEAR_FULL_DENSITY = 24;
+const NEAR_FULL_DENSITY = 48;
 
 export type ProjectCorner = (x: number, z: number, u: number, v: number) => { x: number; y: number } | null;
 
@@ -490,9 +491,9 @@ export function paintNavPath(
                 }
             }
 
-            // Explore: cyan client-walk segment (scene BFS after tryMove)
-            const seg = path.clientSegment;
-            if (seg && seg.length > 0) {
+            // Explore: cyan client-walk trail (actual tryMove tiles), trimmed to player
+            const segRaw = path.clientSegment;
+            if (segRaw && segRaw.length > 0) {
                 let clientColor = '#00D4FF';
                 try {
                     clientColor = SettingsStore.globalBag().str('navPathColorClient', '#00D4FF');
@@ -500,8 +501,11 @@ export function paintNavPath(
                     /* default */
                 }
                 const rgb = parseHtmlColor(clientColor, '#00D4FF');
-                const fill = rgba(rgb, 0.35);
+                const fill = rgba(rgb, 0.4);
                 const stroke = rgba(rgb, 0.95);
+                const line = rgba(rgb, 0.9);
+                const seg = remainingPathFromPlayer(segRaw, me);
+                const centers: { x: number; y: number }[] = [];
                 for (const t of seg) {
                     if (t.level !== me.level) {
                         continue;
@@ -509,7 +513,23 @@ export function paintNavPath(
                     const corners = projectTileQuad(t, project);
                     if (corners) {
                         fillQuad(ctx, corners, fill, stroke, 1.5);
+                        centers.push({
+                            x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
+                            y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
+                        });
                     }
+                }
+                if (centers.length >= 2) {
+                    ctx.beginPath();
+                    ctx.moveTo(centers[0]!.x, centers[0]!.y);
+                    for (let i = 1; i < centers.length; i++) {
+                        ctx.lineTo(centers[i]!.x, centers[i]!.y);
+                    }
+                    ctx.strokeStyle = line;
+                    ctx.lineWidth = 3;
+                    ctx.lineJoin = 'round';
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
                 }
             }
         }
