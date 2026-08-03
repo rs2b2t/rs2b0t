@@ -625,9 +625,10 @@ export class PathFinder {
         // - Unit-cost walk → Chebyshev is admissible.
         // - Originless spell teles (injected at start) → min over teleCost+Chebyshev(landing,goal)
         //   is admissible from any node (can cast from anywhere).
-        // - Long-range graph edges (dungeons z±6400) without a tele floor → Dijkstra (h=0).
-        //   Full-pack Dijkstra with tele injection was expanding 350k+ on Seers→Rellekka and
-        //   blowing the 300k HARD budget; tele-aware A* keeps long OD pairs routable.
+        // - Long-range graph edges (dungeons z±6400, ships, portals) make pure Chebyshev
+        //   inadmissible — without a tele floor we fall back to Dijkstra (h=0). Classic
+        //   and v2 share this graph; both need correct transport preference (#335 test).
+        //   Tele inject uses teleFloor so HARD long OD stays under budget.
         const chebAt = (x: number, z: number): number =>
             Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
         let teleFloor = Infinity;
@@ -710,11 +711,10 @@ export class PathFinder {
                 if (edge.kind && !kindAllowedByPolicy(edge.kind as never, ctx.policy)) {
                     continue;
                 }
-                // Requires-gated edges (skill/quest/state) need a WorldState snapshot.
-                // Classic walks omit state → skip these edges (safe default).
-                if (edge.requires && !ctx.state) {
-                    continue;
-                }
+                // Requires gates (skill/quest/coins/…):
+                // - With WorldState: fail closed when unmet (honesty for classic + v2 live walks).
+                // - Without WorldState: fail *open* (pre-v2 / offline pack tools never had requires;
+                //   skipping all gated edges here made ships and skill doors vanish offline).
                 if (ctx.state && edge.requires && !meetsRequires(edge.requires, ctx.state).ok) {
                     continue;
                 }

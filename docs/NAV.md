@@ -50,9 +50,22 @@ traversal edges that plain collision cannot express:
 | [`travelCatalog.ts`](../src/bot/nav/v2/travelCatalog.ts) | content constants | 2004 travel (spirit/glider/Entrana/cart/essence/levers/agi) merged at graph load for **classic and v2** |
 | [`specialRequires.ts`](../src/bot/nav/v2/specialRequires.ts) | content scripts | plan-time skill/coin gates on doors and transport from-tiles |
 
-Both walkers snapshot live WorldState (skills/quests/items/`Client.memServer`) so
-requires-gated edges fail closed when the player cannot use them. **v2 only:** spell/
-jewellery tele inject + path-scoped bank. See [Nav v2](#nav-v2-experimental).
+Both walkers load the **same** door/transport/travelCatalog graph and share the
+executor (`WalkExecutor` + `exec/`). Live walks snapshot WorldState so skill/quest/coin
+gates fail closed when the player cannot use them. Offline / no-state path finds
+**fail open** on requires (pre-v2 pack-tool parity — ships and skill doors still expand).
+
+**Classic vs v2** (default remains classic):
+
+| | Classic | v2 |
+|---|---|---|
+| Graph (doors, transports, travelCatalog) | yes | yes |
+| Live WorldState requires | yes (when snapshot works) | yes |
+| Spell/jewellery tele inject | no | yes |
+| Path-scoped bank for runes/tolls | no | yes |
+| A* heuristic | Chebyshev; Dijkstra if long-range edges (#335) | Same + tele floor when teles inject |
+
+See [Nav v2](#nav-v2-experimental).
 
 Multi-level routing is therefore a **data** property, not an algorithm one: the
 executor already knows how to climb, and gains a new route the moment an edge for it

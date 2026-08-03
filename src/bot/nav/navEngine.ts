@@ -1,6 +1,16 @@
 /**
  * Classic (v1) vs Nav v2 walker selection for end users.
  *
+ * **Shared (both engines):** PathFinder graph (doors, transports.json, travelCatalog,
+ * stairs), WalkExecutor follow/door/specialCrossing, live WorldState when snapshotted
+ * (skill/quest/coin gates), danger zones, path paint/camera settings.
+ *
+ * **Classic-only / pre-v2 parity:** no teleport catalog inject, no path-scoped bank plan.
+ * Offline / no-state finds still expand requires-gated graph edges (fail open); live walks
+ * snapshot WorldState and filter (fail closed).
+ *
+ * **v2-only:** spell/jewellery tele edges, bank-for-runes leg, hop logs under v2 policy.
+ *
  * Resolution order (first wins):
  * 1. Explicit WalkOptions.navEngine / PathFinder call site
  * 2. URL `?Global.navEngine=v2` (SettingsStore)
