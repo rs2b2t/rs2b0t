@@ -20,9 +20,16 @@ describe('specialRequiresAt — guild skill gates (content-backed)', () => {
         expect(specialRequiresAt(3143, 3444, 0)?.skills).toEqual([{ name: 'cooking', level: 32 }]);
     });
 
-    test('Mining Guild ladder descent requires mining 60', () => {
-        expect(specialRequiresAt(3019, 3339, 0)?.skills).toEqual([{ name: 'mining', level: 60 }]);
-        expect(specialRequiresAt(3020, 3340, 0)?.skills).toEqual([{ name: 'mining', level: 60 }]);
+    test('Mining Guild ladder descent requires mining 60 on all four surface stands', () => {
+        const mining60 = [{ name: 'mining', level: 60 }];
+        for (const [x, z] of [
+            [3018, 3340],
+            [3019, 3339],
+            [3019, 3341],
+            [3020, 3340]
+        ] as const) {
+            expect(specialRequiresAt(x, z, 0)?.skills).toEqual(mining60);
+        }
         // exit from cellar has no gate
         expect(specialRequiresAt(3019, 9739, 0)).toBeUndefined();
     });

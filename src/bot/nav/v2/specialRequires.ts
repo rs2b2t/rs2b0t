@@ -45,6 +45,8 @@ const TRANSPORT_SKILL_GATES: readonly {
     levelReq: number;
 }[] = [
     // mining_guild.rs2 miningguildladder — mining 60 to descend into guild
+    // All four surface from-tiles in transports.json (locId 2113)
+    { x: 3018, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3339, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3341, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3020, z: 3340, level: 0, skill: 'mining', levelReq: 60 }
