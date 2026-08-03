@@ -1,7 +1,7 @@
 # Nav v2 — full 2004-era transport coverage
 
 **Branch:** `feat/nav-v2-2004-transports`  
-**Status:** implemented on branch (local iteration)  
+**Status:** ready for upstream PR  
 **Date:** 2026-08-03  
 
 **North star:** every *player-executable* travel hop that exists in the
@@ -22,27 +22,29 @@ Source of truth for “what exists” is the **deploy engine content tree**
 
 | Layer | Artifact | Role |
 |---|---|---|
-| Doors | `doors.json` | Openable barriers |
+| Doors | `doors.json` | Openable barriers (+ skill gates via `specialRequires.ts`) |
 | Stairs / ladders | `stairEdges.json` | Level changes |
 | Curated v1 | `transports.json` | Ships, portals, shortcuts, dungeon links |
 | Curated 2004 travel | `v2/travelCatalog.ts` via `loadTransportGraph.ts` | Spirit/glider/Entrana/cart/essence/levers/agi |
 | Special crossings | `specialCrossings.ts` | Dialog / NPC / quest unlock execute |
 | Spell + jewellery | `teleportCatalog.ts` | Originless A\* inject (v2) |
+| State re-enable | `stateAwareRequires.ts` | Safe single-dest re-enable of deferred stairs |
+| Quest seeds | `transportQuestReqs.ts` | Journal names + setvar complete stages |
 
 ### `travelCatalog` families (curated)
 
-| Family | Edges | Content anchor |
-|---|---:|---|
-| Spirit trees | 8 | `area_gnome/spirit_tree.rs2` + constants |
-| Gnome glider hub↔pad | 8 | `gnome_glider.rs2` + `glider.constant` |
-| Entrana ferry | 2 | `monk_of_entrana.rs2` |
-| Shilo↔Brimhaven cart | 2 | `vigroy.rs2` / `hajedy.rs2` |
-| Essence entry | 5 | Aubury/Sedridor/Distentor/Cromperty/Brimstail |
-| Wildy levers | 2 | `wilderness_lever.rs2` |
-| Agility OD shortcuts | 3 | castle wall + Edgeville monkeybars (Shilo log already in transports.json) |
-| **Total curated** | **30** | merged at graph load |
+| Family | Edges | Content anchor | Plan gates |
+|---|---:|---|---|
+| Spirit trees | 8 | `area_gnome/spirit_tree.rs2` + constants | Grand Tree / Tree Gnome Village + members |
+| Gnome glider hub↔pad | 8 | `gnome_glider.rs2` + `glider.constant` | Grand Tree complete + members |
+| Entrana ferry | 2 | `monk_of_entrana.rs2` | Members; **gear refuse at execute** |
+| Shilo↔Brimhaven cart | 2 | `vigroy.rs2` / `hajedy.rs2` | Coins 10–200; Brim→Shilo needs Shilo complete |
+| Essence entry | 5 | Aubury/Sedridor/Distentor/Cromperty/Brimstail | Rune Mysteries complete (+ members for Yanille/Ardy/gnome) |
+| Wildy levers | 2 | `wilderness_lever.rs2` | Members |
+| Agility OD shortcuts | 3 | castle wall + Edgeville monkeybars | Agility 5 / 15 (Shilo log already in transports.json) |
+| **Total curated** | **30** | merged at graph load | |
 
-Plus existing `transports.json` ships/gangplanks/coal log/ropeswings/essence **exits**/Shantay free exit.
+Plus existing `transports.json` ships/gangplanks/coal log/ropeswings/essence **exits**/Shantay free exit/mining guild ladders.
 
 ### Disabled-row policy
 
@@ -66,6 +68,8 @@ Audit: `CONTENT_DIR=… bun tools/nav/content-transport-audit.ts` prints disable
 | Full agility *courses* | Training loops — only OD shortcuts |
 | Random-event teles | Supervisor, not planner |
 | Decorative broken ladders | No movement dest in content |
+| Ranging Guild door | Not in `doors.json` yet (content minigame; add when mapped) |
+| Cooking Guild chef’s hat | Execute-time worn check; plan-time is cooking 32 only |
 
 ---
 
@@ -74,9 +78,41 @@ Audit: `CONTENT_DIR=… bun tools/nav/content-transport-audit.ts` prints disable
 1. Content first — cite `.rs2` + constants.  
 2. Plan-time `TransportRequires` (members, quest, skill, coins).  
 3. Multi-dest hubs → **one edge per destination** + specialCrossing matched by `toTile`.  
-4. Executor: specialCrossing (NPC Teleport/Talk-to/dialog, spirit loc dialog, Entrana gear gate).  
+4. Executor: specialCrossing (NPC Teleport/Talk-to/dialog, spirit loc dialog, Entrana gear gate, glider map UI).  
 5. Fail closed without WorldState on requires-gated edges.  
-6. `loadDefaultNavEdges()` keeps NavWorker and pack tools in sync.
+6. `loadDefaultNavEdges()` keeps NavWorker and pack tools in sync.  
+7. Classic walker also snapshots WorldState when available so skill/quest doors stay honest.
+
+### Plane / level notes
+
+| Hop | Levels |
+|---|---|
+| Glider hub Ta Quir Priw | Plane **3** (Grand Tree top) ↔ pads plane 0 |
+| Entrana ferry landings | Plane **1** deck tiles from content `set_sail` |
+| Essence mine | Representative pad + `acceptAnyLanding` (random mine pads) |
+| Stairs / ladders | `stairEdges.json` + door open + climb |
+| Spirit / cart / levers | Same plane as content constants |
+
+### Execute nuances
+
+| Family | Execute path |
+|---|---|
+| Doors / gates | `doorCrossing` — approach tile, Open, step through; quest-lock blacklist |
+| Ships / gangplanks | specialCrossing NPC Pay-fare + `toTile` match (Customs reverse must not steal gangplank) |
+| Glider | Talk-to **Gnome pilot** + glidermap dest click (`mapChoice`) |
+| Spirit trees | Loc Talk-to + dialog line matched by hop `toTile` |
+| Essence entry | NPC **Teleport** action (fallback Talk-to + dialog) |
+| Entrana | Talk-to monk; refuse board if restricted weapons/armour (name heuristic) |
+| Wildy levers | Pull Lever |
+| Agility shortcuts | Climb-over / Swing across on loc |
+
+### Object highlighter (path paint)
+
+When Global **Show nav path** is on:
+
+- Path tiles paint into **areaGame** after 3D world (`pathScenePaint.ts`).
+- **Object hulls** only for live scenery the executor would click (`liveTransportLoc` + `reader.locBox`).
+- **No hull** for teleports, NPC-only hops, or locs missing from the loaded scene (avoids a fake cube on the player stand tile).
 
 ---
 
@@ -86,30 +122,36 @@ Audit: `CONTENT_DIR=… bun tools/nav/content-transport-audit.ts` prints disable
 |---|---|
 | Content audit tool | **done** |
 | Disabled-row report | **done** (audit buckets) |
-| Karamja / Brimhaven ferries | **done** (pre-existing) |
+| Karamja / Brimhaven ferries | **done** (pre-existing + gangplank fixes) |
 | Entrana ferry + gear gate | **done** |
 | Shilo cart | **done** |
 | Spirit trees (plan + dialog) | **done** |
-| Gnome glider hub↔pad | **done** (map UI still uses loc interact) |
+| Gnome glider hub↔pad + map UI | **done** |
 | Essence entry | **done** |
 | Essence exit portals | **done** (transports.json) |
 | Wildy levers | **done** |
-| Coal log + island ropes | **done** (transports.json) |
-| Castle wall / Shilo log / monkeybars | **done** (travelCatalog) |
+| Coal log + island ropes | **done** (transports.json + specialCrossing skill) |
+| Castle wall / Shilo log / monkeybars | **done** (travelCatalog + transports.json) |
 | Shantay free desert exit | **done** (transports.json) |
 | Shantay pass item northbound | **wont** for free pathing (item gate; desert exit is the OD fix) |
-| State-aware monastery ladder | **done** |
+| State-aware monastery ladder | **done** (Prayer 31) |
 | Horror/Watchtower multi-dest ladders | **wont** / blocked |
-| Guild skill doors (Mining 60, …) | **partial** (doors exist; skill requires incomplete) |
+| Fishing Guild doors | **done** (fishing 68) |
+| Magic Guild doors | **done** (magic 66) |
+| Crafting Guild door | **done** (crafting 40) |
+| Cooking Guild door | **partial** (cooking 32 plan-time; chef’s hat execute) |
+| Mining Guild ladder down | **done** (mining 60 on surface from-tiles) |
+| Ranging Guild door | **not in doors.json** |
 | Zanaris / Lost City | **quest path** (out of generic travel catalog) |
+| Path paint + loc hulls | **done** (live scenery only) |
 
 ---
 
 ## 5. Operator commands
 
 ```bash
-# catalog unit tests
-bun test test/nav/travelCatalog.test.ts test/nav/transportQuestReqs.test.ts
+# catalog + quest seed unit tests
+bun test test/nav/travelCatalog.test.ts test/nav/transportQuestReqs.test.ts test/nav/specialRequires.test.ts test/nav/specialCrossingMatch.test.ts
 
 # pack walkability of curated endpoints
 bun tools/nav/curated-travel-probe.ts
@@ -137,6 +179,19 @@ CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.t
 
 Source: `src/bot/nav/v2/transportQuestReqs.ts`. After `setvar`, **relog** so the quest-list colour updates (`Quests.status` is colour-based).
 
+Aliases (`Watchtower` → `Watch Tower`, etc.) resolve in `worldStateData` / `canonicalQuestName`.
+
+### Guild / skill door seeds (plan-time)
+
+| Gate | Skill | Tiles (world) | Content |
+|---|---|---|---|
+| Fishing Guild | fishing 68 | 2611,3394 / 2611,3398 | `fishing_guild.rs2` |
+| Magic Guild | magic 66 | 2584/2597 × 3087/3088 | `magic_guild.rs2` |
+| Crafting Guild | crafting 40 | 2933,3289 | `crafting_guild.rs2` |
+| Cooking Guild | cooking 32 | 3143,3444 | `cooking_guild.rs2` (+ hat) |
+| Mining Guild ladder | mining 60 | 3019,3339 / 3019,3341 / 3020,3340 | `mining_guild.rs2` |
+| Monastery ladder | prayer 31 | stateAware `monasteryladder` | prayer guild |
+
 ---
 
 ## 6. Related
@@ -144,8 +199,11 @@ Source: `src/bot/nav/v2/transportQuestReqs.ts`. After `setvar`, **relog** so the
 | Doc / code | Role |
 |---|---|
 | `src/bot/nav/v2/travelCatalog.ts` | Curated edges |
+| `src/bot/nav/v2/specialRequires.ts` | Door + transport skill gates |
+| `src/bot/nav/v2/transportQuestReqs.ts` | Quest journal + setvar seeds |
 | `src/bot/nav/loadTransportGraph.ts` | Graph merge |
 | `src/bot/nav/data/specialCrossings.ts` | Execute dialogs |
-| `src/bot/nav/exec/specialCrossing.ts` | Entrana gear + spirit loc dialog |
-| [docs/NAV.md](../NAV.md) | Product manual |
+| `src/bot/nav/exec/specialCrossing.ts` | Entrana gear + spirit + glider map |
+| `src/bot/nav/pathOverlay.ts` | Live loc hull highlighter |
+| [docs/NAV.md](../NAV.md) | Product manual (path paint, nav v2 table) |
 | Server `content/scripts/` | Authoritative hops |

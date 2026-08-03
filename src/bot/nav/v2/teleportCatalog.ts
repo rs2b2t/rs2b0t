@@ -105,7 +105,8 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             members: true,
             skills: [{ name: 'magic', level: 58 }],
             items: [earth(2), law(2)],
-            quests: [{ quest: 'Watchtower', minStatus: 'complete' }]
+            // Journal display name is "Watch Tower" (questlist.if); alias still resolves.
+            quests: [{ quest: 'Watch Tower', minStatus: 'complete' }]
         },
         source: 'magic_spell_teleport_watchtower',
         notes: 'Landing is level 2; requires Watchtower complete + scroll. Cast via Game.teleport.'

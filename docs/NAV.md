@@ -286,8 +286,8 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 - **Path tiles** paint into the **game surface** after the 3D world (`BotClient.onAfterWorldRender`
   → `pathScenePaint.ts`) with the same camera projection as the scene.
 - **Object highlighter**: each transport hop draws a **3D AABB hull** of the live loc the executor
-  will click (`reader.locBox`: scene wall/sprite/decor, multi-tile footprint, model `minY` height),
-  not just the stand tile. Next hop is emphasized; hulls clip to the game viewport.
+  will click (`reader.locBox` + live `Locs` match). Teleports / NPC-only hops / missing scene locs
+  draw **nothing** (no fake cube on the stand tile). Next hop is emphasized; hulls clip to the game viewport.
 - **Click tile** outline = next walker click. **Hop labels** on the HTML overlay.
 
 True z-buffer path paint *under* models would need injecting into `World` draw order; object hulls
@@ -295,6 +295,10 @@ do not require that (overlay projection is enough for interact targeting).
 
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
 (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
+
+**2004 travel + gates:** spirit/glider/Entrana/cart/essence/levers/agi shortcuts (`travelCatalog.ts`);
+quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder (`specialRequires.ts`).
+Matrix and operator commands: [docs/nav-v2/TRANSPORTS-2004.md](nav-v2/TRANSPORTS-2004.md).
 
 **Code:** `src/bot/nav/v2/`, `exec/`, `pathPublish.ts`, `pathOverlay.ts`, `cameraFollow.ts`. Tele catalog:
 `teleportCatalog.ts`. Pack stress: `tools/nav/script-route-corpus.ts`. Live/operator tools
