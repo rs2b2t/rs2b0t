@@ -195,6 +195,11 @@ import EntityQuery from '../api/queries/Query.js';
 import { bus, type EventMap } from '../events/EventBus.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { EssenceSession } from '../nav/v2/essenceSession.js';
+import {
+    liveFortressStep,
+    liveMordredBriefed,
+    liveResetMordredBrief
+} from '../quests/defs/merlinscrystal.js';
 import { defineBot, registerScript } from './defineBot.js';
 
 export const API_VERSION = 1;
@@ -206,6 +211,12 @@ export function installAbi(): void {
         Execution,
         defineBot,
         registerScript,
+        /** Live-harness hooks (Merlin #353 fortress / Mordred latch). */
+        questLive: Object.freeze({
+            merlinFortress: liveFortressStep,
+            merlinResetMordredBrief: liveResetMordredBrief,
+            merlinMordredBriefed: liveMordredBriefed
+        }),
         events: Object.freeze({
             on: <K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): (() => void) => bus.on(event, cb),
             off: <K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void => bus.off(event, cb)

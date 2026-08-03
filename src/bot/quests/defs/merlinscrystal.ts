@@ -40,6 +40,8 @@ const CATHERBY_CRATE_STAND = new Tile(2801, 3443, 0);
 function insideKeep(t: { x: number; z: number }): boolean {
     return t.x >= 2762 && t.x <= 2782 && t.z >= 3396 && t.z <= 3410;
 }
+/** #353: Morgan brief survives after combat ends; do not re-Attack Mordred. */
+let mordredBriefed = false;
 const MORDRED_TILE = new Tile(2769, 3403, 2);
 const KEEP_STAIR_L0 = new Tile(2769, 3404, 0);
 const KEEP_STAIR_L1_UP = new Tile(2769, 3398, 1);
@@ -262,8 +264,25 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
         log(`fortress: crate Hide-in -> insideKeep=${boarded} (needs stage>=spoken_lancelot to teleport)`);
         return false;
     }
+    // #353: dialog / Morgan brief always outranks Attack — Mordred stays attackable after the
+    // fight ends, so re-Attack loops if we do not latch "briefed".
     if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
-        await driveDialogue(['Tell me how to untrap Merlin and I might.', 'OK I will go do all that.'], log);
+        await driveDialogue(
+            [
+                'Tell me how to untrap Merlin and I might.',
+                'OK I will go do all that.',
+                'Tell me how to untrap Merlin',
+                'I will go do all that'
+            ],
+            log
+        );
+        mordredBriefed = true;
+        log('fortress: Morgan brief done — leaving keep (no re-attack)');
+        await leaveKeep(log);
+        return false;
+    }
+    if (mordredBriefed) {
+        log('fortress: already briefed by Morgan — leaving keep');
         await leaveKeep(log);
         return false;
     }
@@ -279,6 +298,16 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(MORDRED_TILE, { radius: 5, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
+    // Dialog may have opened while walking up.
+    if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+        await driveDialogue(
+            ['Tell me how to untrap Merlin and I might.', 'OK I will go do all that.', 'Tell me how to untrap Merlin'],
+            log
+        );
+        mordredBriefed = true;
+        await leaveKeep(log);
+        return false;
+    }
     await wieldWeapon(log);
     Game.setCombatStyle('strength');
     const mordred = Npcs.query().name('Sir Mordred').action('Attack').within(8).nearest();
@@ -288,9 +317,32 @@ async function fortress(log: (m: string) => void): Promise<boolean> {
             await Traversal.walkResilient(mordred.tile(), { radius: 1, attempts: 2, timeoutMs: 20_000, log });
         }
         await mordred.interact('Attack');
-        for (let i = 0; i < 8 && !ChatDialog.isOpen() && !ChatDialog.canContinue() && Game.inCombat(); i++) {
-            await Execution.delayTicks(3);
+        // Wait for Morgan dialog OR combat end — do not re-Attack next tick if combat
+        // ended without dialog (flag still false; next call may re-engage once only if
+        // no dialog); prefer dialog detection every tick.
+        for (let i = 0; i < 40 && !mordredBriefed; i++) {
+            if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+                await driveDialogue(
+                    ['Tell me how to untrap Merlin and I might.', 'OK I will go do all that.', 'Tell me how to untrap Merlin'],
+                    log
+                );
+                mordredBriefed = true;
+                break;
+            }
+            if (!Game.inCombat() && i > 4) {
+                // Combat ended without dialog yet — give Morgan a moment to spawn dialog
+                await Execution.delayTicks(2);
+                if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+                    continue;
+                }
+                break;
+            }
+            await Execution.delayTicks(2);
             await Sustain.run();
+        }
+        if (mordredBriefed) {
+            log('fortress: Morgan brief after Mordred fight — leaving keep');
+            await leaveKeep(log);
         }
     }
     return false;
@@ -538,10 +590,31 @@ async function summonThrantax(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
+/** Live harness surface for #353 — calls the same fortress() product path. */
+export async function liveFortressStep(log: (m: string) => void): Promise<boolean> {
+    return fortress(log);
+}
+
+export function liveResetMordredBrief(): void {
+    mordredBriefed = false;
+}
+
+export function liveMordredBriefed(): boolean {
+    return mordredBriefed;
+}
+
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
+    if (snap.journal === 'complete') {
+        mordredBriefed = false;
+        return { kind: 'done' };
+    }
     if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { breadStealPasses = 0; breadCombatEndTick = 0; return { kind: 'talk', stop: KING_ARTHUR }; }
+    if (snap.journal === 'notStarted') {
+        breadStealPasses = 0;
+        breadCombatEndTick = 0;
+        mordredBriefed = false;
+        return { kind: 'talk', stop: KING_ARTHUR };
+    }
 
     const hasExcalibur = has(snap, EXCALIBUR);
     const hasUnlit = has(snap, UNLIT_CANDLE);
