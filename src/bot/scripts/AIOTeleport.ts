@@ -616,7 +616,10 @@ export default class AIOTeleport extends LoopingBot {
             
             if (this.currentBankPos) {
                 this.log(`Walking to nearest bank at ${this.currentBankPos.x},${this.currentBankPos.z}...`);
-                await this.walkTo(new Tile(this.currentBankPos.x, this.currentBankPos.z, 0), 3);
+                await Traversal.walkTo(new Tile(this.currentBankPos.x, this.currentBankPos.z, 0), {
+                    radius: 3,
+                    timeoutMs: 60_000
+                });
             } else {
                 this.log('No bank found! Stopping...');
                 return;
@@ -690,7 +693,7 @@ export default class AIOTeleport extends LoopingBot {
             // Walk to the bank tile to close the interface
             this.log('Walking to bank tile to close interface...');
             const bankTile = new Tile(this.currentBankPos.x, this.currentBankPos.z, 0);
-            await this.walkTo(bankTile, 0);
+            await Traversal.walkTo(bankTile, { radius: 0, timeoutMs: 15_000 });
             
             this.needBanking = false;
             
