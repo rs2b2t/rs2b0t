@@ -63,6 +63,16 @@ import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
 import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport.js';
 
+// First register = panel default when no script is remembered (BotPanel → list()[0]).
+// Keep TutorialBot first so new accounts land on onboarding, not AIO Teleport.
+ScriptRegistry.register({
+    name: 'TutorialBot',
+    description: 'Completes Tutorial Island unassisted (no cheats)',
+    category: 'Tutorial',
+    tags: ['tutorial', 'onboarding'],
+    create: () => new TutorialBot()
+});
+
 ScriptRegistry.register({
     name: 'AIO Teleport',
     description: 'Automated teleportation with intelligent banking and safety features',
@@ -70,14 +80,6 @@ ScriptRegistry.register({
     tags: ['teleport', 'magic', 'banking', 'aio'],
     settingsSchema: AIOTELEPORT_SETTINGS,
     create: () => new AIOTeleport()
-});
-
-ScriptRegistry.register({
-    name: 'TutorialBot',
-    description: 'Completes Tutorial Island unassisted (no cheats)',
-    category: 'Tutorial',
-    tags: ['tutorial', 'onboarding'],
-    create: () => new TutorialBot()
 });
 
 ScriptRegistry.register({
