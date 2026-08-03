@@ -17,6 +17,10 @@ export interface PublishedPathTile {
     /** Loc placement the executor will interact with (may differ from stand tile). */
     locX?: number;
     locZ?: number;
+    /** Map loc id when known (for object-hull highlight). */
+    locId?: number;
+    /** Loc display name for scene lookup when id is missing. */
+    locName?: string;
 }
 
 export interface PublishedPath {

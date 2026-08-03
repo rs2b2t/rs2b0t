@@ -210,6 +210,76 @@ function fillQuad(
     ctx.stroke();
 }
 
+/**
+ * Wireframe AABB (8 corners: 0–3 ground, 4–7 top).
+ * Same edge pattern as FireGiant.outlineTarget / reader.npcBox.
+ */
+export function strokeLocHull(
+    ctx: CanvasRenderingContext2D,
+    box: { x: number; y: number }[],
+    stroke: string,
+    lineWidth = 2
+): void {
+    if (box.length < 8) {
+        return;
+    }
+    ctx.save();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.lineJoin = 'round';
+    const edge = (a: number, b: number): void => {
+        ctx.beginPath();
+        ctx.moveTo(box[a]!.x, box[a]!.y);
+        ctx.lineTo(box[b]!.x, box[b]!.y);
+        ctx.stroke();
+    };
+    for (let i = 0; i < 4; i++) {
+        edge(i, (i + 1) % 4);
+        edge(4 + i, 4 + ((i + 1) % 4));
+        edge(i, 4 + i);
+    }
+    ctx.restore();
+}
+
+/** Draw hulls for transport locs on the published path (object highlighter). */
+export function paintNavLocHulls(ctx: CanvasRenderingContext2D): void {
+    if (!isNavPathPaintEnabled()) {
+        return;
+    }
+    const path = PathPublish.get();
+    if (!path) {
+        return;
+    }
+    const me = reader.worldTile();
+    if (!me || !reader.attached()) {
+        return;
+    }
+    const theme = resolveNavPathPaintTheme();
+    const trailFrom = Math.max(0, path.pathIdx - 2);
+
+    for (let i = trailFrom; i < path.tiles.length; i++) {
+        const t = path.tiles[i]!;
+        if (!t.transport || t.level !== me.level) {
+            continue;
+        }
+        const lx = t.locX ?? t.x;
+        const lz = t.locZ ?? t.z;
+        // Prefer locId when published; else match by name from hop label / locName
+        const box = reader.locBox({
+            x: lx,
+            z: lz,
+            level: t.level,
+            id: t.locId,
+            name: t.locName
+        });
+        if (!box) {
+            continue;
+        }
+        const done = i < path.pathIdx;
+        strokeLocHull(ctx, box, done ? theme.doneStroke : theme.hopStroke, done ? 1.25 : 2.25);
+    }
+}
+
 export function paintNavPath(
     ctx: CanvasRenderingContext2D,
     opts?: { labelsOnly?: boolean }
@@ -233,9 +303,6 @@ export function paintNavPath(
     const quads = buildPathQuads(path.tiles, trailFrom, me.level, project);
     for (const q of quads) {
         q.done = q.idx < path.pathIdx;
-    }
-    if (quads.length === 0) {
-        return;
     }
 
     const labelsOnly = opts?.labelsOnly === true;
@@ -282,6 +349,9 @@ export function paintNavPath(
                 }
             }
         }
+
+        // Object highlighter (always on when path paint is on) — actual loc model AABB
+        paintNavLocHulls(ctx);
 
         if (theme.showText) {
             for (const q of quads) {

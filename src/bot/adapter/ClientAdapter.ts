@@ -307,6 +307,131 @@ export const reader = {
         return out;
     },
 
+    /**
+     * Loc object hull: eight corners of the object AABB in overlay pixels
+     * (or areaGame if `areaGame`). Prefer live scene placement for centre; size from
+     * LocType / multi-tile footprint / model maxY. Null when not in the loaded scene.
+     */
+    locBox(
+        opts: { id?: number; x: number; z: number; level?: number; name?: string },
+        areaGame = false
+    ): { x: number; y: number }[] | null {
+        if (!raw || !raw.world) {
+            return null;
+        }
+        const level = opts.level ?? raw.minusedlevel;
+        const lx = opts.x - raw.mapBuildBaseX;
+        const lz = opts.z - raw.mapBuildBaseZ;
+        if (lx < 0 || lz < 0 || lx >= SCENE_SIZE || lz >= SCENE_SIZE) {
+            return null;
+        }
+
+        let sceneX = lx * 128 + 64;
+        let sceneZ = lz * 128 + 64;
+        let halfW = 64;
+        let halfL = 64;
+        let topH = 128;
+        let usedSceneFootprint = false;
+
+        const matchTc = (tc: number): boolean => {
+            if (tc === 0) {
+                return false;
+            }
+            const id = (tc >> 14) & 0x7fff;
+            if (opts.id !== undefined) {
+                return id === opts.id;
+            }
+            if (opts.name) {
+                try {
+                    const n = LocType.list(id).name;
+                    return n !== null && n.toLowerCase() === opts.name.toLowerCase();
+                } catch {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        const wall = raw.world.getWall(level, lx, lz);
+        const decor = raw.world.getDecor(level, lz, lx);
+        const scene = raw.world.getScene(level, lx, lz);
+        const gd = raw.world.getGd(level, lx, lz);
+
+        let resolvedId = opts.id;
+        let modelSrc: { getTempModel(): { maxY: number } | null } | null = null;
+
+        if (wall && matchTc(wall.typecode)) {
+            sceneX = wall.x;
+            sceneZ = wall.z;
+            resolvedId = (wall.typecode >> 14) & 0x7fff;
+            modelSrc = wall.model1;
+        } else if (scene && matchTc(scene.typecode)) {
+            sceneX = scene.x;
+            sceneZ = scene.z;
+            resolvedId = (scene.typecode >> 14) & 0x7fff;
+            halfW = ((scene.maxTileX - scene.minTileX + 1) * 128) / 2;
+            halfL = ((scene.maxTileZ - scene.minTileZ + 1) * 128) / 2;
+            usedSceneFootprint = true;
+            modelSrc = scene.model;
+        } else if (decor && matchTc(decor.typecode)) {
+            sceneX = decor.x;
+            sceneZ = decor.z;
+            resolvedId = (decor.typecode >> 14) & 0x7fff;
+            modelSrc = decor.model;
+        } else if (gd && matchTc(gd.typecode)) {
+            sceneX = gd.x;
+            sceneZ = gd.z;
+            resolvedId = (gd.typecode >> 14) & 0x7fff;
+            modelSrc = gd.model;
+        } else if (opts.id === undefined && !opts.name) {
+            return null;
+        }
+
+        if (resolvedId !== undefined) {
+            try {
+                const lt = LocType.list(resolvedId);
+                if (!usedSceneFootprint) {
+                    halfW = Math.max(32, (lt.width * 128) / 2);
+                    halfL = Math.max(32, (lt.length * 128) / 2);
+                }
+                const model = modelSrc?.getTempModel() ?? null;
+                if (model && model.maxY > 0) {
+                    topH = model.maxY;
+                } else {
+                    topH = Math.max(64, lt.resizey);
+                }
+            } catch {
+                // LocType may not be ready during boot
+            }
+        }
+
+        const project = (sx: number, sz: number, h: number): { x: number; y: number } | null => {
+            if (areaGame && typeof raw!.projectAreaGame === 'function') {
+                return raw!.projectAreaGame!(sx, sz, h);
+            }
+            return raw!.overlayPos(sx, sz, h);
+        };
+
+        // Ground ring then top ring (same winding as npcBox).
+        const corners: [number, number][] = [
+            [-halfW, -halfL],
+            [halfW, -halfL],
+            [halfW, halfL],
+            [-halfW, halfL]
+        ];
+        const out: { x: number; y: number }[] = [];
+        for (const h of [4, Math.max(16, topH)]) {
+            for (const [dx, dz] of corners) {
+                const p = project(sceneX + dx, sceneZ + dz, h);
+                if (!p) {
+                    return null;
+                }
+                out.push(p);
+            }
+        }
+        return out;
+    },
+
     npcs(): NpcSnapshot[] {
         const out: NpcSnapshot[] = [];
         if (!raw || !raw.localPlayer) {

@@ -291,9 +291,11 @@ class WalkExecutorImpl {
                     level: t.level,
                     transport: true,
                     label: formatHopLabel(tr),
-                    // Loc placement for scene paint (often 1 tile off the stand tile)
+                    // Loc placement + identity for object-hull highlighter
                     locX: tr.locX,
-                    locZ: tr.locZ
+                    locZ: tr.locZ,
+                    locId: tr.locId,
+                    locName: tr.locName
                 };
             }),
             pathIdx,

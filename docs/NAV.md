@@ -281,13 +281,17 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 | Path camera follow | optional (`navCameraFollow`) | optional (`navCameraFollow`) |
 | Path paint | optional | optional (`showNavPath`) |
 
-**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads paint
-into the **game surface** after the 3D world (`BotClient.onAfterWorldRender` →
-`pathScenePaint.ts`) using the same camera projection as the scene — so the path lines up
-with the ground under the current view. Transport **loc** placements (often 1 tile off the
-stand tile) get a separate ring; the walker’s next click tile is outlined. Hop labels stay
-on the HTML overlay for crisp text. Quads are still drawn after the model composite (not
-true z-buffer under people); depth-correct under entities would need World inject.
+**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`).
+
+- **Path tiles** paint into the **game surface** after the 3D world (`BotClient.onAfterWorldRender`
+  → `pathScenePaint.ts`) with the same camera projection as the scene.
+- **Object highlighter**: each transport hop draws a **3D AABB hull** of the live loc the executor
+  will click (`reader.locBox` from scene wall/sprite/decor + LocType size), not just the stand tile.
+  Hulls are projected to the HTML overlay for crisp strokes (screen-space object hull, not a tile marker).
+- **Click tile** outline = next walker click. **Hop labels** on the HTML overlay.
+
+True z-buffer path paint *under* models would need injecting into `World` draw order; object hulls
+do not require that (overlay projection is enough for interact targeting).
 
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
 (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.

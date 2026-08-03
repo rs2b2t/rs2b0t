@@ -17,7 +17,7 @@ import {
     type ProjectCorner,
     type TileQuad
 } from './pathOverlay.js';
-import { parseHtmlColor, NAV_PATH_PAINT_DEFAULTS, resolveNavPathPaintTheme } from './pathPaintTheme.js';
+import { parseHtmlColor, NAV_PATH_PAINT_DEFAULTS } from './pathPaintTheme.js';
 import { PathPublish } from './pathPublish.js';
 import { SettingsStore } from '../runtime/Settings.js';
 
@@ -171,7 +171,6 @@ export function paintNavPathInGame(_client: Client): void {
         parseHtmlColor(SettingsStore.globalBag().str('navPathColorTransport', NAV_PATH_PAINT_DEFAULTS.transport))
     );
     const clickRgb = rgbInt(parseHtmlColor(SettingsStore.globalBag().str('navPathColorClick', NAV_PATH_PAINT_DEFAULTS.click)));
-    const locRgb = hopRgb;
 
     const project: ProjectCorner = (x, z, u, v) => reader.projectAreaGameWorld(x, z, 0, u, v);
 
@@ -195,34 +194,8 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Loc rings: where the bot will actually click (locX/locZ), not only the stand tile
-    for (const t of path.tiles) {
-        if (!t.transport || t.level !== me.level) {
-            continue;
-        }
-        if (t.locX === undefined || t.locZ === undefined) {
-            continue;
-        }
-        // Skip if loc is same as path tile (already painted as hop)
-        if (t.locX === t.x && t.locZ === t.z) {
-            continue;
-        }
-        const locTile = { x: t.locX, z: t.locZ, level: t.level };
-        const corners = projectTileQuad(locTile, project);
-        if (!corners) {
-            continue;
-        }
-        // Hollow highlight — the object placement the executor targets
-        strokeQuadPix(corners, locRgb, 1);
-        // inset ring for visibility
-        const inset = projectTileQuad(
-            { x: t.locX, z: t.locZ, level: t.level },
-            (x, z, u, v) => project(x, z, 0.15 + u * 0.7, 0.15 + v * 0.7)
-        );
-        if (inset) {
-            strokeQuadPix(inset, locRgb, 0.7);
-        }
-    }
+    // Object highlighter hulls are drawn on the HTML overlay (crisp 2D strokes).
+    // Scene paint keeps path tile quads + click target.
 
     // Next click target (where the walker will actually click)
     if (path.clickIdx >= 0 && path.clickIdx < path.tiles.length) {
@@ -231,7 +204,6 @@ export function paintNavPathInGame(_client: Client): void {
             const corners = projectTileQuad(ct, project);
             if (corners) {
                 strokeQuadPix(corners, clickRgb, 1);
-                // double stroke
                 const c2 = projectTileQuad(ct, (x, z, u, v) => project(x, z, 0.08 + u * 0.84, 0.08 + v * 0.84));
                 if (c2) {
                     strokeQuadPix(c2, clickRgb, 0.85);
@@ -239,6 +211,4 @@ export function paintNavPathInGame(_client: Client): void {
             }
         }
     }
-
-    void theme; // theme still drives HTML hop labels
 }
