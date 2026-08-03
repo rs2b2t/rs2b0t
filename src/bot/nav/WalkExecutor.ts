@@ -495,20 +495,25 @@ class WalkExecutorImpl {
             })
         ];
 
+        // Snapshot WorldState for **both** engines so requirements-gated transports
+        // (agility shortcuts, quest doors, tolls) are evaluated for the live player.
+        // Classic still does not inject the v2 teleport catalog or bank planner (#340).
         let state: WorldStateData | undefined;
-        let policy;
-        let useTeleportCatalog = false;
-        if (this.walkEngine === 'v2') {
-            if (stateOverride) {
-                state = stateOverride;
-            } else {
-                try {
-                    state = snapshotWorldStateData();
-                } catch (e) {
-                    state = undefined;
+        if (stateOverride) {
+            state = stateOverride;
+        } else {
+            try {
+                state = snapshotWorldStateData();
+            } catch (e) {
+                state = undefined;
+                if (this.walkEngine === 'v2') {
                     console.warn('[nav-v2] worldState snapshot failed', e);
                 }
             }
+        }
+        let policy;
+        let useTeleportCatalog = false;
+        if (this.walkEngine === 'v2') {
             policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
             useTeleportCatalog = this.walkUseTeleports;
         }
