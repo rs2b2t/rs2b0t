@@ -135,6 +135,20 @@ export async function crossMultiTileDoor(
         }
         if (shut) {
             const mark = GameMessages.mark();
+            // Stand on the approach tile before Open — CANT_REACH is common when
+            // the walker clicks a door from one tile too far (manor vestibule, guild).
+            const p0 = reader.worldTile();
+            if (
+                p0
+                && (p0.x !== approach.x || p0.z !== approach.z || p0.level !== approach.level)
+                && Math.max(Math.abs(p0.x - approach.x), Math.abs(p0.z - approach.z)) <= 4
+            ) {
+                DirectNavigator.walk(approach);
+                await Execution.delayUntil(() => {
+                    const p = reader.worldTile();
+                    return p !== null && p.x === approach.x && p.z === approach.z && p.level === approach.level;
+                }, APPROACH_WALK_MS);
+            }
             const knife = transport.action === 'Slash' ? Inventory.first('Knife') : null;
             if (knife !== null) {
                 log(`using the ${knife.name} on ${transport.locName} at (${transport.locX},${transport.locZ})`);
@@ -162,6 +176,10 @@ export async function crossMultiTileDoor(
                 onQuestLock?.(transport.locX, transport.locZ);
                 return false;
             }
+            // Collision often lags a tick after Open — step through immediately.
+            await Execution.delayTicks(1);
+            DirectNavigator.walk(step);
+            await Execution.delayUntil(() => isOnFarSide(reader.worldTile(), approach, step), 4000);
             continue;
         }
         const canStepEdge = Reachability.canStep(approach, step);

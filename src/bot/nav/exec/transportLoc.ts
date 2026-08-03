@@ -64,17 +64,33 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     }
     // Fallback: name+action near the recorded placement (scene lag / id drift after
     // ship hops — gangplanks on Brimhaven deck after Barnaby).
-    return (
-        Locs.query()
+    const nearName = Locs.query()
+        .name(transport.locName)
+        .action(transport.action)
+        .where(loc => {
+            const t = loc.tile();
+            return Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 5;
+        })
+        .nearest();
+    if (nearName) {
+        return nearName;
+    }
+    // Closed→open transform: doors keep the same name but swap Open↔Close and id.
+    // Nearby open leaf ⇒ treat as not-shut so the walker steps through.
+    if (/^open$/i.test(transport.action)) {
+        const openLeaf = Locs.query()
             .name(transport.locName)
-            .action(transport.action)
             .where(loc => {
                 const t = loc.tile();
-                return Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 5;
+                const near = Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 3;
+                return near && loc.actions().some(a => a !== null && /^close$/i.test(a));
             })
-            .nearest()
-        ?? Locs.query().name(transport.locName).action(transport.action).nearest()
-    );
+            .nearest();
+        if (openLeaf) {
+            return null; // open — caller should walk through, not re-Open
+        }
+    }
+    return null;
 }
 
 export async function openShutTrapdoor(
