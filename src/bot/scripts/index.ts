@@ -61,6 +61,16 @@ import RoguesPurse from './RoguesPurse.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
+import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport.js';
+
+ScriptRegistry.register({
+    name: 'AIO Teleport',
+    description: 'Automated teleportation with intelligent banking and safety features',
+    category: 'Magic',
+    tags: ['teleport', 'magic', 'banking', 'aio'],
+    settingsSchema: AIOTELEPORT_SETTINGS,
+    create: () => new AIOTeleport()
+});
 
 ScriptRegistry.register({
     name: 'TutorialBot',
