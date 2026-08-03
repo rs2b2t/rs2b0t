@@ -40,7 +40,11 @@ The dual-run switch only gates:
 2. path-scoped bank planner  
 3. v2 hop logging  
 
-Everything else is shared by design. Tests: `test/nav/classicParity.test.ts`.
+Everything else is shared by design.
+
+Tests: `test/nav/classicParity.test.ts` — engine default, requires helpers, and
+(when `out/collision.lcnav.gz` is present) pack `findPath` fail-open without state
+plus fail-closed with zero-coin WorldState on the Ardougne→Brimhaven ship.
 
 ## Audit findings (code review)
 
