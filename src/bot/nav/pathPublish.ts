@@ -34,6 +34,11 @@ export interface PublishedPath {
     pathIdx: number;
     /** Optional next click target index for highlight. */
     clickIdx: number;
+    /**
+     * Explore: scene-BFS segment for the current walk click (cyan overlay).
+     * Set after a successful tryMove so operators can compare pack vs client route.
+     */
+    clientSegment?: PublishedPathTile[];
 }
 
 let active: PublishedPath | null = null;
@@ -66,10 +71,13 @@ export function formatHopLabel(t: {
 
 export const PathPublish = {
     set(tiles: PublishedPathTile[], pathIdx = 0, clickIdx = -1): void {
+        // Preserve clientSegment across pathIdx/click republish (same walk).
+        const prevSeg = active?.clientSegment;
         active = {
             tiles: tiles.slice(),
             pathIdx,
-            clickIdx
+            clickIdx,
+            clientSegment: prevSeg
         };
     },
 
@@ -79,6 +87,14 @@ export const PathPublish = {
         }
         active.pathIdx = pathIdx;
         active.clickIdx = clickIdx;
+    },
+
+    /** Explore: replace the active client-walk segment for dual paint. */
+    setClientSegment(tiles: PublishedPathTile[] | null): void {
+        if (!active) {
+            return;
+        }
+        active.clientSegment = tiles && tiles.length > 0 ? tiles.slice() : undefined;
     },
 
     clear(): void {

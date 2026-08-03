@@ -170,6 +170,10 @@ export function paintNavPathInGame(_client: Client): void {
         parseHtmlColor(SettingsStore.globalBag().str('navPathColorTransport', NAV_PATH_PAINT_DEFAULTS.transport))
     );
     const clickRgb = rgbInt(parseHtmlColor(SettingsStore.globalBag().str('navPathColorClick', NAV_PATH_PAINT_DEFAULTS.click)));
+    // Explore: cyan = scene-BFS walk segment (see navPathClientSegment / CLIENT-PATH-ALIGN).
+    const clientSegRgb = rgbInt(
+        parseHtmlColor(SettingsStore.globalBag().str('navPathColorClient', '#00D4FF'), '#00D4FF')
+    );
 
     const project: ProjectCorner = (x, z, u, v) => reader.projectAreaGameWorld(x, z, 0, u, v);
 
@@ -190,6 +194,22 @@ export function paintNavPathInGame(_client: Client): void {
         } else {
             fillQuadPix(q.corners, pathRgb, 0.28);
             strokeQuadPix(q.corners, pathRgb, 0.85);
+        }
+    }
+
+    // Explore dual-paint: client-like BFS segment for the active walk click
+    const seg = path.clientSegment;
+    if (seg && seg.length > 0) {
+        for (const t of seg) {
+            if (t.level !== me.level) {
+                continue;
+            }
+            const corners = projectTileQuad(t, project);
+            if (!corners) {
+                continue;
+            }
+            fillQuadPix(corners, clientSegRgb, 0.4);
+            strokeQuadPix(corners, clientSegRgb, 0.95);
         }
     }
 

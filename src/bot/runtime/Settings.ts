@@ -224,6 +224,37 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help: 'HTML #RGB / #RRGGBB — transport captions (default white)'
+    },
+    // ── Explore (client-path paint) — not production defaults ──
+    navPathSceneExpand: {
+        type: 'boolean',
+        default: true,
+        label: 'Scene-aware path expand (explore)',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help:
+            'EXPLORE: fill pack path segments with scene collision BFS instead of '
+            + 'Chebyshev diagonals when both ends are in the loaded scene. '
+            + 'May change corridor snap behaviour. Not upstream-ready.'
+    },
+    navPathClientSegment: {
+        type: 'boolean',
+        default: true,
+        label: 'Paint client walk segment (explore)',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help:
+            'EXPLORE: after each walk click, paint a cyan scene-BFS polyline from '
+            + 'the player to the click tile (approximates Client.tryMove). Compare '
+            + 'to the red pack path. Not upstream-ready.'
+    },
+    navPathColorClient: {
+        type: 'string',
+        default: '#00D4FF',
+        label: 'Client segment colour (explore)',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help: 'HTML colour for the explore client-walk segment (default cyan)'
     }
 };
 

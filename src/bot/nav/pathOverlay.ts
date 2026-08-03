@@ -16,7 +16,9 @@ import { SettingsStore } from '../runtime/Settings.js';
 import { matchesTransportLoc } from './exec/transportLoc.js';
 import { PathPublish, type PublishedPathTile } from './pathPublish.js';
 import {
+    parseHtmlColor,
     resolveNavPathPaintTheme,
+    rgba,
     type NavPathPaintTheme
 } from './pathPaintTheme.js';
 
@@ -484,6 +486,29 @@ export function paintNavPath(
                         ctx.strokeStyle = theme.clickStroke;
                         ctx.lineWidth = 2.5;
                         ctx.stroke();
+                    }
+                }
+            }
+
+            // Explore: cyan client-walk segment (scene BFS after tryMove)
+            const seg = path.clientSegment;
+            if (seg && seg.length > 0) {
+                let clientColor = '#00D4FF';
+                try {
+                    clientColor = SettingsStore.globalBag().str('navPathColorClient', '#00D4FF');
+                } catch {
+                    /* default */
+                }
+                const rgb = parseHtmlColor(clientColor, '#00D4FF');
+                const fill = rgba(rgb, 0.35);
+                const stroke = rgba(rgb, 0.95);
+                for (const t of seg) {
+                    if (t.level !== me.level) {
+                        continue;
+                    }
+                    const corners = projectTileQuad(t, project);
+                    if (corners) {
+                        fillQuad(ctx, corners, fill, stroke, 1.5);
                     }
                 }
             }

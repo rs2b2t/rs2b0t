@@ -38,6 +38,8 @@ import { RouteState } from './v2/routeState.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
 import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
 import { resolveDangerZones, type DangerZoneRect } from './data/dangerZones.js';
+import { expandWaypoints as expandWaypointsDense, localBfsPath } from './pathExpand.js';
+import { SettingsStore } from '../runtime/Settings.js';
 import {
     crossMultiTileDoor,
     isOpenableBarrier,
@@ -115,26 +117,20 @@ interface PathStep extends WorldTile {
 type FollowResult = 'arrived' | 'closest' | 'blocked' | 'repath' | 'failed' | 'interrupted';
 
 function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
-    const tiles: PathStep[] = [];
-    for (let i = 0; i < waypoints.length; i++) {
-        const wp = waypoints[i];
-        if (i === 0) {
-            tiles.push({ x: wp.x, z: wp.z, level: wp.level, transport: wp.transport });
-            continue;
+    // Explore: scene-aware BFS when Global.navPathSceneExpand (default on this branch).
+    let scene: import('./pathExpand.js').ExpandWorldFns | null = null;
+    try {
+        const on = SettingsStore.globalBag().bool('navPathSceneExpand', true);
+        if (on && reader.attached()) {
+            scene = {
+                toLocal: (x, z) => reader.toLocal(x, z),
+                flags: (lx, lz) => reader.collisionFlags(lx, lz)
+            };
         }
-        const prev = waypoints[i - 1];
-        if (wp.transport || wp.level !== prev.level) {
-            tiles.push({ x: wp.x, z: wp.z, level: wp.level, transport: wp.transport });
-            continue;
-        }
-        const dx = Math.sign(wp.x - prev.x);
-        const dz = Math.sign(wp.z - prev.z);
-        const steps = Math.max(Math.abs(wp.x - prev.x), Math.abs(wp.z - prev.z));
-        for (let step = 1; step <= steps; step++) {
-            tiles.push({ x: prev.x + dx * step, z: prev.z + dz * step, level: wp.level });
-        }
+    } catch {
+        scene = null;
     }
-    return tiles;
+    return expandWaypointsDense(waypoints as PathStep[], scene) as PathStep[];
 }
 
 class WalkExecutorImpl {
@@ -290,6 +286,46 @@ class WalkExecutorImpl {
             RouteState.reset();
             PathCameraFollow.release();
         }
+    }
+
+    /**
+     * Explore: paint scene-BFS polyline for the current walk click (cyan).
+     * Approximates Client.tryMove when both ends are in the loaded scene.
+     */
+    private publishClientWalkSegment(
+        from: WorldTile,
+        to: { x: number; z: number; level: number }
+    ): void {
+        try {
+            if (!SettingsStore.globalBag().bool('navPathClientSegment', true)) {
+                PathPublish.setClientSegment(null);
+                return;
+            }
+        } catch {
+            return;
+        }
+        if (from.level !== to.level) {
+            PathPublish.setClientSegment(null);
+            return;
+        }
+        const a = reader.toLocal(from.x, from.z);
+        const b = reader.toLocal(to.x, to.z);
+        if (!a || !b) {
+            PathPublish.setClientSegment(null);
+            return;
+        }
+        const path = localBfsPath((lx, lz) => reader.collisionFlags(lx, lz), a, b, 800);
+        if (!path || path.length < 2) {
+            PathPublish.setClientSegment(null);
+            return;
+        }
+        PathPublish.setClientSegment(
+            path.map(p => ({
+                x: from.x + (p.lx - a.lx),
+                z: from.z + (p.lz - a.lz),
+                level: from.level
+            }))
+        );
     }
 
     private publishPath(tiles: PathStep[], pathIdx: number, clickIdx: number): void {
@@ -817,6 +853,7 @@ class WalkExecutorImpl {
                             if (ActionRouter.driver.walk(local.lx, local.lz)) {
                                 walkClickMark = mark;
                                 walkClickAt = { x: me.x, z: me.z, level: me.level };
+                                this.publishClientWalkSegment(me, tiles[recover]!);
                                 clickIdx = recover;
                                 clicks++;
                                 stallRetries = 1;
@@ -904,6 +941,7 @@ class WalkExecutorImpl {
                     if (ok) {
                         walkClickMark = mark;
                         walkClickAt = { x: me.x, z: me.z, level: me.level };
+                        this.publishClientWalkSegment(me, t);
                     }
                     return ok;
                 };
@@ -926,6 +964,7 @@ class WalkExecutorImpl {
                 } else {
                     walkClickMark = null;
                     walkClickAt = null;
+                    PathPublish.setClientSegment(null);
                     // Client pathfind rejected every candidate — repath immediately (no stall budget).
                     if (nextCrossingIdx !== -1) {
                         const appr = tiles[nextCrossingIdx - 1]!;
