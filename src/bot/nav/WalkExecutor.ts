@@ -20,7 +20,7 @@ import {
     chebyshev,
     crossingEligible,
     locateOnPath,
-    selectClickTarget,
+    selectClientWalkTarget,
     starvedTerminalIndex
 } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
@@ -677,6 +677,10 @@ class WalkExecutorImpl {
         let warnedCombat = false;
         let lastTile: WorldTile | null = null;
         let stillIters = 0;
+        /** GameMessages watermark after the last walk click — watch for server can't-reach. */
+        let walkClickMark: number | null = null;
+        /** Consecutive client walk rejects this follow (reset on successful walk). */
+        let walkRejects = 0;
 
         const clickable = (t: WorldTile): boolean =>
             reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
@@ -690,6 +694,17 @@ class WalkExecutorImpl {
             const me = reader.worldTile();
             if (!me) {
                 return 'failed';
+            }
+
+            // Server rejected the last walk/op pathfind — do not wait for stall ticks.
+            // (Transport/door hops already fail-fast on CANT_REACH; this covers plain walk clicks
+            // and residual server rejections mid-follow. Not a regression: walk clicks never listened.)
+            if (walkClickMark !== null && GameMessages.sawSince(walkClickMark, CANT_REACH)) {
+                log(
+                    `server "I can't reach that!" after walk click toward path idx ${clickIdx} — repathing immediately (${clicks} clicks)`
+                );
+                walkClickMark = null;
+                return 'repath';
             }
 
             if (isArrived(me, dest, radius, Reachability.arrivalProbe())) {
@@ -780,13 +795,18 @@ class WalkExecutorImpl {
                         const local = reader.toLocal(tiles[recover].x, tiles[recover].z);
                         if (local) {
                             log(`stall recovery → path idx ${recover} (${tiles[recover].x},${tiles[recover].z})`);
-                            ActionRouter.driver.walk(local.lx, local.lz);
-                            clickIdx = recover;
-                            clicks++;
-                            stallRetries = 1;
-                            this.publishPath(tiles, pathIdx, clickIdx);
-                            await Execution.delayTicks(2);
-                            continue;
+                            const mark = GameMessages.mark();
+                            if (ActionRouter.driver.walk(local.lx, local.lz)) {
+                                walkClickMark = mark;
+                                clickIdx = recover;
+                                clicks++;
+                                stallRetries = 1;
+                                this.publishPath(tiles, pathIdx, clickIdx);
+                                await Execution.delayTicks(2);
+                                continue;
+                            }
+                            log(`stall recovery walk rejected by client — repathing`);
+                            return 'repath';
                         }
                     }
                     stallRetries = 1;
@@ -849,35 +869,68 @@ class WalkExecutorImpl {
             if (needClick) {
                 const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
-                const target = selectClickTarget(tiles, pathIdx, steps, limit, me.level, clickable);
-                const chosen =
-                    target !== -1 || nextCrossingIdx !== -1 || pathIdx !== tiles.length - 1 || clickIdx === tiles.length - 1
-                        ? target
-                        : starvedTerminalIndex(tiles, me, clickable);
-                if (chosen !== -1 && !(tiles[chosen].x === me.x && tiles[chosen].z === me.z)) {
-                    const local = reader.toLocal(tiles[chosen].x, tiles[chosen].z)!;
-                    ActionRouter.driver.walk(local.lx, local.lz);
+                const tryWalkAt = (i: number): boolean => {
+                    const t = tiles[i]!;
+                    if (t.x === me.x && t.z === me.z) {
+                        return false;
+                    }
+                    const local = reader.toLocal(t.x, t.z);
+                    if (!local) {
+                        return false;
+                    }
+                    // Client tryMove: false = scene BFS found no route (no packet).
+                    // Also watermark chat so a server "I can't reach that!" repaths next tick.
+                    const mark = GameMessages.mark();
+                    const ok = ActionRouter.driver.walk(local.lx, local.lz);
+                    if (ok) {
+                        walkClickMark = mark;
+                    }
+                    return ok;
+                };
+                let chosen = selectClientWalkTarget(tiles, pathIdx, steps, limit, me.level, clickable, tryWalkAt);
+                if (chosen === -1) {
+                    const starve = starvedTerminalIndex(tiles, me, clickable);
+                    if (
+                        starve !== -1
+                        && (nextCrossingIdx === -1 || pathIdx === tiles.length - 1 || clickIdx === tiles.length - 1)
+                        && tryWalkAt(starve)
+                    ) {
+                        chosen = starve;
+                    }
+                }
+                if (chosen !== -1) {
                     clickIdx = chosen;
                     clicks++;
+                    walkRejects = 0;
                     stallTicks = 0;
                     this.publishPath(tiles, pathIdx, clickIdx);
-                } else if (target === -1) {
-                    if (nextCrossingIdx !== -1) {
-                        const appr = tiles[nextCrossingIdx - 1];
-                        if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
-                            const handled = await this.handleTransport(appr, tiles[nextCrossingIdx], log);
-                            if (handled) {
-                                tiles[nextCrossingIdx].transport = undefined;
-                                pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
-                                stallTicks = 0;
-                                stallRetries = 0;
-                                clickIdx = -1;
-                                lastTile = null;
-                                continue;
+                } else {
+                    walkRejects++;
+                    walkClickMark = null;
+                    // Client pathfind rejected every candidate — repath immediately (no stall budget).
+                    if (walkRejects >= 1) {
+                        if (nextCrossingIdx !== -1) {
+                            const appr = tiles[nextCrossingIdx - 1]!;
+                            if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
+                                const handled = await this.handleTransport(appr, tiles[nextCrossingIdx]!, log);
+                                if (handled) {
+                                    tiles[nextCrossingIdx]!.transport = undefined;
+                                    pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                                    stallTicks = 0;
+                                    stallRetries = 0;
+                                    clickIdx = -1;
+                                    lastTile = null;
+                                    walkRejects = 0;
+                                    continue;
+                                }
+                                noteFailedDoor(tiles[nextCrossingIdx]!, this.doorStrikes, this.avoidDoors);
+                                return 'repath';
                             }
-                            noteFailedDoor(tiles[nextCrossingIdx], this.doorStrikes, this.avoidDoors);
-                            return 'repath';
                         }
+                        log(
+                            `client walk pathfind failed for all click candidates near path idx ${pathIdx} — repathing immediately (${clicks} clicks)`
+                        );
+                        return 'repath';
                     }
                     stallTicks += 2;
                 }

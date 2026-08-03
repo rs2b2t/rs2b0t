@@ -10,6 +10,7 @@
 | Product manual | [docs/NAV.md](../NAV.md) § [One walker, two modes](../NAV.md#one-walker-two-modes-classic--v2) |
 | Classic vs pre-v2 audit | [CLASSIC-PARITY.md](./CLASSIC-PARITY.md) |
 | **2004 transport coverage** | [TRANSPORTS-2004.md](./TRANSPORTS-2004.md) |
+| Client path vs pack paint (notes) | [CLIENT-PATH-ALIGN.md](./CLIENT-PATH-ALIGN.md) |
 | Shared code | `PathFinder`, `WalkExecutor`, `exec/`, `loadTransportGraph`, `data/*` |
 | Mostly under `v2/` (shared use) | `travelCatalog`, `specialRequires`, `worldState*`, path paint |
 | True v2-only | `teleportCatalog` inject, path-scoped bank, hop logs |

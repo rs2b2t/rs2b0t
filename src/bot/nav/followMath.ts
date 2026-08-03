@@ -34,6 +34,39 @@ export function selectClickTarget(tiles: PathTileLike[], pathIdx: number, steps:
     return -1;
 }
 
+/**
+ * Prefer the furthest click that the client walk/pathfind accepts.
+ * Walks from far→near so a failed `tryMove` (or equivalent) falls back to a
+ * closer path tile instead of waiting for stall ticks.
+ *
+ * `tryWalk(i)` should issue the client walk for tiles[i] and return whether the
+ * client accepted a route (e.g. `tryMove` / `driver.walk`). Side effects of a
+ * successful walk are intentional — caller uses the returned index as clickIdx.
+ */
+export function selectClientWalkTarget(
+    tiles: PathTileLike[],
+    pathIdx: number,
+    steps: number,
+    limitIdx: number,
+    level: number,
+    isClickable: (t: PathTileLike) => boolean,
+    tryWalk: (tileIndex: number) => boolean
+): number {
+    const top = Math.min(pathIdx + steps, limitIdx, tiles.length - 1);
+    for (let i = top; i > pathIdx; i--) {
+        if (tiles[i].level !== level) {
+            continue;
+        }
+        if (!isClickable(tiles[i])) {
+            continue;
+        }
+        if (tryWalk(i)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 export function starvedTerminalIndex(tiles: PathTileLike[], me: PathTileLike, isClickable: (t: PathTileLike) => boolean): number {
     const last = tiles.length - 1;
     if (last < 0) {

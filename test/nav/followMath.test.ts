@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { chooseCrossClick, crossingEligible, locateOnPath, selectClickTarget, shouldApproachClosedBarrier, starvedTerminalIndex, type PathTileLike } from '#/bot/nav/followMath.js';
+import {
+    chooseCrossClick,
+    crossingEligible,
+    locateOnPath,
+    selectClientWalkTarget,
+    selectClickTarget,
+    shouldApproachClosedBarrier,
+    starvedTerminalIndex,
+    type PathTileLike
+} from '#/bot/nav/followMath.js';
 
 const t = (x: number, z: number, level = 0): PathTileLike => ({ x, z, level });
 
@@ -45,6 +54,35 @@ describe('selectClickTarget', () => {
     });
     test('skips tiles on another level', () => {
         expect(selectClickTarget(tiles, 15, 20, tiles.length - 1, 3, () => true)).toBe(-1);
+    });
+});
+
+describe('selectClientWalkTarget', () => {
+    const tiles = [t(0, 0), t(1, 0), t(2, 0), t(3, 0), t(4, 0), t(5, 0)];
+
+    test('picks furthest tile where tryWalk succeeds', () => {
+        const tried: number[] = [];
+        const idx = selectClientWalkTarget(tiles, 0, 20, 5, 0, () => true, i => {
+            tried.push(i);
+            return i === 3; // far ones fail, 3 works
+        });
+        expect(idx).toBe(3);
+        // Far→near order: 5,4,3 then stop
+        expect(tried).toEqual([5, 4, 3]);
+    });
+
+    test('returns -1 when every tryWalk fails', () => {
+        expect(selectClientWalkTarget(tiles, 0, 20, 5, 0, () => true, () => false)).toBe(-1);
+    });
+
+    test('skips unclickable before tryWalk', () => {
+        const tried: number[] = [];
+        selectClientWalkTarget(tiles, 0, 20, 5, 0, tile => tile.x !== 5, i => {
+            tried.push(i);
+            return false;
+        });
+        expect(tried).not.toContain(5);
+        expect(tried[0]).toBe(4);
     });
 });
 
