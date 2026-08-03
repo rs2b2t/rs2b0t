@@ -24,6 +24,47 @@ function fullyWalkablePack(): Uint8Array {
     return bytes;
 }
 
+describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
+    test('prefers a cheap long-range transport over pure walk', () => {
+        // Synthetic: start (0,0) → goal (60,0); transport (0,10)→(59,0) cost 10.
+        // Optimal: walk 10 + hop 10 + walk 1 = 21. Inadmissible Chebyshev would
+        // return direct walk cost 60 when first-goal A* closes early.
+        const finder = new PathFinder(fullyWalkablePack());
+        const hop: TransportEdgeData = {
+            from: { x: 0, z: 10, level: 0 },
+            to: { x: 59, z: 0, level: 0 },
+            locName: 'Portal',
+            action: 'Enter',
+            kind: 'portal'
+        };
+        finder.addEdges([], [hop], []);
+        const out = finder.findPath(
+            { x: 0, z: 0, level: 0 },
+            { x: 60, z: 0, level: 0 },
+            { maxExpansions: 50_000 }
+        );
+        expect(out.ok).toBe(true);
+        if (!out.ok) {
+            return;
+        }
+        expect(out.cost).toBe(21);
+        expect(out.waypoints.some(w => w.transport?.kind === 'portal')).toBe(true);
+    });
+
+    test('walk-only still returns Chebyshev-optimal cost', () => {
+        const finder = new PathFinder(fullyWalkablePack());
+        // No edges added → pure walk. Pack is fully walkable in a small region.
+        const out = finder.findPath(
+            { x: 0, z: 0, level: 0 },
+            { x: 5, z: 0, level: 0 }
+        );
+        expect(out.ok).toBe(true);
+        if (out.ok) {
+            expect(out.cost).toBe(5);
+        }
+    });
+});
+
 describe('PathFinder level-change avoidance', () => {
     const from = { x: 10, z: 10, level: 0 };
     const to = { x: 10, z: 12, level: 1 };

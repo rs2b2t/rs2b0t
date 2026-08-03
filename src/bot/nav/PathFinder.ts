@@ -595,7 +595,15 @@ export class PathFinder {
         const viaEdge = new Map<number, TransportInfo>();
         const closed = new Set<number>();
         const open = new MinHeap();
-        const heuristic = (x: number, z: number): number => Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
+        // Chebyshev is admissible only for unit-cost walk steps. Graph transports
+        // (dungeons, ships, portals, teleports) can cover arbitrary distance for a
+        // small fixed cost, so h can overestimate and first-goal A* returns a
+        // non-optimal walk. Use Dijkstra (h = 0) whenever shortcuts may apply (#335).
+        const hasShortcuts = ctx.teleFromStart.length > 0 || this.edges.size > 0;
+        const heuristic = (x: number, z: number): number =>
+            hasShortcuts
+                ? 0
+                : Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
 
         gScore.set(start, 0);
         open.push(heuristic(from.x, from.z) * 1048576, start);
