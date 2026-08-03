@@ -557,11 +557,10 @@ export class PathFinder {
                 if (!teleportAllowedByPolicy(edgeProbe, policy, routeSpan).ok) {
                     continue;
                 }
-                // Origin gates (wildy thresholds) — use state.wildy or compute from start tile (#339).
-                const wildy =
-                    opts.state?.wildernessLevel !== undefined
-                        ? opts.state.wildernessLevel
-                        : wildernessLevelAt(from);
+                // Origin gates (wildy thresholds): always evaluate at the **path start**
+                // tile. Preferring live state.wildernessLevel would poison bank→dest
+                // plans that reuse a deep-wildy snapshot while `from` is a bank stand (#339).
+                const wildy = wildernessLevelAt(from);
                 if (!teleportAllowedFromOrigin(dest, from, wildy).ok) {
                     continue;
                 }

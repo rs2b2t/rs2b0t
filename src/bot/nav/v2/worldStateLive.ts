@@ -80,7 +80,9 @@ export function snapshotWorldStateData(): WorldStateData {
     const entranaRestrictedGear = namesHaveEntranaRestrictedGear([...invNames, ...wornNames]);
 
     const here = reader.worldTile();
-    const wildernessLevel = here ? wildernessLevelAt(here) : 0;
+    // Omit wildernessLevel when tile is unknown so planners fall back to
+    // wildernessLevelAt(from) rather than treating missing as safe level 0.
+    const wildernessLevel = here ? wildernessLevelAt(here) : undefined;
 
     return {
         // Client.memServer is set at boot from world config (members vs free world).
@@ -92,7 +94,7 @@ export function snapshotWorldStateData(): WorldStateData {
         worn,
         freeSlots: Inventory.free(),
         entranaRestrictedGear,
-        wildernessLevel
+        ...(wildernessLevel !== undefined ? { wildernessLevel } : {})
     };
 }
 

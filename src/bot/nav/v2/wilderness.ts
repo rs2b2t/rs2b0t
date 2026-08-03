@@ -1,9 +1,13 @@
 /**
- * Approximate wilderness level from world coordinates (2004 / LostCity map).
+ * Wilderness level from world coordinates — matches LostCity
+ * `~wilderness_level` (wilderness_levels.rs2 + wilderness_zones.dbrow).
  *
- * Standard spell teleports block above level 20; glory jewellery above 30.
- * Formula matches common RSC/OSRS strip north of the Edgeville ditch:
- *   z < 3520 → 0; else floor((z − 3520) / 8) + 1, clipped to free-world x band.
+ * Zones (coord pairs):
+ * - Surface: 0_46_55_0_0 → 3_52_99_63_63  (x 2944–3391, z 3520–6399, levels 0–3)
+ * - Underground: 0_46_155_0_0 → 0_52_199_63_63 (x 2944–3391, z 9920–12799, level 0)
+ *
+ * Level = floor((z − zoneSouthZ) / 8) + 1 when inside a zone, else 0.
+ * Spell teleports block when level > 20; glory when level > 30.
  */
 
 export interface WildTile {
@@ -12,32 +16,38 @@ export interface WildTile {
     level?: number;
 }
 
-/** Edgeville ditch / wildy south edge (z). */
+/** Surface wilderness south edge (z). */
 export const WILDERNESS_SOUTH_Z = 3520;
+/** Edgeville dungeon / underground wildy south edge (z). */
+export const WILDERNESS_UNDERGROUND_SOUTH_Z = 9920;
 
-/** Rough free-world wilderness x span (excludes deep members-only strips for plan). */
 const WILD_X_MIN = 2944;
-const WILD_X_MAX = 3392;
+const WILD_X_MAX = 3391;
+const SURFACE_Z_MAX = 99 * 64 + 63; // 6399
+const UNDER_Z_MAX = 199 * 64 + 63; // 12799
 
-/**
- * Wilderness combat level at a tile, or 0 if not in wilderness.
- * Multi-level (dungeons) treated as non-wild for originless spell/jewellery.
- */
-export function wildernessLevelAt(tile: WildTile): number {
-    if ((tile.level ?? 0) !== 0) {
-        return 0;
-    }
-    if (tile.z < WILDERNESS_SOUTH_Z) {
-        return 0;
-    }
-    if (tile.x < WILD_X_MIN || tile.x > WILD_X_MAX) {
-        return 0;
-    }
-    return Math.floor((tile.z - WILDERNESS_SOUTH_Z) / 8) + 1;
-}
-
-/** Standard spellbook teleports (and most jewellery) refuse above this wildy level. */
+/** Standard spellbook + duel ring / games neck: blocked when wildy > 20. */
 export const SPELL_MAX_WILDERNESS = 20;
 
-/** Amulet of glory teleports refuse above this wildy level. */
+/** Amulet of glory: blocked when wildy > 30. */
 export const GLORY_MAX_WILDERNESS = 30;
+
+/**
+ * Wilderness combat level at a tile, or 0 outside wild zones.
+ */
+export function wildernessLevelAt(tile: WildTile): number {
+    const level = tile.level ?? 0;
+    const { x, z } = tile;
+    if (x < WILD_X_MIN || x > WILD_X_MAX) {
+        return 0;
+    }
+    // Surface strip (levels 0–3).
+    if (level >= 0 && level <= 3 && z >= WILDERNESS_SOUTH_Z && z <= SURFACE_Z_MAX) {
+        return Math.floor((z - WILDERNESS_SOUTH_Z) / 8) + 1;
+    }
+    // Underground wilderness (level 0 only in content zone pair).
+    if (level === 0 && z >= WILDERNESS_UNDERGROUND_SOUTH_Z && z <= UNDER_Z_MAX) {
+        return Math.floor((z - WILDERNESS_UNDERGROUND_SOUTH_Z) / 8) + 1;
+    }
+    return 0;
+}
