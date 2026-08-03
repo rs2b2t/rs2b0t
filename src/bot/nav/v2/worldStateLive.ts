@@ -2,6 +2,8 @@
  * Build WorldStateData from live client APIs (main thread only — not for NavWorker).
  */
 
+import { Client } from '#/client/Client.js';
+
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Quests, type QuestStatus } from '../../api/hud/Quests.js';
@@ -58,7 +60,9 @@ export function snapshotWorldStateData(): WorldStateData {
     }
 
     return {
-        members: true,
+        // Client.memServer is set at boot from world config (members vs free world).
+        // Never hardcode true — free-world snapshots must fail members-gated edges.
+        members: Client.memServer === true,
         skills,
         quests,
         items,

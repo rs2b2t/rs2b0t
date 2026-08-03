@@ -8,6 +8,7 @@ import {
     inventoryNameMatchesJewellery,
     JEWELLERY_TELEPORTS,
     kindAllowedByPolicy,
+    isEdgeAllowed,
     meetsRequires,
     routeSpanChebyshev,
     SPELL_TELEPORTS,
@@ -102,6 +103,21 @@ describe('nav v2 meetsRequires', () => {
         const req = { members: true };
         expect(meetsRequires(req, state({ members: false })).ok).toBe(false);
         expect(meetsRequires(req, state({ members: true })).ok).toBe(true);
+    });
+});
+
+describe('nav v2 isEdgeAllowed', () => {
+    test('no requires always allowed', () => {
+        expect(isEdgeAllowed(undefined, undefined)).toBe(true);
+        expect(isEdgeAllowed({}, undefined)).toBe(true);
+    });
+    test('requires without WorldState fail closed (match PathFinder)', () => {
+        expect(isEdgeAllowed({ members: true }, undefined)).toBe(false);
+        expect(isEdgeAllowed({ skills: [{ name: 'agility', level: 10 }] }, undefined)).toBe(false);
+    });
+    test('requires with state delegate to meetsRequires', () => {
+        expect(isEdgeAllowed({ members: true }, state({ members: false }))).toBe(false);
+        expect(isEdgeAllowed({ members: true }, state({ members: true }))).toBe(true);
     });
 });
 

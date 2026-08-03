@@ -280,7 +280,7 @@ export function agilityShortcutEdges(): TransportEdgeData[] {
         members: true,
         skills: [{ name: 'agility', level }]
     });
-    // Barb village crumbling wall: one-way west→east (loc 0_39_55_46_33).
+    // Outpost / castle crumbling wall: one-way west→east (loc 0_39_55_46_33).
     const castleLoc = parseLcCoord('0_39_55_46_33');
     const castleFrom = { x: castleLoc.x - 1, z: castleLoc.z, level: 0 };
     const castleTo = { x: castleLoc.x + 1, z: castleLoc.z, level: 0 };

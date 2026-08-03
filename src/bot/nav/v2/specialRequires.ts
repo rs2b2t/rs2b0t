@@ -49,7 +49,12 @@ const TRANSPORT_SKILL_GATES: readonly {
     { x: 3018, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3339, level: 0, skill: 'mining', levelReq: 60 },
     { x: 3019, z: 3341, level: 0, skill: 'mining', levelReq: 60 },
-    { x: 3020, z: 3340, level: 0, skill: 'mining', levelReq: 60 }
+    { x: 3020, z: 3340, level: 0, skill: 'mining', levelReq: 60 },
+    // skill_agility/shortcuts.rs2 _island_rope_swing — agility 10 on outer swings.
+    // tree_ropeswing2 (brim south, from 2705,3205) intentionally has NO level check
+    // so players cannot softlock on the island (content: loc_type ! tree_ropeswing2).
+    { x: 2709, z: 3209, level: 0, skill: 'agility', levelReq: 10 }, // tree_ropeswing1 north
+    { x: 2511, z: 3091, level: 0, skill: 'agility', levelReq: 10 } // tree_ropeswing3 ogre
 ];
 
 /**

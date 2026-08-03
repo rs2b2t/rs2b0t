@@ -15,6 +15,12 @@ Opt-in walker: Global **World walker** = `classic` (default) | `v2`.
 
 **Coverage program:** 2004-era travel (spirit trees, glider, Entrana, carts, essence entry, levers, OD agility) in `travelCatalog.ts` / `loadTransportGraph.ts`; guild skill doors + mining ladder gates in `specialRequires.ts`; quest seeds in `transportQuestReqs.ts` — see [TRANSPORTS-2004.md](./TRANSPORTS-2004.md).
 
-**Not in this ship:** bank cache API, multi-dest quest ladders (Horror/Watchtower maze), Ranging Guild door (not in doors.json), fairy rings / post-era transport matrix, live CI harness suite.
+**Classic vs v2:** both load the same door/transport/travelCatalog graph and evaluate
+WorldState requires. **v2 only:** teleport catalog inject, path-scoped bank, hop logs
+when using v2 policy.
+
+**Still deferred:** bank cache API, multi-dest quest ladders (Horror/Watchtower maze),
+Ranging Guild door (not in doors.json), fairy rings / post-era matrix, Entrana gear /
+chef’s hat at plan-time, live CI harness suite.
 
 Operator live tools live under `tools/nav-*.ts` (not CI). Do not document personal deploy paths here.

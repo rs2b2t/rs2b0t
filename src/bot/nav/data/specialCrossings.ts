@@ -113,6 +113,27 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
     { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
 
+    // Island ropeswings (shortcuts.rs2) — outer swings need agility 10; execute re-check.
+    // Do not gate tree_ropeswing2 (2705,3205) — softlock prevention in content.
+    {
+        x: 2709,
+        z: 3209,
+        level: 0,
+        locName: 'Ropeswing',
+        action: 'Swing-on',
+        requiresSkill: { name: 'agility', level: 10 },
+        label: 'Brimhaven north ropeswing'
+    },
+    {
+        x: 2511,
+        z: 3091,
+        level: 0,
+        locName: 'Ropeswing',
+        action: 'Swing-on',
+        requiresSkill: { name: 'agility', level: 10 },
+        label: 'Ogre island ropeswing'
+    },
+
     // Entrana ferry — content: areas/area_port_sarim|entrana/monk_of_entrana.rs2 (Talk-to, members, weapon strip).
     {
         x: 3048,

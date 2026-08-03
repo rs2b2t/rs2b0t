@@ -136,7 +136,7 @@ When Global **Show nav path** is on:
 | Essence entry | **done** |
 | Essence exit portals | **done** (transports.json) |
 | Wildy levers | **done** |
-| Coal log + island ropes | **done** (transports.json + specialCrossing skill) |
+| Coal log + island ropes | **done** (coal log agi 20; outer ropeswings agi 10; softlock swing ungated) |
 | Castle wall / Shilo log / monkeybars | **done** (travelCatalog + transports.json) |
 | Shantay free desert exit | **done** (transports.json) |
 | Shantay pass item northbound | **wont** for free pathing (item gate; desert exit is the OD fix) |
@@ -146,8 +146,9 @@ When Global **Show nav path** is on:
 | Magic Guild doors | **done** (magic 66) |
 | Crafting Guild door | **done** (crafting 40) |
 | Cooking Guild door | **partial** (cooking 32 plan-time; chef’s hat execute) |
-| Mining Guild ladder down | **done** (mining 60 on surface from-tiles) |
+| Mining Guild ladder down | **done** (mining 60 on all four surface stands) |
 | Ranging Guild door | **not in doors.json** |
+| Live members flag | **done** (`Client.memServer` in WorldState snapshot) |
 | Zanaris / Lost City | **quest path** (out of generic travel catalog) |
 | Path paint + loc hulls | **done** (live scenery only) |
 
@@ -195,8 +196,9 @@ Aliases (`Watchtower` → `Watch Tower`, etc.) resolve in `worldStateData` / `ca
 | Magic Guild | magic 66 | 2584/2597 × 3087/3088 | `magic_guild.rs2` |
 | Crafting Guild | crafting 40 | 2933,3289 | `crafting_guild.rs2` |
 | Cooking Guild | cooking 32 | 3143,3444 | `cooking_guild.rs2` (+ hat) |
-| Mining Guild ladder | mining 60 | 3019,3339 / 3019,3341 / 3020,3340 | `mining_guild.rs2` |
+| Mining Guild ladder | mining 60 | 3018,3340 / 3019,3339 / 3019,3341 / 3020,3340 | `mining_guild.rs2` |
 | Monastery ladder | prayer 31 | stateAware `monasteryladder` | prayer guild |
+| Outer island ropeswing | agility 10 | 2709,3209 / 2511,3091 | `shortcuts.rs2` (not softlock swing) |
 
 ---
 

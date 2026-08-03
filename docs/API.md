@@ -639,6 +639,15 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     radius?: number;    // arrive within N tiles (default 2)
     timeoutMs?: number;
     log?: (msg: string) => void;
+    maxExpansions?: number;
+    // Walker engine: Global `navEngine` (`classic` | `v2`) unless overridden.
+    // classic = pack doors/transports + WorldState for skill/quest/toll gates (no spell teles).
+    // v2 = same + teleport catalog inject + path-scoped bank for runes/tolls.
+    navEngine?: 'classic' | 'v2';
+    // v2 only: spell/jewellery tele edges (default true when navEngine is v2).
+    useTeleportCatalog?: boolean;
+    // v2 only: tele policy (useTeleports, distanceBeforeTeleport, allowTeleportIds, …).
+    policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
     // Optional: ban map rects from A* (ids or ad-hoc). See docs/NAV.md#danger-zones
     avoidZones?: readonly (string | { minX: number; maxX: number; minZ: number; maxZ: number; level?: number })[];
 }): Promise<boolean>
@@ -652,6 +661,7 @@ Traversal.walkResilient(dest: WorldTile, opts: {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
+    navEngine?: 'classic' | 'v2'; // forwarded on every baked repath
     avoidZones?: WalkOptions['avoidZones']; // forwarded on every baked repath
 }): Promise<boolean>
 
@@ -662,6 +672,12 @@ Traversal.remaining(): number  // path tiles left in the active walk
 `Traversal.walkTo` web-walks the whole world (A\* over the collision pack + door/
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
+Both engines snapshot live **WorldState** (skills, quests, inventory, members world)
+so skill-gated doors, tolls, and quest transports fail closed when the player cannot
+use them. **v2** additionally injects spell/jewellery teleports and may bank for runes
+once per walk. See [Nav v2](NAV.md#nav-v2-experimental) and
+[`docs/nav-v2/`](nav-v2/README.md).
+
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
 script bank runs and long unattended walks**. Pass `avoidZones: ['white-wolf-mountain']`
 (or ad-hoc rects) so low-level accounts skip wolf-heavy corridors; off by default.

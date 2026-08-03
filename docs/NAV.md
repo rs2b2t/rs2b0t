@@ -47,6 +47,12 @@ traversal edges that plain collision cannot express:
 | [`doors.json`](../src/bot/nav/data/doors.json) | [`tools/nav/derive-doors.ts`](../tools/nav/derive-doors.ts) | openable barriers, and which tiles they join |
 | [`stairEdges.json`](../src/bot/nav/data/stairEdges.json) | [`tools/nav/derive-stairs.ts`](../tools/nav/derive-stairs.ts) | stairs and ladders, so paths can change level |
 | [`transports.json`](../src/bot/nav/data/transports.json) | curated | edges the derivations cannot infer |
+| [`travelCatalog.ts`](../src/bot/nav/v2/travelCatalog.ts) | content constants | 2004 travel (spirit/glider/Entrana/cart/essence/levers/agi) merged at graph load for **classic and v2** |
+| [`specialRequires.ts`](../src/bot/nav/v2/specialRequires.ts) | content scripts | plan-time skill/coin gates on doors and transport from-tiles |
+
+Both walkers snapshot live WorldState (skills/quests/items/`Client.memServer`) so
+requires-gated edges fail closed when the player cannot use them. **v2 only:** spell/
+jewellery tele inject + path-scoped bank. See [Nav v2](#nav-v2-experimental).
 
 Multi-level routing is therefore a **data** property, not an algorithm one: the
 executor already knows how to climb, and gains a new route the moment an edge for it
