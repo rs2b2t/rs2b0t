@@ -124,32 +124,54 @@ async function teleArrive(page: Page, spot: Tile, maxDist = 10): Promise<void> {
     throw new Error(`tele to ${spot.x},${spot.z} failed`);
 }
 
-async function seedItem(page: Page, cmd: string, match: string | RegExp, tries = 8): Promise<void> {
+/**
+ * Prefer engine `give` (no p_finduid). Content `~item` silently no-ops mid-walk.
+ * See docs/TESTING.md and nav-script-routes-live jewellery seed fix.
+ */
+async function seedItem(
+    page: Page,
+    debugOrCmd: string,
+    match: string | RegExp,
+    tries = 8
+): Promise<void> {
     const re = typeof match === 'string' ? new RegExp(match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : match;
+    // Accept legacy "~item foo 1" or bare debug name "foo".
+    const m = /^(?:~item\s+)?(\S+)(?:\s+(\d+))?$/.exec(debugOrCmd.trim());
+    const debugName = m?.[1] ?? debugOrCmd;
+    const qty = m?.[2] ?? '1';
+    const cmds = [`give ${debugName} ${qty}`, `~item ${debugName} ${qty}`];
     for (let i = 0; i < tries; i++) {
-        await cheatQuiet(page, cmd);
-        await page.waitForTimeout(350);
-        const ok = await page.evaluate(pattern => {
-            const items = (globalThis as never as Abi).__rs2b0t.Inventory.items();
-            const rx = new RegExp(pattern, 'i');
-            return items.some(it => it.name !== null && rx.test(it.name));
-        }, re.source);
-        if (ok) {
-            return;
+        await cheatQuiet(page, cmds[i % cmds.length]!);
+        for (let poll = 0; poll < 4; poll++) {
+            await page.waitForTimeout(200);
+            const ok = await page.evaluate(pattern => {
+                const items = (globalThis as never as Abi).__rs2b0t.Inventory.items();
+                const rx = new RegExp(pattern, 'i');
+                return items.some(it => it.name !== null && rx.test(it.name));
+            }, re.source);
+            if (ok) {
+                return;
+            }
         }
     }
-    throw new Error(`could not seed ${cmd} (want name ~ ${re})`);
+    const inv = await page.evaluate(() =>
+        (globalThis as never as Abi).__rs2b0t.Inventory.items()
+            .filter(i => i.name)
+            .map(i => `${i.count}x ${i.name}`)
+            .join(', ')
+    );
+    throw new Error(`could not seed ${debugName} via give/~item (want ~ ${re}); inv=${inv || 'empty'}`);
 }
 
 async function seedRunes(page: Page): Promise<void> {
-    for (const [cmd, name] of [
-        ['~item lawrune 80', 'Law rune'],
-        ['~item airrune 200', 'Air rune'],
-        ['~item firerune 80', 'Fire rune'],
-        ['~item waterrune 80', 'Water rune'],
-        ['~item earthrune 80', 'Earth rune']
+    for (const [spec, name] of [
+        ['lawrune 80', 'Law rune'],
+        ['airrune 200', 'Air rune'],
+        ['firerune 80', 'Fire rune'],
+        ['waterrune 80', 'Water rune'],
+        ['earthrune 80', 'Earth rune']
     ] as const) {
-        await seedItem(page, cmd, name);
+        await seedItem(page, spec, name);
     }
 }
 
@@ -576,7 +598,7 @@ try {
         console.log(`\n══ ${id} ══`);
         try {
             await clearInv(page);
-            await seedItem(page, '~item ring_of_dueling_8 1', /Ring of dueling\(/);
+            await seedItem(page, 'ring_of_dueling_8', /Ring of dueling\(/);
             await teleArrive(page, { x: 3222, z: 3218, level: 0 });
             const dest = { x: 3315, z: 3235, level: 0 }; // Duel Arena
             const r = await runWalk(page, {
@@ -606,7 +628,7 @@ try {
         console.log(`\n══ ${id} ══`);
         try {
             await clearInv(page);
-            await seedItem(page, '~item amulet_of_glory_4 1', /Amulet of glory\(/);
+            await seedItem(page, 'amulet_of_glory_4', /Amulet of glory\(/);
             // Start far (Al Kharid) so glory is worth it
             await teleArrive(page, { x: 3293, z: 3174, level: 0 });
             const dest = { x: 3087, z: 3496, level: 0 }; // Edgeville glory landing

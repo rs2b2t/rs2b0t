@@ -23,6 +23,10 @@ Doors, transports, **travelCatalog** (spirit/glider/Entrana/cart/essence/levers/
 special crossings (ships, gangplanks, tolls), guild skill gates, WorldState requires,
 open-door fast path, path paint / camera (optional globals), danger zones.
 
+**Essence session multiloc** (shared): exit portals × known returns; path-state
+`essenceEntrySetsReturn` / `essenceExitReturn`; live `EssenceSession` (server
+`exit_essence_mine_coord` is not on the client wire).
+
 ### What only `navEngine: 'v2'` turns on
 
 1. Spell + jewellery **teleport catalog inject** (jewellery = inventory Rub only)

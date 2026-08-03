@@ -81,6 +81,21 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         }
     }
 
+    // Essence exit: session dest. Fail closed when state has a known return that
+    // does not match. Fail open when essenceExitReturn is unset (offline pack).
+    // PathFinder also re-checks against path-local return after entry hops.
+    if (requires.essenceExitReturn !== undefined) {
+        const live = state.essenceExitReturn;
+        if (live !== undefined && live !== requires.essenceExitReturn) {
+            return {
+                ok: false,
+                reason: `essence exit returns to ${live}, not ${requires.essenceExitReturn}`
+            };
+        }
+    }
+
+    // essenceEntrySetsReturn is a PathFinder path-state effect, not a usability gate.
+
     return { ok: true };
 }
 
@@ -98,6 +113,7 @@ export function hasGatingRequires(requires: TransportRequires | undefined): bool
         || requires.currency !== undefined
         || (requires.quests !== undefined && requires.quests.length > 0)
         || requires.forbidEntranaRestricted === true
+        || requires.essenceExitReturn !== undefined
     );
 }
 

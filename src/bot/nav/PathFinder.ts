@@ -1,6 +1,6 @@
 // docs/NAV.md#pathfinding
 // nav-v2: docs/nav-v2/README.md
-import type { PathHop, PathPolicy, TransportRequires } from './v2/types.js';
+import type { PathHop, PathPolicy, TransportRequires, WorldState } from './v2/types.js';
 import type { WorldStateData } from './v2/worldStateData.js';
 import { worldStateFromData } from './v2/worldStateData.js';
 import { meetsRequires } from './v2/requires.js';
@@ -16,6 +16,27 @@ import { wildernessLevelAt } from './v2/wilderness.js';
 import { specialRequiresAt } from './v2/specialRequires.js';
 import { activateTransportRows } from './v2/activateStateAware.js';
 import { tileInDangerZones, type DangerZoneRect } from './data/dangerZones.js';
+import {
+    essenceReturnIdFromStateIndex,
+    essenceReturnStateIndex
+} from './v2/essenceExit.js';
+
+/**
+ * A* search key = tile nodeId (30 bits) | essenceReturnIdx << 30.
+ * Return idx 0 = unknown (exit edges fail-open); 1..n = known session return.
+ * Entry hops set return via requires.essenceEntrySetsReturn so entry+exit cannot
+ * form a false surface wormhole.
+ */
+const TILE_KEY_MASK = 0x3fffffff;
+function packSearchKey(tileId: number, essenceReturnIdx: number): number {
+    return (tileId & TILE_KEY_MASK) | ((essenceReturnIdx & 0xf) << 30);
+}
+function searchTileId(key: number): number {
+    return key & TILE_KEY_MASK;
+}
+function searchEssenceIdx(key: number): number {
+    return (key >>> 30) & 0xf;
+}
 
 export interface NavPoint {
     x: number;
@@ -628,8 +649,46 @@ export class PathFinder {
             policy,
             teleFromStart: teleEdges,
             startId: nodeId(from.x, from.z, from.level),
+            startEssenceIdx: essenceReturnStateIndex(state?.essenceExitReturn),
             avoidZones
         };
+    }
+
+    /**
+     * Requires check with path-local essence return (may differ from snapshot after an entry hop).
+     */
+    private edgeAllowedOnPath(
+        requires: TransportRequires | undefined,
+        baseState: WorldState | undefined,
+        pathEssenceIdx: number
+    ): boolean {
+        if (!requires) {
+            return true;
+        }
+        const pathReturn = essenceReturnIdFromStateIndex(pathEssenceIdx);
+        // Essence exit: path return (from entry hop or start session) gates the edge.
+        if (requires.essenceExitReturn !== undefined) {
+            if (pathReturn !== undefined && pathReturn !== requires.essenceExitReturn) {
+                return false;
+            }
+            // pathReturn undefined (idx 0) → fail open for exit dest
+        }
+        // Other gates still need WorldState; fail open offline when no state.
+        const other: TransportRequires = { ...requires };
+        delete other.essenceExitReturn;
+        delete other.essenceEntrySetsReturn;
+        if (!hasOtherGates(other)) {
+            return true;
+        }
+        if (!baseState) {
+            return true; // fail open without WorldState (pre-v2 pack parity)
+        }
+        // Snapshot may still list a stale essenceExitReturn — use path return for honesty.
+        const stateForMeets: WorldState =
+            pathReturn !== undefined
+                ? { ...baseState, essenceExitReturn: pathReturn }
+                : baseState;
+        return meetsRequires(other, stateForMeets).ok;
     }
 
     private search(
@@ -641,13 +700,14 @@ export class PathFinder {
         maxExpansions: number,
         ctx: SearchContext
     ): PathOutcome {
-        const start = nodeId(from.x, from.z, from.level);
+        const startTile = nodeId(from.x, from.z, from.level);
+        const start = packSearchKey(startTile, ctx.startEssenceIdx);
         const goalX = toRaw.x;
         const goalZ = toRaw.z;
 
         const gScore = new Map<number, number>();
         const cameFrom = new Map<number, number>();
-        /** Arrival node → transport metadata + real edge cost for hop reconstruct. */
+        /** Arrival search-key → transport metadata + real edge cost for hop reconstruct. */
         const viaEdge = new Map<number, { transport: TransportInfo; cost: number }>();
         const closed = new Set<number>();
         const open = new MinHeap();
@@ -687,7 +747,10 @@ export class PathFinder {
             }
             closed.add(current);
 
-            if (goals.has(current)) {
+            const curTile = searchTileId(current);
+            const curEssence = searchEssenceIdx(current);
+
+            if (goals.has(curTile)) {
                 return this.reconstruct(start, current, gScore.get(current)!, expanded, cameFrom, viaEdge);
             }
 
@@ -695,9 +758,9 @@ export class PathFinder {
                 return { ok: false, reason: `expansion budget exceeded (${maxExpansions})`, expanded };
             }
 
-            const x = nodeX(current);
-            const z = nodeZ(current);
-            const level = nodeLevel(current);
+            const x = nodeX(curTile);
+            const z = nodeZ(curTile);
+            const level = nodeLevel(curTile);
             const g = gScore.get(current)!;
 
             const mask = this.exitMask(x, z, level);
@@ -712,7 +775,8 @@ export class PathFinder {
                 if (ctx.avoidZones && tileInDangerZones(nx, nz, level, ctx.avoidZones)) {
                     continue;
                 }
-                const neighbor = nodeId(nx, nz, level);
+                const neighborTile = nodeId(nx, nz, level);
+                const neighbor = packSearchKey(neighborTile, curEssence);
                 if (closed.has(neighbor)) {
                     continue;
                 }
@@ -727,25 +791,18 @@ export class PathFinder {
                 open.push((tentative + heuristic(nx, nz)) * 1048576 - tentative, neighbor);
             }
 
-            const extras: CompiledEdge[] = [...(this.edges.get(current) ?? [])];
-            if (current === ctx.startId) {
+            const extras: CompiledEdge[] = [...(this.edges.get(curTile) ?? [])];
+            if (curTile === ctx.startId) {
                 extras.push(...ctx.teleFromStart);
             }
             for (const edge of extras) {
-                if (closed.has(edge.to)) {
-                    continue;
-                }
                 if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
                     continue;
                 }
                 if (edge.kind && !kindAllowedByPolicy(edge.kind as never, ctx.policy)) {
                     continue;
                 }
-                // Requires gates (skill/quest/coins/…):
-                // - With WorldState: fail closed when unmet (honesty for classic + v2 live walks).
-                // - Without WorldState: fail *open* (pre-v2 / offline pack tools never had requires;
-                //   skipping all gated edges here made ships and skill doors vanish offline).
-                if (ctx.state && edge.requires && !meetsRequires(edge.requires, ctx.state).ok) {
+                if (!this.edgeAllowedOnPath(edge.requires, ctx.state, curEssence)) {
                     continue;
                 }
                 // Block transport landings / hops that enter a danger zone.
@@ -755,15 +812,26 @@ export class PathFinder {
                 ) {
                     continue;
                 }
+                // Entry hop updates path session return (content sets exit_essence_mine_coord).
+                const sets = edge.requires?.essenceEntrySetsReturn;
+                const nextEssence =
+                    sets !== undefined ? essenceReturnStateIndex(sets) : curEssence;
+                const neighbor = packSearchKey(edge.to, nextEssence);
+                if (closed.has(neighbor)) {
+                    continue;
+                }
                 const tentative = g + edge.cost;
-                const known = gScore.get(edge.to);
+                const known = gScore.get(neighbor);
                 if (known !== undefined && known <= tentative) {
                     continue;
                 }
-                gScore.set(edge.to, tentative);
-                cameFrom.set(edge.to, current);
-                viaEdge.set(edge.to, { transport: edge.transport, cost: edge.cost });
-                open.push((tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative, edge.to);
+                gScore.set(neighbor, tentative);
+                cameFrom.set(neighbor, current);
+                viaEdge.set(neighbor, { transport: edge.transport, cost: edge.cost });
+                open.push(
+                    (tentative + heuristic(nodeX(edge.to), nodeZ(edge.to))) * 1048576 - tentative,
+                    neighbor
+                );
             }
         }
 
@@ -793,21 +861,30 @@ export class PathFinder {
         chain.reverse();
 
         const waypoints: Waypoint[] = [];
-        const point = (id: number): NavPoint => ({ x: nodeX(id), z: nodeZ(id), level: nodeLevel(id) });
+        const point = (searchKey: number): NavPoint => {
+            const id = searchTileId(searchKey);
+            return { x: nodeX(id), z: nodeZ(id), level: nodeLevel(id) };
+        };
         const stepDir = (a: number, b: number): number => {
-            const dx = Math.sign(nodeX(b) - nodeX(a));
-            const dz = Math.sign(nodeZ(b) - nodeZ(a));
+            const ta = searchTileId(a);
+            const tb = searchTileId(b);
+            const dx = Math.sign(nodeX(tb) - nodeX(ta));
+            const dz = Math.sign(nodeZ(tb) - nodeZ(ta));
             return (dx + 1) * 3 + (dz + 1);
         };
 
-        waypoints.push(point(chain[0]));
+        waypoints.push(point(chain[0]!));
         for (let i = 1; i < chain.length; i++) {
-            const via = viaEdge.get(chain[i]);
-            const viaNext = i + 1 < chain.length ? viaEdge.get(chain[i + 1]) : undefined;
+            const via = viaEdge.get(chain[i]!);
+            const viaNext = i + 1 < chain.length ? viaEdge.get(chain[i + 1]!) : undefined;
             const last = i === chain.length - 1;
-            const turn = !last && !via && !viaNext && stepDir(chain[i - 1], chain[i]) !== stepDir(chain[i], chain[i + 1]);
+            const turn =
+                !last
+                && !via
+                && !viaNext
+                && stepDir(chain[i - 1]!, chain[i]!) !== stepDir(chain[i]!, chain[i + 1]!);
             if (via || viaNext || turn || last) {
-                const wp: Waypoint = point(chain[i]);
+                const wp: Waypoint = point(chain[i]!);
                 if (via) {
                     // Preserve real graph cost on the arrival waypoint's transport.
                     wp.transport = { ...via.transport, edgeCost: via.cost };
@@ -820,10 +897,26 @@ export class PathFinder {
     }
 }
 
+/** Non-essence gates present (for path-local requires without full WorldState). */
+function hasOtherGates(requires: TransportRequires): boolean {
+    return (
+        requires.members === true
+        || requires.freeSlots !== undefined
+        || (requires.skills !== undefined && requires.skills.length > 0)
+        || (requires.items !== undefined && requires.items.length > 0)
+        || (requires.worn !== undefined && requires.worn.length > 0)
+        || requires.currency !== undefined
+        || (requires.quests !== undefined && requires.quests.length > 0)
+        || requires.forbidEntranaRestricted === true
+    );
+}
+
 interface SearchContext {
     state: ReturnType<typeof worldStateFromData> | undefined;
     policy: PathPolicy | undefined;
     teleFromStart: CompiledEdge[];
     startId: number;
+    /** Path-state essence return at search start (0 = unknown). */
+    startEssenceIdx: number;
     avoidZones: readonly DangerZoneRect[] | undefined;
 }

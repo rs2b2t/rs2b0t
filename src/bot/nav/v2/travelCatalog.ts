@@ -9,6 +9,7 @@
  */
 
 import type { TransportEdgeData } from '../PathFinder.js';
+import { essenceExitEdges } from './essenceExit.js';
 import { parseLcCoord } from './lcCoord.js';
 import { REQ } from './transportQuestReqs.js';
 import type { NavPoint, TransportRequires } from './types.js';
@@ -225,18 +226,12 @@ export function shiloCartEdges(): TransportEdgeData[] {
  * Rune Mysteries complete → essence mine via wizard Teleport.
  * Landing is random in-content; we plan to a representative pad + acceptAnyLanding.
  *
- * Recorded but disabled: the mine is exit-only in the graph. essence_mine.rs2
- * keeps the entry NPC in %exit_essence_mine_coord and the exit portal telejumps
- * back to it, so entry-then-portal returns you where you started. transports.json
- * bakes that portal as a fixed Sedridor landing — true only for a Sedridor entry —
- * so enabling these hands A* a cost-20 wormhole from any of five wizards to the
- * Wizards' Tower basement. Live it teleports in, lands back at the entry NPC, and
- * re-plans the same teleport forever. Bots that want the mine drive the NPC
- * themselves; only the exit belongs in the graph.
+ * Each entry carries `essenceEntrySetsReturn` so PathFinder path-state updates the
+ * session return mid-route (server `%exit_essence_mine_coord` is not client-
+ * transmitted). Exit edges require the matching return — entry→wrong-exit is not
+ * a surface wormhole (the #377 failure mode). Live: EssenceSession notes the
+ * same return when the hop executes.
  */
-const ESSENCE_ENTRY_DISABLED =
-    'Exit portal returns to the entry NPC (%exit_essence_mine_coord), so entry + portal is a no-op round trip, not a shortcut.';
-
 export function essenceEntryEdges(): TransportEdgeData[] {
     const f2p: TransportRequires = { ...REQ.runeMysteriesComplete };
     const membersReq: TransportRequires = {
@@ -248,18 +243,20 @@ export function essenceEntryEdges(): TransportEdgeData[] {
         from: NavPoint,
         npc: string,
         debug: string,
-        requires: TransportRequires
-    ): TransportEdgeData => ({
-        ...edge(from, mine, npc, 'Teleport', 'portal', debug, requires),
-        disabledReason: ESSENCE_ENTRY_DISABLED
-    });
+        requires: TransportRequires,
+        returnId: string
+    ): TransportEdgeData =>
+        edge(from, mine, npc, 'Teleport', 'portal', debug, {
+            ...requires,
+            essenceEntrySetsReturn: returnId
+        });
 
     return [
-        mk(ESSENCE_RETURN.aubury, 'Aubury', 'ess_entry_aubury', f2p),
-        mk(ESSENCE_RETURN.sedridor, 'Sedridor', 'ess_entry_sedridor', f2p),
-        mk(ESSENCE_RETURN.distentor, 'Wizard Distentor', 'ess_entry_distentor', membersReq),
-        mk(ESSENCE_RETURN.cromperty, 'Wizard Cromperty', 'ess_entry_cromperty', membersReq),
-        mk(ESSENCE_RETURN.brimstail, 'Brimstail', 'ess_entry_brimstail', membersReq)
+        mk(ESSENCE_RETURN.aubury, 'Aubury', 'ess_entry_aubury', f2p, 'aubury'),
+        mk(ESSENCE_RETURN.sedridor, 'Sedridor', 'ess_entry_sedridor', f2p, 'sedridor'),
+        mk(ESSENCE_RETURN.distentor, 'Wizard Distentor', 'ess_entry_distentor', membersReq, 'distentor'),
+        mk(ESSENCE_RETURN.cromperty, 'Wizard Cromperty', 'ess_entry_cromperty', membersReq, 'cromperty'),
+        mk(ESSENCE_RETURN.brimstail, 'Brimstail', 'ess_entry_brimstail', membersReq, 'brimstail')
     ];
 }
 
@@ -331,6 +328,9 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...entranaFerryEdges(),
         ...shiloCartEdges(),
         ...essenceEntryEdges(),
+        // Session multiloc: portal × return, gated by WorldState.essenceExitReturn.
+        // Replaces the four hard-coded Sedridor-only rows formerly in transports.json.
+        ...essenceExitEdges(),
         ...wildyLeverEdges(),
         ...agilityShortcutEdges()
     ];
@@ -348,6 +348,7 @@ export const TRAVEL_FAMILIES = [
     'jewellery_teleport',
     'wildy_lever',
     'essence_entry',
+    'essence_exit',
     'agility_shortcut'
 ] as const;
 

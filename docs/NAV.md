@@ -340,6 +340,17 @@ rings/glories (bank-cache API is separate). **Quest-lock doors:** mesbox → ses
 (`travelCatalog.ts`); quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder
 (`specialRequires.ts`). Matrix: [docs/nav-v2/TRANSPORTS-2004.md](nav-v2/TRANSPORTS-2004.md).
 
+**Essence mine multiloc (litmus):** multi-entry, **same-origin exit only**. Entering
+via a wizard sets the session return; every exit portal telejumps to that return — not
+to a fixed Sedridor stand. Nav must **never route a surface OD *through* the mine** as
+a shortcut (entry at A + exit as if at B). Implementation: entry edges set
+`essenceEntrySetsReturn`; PathFinder carries return in the A\* key; exit edges require
+matching `essenceExitReturn`; live `EssenceSession` (server varp 64 is not on the wire).
+
+**Door placement (stall open):** when stuck, `tryNearbyDoor` prefers a closed door on
+the **path corridor** ahead of the player, not merely the nearest Open-door within 3
+tiles (wrong doorway / same loc type).
+
 **Code map:** shared stack under `src/bot/nav/` (`PathFinder`, `WalkExecutor`, `exec/`, `data/`).
 Folder `v2/` holds tele catalog, travel catalog, WorldState helpers, bank plan — **most of
 that is used by classic too**; only tele inject / bank-for-route / hop logs are mode-gated.

@@ -43,7 +43,8 @@ Source of truth for “what exists” is the **deploy engine content tree**
 | Gnome glider hub↔pad | 8 | `gnome_glider.rs2` + `glider.constant` | Grand Tree complete + members |
 | Entrana ferry | 2 | `monk_of_entrana.rs2` | Members; **gear refuse at execute** |
 | Shilo↔Brimhaven cart | 2 | `vigroy.rs2` / `hajedy.rs2` | Coins 10–200; Brim→Shilo needs Shilo complete |
-| Essence entry | 5 | Aubury/Sedridor/Distentor/Cromperty/Brimstail | Rune Mysteries complete (+ members for Yanille/Ardy/gnome) |
+| Essence entry | 5 | Aubury/Sedridor/… | Rune Mysteries; `essenceEntrySetsReturn` (path-state) |
+| Essence exit | 4×5 multiloc | Session return (bot `EssenceSession`; varp 64 **not** on client wire) | **Same-origin only** — never a surface shortcut through the mine |
 | Wildy levers | 2 | `wilderness_lever.rs2` | Members |
 | Agility OD shortcuts | 3 | castle wall + Edgeville monkeybars | Agility 5 / 15 (Shilo log already in transports.json) |
 | **Total curated** | **30** | merged at graph load | |
@@ -137,7 +138,8 @@ When Global **Show nav path** is on:
 | Spirit trees (plan + dialog) | **done** |
 | Gnome glider hub↔pad + map UI | **done** |
 | Essence entry | **done** |
-| Essence exit portals | **done** (transports.json) |
+| Essence exit portals | **done** (session multiloc + path-state; same-origin exit only; varp 64 server-only) |
+| Essence entry edges | **done** (`essenceEntrySetsReturn`; litmus: no surface OD through the mine) |
 | Wildy levers | **done** |
 | Coal log + island ropes | **done** (coal log agi 20; outer ropeswings agi 10; softlock swing ungated) |
 | Castle wall / Shilo log / monkeybars | **done** (travelCatalog + transports.json) |
@@ -167,10 +169,12 @@ bun test test/nav/travelCatalog.test.ts test/nav/transportQuestReqs.test.ts test
 # pack walkability of curated endpoints
 bun tools/nav/curated-travel-probe.ts
 
-# ~12 transport-heavy OD pairs (pack + JSON for live)
-bun tools/nav/transport-heavy-routes.ts --write --n=12 --explain
-# Live: setvar quest seeds + relog + Quests.status check are automatic when:
-HEADED=1 TRANSPORT_HEAVY=1 LIMIT=12 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
+# ~14 transport-heavy OD pairs (pack + JSON for live) — pins essence *roundtrips*
+bun tools/nav/transport-heavy-routes.ts --write --n=14 --explain
+# Live: setvar quest seeds + relog are automatic.
+# Essence multiloc: TH-ess-round-* = tele to wizard → walk into mine → portal out
+# (EssenceSession set by entry hop only — no setvar exit_essence_mine_coord).
+HEADED=1 TRANSPORT_HEAVY=1 LIMIT=14 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
 
 # content family scan + disabled buckets
 CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.ts

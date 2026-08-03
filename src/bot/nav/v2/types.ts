@@ -69,6 +69,19 @@ export interface TransportRequires {
      * (weapons/armour heuristic matching content category bans).
      */
     forbidEntranaRestricted?: boolean;
+    /**
+     * Essence mine exit: only usable when the *path's* session return matches
+     * this id. PathFinder carries return in the A* key (entry hops set it via
+     * `essenceEntrySetsReturn`); live WorldState/EssenceSession seeds the start.
+     * Unset path return → fail open (offline pack).
+     */
+    essenceExitReturn?: string;
+    /**
+     * Essence mine entry: after this hop, PathFinder treats the path's session
+     * return as this id (wizard entry sets server `%exit_essence_mine_coord`).
+     * Not a gate — ignored by meetsRequires / hasGatingRequires.
+     */
+    essenceEntrySetsReturn?: string;
 }
 
 export interface TransportLoc {
@@ -136,6 +149,13 @@ export interface WorldState {
     freeSlots: number;
     /** True when inv/worn matches Entrana restricted-gear heuristic. */
     entranaRestrictedGear: boolean;
+    /**
+     * Active essence-mine return id (`aubury`|`sedridor`|…).
+     * Live: `EssenceSession` (server varp 64 is not client-transmitted).
+     * Seeds PathFinder path-state; entry hops can update return mid-path.
+     * Undefined when unknown.
+     */
+    essenceExitReturn?: string;
 }
 
 /**

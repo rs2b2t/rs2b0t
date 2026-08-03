@@ -122,6 +122,13 @@ describe('nav v2 meetsRequires', () => {
         expect(meetsRequires(req, state({ entranaRestrictedGear: true })).ok).toBe(false);
         expect(meetsRequires(req, state({ entranaRestrictedGear: false })).ok).toBe(true);
     });
+
+    test('essenceExitReturn fail closed when state known and mismatched', () => {
+        const req = { essenceExitReturn: 'aubury' };
+        expect(meetsRequires(req, state()).ok).toBe(true); // unset → fail open
+        expect(meetsRequires(req, { ...state(), essenceExitReturn: 'aubury' }).ok).toBe(true);
+        expect(meetsRequires(req, { ...state(), essenceExitReturn: 'sedridor' }).ok).toBe(false);
+    });
 });
 
 describe('nav v2 isEdgeAllowed', () => {

@@ -178,7 +178,8 @@ Server debug cheats are fair game.
 
 | Goal | How (local Server) |
 |---|---|
-| Item in **inventory** | engine `give bronze_pickaxe 1` (or content `~item bronze_pickaxe 1`) |
+| Item in **inventory** | engine `give bronze_pickaxe 1` (prefer) or content `~item bronze_pickaxe 1` (needs `p_finduid` — silent no-op after long walks) |
+| Jewellery live legs | `nav-script-routes-live` / `nav-v2-stress-live` seed via **`give`**, not `~item` (regressed after transport-heavy) |
 | Item in **bank** | engine `givebank bronze_pickaxe 1` (or content `~bankitem bronze_pickaxe 1`) |
 | Wipe pack | `~clearinv` / `clearinv inv` |
 | Wipe bank | `~clearbank` |

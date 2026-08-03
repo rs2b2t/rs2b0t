@@ -54,18 +54,117 @@ export function noteFailedDoor(
     }
 }
 
-export async function tryNearbyDoor(log: (msg: string) => void): Promise<boolean> {
-    const door = Locs.query()
+/**
+ * Path corridor for stall recovery: prefer doors on the published route over
+ * the nearest closed door within 3 (multiloc placement — same loc name/type,
+ * wrong doorway).
+ */
+export interface PathDoorHint {
+    tiles: readonly { x: number; z: number; level: number }[];
+    pathIdx: number;
+    /** Chebyshev distance to a path tile to count as "on corridor" (default 2). */
+    corridor?: number;
+    /** How far ahead of pathIdx to consider (default 12). */
+    window?: number;
+}
+
+/**
+ * Pick which nearby closed barrier to open.
+ * Prefer doors adjacent to the path corridor ahead of the player; else nearest.
+ * Pure helper so tests can pin corridor preference without a live scene.
+ */
+export function pickNearbyDoorTile(
+    candidates: readonly { x: number; z: number; level: number }[],
+    me: { x: number; z: number; level: number },
+    path?: PathDoorHint | null
+): { x: number; z: number; level: number } | null {
+    if (candidates.length === 0) {
+        return null;
+    }
+    const corridor = path?.corridor ?? 2;
+    const window = path?.window ?? 12;
+    let best: { x: number; z: number; level: number } | null = null;
+    let bestScore = -Infinity;
+
+    for (const c of candidates) {
+        if (c.level !== me.level) {
+            continue;
+        }
+        const distMe = Math.max(Math.abs(c.x - me.x), Math.abs(c.z - me.z));
+        // Base: nearer to player is better (negative distance).
+        let score = -distMe;
+        if (path && path.tiles.length > 0) {
+            const lo = Math.max(0, path.pathIdx);
+            const hi = Math.min(path.tiles.length - 1, path.pathIdx + window);
+            let onPath = false;
+            let pathDist = 999;
+            for (let i = lo; i <= hi; i++) {
+                const t = path.tiles[i]!;
+                if (t.level !== c.level) {
+                    continue;
+                }
+                const d = Math.max(Math.abs(c.x - t.x), Math.abs(c.z - t.z));
+                if (d < pathDist) {
+                    pathDist = d;
+                }
+                if (d <= corridor) {
+                    onPath = true;
+                }
+            }
+            // Strong boost for doors on the forward corridor; still prefer nearer among them.
+            if (onPath) {
+                score = 1000 - pathDist - distMe * 0.01;
+            } else {
+                // Off-path doors: keep as last resort only (negative, worse than any on-path).
+                score = -100 - distMe;
+            }
+        }
+        if (score > bestScore) {
+            bestScore = score;
+            best = c;
+        }
+    }
+    return best;
+}
+
+export async function tryNearbyDoor(
+    log: (msg: string) => void,
+    path?: PathDoorHint | null
+): Promise<boolean> {
+    const me = reader.worldTile();
+    if (!me) {
+        return false;
+    }
+    const candidates = Locs.query()
         .where(l => isOpenableBarrier(l.name, l.actions()))
         .within(3)
-        .nearest();
+        .results();
+    if (candidates.length === 0) {
+        return false;
+    }
+    const pick = pickNearbyDoorTile(
+        candidates.map(l => {
+            const t = l.tile();
+            return { x: t.x, z: t.z, level: me.level };
+        }),
+        me,
+        path
+    );
+    const door =
+        pick === null
+            ? null
+            : candidates.find(l => {
+                  const t = l.tile();
+                  return t.x === pick.x && t.z === pick.z;
+              }) ?? null;
     if (!door) {
         return false;
     }
 
     const op = door.actions().find(a => /^open/i.test(a));
     const t = door.tile();
-    log(`stalled next to closed '${door.name}' at (${t.x},${t.z}) — opening it`);
+    const scoped = path && path.tiles.length > 0 ? ' (path-scoped)' : '';
+    log(`stalled next to closed '${door.name}' at (${t.x},${t.z})${scoped} — opening it`);
     if (!op || !door.interact(op)) {
         return false;
     }

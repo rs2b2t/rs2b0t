@@ -194,6 +194,7 @@ import { Players } from '../api/queries/Players.js';
 import EntityQuery from '../api/queries/Query.js';
 import { bus, type EventMap } from '../events/EventBus.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
+import { EssenceSession } from '../nav/v2/essenceSession.js';
 import { defineBot, registerScript } from './defineBot.js';
 
 export const API_VERSION = 1;
@@ -215,6 +216,8 @@ export function installAbi(): void {
         Area,
         Traversal,
         DirectNavigator,
+        /** Bot-side essence exit return (varp 64 is server-only — not on client wire). */
+        EssenceSession,
 
         Npcs,
         Players,

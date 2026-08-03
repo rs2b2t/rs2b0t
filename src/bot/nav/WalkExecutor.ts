@@ -35,6 +35,7 @@ import { missingItemsForPath, pathHasTeleport, planBankLeg } from './v2/bankPlan
 import { virtualizeWithItems } from './v2/virtualState.js';
 import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
 import { RouteState } from './v2/routeState.js';
+import { EssenceSession } from './v2/essenceSession.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
 import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
 import { resolveDangerZones, type DangerZoneRect } from './data/dangerZones.js';
@@ -53,12 +54,19 @@ import {
     findTransportLoc,
     matchesTransportLanding,
     matchesTransportLoc,
+    multiLandingNeedsRepath,
     openShutTrapdoor
 } from './exec/transportLoc.js';
 import { chatShowsQuestLock, dismissQuestLockDialogue } from './exec/questLock.js';
 
 // Re-export for existing tests
-export { isOpenableBarrier, isOpenBarrierLeaf, matchesTransportLoc, matchesTransportLanding };
+export {
+    isOpenableBarrier,
+    isOpenBarrierLeaf,
+    matchesTransportLoc,
+    matchesTransportLanding,
+    multiLandingNeedsRepath
+};
 
 const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
@@ -828,9 +836,18 @@ class WalkExecutorImpl {
                 }
             }
             if (crossingIdx !== -1) {
-                const handled = await this.handleTransport(tiles[crossingIdx - 1], tiles[crossingIdx], log);
+                const hop = tiles[crossingIdx]!;
+                const hopTransport = hop.transport!;
+                const handled = await this.handleTransport(tiles[crossingIdx - 1]!, hop, log);
                 if (handled) {
-                    tiles[crossingIdx].transport = undefined;
+                    hop.transport = undefined;
+                    if (multiLandingNeedsRepath(hopTransport, hop.level, reader.worldTile())) {
+                        const live = reader.worldTile();
+                        log(
+                            `multi-landing hop arrived at (${live?.x},${live?.z}) not planned (${hopTransport.toTile!.x},${hopTransport.toTile!.z}) — repathing`
+                        );
+                        return 'repath';
+                    }
                     pathIdx = Math.max(pathIdx, crossingIdx - 1);
                     stallTicks = 0;
                     stallRetries = 0;
@@ -838,7 +855,7 @@ class WalkExecutorImpl {
                     lastTile = null;
                     continue;
                 }
-                noteFailedDoor(tiles[crossingIdx], this.doorStrikes, this.avoidDoors);
+                noteFailedDoor(hop, this.doorStrikes, this.avoidDoors);
                 return 'repath';
             }
 
@@ -902,7 +919,15 @@ class WalkExecutorImpl {
                             continue;
                         }
                     }
-                    if (await tryNearbyDoor(log)) {
+                    // Prefer doors on the path corridor (placement multiloc), not merely nearest-in-3.
+                    if (
+                        await tryNearbyDoor(log, {
+                            tiles,
+                            pathIdx,
+                            corridor: CORRIDOR,
+                            window: PROGRESS_WINDOW
+                        })
+                    ) {
                         stallRetries = 0;
                         clickIdx = -1;
                         lastTile = null;
@@ -975,10 +1000,19 @@ class WalkExecutorImpl {
                     // Client pathfind rejected every candidate — repath immediately (no stall budget).
                     if (nextCrossingIdx !== -1) {
                         const appr = tiles[nextCrossingIdx - 1]!;
+                        const hop = tiles[nextCrossingIdx]!;
                         if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
-                            const handled = await this.handleTransport(appr, tiles[nextCrossingIdx]!, log);
+                            const hopTransport = hop.transport!;
+                            const handled = await this.handleTransport(appr, hop, log);
                             if (handled) {
-                                tiles[nextCrossingIdx]!.transport = undefined;
+                                hop.transport = undefined;
+                                if (multiLandingNeedsRepath(hopTransport, hop.level, reader.worldTile())) {
+                                    const live = reader.worldTile();
+                                    log(
+                                        `multi-landing hop arrived at (${live?.x},${live?.z}) not planned (${hopTransport.toTile!.x},${hopTransport.toTile!.z}) — repathing`
+                                    );
+                                    return 'repath';
+                                }
                                 pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
                                 stallTicks = 0;
                                 stallRetries = 0;
@@ -986,7 +1020,7 @@ class WalkExecutorImpl {
                                 lastTile = null;
                                 continue;
                             }
-                            noteFailedDoor(tiles[nextCrossingIdx]!, this.doorStrikes, this.avoidDoors);
+                            noteFailedDoor(hop, this.doorStrikes, this.avoidDoors);
                             return 'repath';
                         }
                     }
@@ -1024,6 +1058,12 @@ class WalkExecutorImpl {
             const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
             if (ok) {
                 RouteState.noteTransport(approach, step);
+                // Server does not transmit exit_essence_mine_coord — remember return for plan filters.
+                const ess = EssenceSession.noteEntryFromCrossingLabel(special.label)
+                    ?? EssenceSession.noteEntryFromNpc(special.npc ?? special.locName);
+                if (ess) {
+                    log(`essence session return → ${ess} (entry via ${special.label ?? special.locName})`);
+                }
             }
             return ok;
         }
@@ -1083,6 +1123,13 @@ class WalkExecutorImpl {
                 }
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
                 RouteState.noteTransport(approach, step);
+                // Catalog entry edges (Teleport wizard) when not routed through specialCrossing.
+                if (/^teleport$/i.test(transport.action ?? '')) {
+                    const ess = EssenceSession.noteEntryFromTransport(transport);
+                    if (ess) {
+                        log(`essence session return → ${ess} (entry transport ${transport.locName})`);
+                    }
+                }
                 return true;
             }
             if (chatShowsQuestLock()) {

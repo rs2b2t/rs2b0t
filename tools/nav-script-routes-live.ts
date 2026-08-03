@@ -20,7 +20,8 @@
  *
  * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
  * TRANSPORT_HEAVY=1 reads tools/nav/transport-heavy.routes.json
- *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=12).
+ *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=14).
+ *   Includes essence enter *and* exit (session multiloc — live setvars exit_essence_mine_coord).
  * SHIP_352=1 → Ardougne↔Brimhaven board+gangplank legs (issue #352 stuck-on-boat).
  * NAV_ENGINE=classic|v2 (default v2 for this harness) — forces walkTo.navEngine + Global setting.
  * PATH_PAINT=1 (default) enables showNavPath + explore scene expand + cyan client segment.
@@ -245,20 +246,95 @@ export function loadHardestRoutes(limit: number, file = HARDEST_JSON): ScriptRou
     return limit > 0 ? list.slice(0, limit) : list;
 }
 
+/** Transport-heavy route; essence_roundtrip runs enter then exit without setvar. */
+export type TransportHeavyRoute = ScriptRoute & {
+    family?: string;
+    /** Live: wizard → mine → portal (EssenceSession from entry hop only). */
+    essenceRoundtrip?: string;
+    minePad?: { x: number; z: number; level: number };
+    /** When false, live walk disables tele catalog (force portal on exit leg). */
+    useTeleports?: boolean;
+};
+
 /** Load transport-heavy list from `tools/nav/transport-heavy-routes.ts --write`. */
-export function loadTransportHeavyRoutes(limit: number, file = TRANSPORT_HEAVY_JSON): ScriptRoute[] {
+export function loadTransportHeavyRoutes(limit: number, file = TRANSPORT_HEAVY_JSON): TransportHeavyRoute[] {
     if (!fs.existsSync(file)) {
         throw new Error(
             `missing ${file} — run:\n` +
-                `  bun tools/nav/transport-heavy-routes.ts --write --n=${limit || 12}`
+                `  bun tools/nav/transport-heavy-routes.ts --write --n=${limit || 14}`
         );
     }
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { routes: ScriptRoute[] };
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { routes: TransportHeavyRoute[] };
     const list = raw.routes ?? [];
     if (list.length === 0) {
         throw new Error(`${file} has no routes`);
     }
     return limit > 0 ? list.slice(0, limit) : list;
+}
+
+const DEFAULT_MINE_PAD = { x: 2912, z: 4833, level: 0 };
+
+/**
+ * Real multiloc product path: tele to wizard → walk into mine (entry sets
+ * EssenceSession) → walk out via portal. No setvar / harness override.
+ */
+async function runEssenceRoundtrip(
+    page: Page,
+    route: TransportHeavyRoute,
+    stamp: () => string
+): Promise<{ ok: boolean; detail: string; logs: string[] }> {
+    const mine = route.minePad ?? DEFAULT_MINE_PAD;
+    const returnId = route.essenceRoundtrip ?? '?';
+    const logs: string[] = [];
+    const log = (m: string) => {
+        logs.push(m);
+    };
+
+    // Clear any prior harness override so planner uses session from entry hop only.
+    await page.evaluate(() => {
+        const g = globalThis as never as {
+            __rs2b0t?: { EssenceSession?: { clearHarnessOverride(): void; clear?(): void } };
+        };
+        g.__rs2b0t?.EssenceSession?.clearHarnessOverride?.();
+    });
+
+    console.log(
+        `${stamp()} essence roundtrip: wizard → mine → portal (return=${returnId}, no setvar)`
+    );
+    await teleArrive(page, route.from);
+    const into = await runWalk(page, {
+        dest: mine,
+        budget: BUDGET_MS,
+        // Entry may use wizard hop; tele catalog off so we do not spell-tele into mine.
+        useTeleports: false
+    });
+    logs.push(...into.logs);
+    if (!into.tile) {
+        return { ok: false, detail: 'entry leg: no tile after walk', logs };
+    }
+    // AcceptAnyLanding: anywhere in the mine (far from surface wizard stand).
+    const inMine =
+        into.tile.level === mine.level
+        && Math.max(Math.abs(into.tile.x - mine.x), Math.abs(into.tile.z - mine.z)) <= 64;
+    if (!inMine) {
+        return {
+            ok: false,
+            detail: `entry leg did not land in mine (at ${into.tile.x},${into.tile.z} walkOk=${into.walkOk})`,
+            logs
+        };
+    }
+    log(`entry ok at ${into.tile.x},${into.tile.z}`);
+
+    const out = await runWalk(page, {
+        dest: route.to,
+        budget: BUDGET_MS,
+        useTeleports: false
+    });
+    logs.push(...out.logs);
+    const dist = out.tile ? cheb(out.tile, route.to) : 9999;
+    const ok = dist <= ARRIVAL;
+    const detail = `roundtrip return=${returnId} entryInMine=true exitDist=${dist} walkOk=${out.walkOk}`;
+    return { ok, detail, logs };
 }
 
 /**
@@ -431,25 +507,56 @@ async function applyNavPaintSettings(page: Page): Promise<void> {
     );
 }
 
-async function seedItem(page: Page, cmd: string, match: RegExp, tries = 8): Promise<void> {
+/**
+ * Seed inventory via engine `give` (no p_finduid busy-guard).
+ * Content `~item` silently no-ops while the player is mid-script after long walks —
+ * that regressed jewellery legs after transport-heavy (docs/TESTING.md).
+ */
+async function seedItem(
+    page: Page,
+    debugName: string,
+    displayMatch: RegExp,
+    qty = 1,
+    tries = 8
+): Promise<void> {
+    const cmds = [`give ${debugName} ${qty}`, `~item ${debugName} ${qty}`];
     for (let i = 0; i < tries; i++) {
+        const cmd = cmds[i % cmds.length]!;
         await cheatQuiet(page, cmd);
-        await page.waitForTimeout(350);
-        const ok = await page.evaluate(pattern => {
-            const rx = new RegExp(pattern, 'i');
-            return (globalThis as never as Abi).__rs2b0t.Inventory.items().some(it => it.name !== null && rx.test(it.name));
-        }, match.source);
-        if (ok) {
-            return;
+        // Engine invAdd applies next tick; poll a few times.
+        for (let poll = 0; poll < 4; poll++) {
+            await page.waitForTimeout(200);
+            const ok = await page.evaluate(pattern => {
+                const rx = new RegExp(pattern, 'i');
+                return (globalThis as never as Abi).__rs2b0t.Inventory.items().some(
+                    it => it.name !== null && rx.test(it.name)
+                );
+            }, displayMatch.source);
+            if (ok) {
+                return;
+            }
         }
     }
-    throw new Error(`could not seed ${cmd}`);
+    const inv = await page.evaluate(() =>
+        (globalThis as never as Abi).__rs2b0t.Inventory.items()
+            .filter(i => i.name)
+            .map(i => `${i.count}× ${i.name}`)
+            .join(', ')
+    );
+    throw new Error(
+        `could not seed ${debugName} via give/~item (want ~ ${displayMatch}); inv=${inv || 'empty'}`
+    );
+}
+
+async function clearInvForSeed(page: Page): Promise<void> {
+    await cheatQuiet(page, '~clearinv');
+    await page.waitForTimeout(500);
 }
 
 /**
  * Jewellery is inventory-only at plan time (PathFinder scans state.items).
  * Bank planner deliberately does not withdraw glory/duel rings.
- * These legs clear runes, seed jewellery, and pin allowTeleportIds so Rub must fire.
+ * These legs clear pack, seed jewellery via engine `give`, pin allowTeleportIds so Rub must fire.
  */
 async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: string; ok: boolean; detail: string }[]> {
     const out: { id: string; ok: boolean; detail: string }[] = [];
@@ -459,9 +566,9 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
         const id = 'JEWEL-duel-arena';
         console.log(`\n══ ${id} ══ inventory Rub only (no runes, no bank cache)`);
         try {
-            await cheatQuiet(page, '~clearinv');
-            await page.waitForTimeout(400);
-            await seedItem(page, '~item ring_of_dueling_8 1', /Ring of dueling\(/);
+            await clearInvForSeed(page);
+            // Display name: Ring of dueling(8) — engine give, not ~item (busy-guard).
+            await seedItem(page, 'ring_of_dueling_8', /Ring of dueling\(/);
             await restoreRunEnergy(page);
             await teleArrive(page, { x: 3222, z: 3218, level: 0 });
             const dest = { x: 3315, z: 3235, level: 0 };
@@ -491,9 +598,8 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
         const id = 'JEWEL-glory-edge';
         console.log(`\n══ ${id} ══ inventory Rub only (no runes, no bank cache)`);
         try {
-            await cheatQuiet(page, '~clearinv');
-            await page.waitForTimeout(400);
-            await seedItem(page, '~item amulet_of_glory_4 1', /Amulet of glory\(/);
+            await clearInvForSeed(page);
+            await seedItem(page, 'amulet_of_glory_4', /Amulet of glory\(/);
             await restoreRunEnergy(page);
             await teleArrive(page, { x: 3293, z: 3174, level: 0 });
             const dest = { x: 3087, z: 3496, level: 0 };
@@ -632,11 +738,25 @@ try {
     await restoreRunEnergy(page);
 
     for (const r of routes) {
+        const thr = r as TransportHeavyRoute;
         console.log(`\n══ ${r.id} ══ ${r.note}`);
         try {
             await restoreRunEnergy(page);
+            if (thr.family === 'essence_roundtrip' || thr.essenceRoundtrip) {
+                const res = await runEssenceRoundtrip(page, thr, stamp);
+                console.log(`${stamp()} ${res.ok ? 'PASS' : 'FAIL'} ${r.id}: ${res.detail}`);
+                if (!res.ok) {
+                    console.log(res.logs.slice(-16).join('\n'));
+                }
+                results.push({ id: r.id, ok: res.ok, detail: res.detail });
+                continue;
+            }
             await teleArrive(page, r.from);
-            const res = await runWalk(page, { dest: r.to, budget: BUDGET_MS });
+            const res = await runWalk(page, {
+                dest: r.to,
+                budget: BUDGET_MS,
+                ...(thr.useTeleports === false ? { useTeleports: false } : {})
+            });
             const dist = res.tile ? cheb(res.tile, r.to) : 9999;
             const ok = dist <= ARRIVAL;
             const detail = `dist=${dist} walkOk=${res.walkOk} from=${r.from.x},${r.from.z} to=${r.to.x},${r.to.z} [${r.source}]`;

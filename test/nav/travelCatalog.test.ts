@@ -16,11 +16,10 @@ import {
     agilityShortcutEdges,
     curatedTravelEdges
 } from '#/bot/nav/v2/travelCatalog.js';
+import { essenceExitEdges } from '#/bot/nav/v2/essenceExit.js';
 import { specialCrossingForTransport } from '#/bot/nav/data/specialCrossings.js';
-import {
-    hasEntranaRestrictedGear,
-    namesHaveEntranaRestrictedGear
-} from '#/bot/nav/exec/specialCrossing.js';
+// namesHaveEntranaRestrictedGear / hasEntranaRestrictedGear live in exec/specialCrossing
+// (client-heavy). Keep pure catalog tests free of that import graph.
 
 describe('parseLcCoord', () => {
     test('decodes content constants', () => {
@@ -102,6 +101,7 @@ describe('ferries / cart', () => {
             + entranaFerryEdges().length
             + shiloCartEdges().length
             + essenceEntryEdges().length
+            + essenceExitEdges().length
             + wildyLeverEdges().length
             + agilityShortcutEdges().length
         );
@@ -110,6 +110,8 @@ describe('ferries / cart', () => {
         expect(names.has('glider_hub_to_gandius')).toBe(true);
         expect(names.has('spirit_stronghold_to_village')).toBe(true);
         expect(names.has('ess_entry_aubury')).toBe(true);
+        expect(names.has('ess_exit_ne_to_sedridor')).toBe(true);
+        expect(names.has('ess_exit_ne_to_aubury')).toBe(true);
         expect(names.has('lever_ardougne_to_wild')).toBe(true);
         expect(names.has('agi_castle_crumbling_wall')).toBe(true);
     });
@@ -136,19 +138,6 @@ describe('spirit multi-dest specialCrossing', () => {
     });
 });
 
-describe('entrana gear gate', () => {
-    test('exports restricted-gear helper', () => {
-        // Without client equipment the helper is false (empty pack).
-        expect(typeof hasEntranaRestrictedGear).toBe('function');
-        expect(hasEntranaRestrictedGear()).toBe(false);
-    });
-    test('name heuristic matches weapons/armour, not plain food', () => {
-        expect(namesHaveEntranaRestrictedGear(['Bronze sword', 'Lobster'])).toBe(true);
-        expect(namesHaveEntranaRestrictedGear(['Rune platebody'])).toBe(true);
-        expect(namesHaveEntranaRestrictedGear(['Lobster', 'Coins', 'Air rune'])).toBe(false);
-    });
-});
-
 describe('essence / levers', () => {
     test('essence return stands and mine pad from content constants', () => {
         expect(ESSENCE_RETURN.aubury).toEqual({ x: 3253, z: 3401, level: 0 });
@@ -163,8 +152,24 @@ describe('essence / levers', () => {
             expect(q?.some(x => x.quest === 'Rune Mysteries Quest')).toBe(true);
             expect(e.action).toBe('Teleport');
             expect(e.to.x).toBe(ESSENCE_MINE_PAD.x);
+            expect(e.disabledReason).toBeUndefined();
+            expect(e.requires?.essenceEntrySetsReturn).toBeDefined();
         }
         expect(essenceEntryEdges()).toHaveLength(5);
+        expect(essenceEntryEdges().map(e => e.requires?.essenceEntrySetsReturn).sort()).toEqual(
+            ['aubury', 'brimstail', 'cromperty', 'distentor', 'sedridor'].sort()
+        );
+    });
+
+    test('essence exits are session-gated portal×return edges', () => {
+        const exits = essenceExitEdges();
+        expect(exits).toHaveLength(20);
+        expect(exits.every(e => e.kind === 'portal' && e.action === 'Use')).toBe(true);
+        const returns = new Set(exits.map(e => e.requires?.essenceExitReturn));
+        expect(returns).toEqual(new Set(['aubury', 'sedridor', 'distentor', 'brimstail', 'cromperty']));
+        // Aubury return matches surface entry stand.
+        const toAubury = exits.find(e => e.requires?.essenceExitReturn === 'aubury');
+        expect(toAubury?.to).toEqual(ESSENCE_RETURN.aubury);
     });
 
     test('wildy lever edges are bidirectional members portals', () => {

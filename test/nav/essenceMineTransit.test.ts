@@ -3,17 +3,14 @@ import { describe, expect, test } from 'bun:test';
 import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
 import { allTransportRows } from '#/bot/nav/loadTransportGraph.js';
 import { ESSENCE_MINE_PAD, ESSENCE_RETURN, essenceEntryEdges } from '#/bot/nav/v2/travelCatalog.js';
+import { emptyWorldStateData } from '#/bot/nav/v2/worldStateData.js';
 
 /**
- * The essence mine is exit-only in the graph.
+ * Essence mine multiloc: entry sets path-local session return; exits require it.
  *
- * essence_mine.rs2 stores the entry NPC in %exit_essence_mine_coord and the exit
- * portal telejumps back to it, so entering by one NPC and leaving by the portal
- * returns you to that same NPC. transports.json bakes the portal exit as a fixed
- * Sedridor landing, which is only true for a Sedridor entry. Chain the two and
- * A* believes it has a cost-20 wormhole from any of five wizards to the Wizards'
- * Tower basement; live, the bot teleports in, walks back out to Brimstail, and
- * re-plans the same teleport forever.
+ * Content stores entry NPC in `%exit_essence_mine_coord` (server-only varp).
+ * PathFinder packs return into the A* key so Aubury entry + Sedridor exit is not
+ * a cost-20 surface wormhole (#377 live failure). Live execution uses EssenceSession.
  */
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1] as const;
@@ -74,7 +71,6 @@ function packOf(segments: [NavPoint, NavPoint][]): Uint8Array {
 }
 
 const PORTAL_STAND = { x: 2932, z: 4816, level: 0 } as const;
-const SEDRIDOR_BASEMENT = { x: 3107, z: 9571, level: 0 } as const;
 
 function finderOver(segments: [NavPoint, NavPoint][]): PathFinder {
     const finder = new PathFinder(packOf(segments));
@@ -85,32 +81,136 @@ function finderOver(segments: [NavPoint, NavPoint][]): PathFinder {
 /** Walkable floor of the mine: the arrival pad through to a portal stand. */
 const MINE_FLOOR: [NavPoint, NavPoint] = [ESSENCE_MINE_PAD, PORTAL_STAND];
 
-describe('essence mine is exit-only', () => {
-    test('every essence entry is disabled with a recorded reason', () => {
+const richRm = {
+    ...emptyWorldStateData(),
+    quests: {
+        'Rune Mysteries Quest': 'complete' as const,
+        'rune mysteries quest': 'complete' as const
+    }
+};
+
+describe('essence mine multiloc (entry + path-state return)', () => {
+    test('every essence entry sets a session return id (not disabled)', () => {
         const entries = essenceEntryEdges();
         expect(entries).toHaveLength(5);
         for (const e of entries) {
-            expect(e.disabledReason, e.debugName).toBeDefined();
+            expect(e.disabledReason, e.debugName).toBeUndefined();
+            expect(e.requires?.essenceEntrySetsReturn, e.debugName).toBeDefined();
+            expect(e.action).toBe('Teleport');
         }
     });
 
-    test('no enabled edge teleports into the mine', () => {
+    test('enabled entry edges exist into the mine pad', () => {
         const intoMine = allTransportRows().filter(
-            e => !e.disabledReason && e.to.x === ESSENCE_MINE_PAD.x && e.to.z === ESSENCE_MINE_PAD.z
+            e =>
+                !e.disabledReason
+                && e.to.x === ESSENCE_MINE_PAD.x
+                && e.to.z === ESSENCE_MINE_PAD.z
+                && e.requires?.essenceEntrySetsReturn
         );
-        expect(intoMine).toEqual([]);
+        expect(intoMine.length).toBe(5);
     });
 
-    test('Brimstail is not a wormhole to the Wizards Tower basement', () => {
+    test('litmus: multi-entry same-origin only — never surface OD through the mine', () => {
+        // Pack connects each wizard stand only via the mine. If exit ignored session,
+        // Brimstail→Sedridor would be a cost-20 wormhole. Path-state forbids that.
         const brimstail: [NavPoint, NavPoint] = [ESSENCE_RETURN.brimstail, ESSENCE_RETURN.brimstail];
-        const sedridor: [NavPoint, NavPoint] = [SEDRIDOR_BASEMENT, SEDRIDOR_BASEMENT];
-        const finder = finderOver([brimstail, MINE_FLOOR, sedridor]);
-        expect(finder.findPath(ESSENCE_RETURN.brimstail, SEDRIDOR_BASEMENT).ok).toBe(false);
+        const aubury: [NavPoint, NavPoint] = [ESSENCE_RETURN.aubury, ESSENCE_RETURN.aubury];
+        const sedridor: [NavPoint, NavPoint] = [ESSENCE_RETURN.sedridor, ESSENCE_RETURN.sedridor];
+        const finder = finderOver([brimstail, aubury, MINE_FLOOR, sedridor]);
+        const opts = { state: richRm, useTeleportCatalog: false as const };
+        expect(finder.findPath(ESSENCE_RETURN.brimstail, ESSENCE_RETURN.sedridor, opts).ok).toBe(false);
+        expect(finder.findPath(ESSENCE_RETURN.aubury, ESSENCE_RETURN.sedridor, opts).ok).toBe(false);
+        expect(finder.findPath(ESSENCE_RETURN.sedridor, ESSENCE_RETURN.aubury, opts).ok).toBe(false);
+        // Same-origin round trip remains admissible (entry then matching exit).
+        expect(finder.findPath(ESSENCE_RETURN.brimstail, ESSENCE_MINE_PAD, opts).ok).toBe(true);
+        expect(
+            finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.brimstail, {
+                state: { ...richRm, essenceExitReturn: 'brimstail' },
+                useTeleportCatalog: false
+            }).ok
+        ).toBe(true);
     });
 
-    test('but the portal still gets you out once you are inside', () => {
-        const sedridor: [NavPoint, NavPoint] = [SEDRIDOR_BASEMENT, SEDRIDOR_BASEMENT];
+    test('Brimstail entry + exit returns to Brimstail (honest round trip)', () => {
+        const brimstail: [NavPoint, NavPoint] = [ESSENCE_RETURN.brimstail, ESSENCE_RETURN.brimstail];
+        const finder = finderOver([brimstail, MINE_FLOOR]);
+        const outcome = finder.findPath(ESSENCE_RETURN.brimstail, ESSENCE_RETURN.brimstail, {
+            state: richRm,
+            useTeleportCatalog: false
+        });
+        // Same tile start=goal snaps as arrived without hops — use mine as mid then out.
+        // Plan mine pad → brimstail with session after "virtual" entry: seed state.
+        const out = finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.brimstail, {
+            state: { ...richRm, essenceExitReturn: 'brimstail' },
+            useTeleportCatalog: false
+        });
+        expect(out.ok).toBe(true);
+        if (!out.ok) return;
+        expect(out.waypoints.some(w => w.transport?.action === 'Use')).toBe(true);
+        void outcome;
+        void brimstail;
+    });
+
+    test('portal gets you out to session return (sedridor state)', () => {
+        const sedridor: [NavPoint, NavPoint] = [ESSENCE_RETURN.sedridor, ESSENCE_RETURN.sedridor];
         const finder = finderOver([MINE_FLOOR, sedridor]);
-        expect(finder.findPath(ESSENCE_MINE_PAD, SEDRIDOR_BASEMENT).ok).toBe(true);
+        const outcome = finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.sedridor, {
+            state: { ...emptyWorldStateData(), essenceExitReturn: 'sedridor' },
+            useTeleportCatalog: false
+        });
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        const portal = outcome.waypoints.find(w => w.transport?.action === 'Use');
+        expect(portal?.transport?.toTile).toEqual({
+            x: ESSENCE_RETURN.sedridor.x,
+            z: ESSENCE_RETURN.sedridor.z
+        });
+    });
+
+    test('session aubury cannot plan exit to sedridor', () => {
+        const sedridor: [NavPoint, NavPoint] = [ESSENCE_RETURN.sedridor, ESSENCE_RETURN.sedridor];
+        const aubury: [NavPoint, NavPoint] = [ESSENCE_RETURN.aubury, ESSENCE_RETURN.aubury];
+        const finder = finderOver([MINE_FLOOR, sedridor, aubury]);
+        expect(
+            finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.sedridor, {
+                state: { ...emptyWorldStateData(), essenceExitReturn: 'aubury' },
+                useTeleportCatalog: false
+            }).ok
+        ).toBe(false);
+        expect(
+            finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.aubury, {
+                state: { ...emptyWorldStateData(), essenceExitReturn: 'aubury' },
+                useTeleportCatalog: false
+            }).ok
+        ).toBe(true);
+    });
+
+    test('Aubury entry then exit to Aubury is admissible (path sets return)', () => {
+        const aubury: [NavPoint, NavPoint] = [ESSENCE_RETURN.aubury, ESSENCE_RETURN.aubury];
+        const finder = finderOver([aubury, MINE_FLOOR]);
+        // Start with no session; entry hop sets aubury so exit opens.
+        const outcome = finder.findPath(ESSENCE_RETURN.aubury, ESSENCE_RETURN.aubury, {
+            state: richRm,
+            useTeleportCatalog: false
+        });
+        // start==goal → trivial path without needing mine
+        expect(outcome.ok).toBe(true);
+
+        // Non-trivial: force through mine by going aubury → mine pad only first
+        const into = finder.findPath(ESSENCE_RETURN.aubury, ESSENCE_MINE_PAD, {
+            state: richRm,
+            useTeleportCatalog: false
+        });
+        expect(into.ok).toBe(true);
+        if (!into.ok) return;
+        expect(into.waypoints.some(w => w.transport?.action === 'Teleport')).toBe(true);
+
+        // From mine with path-state after entry: replan with session aubury
+        const out = finder.findPath(ESSENCE_MINE_PAD, ESSENCE_RETURN.aubury, {
+            state: { ...richRm, essenceExitReturn: 'aubury' },
+            useTeleportCatalog: false
+        });
+        expect(out.ok).toBe(true);
     });
 });

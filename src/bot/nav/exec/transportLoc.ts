@@ -53,6 +53,26 @@ export function matchesTransportLanding(
     );
 }
 
+/**
+ * After acceptAnyLanding hops (essence exit, random mine entry pads), the live
+ * tile can be far from the edge's planned `to`. Continue would walk a corridor
+ * that no longer matches — force repath from the real landing instead.
+ * Exact landings (within 3 of toTile) are fine.
+ */
+export function multiLandingNeedsRepath(
+    transport: TransportInfo,
+    plannedLevel: number,
+    live: { x: number; z: number; level: number } | null
+): boolean {
+    if (!live || transport.acceptAnyLanding !== true || !transport.toTile) {
+        return false;
+    }
+    if (live.level !== plannedLevel) {
+        return true;
+    }
+    return chebyshev(live, transport.toTile) > 3;
+}
+
 export function findTransportLoc(transport: TransportInfo): Loc | null {
     const byMeta = Locs.query()
         .name(transport.locName)

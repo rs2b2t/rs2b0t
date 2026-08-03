@@ -700,6 +700,15 @@ jewellery tele inject and path-scoped bank for runes/tolls. See
 [One walker, two modes](NAV.md#one-walker-two-modes-classic--v2) and
 [`docs/nav-v2/`](nav-v2/README.md).
 
+**Essence mine (session multiloc):** multi-entry, **same-origin exit only**. Exit
+portals share one loc type but telejump to the wizard you entered with
+(`%exit_essence_mine_coord`). That varp is **not** sent to the client — the bot
+tracks return on `EssenceSession` when an entry hop succeeds, and PathFinder
+carries the same return in the A\* key so nav **never routes a surface path
+through the mine** as a free teleport between wizards. Scripts that enter via
+NPC without the walker should call `__rs2b0t.EssenceSession.noteEntryFromNpc('Aubury')`
+(or `noteEntry('aubury')`) after a successful teleport.
+
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
 script bank runs and long unattended walks**. Pass `avoidZones: ['white-wolf-mountain']`
 (or ad-hoc rects) so low-level accounts skip wolf-heavy corridors; off by default.

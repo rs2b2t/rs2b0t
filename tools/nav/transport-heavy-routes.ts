@@ -31,6 +31,7 @@ import {
     WILDY_LEVER,
     TRAVEL_STANDS
 } from '#/bot/nav/v2/travelCatalog.js';
+import type { EssenceReturnId } from '#/bot/nav/v2/essenceExit.js';
 import {
     richTransportQuestMap,
     TRANSPORT_QUEST_SEEDS
@@ -53,6 +54,14 @@ interface Seed {
     note: string;
     from: NavPoint;
     to: NavPoint;
+    /**
+     * Live round-trip: tele to wizard → walk into mine (sets EssenceSession) →
+     * walk out via portal to surface. No setvar / harness override.
+     * Pack probe: entry from→mine + exit mine→to with matching session state.
+     */
+    essenceRoundtrip?: EssenceReturnId;
+    /** Always keep in written list (essence enter/exit should not be ranked out). */
+    pin?: boolean;
 }
 
 /** Hand-picked OD pairs that should prefer ships / hubs / levers over pure walk. */
@@ -113,19 +122,34 @@ const SEEDS: Seed[] = [
         from: TRAVEL_STANDS.brimhavenCart,
         to: CART_SHILO
     },
+    // Real multiloc product path: enter via wizard (sets session) → exit portal.
+    // Live harness must NOT setvar exit_essence_mine_coord — that only tests cheats.
     {
-        id: 'TH-ess-aubury',
-        family: 'essence_entry',
-        note: 'Aubury → essence mine pad',
+        id: 'TH-ess-round-aubury',
+        family: 'essence_roundtrip',
+        note: 'Aubury Teleport → mine → portal back to Aubury (session from entry)',
         from: ESSENCE_RETURN.aubury,
-        to: ESSENCE_MINE_PAD
+        to: ESSENCE_RETURN.aubury,
+        essenceRoundtrip: 'aubury',
+        pin: true
     },
     {
-        id: 'TH-ess-sedridor',
-        family: 'essence_entry',
-        note: 'Sedridor (tower basement) → essence mine',
+        id: 'TH-ess-round-sedridor',
+        family: 'essence_roundtrip',
+        note: 'Sedridor Teleport → mine → portal back to Sedridor basement',
         from: ESSENCE_RETURN.sedridor,
-        to: ESSENCE_MINE_PAD
+        to: ESSENCE_RETURN.sedridor,
+        essenceRoundtrip: 'sedridor',
+        pin: true
+    },
+    {
+        id: 'TH-ess-round-brimstail',
+        family: 'essence_roundtrip',
+        note: 'Brimstail Teleport → mine → portal back (live clue failure mode)',
+        from: ESSENCE_RETURN.brimstail,
+        to: ESSENCE_RETURN.brimstail,
+        essenceRoundtrip: 'brimstail',
+        pin: true
     },
     {
         id: 'TH-lever-to-wild',
@@ -229,6 +253,55 @@ const rows: Row[] = [];
 
 for (const s of SEEDS) {
     const t0 = performance.now();
+    // Round-trip: pack-probe entry + exit with session after entry (path-state / WorldState).
+    if (s.essenceRoundtrip) {
+        const returnId = s.essenceRoundtrip;
+        const into = finder.findPath(s.from, ESSENCE_MINE_PAD, {
+            policy,
+            state: RICH_STATE,
+            useTeleportCatalog: true
+        });
+        const out = finder.findPath(ESSENCE_MINE_PAD, s.to, {
+            policy: { useTeleports: false },
+            state: { ...RICH_STATE, essenceExitReturn: returnId },
+            useTeleportCatalog: false
+        });
+        const ms = performance.now() - t0;
+        if (!into.ok || !out.ok) {
+            const reason = !into.ok ? `entry: ${into.reason}` : `exit: ${out.reason}`;
+            rows.push({ ...s, ok: false, reason, ms });
+            console.log(`FAIL ${s.id}  ${s.note}: ${reason} (${ms.toFixed(1)}ms)`);
+            continue;
+        }
+        const hopKinds = [
+            ...into.hops.map(h => h.kind ?? h.locName ?? '?'),
+            ...out.hops.map(h => h.kind ?? h.locName ?? '?')
+        ];
+        const th = into.hops.length + out.hops.length;
+        const cost = into.cost + out.cost;
+        rows.push({
+            ...s,
+            ok: true,
+            cost,
+            hops: th,
+            transportHops: th,
+            hopKinds,
+            ms
+        });
+        console.log(
+            `PASS ${s.id}  cost=${cost} hops=${th} kinds=[${[...new Set(hopKinds)].join(',')}]  ${s.note}  (${ms.toFixed(1)}ms)`
+        );
+        if (explain) {
+            if (into.hops.length) {
+                console.log('  entry:\n' + formatHops(into.hops));
+            }
+            if (out.hops.length) {
+                console.log('  exit:\n' + formatHops(out.hops));
+            }
+        }
+        continue;
+    }
+
     const outcome = finder.findPath(s.from, s.to, {
         policy,
         state: RICH_STATE,
@@ -241,10 +314,6 @@ for (const s of SEEDS) {
         continue;
     }
     const hopKinds = outcome.hops.map(h => h.kind ?? h.locName ?? '?');
-    const transportHops = outcome.hops.filter(
-        h => h.kind && h.kind !== 'walk' && h.kind !== undefined
-    ).length;
-    // hops array is transport hops only in v2 — length is the count
     const th = outcome.hops.length;
     rows.push({
         ...s,
@@ -263,10 +332,26 @@ for (const s of SEEDS) {
     }
 }
 
-// Prefer OK routes with at least one hop; fill with zero-hop if needed.
+// Pin essence enter/exit (and other pin:true) first so hop-rank cannot drop them;
+// fill remaining slots by transport-hop heaviness.
 const ok = rows.filter(r => r.ok);
-const heavy = [...ok].sort((a, b) => (b.hops ?? 0) - (a.hops ?? 0) || (b.cost ?? 0) - (a.cost ?? 0));
-const pick = heavy.slice(0, n);
+const pinned = ok.filter(r => r.pin === true);
+const rest = ok
+    .filter(r => r.pin !== true)
+    .sort((a, b) => (b.hops ?? 0) - (a.hops ?? 0) || (b.cost ?? 0) - (a.cost ?? 0));
+const pick: Row[] = [];
+for (const r of pinned) {
+    if (pick.length >= n) {
+        break;
+    }
+    pick.push(r);
+}
+for (const r of rest) {
+    if (pick.length >= n) {
+        break;
+    }
+    pick.push(r);
+}
 
 console.log(`\n── quest seeds (live: setvar then relog) ──`);
 for (const s of TRANSPORT_QUEST_SEEDS) {
@@ -293,7 +378,9 @@ if (write) {
     const payload = {
         description:
             'Transport-heavy OD pairs for pack/live stress. Generated by transport-heavy-routes.ts. '
-            + 'WorldState assumes members, transport quests complete (see questSeeds), full runes, coins.',
+            + 'WorldState assumes members, transport quests complete (see questSeeds), full runes, coins. '
+            + 'Essence multiloc: family essence_roundtrip = live enter via wizard then exit portal '
+            + '(EssenceSession from hop — no setvar). Pack probes entry+exit legs separately.',
         generatedAt: new Date().toISOString(),
         pack: packPath,
         questSeeds: TRANSPORT_QUEST_SEEDS.map(s => ({
@@ -303,17 +390,29 @@ if (write) {
             usedBy: s.usedBy
         })),
         count: pick.length,
-        routes: pick.map(r => ({
-            id: r.id,
-            family: r.family,
-            note: r.note,
-            from: r.from,
-            to: r.to,
-            source: 'transport-heavy-routes',
-            cost: r.cost,
-            hops: r.hops,
-            hopKinds: r.hopKinds
-        }))
+        routes: pick.map(r => {
+            const round = r.essenceRoundtrip;
+            return {
+                id: r.id,
+                family: r.family,
+                note: r.note,
+                from: r.from,
+                to: r.to,
+                source: 'transport-heavy-routes',
+                cost: r.cost,
+                hops: r.hops,
+                hopKinds: r.hopKinds,
+                ...(round !== undefined
+                    ? {
+                          essenceRoundtrip: round,
+                          /** Mid waypoint for live: walk into mine after tele to wizard. */
+                          minePad: ESSENCE_MINE_PAD,
+                          /** Exit leg must use portal, not spell tele. */
+                          useTeleports: false
+                      }
+                    : {})
+            };
+        })
     };
     fs.writeFileSync(outPath, JSON.stringify(payload, null, 2));
     console.log(`\nwrote ${pick.length} routes → ${outPath}`);

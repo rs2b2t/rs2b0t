@@ -34,7 +34,10 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         journal: 'Rune Mysteries Quest',
         varp: 'runemysteries',
         complete: 6,
-        usedBy: ['essence_entry (Aubury/Sedridor/Distentor/Cromperty/Brimstail)']
+        usedBy: [
+            'essence_entry (Aubury/Sedridor/Distentor/Cromperty/Brimstail)',
+            'essence_exit (session portal×return)'
+        ]
     },
     {
         journal: 'The Grand Tree',

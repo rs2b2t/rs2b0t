@@ -22,6 +22,11 @@ export interface WorldStateData {
      * compute from the path start tile via `wildernessLevelAt`.
      */
     wildernessLevel?: number;
+    /**
+     * Active essence-mine return id (`aubury`|`sedridor`|…) from
+     * `%exit_essence_mine_coord` (varp 64). Omitted when unknown.
+     */
+    essenceExitReturn?: string;
 }
 
 function lookupItem(items: Record<string, number>, name: string): number {
@@ -49,6 +54,7 @@ export function worldStateFromData(data: WorldStateData): WorldState {
         skills: data.skills,
         freeSlots: data.freeSlots,
         entranaRestrictedGear: data.entranaRestrictedGear === true,
+        ...(data.essenceExitReturn !== undefined ? { essenceExitReturn: data.essenceExitReturn } : {}),
         questStatus: q => {
             const canon = canonicalQuestName(q);
             return (
