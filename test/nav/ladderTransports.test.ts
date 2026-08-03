@@ -48,6 +48,28 @@ describe('ladder transport data', () => {
         expect(web(3092, 3094)?.locX).toBe(3093);
     });
 
+    test('binds west Varrock sewer web (#370) N-S across the centrepiece tile', () => {
+        const web = (fromZ: number, toZ: number): TransportEdgeData | undefined => transportEdges.find(edge =>
+            edge.from.x === 3210 && edge.from.z === fromZ && edge.to.x === 3210 && edge.to.z === toZ
+            && edge.debugName === 'bigweb_slashable'
+        );
+
+        expect(web(9897, 9899)).toMatchObject({
+            locId: 733,
+            locX: 3210,
+            locZ: 9898,
+            action: 'Slash',
+            kind: 'door'
+        });
+        expect(web(9899, 9897)).toMatchObject({
+            locId: 733,
+            locX: 3210,
+            locZ: 9898,
+            action: 'Slash',
+            kind: 'door'
+        });
+    });
+
     test('binds clustered outdoor stair reverses to their outdoor top locs', () => {
         const yanille = stairEdges.find(edge => edge.from.x === 2517 && edge.from.z === 3426
             && edge.from.level === 1 && edge.to.x === 2516 && edge.to.z === 3423 && edge.to.level === 0);

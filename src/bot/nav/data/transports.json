@@ -1564,6 +1564,50 @@
   },
   {
     "from": {
+      "x": 3210,
+      "z": 9897,
+      "level": 0
+    },
+    "to": {
+      "x": 3210,
+      "z": 9899,
+      "level": 0
+    },
+    "locName": "Web",
+    "action": "Slash",
+    "kind": "door",
+    "locId": 733,
+    "locX": 3210,
+    "locZ": 9898,
+    "debugName": "bigweb_slashable",
+    "options": [
+      "Slash"
+    ]
+  },
+  {
+    "from": {
+      "x": 3210,
+      "z": 9899,
+      "level": 0
+    },
+    "to": {
+      "x": 3210,
+      "z": 9897,
+      "level": 0
+    },
+    "locName": "Web",
+    "action": "Slash",
+    "kind": "door",
+    "locId": 733,
+    "locX": 3210,
+    "locZ": 9898,
+    "debugName": "bigweb_slashable",
+    "options": [
+      "Slash"
+    ]
+  },
+  {
+    "from": {
       "x": 2511,
       "z": 3091,
       "level": 0
