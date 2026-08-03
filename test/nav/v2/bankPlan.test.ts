@@ -52,6 +52,15 @@ describe('itemsRequiredByWaypoints / missing', () => {
         const missing = missingItemsForPath(path, empty);
         expect(missing.find(m => m.name === 'Law rune')?.count).toBe(1);
 
+        // Partial inventory: count is shortage only (required − held), not total.
+        const partial = emptyWorldStateData();
+        partial.skills.magic = 25;
+        partial.items = { 'Law rune': 0, 'Fire rune': 1, 'Air rune': 1 };
+        const partialMissing = missingItemsForPath(path, partial);
+        expect(partialMissing.find(m => m.name === 'Law rune')?.count).toBe(1);
+        expect(partialMissing.find(m => m.name === 'Fire rune')).toBeUndefined();
+        expect(partialMissing.find(m => m.name === 'Air rune')?.count).toBe(2);
+
         const full = emptyWorldStateData();
         full.items = { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 };
         expect(missingItemsForPath(path, full)).toEqual([]);

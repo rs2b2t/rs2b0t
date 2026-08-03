@@ -404,13 +404,14 @@ class WalkExecutorImpl {
             return false;
         }
 
+        // MissingItem.count is the shortage (required − held at plan time), not the
+        // total required amount. Withdraw that count directly — do not subtract
+        // inventory again (see #336).
         for (const item of plan.missing) {
-            const have = Inventory.count(item.name);
-            const need = item.count;
-            if (have >= need) {
+            const take = item.count;
+            if (take <= 0) {
                 continue;
             }
-            const take = need - have;
             const ok = await Bank.withdrawX(item.name, take);
             if (!ok) {
                 log(`bank plan: failed to withdraw ${take}×${item.name}`);
