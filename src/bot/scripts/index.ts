@@ -276,7 +276,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'RuneCrafter',
-    description: 'AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; Runner ferries bank essence to a Mule Recipient by trade; Mule Recipient camps the ruins, takes every essence trade and crafts between trades',
+    description: 'AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between the deliveries runners bring it',
     category: 'Runecrafting',
     tags: ['runecrafting', 'banking', 'trade', 'runner', 'mule', 'afk'],
     settingsSchema: RUNECRAFTER_SETTINGS,

@@ -2,7 +2,6 @@ import { TaskBot, type Task } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
-import { depositAllExcept } from '../api/Banking.js';
 import { Bank } from '../api/hud/Bank.js';
 import { withdrawOp } from '../api/hud/bankOps.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
@@ -15,6 +14,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { Players } from '../api/queries/Players.js';
 import type { Player } from '../api/entities/index.js';
 import { Traversal } from '../api/Traversal.js';
+import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
@@ -28,12 +28,14 @@ const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const TEMPLE_Z = 4000; // altar temples sit at z ~4800; the overworld is < 4000
 const MAX_BANK_FAILS = 6;
 const MAX_ENTER_FAILS = 3;
-// the Mule Recipient holds a talisman + one stacking rune slot, so 26 slots take essence
+// the Mule Recipient stands at the altar holding a talisman + one stacking rune slot, so 26 slots take essence
 const TRADE_LOAD = 26;
 const TRADEREQ_CHAT = 4; // Client.addChat(4, 'wishes to trade with you.', player)
 const TRADE_REQ_TEXT = /wishes to trade with you/i;
 const EMPTY_TRADE_MS = 20_000; // a trade nobody puts essence into gets declined after this
-const REQUEST_RANGE = 12; // only answer a request whose runner is still near the ruins
+const ADJACENT = 2; // OPPLAYER4 walks you to the target — only answer a runner that already came to us
+const TEMPLE_RANGE = 30; // the runner lands at the temple entrance, a walk away from the altar
+const ALTAR_PARK = 2; // the recipient camps this close to the altar so every runner finds it there
 
 interface RuneType {
     talisman: string;
@@ -54,7 +56,7 @@ const MODES = ['Solo', 'Runner', 'Mule Recipient'];
 
 export const SETTINGS: SettingsSchema = {
     rune: { type: 'string', default: 'Air runes', options: RUNE_OPTIONS, label: 'Rune', help: 'which rune to craft — Air is the ruins south of Falador (Falador East bank), Earth is north-east of Varrock (Varrock East bank)' },
-    mode: { type: 'string', default: 'Solo', options: MODES, label: 'Mode', help: 'Solo banks its own essence. A Runner ferries bank essence to a Mule Recipient at the ruins. The Mule Recipient camps the ruins with just the talisman, takes every essence trade and crafts between trades' },
+    mode: { type: 'string', default: 'Solo', options: MODES, label: 'Mode', help: 'Solo banks its own essence. A Runner needs its own talisman: it banks essence, enters the altar and hands the load over inside. The Mule Recipient camps next to the altar and never leaves — it takes every essence trade and crafts between them' },
     partner: { type: 'string', default: '', label: 'Trade essence to (IGN)', help: 'the Mule Recipient this runner delivers essence to', showIf: { key: 'mode', anyOf: ['Runner'] } }
 };
 
@@ -66,6 +68,12 @@ function inTemple(): boolean {
 function essCount(): number {
     return Inventory.items().filter(i => i.id === ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
+// everything the pack is allowed to hold; anything else eats a slot essence needs.
+// Nameless items count as junk — a cache miss must not smuggle an item past the deposit.
+function packJunk(keep: string[]): { name: string | null; id: number }[] {
+    const kept = new Set(keep.map(s => s.toLowerCase()));
+    return Inventory.items().filter(i => !kept.has((i.name ?? '').toLowerCase()));
+}
 // chat usernames can carry nbsp/underscores where the entity list has spaces
 function sameName(a: string, b: string): boolean {
     const clean = (s: string) => s.toLowerCase().replace(/[\u00A0_]/g, ' ').trim();
@@ -73,6 +81,78 @@ function sameName(a: string, b: string): boolean {
 }
 function playerNamed(name: string, range: number): Player | null {
     return Players.query().where(p => p.name !== null && sameName(p.name, name)).within(range).nearest();
+}
+// A runner's pack for one run: the talisman that opens the altar plus exactly one
+// recipient load. A short/over load is what makes a runner deliver 1 essence and
+// waste a trade slot the recipient could have spent on a full delivery.
+function runnerLoaded(bot: RuneCrafter): boolean {
+    return Inventory.contains(bot.talismanName()) && essCount() === TRADE_LOAD
+        && packJunk([bot.talismanName(), ESSENCE]).length === 0;
+}
+function altarLoc(): { tile(): Tile; distance(): number; interact(op: string): boolean | Promise<boolean> } | null {
+    return Locs.query().name(ALTAR.name).action(ALTAR.op).nearest();
+}
+
+async function openBank(bot: RuneCrafter): Promise<boolean> {
+    const log = (m: string): void => bot.log(`  ${m}`);
+    await bot.walkTo(bot.bankTile(), 3);
+    if ((await Bank.openBooth(bot.bankTile(), BOOTH.name, BOOTH.op, log)) || (await Bank.openNearest(BOOTH.name, BOOTH.op, log))) {
+        bot.resetBankFail();
+        return true;
+    }
+    if (bot.countBankFail() >= MAX_BANK_FAILS) {
+        bot.log('RuneCrafter: couldn\'t reach the bank — start nearer it. Stopping.');
+        ScriptRunner.stop();
+        return false;
+    }
+    bot.log('could not open the bank — will retry');
+    return false;
+}
+
+// Deposit everything off the keep list, then prove it worked: a stack that refuses to
+// deposit silently shrinks every load from here on, so it stops the script instead.
+async function cleanPack(bot: RuneCrafter, keep: string[]): Promise<boolean> {
+    const kept = new Set(keep.map(s => s.toLowerCase()));
+    const deposit = (): Promise<void> => Bank.depositAllMatching(name => !kept.has(name.toLowerCase()), m => bot.log(`  ${m}`));
+    await Bank.setNoteMode(false);
+    await deposit();
+    await Execution.delayTicks(1);
+    if (packJunk(keep).length > 0) {
+        // one more pass before calling it stuck: a click that landed late still shows in the side pack
+        await deposit();
+        await Execution.delayUntil(() => packJunk(keep).length === 0, 2500);
+    }
+    const left = packJunk(keep);
+    if (left.length > 0) {
+        bot.log(`RuneCrafter: ${left.length} item(s) would not deposit (${left.map(i => `${i.name ?? 'unnamed'}#${i.id}`).join(', ')}) — the pack must hold only ${keep.join(' + ')}. Stopping.`);
+        ScriptRunner.stop();
+        return false;
+    }
+    return true;
+}
+
+async function ensureTalisman(bot: RuneCrafter): Promise<boolean> {
+    const talisman = bot.talismanName();
+    if (Inventory.contains(talisman)) {
+        return true;
+    }
+    // blank is not empty: the bank list reads [] for a beat after opening
+    await Execution.delayUntil(() => Bank.loaded(), 3000);
+    const tal = Bank.items().find(i => i.name?.toLowerCase() === talisman.toLowerCase());
+    if (!tal) {
+        bot.log(`RuneCrafter: no ${talisman} in the bank or pack. Stopping.`);
+        ScriptRunner.stop();
+        return false;
+    }
+    const op = withdrawOp(tal.ops, '1') ?? withdrawOp(tal.ops, 'any') ?? 'Withdraw-1';
+    await Bank.withdraw(talisman, op);
+    if (!(await Execution.delayUntil(() => Inventory.contains(talisman), 3000))) {
+        bot.log(`RuneCrafter: the ${talisman} withdraw never landed. Stopping.`);
+        ScriptRunner.stop();
+        return false;
+    }
+    bot.log(`withdrew a ${talisman}`);
+    return true;
 }
 
 export default class RuneCrafter extends TaskBot {
@@ -106,8 +186,8 @@ export default class RuneCrafter extends TaskBot {
                 this.log('RuneCrafter: Runner mode needs the Mule Recipient\'s name in settings. Stopping.');
                 throw new Error('RuneCrafter: no trade partner configured');
             }
-            this.log(`RuneCrafter runner starting — ferrying essence from ${this.cfg.bank} to '${this.partner}' at the ${this.choice} ruins ${this.cfg.ruins}`);
-            this.add(new ContinueDialog(), new RunnerTrade(this), new RunnerDeliver(this), new RunnerRestock(this));
+            this.log(`RuneCrafter runner starting — ferrying essence from ${this.cfg.bank} into the ${this.choice} altar for '${this.partner}' (needs an ${this.cfg.talisman})`);
+            this.add(new ContinueDialog(), new RunnerTrade(this), new RunnerDeliver(this), new Exit(this), new RunnerRestock(this), new Enter(this, () => essCount() > 0));
             return;
         }
 
@@ -122,13 +202,13 @@ export default class RuneCrafter extends TaskBot {
                     this.lastRequester = e.username; // most recent wins — that runner is still waiting
                 }
             });
-            this.log(`RuneCrafter mule recipient starting — camping the ${this.choice} ruins ${this.cfg.ruins}, crafting whatever essence gets traded in`);
-            this.add(new ContinueDialog(), new MuleTakeTrade(this), new Craft(this), new Exit(this), new Enter(this), new MulePrepare(this), new MuleAnswerRequest(this), new MuleWait(this));
+            this.log(`RuneCrafter mule recipient starting — camping inside the ${this.choice} altar, crafting whatever essence gets traded in`);
+            this.add(new ContinueDialog(), new MuleTakeTrade(this), new Craft(this, false), new MuleAnswerRequest(this), new MuleGoClean(this), new MuleWait(this), new MulePrepare(this), new Enter(this, () => true));
             return;
         }
 
         this.log(`RuneCrafter starting — ${this.choice}, ruins ${this.cfg.ruins}, bank ${this.cfg.bank}`);
-        this.add(new ContinueDialog(), new Craft(this), new Exit(this), new BankTrip(this), new Enter(this));
+        this.add(new ContinueDialog(), new Craft(this, true), new Exit(this), new BankTrip(this), new Enter(this, () => essCount() > 0));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -180,6 +260,8 @@ export default class RuneCrafter extends TaskBot {
         this.lastRequester = null;
         return name;
     }
+    // the recipient keeps the runes it crafts (one stack); everyone else banks them
+    muleKeep(): string[] { return [this.cfg.talisman, this.cfg.rune]; }
 
     async walkTo(dest: Tile, radius = 2): Promise<void> {
         const here = Game.tile();
@@ -191,10 +273,10 @@ export default class RuneCrafter extends TaskBot {
 }
 
 class Craft implements Task {
-    constructor(private bot: RuneCrafter) {}
+    constructor(private bot: RuneCrafter, private thenExit: boolean) {}
     validate(): boolean { return inTemple() && essCount() > 0; }
     async execute(): Promise<void> {
-        const altar = Locs.query().name(ALTAR.name).action(ALTAR.op).nearest();
+        const altar = altarLoc();
         if (!altar) { await Execution.delayTicks(2); return; } // scene still syncing after the telejump
         this.bot.setStatus('crafting runes');
         const before = essCount();
@@ -204,6 +286,7 @@ class Craft implements Task {
         const made = before - essCount();
         this.bot.countCraft(made);
         this.bot.log(`crafted ${made} ${this.bot.runeName()}s`);
+        if (!this.thenExit) { return; } // the recipient lives here — it stays parked at the altar
         // The craft locks the player (p_delay 3) and pops a level-up. Leave straight
         // away: in a tight loop, close any dialog and re-click the portal every tick
         // so the Use fires the instant the lock clears, instead of standing there.
@@ -241,43 +324,15 @@ class BankTrip implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         this.bot.log('heading to the bank');
-        await this.bot.walkTo(this.bot.bankTile(), 3);
-        const opened = (await Bank.openBooth(this.bot.bankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
-                this.bot.log('RuneCrafter: couldn\'t reach the bank — start nearer it. Stopping.');
-                ScriptRunner.stop();
-                return;
-            }
-            this.bot.log('could not open the bank — will retry');
-            return;
-        }
-        this.bot.resetBankFail();
+        if (!(await openBank(this.bot))) { return; }
 
-        const talisman = this.bot.talismanName();
-        const rune = this.bot.runeName();
-        const madeRunes = Inventory.count(rune);
-        await Bank.setNoteMode(false);
-        await Bank.depositAllMatching(depositAllExcept([talisman]), m => this.bot.log(`  ${m}`));
-        await Execution.delayTicks(1);
+        const madeRunes = Inventory.count(this.bot.runeName());
+        if (!(await cleanPack(this.bot, [this.bot.talismanName()]))) { return; }
         this.bot.countTrip();
         if (madeRunes > 0) {
-            this.bot.log(`deposited ${madeRunes} ${rune}s`);
+            this.bot.log(`deposited ${madeRunes} ${this.bot.runeName()}s`);
         }
-
-        if (!Inventory.contains(talisman)) {
-            const tal = Bank.items().find(i => i.name?.toLowerCase() === talisman.toLowerCase());
-            if (!tal || tal.name === null) {
-                this.bot.log(`RuneCrafter: no ${talisman} in the bank or pack. Stopping.`);
-                ScriptRunner.stop();
-                return;
-            }
-            const op = withdrawOp(tal.ops, '1') ?? withdrawOp(tal.ops, 'any') ?? 'Withdraw-1';
-            await Bank.withdraw(talisman, op);
-            await Execution.delayUntil(() => Inventory.contains(talisman), 3000);
-            this.bot.log(`withdrew an ${talisman}`);
-        }
+        if (!(await ensureTalisman(this.bot))) { return; }
 
         if (Bank.count(ESSENCE) === 0) {
             this.bot.log('RuneCrafter: out of Rune essence in the bank. Stopping.');
@@ -292,17 +347,23 @@ class BankTrip implements Task {
     }
 }
 
+// Solo and Runner enter with a load of essence; the recipient enters once and stays.
 class Enter implements Task {
     private fails = 0;
-    constructor(private bot: RuneCrafter) {}
-    validate(): boolean { return !inTemple() && essCount() > 0; }
+    constructor(private bot: RuneCrafter, private ready: () => boolean) {}
+    validate(): boolean { return !inTemple() && this.ready(); }
     async execute(): Promise<void> {
         this.bot.setStatus('heading to the ruins');
-        this.bot.log('heading to the mysterious ruins with a pack of essence');
+        this.bot.log('heading to the mysterious ruins');
         await this.bot.walkTo(this.bot.ruinsTile(), 1);
         const ruins = Locs.query().name(RUINS).nearest();
         const talisman = Inventory.first(this.bot.talismanName());
-        if (!ruins || !talisman) { await Execution.delayTicks(2); return; }
+        if (!talisman) {
+            this.bot.log(`RuneCrafter: no ${this.bot.talismanName()} in the pack — the altar can't be entered without one. Stopping.`);
+            ScriptRunner.stop();
+            return;
+        }
+        if (!ruins) { await Execution.delayTicks(2); return; }
         this.bot.setStatus('entering the altar');
         this.bot.log(`using the ${this.bot.talismanName()} on the mysterious ruins`);
         if (!(await talisman.useOn(ruins))) { await Execution.delayTicks(2); return; }
@@ -355,21 +416,23 @@ class RunnerTrade implements Task {
     }
 }
 
+// runner: inside the altar with a load — the recipient is parked at the altar, so walk to it
 class RunnerDeliver implements Task {
     constructor(private bot: RuneCrafter) {}
-    validate(): boolean { return essCount() > 0 && !Trade.active(); }
+    validate(): boolean { return inTemple() && essCount() > 0 && !Trade.active(); }
     async execute(): Promise<void> {
         const partner = this.bot.partnerName();
-        this.bot.setStatus(`delivering to ${partner}`);
-        await this.bot.walkTo(this.bot.ruinsTile(), 2);
-        const master = playerNamed(partner, REQUEST_RANGE);
+        const master = playerNamed(partner, TEMPLE_RANGE);
         if (!master) {
-            this.bot.setStatus(`waiting for ${partner} at the ruins`);
+            this.bot.setStatus(`looking for ${partner} at the altar`);
+            const altar = altarLoc();
+            if (altar) { await DirectNavigator.walkTo(altar.tile(), ALTAR_PARK + 1, 10_000); }
             await Execution.delayTicks(2);
             return;
         }
         // spam on purpose: a busy recipient drops the request server-side, and answering our
         // most recent request is exactly how the recipient opens the trade — so keep asking
+        this.bot.setStatus(`delivering to ${partner}`);
         this.bot.log(`requesting a trade with ${master.name}`);
         await Trade.request(master.name ?? partner);
         await Execution.delayUntil(() => Trade.active(), 4000);
@@ -378,27 +441,20 @@ class RunnerDeliver implements Task {
 
 class RunnerRestock implements Task {
     private emptyReads = 0;
+    private stocked = false; // one withdraw per run — a drained bank must not shuttle the same short load forever
     constructor(private bot: RuneCrafter) {}
-    validate(): boolean { return essCount() === 0 && !Trade.active(); }
+    validate(): boolean {
+        if (essCount() === 0) { this.stocked = false; }
+        return !inTemple() && !Trade.active() && !this.stocked && !runnerLoaded(this.bot);
+    }
     async execute(): Promise<void> {
         this.bot.setStatus('restocking essence');
-        await this.bot.walkTo(this.bot.bankTile(), 3);
-        const opened = (await Bank.openBooth(this.bot.bankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
-                this.bot.log('RuneCrafter: couldn\'t reach the bank — start nearer it. Stopping.');
-                ScriptRunner.stop();
-                return;
-            }
-            this.bot.log('could not open the bank — will retry');
-            return;
-        }
-        this.bot.resetBankFail();
-
-        await Bank.setNoteMode(false);
-        // random events hand out junk that eats the slots essence needs; noted essence can't be traded
-        await Bank.depositAllMatching((name, id) => name.length > 0 && id !== ESSENCE_ID, m => this.bot.log(`  ${m}`));
+        if (!(await openBank(this.bot))) { return; }
+        // the talisman is the only thing that stays: junk, the noted essence the bank hands
+        // back, and any leftover from the last delivery all go, so the run starts on exactly
+        // one full load instead of dribbling 1-2 essence into a trade the recipient waited for
+        if (!(await cleanPack(this.bot, [this.bot.talismanName()]))) { return; }
+        if (!(await ensureTalisman(this.bot))) { return; }
 
         // blank is not empty: the list reads [] for a beat after opening — believe it on the third read
         await Execution.delayUntil(() => Bank.loaded(), 3000);
@@ -412,7 +468,7 @@ class RunnerRestock implements Task {
         }
         this.emptyReads = 0;
         await Bank.withdrawX(ESSENCE, Math.min(TRADE_LOAD, banked, Inventory.free()));
-        await Execution.delayUntil(() => essCount() > 0, 3000);
+        this.stocked = await Execution.delayUntil(() => essCount() > 0, 3000); // a withdraw that never landed must retry
         this.bot.countTrip();
         this.bot.log(`withdrew ${essCount()} essence (bank run ${this.bot.tripsTotal()})`);
     }
@@ -459,7 +515,7 @@ class MuleTakeTrade implements Task {
             return;
         }
         if (theirEssence > Inventory.free()) {
-            // junk in the pack (random event) — declining lets MulePrepare bank it before the retry
+            // junk in the pack (random event) — declining lets MuleGoClean bank it before the retry
             this.bot.log(`can't fit ${theirEssence} essence (${Inventory.free()} slots free) — declining to clean the pack first`);
             await Trade.decline();
             return;
@@ -469,68 +525,21 @@ class MuleTakeTrade implements Task {
     }
 }
 
-// anything besides the talisman/runes/essence blocks a full 26-essence trade — bank it off
-class MulePrepare implements Task {
-    constructor(private bot: RuneCrafter) {}
-    validate(): boolean {
-        if (inTemple() || Trade.active() || essCount() > 0) {
-            return false;
-        }
-        const junk = Inventory.items().some(i => i.name !== null && i.id !== ESSENCE_ID
-            && i.name.toLowerCase() !== this.bot.talismanName().toLowerCase()
-            && i.name.toLowerCase() !== this.bot.runeName().toLowerCase());
-        return junk || !Inventory.contains(this.bot.talismanName());
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus('cleaning the pack at the bank');
-        this.bot.log('bank trip — the pack needs just the talisman (+ the rune stack) to take trades');
-        await this.bot.walkTo(this.bot.bankTile(), 3);
-        const opened = (await Bank.openBooth(this.bot.bankTile(), BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
-                this.bot.log('RuneCrafter: couldn\'t reach the bank — start nearer it. Stopping.');
-                ScriptRunner.stop();
-                return;
-            }
-            this.bot.log('could not open the bank — will retry');
-            return;
-        }
-        this.bot.resetBankFail();
-
-        const talisman = this.bot.talismanName();
-        await Bank.depositAllMatching(depositAllExcept([talisman, this.bot.runeName()]), m => this.bot.log(`  ${m}`));
-        await Execution.delayTicks(1);
-
-        if (!Inventory.contains(talisman)) {
-            // blank is not empty: the list reads [] for a beat after opening
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            const tal = Bank.items().find(i => i.name?.toLowerCase() === talisman.toLowerCase());
-            if (!tal || tal.name === null) {
-                this.bot.log(`RuneCrafter: no ${talisman} in the bank or pack. Stopping.`);
-                ScriptRunner.stop();
-                return;
-            }
-            const op = withdrawOp(tal.ops, '1') ?? withdrawOp(tal.ops, 'any') ?? 'Withdraw-1';
-            await Bank.withdraw(talisman, op);
-            await Execution.delayUntil(() => Inventory.contains(talisman), 3000);
-            this.bot.log(`withdrew an ${talisman}`);
-        }
-        this.bot.log('pack is clean — heading back to the ruins');
-    }
-}
-
 class MuleAnswerRequest implements Task {
     constructor(private bot: RuneCrafter) {}
-    validate(): boolean { return !inTemple() && essCount() === 0 && !Trade.active() && this.bot.pendingRequester() !== null; }
+    validate(): boolean { return inTemple() && !Trade.active() && this.bot.pendingRequester() !== null; }
     async execute(): Promise<void> {
         const name = this.bot.takeRequester();
         if (!name) {
             return;
         }
-        const runner = playerNamed(name, REQUEST_RANGE);
+        // never chase: OPPLAYER4 walks us to the target, and a recipient that wanders
+        // off the altar is one every other runner then has to hunt for
+        const runner = await Execution.delayUntil(() => playerNamed(name, ADJACENT) !== null, 1800)
+            ? playerNamed(name, ADJACENT)
+            : null;
         if (!runner) {
-            this.bot.log(`'${name}' asked to trade but isn't near the ruins any more — waiting for the next request`);
+            this.bot.log(`'${name}' asked to trade but never reached the altar — waiting for the next request`);
             return;
         }
         // trading the requester back is what opens the window (both sides must Trade-with each other)
@@ -541,12 +550,52 @@ class MuleAnswerRequest implements Task {
     }
 }
 
+// the recipient's one reason to leave: junk (random-event litter) is eating the slots
+// runners deliver into, and the only way to shed it is a bank trip
+class MuleGoClean implements Task {
+    constructor(private bot: RuneCrafter) {}
+    validate(): boolean { return inTemple() && !Trade.active() && essCount() === 0 && packJunk(this.bot.muleKeep()).length > 0; }
+    async execute(): Promise<void> {
+        const junk = packJunk(this.bot.muleKeep());
+        this.bot.setStatus('leaving to bank pack junk');
+        this.bot.log(`${junk.length} item(s) in the pack are not essence (${junk.map(i => i.name ?? 'unnamed').join(', ')}) — bank trip before the next delivery`);
+        const portal = Locs.query().name(PORTAL.name).action(PORTAL.op).nearest();
+        if (!portal) { await Execution.delayTicks(2); return; }
+        if (!(await portal.interact(PORTAL.op))) { await Execution.delayTicks(2); return; }
+        await Execution.delayUntil(() => !inTemple(), 15_000);
+    }
+}
+
+// anything besides the talisman/runes blocks a full 26-essence trade — bank it off
+class MulePrepare implements Task {
+    constructor(private bot: RuneCrafter) {}
+    validate(): boolean {
+        return !inTemple() && !Trade.active() && essCount() === 0
+            && (packJunk(this.bot.muleKeep()).length > 0 || !Inventory.contains(this.bot.talismanName()));
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('cleaning the pack at the bank');
+        this.bot.log('bank trip — the pack needs just the talisman (+ the rune stack) to take trades');
+        if (!(await openBank(this.bot))) { return; }
+        if (!(await cleanPack(this.bot, this.bot.muleKeep()))) { return; }
+        if (!(await ensureTalisman(this.bot))) { return; }
+        this.bot.log('pack is clean — heading back to the altar');
+    }
+}
+
+// the recipient never walks off the altar: runners come to it
 class MuleWait implements Task {
     constructor(private bot: RuneCrafter) {}
-    validate(): boolean { return !inTemple() && essCount() === 0; }
+    validate(): boolean { return inTemple() && essCount() === 0; }
     async execute(): Promise<void> {
+        const altar = altarLoc();
+        if (altar && altar.distance() > ALTAR_PARK) {
+            this.bot.setStatus('parking at the altar');
+            this.bot.log('taking up station next to the altar');
+            await DirectNavigator.walkTo(altar.tile(), ALTAR_PARK, 15_000);
+            return;
+        }
         this.bot.setStatus('waiting for a trade request');
-        await this.bot.walkTo(this.bot.ruinsTile(), 1);
         await Execution.delayTicks(2);
     }
 }

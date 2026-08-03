@@ -76,6 +76,10 @@ function chebyshev(a: Tile, b: Tile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 }
 
+const TEMPLE_Z = 4000; // altar temples sit at z ~4800; the overworld is < 4000
+const TRADE_LOAD = 26; // RuneCrafter's fixed runner load: talisman + 26 essence, nothing else
+const ESSENCE_ID = 1436; // blankrune — the bank note shares the display name but can't be traded or crafted
+
 async function teleArrive(page: Page, spot: Tile, maxDist = 18): Promise<boolean> {
     const cmd = `tele ${spot.level},${spot.x >> 6},${spot.z >> 6},${spot.x & 63},${spot.z & 63}`;
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -161,9 +165,9 @@ async function prepAccount(browser: Browser, user: string, kind: 'recipient' | '
         await mainlandAccount(page, base, user);
         await maxAccount(page);
         await clearInv(page);
-        if (kind === 'recipient') {
-            await seedItem(page, route.talisman, route.talisman.replace(/_/g, ' '), 1);
-        } else {
+        // both roles enter the altar now, so both need a talisman
+        await seedItem(page, route.talisman, route.talisman.replace(/_/g, ' '), 1);
+        if (kind === 'runner') {
             // typed ::give path so the cert (noted essence) stacks; the runner's first
             // restock deposits it, giving the account a bank to draw 26s from
             await type(page, '::give cert_blankrune 1000');
@@ -204,31 +208,46 @@ type SlotSample = {
     pos: Tile | null;
     lastLog: string;
     stopReason: string;
+    tail: string[];
+    received: number[];
+    excursions: string[];
 };
 
 function sampleWall(page: Page): Promise<SlotSample[]> {
-    return page.evaluate(rn => {
+    return page.evaluate(([rn, essId]: [string, number]) => {
         return Array.from(document.querySelectorAll('iframe')).map(f => {
             const el = f as HTMLIFrameElement;
             const box = new URL(el.src).searchParams.get('box');
             const w = el.contentWindow as never as Abi & { rs2b0t?: { runner?: { state: string; ctx?: { log?: { msg: string }[] } } } };
             if (!w || !w.__rs2b0t || !w.rs2b0t?.runner) {
-                return { box, state: 'booting', ess: 0, runes: 0, rcXp: 0, pos: null, lastLog: '', stopReason: '' };
+                return { box, state: 'booting', ess: 0, runes: 0, rcXp: 0, pos: null, lastLog: '', stopReason: '', tail: [], received: [], excursions: [] };
             }
             const items = w.__rs2b0t.Inventory.items();
             const msgs = (w.rs2b0t.runner.ctx?.log ?? []).map(l => l.msg);
             return {
                 box,
                 state: w.rs2b0t.runner.state,
-                ess: items.filter(i => (i.name ?? '').toLowerCase() === 'rune essence').reduce((s, i) => s + Math.max(1, i.count), 0),
+                ess: items.filter(i => i.id === essId).reduce((s, i) => s + Math.max(1, i.count), 0),
                 runes: items.filter(i => (i.name ?? '').toLowerCase() === rn).reduce((s, i) => s + Math.max(1, i.count), 0),
                 rcXp: w.__rs2b0t.Skills.xp('runecraft'),
                 pos: w.__rs2b0t.reader.worldTile(),
                 lastLog: (msgs[msgs.length - 1] ?? '').slice(0, 48),
-                stopReason: msgs.filter(m => /Stopping\.|crashed/i.test(m)).slice(-1)[0] ?? ''
+                // the runtime's own bare 'stopping...' line would otherwise mask the script's reason
+                stopReason: msgs.filter(m => /Stopping\.|crashed|threw/i.test(m) && !/^stopping\.\.\.$/i.test(m)).slice(-1)[0] ?? '',
+                tail: msgs.slice(-10),
+                // every delivery either side booked, so a dribbled 1-2 essence trade is visible.
+                // Counting these beats sampling the pack: a runner's whole cycle is ~30s, so
+                // polling for a 26 -> 0 transition aliases against the dashboard interval.
+                received: msgs.flatMap(m => { const hit = /(?:received|delivered) (\d+) essence/.exec(m); return hit ? [Number(hit[1])] : []; }),
+                // why a camper ever left its altar: pack junk, a random event, or the watchdog
+                excursions: msgs.filter(m => /not essence|random event|watchdog/i.test(m)).map(m => m.slice(0, 70))
             };
         });
-    }, route.runeName);
+    }, [route.runeName, ESSENCE_ID] as [string, number]);
+}
+
+function inTemple(s: SlotSample): boolean {
+    return s.pos !== null && s.pos.z > TEMPLE_Z;
 }
 
 async function shot(page: Page, name: string): Promise<void> {
@@ -311,7 +330,16 @@ try {
     }
     console.log(`all ${ingameNow} slots ingame — starting every script`);
 
-    await page.evaluate(() => (globalThis as never as Mbx).multibox.controller.startAll());
+    // startSelectedScript no-ops on a box the panel still counts as active, so a slot that was
+    // mid-'stopping' when the wall started silently soaks doing nothing — retry until all run
+    for (let attempt = 1; attempt <= 6; attempt++) {
+        await page.evaluate(() => (globalThis as never as Mbx).multibox.controller.startAll());
+        await page.waitForTimeout(5000);
+        const idle = (await sampleWall(page)).filter(s => s.state !== 'running').map(s => `${s.box}=${s.state}`);
+        if (idle.length === 0) { break; }
+        console.log(`  start attempt ${attempt}: ${idle.length} slot(s) not running (${idle.join(', ')})`);
+        if (attempt === 6) { fail(`slots never started: ${idle.join(', ')}`); }
+    }
     await page.evaluate(() => (globalThis as never as Mbx).multibox.controller.setAllRenderers(true));
     // keep the recipient (first slot) in the focused pane so screenshots show its paint
     await page.evaluate(() => (globalThis as never as Mbx).multibox.focus(1));
@@ -329,12 +357,19 @@ try {
     const xp0 = first.m.rcXp;
     const startedAt = Date.now();
     const deadline = startedAt + budgetMin * 60_000;
-    const prevEss = new Map<string, number>();
     const deliveries = new Map<string, number>();
     const stopped = new Map<string, string>();
+    const receivedSizes = new Set<number>();
+    let bookedSizes: number[] = [];
+    const runnersSeenInside = new Set<string>();
+    const recipientExcursions = new Set<string>();
     let sawRecipientStop = '';
     let mm = first.m;
     let midShotDone = false;
+    let recipientInside = 0;
+    let recipientOutside = 0;
+    let awayStreak = 0;
+    let longestAway = 0;
 
     while (Date.now() < deadline) {
         const { m, rr } = bySlot(await sampleWall(page));
@@ -343,19 +378,32 @@ try {
         const craftedEss = Math.round((m.rcXp - xp0) / route.xpPerEssence);
         if (m.state !== 'running' && !sawRecipientStop) sawRecipientStop = m.stopReason || m.state;
 
+        // the recipient camps at the altar; a random event or pack junk can drag it out, but its
+        // own loop must never do a lap, so track how long any excursion lasts
+        for (const n of m.received) receivedSizes.add(n);
+        if (m.received.length >= bookedSizes.length) bookedSizes = m.received;
+        for (const e of m.excursions) recipientExcursions.add(e);
+        if (inTemple(m)) { recipientInside++; awayStreak = 0; }
+        else if (recipientInside > 0) { recipientOutside++; awayStreak++; longestAway = Math.max(longestAway, awayStreak); }
+        for (const r of rr) { if (inTemple(r)) runnersSeenInside.add(r.box ?? '?'); }
+
         for (const r of rr) {
             const u = r.box ?? '?';
-            const prev = prevEss.get(u) ?? 0;
-            if (prev > 0 && r.ess === 0) deliveries.set(u, (deliveries.get(u) ?? 0) + 1);
-            prevEss.set(u, r.ess);
-            if (r.state !== 'running' && !stopped.has(u)) stopped.set(u, r.stopReason || r.state);
+            // the runner logs one 'delivered N essence' per handover; the log is a ring buffer,
+            // so keep the high-water mark rather than the current read
+            deliveries.set(u, Math.max(deliveries.get(u) ?? 0, r.received.length));
+            for (const n of r.received) receivedSizes.add(n);
+            if (r.state !== 'running' && !stopped.has(u)) {
+                stopped.set(u, `${r.stopReason || r.state}${r.tail.length > 0 ? ` | log: ${r.tail.join(' / ')}` : ''}`);
+            }
         }
 
         const delivered = [...deliveries.values()].reduce((a, b) => a + b, 0);
         const carrying = rr.filter(r => r.ess > 0).length;
         const rate = Math.round(craftedEss / Math.max(0.1, (Date.now() - startedAt) / 3_600_000));
-        console.log(`── t=${mins}min | recipient ${m.runes} ${route.runeName}s · ${craftedEss} ess crafted (~${rate}/hr) ${m.state} · ${m.lastLog}`);
-        console.log(`   runners: ${delivered} deliveries total · ${carrying}/${rr.length} carrying essence · ${stopped.size} stopped`);
+        console.log(`── t=${mins}min | recipient ${m.runes} ${route.runeName}s · ${craftedEss} ess crafted (~${rate}/hr) ${m.state} · ${inTemple(m) ? 'at altar' : `OUTSIDE (${m.pos?.x},${m.pos?.z})`} · ${m.lastLog}`);
+        const why = [...stopped.entries()].map(([u, w]) => `${u}: ${w}`).join(' · ');
+        console.log(`   runners: ${delivered} deliveries total · ${carrying}/${rr.length} carrying essence · ${rr.filter(inTemple).length} inside the altar · ${stopped.size} stopped${why ? ` (${why})` : ''}`);
 
         if (!midShotDone && mins >= budgetMin / 2) {
             midShotDone = true;
@@ -374,12 +422,28 @@ try {
 
     console.log(`\n=== MULTIBOX SOAK DONE (${elapsedMin}min, ${NUM_RUNNERS} runners, ${RUNE}) ===`);
     console.log(`recipient crafted ${craftedEss} essence (${mm.runes} ${route.runeName}s) — ~${Math.round(craftedEss / Math.max(0.1, elapsedMin / 60))} essence/hr`);
+    console.log(`recipient reads at the altar: ${recipientInside} inside / ${recipientOutside} outside after entering (longest excursion ${longestAway} sample(s))`);
+    if (recipientExcursions.size > 0) console.log(`recipient excursion causes: ${[...recipientExcursions].join(' | ')}`);
     console.log(`deliveries per runner: ${perRunner.join(', ')} (total ${perRunner.reduce((a, b) => a + b, 0)})`);
+    console.log(`delivery sizes the recipient booked: ${[...receivedSizes].sort((a, b) => a - b).join(', ') || 'none'} · ${runnersSeenInside.size}/${NUM_RUNNERS} runners sampled inside the altar`);
 
     const problems: string[] = [];
     if (sawRecipientStop) problems.push(`recipient stopped mid-soak: ${sawRecipientStop}`);
     if (stopped.size > 0) problems.push(`${stopped.size} runner(s) stopped: ${[...stopped.entries()].map(([u, w]) => `${u} (${w})`).join('; ')}`);
     if (craftedEss === 0) problems.push('recipient crafted nothing');
+    if (recipientInside === 0) problems.push('recipient never reached the altar temple');
+    // camping means the altar is home, not a stop on a lap: a random event or a junk-clean trip
+    // can pull it out briefly, but a recipient that banks or waits outside reads away for long
+    const insideShare = recipientInside / Math.max(1, recipientInside + recipientOutside);
+    if (insideShare < 0.9) problems.push(`recipient was at the altar for only ${Math.round(insideShare * 100)}% of reads — it must camp there, not lap through the ruins`);
+    if (longestAway > 2) problems.push(`recipient stayed away from the altar for ${longestAway} consecutive reads (${longestAway * 30}s) — camping means it comes straight back`);
+    if (runnersSeenInside.size === 0) problems.push('no runner was ever sampled inside the altar — runners must carry the essence in');
+    // a runner whose bank finally runs dry legitimately ships one short last load; the bug this
+    // guards is a runner that starts every run over/under a load and dribbles the remainder
+    const short = bookedSizes.filter(n => n < TRADE_LOAD);
+    if (bookedSizes.length > 0 && short.length > Math.max(1, bookedSizes.length * 0.1)) {
+        problems.push(`${short.length}/${bookedSizes.length} deliveries were short (${[...new Set(short)].join(', ')} essence) — a run must start on a full ${TRADE_LOAD}`);
+    }
     // the recipient completes ~2 trades/min flat out, so with enough runners the queue is
     // deliberately over-saturated (most-recent-wins) and some can't be served in-budget.
     // Under-saturated: everyone must deliver. Over-saturated: total throughput must hold.

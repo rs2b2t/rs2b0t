@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **45 scripts** across 19 categories. They double as worked
+The client ships **46 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -21,6 +21,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 2
+- [Magic](#magic) — 1
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 1
@@ -532,6 +533,21 @@ Tags: `falador`, `vials`, `water`, `banking`, `afk`
 | `buyQty` | number (1–28) | `27` | Empty vials to buy |
 | `coinsPerTrip` | number (1–100000) | `1000` | Coins to top up to |
 
+## Magic
+
+### AIO Teleport
+
+Automated teleportation with intelligent banking and safety features
+
+Tags: `teleport`, `magic`, `banking`, `aio`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `teleportName` | string | `"progressive"` | Teleport Destination — one of: ⚡ Progressive (Best for your level), Varrock Teleport (Lvl 25), Lumbridge Teleport (Lvl 31), Falador Teleport (Lvl 37), Camelot Teleport (Lvl 45), Ardougne Teleport (Lvl 51), Watchtower Teleport (Lvl 58) |
+| `lawBatchSize` | number (10–10000) | `1000` | Law Rune Batch Size |
+| `minLawRunes` | number (10–1000) | `100` | Minimum Law Runes |
+| `useStaffRunes` | boolean | `true` | Use Staff Runes |
+
 ## Mining
 
 ### CoalTrucks
@@ -561,7 +577,7 @@ Tags: `gathering`, `banking`, `drop`
 |---|---|---|---|
 | `rocks` | string[] | `["Iron"]` | Rock types — one of: Clay, Copper, Tin, Iron, Silver, Coal, Gold, Mithril, Adamantite, Runite |
 | `leashRadius` | number (2–64) | `10` | Leash radius (tiles) |
-| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, Legends Guild Iron (west), Legends Guild Iron (east), None |
+| `location` | string | `"Auto"` | Location / full inventory — one of: Auto, Southwest Varrock Mine, Southeast Varrock Mine, Rimmington Mine, Dwarven Mine, Fight Arena Mine, Al Kharid Mine, Mining Guild, Crafting Guild, Coal Trucks, Barbarian Village, North Brimhaven Mine, Shilo Village, West Lumbridge Swamp Mine, Grand Tree Mine, Desert Mining Camp, Lava Maze Runite Mine, Heroes Guild, South-east Ardougne Mine, Legends Guild Iron (west), Legends Guild Iron (east), None |
 | `tickManip` | string | `"Off"` | Tick manip — one of: Off |
 | `muleMode` | string | `"Off"` | Mule mode — one of: Off, Gatherer, Mule, Cooker, Supplier |
 | `mulePartner` | string | `""` | Mule partner name(s) |
@@ -578,11 +594,11 @@ Tags: `wilderness`, `shopping`, `banking`, `runes`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `shop` | string | `"Mage Arena runes — Lundail (Gundai bank)"` | Shop — one of: Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank) |
+| `shop` | string | `"Mage Arena runes — Lundail (Gundai bank)"` | Shop — one of: Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
 | `budgetGp` | number (100–) | `250000` | Total gp to spend |
 | `perTripGp` | number (100–) | `100000` | Gp per bank trip |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
-| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Adamant pickaxe, Air rune, Big fishing net, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Bronze axe, Bronze pickaxe, Chaos rune, Cosmic rune, Crossbow, Death rune, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Iron axe, Iron battleaxe, Iron pickaxe, Law rune, Lobster pot, Longbow, Mind rune, Mithril arrow, Mithril arrowtips, Mithril battleaxe, Mithril pickaxe, Nature rune, Oak longbow, Oak shortbow, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rune arrow, Rune arrowtips, Rune pickaxe, Shortbow, Small fishing net, Steel arrow, Steel arrowtips, Steel axe, Steel battleaxe, Steel pickaxe, Studded body, Studded chaps, Water rune, Wizards hat |
+| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Adamant pickaxe, Air rune, Battlestaff, Big fishing net, Blood rune, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Bronze axe, Bronze pickaxe, Chaos rune, Cosmic rune, Crossbow, Death rune, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Iron axe, Iron battleaxe, Iron pickaxe, Law rune, Lobster pot, Longbow, Mind rune, Mithril arrow, Mithril arrowtips, Mithril battleaxe, Mithril pickaxe, Nature rune, Oak longbow, Oak shortbow, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rune arrow, Rune arrowtips, Rune pickaxe, Shortbow, Small fishing net, Soul rune, Staff of air, Staff of earth, Staff of fire, Staff of water, Steel arrow, Steel arrowtips, Steel axe, Steel battleaxe, Steel pickaxe, Studded body, Studded chaps, Water rune, Wizards hat |
 | `recheckSeconds` | number (5–600) | `60` | Restock recheck (s) |
 
 ### ShopRunner
@@ -678,7 +694,7 @@ Tags: `runecrafting`, `nature`, `trade`, `master`, `runner`, `karamja`
 
 ### RuneCrafter
 
-AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; Runner ferries bank essence to a Mule Recipient by trade; Mule Recipient camps the ruins, takes every essence trade and crafts between trades
+AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between the deliveries runners bring it
 
 Tags: `runecrafting`, `banking`, `trade`, `runner`, `mule`, `afk`
 

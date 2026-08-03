@@ -174,7 +174,8 @@ export const Bank = {
                 await Execution.delayUntil(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
                 items = reader.bankSideItems();
             }
-            const item = items.find(i => i.name !== null && match(i.name, i.id));
+            // a nameless obj (cache miss) is still an item taking a slot — let the matcher decide
+            const item = items.find(i => match(i.name ?? '', i.id));
             if (!item) {
                 return;
             }
