@@ -42,3 +42,4 @@ screenshots/
 
 # operator-only notes (not for token-hungry upstream clones)
 docs/local/
+tools/nav/transport-heavy.routes.json

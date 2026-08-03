@@ -114,6 +114,10 @@ bun test test/nav/travelCatalog.test.ts
 # pack walkability of curated endpoints
 bun tools/nav/curated-travel-probe.ts
 
+# ~12 transport-heavy OD pairs (pack + JSON for live)
+bun tools/nav/transport-heavy-routes.ts --write --n=12 --explain
+HEADED=1 TRANSPORT_HEAVY=1 LIMIT=12 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
+
 # content family scan + disabled buckets
 CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.ts
 ```
