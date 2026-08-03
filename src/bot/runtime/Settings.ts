@@ -147,14 +147,15 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         default: 'classic',
         options: ['classic', 'v2'],
         optionLabels: {
-            classic: 'Classic (stable)',
-            v2: 'Nav v2 (experimental)'
+            classic: 'Classic (default)',
+            v2: 'v2 (teles + bank plan)'
         },
         label: 'World walker',
         help:
-            'Classic is the long-standing pathfinder. Nav v2 may route through spell teleports, '
-            + 'logs transport hops, and filters skill/item-gated shortcuts using live stats. '
-            + 'Default classic so existing scripts keep prior behaviour. Change applies on the next walk.'
+            'One walker stack with two modes — not two engines. Both share doors, ships, '
+            + 'travel catalog, and skill/quest/coin gates from live WorldState. Classic (default) '
+            + 'omits spell/jewellery tele inject, path-scoped bank for runes/tolls, and hop logs. '
+            + 'v2 turns those on. Change applies on the next walk.'
     },
     showNavPath: {
         type: 'boolean',

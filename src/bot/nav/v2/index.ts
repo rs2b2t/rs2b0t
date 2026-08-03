@@ -1,6 +1,8 @@
 /**
- * Nav v2 routing contract for the 2004 bot client.
- * docs/nav-v2/README.md · docs/NAV.md
+ * Nav routing helpers under the historical `v2/` folder.
+ * Most exports are shared by classic and v2 modes (travelCatalog, requires, …).
+ * Mode-gated pieces: teleportCatalog inject, bankPlan, hop logs.
+ * docs/nav-v2/README.md · docs/NAV.md § One walker, two modes · CLASSIC-PARITY.md
  */
 
 export * from './types.js';

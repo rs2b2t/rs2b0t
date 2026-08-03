@@ -640,9 +640,10 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    // Walker engine: Global `navEngine` (`classic` | `v2`) unless overridden.
-    // classic = pack doors/transports + WorldState for skill/quest/toll gates (no spell teles).
-    // v2 = same + teleport catalog inject + path-scoped bank for runes/tolls.
+    // Feature gate on the *single* walker stack (not two engines). Global `navEngine`
+    // unless overridden. classic (default) = shared graph/exec, no tele inject / bank plan.
+    // v2 = same stack + teleport catalog inject + path-scoped bank for runes/tolls.
+    // See docs/NAV.md § One walker, two modes.
     navEngine?: 'classic' | 'v2';
     // v2 only: spell/jewellery tele edges (default true when navEngine is v2).
     useTeleportCatalog?: boolean;
@@ -672,10 +673,10 @@ Traversal.remaining(): number  // path tiles left in the active walk
 `Traversal.walkTo` web-walks the whole world (A\* over the collision pack + door/
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
-Both engines snapshot live **WorldState** (skills, quests, inventory, members world)
-so skill-gated doors, tolls, and quest transports fail closed when the player cannot
-use them. **v2** additionally injects spell/jewellery teleports and may bank for runes
-once per walk. See [Nav v2](NAV.md#nav-v2-experimental) and
+There is **one** walker stack: live **WorldState** (skills, quests, inventory, members)
+gates skill doors, tolls, and quest transports for both modes. **v2** only adds spell/
+jewellery tele inject and path-scoped bank for runes/tolls. See
+[One walker, two modes](NAV.md#one-walker-two-modes-classic--v2) and
 [`docs/nav-v2/`](nav-v2/README.md).
 
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for

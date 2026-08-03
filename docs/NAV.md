@@ -10,8 +10,12 @@ The hard part is not the search. It is that the client can only express movement
 *clicks on tiles it can see*, while the destination is usually off-screen, behind a
 shut door, or on another level.
 
-> **Nav v2 (experimental)** — see [Nav v2](#nav-v2-experimental) below and
-> [`docs/nav-v2/`](nav-v2/README.md). Default walker remains **classic**.
+> **One walker, two modes.** Global **World walker** is `classic` (default) or `v2`.
+> That is a **feature gate on a single stack**, not two engines. Most of what shipped
+> under the “nav v2” program (travel catalog, skill/quest gates, ship/gangplank fixes,
+> open-door skips, path paint) runs in **both** modes. v2 only adds tele inject,
+> path-scoped bank, and hop logs. See [One walker, two modes](#one-walker-two-modes-classic--v2)
+> and [classic parity](nav-v2/CLASSIC-PARITY.md).
 
 ## Contents
 
@@ -21,7 +25,7 @@ shut door, or on another level.
 - [Corridor snap](#corridor-snap)
 - [Doors](#doors)
 - [Special crossings](#special-crossings)
-- [Nav v2 (experimental)](#nav-v2-experimental)
+- [One walker, two modes (classic / v2)](#one-walker-two-modes-classic--v2)
 - [Path camera](#path-camera)
 - [Route corpus / HARD stress](#route-corpus--hard-stress)
 - [Level-change loc lag](#level-change-loc-lag)
@@ -50,22 +54,13 @@ traversal edges that plain collision cannot express:
 | [`travelCatalog.ts`](../src/bot/nav/v2/travelCatalog.ts) | content constants | 2004 travel (spirit/glider/Entrana/cart/essence/levers/agi) merged at graph load for **classic and v2** |
 | [`specialRequires.ts`](../src/bot/nav/v2/specialRequires.ts) | content scripts | plan-time skill/coin gates on doors and transport from-tiles |
 
-Both walkers load the **same** door/transport/travelCatalog graph and share the
-executor (`WalkExecutor` + `exec/`). Live walks snapshot WorldState so skill/quest/coin
-gates fail closed when the player cannot use them. Offline / no-state path finds
-**fail open** on requires (pre-v2 pack-tool parity — ships and skill doors still expand).
+There is a **single** door/transport/travelCatalog graph and a **single** executor
+(`WalkExecutor` + `exec/`). Live walks snapshot WorldState so skill/quest/coin gates
+fail closed when the player cannot use them. Offline / no-state path finds **fail open**
+on requires (pre-v2 pack-tool parity — ships and skill doors still expand).
 
-**Classic vs v2** (default remains classic):
-
-| | Classic | v2 |
-|---|---|---|
-| Graph (doors, transports, travelCatalog) | yes | yes |
-| Live WorldState requires | yes (when snapshot works) | yes |
-| Spell/jewellery tele inject | no | yes |
-| Path-scoped bank for runes/tolls | no | yes |
-| A* heuristic | Chebyshev; Dijkstra if long-range edges (#335) | Same + tele floor when teles inject |
-
-See [Nav v2](#nav-v2-experimental).
+The Global `navEngine` flag only gates a few extras (see
+[One walker, two modes](#one-walker-two-modes-classic--v2)).
 
 Multi-level routing is therefore a **data** property, not an algorithm one: the
 executor already knows how to climb, and gains a new route the moment an edge for it
@@ -287,24 +282,46 @@ falls back to nearby-name lookup when ids are absent. Special crossings resolve 
 
 Ladders with a single tele still wrapped in quest/skill/inv guards stay in the JSON as
 `disabledReason` audit rows (not active graph edges), unless a curated activation in
-`src/bot/nav/v2/stateAwareRequires.ts` re-enables them with `requires` (nav v2 only —
-classic skips requires-gated edges when no WorldState snapshot is sent).
+`src/bot/nav/v2/stateAwareRequires.ts` re-enables them with `requires` (merged at graph
+load for **both** modes). Without a WorldState snapshot, requires-gated **graph** edges
+**fail open** (pack-tool parity); live walks snapshot state and fail closed.
 
-## Nav v2 (experimental)
+## One walker, two modes (classic / v2)
 
-**Global → World walker:** `classic` (default) | `v2`. Override: `?Global.navEngine=v2`
-or `walkTo(dest, { navEngine: 'v2' })`.
+**There is not a separate “v1 engine” still running.** Dual-run nav-v2 kept one
+`PathFinder` / `WalkExecutor` / transport graph. The program mostly **landed in the
+shared stack**; the switch only turns a few features on or off.
 
-| | Classic | v2 |
-|---|---|---|
-| Tele catalog (spell + jewellery) | no | yes |
-| Live WorldState for edge `requires` | snapshot when available | yes |
-| Hop logs | no | yes |
-| Path-scoped bank (runes/tolls; inv jewellery only) | no | yes (one leg max) |
-| Path camera follow | optional (`navCameraFollow`) | optional (`navCameraFollow`) |
-| Path paint | optional | optional (`showNavPath`) |
+**Global → World walker:** `classic` (default) | `v2`.  
+Override: `?Global.navEngine=v2` or `walkTo(dest, { navEngine: 'v2' })`.
 
-**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`).
+### Shared (classic and v2)
+
+| Concern | Behaviour |
+|---|---|
+| Graph | doors + transports + stairs + **travelCatalog** (spirit/glider/Entrana/cart/essence/levers/agi) |
+| Requires | skill / quest / coins via `specialRequires` + catalog; live fail-closed, pack fail-open |
+| Execute | doors, ships, gangplanks, gliders, spirit trees, carts, open-loc fast path — one `exec/` |
+| Heuristic | Chebyshev; **Dijkstra** when long-range edges exist (#335) |
+| Paint / camera | optional globals (`showNavPath`, `navCameraFollow`) |
+
+### Only when `navEngine === 'v2'`
+
+| Concern | Behaviour |
+|---|---|
+| Tele catalog | spell + jewellery inject (jewellery = inventory Rub only; no bank jewellery) |
+| Path-scoped bank | one leg for runes/tolls |
+| Hop logs | transport hop logging under v2 policy |
+| A* tele floor | when teles inject |
+
+Default stays **classic** so existing scripts do not suddenly route through spell teles
+or bank for runes. Classic is **not** a freeze of pre-nav-v2 (`bce3c6e`): shared
+improvements (travel graph, honest gates with WorldState, ship/plank fixes, etc.) apply
+in both modes. Pre-v2 comparison: [docs/nav-v2/CLASSIC-PARITY.md](nav-v2/CLASSIC-PARITY.md).
+
+### Path paint (both modes)
+
+Global **Show nav path** + group **Nav path paint** (`showIf`).
 
 - **Path tiles** paint into the **game surface** after the 3D world (`BotClient.onAfterWorldRender`
   → `pathScenePaint.ts`) with the same camera projection as the scene.
@@ -316,16 +333,17 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 True z-buffer path paint *under* models would need injecting into `World` draw order; object hulls
 do not require that (overlay projection is enough for interact targeting).
 
-**Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
-(bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
+**Jewellery (v2 only):** inventory Rub only at plan+execute. Bank planner does not withdraw
+rings/glories (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
 
-**2004 travel + gates:** spirit/glider/Entrana/cart/essence/levers/agi shortcuts (`travelCatalog.ts`);
-quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder (`specialRequires.ts`).
-Matrix and operator commands: [docs/nav-v2/TRANSPORTS-2004.md](nav-v2/TRANSPORTS-2004.md).
+**2004 travel + gates (shared graph):** spirit/glider/Entrana/cart/essence/levers/agi
+(`travelCatalog.ts`); quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder
+(`specialRequires.ts`). Matrix: [docs/nav-v2/TRANSPORTS-2004.md](nav-v2/TRANSPORTS-2004.md).
 
-**Code:** `src/bot/nav/v2/`, `exec/`, `pathPublish.ts`, `pathOverlay.ts`, `cameraFollow.ts`. Tele catalog:
-`teleportCatalog.ts`. Pack stress: `tools/nav/script-route-corpus.ts`. Live/operator tools
-under `tools/nav-*.ts` (not CI). Index: [docs/nav-v2/](nav-v2/).
+**Code map:** shared stack under `src/bot/nav/` (`PathFinder`, `WalkExecutor`, `exec/`, `data/`).
+Folder `v2/` holds tele catalog, travel catalog, WorldState helpers, bank plan — **most of
+that is used by classic too**; only tele inject / bank-for-route / hop logs are mode-gated.
+Index: [docs/nav-v2/](nav-v2/).
 
 ## Path camera
 

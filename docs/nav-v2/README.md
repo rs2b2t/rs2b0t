@@ -1,25 +1,38 @@
-# Nav v2
+# Nav modes (classic / v2)
 
-Opt-in walker: Global **World walker** = `classic` (default) | `v2`.
+> **Honest framing:** there is **one** world walker. The dual-run flag did not leave a
+> frozen “v1 engine” beside a new “v2 engine.” Most of the nav-v2 program **landed in
+> the shared stack**. What the UI still calls **classic** vs **v2** is a **feature gate**
+> on that stack. Details: [CLASSIC-PARITY.md](./CLASSIC-PARITY.md).
 
 | | |
 |---|---|
-| Code | `src/bot/nav/v2/`, `exec/`, `pathPublish` / `pathOverlay` / `pathPaintTheme` |
-| Tele catalog | `src/bot/nav/v2/teleportCatalog.ts` |
-| Manual | [docs/NAV.md](../NAV.md) § Nav v2 |
-| **2004 transport coverage plan** | [TRANSPORTS-2004.md](./TRANSPORTS-2004.md) |
-| Unit | `bun test test/nav/` |
+| Product manual | [docs/NAV.md](../NAV.md) § [One walker, two modes](../NAV.md#one-walker-two-modes-classic--v2) |
+| Classic vs pre-v2 audit | [CLASSIC-PARITY.md](./CLASSIC-PARITY.md) |
+| **2004 transport coverage** | [TRANSPORTS-2004.md](./TRANSPORTS-2004.md) |
+| Shared code | `PathFinder`, `WalkExecutor`, `exec/`, `loadTransportGraph`, `data/*` |
+| Mostly under `v2/` (shared use) | `travelCatalog`, `specialRequires`, `worldState*`, path paint |
+| True v2-only | `teleportCatalog` inject, path-scoped bank, hop logs |
+| Unit | `bun test test/nav/` (incl. `classicParity.test.ts`) |
 | Pack corpus | `bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts` |
 
-**v2 adds:** spell + jewellery tele edges (magic/runes/quests via WorldState; jewellery inventory only), hop logs, path-scoped bank for runes/tolls, optional path paint + live loc hulls, quest-lock door blacklist, danger zones.
+### What is shared (both modes)
 
-**Coverage program:** 2004-era travel (spirit trees, glider, Entrana, carts, essence entry, levers, OD agility) in `travelCatalog.ts` / `loadTransportGraph.ts`; guild skill doors + mining ladder gates in `specialRequires.ts`; quest seeds in `transportQuestReqs.ts` — see [TRANSPORTS-2004.md](./TRANSPORTS-2004.md).
+Doors, transports, **travelCatalog** (spirit/glider/Entrana/cart/essence/levers/agi),
+special crossings (ships, gangplanks, tolls), guild skill gates, WorldState requires,
+open-door fast path, path paint / camera (optional globals), danger zones.
 
-**Classic vs v2:** both load the same door/transport/travelCatalog graph and evaluate
-WorldState requires. **v2 only:** teleport catalog inject, path-scoped bank, hop logs
-when using v2 policy.
+### What only `navEngine: 'v2'` turns on
 
-**Still deferred:** bank cache API, multi-dest quest ladders (Horror/Watchtower maze),
-fairy rings / post-era matrix, live CI harness suite.
+1. Spell + jewellery **teleport catalog inject** (jewellery = inventory Rub only)
+2. **Path-scoped bank** for runes/tolls (one leg; not jewellery bank withdraw)
+3. Transport **hop logs** under v2 policy
 
-Operator live tools live under `tools/nav-*.ts` (not CI). Do not document personal deploy paths here.
+Default Global remains **`classic`** so scripts do not gain tele inject by surprise.
+
+### Still deferred
+
+Bank cache API, multi-dest quest ladders (Horror/Watchtower maze), fairy rings /
+post-era matrix, live CI harness suite.
+
+Operator live tools: `tools/nav-*.ts` (not CI). Do not document personal deploy paths here.

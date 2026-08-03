@@ -1,11 +1,23 @@
-# Classic nav vs pre–nav-v2 (`bce3c6e`)
+# Classic mode vs pre–nav-v2 (`bce3c6e`)
 
 Baseline commit: **`bce3c6e`** (Add hill giant script — last main tip before dual-run nav-v2).
 
-## What “classic” means now
+## Bottom line
 
-There is **one** pathfinder + executor stack. Classic is **not** a frozen copy of
-pre-v2 sources; it is the shared engine with v2-only features disabled.
+**v2 mostly swallowed v1.** There is **one** pathfinder + executor + transport graph.
+The Global **World walker** switch (`classic` | `v2`) is a **feature gate**, not two
+codebases. Calling the default “classic” does **not** mean “unchanged since before
+nav-v2 shipped.”
+
+| Mode | What it is |
+|---|---|
+| **classic** (default) | Current shared stack with tele inject, path-scoped bank, and v2 hop logs **off** |
+| **v2** | Same stack with those three features **on** |
+| **pre-v2 (`bce3c6e`)** | Historical baseline for audits — **not** what classic runs today |
+
+Product overview: [NAV.md § One walker, two modes](../NAV.md#one-walker-two-modes-classic--v2).
+
+## Shared vs gated
 
 | Concern | Pre-v2 (`bce3c6e`) | Classic (default) today | v2 |
 |---|---|---|---|
@@ -16,22 +28,31 @@ pre-v2 sources; it is the shared engine with v2-only features disabled.
 | Live find | all edges open | fail closed when state says unmet | same |
 | Tele inject | n/a | **off** | on (policy) |
 | Bank-for-route | n/a | **off** | on |
+| Hop logs | n/a | **off** | on |
 | A* / long-range | Chebyshev always | Chebyshev; **Dijkstra if long-range edges** (#335) | + tele floor |
 | MAX_EXPANSIONS | 300k | 500k | 500k |
 | Door execute | inlined WalkExecutor | `exec/doorCrossing` (same logic + open-loc fast path) | same |
 | Paint / camera | n/a | optional globals | optional globals |
 
+The dual-run switch only gates:
+
+1. teleport catalog inject  
+2. path-scoped bank planner  
+3. v2 hop logging  
+
+Everything else is shared by design. Tests: `test/nav/classicParity.test.ts`.
+
 ## Audit findings (code review)
 
-### Not a regression (shared improvements)
+### Not a regression (shared improvements — classic gets them too)
 
-- **Open-door skip waits** (#356) — both engines.
-- **Ship / gangplank / glider / spirit** execute fixes — both engines.
-- **Guild skill gates, mining ladder, ropeswings** — honesty when WorldState present.
-- **travelCatalog** on the graph — extra OD options for classic too.
-- **Door approach-before-Open** — both engines.
+- **Open-door skip waits** (#356)
+- **Ship / gangplank / glider / spirit** execute fixes (incl. #352 Ardougne↔Brimhaven plank)
+- **Guild skill gates, mining ladder, ropeswings** — honesty when WorldState present
+- **travelCatalog** on the graph — extra OD options for classic too
+- **Door approach-before-Open**
 
-### Real classic / pack-tool issue fixed on this branch
+### Pack-tool / offline issue (fixed)
 
 - **Requires fail-closed without WorldState** skipped every gated edge (ships with coin
   requires, fishing guild, …) in offline `PathFinder` / worker calls that omitted
@@ -46,16 +67,15 @@ pre-v2 sources; it is the shared engine with v2-only features disabled.
 - Long-range edges force Dijkstra when no tele floor (#335) so A* prefers cheap
   portals/ships over pure walk; expansion budget raised to 500k.
 
-### “v2 swallowed v1”
+## Live regression (classic)
 
-Accurate in the sense that **classic does not run a separate codebase**. The dual-run
-switch only gates:
+```bash
+# Shared ship+plank path that closed #352 — must pass under classic
+HEADED=1 NAV_ENGINE=classic SHIP_352=1 bun tools/nav-script-routes-live.ts
 
-1. teleport catalog inject  
-2. path-scoped bank planner  
-3. v2 hop logging  
-
-Everything else is shared by design. Tests: `test/nav/classicParity.test.ts`.
+# General classic smoke
+HEADED=1 NAV_ENGINE=classic LIMIT=2 bun tools/nav-script-routes-live.ts
+```
 
 ## How to re-audit
 

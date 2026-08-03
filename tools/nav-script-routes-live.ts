@@ -14,10 +14,14 @@
  *   HEADED=1 HARD=1 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
  *   HEADED=1 TRANSPORT_HEAVY=1 LIMIT=12 bun tools/nav-script-routes-live.ts
  *   HEADED=1 LIMIT=8 BUDGET_S=180 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 NAV_ENGINE=classic LIMIT=3 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 NAV_ENGINE=classic SHIP_352=1 bun tools/nav-script-routes-live.ts
  *
  * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
  * TRANSPORT_HEAVY=1 reads tools/nav/transport-heavy.routes.json
  *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=12).
+ * SHIP_352=1 → Ardougne↔Brimhaven board+gangplank legs (issue #352 stuck-on-boat).
+ * NAV_ENGINE=classic|v2 (default v2 for this harness) — forces walkTo.navEngine + Global setting.
  * Non-HARD builds seeds from script-route-corpus (happy-dom registered on demand).
  * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
  */
@@ -42,6 +46,14 @@ const USE_HARDEST = process.env.HARD === '1' || process.env.HARD === 'true';
 /** TRANSPORT_HEAVY=1 → curated transport-heavy OD list (tools/nav/transport-heavy.routes.json). */
 const USE_TRANSPORT_HEAVY =
     process.env.TRANSPORT_HEAVY === '1' || process.env.TRANSPORT_HEAVY === 'true';
+/**
+ * SHIP_352=1 → Ardougne↔Brimhaven ship legs that reproduce #352 (stuck on boat / no plank).
+ * Forces coins seed; classic and v2 both exercise the shared ship/gangplank execute path.
+ */
+const USE_SHIP_352 = process.env.SHIP_352 === '1' || process.env.SHIP_352 === 'true';
+/** NAV_ENGINE=classic|v2 — default v2 (historical harness default). Classic = no tele inject. */
+const NAV_ENGINE: 'classic' | 'v2' =
+    process.env.NAV_ENGINE === 'classic' || process.env.NAV_ENGINE === 'v1' ? 'classic' : 'v2';
 const ARRIVAL = 8;
 /** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
 const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
@@ -237,6 +249,34 @@ export function loadTransportHeavyRoutes(limit: number, file = TRANSPORT_HEAVY_J
 }
 
 /**
+ * Issue #352: bots boarded Ardougne→Brimhaven then sat on the deck (no gangplank Cross).
+ * OD pairs force Barnaby/Customs Pay-fare + deck→shore gangplank (shared classic/v2 exec).
+ *
+ * Stands from transports.json / specialCrossings (Barnaby 2683,3272 → deck 2775,3234 L1
+ * → plank to 2772,3234 L0; reverse Customs 2772,3234 → Ardougne deck 2683,3268 L1 → shore).
+ */
+export function loadShip352Routes(limit = 2): ScriptRoute[] {
+    const all: ScriptRoute[] = [
+        {
+            id: 'SHIP-352-ard-brim',
+            from: { x: 2668, z: 3285, level: 0 },
+            // Ashore Brimhaven (past plank), not the deck tile — forces disembark hop.
+            to: { x: 2779, z: 3218, level: 0 },
+            note: 'Ardougne docks → Brimhaven shore (Barnaby Pay-fare + gangplank Cross) #352',
+            source: 'issue-352'
+        },
+        {
+            id: 'SHIP-352-brim-ard',
+            from: { x: 2779, z: 3218, level: 0 },
+            to: { x: 2668, z: 3285, level: 0 },
+            note: 'Brimhaven docks → Ardougne shore (Customs Pay-fare + gangplank Cross) #352',
+            source: 'issue-352'
+        }
+    ];
+    return limit > 0 ? all.slice(0, limit) : all;
+}
+
+/**
  * Seed list for non-HARD runs. Registers happy-dom when needed so BankLocations
  * (and friends) can import without a manual --preload.
  */
@@ -255,11 +295,14 @@ type WalkOpts = {
     allowTeleportIds?: string[];
     distanceBeforeTeleport?: number;
     useTeleports?: boolean;
+    navEngine?: 'classic' | 'v2';
 };
 
 async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; tile: Tile | null; logs: string[] }> {
+    const engine = opts.navEngine ?? NAV_ENGINE;
+    const teleOn = engine === 'v2' && opts.useTeleports !== false;
     await page.evaluate(
-        ({ destination, budgetMs, allowTeleportIds, distanceBeforeTeleport, useTeleports }) => {
+        ({ destination, budgetMs, allowTeleportIds, distanceBeforeTeleport, teleOn, engine }) => {
             const g = globalThis as never as Abi;
             const logs: string[] = [];
             g.__navScriptRoute = undefined;
@@ -269,13 +312,16 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: 4,
                             timeoutMs: budgetMs,
-                            navEngine: 'v2',
-                            useTeleportCatalog: useTeleports !== false,
-                            policy: {
-                                useTeleports: useTeleports !== false,
-                                distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
-                                ...(allowTeleportIds ? { allowTeleportIds } : {})
-                            },
+                            navEngine: engine,
+                            useTeleportCatalog: teleOn,
+                            policy:
+                                engine === 'v2'
+                                    ? {
+                                          useTeleports: teleOn,
+                                          distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
+                                          ...(allowTeleportIds ? { allowTeleportIds } : {})
+                                      }
+                                    : undefined,
                             log: m => {
                                 logs.push(m);
                                 this.log(m);
@@ -302,7 +348,8 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
             budgetMs: opts.budget,
             allowTeleportIds: opts.allowTeleportIds,
             distanceBeforeTeleport: opts.distanceBeforeTeleport,
-            useTeleports: opts.useTeleports
+            teleOn,
+            engine
         }
     );
 
@@ -424,22 +471,26 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
     return out;
 }
 
-const all = USE_HARDEST || USE_TRANSPORT_HEAVY ? [] : await loadSeedRoutes();
-const routes = USE_TRANSPORT_HEAVY
-    ? loadTransportHeavyRoutes(LIVE_LIMIT || 12)
-    : USE_HARDEST
-      ? loadHardestRoutes(LIVE_LIMIT || 25)
-      : pickLiveRoutes(all, LIVE_LIMIT);
+const all = USE_HARDEST || USE_TRANSPORT_HEAVY || USE_SHIP_352 ? [] : await loadSeedRoutes();
+const routes = USE_SHIP_352
+    ? loadShip352Routes(LIVE_LIMIT || 2)
+    : USE_TRANSPORT_HEAVY
+      ? loadTransportHeavyRoutes(LIVE_LIMIT || 12)
+      : USE_HARDEST
+        ? loadHardestRoutes(LIVE_LIMIT || 25)
+        : pickLiveRoutes(all, LIVE_LIMIT);
 
 console.log(
-    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} budget≈${Math.round(BUDGET_MS / 1000)}s`
+    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} navEngine=${NAV_ENGINE} budget≈${Math.round(BUDGET_MS / 1000)}s`
 );
 console.log(
-    USE_TRANSPORT_HEAVY
-        ? `  TRANSPORT_HEAVY=1 → ${routes.length} routes from ${TRANSPORT_HEAVY_JSON}`
-        : USE_HARDEST
-          ? `  HARD=1 → ${routes.length} precalc hardest from ${HARDEST_JSON}`
-          : `  selected ${routes.length} of ${all.length} script-ripped routes (hub score)`
+    USE_SHIP_352
+        ? `  SHIP_352=1 → ${routes.length} Ardougne↔Brimhaven ship+plank legs (issue #352)`
+        : USE_TRANSPORT_HEAVY
+          ? `  TRANSPORT_HEAVY=1 → ${routes.length} routes from ${TRANSPORT_HEAVY_JSON}`
+          : USE_HARDEST
+            ? `  HARD=1 → ${routes.length} precalc hardest from ${HARDEST_JSON}`
+            : `  selected ${routes.length} of ${all.length} script-ripped routes (hub score)`
 );
 
 await proof.ensureDirs();
@@ -471,18 +522,23 @@ try {
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
 
-    await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2', navCameraFollow: true });
-    await page.evaluate(() => {
+    await setSettings(page, 'Global', {
+        showNavPath: true,
+        navEngine: NAV_ENGINE,
+        navCameraFollow: true
+    });
+    await page.evaluate(engine => {
         const g = globalThis as never as Abi;
         g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-        g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
+        g.__rs2b0t.SettingsStore.save('Global', 'navEngine', engine);
         g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-    });
+    }, NAV_ENGINE);
 
     await maxmeAndClearDialogs(page);
 
     // Transport-heavy / HARD: seed quest varps then relog so quest-list colours update
     // (content only recolours via ~update_questlist at login).
+    // SHIP_352 only needs coins (Barnaby/Customs 30gp) — no quest varps.
     if (USE_TRANSPORT_HEAVY || USE_HARDEST) {
         const setvars = transportQuestSetvarCommands();
         console.log(`${stamp()} seeding ${setvars.length} transport quest varps…`);
@@ -496,13 +552,17 @@ try {
         console.log(`${stamp()} relog so quest journal colours match setvar`);
         await relog(page, user);
         // Re-apply settings after relog
-        await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2', navCameraFollow: true });
-        await page.evaluate(() => {
+        await setSettings(page, 'Global', {
+            showNavPath: true,
+            navEngine: NAV_ENGINE,
+            navCameraFollow: true
+        });
+        await page.evaluate(engine => {
             const g = globalThis as never as Abi;
             g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
+            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', engine);
             g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-        });
+        }, NAV_ENGINE);
         await maxmeAndClearDialogs(page);
 
         type QStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
@@ -528,11 +588,14 @@ try {
     }
 
     // Tele runes so v2 can collapse long hub legs (still pure-walk when no tele).
+    // Classic ignores the tele catalog — still seed so mixed harnesses can switch mid-session.
     for (const cmd of ['~item lawrune 80', '~item airrune 200', '~item firerune 80', '~item waterrune 80', '~item earthrune 80']) {
         await cheatQuiet(page, cmd);
     }
-    if (USE_TRANSPORT_HEAVY) {
+    // Coins for cart / toll / ship fares (classic + transport-heavy + #352 ships).
+    if (USE_TRANSPORT_HEAVY || USE_SHIP_352 || NAV_ENGINE === 'classic') {
         await cheatQuiet(page, '~item coins 5000');
+        console.log(`${stamp()} seeded coins for fares (ship/cart/toll)`);
     }
     console.log(`${stamp()} set tick ${TICK_MS}ms + full run energy`);
     await setTickRate(page, TICK_MS);
@@ -558,10 +621,12 @@ try {
         }
     }
 
-    // Jewellery: separate from script mesh — inventory-only plan (no bank jewellery cache).
-    if (process.env.SKIP_JEWELLERY !== '1') {
+    // Jewellery: v2-only (inventory Rub + teleport catalog). Classic has no tele inject.
+    if (NAV_ENGINE === 'v2' && process.env.SKIP_JEWELLERY !== '1') {
         const jew = await runJewelleryLegs(page, BUDGET_MS);
         results.push(...jew);
+    } else if (NAV_ENGINE === 'classic') {
+        console.log(`${stamp()} skip jewellery legs (navEngine=classic — no tele catalog)`);
     }
 
     const passed = results.filter(x => x.ok).length;

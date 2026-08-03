@@ -1,7 +1,6 @@
-# Nav v2 — full 2004-era transport coverage
+# 2004-era transport coverage
 
-**Branch:** `feat/nav-v2-2004-transports`  
-**Status:** ready for upstream PR  
+**Status:** merged on main (#354); matrix kept as operator/reference  
 **Date:** 2026-08-03  
 
 **North star:** every *player-executable* travel hop that exists in the
@@ -10,6 +9,11 @@ revision-274 / LostCity-style content pack should be either:
 1. **Routable** in A\* with honest `TransportRequires` + executor hop, or  
 2. **Explicitly out of scope** with a one-line reason (broken loc, multi-dest
    dialog without a safe single dest, minigame-only, etc.).
+
+These edges load into the **shared** graph (`loadTransportGraph`) for **classic and
+v2**. Spell/jewellery inject remains the only originless tele layer gated to v2.
+See [CLASSIC-PARITY.md](./CLASSIC-PARITY.md) and
+[NAV.md § One walker, two modes](../NAV.md#one-walker-two-modes-classic--v2).
 
 Source of truth for “what exists” is the **deploy engine content tree**
 (`CONTENT_DIR`, e.g. `~/experiments/Server/content/scripts`).
@@ -24,11 +28,11 @@ Source of truth for “what exists” is the **deploy engine content tree**
 |---|---|---|
 | Doors | `doors.json` | Openable barriers (+ skill gates via `specialRequires.ts`) |
 | Stairs / ladders | `stairEdges.json` | Level changes |
-| Curated v1 | `transports.json` | Ships, portals, shortcuts, dungeon links |
-| Curated 2004 travel | `v2/travelCatalog.ts` via `loadTransportGraph.ts` | Spirit/glider/Entrana/cart/essence/levers/agi |
+| Curated transports | `transports.json` | Ships, portals, shortcuts, dungeon links |
+| Curated 2004 travel | `v2/travelCatalog.ts` via `loadTransportGraph.ts` | Spirit/glider/Entrana/cart/essence/levers/agi (**shared**) |
 | Special crossings | `specialCrossings.ts` | Dialog / NPC / quest unlock execute |
-| Spell + jewellery | `teleportCatalog.ts` | Originless A\* inject (v2) |
-| State re-enable | `stateAwareRequires.ts` | Safe single-dest re-enable of deferred stairs |
+| Spell + jewellery | `teleportCatalog.ts` | Originless A\* inject (**v2 mode only**) |
+| State re-enable | `stateAwareRequires.ts` | Safe single-dest re-enable of deferred stairs (**shared**) |
 | Quest seeds | `transportQuestReqs.ts` | Journal names + setvar complete stages |
 
 ### `travelCatalog` families (curated)
@@ -215,5 +219,6 @@ Aliases (`Watchtower` → `Watch Tower`, etc.) resolve in `worldStateData` / `ca
 | `src/bot/nav/data/specialCrossings.ts` | Execute dialogs |
 | `src/bot/nav/exec/specialCrossing.ts` | Entrana gear + spirit + glider map |
 | `src/bot/nav/pathOverlay.ts` | Live loc hull highlighter |
-| [docs/NAV.md](../NAV.md) | Product manual (path paint, nav v2 table) |
+| [docs/NAV.md](../NAV.md) | Product manual (one walker / two modes, path paint) |
+| [CLASSIC-PARITY.md](./CLASSIC-PARITY.md) | Shared stack vs pre-v2; what v2 mode alone adds |
 | Server `content/scripts/` | Authoritative hops |

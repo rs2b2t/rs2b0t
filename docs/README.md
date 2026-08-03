@@ -22,7 +22,7 @@ pure Lost City or 2004scape projects and is not maintained for those targets.
 | [Running locally](RUNNING.md) | prerequisites, getting an engine, deploying the client, tests, lint, smokes |
 | [Architecture](ARCHITECTURE.md) | the layers, the fences, the ABI boundary, how a call becomes a packet |
 | [Scripting API](API.md) | the complete `@rs2b0t/api` surface, with examples |
-| [World-walking](NAV.md) | the collision pack, pathfinding, doors, transports, arrival |
+| [World-walking](NAV.md) | one walker stack (classic/v2 feature gate), pack, doors, transports, arrival |
 | [Quests](QUESTS.md) | the quest engine, quest modules, exec primitives, provisioning |
 | [Clue scrolls](CLUES.md) | the clue database, step kinds, tool acquisition, tracing |
 | [MultiBox](MULTIBOX.md) | the wall: slots, profiles, login coordination, telemetry |
