@@ -103,8 +103,14 @@ Audit: `CONTENT_DIR=… bun tools/nav/content-transport-audit.ts` prints disable
 | Spirit trees | Loc Talk-to + dialog line matched by hop `toTile` |
 | Essence entry | NPC **Teleport** action (fallback Talk-to + dialog) |
 | Entrana | Talk-to monk; refuse board if restricted weapons/armour (name heuristic) |
-| Wildy levers | Pull Lever |
+| Wildy levers | Pull Lever; Ardougne→wild confirms warning dialog first time |
 | Agility shortcuts | Climb-over / Swing across on loc |
+
+**Plan-time requires notes**
+
+- Ship fares (30 coins) attach via `specialRequiresAt` even when SC is keyed at deck L1 and the graph stand is pier L0 (same x/z).
+- Mort Myre `freeSlots: 6` is **execute-only** (Drezel pies when starting Nature Spirit) — not a permanent plan gate.
+- Entrana restricted gear is **execute-only** (plan has members; strip before boarding or hop fails closed).
 
 ### Object highlighter (path paint)
 

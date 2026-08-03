@@ -30,4 +30,19 @@ describe('specialRequiresAt — guild skill gates (content-backed)', () => {
     test('unrelated tile has no gate', () => {
         expect(specialRequiresAt(3200, 3200, 0)).toBeUndefined();
     });
+
+    test('ship fares attach at pier L0 even when SC is keyed at deck L1', () => {
+        // transports.json from is L0; specialCrossings ships at L1 same x/z
+        const sarim = specialRequiresAt(3027, 3218, 0);
+        expect(sarim?.currency).toEqual({ name: 'Coins', amount: 30 });
+        expect(sarim?.items?.[0]).toMatchObject({ name: 'Coins', count: 30 });
+        const barnaby = specialRequiresAt(2683, 3272, 0);
+        expect(barnaby?.currency?.amount).toBe(30);
+    });
+
+    test('Mort Myre unlock freeSlots is not a plan-time require', () => {
+        // freeSlots only matter when starting Nature Spirit (execute unlock path)
+        expect(specialRequiresAt(3443, 3458, 0)).toBeUndefined();
+        expect(specialRequiresAt(3444, 3458, 0)).toBeUndefined();
+    });
 });

@@ -415,6 +415,32 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         toTile: { x: 2465, z: 3501, level: 3 },
         arrivalRadius: 4,
         label: 'Glider Kar-Hewo → hub'
+    },
+
+    // Wilderness levers (wilderness_lever.rs2). Ardougne→deep wild shows a confirm
+    // the first time (%warning_wilderness_teleport_lever); reverse has no dialog.
+    {
+        x: 2561,
+        z: 3311,
+        level: 0,
+        locName: 'Lever',
+        action: 'Pull',
+        dialogue: {
+            choose: ["Yes I'm brave.", "Yes please, don't show this message again."]
+        },
+        toTile: { x: 3154, z: 3924, level: 0 },
+        arrivalRadius: 3,
+        label: 'Ardougne → deep wilderness lever'
+    },
+    {
+        x: 3153,
+        z: 3923,
+        level: 0,
+        locName: 'Lever',
+        action: 'Pull',
+        toTile: { x: 2562, z: 3311, level: 0 },
+        arrivalRadius: 3,
+        label: 'Deep wilderness → Ardougne lever'
     }
 ];
 

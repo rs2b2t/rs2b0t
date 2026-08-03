@@ -50,14 +50,22 @@ const TRANSPORT_SKILL_GATES: readonly {
     { x: 3020, z: 3340, level: 0, skill: 'mining', levelReq: 60 }
 ];
 
-/** Key: `${x},${z},${level}` of the edge origin (specialCrossing from-tile). */
+/**
+ * Plan-time requires for an edge origin tile.
+ * specialCrossings: prefer exact level, else same x/z (ships often key SC at
+ * deck L1 while transports.json stand is pier L0).
+ *
+ * freeSlots on unlockQuest is **execute-only** (e.g. Drezel pies when starting
+ * Nature Spirit) — never attach to plan requires or full packs fail the gate forever.
+ */
 export function specialRequiresAt(x: number, z: number, level: number): TransportRequires | undefined {
-    const sc = SPECIAL_CROSSINGS.find(s => s.x === x && s.z === z && s.level === level);
+    const atXz = SPECIAL_CROSSINGS.filter(s => s.x === x && s.z === z);
+    const sc = atXz.find(s => s.level === level) ?? atXz[0];
     if (sc) {
         const requires: TransportRequires = {};
         if (sc.requires) {
             requires.items = [{ name: sc.requires.item, count: sc.requires.count, consumed: true }];
-            // also currency form for tolls
+            // also currency form for tolls / ship fares
             if (sc.requires.item === 'Coins') {
                 requires.currency = { name: 'Coins', amount: sc.requires.count };
             }
@@ -65,10 +73,8 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
         if (sc.requiresSkill) {
             requires.skills = [{ name: sc.requiresSkill.name, level: sc.requiresSkill.level }];
         }
-        if (sc.unlockQuest?.freeSlots) {
-            requires.freeSlots = sc.unlockQuest.freeSlots;
-        }
-        if (!requires.items && !requires.skills && !requires.currency && requires.freeSlots === undefined) {
+        if (!requires.items && !requires.skills && !requires.currency) {
+            // unlockQuest-only rows (Mort Myre) → no plan-time freeSlots
             return undefined;
         }
         return requires;
