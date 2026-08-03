@@ -159,6 +159,13 @@ export async function handleSpecialCrossing(
             }
         }
         if (arrived()) {
+            // Ship/tele landings rebuild the scene (gangplanks on deck). Wait so
+            // Locs.query can see the disembark plank before the next hop.
+            if (sc.toTile && approach.level !== sc.toTile.level) {
+                await Execution.delayTicks(2);
+            } else if (sc.toTile) {
+                await Execution.delayTicks(1);
+            }
             log(`${sc.label}: arrived`);
             return true;
         }

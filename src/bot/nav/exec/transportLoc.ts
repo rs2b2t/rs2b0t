@@ -22,8 +22,14 @@ export function matchesTransportLoc(
     if (!idOk) {
         return false;
     }
+    // Prefer exact placement when known, but allow a small slack: ship teleports
+    // land a tile off the stand, and content pack locX/Z for gangplanks is often
+    // one tile from the walkable approach. Live combo failed with exact-only.
     if (loc.id === transport.locId) {
-        return tile.x === transport.locX && tile.z === transport.locZ;
+        return (
+            (tile.x === transport.locX && tile.z === transport.locZ)
+            || near
+        );
     }
     return near;
 }
@@ -48,11 +54,27 @@ export function matchesTransportLanding(
 }
 
 export function findTransportLoc(transport: TransportInfo): Loc | null {
-    return Locs.query()
+    const byMeta = Locs.query()
         .name(transport.locName)
         .action(transport.action)
         .where(loc => matchesTransportLoc(transport, loc))
         .nearest();
+    if (byMeta) {
+        return byMeta;
+    }
+    // Fallback: name+action near the recorded placement (scene lag / id drift after
+    // ship hops — gangplanks on Brimhaven deck after Barnaby).
+    return (
+        Locs.query()
+            .name(transport.locName)
+            .action(transport.action)
+            .where(loc => {
+                const t = loc.tile();
+                return Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 5;
+            })
+            .nearest()
+        ?? Locs.query().name(transport.locName).action(transport.action).nearest()
+    );
 }
 
 export async function openShutTrapdoor(
