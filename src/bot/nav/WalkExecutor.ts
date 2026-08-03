@@ -117,10 +117,10 @@ interface PathStep extends WorldTile {
 type FollowResult = 'arrived' | 'closest' | 'blocked' | 'repath' | 'failed' | 'interrupted';
 
 function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
-    // Explore: scene-aware BFS when Global.navPathSceneExpand (default on this branch).
+    // Experimental: scene-aware BFS when Global.navPathSceneExpand (opt-in debug).
     let scene: import('./pathExpand.js').ExpandWorldFns | null = null;
     try {
-        const on = SettingsStore.globalBag().bool('navPathSceneExpand', true);
+        const on = SettingsStore.globalBag().bool('navPathSceneExpand', false);
         if (on && reader.attached()) {
             scene = {
                 toLocal: (x, z) => reader.toLocal(x, z),
@@ -300,7 +300,7 @@ class WalkExecutorImpl {
         to: { x: number; z: number; level: number }
     ): void {
         try {
-            if (!SettingsStore.globalBag().bool('navPathClientSegment', true)) {
+            if (!SettingsStore.globalBag().bool('navPathClientSegment', false)) {
                 PathPublish.setClientSegment(null);
                 return;
             }

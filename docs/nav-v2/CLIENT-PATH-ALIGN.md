@@ -1,6 +1,6 @@
 # Client path vs pack path / ground paint
 
-**Status:** **EXPLORE branch** (`explore/client-path-paint`) — not upstream-ready.  
+**Status:** experimental debug features (opt-in Global settings under Show nav path).  
 **Date:** 2026-08-03  
 
 Operators see the painted webwalker route diverge from the tiles the client actually
@@ -30,8 +30,8 @@ accepts for gameclick movement.
 
 | Control | Default | Effect |
 |---|---|---|
-| `Global.navPathSceneExpand` | **true** (explore) | Pack path segments expanded with scene-flag BFS when both ends are in the loaded scene (`pathExpand.ts` → `WalkExecutor.expandWaypoints`) |
-| `Global.navPathClientSegment` | **true** (explore) | After each successful walk click, paint the **exact** `tryMove` tiles |
+| `Global.navPathSceneExpand` | **false** (opt-in) | Pack path segments expanded with scene-flag BFS when both ends are in the loaded scene |
+| `Global.navPathClientSegment` | **false** (opt-in) | After each successful walk click, paint the **exact** `tryMove` tiles |
 | `Global.navPathColorClient` | `#00D4FF` | Solid trail colour when walking |
 | `Global.navPathColorClientRunAlt` | `#FFFF00` | When run is on, alternate tiles use this (yellow) |
 
@@ -69,22 +69,18 @@ HEADED=1 LIMIT=2 PATH_PAINT=0 bun tools/nav-script-routes-live.ts   # paint off
 
 Env toggles (all three harnesses): `PATH_PAINT_SCENE_EXPAND=0|1`, `PATH_PAINT_CLIENT_SEG=0|1`.
 
-### Known limits (why not upstream yet)
+### Known limits
 
-1. Cyan is the **current walk-click** only (not the entire remaining pack path). Pack red
-   still shows the long plan; cyan is “what this click will walk”.
-2. Scene expand changes the dense tile list used for **corridor snap**, not only paint —
-   behaviour change beyond cosmetics (needs live soak).
+1. Client trail is the **current walk-click** only (not the entire remaining pack path).
+2. Scene expand also feeds **corridor snap** (not paint-only) — keep off unless debugging.
 3. Off-scene / multi-level / transport pack segments still Chebyshev.
-4. `tryMove` records at most the scene-local path (104×104); far-off destinations still
-   use tryNearest / multi-click.
+4. `tryMove` records at most the scene-local path (104×104).
 
 ## Follow-ups
 
-1. Paint the full remaining plan as one continuous trail (merge pack ahead-of-scene with
-   client route for the active hop) for a single “shortest path” look.
-2. Gate scene expand behind a “paint only” mode that does not affect corridor snap.
-3. Diff metric: % of cyan tiles not on red (and vice versa) for automated probes.
+1. Paint the full remaining plan as one continuous trail.
+2. Scene expand that only affects paint, not corridor snap.
+3. Diff metric: pack vs client trail overlap for automated probes.
 
 ## Code map
 

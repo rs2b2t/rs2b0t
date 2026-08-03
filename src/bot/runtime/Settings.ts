@@ -225,43 +225,43 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help: 'HTML #RGB / #RRGGBB — transport captions (default white)'
     },
-    // ── Explore (client-path paint) — not production defaults ──
+    // ── Experimental path-paint debug (opt-in; only when showNavPath) ──
     navPathSceneExpand: {
         type: 'boolean',
-        default: true,
-        label: 'Scene-aware path expand (explore)',
+        default: false,
+        label: 'Scene-aware path expand (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
-            'EXPLORE: fill pack path segments with scene collision BFS instead of '
-            + 'Chebyshev diagonals when both ends are in the loaded scene. '
-            + 'May change corridor snap behaviour. Not upstream-ready.'
+            'Experimental debug: fill pack path segments with live scene collision '
+            + 'BFS when both ends are on-screen (instead of Chebyshev diagonals). '
+            + 'Can change corridor snap. Off by default.'
     },
     navPathClientSegment: {
         type: 'boolean',
-        default: true,
-        label: 'Paint client walk segment (explore)',
+        default: false,
+        label: 'Paint client walk trail (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
-            'EXPLORE: after each walk click, paint a cyan scene-BFS polyline from '
-            + 'the player to the click tile (approximates Client.tryMove). Compare '
-            + 'to the red pack path. Not upstream-ready.'
+            'Experimental debug: after each walk click, paint the exact client '
+            + 'tryMove tiles (solid when walking; alternate colours when run is on). '
+            + 'Compare to the pack path. Off by default.'
     },
     navPathColorClient: {
         type: 'string',
         default: '#00D4FF',
-        label: 'Client segment colour (explore)',
+        label: 'Client trail colour (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
-            'Primary colour for the client-walk trail (solid when walking). '
+            'Primary colour for the experimental client-walk trail (solid when walking). '
             + 'Default cyan #00D4FF.'
     },
     navPathColorClientRunAlt: {
         type: 'string',
         default: '#FFFF00',
-        label: 'Client run alt colour (explore)',
+        label: 'Client run alt colour (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
