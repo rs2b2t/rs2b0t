@@ -163,19 +163,19 @@ export function pathCorridorSignature(
 }
 
 /**
- * Keep one ranked route per journey signature. Prefer higher source priority,
- * then higher difficulty (harder representative of that journey).
+ * Keep one ranked route per journey signature. Prefer higher difficulty (the
+ * HARD representative), then source priority as a tie-break.
  */
 export function dedupeByCorridor<T extends ScriptRoute & { corridor: string; difficulty: number }>(
     rows: T[]
 ): T[] {
     const sorted = [...rows].sort((a, b) => {
+        if (b.difficulty !== a.difficulty) {
+            return b.difficulty - a.difficulty;
+        }
         const dp = sourcePriority(b.source) - sourcePriority(a.source);
         if (dp !== 0) {
             return dp;
-        }
-        if (b.difficulty !== a.difficulty) {
-            return b.difficulty - a.difficulty;
         }
         return a.id.localeCompare(b.id);
     });

@@ -155,8 +155,12 @@ export function yawTowardTiles(from: TileLike, to: TileLike): number | null {
 
 /** How far desired yaw may jump before we retarget (reduces micro-chatter). */
 const TARGET_RETARGET_MIN = 28;
-/** Stop driving camera this long after the last path sample (walk ended / stalled). */
-const STALE_MS = 900;
+/**
+ * Stop driving camera this long after the last path sample (walk ended / stalled).
+ * Walk follow samples once per loop then `delayTicks(2)` (~1200ms @ 600ms ticks),
+ * so this must exceed that interval with margin or the camera freeze-starts.
+ */
+const STALE_MS = 3000;
 
 /**
  * Frame-driven path camera. WalkExecutor only publishes a desired heading;

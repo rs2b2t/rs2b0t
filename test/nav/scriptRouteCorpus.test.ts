@@ -111,7 +111,7 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
         expect(toGt).not.toBe(fromGt);
     });
 
-    test('dedupeByCorridor keeps one row per signature', () => {
+    test('dedupeByCorridor keeps the harder row per signature', () => {
         const base = {
             from: { x: 0, z: 0, level: 0 },
             to: { x: 1, z: 0, level: 0 },
@@ -125,12 +125,12 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
             difficulty: 10
         };
         const rows = [
-            { ...base, id: 'low', source: 'NAV_TARGETS', difficulty: 10 },
-            { ...base, id: 'high', source: 'mainland-routes.json', difficulty: 5 }
+            { ...base, id: 'hard', source: 'NAV_TARGETS', difficulty: 10 },
+            { ...base, id: 'easy-mainland', source: 'mainland-routes.json', difficulty: 5 }
         ];
         const out = dedupeByCorridor(rows);
         expect(out).toHaveLength(1);
-        expect(out[0]!.id).toBe('high'); // mainland preferred
+        expect(out[0]!.id).toBe('hard'); // difficulty beats source priority
     });
 });
 
