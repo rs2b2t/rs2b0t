@@ -63,14 +63,28 @@ export async function handleSpecialCrossing(
     }
 
     if (sc.npc) {
-        const npc = Npcs.query().name(sc.npc).action('Talk-to').nearest();
-        if (!npc || !(await npc.interact('Talk-to'))) {
-            log(`${sc.label}: '${sc.npc}' not talkable`);
+        // Prefer the crossing action when it is a real NPC op (Teleport, Pay-fare, …).
+        const preferred =
+            sc.action && sc.action !== 'Open' && sc.action !== 'Go-through' && sc.action !== 'Pull'
+                ? sc.action
+                : 'Talk-to';
+        const tryActs = preferred === 'Talk-to' ? (['Talk-to'] as const) : ([preferred, 'Talk-to'] as const);
+        let interacted = false;
+        for (const act of tryActs) {
+            const npc = Npcs.query().name(sc.npc).action(act).nearest();
+            if (npc && (await npc.interact(act))) {
+                interacted = true;
+                break;
+            }
+        }
+        if (!interacted) {
+            log(`${sc.label}: '${sc.npc}' not interactable (${preferred})`);
             return false;
         }
+        const rad = sc.arrivalRadius ?? 2;
         const arrived = (): boolean => {
             const me = reader.worldTile();
-            return me !== null && sc.toTile !== undefined && me.level === sc.toTile.level && isNear(me, sc.toTile, 2);
+            return me !== null && sc.toTile !== undefined && me.level === sc.toTile.level && isNear(me, sc.toTile, rad);
         };
         for (let i = 0; i < SHIP_DIALOGUE_STEPS && !arrived(); i++) {
             const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
@@ -83,10 +97,10 @@ export async function handleSpecialCrossing(
             }
         }
         if (arrived()) {
-            log(`${sc.label}: sailed`);
+            log(`${sc.label}: arrived`);
             return true;
         }
-        log(`${sc.label}: voyage did not resolve — repathing`);
+        log(`${sc.label}: hop did not resolve — repathing`);
         return false;
     }
 

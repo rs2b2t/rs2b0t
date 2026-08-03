@@ -11,6 +11,11 @@ export interface SpecialCrossing {
     dialogue?: { choose: string[] };
     npc?: string;
     toTile?: { x: number; z: number; level: number };
+    /**
+     * Chebyshev radius for toTile arrival (default 2). Larger for random landings
+     * (e.g. essence mine pads).
+     */
+    arrivalRadius?: number;
     reopenAfterDialogue?: boolean;
     /**
      * When `quest` is notStarted, walk to `npc` at `stand`, run `dialogue`, then
@@ -151,6 +156,68 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         dialogue: { choose: ["Yes please, I'd like to go to Shilo Village."] },
         toTile: { x: 2834, z: 2951, level: 0 },
         label: 'Brimhaven → Shilo cart'
+    },
+
+    // Essence mine entry — right-click Teleport after Rune Mysteries (content runecraft.constant stands).
+    {
+        x: 3253,
+        z: 3401,
+        level: 0,
+        npc: 'Aubury',
+        locName: 'Aubury',
+        action: 'Teleport',
+        toTile: { x: 2912, z: 4833, level: 0 },
+        arrivalRadius: 64,
+        dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
+        label: 'Aubury → essence mine'
+    },
+    {
+        x: 3106,
+        z: 9572,
+        level: 0,
+        npc: 'Sedridor',
+        locName: 'Sedridor',
+        action: 'Teleport',
+        toTile: { x: 2912, z: 4833, level: 0 },
+        arrivalRadius: 64,
+        dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
+        label: 'Sedridor → essence mine'
+    },
+    {
+        x: 2591,
+        z: 3086,
+        level: 0,
+        npc: 'Wizard Distentor',
+        locName: 'Wizard Distentor',
+        action: 'Teleport',
+        toTile: { x: 2912, z: 4833, level: 0 },
+        arrivalRadius: 64,
+        dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
+        label: 'Distentor → essence mine'
+    },
+    {
+        x: 2684,
+        z: 3322,
+        level: 0,
+        npc: 'Wizard Cromperty',
+        locName: 'Wizard Cromperty',
+        action: 'Teleport',
+        toTile: { x: 2912, z: 4833, level: 0 },
+        arrivalRadius: 64,
+        dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
+        label: 'Cromperty → essence mine'
+    },
+    {
+        x: 2390,
+        z: 9810,
+        level: 0,
+        npc: 'Brimstail',
+        locName: 'Brimstail',
+        action: 'Teleport',
+        toTile: { x: 2912, z: 4833, level: 0 },
+        arrivalRadius: 64,
+        dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
+        label: 'Brimstail → essence mine'
     }
 ];
 

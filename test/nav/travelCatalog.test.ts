@@ -4,10 +4,15 @@ import {
     SPIRIT_TREE,
     GLIDER_PAD,
     ENTRANA_LAND,
+    ESSENCE_MINE_PAD,
+    ESSENCE_RETURN,
+    WILDY_LEVER,
     spiritTreeEdges,
     gliderEdges,
     entranaFerryEdges,
     shiloCartEdges,
+    essenceEntryEdges,
+    wildyLeverEdges,
     curatedTravelEdges
 } from '#/bot/nav/v2/travelCatalog.js';
 
@@ -80,10 +85,39 @@ describe('ferries / cart', () => {
             + gliderEdges().length
             + entranaFerryEdges().length
             + shiloCartEdges().length
+            + essenceEntryEdges().length
+            + wildyLeverEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
         expect(names.has('ferry_port_sarim_to_entrana')).toBe(true);
         expect(names.has('glider_hub_to_gandius')).toBe(true);
         expect(names.has('spirit_stronghold_to_village')).toBe(true);
+        expect(names.has('ess_entry_aubury')).toBe(true);
+        expect(names.has('lever_ardougne_to_wild')).toBe(true);
+    });
+});
+
+describe('essence / levers', () => {
+    test('essence return stands and mine pad from content constants', () => {
+        expect(ESSENCE_RETURN.aubury).toEqual({ x: 3253, z: 3401, level: 0 });
+        expect(ESSENCE_MINE_PAD).toEqual({ x: 2912, z: 4833, level: 0 });
+        expect(WILDY_LEVER.deepWild).toEqual({ x: 3154, z: 3924, level: 0 });
+        expect(WILDY_LEVER.ardougne).toEqual({ x: 2562, z: 3311, level: 0 });
+    });
+
+    test('essence entries require Rune Mysteries', () => {
+        for (const e of essenceEntryEdges()) {
+            const q = (e as { requires?: { quests?: { quest: string }[] } }).requires?.quests;
+            expect(q?.some(x => x.quest === 'Rune Mysteries')).toBe(true);
+            expect(e.action).toBe('Teleport');
+            expect(e.to.x).toBe(ESSENCE_MINE_PAD.x);
+        }
+        expect(essenceEntryEdges()).toHaveLength(5);
+    });
+
+    test('wildy lever edges are bidirectional members portals', () => {
+        const e = wildyLeverEdges();
+        expect(e).toHaveLength(2);
+        expect(e.every(x => x.kind === 'portal' && x.action === 'Pull')).toBe(true);
     });
 });

@@ -184,13 +184,14 @@ Maintain as a living table in this doc (or generate later). Status key:
 | Shilo↔Brimhaven cart | **partial** | edges + specialCrossing (fare min 10 coins; Brim→Shilo needs quest) |
 | Spirit trees (4 dests) | **partial** | catalog edges in graph load; dialog execute still generic Talk-to |
 | Gnome glider (5 pads, hub rule) | **partial** | hub↔pad only; map UI execute not wired |
-| Agility shortcuts that split components | todo | `shortcuts.rs2` vs component-report |
-| Shantay Pass | todo | `shantay_pass.rs2` |
-| Essence **entry** (Aubury / Sedridor / guild) | todo | area scripts + `essence_mine.rs2` |
-| Wildy Ardougne lever execute | todo | lever catalog + executor |
+| Agility shortcuts that split components | partial | coal log + ropeswings already in transports; more from `shortcuts.rs2` TBD |
+| Shantay Pass | partial | free south→north exit already in transports.json |
+| Essence **entry** (Aubury / Sedridor / guild) | **partial** | 5 wizard Teleport edges + specialCrossing (`travelCatalog`) |
+| Wildy Ardougne lever execute | **partial** | loc Pull edges + landings from content constants |
 
 **Local progress (feat/nav-v2-2004-transports):** `travelCatalog.ts`, `lcCoord.ts`,
-`tools/nav/content-transport-audit.ts`, NavWorker merges curated edges.
+`loadTransportGraph.ts`, `content-transport-audit.ts`, `curated-travel-probe.ts`,
+NavWorker merges curated edges; specialCrossing NPC Teleport/dialog.
 
 ### Priority 2 — state-aware ladder activation
 

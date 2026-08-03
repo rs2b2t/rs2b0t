@@ -17,7 +17,9 @@ import {
     spiritTreeEdges,
     gliderEdges,
     entranaFerryEdges,
-    shiloCartEdges
+    shiloCartEdges,
+    essenceEntryEdges,
+    wildyLeverEdges
 } from '../../src/bot/nav/v2/travelCatalog.ts';
 import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/v2/teleportCatalog.ts';
 
@@ -111,6 +113,8 @@ function main(): void {
             glider: gliderEdges().length,
             entrana: entranaFerryEdges().length,
             shiloCart: shiloCartEdges().length,
+            essenceEntry: essenceEntryEdges().length,
+            wildyLeverEdges: wildyLeverEdges().length,
             spellTeles: SPELL_TELEPORTS.length,
             jewellery: JEWELLERY_TELEPORTS.length,
             levers: LEVER_TELEPORTS.length
@@ -136,7 +140,9 @@ function main(): void {
         spirit: spiritTreeEdges().length,
         glider: gliderEdges().length,
         entrana: entranaFerryEdges().length,
-        cart: shiloCartEdges().length
+        cart: shiloCartEdges().length,
+        essence: essenceEntryEdges().length,
+        wildyLever: wildyLeverEdges().length
     });
     console.log('  tele catalog:', {
         spell: SPELL_TELEPORTS.length,

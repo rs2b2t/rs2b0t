@@ -38,6 +38,27 @@ export const CART_BRIMHAVEN = parseLcCoord('0_43_50_24_14');
 export const CART_SHILO = parseLcCoord('0_44_46_18_7');
 
 /**
+ * Essence-mine surface return stands (runecraft.constant) — used as NPC stands
+ * for entry edges. Mine landing is random; planner uses a representative pad.
+ */
+export const ESSENCE_RETURN = {
+    aubury: parseLcCoord('0_50_53_53_9'),
+    sedridor: parseLcCoord('0_48_149_34_36'),
+    distentor: parseLcCoord('0_40_48_31_14'),
+    brimstail: parseLcCoord('0_37_153_22_18'),
+    cromperty: parseLcCoord('0_41_51_60_58')
+} as const;
+
+/** Representative essence-mine pad (essence_mine_teleports.enum val=0). */
+export const ESSENCE_MINE_PAD = parseLcCoord('0_45_75_32_33');
+
+/** Wildy lever landings (wilderness_lever.constant). */
+export const WILDY_LEVER = {
+    deepWild: parseLcCoord('0_49_61_18_20'),
+    ardougne: parseLcCoord('0_40_51_2_47')
+} as const;
+
+/**
  * Pier / NPC stand heuristics (Talk-to range). Refine with live pack probes.
  * Pathfinder only keeps the edge if both ends are walkable in the collision pack.
  */
@@ -45,7 +66,10 @@ export const TRAVEL_STANDS = {
     portSarimMonk: { x: 3048, z: 3236, level: 0 } as NavPoint,
     entranaMonk: { x: 2834, z: 3335, level: 0 } as NavPoint,
     shiloCart: { x: 2834, z: 2954, level: 0 } as NavPoint,
-    brimhavenCart: { x: 2779, z: 3212, level: 0 } as NavPoint
+    brimhavenCart: { x: 2779, z: 3212, level: 0 } as NavPoint,
+    /** Lever locs — stand next to the object. */
+    ardyLever: { x: 2561, z: 3311, level: 0 } as NavPoint,
+    wildLever: { x: 3153, z: 3923, level: 0 } as NavPoint
 } as const;
 
 const members: TransportRequires = { members: true };
@@ -197,9 +221,71 @@ export function shiloCartEdges(): TransportEdgeData[] {
     ];
 }
 
+/**
+ * Rune Mysteries complete → essence mine via wizard Teleport.
+ * Landing is random in-content; we plan to a representative pad + acceptAnyLanding.
+ */
+export function essenceEntryEdges(): TransportEdgeData[] {
+    const f2p: TransportRequires = {
+        quests: [{ quest: 'Rune Mysteries', minStatus: 'complete' }]
+    };
+    const members: TransportRequires = {
+        members: true,
+        quests: [{ quest: 'Rune Mysteries', minStatus: 'complete' }]
+    };
+    const mine = ESSENCE_MINE_PAD;
+    const mk = (
+        from: NavPoint,
+        npc: string,
+        debug: string,
+        requires: TransportRequires
+    ): TransportEdgeData =>
+        edge(from, mine, npc, 'Teleport', 'portal', debug, requires);
+
+    return [
+        mk(ESSENCE_RETURN.aubury, 'Aubury', 'ess_entry_aubury', f2p),
+        mk(ESSENCE_RETURN.sedridor, 'Sedridor', 'ess_entry_sedridor', f2p),
+        mk(ESSENCE_RETURN.distentor, 'Wizard Distentor', 'ess_entry_distentor', members),
+        mk(ESSENCE_RETURN.cromperty, 'Wizard Cromperty', 'ess_entry_cromperty', members),
+        mk(ESSENCE_RETURN.brimstail, 'Brimstail', 'ess_entry_brimstail', members)
+    ];
+}
+
+/** Ardougne ↔ deep wilderness levers (wilderness_lever.rs2). */
+export function wildyLeverEdges(): TransportEdgeData[] {
+    const members: TransportRequires = { members: true };
+    return [
+        edge(
+            TRAVEL_STANDS.ardyLever,
+            WILDY_LEVER.deepWild,
+            'Lever',
+            'Pull',
+            'portal',
+            'lever_ardougne_to_wild',
+            members
+        ),
+        edge(
+            TRAVEL_STANDS.wildLever,
+            WILDY_LEVER.ardougne,
+            'Lever',
+            'Pull',
+            'portal',
+            'lever_wild_to_ardougne',
+            members
+        )
+    ];
+}
+
 /** All curated travel rows to merge with transports.json at graph load. */
 export function curatedTravelEdges(): TransportEdgeData[] {
-    return [...spiritTreeEdges(), ...gliderEdges(), ...entranaFerryEdges(), ...shiloCartEdges()];
+    return [
+        ...spiritTreeEdges(),
+        ...gliderEdges(),
+        ...entranaFerryEdges(),
+        ...shiloCartEdges(),
+        ...essenceEntryEdges(),
+        ...wildyLeverEdges()
+    ];
 }
 
 /** Stable family ids for audits / docs. */
@@ -212,7 +298,9 @@ export const TRAVEL_FAMILIES = [
     'brimhaven_ferry',
     'spell_teleport',
     'jewellery_teleport',
-    'wildy_lever'
+    'wildy_lever',
+    'essence_entry',
+    'agility_shortcut'
 ] as const;
 
 export type TravelFamilyId = (typeof TRAVEL_FAMILIES)[number];
