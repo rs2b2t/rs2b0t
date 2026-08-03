@@ -309,7 +309,9 @@ class WalkExecutorImpl {
         }
 
         // Exact client path (includes tryNearest landing) — primary.
-        const clientPath = reader.lastWalkPathWorld();
+        // Guard: older deploys may lack the reader method (must not kill the walk).
+        const clientPath =
+            typeof reader.lastWalkPathWorld === 'function' ? reader.lastWalkPathWorld() : [];
         if (clientPath.length >= 2) {
             PathPublish.setClientSegment(clientPath);
             return;
