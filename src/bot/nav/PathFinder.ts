@@ -261,6 +261,23 @@ export class PathFinder {
         return this.slots[(level << 16) | ((x >> 6) << 8) | (z >> 6)];
     }
 
+    /** Every (level, mapsquare) the pack carries, for whole-map sweeps. */
+    populatedSquares(): { mx: number; mz: number; level: number }[] {
+        const out: { mx: number; mz: number; level: number }[] = [];
+        for (let key = 0; key < this.slots.length; key++) {
+            if (this.slots[key]) {
+                out.push({ level: key >> 16, mx: (key >> 8) & 0xff, mz: key & 0xff });
+            }
+        }
+        return out;
+    }
+
+    /** Transport/door/stair hops leaving a tile, for connectivity analysis. */
+    edgesFrom(x: number, z: number, level: number): { x: number; z: number; level: number }[] {
+        const compiled = this.edges.get(nodeId(x, z, level)) ?? [];
+        return compiled.map(e => ({ x: nodeX(e.to), z: nodeZ(e.to), level: nodeLevel(e.to) }));
+    }
+
     walkable(x: number, z: number, level: number): boolean {
         const slot = this.slotAt(x, z, level);
         if (!slot) {
