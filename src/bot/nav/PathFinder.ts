@@ -125,7 +125,8 @@ export type NavResponse =
 
 const DOOR_COST = 4;
 const TRANSPORT_COST = 10;
-const MAX_EXPANSIONS = 300_000;
+/** HARD long OD pairs (Seers→Rellekka, multi-level manor) need ~350k with Dijkstra. */
+const MAX_EXPANSIONS = 500_000;
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -231,6 +232,12 @@ export class PathFinder {
     readonly members: boolean;
 
     private readonly edges = new Map<number, CompiledEdge[]>();
+    /**
+     * True when any compiled edge spans more tiles than its cost (dungeon
+     * z±6400, ships, portals). Chebyshev is then inadmissible without a
+     * transport-aware lower bound (#335).
+     */
+    private hasLongRangeEdges = false;
     doorEdges = 0;
     transportEdges = 0;
 
@@ -318,8 +325,10 @@ export class PathFinder {
                 locId: door.locId,
                 kind: 'door'
             };
-            this.addEdge(nodeId(ax, az, door.level), nodeId(bx, bz, door.level), DOOR_COST, transport, undefined, 'door');
-            this.addEdge(nodeId(bx, bz, door.level), nodeId(ax, az, door.level), DOOR_COST, transport, undefined, 'door');
+            // Guild skill doors etc. via specialCrossings keyed at door tile.
+            const doorReq = specialRequiresAt(door.x, door.z, door.level);
+            this.addEdge(nodeId(ax, az, door.level), nodeId(bx, bz, door.level), DOOR_COST, transport, doorReq, 'door');
+            this.addEdge(nodeId(bx, bz, door.level), nodeId(ax, az, door.level), DOOR_COST, transport, doorReq, 'door');
             this.doorEdges++;
         }
 
@@ -380,6 +389,10 @@ export class PathFinder {
         kind?: string,
         teleportId?: string
     ): void {
+        const span = Math.max(Math.abs(nodeX(to) - nodeX(from)), Math.abs(nodeZ(to) - nodeZ(from)));
+        if (span > cost) {
+            this.hasLongRangeEdges = true;
+        }
         let list = this.edges.get(from);
         if (!list) {
             list = [];
@@ -608,15 +621,29 @@ export class PathFinder {
         const viaEdge = new Map<number, { transport: TransportInfo; cost: number }>();
         const closed = new Set<number>();
         const open = new MinHeap();
-        // Chebyshev is admissible only for unit-cost walk steps. Graph transports
-        // (dungeons, ships, portals, teleports) can cover arbitrary distance for a
-        // small fixed cost, so h can overestimate and first-goal A* returns a
-        // non-optimal walk. Use Dijkstra (h = 0) whenever shortcuts may apply (#335).
-        const hasShortcuts = ctx.teleFromStart.length > 0 || this.edges.size > 0;
-        const heuristic = (x: number, z: number): number =>
-            hasShortcuts
-                ? 0
-                : Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
+        // Lower bounds (#335):
+        // - Unit-cost walk → Chebyshev is admissible.
+        // - Originless spell teles (injected at start) → min over teleCost+Chebyshev(landing,goal)
+        //   is admissible from any node (can cast from anywhere).
+        // - Long-range graph edges (dungeons z±6400) without a tele floor → Dijkstra (h=0).
+        //   Full-pack Dijkstra with tele injection was expanding 350k+ on Seers→Rellekka and
+        //   blowing the 300k HARD budget; tele-aware A* keeps long OD pairs routable.
+        const chebAt = (x: number, z: number): number =>
+            Math.max(0, Math.max(Math.abs(x - goalX), Math.abs(z - goalZ)) - goalSlack);
+        let teleFloor = Infinity;
+        for (const e of ctx.teleFromStart) {
+            teleFloor = Math.min(teleFloor, e.cost + chebAt(nodeX(e.to), nodeZ(e.to)));
+        }
+        const heuristic = (x: number, z: number): number => {
+            const walk = chebAt(x, z);
+            if (teleFloor !== Infinity) {
+                return Math.min(walk, teleFloor);
+            }
+            if (this.hasLongRangeEdges) {
+                return 0;
+            }
+            return walk;
+        };
 
         gScore.set(start, 0);
         open.push(heuristic(from.x, from.z) * 1048576, start);
