@@ -51,7 +51,10 @@ describe('ladder transport data', () => {
     test('binds clustered outdoor stair reverses to their outdoor top locs', () => {
         const yanille = stairEdges.find(edge => edge.from.x === 2517 && edge.from.z === 3426
             && edge.from.level === 1 && edge.to.x === 2516 && edge.to.z === 3423 && edge.to.level === 0);
-        const ardougne = stairEdges.find(edge => edge.from.x === 2527 && edge.from.z === 3292
+        // 2527,3293 rather than 3292: the tile one square south is walkable with
+        // an exit mask of 0, so the old edge landed on a square the walker could
+        // reach and never leave. The snap now refuses sealed tiles.
+        const ardougne = stairEdges.find(edge => edge.from.x === 2527 && edge.from.z === 3293
             && edge.from.level === 1 && edge.to.x === 2526 && edge.to.z === 3290 && edge.to.level === 0);
 
         expect(yanille).toMatchObject({ locId: 1736, locX: 2516, locZ: 3425, debugName: 'loc_1736' });

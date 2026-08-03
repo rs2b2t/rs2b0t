@@ -47,8 +47,7 @@ export const PACK_UNREACHABLE: Record<number, string> = {
     3536: 'Kharazi jungle: boundary is cut tile-by-tile with a machete (jungle_tree.rs2) — a traversal mode, not one edge',
 
     // ---- DEFECT: no gate, the data is wrong --------------------------------
-    2855: 'Sinclair Mansion upstairs is a 1-tile pocket at (2745,3576,1) — the ladder edge lands somewhere unreachable',
-    3572: 'the ladder at (2701,3408) lands on a 1-tile pocket at level 1'
+    2855: 'Sinclair Mansion upstairs: its ladder foot at (2737,3583,0) sits on a sealed one-tile-wide strip — walkable, exits only along itself, connected to nothing. A build-collision artifact, not a snap choice.'
 };
 
 export function packUnreachable(id: number): string | null {

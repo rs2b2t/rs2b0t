@@ -143,6 +143,7 @@ class CollisionPack:
         version = raw[4]
         count = struct.unpack_from("<H", raw, 8)[0]
         self.walk: dict[tuple[int, int, int], bytes] = {}
+        self.exit: dict[tuple[int, int, int], bytes] = {}
         pos = 10
         for _ in range(count):
             mx, mz, mask = raw[pos : pos + 3]
@@ -150,6 +151,7 @@ class CollisionPack:
             for level in range(4):
                 if not mask & (1 << level):
                     continue
+                self.exit[(mx, mz, level)] = raw[pos : pos + 4096]
                 pos += 4096
                 self.walk[(mx, mz, level)] = raw[pos : pos + 512]
                 pos += 512
@@ -165,6 +167,16 @@ class CollisionPack:
         index = (x & 0x3F) * 64 + (z & 0x3F)
         return bool(walk[index >> 3] & (1 << (index & 7)))
 
+    def exit_mask(self, x: int, z: int, level: int) -> int:
+        exit_bytes = self.exit.get((x >> 6, z >> 6, level))
+        if exit_bytes is None:
+            return 0
+        return exit_bytes[(x & 0x3F) * 64 + (z & 0x3F)]
+
+    def sealed(self, x: int, z: int, level: int) -> bool:
+        """Walkable but with no way off it — standing here strands the walker."""
+        return self.exit_mask(x, z, level) == 0
+
 
 def offsets(radius: int) -> list[tuple[int, int]]:
     values = [(dx, dz) for dx in range(-radius, radius + 1) for dz in range(-radius, radius + 1)]
@@ -175,10 +187,19 @@ SNAP_OFFSETS = offsets(2)
 
 
 def snap(pack: CollisionPack, target: Target) -> Target | None:
+    # A sealed tile can be reached and never left, so a ladder that lands on one
+    # strands the walker. Keep the original ordering otherwise, so every ladder
+    # that was already fine stays exactly where it was.
+    fallback: Target | None = None
     for dx, dz in SNAP_OFFSETS:
-        if pack.walkable(target.x + dx, target.z + dz, target.level):
-            return Target(target.x + dx, target.z + dz, target.level)
-    return None
+        x, z = target.x + dx, target.z + dz
+        if not pack.walkable(x, z, target.level):
+            continue
+        if fallback is None:
+            fallback = Target(x, z, target.level)
+        if not pack.sealed(x, z, target.level):
+            return Target(x, z, target.level)
+    return fallback
 
 
 COORD_RE = re.compile(r"^(\d+)_(\d+)_(\d+)_(\d+)_(\d+)$")
