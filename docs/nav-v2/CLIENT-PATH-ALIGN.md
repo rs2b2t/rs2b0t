@@ -45,6 +45,26 @@ accepts for gameclick movement.
 - **Cyan** = last walk-click client-like BFS (compare curves around walls).
 - **Green** = transports; **white outline** = click target.
 
+### Live harnesses (operator)
+
+```bash
+~/redeploy.sh   # branch explore/client-path-paint
+
+# Focused paint compare (default classic pure-walk, dual paint ON)
+HEADED=1 bun tools/nav-path-paint-live.ts
+HEADED=1 CASES=lumb-dray,varrock-edge bun tools/nav-path-paint-live.ts
+HEADED=1 LIMIT=1 PATH_PAINT_SCENE_EXPAND=0 bun tools/nav-path-paint-live.ts
+
+# Stress suite paint cases only
+HEADED=1 CASES=path-paint,paint-compare bun tools/nav-v2-stress-live.ts
+
+# Script routes with paint (default PATH_PAINT=1)
+HEADED=1 LIMIT=2 NAV_ENGINE=classic bun tools/nav-script-routes-live.ts
+HEADED=1 LIMIT=2 PATH_PAINT=0 bun tools/nav-script-routes-live.ts   # paint off
+```
+
+Env toggles (all three harnesses): `PATH_PAINT_SCENE_EXPAND=0|1`, `PATH_PAINT_CLIENT_SEG=0|1`.
+
 ### Known limits (why not upstream yet)
 
 1. Scene BFS is **our** `canStepLocal`, not a dump of `Client.dirMap` after `tryMove`

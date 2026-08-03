@@ -16,12 +16,15 @@
  *   HEADED=1 LIMIT=8 BUDGET_S=180 bun tools/nav-script-routes-live.ts
  *   HEADED=1 NAV_ENGINE=classic LIMIT=3 bun tools/nav-script-routes-live.ts
  *   HEADED=1 NAV_ENGINE=classic SHIP_352=1 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 LIMIT=2 PATH_PAINT=1 bun tools/nav-script-routes-live.ts   # dual red/cyan paint
  *
  * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
  * TRANSPORT_HEAVY=1 reads tools/nav/transport-heavy.routes.json
  *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=12).
  * SHIP_352=1 → Ardougne↔Brimhaven board+gangplank legs (issue #352 stuck-on-boat).
  * NAV_ENGINE=classic|v2 (default v2 for this harness) — forces walkTo.navEngine + Global setting.
+ * PATH_PAINT=1 (default) enables showNavPath + explore scene expand + cyan client segment.
+ *   PATH_PAINT=0 off; PATH_PAINT_SCENE_EXPAND=0 / PATH_PAINT_CLIENT_SEG=0 toggle explore bits.
  * Non-HARD builds seeds from script-route-corpus (happy-dom registered on demand).
  * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
  */
@@ -54,6 +57,16 @@ const USE_SHIP_352 = process.env.SHIP_352 === '1' || process.env.SHIP_352 === 't
 /** NAV_ENGINE=classic|v2 — default v2 (historical harness default). Classic = no tele inject. */
 const NAV_ENGINE: 'classic' | 'v2' =
     process.env.NAV_ENGINE === 'classic' || process.env.NAV_ENGINE === 'v1' ? 'classic' : 'v2';
+/** PATH_PAINT=0 disables showNavPath; default on for operator visual checks. */
+const PATH_PAINT = process.env.PATH_PAINT !== '0' && process.env.PATH_PAINT !== 'false';
+const PATH_PAINT_SCENE_EXPAND =
+    PATH_PAINT
+    && process.env.PATH_PAINT_SCENE_EXPAND !== '0'
+    && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
+const PATH_PAINT_CLIENT_SEG =
+    PATH_PAINT
+    && process.env.PATH_PAINT_CLIENT_SEG !== '0'
+    && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
 const ARRIVAL = 8;
 /** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
 const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
@@ -381,6 +394,43 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
     return result;
 }
 
+/** Global nav engine + explore path paint (red pack / cyan client segment). */
+async function applyNavPaintSettings(page: Page): Promise<void> {
+    await setSettings(page, 'Global', {
+        showNavPath: PATH_PAINT,
+        navEngine: NAV_ENGINE,
+        navCameraFollow: true,
+        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
+        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
+        navPathColorClient: '#00D4FF'
+    });
+    await page.evaluate(
+        flags => {
+            const g = globalThis as never as Abi;
+            g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', flags.paint ? 'true' : 'false');
+            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', flags.engine);
+            g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
+            g.__rs2b0t.SettingsStore.save(
+                'Global',
+                'navPathSceneExpand',
+                flags.sceneExpand ? 'true' : 'false'
+            );
+            g.__rs2b0t.SettingsStore.save(
+                'Global',
+                'navPathClientSegment',
+                flags.clientSeg ? 'true' : 'false'
+            );
+            g.__rs2b0t.SettingsStore.save('Global', 'navPathColorClient', '#00D4FF');
+        },
+        {
+            paint: PATH_PAINT,
+            engine: NAV_ENGINE,
+            sceneExpand: PATH_PAINT_SCENE_EXPAND,
+            clientSeg: PATH_PAINT_CLIENT_SEG
+        }
+    );
+}
+
 async function seedItem(page: Page, cmd: string, match: RegExp, tries = 8): Promise<void> {
     for (let i = 0; i < tries; i++) {
         await cheatQuiet(page, cmd);
@@ -481,7 +531,7 @@ const routes = USE_SHIP_352
         : pickLiveRoutes(all, LIVE_LIMIT);
 
 console.log(
-    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} navEngine=${NAV_ENGINE} budget≈${Math.round(BUDGET_MS / 1000)}s`
+    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} navEngine=${NAV_ENGINE} pathPaint=${PATH_PAINT} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} budget≈${Math.round(BUDGET_MS / 1000)}s`
 );
 console.log(
     USE_SHIP_352
@@ -522,17 +572,7 @@ try {
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
 
-    await setSettings(page, 'Global', {
-        showNavPath: true,
-        navEngine: NAV_ENGINE,
-        navCameraFollow: true
-    });
-    await page.evaluate(engine => {
-        const g = globalThis as never as Abi;
-        g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-        g.__rs2b0t.SettingsStore.save('Global', 'navEngine', engine);
-        g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-    }, NAV_ENGINE);
+    await applyNavPaintSettings(page);
 
     await maxmeAndClearDialogs(page);
 
@@ -552,17 +592,7 @@ try {
         console.log(`${stamp()} relog so quest journal colours match setvar`);
         await relog(page, user);
         // Re-apply settings after relog
-        await setSettings(page, 'Global', {
-            showNavPath: true,
-            navEngine: NAV_ENGINE,
-            navCameraFollow: true
-        });
-        await page.evaluate(engine => {
-            const g = globalThis as never as Abi;
-            g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', engine);
-            g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-        }, NAV_ENGINE);
+        await applyNavPaintSettings(page);
         await maxmeAndClearDialogs(page);
 
         type QStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';

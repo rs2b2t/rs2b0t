@@ -7,8 +7,13 @@
  *   ~/redeploy.sh
  *   HEADED=1 bun tools/nav-v2-stress-live.ts
  *
- * Optional: BASE=…  CASES=spell-varrock,jewellery-duel,path-paint  BUDGET_S=120
+ * Optional: BASE=…  CASES=spell-varrock,jewellery-duel,path-paint,paint-compare  BUDGET_S=120
  * Mid-walk: ENERGY_REFILL_AT=25 (default) — poll ~1s, `~energy` when run ≤ threshold.
+ *
+ * Explore path paint (default ON when showNavPath):
+ *   PATH_PAINT_SCENE_EXPAND=0|1   scene-BFS pack expand (default 1)
+ *   PATH_PAINT_CLIENT_SEG=0|1     cyan client-walk segment after click (default 1)
+ * Cases: path-paint (samples PathPublish), paint-compare (asserts clientSegment appears)
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
@@ -56,7 +61,12 @@ type Abi = {
             ): Promise<boolean>;
         };
         PathPublish: {
-            get(): { tiles: Tile[]; pathIdx: number; clickIdx: number } | null;
+            get(): {
+                tiles: Tile[];
+                pathIdx: number;
+                clickIdx: number;
+                clientSegment?: Tile[];
+            } | null;
             clear(): void;
         };
         isNavPathPaintEnabled(): boolean;
@@ -70,10 +80,23 @@ type Abi = {
         walkOk: boolean;
         tile: Tile | null;
         logs: string[];
-        pathSamples: { n: number; pathIdx: number; hasTransport: boolean }[];
+        pathSamples: {
+            n: number;
+            pathIdx: number;
+            clickIdx: number;
+            hasTransport: boolean;
+            clientSegN: number;
+        }[];
         paintOn: boolean;
+        maxClientSeg: number;
     };
 };
+
+/** Explore paint flags — default on for dual red/cyan paint (PATH_PAINT_*=0 to disable). */
+const PATH_PAINT_SCENE_EXPAND =
+    process.env.PATH_PAINT_SCENE_EXPAND !== '0' && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
+const PATH_PAINT_CLIENT_SEG =
+    process.env.PATH_PAINT_CLIENT_SEG !== '0' && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
 
 function cheb(a: Tile, b: Tile): number {
     if (a.level !== b.level) {
@@ -213,7 +236,11 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                                     pathSamples.push({
                                         n: p.tiles.length,
                                         pathIdx: p.pathIdx,
-                                        hasTransport: p.tiles.some(t => (t as { transport?: boolean }).transport === true)
+                                        clickIdx: p.clickIdx,
+                                        hasTransport: p.tiles.some(
+                                            t => (t as { transport?: boolean }).transport === true
+                                        ),
+                                        clientSegN: p.clientSegment?.length ?? 0
                                     });
                                 }
                             }, 400);
@@ -236,12 +263,14 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                                 this.log(m);
                             }
                         });
+                        const maxClientSeg = pathSamples.reduce((m, s) => Math.max(m, s.clientSegN), 0);
                         g.__navStress = {
                             walkOk,
                             tile: g.__rs2b0t.reader.worldTile(),
                             logs,
                             pathSamples,
-                            paintOn: g.__rs2b0t.isNavPathPaintEnabled()
+                            paintOn: g.__rs2b0t.isNavPathPaintEnabled(),
+                            maxClientSeg
                         };
                     } catch (e) {
                         g.__navStress = {
@@ -249,7 +278,8 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                             tile: g.__rs2b0t.reader.worldTile(),
                             logs: [...logs, String(e)],
                             pathSamples,
-                            paintOn: false
+                            paintOn: false,
+                            maxClientSeg: pathSamples.reduce((m, s) => Math.max(m, s.clientSegN), 0)
                         };
                     } finally {
                         if (sampler) {
@@ -307,6 +337,7 @@ type CaseResult = { id: string; ok: boolean; detail: string };
 
 const ALL_CASES = [
     'path-paint',
+    'paint-compare',
     'spell-varrock',
     'spell-falador',
     'jewellery-duel',
@@ -373,22 +404,34 @@ try {
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
 
-    // Global toggles for path paint + default engine preference (walk opts still force v2).
-    await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2', navCameraFollow: true });
-    // Re-read via SettingsStore after save (sessionStorage).
-    await page.evaluate(() => {
+    // Global toggles for path paint + explore dual-paint + engine preference.
+    const paintSettings = {
+        showNavPath: true,
+        navEngine: 'v2',
+        navCameraFollow: true,
+        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
+        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
+        navPathColorClient: '#00D4FF'
+    };
+    await setSettings(page, 'Global', paintSettings);
+    await page.evaluate(flags => {
         const g = globalThis as never as Abi;
         g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
         g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
         g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-    });
+        g.__rs2b0t.SettingsStore.save('Global', 'navPathSceneExpand', flags.scene ? 'true' : 'false');
+        g.__rs2b0t.SettingsStore.save('Global', 'navPathClientSegment', flags.client ? 'true' : 'false');
+        g.__rs2b0t.SettingsStore.save('Global', 'navPathColorClient', '#00D4FF');
+    }, { scene: PATH_PAINT_SCENE_EXPAND, client: PATH_PAINT_CLIENT_SEG });
 
     console.log(`${stamp()} seed runes + maxme`);
     await seedRunes(page);
     await maxmeAndClearDialogs(page);
 
     const paintOn = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.isNavPathPaintEnabled());
-    console.log(`${stamp()} showNavPath=${paintOn}`);
+    console.log(
+        `${stamp()} showNavPath=${paintOn} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG}`
+    );
     if (!paintOn) {
         console.warn('WARNING: showNavPath still false after setSettings — paint case may soft-fail');
     }
@@ -411,10 +454,56 @@ try {
             const samples = r.pathSamples.length;
             const maxTiles = r.pathSamples.reduce((m, s) => Math.max(m, s.n), 0);
             const ok = dist <= 6 && samples >= 2 && maxTiles >= 5;
-            const detail = `dist=${dist} pathSamples=${samples} maxTiles=${maxTiles} paintOn=${r.paintOn} walkOk=${r.walkOk}`;
+            const detail =
+                `dist=${dist} pathSamples=${samples} maxTiles=${maxTiles} ` +
+                `maxClientSeg=${r.maxClientSeg} paintOn=${r.paintOn} walkOk=${r.walkOk}`;
             console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${id}: ${detail}`);
             if (!ok) {
                 console.log(r.logs.slice(-12).join('\n'));
+            }
+            results.push({ id, ok, detail });
+        } catch (e) {
+            results.push({ id, ok: false, detail: String(e) });
+            console.error(`${stamp()} FAIL ${id}:`, e);
+        }
+    }
+
+    // ── paint-compare: longer pure walk; require cyan clientSegment samples ─
+    if (cases.includes('paint-compare')) {
+        const id = 'paint-compare';
+        console.log(`\n══ ${id} ══ red pack path vs cyan client segment (explore)`);
+        try {
+            if (!PATH_PAINT_CLIENT_SEG) {
+                throw new Error('paint-compare needs PATH_PAINT_CLIENT_SEG=1 (default)');
+            }
+            // Lumbridge → Draynor: multi-click pure walk through doors/gates
+            await teleArrive(page, { x: 3222, z: 3218, level: 0 });
+            const dest = { x: 3093, z: 3243, level: 0 };
+            const r = await runWalk(page, {
+                dest,
+                samplePath: true,
+                useTeleports: false,
+                budget: Math.max(BUDGET_MS, 120_000),
+                navEngine: 'classic'
+            });
+            const dist = r.tile ? cheb(r.tile, dest) : 9999;
+            const maxTiles = r.pathSamples.reduce((m, s) => Math.max(m, s.n), 0);
+            const clientHits = r.pathSamples.filter(s => s.clientSegN >= 2).length;
+            const ok =
+                dist <= 8
+                && r.pathSamples.length >= 3
+                && maxTiles >= 8
+                && r.maxClientSeg >= 2
+                && clientHits >= 1;
+            const detail =
+                `dist=${dist} samples=${r.pathSamples.length} maxTiles=${maxTiles} ` +
+                `maxClientSeg=${r.maxClientSeg} clientHits=${clientHits} walkOk=${r.walkOk}`;
+            console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${id}: ${detail}`);
+            if (!ok) {
+                console.log(r.logs.slice(-15).join('\n'));
+                console.log(
+                    '  tip: redeploy explore/client-path-paint; watch red pack vs cyan client segment'
+                );
             }
             results.push({ id, ok, detail });
         } catch (e) {
