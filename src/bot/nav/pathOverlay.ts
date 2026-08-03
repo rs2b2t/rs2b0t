@@ -11,7 +11,9 @@
  */
 
 import { reader } from '../adapter/ClientAdapter.js';
+import { Locs } from '../api/queries/Locs.js';
 import { SettingsStore } from '../runtime/Settings.js';
+import { matchesTransportLoc } from './exec/transportLoc.js';
 import { PathPublish, type PublishedPathTile } from './pathPublish.js';
 import {
     resolveNavPathPaintTheme,
@@ -213,20 +215,40 @@ function fillQuad(
 /**
  * Wireframe AABB (8 corners: 0–3 ground, 4–7 top).
  * Same edge pattern as FireGiant.outlineTarget / reader.npcBox.
+ * Optional translucent face fills make thin doors/ladders easier to spot.
  */
 export function strokeLocHull(
     ctx: CanvasRenderingContext2D,
     box: { x: number; y: number }[],
     stroke: string,
-    lineWidth = 2
+    lineWidth = 2,
+    opts?: { fill?: string }
 ): void {
     if (box.length < 8) {
         return;
     }
     ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    if (opts?.fill) {
+        const face = (idxs: number[]): void => {
+            ctx.beginPath();
+            ctx.moveTo(box[idxs[0]!]!.x, box[idxs[0]!]!.y);
+            for (let k = 1; k < idxs.length; k++) {
+                ctx.lineTo(box[idxs[k]!]!.x, box[idxs[k]!]!.y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = opts.fill!;
+            ctx.fill();
+        };
+        // Ground + top lids (most readable under camera pitch).
+        face([0, 1, 2, 3]);
+        face([4, 5, 6, 7]);
+    }
+
     ctx.strokeStyle = stroke;
     ctx.lineWidth = lineWidth;
-    ctx.lineJoin = 'round';
     const edge = (a: number, b: number): void => {
         ctx.beginPath();
         ctx.moveTo(box[a]!.x, box[a]!.y);
@@ -239,6 +261,94 @@ export function strokeLocHull(
         edge(i, 4 + i);
     }
     ctx.restore();
+}
+
+/** Semi-transparent fill derived from a stroke rgba/hex (best-effort). */
+export function hullFillFromStroke(stroke: string, alpha = 0.14): string {
+    const m = stroke.match(
+        /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/i
+    );
+    if (m) {
+        return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+    }
+    if (stroke.startsWith('#') && (stroke.length === 7 || stroke.length === 4)) {
+        const hex =
+            stroke.length === 4
+                ? `#${stroke[1]}${stroke[1]}${stroke[2]}${stroke[2]}${stroke[3]}${stroke[3]}`
+                : stroke;
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+    }
+    return `rgba(255, 220, 80, ${alpha})`;
+}
+
+/**
+ * Resolve the live scenery the executor would click for a published hop.
+ * Returns null for teles / NPCs / missing scene (caller draws nothing).
+ */
+export function liveTransportLoc(t: PublishedPathTile): {
+    x: number;
+    z: number;
+    level: number;
+    id: number;
+    name: string | null;
+} | null {
+    if (!t.transport) {
+        return null;
+    }
+    if (t.teleportId || t.kind === 'teleport') {
+        return null;
+    }
+    // NPC hops (ships, carts, essence wizards) are not scenery.
+    if (t.kind === 'npc' || (t.locName && /^(customs officer|captain |seaman |monk of |vigroy|hajedy|aubury|sedridor|wizard |brimstail|gnome pilot)/i.test(t.locName))) {
+        return null;
+    }
+    const locX = t.locX ?? t.x;
+    const locZ = t.locZ ?? t.z;
+    const meta = {
+        locName: t.locName ?? '',
+        action: t.action ?? '',
+        locX,
+        locZ,
+        locId: t.locId
+    };
+    let q = Locs.query();
+    if (t.locName) {
+        q = q.name(t.locName);
+    }
+    if (t.action) {
+        q = q.action(t.action);
+    }
+    const live =
+        q.where(loc => matchesTransportLoc(meta, loc)).nearest()
+        // Name-only near placement when action filter is empty/mismatched (open doors).
+        ?? Locs.query()
+            .where(loc => {
+                if (t.locName && loc.name?.toLowerCase() !== t.locName.toLowerCase()) {
+                    return false;
+                }
+                if (t.locId !== undefined && loc.id !== t.locId) {
+                    return false;
+                }
+                const tile = loc.tile();
+                return Math.max(Math.abs(tile.x - locX), Math.abs(tile.z - locZ)) <= 5;
+            })
+            .nearest();
+    if (!live) {
+        return null;
+    }
+    const tile = live.tile();
+    return {
+        x: tile.x,
+        z: tile.z,
+        level: tile.level,
+        id: live.id,
+        name: live.name
+    };
 }
 
 /** Draw hulls for transport locs on the published path (object highlighter). */
@@ -255,28 +365,57 @@ export function paintNavLocHulls(ctx: CanvasRenderingContext2D): void {
         return;
     }
     const theme = resolveNavPathPaintTheme();
-    const trailFrom = Math.max(0, path.pathIdx - 2);
+    // Past hop trail + a few upcoming; always include the next scenery transport.
+    const trailFrom = Math.max(0, path.pathIdx - 1);
+    let nextHopIdx = -1;
+    for (let i = path.pathIdx; i < path.tiles.length; i++) {
+        if (path.tiles[i]!.transport) {
+            nextHopIdx = i;
+            break;
+        }
+    }
 
-    for (let i = trailFrom; i < path.tiles.length; i++) {
-        const t = path.tiles[i]!;
-        if (!t.transport || t.level !== me.level) {
-            continue;
+    ctx.save();
+    try {
+        ctx.beginPath();
+        ctx.rect(GAME_VIEW_CLIP.x, GAME_VIEW_CLIP.y, GAME_VIEW_CLIP.w, GAME_VIEW_CLIP.h);
+        ctx.clip();
+
+        for (let i = trailFrom; i < path.tiles.length; i++) {
+            const t = path.tiles[i]!;
+            if (!t.transport) {
+                continue;
+            }
+            // Cap far hulls so only near path clutter is drawn.
+            if (i > path.pathIdx + 12 && i !== nextHopIdx) {
+                continue;
+            }
+            const live = liveTransportLoc(t);
+            if (!live || live.level !== me.level) {
+                continue;
+            }
+            // Only hulls for locs that resolve in the live scene (no fake tile cubes).
+            const box = reader.locBox({
+                x: live.x,
+                z: live.z,
+                level: live.level,
+                id: live.id,
+                name: live.name ?? undefined
+            });
+            if (!box) {
+                continue;
+            }
+            const done = i < path.pathIdx;
+            const isNext = i === nextHopIdx;
+            const stroke = done ? theme.doneStroke : theme.hopStroke;
+            const lineW = done ? 1.15 : isNext ? 2.75 : 1.85;
+            const fillA = done ? 0.06 : isNext ? 0.18 : 0.1;
+            strokeLocHull(ctx, box, stroke, lineW, {
+                fill: hullFillFromStroke(stroke, fillA)
+            });
         }
-        const lx = t.locX ?? t.x;
-        const lz = t.locZ ?? t.z;
-        // Prefer locId when published; else match by name from hop label / locName
-        const box = reader.locBox({
-            x: lx,
-            z: lz,
-            level: t.level,
-            id: t.locId,
-            name: t.locName
-        });
-        if (!box) {
-            continue;
-        }
-        const done = i < path.pathIdx;
-        strokeLocHull(ctx, box, done ? theme.doneStroke : theme.hopStroke, done ? 1.25 : 2.25);
+    } finally {
+        ctx.restore();
     }
 }
 

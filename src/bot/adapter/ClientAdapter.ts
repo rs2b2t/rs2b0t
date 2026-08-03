@@ -6,6 +6,8 @@ import IfType from '#/config/IfType.js';
 import LocType from '#/config/LocType.js';
 import ObjType from '#/config/ObjType.js';
 import CollisionMap from '#/dash3d/CollisionMap.js';
+import Model from '#/dash3d/Model.js';
+import type ModelSource from '#/dash3d/ModelSource.js';
 import { ClientProt } from '#/io/ClientProt.js';
 
 import { SELF_TEST, type RawClient } from './RawClient.js';
@@ -15,6 +17,44 @@ const SCRATCH_SLOT = 499;
 
 let raw: RawClient | null = null;
 let packetListener: ((ptype: number) => void) | null = null;
+
+/**
+ * Object/NPC vertical extent for hulls. RS model space: minY = max(-vertexY)
+ * (height above origin) — same as ClientNpc.height. maxY is below-origin only.
+ */
+export function locHullHeight(
+    model: { minY: number; maxY: number } | null | undefined,
+    fallback = 128
+): number {
+    if (model && model.minY > 0) {
+        return model.minY;
+    }
+    if (model && model.maxY > 0) {
+        return model.maxY;
+    }
+    return fallback;
+}
+
+/**
+ * Walls/scenery often store a static `Model` as ModelSource. Model does not
+ * override getTempModel() (returns null), so use the instance itself when it is
+ * a Model. Never use bare ModelSource.minY (defaults to 1000).
+ */
+export function resolveLocModelExtents(
+    src: ModelSource | null | undefined
+): { minY: number; maxY: number; radius: number } | null {
+    if (!src) {
+        return null;
+    }
+    const temp = src.getTempModel();
+    if (temp) {
+        return temp;
+    }
+    if (src instanceof Model) {
+        return src;
+    }
+    return null;
+}
 
 function worldTileToScene(
     x: number,
@@ -310,7 +350,8 @@ export const reader = {
     /**
      * Loc object hull: eight corners of the object AABB in overlay pixels
      * (or areaGame if `areaGame`). Prefer live scene placement for centre; size from
-     * LocType / multi-tile footprint / model maxY. Null when not in the loaded scene.
+     * LocType / multi-tile footprint / model minY (same height metric as npcBox).
+     * Null when the tile is outside the loaded scene or projection fails.
      */
     locBox(
         opts: { id?: number; x: number; z: number; level?: number; name?: string },
@@ -326,13 +367,7 @@ export const reader = {
             return null;
         }
 
-        let sceneX = lx * 128 + 64;
-        let sceneZ = lz * 128 + 64;
-        let halfW = 64;
-        let halfL = 64;
-        let topH = 128;
-        let usedSceneFootprint = false;
-
+        const wantName = opts.name?.trim().toLowerCase() || null;
         const matchTc = (tc: number): boolean => {
             if (tc === 0) {
                 return false;
@@ -341,68 +376,194 @@ export const reader = {
             if (opts.id !== undefined) {
                 return id === opts.id;
             }
-            if (opts.name) {
+            if (wantName) {
                 try {
                     const n = LocType.list(id).name;
-                    return n !== null && n.toLowerCase() === opts.name.toLowerCase();
+                    return n !== null && n.toLowerCase() === wantName;
                 } catch {
                     return false;
                 }
             }
+            // No id/name: accept any loc on the exact tile only (see search).
             return true;
         };
 
-        const wall = raw.world.getWall(level, lx, lz);
-        const decor = raw.world.getDecor(level, lz, lx);
-        const scene = raw.world.getScene(level, lx, lz);
-        const gd = raw.world.getGd(level, lx, lz);
+        type Hit = {
+            sceneX: number;
+            sceneZ: number;
+            halfW: number;
+            halfL: number;
+            resolvedId: number | undefined;
+            modelSrc: ModelSource | null;
+            usedSceneFootprint: boolean;
+            /** Prefer exact-tile / wall over distant scenery. */
+            rank: number;
+            dist: number;
+            /** Wall orientation for thin AABB (scene units). */
+            wallAngle1?: number;
+        };
 
-        let resolvedId = opts.id;
-        let modelSrc: { getTempModel(): { maxY: number } | null } | null = null;
+        const hits: Hit[] = [];
 
-        if (wall && matchTc(wall.typecode)) {
-            sceneX = wall.x;
-            sceneZ = wall.z;
-            resolvedId = (wall.typecode >> 14) & 0x7fff;
-            modelSrc = wall.model1;
-        } else if (scene && matchTc(scene.typecode)) {
-            sceneX = scene.x;
-            sceneZ = scene.z;
-            resolvedId = (scene.typecode >> 14) & 0x7fff;
-            halfW = ((scene.maxTileX - scene.minTileX + 1) * 128) / 2;
-            halfL = ((scene.maxTileZ - scene.minTileZ + 1) * 128) / 2;
-            usedSceneFootprint = true;
-            modelSrc = scene.model;
-        } else if (decor && matchTc(decor.typecode)) {
-            sceneX = decor.x;
-            sceneZ = decor.z;
-            resolvedId = (decor.typecode >> 14) & 0x7fff;
-            modelSrc = decor.model;
-        } else if (gd && matchTc(gd.typecode)) {
-            sceneX = gd.x;
-            sceneZ = gd.z;
-            resolvedId = (gd.typecode >> 14) & 0x7fff;
-            modelSrc = gd.model;
-        } else if (opts.id === undefined && !opts.name) {
+        const pushWall = (tx: number, tz: number): void => {
+            const wall = raw!.world!.getWall(level, tx, tz);
+            if (!wall || !matchTc(wall.typecode)) {
+                return;
+            }
+            const id = (wall.typecode >> 14) & 0x7fff;
+            hits.push({
+                sceneX: wall.x,
+                sceneZ: wall.z,
+                halfW: 64,
+                halfL: 64,
+                resolvedId: id,
+                modelSrc: wall.model1 ?? wall.model2,
+                usedSceneFootprint: false,
+                rank: 0,
+                dist: Math.abs(tx - lx) + Math.abs(tz - lz),
+                wallAngle1: wall.angle1
+            });
+        };
+
+        const pushDecor = (tx: number, tz: number): void => {
+            const decor = raw!.world!.getDecor(level, tz, tx);
+            if (!decor || !matchTc(decor.typecode)) {
+                return;
+            }
+            const id = (decor.typecode >> 14) & 0x7fff;
+            hits.push({
+                sceneX: decor.x,
+                sceneZ: decor.z,
+                halfW: 64,
+                halfL: 64,
+                resolvedId: id,
+                modelSrc: decor.model,
+                usedSceneFootprint: false,
+                rank: 2,
+                dist: Math.abs(tx - lx) + Math.abs(tz - lz)
+            });
+        };
+
+        const pushGd = (tx: number, tz: number): void => {
+            const gd = raw!.world!.getGd(level, tx, tz);
+            if (!gd || !matchTc(gd.typecode)) {
+                return;
+            }
+            const id = (gd.typecode >> 14) & 0x7fff;
+            hits.push({
+                sceneX: gd.x,
+                sceneZ: gd.z,
+                halfW: 64,
+                halfL: 64,
+                resolvedId: id,
+                modelSrc: gd.model,
+                usedSceneFootprint: false,
+                rank: 3,
+                dist: Math.abs(tx - lx) + Math.abs(tz - lz)
+            });
+        };
+
+        // getScene only returns when (tx,tz) is the SW (min) corner of the sprite.
+        // Scan a neighbourhood so multi-tile locs still resolve when locX/Z is not SW.
+        const SEARCH = opts.id !== undefined || wantName ? 2 : 0;
+        for (let ox = Math.max(0, lx - SEARCH); ox <= Math.min(SCENE_SIZE - 1, lx + SEARCH); ox++) {
+            for (let oz = Math.max(0, lz - SEARCH); oz <= Math.min(SCENE_SIZE - 1, lz + SEARCH); oz++) {
+                if (SEARCH === 0 && (ox !== lx || oz !== lz)) {
+                    continue;
+                }
+                // Without id/name, only the exact tile (avoid random nearby locs).
+                if (opts.id === undefined && !wantName && (ox !== lx || oz !== lz)) {
+                    continue;
+                }
+
+                pushWall(ox, oz);
+                pushDecor(ox, oz);
+                pushGd(ox, oz);
+
+                const scene = raw.world.getScene(level, ox, oz);
+                if (!scene || !matchTc(scene.typecode)) {
+                    continue;
+                }
+                // Require the published tile to sit inside the footprint when found off-min.
+                if (lx < scene.minTileX || lx > scene.maxTileX || lz < scene.minTileZ || lz > scene.maxTileZ) {
+                    continue;
+                }
+                const id = (scene.typecode >> 14) & 0x7fff;
+                const tilesX = scene.maxTileX - scene.minTileX + 1;
+                const tilesZ = scene.maxTileZ - scene.minTileZ + 1;
+                hits.push({
+                    sceneX: scene.x,
+                    sceneZ: scene.z,
+                    halfW: (tilesX * 128) / 2,
+                    halfL: (tilesZ * 128) / 2,
+                    resolvedId: id,
+                    modelSrc: scene.model,
+                    usedSceneFootprint: true,
+                    rank: 1,
+                    dist: Math.abs(ox - lx) + Math.abs(oz - lz)
+                });
+            }
+        }
+
+        hits.sort((a, b) => a.rank - b.rank || a.dist - b.dist);
+
+        // Only draw when the loc is actually in the loaded scene. A tile-center
+        // fallback at locX/locZ (often the approach/from tile) looks like a cube
+        // around the player when the hop is active and the real loc was missed.
+        if (hits.length === 0) {
             return null;
         }
 
-        if (resolvedId !== undefined) {
-            try {
+        const h0 = hits[0]!;
+        let sceneX = h0.sceneX;
+        let sceneZ = h0.sceneZ;
+        let halfW = h0.halfW;
+        let halfL = h0.halfL;
+        let topH = 128;
+        let resolvedId = h0.resolvedId ?? opts.id;
+        const modelSrc = h0.modelSrc;
+        let usedSceneFootprint = h0.usedSceneFootprint;
+        const wallAngle1 = h0.wallAngle1;
+
+        try {
+            if (resolvedId !== undefined) {
                 const lt = LocType.list(resolvedId);
                 if (!usedSceneFootprint) {
                     halfW = Math.max(32, (lt.width * 128) / 2);
                     halfL = Math.max(32, (lt.length * 128) / 2);
+                    // Doors / walls: thin AABB on the wall-facing axis (wallwidth ≈ 16).
+                    if (wallAngle1 !== undefined) {
+                        const thin = Math.max(8, Math.min(40, lt.wallwidth || 16));
+                        const a = ((wallAngle1 % 2048) + 2048) % 2048;
+                        // 0/1024 → extends along X (thin in Z); 512/1536 → along Z (thin in X).
+                        if (a < 256 || (a >= 896 && a < 1152) || a >= 1792) {
+                            halfL = thin;
+                        } else {
+                            halfW = thin;
+                        }
+                    }
                 }
-                const model = modelSrc?.getTempModel() ?? null;
-                if (model && model.maxY > 0) {
-                    topH = model.maxY;
-                } else {
-                    topH = Math.max(64, lt.resizey);
+                const model = resolveLocModelExtents(modelSrc);
+                // resizey is a % scale (128 = 100%), not a height — never use it as topH.
+                topH = locHullHeight(model, 128);
+                if (
+                    !usedSceneFootprint &&
+                    model &&
+                    model.radius > 0 &&
+                    lt.width <= 1 &&
+                    lt.length <= 1 &&
+                    wallAngle1 === undefined
+                ) {
+                    // Single-tile scenery (trees, etc.): inflate to model radius, capped.
+                    const r = Math.min(model.radius, 192);
+                    halfW = Math.max(halfW, r);
+                    halfL = Math.max(halfL, r);
                 }
-            } catch {
-                // LocType may not be ready during boot
+            } else {
+                topH = locHullHeight(resolveLocModelExtents(modelSrc), 128);
             }
+        } catch {
+            // LocType may not be ready during boot
         }
 
         const project = (sx: number, sz: number, h: number): { x: number; y: number } | null => {
@@ -413,23 +574,34 @@ export const reader = {
         };
 
         // Ground ring then top ring (same winding as npcBox).
-        const corners: [number, number][] = [
+        const offsets: [number, number][] = [
             [-halfW, -halfL],
             [halfW, -halfL],
             [halfW, halfL],
             [-halfW, halfL]
         ];
-        const out: { x: number; y: number }[] = [];
-        for (const h of [4, Math.max(16, topH)]) {
-            for (const [dx, dz] of corners) {
-                const p = project(sceneX + dx, sceneZ + dz, h);
-                if (!p) {
-                    return null;
+        const tryHeights = [Math.max(16, topH), Math.max(16, Math.min(topH, 96)), 48];
+        for (const top of tryHeights) {
+            const out: { x: number; y: number }[] = [];
+            let ok = true;
+            for (const h of [4, top]) {
+                for (const [dx, dz] of offsets) {
+                    const p = project(sceneX + dx, sceneZ + dz, h);
+                    if (!p) {
+                        ok = false;
+                        break;
+                    }
+                    out.push(p);
                 }
-                out.push(p);
+                if (!ok) {
+                    break;
+                }
+            }
+            if (ok && out.length === 8) {
+                return out;
             }
         }
-        return out;
+        return null;
     },
 
     npcs(): NpcSnapshot[] {

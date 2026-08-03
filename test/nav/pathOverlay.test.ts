@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test';
+import { locHullHeight, resolveLocModelExtents } from '#/bot/adapter/ClientAdapter.js';
+import Model from '#/dash3d/Model.js';
+import ModelSource from '#/dash3d/ModelSource.js';
 import { PathPublish, formatHopLabel } from '#/bot/nav/pathPublish.js';
 import {
     GAME_VIEW_CLIP,
     buildPathQuads,
+    hullFillFromStroke,
+    liveTransportLoc,
     projectPathTiles,
     projectTileQuad,
-    selectDrawIndices
+    selectDrawIndices,
+    strokeLocHull
 } from '#/bot/nav/pathOverlay.js';
 
 describe('PathPublish', () => {
@@ -125,5 +131,111 @@ describe('projectPathTiles (centre-line helper)', () => {
         expect(pts.length).toBe(1);
         expect(pts[0]!.transport).toBe(true);
         expect(pts[0]!.x).toBe(120);
+    });
+});
+
+describe('locHullHeight', () => {
+    test('prefers model.minY (NPC height metric), not maxY or scale', () => {
+        expect(locHullHeight({ minY: 200, maxY: 12 })).toBe(200);
+        expect(locHullHeight({ minY: 0, maxY: 40 })).toBe(40);
+        expect(locHullHeight(null, 96)).toBe(96);
+        expect(locHullHeight(undefined)).toBe(128);
+    });
+});
+
+describe('resolveLocModelExtents', () => {
+    test('uses Model instance directly (walls store Model as ModelSource)', () => {
+        const m = new Model();
+        m.minY = 180;
+        m.maxY = 4;
+        m.radius = 40;
+        expect(resolveLocModelExtents(m)?.minY).toBe(180);
+    });
+    test('ignores bare ModelSource default minY=1000', () => {
+        expect(resolveLocModelExtents(new ModelSource())).toBeNull();
+    });
+});
+
+describe('liveTransportLoc', () => {
+    test('skips teleports and non-scenery kinds (no player-stand cube)', () => {
+        expect(
+            liveTransportLoc({
+                x: 1,
+                z: 2,
+                level: 0,
+                transport: true,
+                teleportId: 'varrock',
+                locName: 'Varrock teleport',
+                locX: 1,
+                locZ: 2
+            })
+        ).toBeNull();
+        expect(
+            liveTransportLoc({
+                x: 1,
+                z: 2,
+                level: 0,
+                transport: true,
+                kind: 'teleport',
+                locName: 'Castle wars'
+            })
+        ).toBeNull();
+        expect(
+            liveTransportLoc({
+                x: 1,
+                z: 2,
+                level: 0,
+                transport: true,
+                locName: 'Customs officer',
+                locX: 1,
+                locZ: 2
+            })
+        ).toBeNull();
+    });
+});
+
+describe('hullFillFromStroke', () => {
+    test('parses rgba stroke into translucent fill', () => {
+        expect(hullFillFromStroke('rgba(255, 128, 0, 0.95)', 0.2)).toBe('rgba(255, 128, 0, 0.2)');
+        expect(hullFillFromStroke('#ff8800', 0.1)).toBe('rgba(255, 136, 0, 0.1)');
+    });
+});
+
+describe('strokeLocHull', () => {
+    test('draws 12 edges (4+4+4) for a full box', () => {
+        const box = [
+            { x: 0, y: 10 },
+            { x: 10, y: 10 },
+            { x: 10, y: 0 },
+            { x: 0, y: 0 },
+            { x: 0, y: 8 },
+            { x: 10, y: 8 },
+            { x: 10, y: -2 },
+            { x: 0, y: -2 }
+        ];
+        let strokes = 0;
+        let fills = 0;
+        const ctx = {
+            save() {},
+            restore() {},
+            beginPath() {},
+            moveTo() {},
+            lineTo() {},
+            closePath() {},
+            stroke() {
+                strokes++;
+            },
+            fill() {
+                fills++;
+            },
+            set strokeStyle(_v: string) {},
+            set fillStyle(_v: string) {},
+            set lineWidth(_v: number) {},
+            set lineJoin(_v: string) {},
+            set lineCap(_v: string) {}
+        } as unknown as CanvasRenderingContext2D;
+        strokeLocHull(ctx, box, 'rgba(1,2,3,1)', 2, { fill: 'rgba(1,2,3,0.1)' });
+        expect(strokes).toBe(12);
+        expect(fills).toBe(2);
     });
 });

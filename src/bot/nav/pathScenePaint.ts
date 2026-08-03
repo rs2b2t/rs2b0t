@@ -165,7 +165,6 @@ export function paintNavPathInGame(_client: Client): void {
         return;
     }
 
-    const theme = resolveNavPathPaintTheme();
     const pathRgb = rgbInt(parseHtmlColor(SettingsStore.globalBag().str('navPathColorPath', NAV_PATH_PAINT_DEFAULTS.path)));
     const hopRgb = rgbInt(
         parseHtmlColor(SettingsStore.globalBag().str('navPathColorTransport', NAV_PATH_PAINT_DEFAULTS.transport))

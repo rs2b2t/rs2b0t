@@ -286,8 +286,8 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 - **Path tiles** paint into the **game surface** after the 3D world (`BotClient.onAfterWorldRender`
   → `pathScenePaint.ts`) with the same camera projection as the scene.
 - **Object highlighter**: each transport hop draws a **3D AABB hull** of the live loc the executor
-  will click (`reader.locBox` from scene wall/sprite/decor + LocType size), not just the stand tile.
-  Hulls are projected to the HTML overlay for crisp strokes (screen-space object hull, not a tile marker).
+  will click (`reader.locBox`: scene wall/sprite/decor, multi-tile footprint, model `minY` height),
+  not just the stand tile. Next hop is emphasized; hulls clip to the game viewport.
 - **Click tile** outline = next walker click. **Hop labels** on the HTML overlay.
 
 True z-buffer path paint *under* models would need injecting into `World` draw order; object hulls

@@ -21,6 +21,12 @@ export interface PublishedPathTile {
     locId?: number;
     /** Loc display name for scene lookup when id is missing. */
     locName?: string;
+    /** Interact action (Open, Climb-up, …) for live Loc query. */
+    action?: string;
+    /** Hop kind when known (door, ladder, teleport, …). */
+    kind?: string;
+    /** Spell/jewellery tele id — no scenery hull for these. */
+    teleportId?: string;
 }
 
 export interface PublishedPath {

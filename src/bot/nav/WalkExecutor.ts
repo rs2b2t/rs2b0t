@@ -295,7 +295,10 @@ class WalkExecutorImpl {
                     locX: tr.locX,
                     locZ: tr.locZ,
                     locId: tr.locId,
-                    locName: tr.locName
+                    locName: tr.locName,
+                    action: tr.action,
+                    kind: tr.kind,
+                    teleportId: tr.teleportId
                 };
             }),
             pathIdx,
