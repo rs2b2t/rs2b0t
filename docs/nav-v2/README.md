@@ -13,7 +13,7 @@ Opt-in walker: Global **World walker** = `classic` (default) | `v2`.
 
 **v2 adds:** spell + jewellery tele edges (magic/runes/quests via WorldState; jewellery inventory only), hop logs, path-scoped bank for runes/tolls, optional path paint, quest-lock door blacklist, danger zones.
 
-**Coverage program:** close remaining 2004-era travel systems (spirit trees, glider, Entrana, carts, agility shortcuts, …) using Server `content/scripts` as source of truth — see [TRANSPORTS-2004.md](./TRANSPORTS-2004.md).
+**Coverage program:** 2004-era travel systems (spirit trees, glider, Entrana, carts, essence entry, levers, OD agility) live in `travelCatalog.ts` / `loadTransportGraph.ts` — see [TRANSPORTS-2004.md](./TRANSPORTS-2004.md).
 
 **Not in the original v2 ship:** bank cache API, multi-dest quest ladders, live CI harness suite, fairy rings / post-era transport matrix.
 

@@ -276,6 +276,41 @@ export function wildyLeverEdges(): TransportEdgeData[] {
     ];
 }
 
+/**
+ * OD-relevant agility shortcuts from skill_agility/shortcuts.rs2 (not full courses).
+ * Coal logs + island ropes already live in transports.json — these fill remaining OD gaps.
+ */
+export function agilityShortcutEdges(): TransportEdgeData[] {
+    const agi = (level: number): TransportRequires => ({
+        skills: [{ name: 'agility', level }]
+    });
+    const membersAgi = (level: number): TransportRequires => ({
+        members: true,
+        skills: [{ name: 'agility', level }]
+    });
+    // Barb village crumbling wall: one-way west→east (loc 0_39_55_46_33).
+    const castleLoc = parseLcCoord('0_39_55_46_33');
+    const castleFrom = { x: castleLoc.x - 1, z: castleLoc.z, level: 0 };
+    const castleTo = { x: castleLoc.x + 1, z: castleLoc.z, level: 0 };
+    // Shilo river log already in transports.json (zq_logbalance @ 2906↔2910,3049).
+    // Edgeville dungeon monkeybars (loc params).
+    const mbA = parseLcCoord('0_48_155_48_44');
+    const mbB = parseLcCoord('0_48_155_49_49');
+    return [
+        edge(
+            castleFrom,
+            castleTo,
+            'Crumbling wall',
+            'Climb-over',
+            'shortcut',
+            'agi_castle_crumbling_wall',
+            membersAgi(5)
+        ),
+        edge(mbA, mbB, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_n', agi(15)),
+        edge(mbB, mbA, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_s', agi(15))
+    ];
+}
+
 /** All curated travel rows to merge with transports.json at graph load. */
 export function curatedTravelEdges(): TransportEdgeData[] {
     return [
@@ -284,7 +319,8 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...entranaFerryEdges(),
         ...shiloCartEdges(),
         ...essenceEntryEdges(),
-        ...wildyLeverEdges()
+        ...wildyLeverEdges(),
+        ...agilityShortcutEdges()
     ];
 }
 

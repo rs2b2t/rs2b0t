@@ -13,8 +13,11 @@ import {
     shiloCartEdges,
     essenceEntryEdges,
     wildyLeverEdges,
+    agilityShortcutEdges,
     curatedTravelEdges
 } from '#/bot/nav/v2/travelCatalog.js';
+import { specialCrossingForTransport } from '#/bot/nav/data/specialCrossings.js';
+import { hasEntranaRestrictedGear } from '#/bot/nav/exec/specialCrossing.js';
 
 describe('parseLcCoord', () => {
     test('decodes content constants', () => {
@@ -87,6 +90,7 @@ describe('ferries / cart', () => {
             + shiloCartEdges().length
             + essenceEntryEdges().length
             + wildyLeverEdges().length
+            + agilityShortcutEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
         expect(names.has('ferry_port_sarim_to_entrana')).toBe(true);
@@ -94,6 +98,36 @@ describe('ferries / cart', () => {
         expect(names.has('spirit_stronghold_to_village')).toBe(true);
         expect(names.has('ess_entry_aubury')).toBe(true);
         expect(names.has('lever_ardougne_to_wild')).toBe(true);
+        expect(names.has('agi_castle_crumbling_wall')).toBe(true);
+    });
+});
+
+describe('spirit multi-dest specialCrossing', () => {
+    test('picks dialog by hop destination', () => {
+        const transport = { locX: 2461, locZ: 3444 };
+        const approach = { x: 2461, z: 3444, level: 0 };
+        const toVillage = specialCrossingForTransport(transport, approach, {
+            x: 2542,
+            z: 3169,
+            level: 0
+        });
+        const toVarrock = specialCrossingForTransport(transport, approach, {
+            x: 3179,
+            z: 3507,
+            level: 0
+        });
+        expect(toVillage?.label).toContain('Gnome Village');
+        expect(toVarrock?.label).toContain('Varrock');
+        expect(toVillage?.dialogue?.choose.some(c => /Village/i.test(c))).toBe(true);
+        expect(toVarrock?.dialogue?.choose.some(c => /Varrock/i.test(c))).toBe(true);
+    });
+});
+
+describe('entrana gear gate', () => {
+    test('exports restricted-gear helper', () => {
+        // Without client equipment the helper is false (empty pack).
+        expect(typeof hasEntranaRestrictedGear).toBe('function');
+        expect(hasEntranaRestrictedGear()).toBe(false);
     });
 });
 

@@ -11,6 +11,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 
 import transportsJson from '../../src/bot/nav/data/transports.json';
+import stairsJson from '../../src/bot/nav/data/stairEdges.json';
 import {
     TRAVEL_FAMILIES,
     curatedTravelEdges,
@@ -19,7 +20,8 @@ import {
     entranaFerryEdges,
     shiloCartEdges,
     essenceEntryEdges,
-    wildyLeverEdges
+    wildyLeverEdges,
+    agilityShortcutEdges
 } from '../../src/bot/nav/v2/travelCatalog.ts';
 import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/v2/teleportCatalog.ts';
 
@@ -91,11 +93,41 @@ function main(): void {
         }
     }
 
-    const transports = transportsJson as { kind?: string; locName?: string; debugName?: string }[];
+    const transports = transportsJson as {
+        kind?: string;
+        locName?: string;
+        debugName?: string;
+        disabledReason?: string;
+    }[];
+    const stairs = stairsJson as { disabledReason?: string }[];
     const byKind: Record<string, number> = {};
     for (const t of transports) {
         const k = t.kind ?? '?';
         byKind[k] = (byKind[k] ?? 0) + 1;
+    }
+
+    const disabledReasons: Record<string, number> = {};
+    const bucketDisabled = (reason: string | undefined): void => {
+        if (!reason) {
+            return;
+        }
+        const key =
+            /state-aware|depends on player|runtime quest/i.test(reason)
+                ? 'state_deferred'
+                : /up\/down choice|Climb-up or Climb-down/i.test(reason)
+                  ? 'multi_choice_climb'
+                  : /non-traversable|no statically|no movement destination/i.test(reason)
+                    ? 'broken_or_no_dest'
+                    : /walkable interaction tile|no walkable/i.test(reason)
+                      ? 'pack_stand_gap'
+                      : 'other';
+        disabledReasons[key] = (disabledReasons[key] ?? 0) + 1;
+    };
+    for (const t of transports) {
+        bucketDisabled(t.disabledReason);
+    }
+    for (const s of stairs) {
+        bucketDisabled(s.disabledReason);
     }
 
     const curated = curatedTravelEdges();
@@ -107,6 +139,10 @@ function main(): void {
             [...familyFiles.entries()].map(([k, v]) => [k, v.size])
         ),
         transportsJson: { count: transports.length, byKind },
+        disabledBuckets: disabledReasons,
+        disabledTotal:
+            transports.filter(t => t.disabledReason).length
+            + stairs.filter(s => s.disabledReason).length,
         botCatalog: {
             curatedTravelEdges: curated.length,
             spiritTree: spiritTreeEdges().length,
@@ -115,6 +151,7 @@ function main(): void {
             shiloCart: shiloCartEdges().length,
             essenceEntry: essenceEntryEdges().length,
             wildyLeverEdges: wildyLeverEdges().length,
+            agilityShortcuts: agilityShortcutEdges().length,
             spellTeles: SPELL_TELEPORTS.length,
             jewellery: JEWELLERY_TELEPORTS.length,
             levers: LEVER_TELEPORTS.length
@@ -142,13 +179,18 @@ function main(): void {
         entrana: entranaFerryEdges().length,
         cart: shiloCartEdges().length,
         essence: essenceEntryEdges().length,
-        wildyLever: wildyLeverEdges().length
+        wildyLever: wildyLeverEdges().length,
+        agility: agilityShortcutEdges().length
     });
     console.log('  tele catalog:', {
         spell: SPELL_TELEPORTS.length,
         jewellery: JEWELLERY_TELEPORTS.length,
         lever: LEVER_TELEPORTS.length
     });
+    console.log(
+        `  disabled rows (transports+stairs): ${coverage.disabledTotal}`,
+        coverage.disabledBuckets
+    );
     if (files.length === 0) {
         console.log('\n  WARN: no scripts found — set CONTENT_DIR to Server/content');
         process.exit(2);

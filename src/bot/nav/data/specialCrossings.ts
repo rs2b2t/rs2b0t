@@ -218,6 +218,91 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         arrivalRadius: 64,
         dialogue: { choose: ['Can you teleport me to the Rune Essence?'] },
         label: 'Brimstail → essence mine'
+    },
+
+    // Spirit trees — one crossing per destination (dialog option); multi-dest match uses toTile.
+    // Stronghold tree (Grand Tree complete): village / varrock forest / khazard battlefield.
+    {
+        x: 2461,
+        z: 3444,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Tree Gnome Village'] },
+        toTile: { x: 2542, z: 3169, level: 0 },
+        label: 'Spirit tree → Gnome Village'
+    },
+    {
+        x: 2461,
+        z: 3444,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Forest north of Varrock'] },
+        toTile: { x: 3179, z: 3507, level: 0 },
+        label: 'Spirit tree → Varrock forest'
+    },
+    {
+        x: 2461,
+        z: 3444,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Battlefield of Khazard'] },
+        toTile: { x: 2555, z: 3259, level: 0 },
+        label: 'Spirit tree → Khazard battlefield'
+    },
+    // Village tree → others
+    {
+        x: 2542,
+        z: 3169,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Battlefield of Khazard'] },
+        toTile: { x: 2555, z: 3259, level: 0 },
+        label: 'Village spirit → Khazard'
+    },
+    {
+        x: 2542,
+        z: 3169,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Forest north of Varrock'] },
+        toTile: { x: 3179, z: 3507, level: 0 },
+        label: 'Village spirit → Varrock forest'
+    },
+    {
+        x: 2542,
+        z: 3169,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Where can I go?', 'Gnome stronghold'] },
+        toTile: { x: 2461, z: 3444, level: 0 },
+        label: 'Village spirit → Stronghold'
+    },
+    // Young trees → village only
+    {
+        x: 3179,
+        z: 3507,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Yes please'] },
+        toTile: { x: 2542, z: 3169, level: 0 },
+        label: 'Varrock young spirit → Village'
+    },
+    {
+        x: 2555,
+        z: 3259,
+        level: 0,
+        locName: 'Spirit Tree',
+        action: 'Talk-to',
+        dialogue: { choose: ['Yes please'] },
+        toTile: { x: 2542, z: 3169, level: 0 },
+        label: 'Khazard young spirit → Village'
     }
 ];
 
@@ -242,16 +327,43 @@ export function specialCrossingForTransport(
     if (step !== undefined) {
         levels.add(step.level);
     }
+
+    const matchesOrigin = (sc: SpecialCrossing, level: number): boolean => {
+        if (sc.level !== level) {
+            return false;
+        }
+        return (
+            (sc.x === transport.locX && sc.z === transport.locZ)
+            || (sc.x === approach.x && sc.z === approach.z)
+            || (step !== undefined && sc.x === step.x && sc.z === step.z)
+        );
+    };
+
+    const candidates: SpecialCrossing[] = [];
     for (const level of levels) {
-        const hit =
-            specialCrossingAt(transport.locX, transport.locZ, level)
-            ?? specialCrossingAt(approach.x, approach.z, level)
-            ?? (step !== undefined ? specialCrossingAt(step.x, step.z, level) : null);
-        if (hit) {
-            return hit;
+        for (const sc of SPECIAL_CROSSINGS) {
+            if (matchesOrigin(sc, level)) {
+                candidates.push(sc);
+            }
         }
     }
-    return null;
+    if (candidates.length === 0) {
+        return null;
+    }
+    // Multi-dest hubs (spirit trees): pick the crossing whose toTile matches the hop.
+    if (step !== undefined && candidates.length > 1) {
+        const byDest = candidates.find(
+            sc =>
+                sc.toTile !== undefined
+                && sc.toTile.x === step.x
+                && sc.toTile.z === step.z
+                && (sc.toTile.level === undefined || sc.toTile.level === step.level)
+        );
+        if (byDest) {
+            return byDest;
+        }
+    }
+    return candidates[0] ?? null;
 }
 
 export function pickChoice(options: string[], choose: string[]): string | null {
