@@ -22,6 +22,8 @@ shut door, or on another level.
 - [Doors](#doors)
 - [Special crossings](#special-crossings)
 - [Nav v2 (experimental)](#nav-v2-experimental)
+- [Path camera](#path-camera)
+- [Route corpus / HARD stress](#route-corpus--hard-stress)
 - [Level-change loc lag](#level-change-loc-lag)
 - [Arrival](#arrival)
 - [The Reach primitive](#the-reach-primitive)
@@ -273,9 +275,10 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 | | Classic | v2 |
 |---|---|---|
 | Tele catalog (spell + jewellery) | no | yes |
-| Live WorldState / `requires` | no | yes |
+| Live WorldState for edge `requires` | snapshot when available | yes |
 | Hop logs | no | yes |
 | Path-scoped bank (runes/tolls; inv jewellery only) | no | yes (one leg max) |
+| Path camera follow | optional (`navCameraFollow`) | optional (`navCameraFollow`) |
 | Path paint | optional | optional (`showNavPath`) |
 
 **Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads on
@@ -284,9 +287,65 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
 (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
 
-**Code:** `src/bot/nav/v2/`, `exec/`, `pathPublish.ts`, `pathOverlay.ts`. Tele catalog:
+**Code:** `src/bot/nav/v2/`, `exec/`, `pathPublish.ts`, `pathOverlay.ts`, `cameraFollow.ts`. Tele catalog:
 `teleportCatalog.ts`. Pack stress: `tools/nav/script-route-corpus.ts`. Live/operator tools
 under `tools/nav-*.ts` (not CI). Index: [docs/nav-v2/](nav-v2/).
+
+## Path camera
+
+Optional orbit-camera path facing so operators can see the route being walked
+(diagnostics / recordings). **Off by default.**
+
+| Setting | Default | Override |
+|---|---|---|
+| Global `navCameraFollow` | `false` | `?Global.navCameraFollow=true` |
+
+When on, [`WalkExecutor`](../src/bot/nav/WalkExecutor.ts) samples a path-facing yaw
+each follow tick and [`PathCameraFollow`](../src/bot/nav/cameraFollow.ts) eases the
+orbit yaw on the **client frame loop** (not once per walk tick), so turns feel like
+a human holding left/right rather than stepping.
+
+- Yaw uses client units `0–2047` (same as [`Game.cameraYaw`](API.md#camera-client-only)).
+- Lookahead stops at **transport boundaries** (level change, same-plane dungeon
+  jumps such as z ± 6400, or a transport waypoint) so the camera aims at the local
+  ladder/object, not the remote landing.
+- Independent of path paint (`showNavPath`); both may be on together.
+- Client camera packets remain rate-limited by the client itself.
+
+Scripts that need a one-shot aim should call `Game.setCameraYaw` directly; prefer
+the Global setting for continuous walk follow.
+
+## Route corpus / HARD stress
+
+The script-route corpus ranks hard OD pairs for live regression walks. Artifacts
+are **generated and gitignored** — regenerate before `HARD=1` live runs.
+
+| Artifact | Role |
+|---|---|
+| `out/script-routes.generated.json` | Full successful probe set after endpoint + corridor dedupe |
+| `out/script-routes.hardest.json` | Top-N by difficulty for live HARD walks |
+
+**Generate (requires collision pack):**
+
+```bash
+bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts
+# optional: --no-tele for pure-walk ranking; tele ranking is default (full runes)
+```
+
+**Dedupe stages** (see `tools/nav/script-route-corpus.ts`):
+
+1. **Endpoint near-dedupe** (`dedupePaths`) — drop generator twins with nearly the
+   same directed from→to.
+2. **Corridor / journey fingerprint** (`pathCorridorSignature` + `dedupeByCorridor`)
+   — keep one highest-difficulty row per start map-square + end map-square + hop
+   sequence so transport-diverse routes are retained.
+3. **HARD top-N** (`rankHardest`) — score cost / expansions / hop count for the
+   live sample list.
+
+**Live HARD:** operator harnesses under `tools/nav-*.ts` read
+`script-routes.hardest.json` when `HARD=1`. Fresh checkouts without the pack or
+generated JSON will not exercise collision-backed corpus coverage; unit tests that
+need the pack use `test.skipIf` rather than silent pass.
 
 ## Level-change loc lag
 

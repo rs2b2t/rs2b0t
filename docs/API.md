@@ -178,9 +178,35 @@ Game.hasCombatStyle(style): boolean
 Game.setCombatStyle(style): boolean
 Game.setCombatMode(mode: number): boolean // exact numeric mode (for ranged styles)
 Game.myName(): string | null
+Game.cameraYaw(): number
+Game.cameraPitch(): number
+Game.setCameraYaw(yaw: number): boolean
 Game.openSideTab(tab: number): Promise<boolean>
 Game.castOnNpc(spell: string, npc: Npc): Promise<boolean>
 Game.teleport(name: string): Promise<boolean>
+```
+
+### Camera (client-only)
+
+Orbit camera read/write is **client-side only** — nothing is sent to the game
+server except the client's own camera-report packets, which are already
+rate-limited (`sendCameraDelay = 20` ticks between reports).
+
+| Method | Returns | Notes |
+|---|---|---|
+| `cameraYaw()` | `0–2047` | Client orbit yaw units (**not** degrees). |
+| `cameraPitch()` | number | Client pitch units. |
+| `setCameraYaw(yaw)` | `boolean` | Local mutation / dispatch availability. **Does not** wait for the view to settle; a `true` result only means the client accepted the write. |
+
+For automatic path-facing during walks, prefer Global **`navCameraFollow`**
+(default `false`) rather than driving yaw from scripts every tick — see
+[World-walking → Path camera](NAV.md#path-camera).
+
+```ts
+// One-shot face east (client units: east ≈ 1536)
+if (Game.setCameraYaw(1536)) {
+    await Execution.delay(200); // optional settle; API does not wait
+}
 ```
 
 Melee styles are resolved from the Accurate, Aggressive, Controlled, or
