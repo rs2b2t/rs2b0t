@@ -64,8 +64,8 @@ describe('dedupePaths (endpoints only)', () => {
 });
 
 describe('pathCorridorSignature / dedupeByCorridor', () => {
-    test('same end map-square shares a journey (ignores approach and teles)', () => {
-        // Seers tele-in vs Ardougne pure-walk into Grand Tree bank.
+    test('same end square but different start/hops stay distinct journeys', () => {
+        // Seers tele-in vs Ardougne pure-walk into Grand Tree bank — different coverage.
         const seersTele = [
             { x: 2716, z: 3473, level: 1 },
             { x: 2662, z: 3305, level: 0 },
@@ -85,8 +85,12 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
         ];
         const sa = pathCorridorSignature(seersTele, teleHops, { grid: 64 });
         const sb = pathCorridorSignature(ardyWalk, [], { grid: 64 });
-        expect(sa).toBe(sb);
-        expect(sa).toBe('end:1:38:54');
+        expect(sa).not.toBe(sb);
+        expect(sa).toContain('h:teleport:ardougne_teleport');
+        expect(sb).toContain('h:walk');
+        // Same end map-square (GT bank) still appears in both.
+        expect(sa).toContain('e:1:38:54');
+        expect(sb).toContain('e:1:38:54');
     });
 
     test('different end map-squares get different signatures', () => {
@@ -100,15 +104,37 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
             [{ kind: 'teleport', locName: 'Varrock teleport', from: { x: 0, z: 0, level: 0 }, to: { x: 3213, z: 3424, level: 0 } }],
             { grid: 64 }
         );
-        expect(rellekka).toBe('end:0:41:57');
-        expect(varrock).toBe('end:0:50:53');
+        expect(rellekka).toContain('e:0:41:57');
+        expect(varrock).toContain('e:0:50:53');
         expect(rellekka).not.toBe(varrock);
     });
 
-    test('reverse direction is a different journey (different end)', () => {
+    test('reverse direction is a different journey (start/end swap)', () => {
         const toGt = pathCorridorSignature([{ x: 2716, z: 3473, level: 1 }, { x: 2449, z: 3482, level: 1 }], []);
         const fromGt = pathCorridorSignature([{ x: 2449, z: 3482, level: 1 }, { x: 2716, z: 3473, level: 1 }], []);
         expect(toGt).not.toBe(fromGt);
+    });
+
+    test('distinct starts to the same end stay distinct', () => {
+        const fromEdge = pathCorridorSignature(
+            [
+                { x: 3096, z: 9867, level: 0 },
+                { x: 2964, z: 3378, level: 0 }
+            ],
+            [{ kind: 'dungeon', locName: 'Ladder', from: { x: 3096, z: 9867, level: 0 }, to: { x: 3096, z: 3468, level: 0 } }],
+            { grid: 64 }
+        );
+        const fromDraynor = pathCorridorSignature(
+            [
+                { x: 3092, z: 3243, level: 0 },
+                { x: 2964, z: 3378, level: 0 }
+            ],
+            [],
+            { grid: 64 }
+        );
+        expect(fromEdge).not.toBe(fromDraynor);
+        expect(fromEdge).toContain('e:0:46:52');
+        expect(fromDraynor).toContain('e:0:46:52');
     });
 
     test('dedupeByCorridor keeps the harder row per signature', () => {
@@ -116,7 +142,7 @@ describe('pathCorridorSignature / dedupeByCorridor', () => {
             from: { x: 0, z: 0, level: 0 },
             to: { x: 1, z: 0, level: 0 },
             note: 'n',
-            corridor: 'end:0:41:57',
+            corridor: 's:0:0:0|e:0:41:57|h:walk',
             cost: 10,
             expanded: 1,
             hops: 0,

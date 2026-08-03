@@ -136,14 +136,15 @@ export type PathHopLike = {
 export type WaypointLike = { x: number; z: number; level: number };
 
 /**
- * Journey fingerprint for stress dedupe — **destination map-square only**.
+ * Journey fingerprint for stress / corpus dedupe.
  *
- * HARD stress cares about *where you end up thrashing*, not how you got there.
- * Tele vs pure-walk into Grand Tree, Seers vs Catherby approaches, and local
- * door order all collapse to one representative (highest difficulty kept).
+ * Groups routes that share the same start map-square, end map-square, and
+ * transport-hop sequence. Distinct starts (Edgeville dungeon vs Draynor),
+ * tele vs pure-walk, or different hop kinds stay separate so the corpus
+ * retains execution diversity (#331).
  *
- * Reverse legs stay distinct (different end square). `hops` is unused but kept
- * so call sites stay stable. `grid` default **64** = one map square.
+ * Reverse legs stay distinct (start/end swap). `sampleEvery` is reserved for
+ * future walk-corridor sampling; default `grid` **64** = one map square.
  */
 export function pathCorridorSignature(
     waypoints: WaypointLike[],
@@ -151,15 +152,29 @@ export function pathCorridorSignature(
     opts?: { grid?: number; sampleEvery?: number }
 ): string {
     const grid = Math.max(1, opts?.grid ?? 64);
-    void hops;
     void opts?.sampleEvery;
 
     if (waypoints.length === 0) {
-        return 'end:';
+        return 'empty';
     }
 
+    const start = waypoints[0]!;
     const end = waypoints[waypoints.length - 1]!;
-    return `end:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`;
+    const hopKey =
+        hops.length === 0
+            ? 'walk'
+            : hops
+                  .map(h => {
+                      const name = (h.locName ?? h.kind).toLowerCase().replace(/\s+/g, '_');
+                      return `${h.kind}:${name}`;
+                  })
+                  .join('+');
+
+    return [
+        `s:${start.level}:${(start.x / grid) | 0}:${(start.z / grid) | 0}`,
+        `e:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`,
+        `h:${hopKey}`
+    ].join('|');
 }
 
 /**
