@@ -639,6 +639,7 @@ timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for
 script bank runs and long unattended walks**. Pass `avoidZones: ['white-wolf-mountain']`
 (or ad-hoc rects) so low-level accounts skip wolf-heavy corridors; off by default.
+See [Danger zones](NAV.md#danger-zones-optional-avoid) for catalog + pack verification.
 
 For same-scene clicks, `DirectNavigator.walk(dest)` / `walkTo(dest, radius?,
 timeoutMs?)` are available, but prefer `Traversal.walkTo` / `walkResilient`.
@@ -647,6 +648,12 @@ timeoutMs?)` are available, but prefer `Traversal.walkTo` / `walkResilient`.
 if (!await Traversal.walkResilient({ x: 2662, z: 3305, level: 0 }, { radius: 0 })) {
     this.log('could not reach the stall');
 }
+
+// Skip White Wolf Mountain on a long unattended walk
+await Traversal.walkResilient(catherby, {
+    radius: 2,
+    avoidZones: ['white-wolf-mountain'],
+});
 ```
 
 ---

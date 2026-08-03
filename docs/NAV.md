@@ -90,6 +90,11 @@ The pathfinder never expands *into* those tiles (walk or transport landing). A
 start tile already inside a zone can still path *out*. Off by default — no
 routing change unless a script (or future Global setting) opts in.
 
+**Pack check (baked collision):** Taverley bank ↔ Catherby bank free path crosses
+White Wolf Mountain (~cost 239, dozens of zone tiles). With
+`avoidZones: ['white-wolf-mountain']` the same OD stays outside the zone
+(~cost 710+, longer coastal/ship detour, zero zone tiles). Unit tests live in
+`test/nav/dangerZones.test.ts`.
 
 The outcome is explicit about failure:
 
