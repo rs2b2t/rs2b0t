@@ -488,13 +488,18 @@ class WalkExecutorImpl {
         stateOverride?: WorldStateData
     ): Promise<PathResult> {
         let result: PathResult | null = null;
-        const avoid = [
-            ...this.avoidDoors,
-            ...[...this.sessionBlacklistDoors].map(k => {
-                const [x, z] = k.split('|').map(Number);
-                return { x: x!, z: z! };
-            })
-        ];
+        // Virtual bank planning must recompute item-gated crossing avoids against
+        // the virtual inventory; live-item blacklists would hide the exact tolls
+        // banking is meant to unlock (#338). Session-failed doors and skill gates stay.
+        const avoid = stateOverride
+            ? this.avoidListForState(stateOverride)
+            : [
+                  ...this.avoidDoors,
+                  ...[...this.sessionBlacklistDoors].map(k => {
+                      const [x, z] = k.split('|').map(Number);
+                      return { x: x!, z: z! };
+                  })
+              ];
 
         // Snapshot WorldState for **both** engines so requirements-gated transports
         // (agility shortcuts, quest doors, tolls) are evaluated for the live player.
@@ -532,6 +537,42 @@ class WalkExecutorImpl {
         );
         const settled = await Execution.delayUntil(() => result !== null, PATH_REQUEST_TIMEOUT_MS);
         return settled && result ? result : { ok: false, reason: 'path request timed out', expanded: 0 };
+    }
+
+    /**
+     * Avoid list for a virtual (or other) WorldState: keep session blacklists and
+     * skill-gated specials, but re-evaluate item requirements against `state.items`
+     * so bank-planned routes can use tolls the live inventory cannot.
+     */
+    private avoidListForState(state: WorldStateData): { x: number; z: number }[] {
+        const avoid: { x: number; z: number }[] = [];
+        for (const sc of SPECIAL_CROSSINGS) {
+            const itemCount = sc.requires
+                ? (state.items[sc.requires.item] ?? 0)
+                : 0;
+            const shortItem = sc.requires && !meetsRequirement(itemCount, sc.requires);
+            const skillLevel = sc.requiresSkill
+                ? (state.skills[sc.requiresSkill.name] ?? state.skills[sc.requiresSkill.name.toLowerCase()] ?? 0)
+                : 0;
+            const shortSkill = sc.requiresSkill && !meetsSkill(skillLevel, sc.requiresSkill);
+            if (shortItem || shortSkill) {
+                avoid.push({ x: sc.x, z: sc.z });
+            }
+        }
+        for (const key of this.sessionBlacklistDoors) {
+            const [x, z] = key.split('|').map(Number);
+            avoid.push({ x: x!, z: z! });
+        }
+        // Runtime door-failure strikes from this.avoidDoors that are not pure
+        // special-crossing prefilters — keep any extra entries already struck.
+        const specialKeys = new Set(SPECIAL_CROSSINGS.map(sc => `${sc.x}|${sc.z}`));
+        for (const d of this.avoidDoors) {
+            const k = `${d.x}|${d.z}`;
+            if (!specialKeys.has(k) && !this.sessionBlacklistDoors.has(k)) {
+                avoid.push(d);
+            }
+        }
+        return avoid;
     }
 
     private resetAvoids(): void {
