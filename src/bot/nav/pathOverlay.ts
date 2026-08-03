@@ -22,6 +22,7 @@ import {
     type NavPathPaintTheme
 } from './pathPaintTheme.js';
 import { remainingPathFromPlayer } from './pathExpand.js';
+import { Game } from '../api/Game.js';
 
 /** areaGame surface blitted at (4,4) — see Client.overlayPos. */
 export const GAME_VIEW_CLIP = { x: 4, y: 4, w: 512, h: 334 } as const;
@@ -491,45 +492,35 @@ export function paintNavPath(
                 }
             }
 
-            // Explore: cyan client-walk trail (actual tryMove tiles), trimmed to player
+            // Explore: client-walk trail (tryMove tiles). Solid when walking;
+            // alternate primary / run-alt when running. No centre-line.
             const segRaw = path.clientSegment;
             if (segRaw && segRaw.length > 0) {
                 let clientColor = '#00D4FF';
+                let runAltColor = '#FFFF00';
                 try {
-                    clientColor = SettingsStore.globalBag().str('navPathColorClient', '#00D4FF');
+                    const bag = SettingsStore.globalBag();
+                    clientColor = bag.str('navPathColorClient', '#00D4FF');
+                    runAltColor = bag.str('navPathColorClientRunAlt', '#FFFF00');
                 } catch {
                     /* default */
                 }
-                const rgb = parseHtmlColor(clientColor, '#00D4FF');
-                const fill = rgba(rgb, 0.4);
-                const stroke = rgba(rgb, 0.95);
-                const line = rgba(rgb, 0.9);
+                const primary = parseHtmlColor(clientColor, '#00D4FF');
+                const runAlt = parseHtmlColor(runAltColor, '#FFFF00');
+                const runOn = Game.runEnabled();
                 const seg = remainingPathFromPlayer(segRaw, me);
-                const centers: { x: number; y: number }[] = [];
+                let tileI = 0;
                 for (const t of seg) {
                     if (t.level !== me.level) {
                         continue;
                     }
                     const corners = projectTileQuad(t, project);
-                    if (corners) {
-                        fillQuad(ctx, corners, fill, stroke, 1.5);
-                        centers.push({
-                            x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
-                            y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
-                        });
+                    if (!corners) {
+                        continue;
                     }
-                }
-                if (centers.length >= 2) {
-                    ctx.beginPath();
-                    ctx.moveTo(centers[0]!.x, centers[0]!.y);
-                    for (let i = 1; i < centers.length; i++) {
-                        ctx.lineTo(centers[i]!.x, centers[i]!.y);
-                    }
-                    ctx.strokeStyle = line;
-                    ctx.lineWidth = 3;
-                    ctx.lineJoin = 'round';
-                    ctx.lineCap = 'round';
-                    ctx.stroke();
+                    const c = runOn && tileI % 2 === 1 ? runAlt : primary;
+                    fillQuad(ctx, corners, rgba(c, 0.45), rgba(c, 0.95), 1.5);
+                    tileI++;
                 }
             }
         }

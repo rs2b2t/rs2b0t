@@ -254,7 +254,19 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Client segment colour (explore)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
-        help: 'HTML colour for the explore client-walk segment (default cyan)'
+        help:
+            'Primary colour for the client-walk trail (solid when walking). '
+            + 'Default cyan #00D4FF.'
+    },
+    navPathColorClientRunAlt: {
+        type: 'string',
+        default: '#FFFF00',
+        label: 'Client run alt colour (explore)',
+        group: 'Nav path paint',
+        showIf: { key: 'showNavPath', anyOf: ['true'] },
+        help:
+            'When run is on, client-walk tiles alternate primary / this colour. '
+            + 'Default yellow #FFFF00.'
     }
 };
 

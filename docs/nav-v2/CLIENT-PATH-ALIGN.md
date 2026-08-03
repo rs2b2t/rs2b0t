@@ -31,8 +31,9 @@ accepts for gameclick movement.
 | Control | Default | Effect |
 |---|---|---|
 | `Global.navPathSceneExpand` | **true** (explore) | Pack path segments expanded with scene-flag BFS when both ends are in the loaded scene (`pathExpand.ts` → `WalkExecutor.expandWaypoints`) |
-| `Global.navPathClientSegment` | **true** (explore) | After each successful walk click, paint a **cyan** trail of the **exact** `tryMove` tiles |
-| `Global.navPathColorClient` | `#00D4FF` | Colour for that trail |
+| `Global.navPathClientSegment` | **true** (explore) | After each successful walk click, paint the **exact** `tryMove` tiles |
+| `Global.navPathColorClient` | `#00D4FF` | Solid trail colour when walking |
+| `Global.navPathColorClientRunAlt` | `#FFFF00` | When run is on, alternate tiles use this (yellow) |
 
 **How to try live**
 
@@ -42,11 +43,11 @@ accepts for gameclick movement.
 ```
 
 - **Red** = pack path (scene-expanded when possible).
-- **Cyan** = last walk-click route as the **client** routed it (`Client.lastWalkPathLocal` from
-  `tryMove`), trimmed to the player as you move, with a continuous centre-line.
-  Falls back to scene-flag BFS only if the client buffer is empty; does **not** clear
-  cyan when re-BFS fails (gates/doors near Draynor used to wipe the trail).
-- **Green** = transports; **white outline** = click target.
+- **Client trail** = last walk-click route as the **client** routed it
+  (`Client.lastWalkPathLocal` from `tryMove`), trimmed to the player as you move.
+  **Walk:** solid primary colour. **Run:** alternating primary / yellow tiles.
+  No centre-line. Falls back to scene-flag BFS if the client buffer is empty.
+- **Green** = transports; **white outline** = pack click target.
 
 ### Live harnesses (operator)
 

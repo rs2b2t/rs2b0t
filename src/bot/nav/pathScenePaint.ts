@@ -21,6 +21,7 @@ import { parseHtmlColor, NAV_PATH_PAINT_DEFAULTS } from './pathPaintTheme.js';
 import { PathPublish } from './pathPublish.js';
 import { remainingPathFromPlayer } from './pathExpand.js';
 import { SettingsStore } from '../runtime/Settings.js';
+import { Game } from '../api/Game.js';
 
 function rgbInt(c: { r: number; g: number; b: number }): number {
     return ((c.r & 0xff) << 16) | ((c.g & 0xff) << 8) | (c.b & 0xff);
@@ -171,10 +172,14 @@ export function paintNavPathInGame(_client: Client): void {
         parseHtmlColor(SettingsStore.globalBag().str('navPathColorTransport', NAV_PATH_PAINT_DEFAULTS.transport))
     );
     const clickRgb = rgbInt(parseHtmlColor(SettingsStore.globalBag().str('navPathColorClick', NAV_PATH_PAINT_DEFAULTS.click)));
-    // Explore: cyan = scene-BFS walk segment (see navPathClientSegment / CLIENT-PATH-ALIGN).
-    const clientSegRgb = rgbInt(
-        parseHtmlColor(SettingsStore.globalBag().str('navPathColorClient', '#00D4FF'), '#00D4FF')
+    // Explore: client walk trail colour (solid when walking; alternate when running).
+    const g = SettingsStore.globalBag();
+    const clientSegRgb = rgbInt(parseHtmlColor(g.str('navPathColorClient', '#00D4FF'), '#00D4FF'));
+    // Run-alt: yellow (user-facing); hex default #FFFF00.
+    const clientRunAltRgb = rgbInt(
+        parseHtmlColor(g.str('navPathColorClientRunAlt', '#FFFF00'), '#FFFF00')
     );
+    const runOn = Game.runEnabled();
 
     const project: ProjectCorner = (x, z, u, v) => reader.projectAreaGameWorld(x, z, 0, u, v);
 
@@ -198,12 +203,12 @@ export function paintNavPathInGame(_client: Client): void {
         }
     }
 
-    // Explore: continuous client walk trail (tiles the client actually MOVE-routed).
-    // Trim to the player so the trail shrinks as you walk (shortest-path style).
+    // Explore: client walk trail (exact tryMove tiles). No centre-line.
+    // Walk: solid primary. Run: alternate primary / run-alt between consecutive tiles.
     const segRaw = path.clientSegment;
     if (segRaw && segRaw.length > 0) {
         const seg = remainingPathFromPlayer(segRaw, me);
-        const centers: { x: number; y: number }[] = [];
+        let tileI = 0;
         for (const t of seg) {
             if (t.level !== me.level) {
                 continue;
@@ -212,22 +217,10 @@ export function paintNavPathInGame(_client: Client): void {
             if (!corners) {
                 continue;
             }
-            fillQuadPix(corners, clientSegRgb, 0.45);
-            strokeQuadPix(corners, clientSegRgb, 0.95);
-            // Tile centre for path line (average of four corners)
-            centers.push({
-                x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
-                y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
-            });
-        }
-        // Polyline through centres — continuous ribbon like in-game route overlays
-        for (let i = 0; i + 1 < centers.length; i++) {
-            const a = centers[i]!;
-            const b = centers[i + 1]!;
-            drawLineTrans(a.x | 0, a.y | 0, b.x | 0, b.y | 0, clientSegRgb, alphaByte(0.95));
-            // thicker stroke
-            drawLineTrans((a.x | 0) + 1, a.y | 0, (b.x | 0) + 1, b.y | 0, clientSegRgb, alphaByte(0.7));
-            drawLineTrans(a.x | 0, (a.y | 0) + 1, b.x | 0, (b.y | 0) + 1, clientSegRgb, alphaByte(0.7));
+            const rgb = runOn && tileI % 2 === 1 ? clientRunAltRgb : clientSegRgb;
+            fillQuadPix(corners, rgb, 0.5);
+            strokeQuadPix(corners, rgb, 0.95);
+            tileI++;
         }
     }
 
