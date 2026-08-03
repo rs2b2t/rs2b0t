@@ -155,6 +155,11 @@ export interface PathPolicy {
      * Empty/undefined = all catalogued teleports that pass requires.
      */
     allowTeleportIds?: readonly string[];
+    /**
+     * Teleport ids suppressed for this plan (e.g. server rejected mid-walk).
+     * Applied after allowlist; empty/undefined = none denied.
+     */
+    denyTeleportIds?: readonly string[];
     useShips?: boolean;
     useShortcuts?: boolean;
 }

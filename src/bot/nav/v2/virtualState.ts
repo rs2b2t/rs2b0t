@@ -28,7 +28,8 @@ export function virtualizeWithItems(state: WorldStateData, add: Record<string, n
         worn: state.worn ? { ...state.worn } : {},
         freeSlots: state.freeSlots,
         // Bank virtualization does not strip gear; preserve Entrana / worn gates.
-        entranaRestrictedGear: state.entranaRestrictedGear === true
+        entranaRestrictedGear: state.entranaRestrictedGear === true,
+        wildernessLevel: state.wildernessLevel
     };
 }
 

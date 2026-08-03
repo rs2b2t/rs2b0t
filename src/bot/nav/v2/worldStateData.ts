@@ -16,6 +16,12 @@ export interface WorldStateData {
     freeSlots: number;
     /** Live Entrana restricted-gear heuristic (weapons/armour names). */
     entranaRestrictedGear?: boolean;
+    /**
+     * Current wilderness combat level (0 outside wild).
+     * Used for origin-aware teleport admission (#339). When omitted, planners
+     * compute from the path start tile via `wildernessLevelAt`.
+     */
+    wildernessLevel?: number;
 }
 
 function lookupItem(items: Record<string, number>, name: string): number {

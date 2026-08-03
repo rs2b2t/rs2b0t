@@ -6,8 +6,19 @@
 
 import { ensureEdgeId } from './edgeId.js';
 import { DEFAULT_EDGE_COST, type NavPoint, type TransportEdge, type TransportRequires } from './types.js';
+import { GLORY_MAX_WILDERNESS, SPELL_MAX_WILDERNESS, wildernessLevelAt } from './wilderness.js';
 
 export type TeleportFamily = 'spell' | 'jewellery' | 'lever';
+
+/** Origin-side restrictions evaluated at the player's current tile (#339). */
+export interface TeleportOriginRequires {
+    /**
+     * Maximum wilderness level where this tele may be cast/rubbed.
+     * Player wildy **strictly greater** than this → not planned.
+     * Standard spells / duel ring / games neck: 20. Glory: 30.
+     */
+    maxWildernessLevel?: number;
+}
 
 export interface TeleportDestination {
     /** Stable id for PathPolicy.allowTeleportIds / edge.teleportId */
@@ -19,6 +30,8 @@ export interface TeleportDestination {
     /** Fixed cost override; default DEFAULT_EDGE_COST.teleport */
     cost?: number;
     requires?: TransportRequires;
+    /** Where the player may cast/rub from (wildy thresholds, later spellbook, …). */
+    origin?: TeleportOriginRequires;
     /**
      * Inventory item name substrings that satisfy the hop (any charge stage).
      * Spells use requires.items (runes) instead.
@@ -51,6 +64,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Varrock teleport',
         to: { x: 3213, z: 3424, level: 0 },
         requires: { skills: [{ name: 'magic', level: 25 }], items: [fire(1), air(3), law(1)] },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_varrock'
     },
     {
@@ -59,6 +73,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Lumbridge teleport',
         to: { x: 3221, z: 3218, level: 0 },
         requires: { skills: [{ name: 'magic', level: 31 }], items: [earth(1), air(3), law(1)] },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_lumbridge'
     },
     {
@@ -67,6 +82,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
         label: 'Falador teleport',
         to: { x: 2965, z: 3378, level: 0 },
         requires: { skills: [{ name: 'magic', level: 37 }], items: [water(1), air(3), law(1)] },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_falador'
     },
     {
@@ -79,6 +95,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             skills: [{ name: 'magic', level: 45 }],
             items: [air(5), law(1)]
         },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_camelot'
     },
     {
@@ -93,6 +110,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             // Journal display name (questlist.if); alias "Plague City" also resolves.
             quests: [{ quest: 'Plague City', minStatus: 'complete' }]
         },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_ardougne',
         notes: 'Also requires having read the unlock scroll (elenaquest complete_read_scroll).'
     },
@@ -108,6 +126,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             // Journal display name is "Watch Tower" (questlist.if); alias still resolves.
             quests: [{ quest: 'Watch Tower', minStatus: 'complete' }]
         },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_watchtower',
         notes: 'Landing is level 2; requires Watchtower complete + scroll. Cast via Game.teleport.'
     },
@@ -122,6 +141,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             items: [fire(2), law(2)],
             quests: [{ quest: "Eadgar's Ruse", minStatus: 'complete' }]
         },
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'magic_spell_teleport_trollheim',
         notes: 'Requires Eadgar\'s Ruse complete. Cast via Game.teleport.'
     }
@@ -139,6 +159,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 3315, z: 3235, level: 0 },
         itemNameMatch: ['Ring of dueling'],
         dialogueChoose: ['Al Kharid', 'Duel Arena'],
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'ring_of_dueling.rs2',
         notes: 'Charges 8→1. Inventory Rub only. Wildy >20 blocked. No Castle Wars on this Server.'
     },
@@ -150,6 +171,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         requires: { members: true },
         itemNameMatch: ['Games necklace'],
         dialogueChoose: ['Burthorpe', 'Games Room'],
+        origin: { maxWildernessLevel: SPELL_MAX_WILDERNESS },
         source: 'necklace_of_minigames.rs2',
         notes: 'Charges 8→1. Inventory Rub only. Wildy >20. Burthorpe only on this Server.'
     },
@@ -160,6 +182,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 3087, z: 3496, level: 0 },
         itemNameMatch: ['Amulet of glory('],
         dialogueChoose: ['Edgeville'],
+        origin: { maxWildernessLevel: GLORY_MAX_WILDERNESS },
         source: 'amulet_of_glory.rs2 case 1',
         notes: 'Requires charged glory (1–4). Wildy >30 blocked. Inventory Rub only.'
     },
@@ -170,6 +193,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 2918, z: 3176, level: 0 },
         itemNameMatch: ['Amulet of glory('],
         dialogueChoose: ['Karamja'],
+        origin: { maxWildernessLevel: GLORY_MAX_WILDERNESS },
         source: 'amulet_of_glory.rs2 case 2'
     },
     {
@@ -179,6 +203,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 3105, z: 3251, level: 0 },
         itemNameMatch: ['Amulet of glory('],
         dialogueChoose: ['Draynor'],
+        origin: { maxWildernessLevel: GLORY_MAX_WILDERNESS },
         source: 'amulet_of_glory.rs2 case 3'
     },
     {
@@ -188,6 +213,7 @@ export const JEWELLERY_TELEPORTS: readonly TeleportDestination[] = [
         to: { x: 3293, z: 3163, level: 0 },
         itemNameMatch: ['Amulet of glory('],
         dialogueChoose: ['Al Kharid'],
+        origin: { maxWildernessLevel: GLORY_MAX_WILDERNESS },
         source: 'amulet_of_glory.rs2 case 4'
     }
 ];
@@ -249,4 +275,28 @@ export function inventoryNameMatchesJewellery(itemName: string, dest: TeleportDe
         return false;
     }
     return dest.itemNameMatch.some(prefix => itemName.includes(prefix));
+}
+
+/**
+ * Whether `dest` may be used from `from` given optional wildy on state or computed
+ * from coordinates (#339). Fail closed when origin.maxWildernessLevel is set and
+ * player wildy is strictly greater.
+ */
+export function teleportAllowedFromOrigin(
+    dest: TeleportDestination,
+    from: NavPoint,
+    wildyLevel?: number
+): { ok: true } | { ok: false; reason: string } {
+    const max = dest.origin?.maxWildernessLevel;
+    if (max === undefined) {
+        return { ok: true };
+    }
+    const level = wildyLevel ?? wildernessLevelAt(from);
+    if (level > max) {
+        return {
+            ok: false,
+            reason: `${dest.teleportId} blocked at wilderness level ${level} (max ${max})`
+        };
+    }
+    return { ok: true };
 }

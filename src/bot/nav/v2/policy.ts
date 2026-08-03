@@ -51,6 +51,12 @@ export function teleportAllowedByPolicy(
             return { ok: false, reason: `teleport ${id ?? edge.id} not in allowTeleportIds` };
         }
     }
+    if (policy?.denyTeleportIds && policy.denyTeleportIds.length > 0) {
+        const id = edge.teleportId;
+        if (id && policy.denyTeleportIds.includes(id)) {
+            return { ok: false, reason: `teleport ${id} denied for this walk` };
+        }
+    }
     const minDist = policy?.distanceBeforeTeleport ?? 0;
     if (minDist > 0 && routeSpan < minDist) {
         return {

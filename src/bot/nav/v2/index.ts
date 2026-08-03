@@ -11,6 +11,7 @@ export * from './requires.js';
 export * from './fromV1.js';
 export * from './policy.js';
 export * from './teleportCatalog.js';
+export * from './wilderness.js';
 export * from './lcCoord.js';
 export * from './travelCatalog.js';
 export * from './transportQuestReqs.js';

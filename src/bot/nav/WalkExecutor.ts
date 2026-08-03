@@ -149,6 +149,9 @@ class WalkExecutorImpl {
     /** Session blacklist for quest-locked doors. */
     private sessionBlacklistDoors = new Set<string>();
 
+    /** Teleport ids rejected this walk (server fail / no land) — not re-planned (#339). */
+    private sessionSuppressedTeleports = new Set<string>();
+
     private walkPolicy: PathPolicy | undefined;
 
     private walkUseTeleports = false;
@@ -178,6 +181,7 @@ class WalkExecutorImpl {
         this.walkBankItemCounts = this.walkEngine === 'v2' ? opts?.bankItemCounts : undefined;
         this.walkAvoidZones = resolveDangerZones(opts?.avoidZones);
         this.bankLegDone = false;
+        this.sessionSuppressedTeleports.clear();
         const deadline = performance.now() + timeoutMs;
         this.lastOutcome = null;
         this.resetAvoids();
@@ -529,11 +533,18 @@ class WalkExecutorImpl {
                 }
             }
         }
-        let policy;
+        let policy: PathPolicy | undefined;
         let useTeleportCatalog = false;
         if (this.walkEngine === 'v2') {
-            policy = this.walkPolicy ?? { useTeleports: this.walkUseTeleports };
+            policy = { ...(this.walkPolicy ?? { useTeleports: this.walkUseTeleports }) };
             useTeleportCatalog = this.walkUseTeleports;
+            if (this.sessionSuppressedTeleports.size > 0) {
+                const denied = new Set([
+                    ...(policy.denyTeleportIds ?? []),
+                    ...this.sessionSuppressedTeleports
+                ]);
+                policy.denyTeleportIds = [...denied];
+            }
         }
 
         Navigator.findPath(from, to, {
@@ -876,6 +887,10 @@ class WalkExecutorImpl {
             const ok = await executeTeleportHop(transport, log);
             if (ok) {
                 RouteState.noteTransport(approach, step);
+            } else if (transport.teleportId) {
+                // Do not re-pick the same rejected tele on repath (#339).
+                this.sessionSuppressedTeleports.add(transport.teleportId);
+                log(`suppress teleport ${transport.teleportId} for this walk`);
             }
             return ok;
         }
