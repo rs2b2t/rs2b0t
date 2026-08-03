@@ -48,6 +48,51 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
     { x: 3268, z: 3228, level: 0, locName: 'Gate', action: 'Open', requires: { item: 'Coins', count: 10 }, dialogue: { choose: ['Yes, ok.'] }, label: 'Al Kharid toll gate' },
 
+    // Plague City (#366) — East Ardougne garden mud → sewer → pipe → West Ardougne manhole.
+    // Complete quest: dig soft mud (spade), climb mud pile out; pipe needs Gas mask worn.
+    {
+        x: 2566,
+        z: 3331,
+        level: 0,
+        locName: 'Mud patch',
+        action: 'Dig',
+        useItem: { id: 952, name: 'Spade' },
+        requires: { item: 'Spade', count: 1 },
+        toTile: { x: 2562, z: 9737, level: 0 },
+        arrivalRadius: 2,
+        label: 'Plague City mud dig → sewer (#366)'
+    },
+    {
+        x: 2562,
+        z: 9737,
+        level: 0,
+        locName: 'Mud pile',
+        action: 'Climb',
+        toTile: { x: 2566, z: 3331, level: 0 },
+        arrivalRadius: 2,
+        label: 'Plague City mud pile → garden (#366)'
+    },
+    {
+        x: 2530,
+        z: 9701,
+        level: 0,
+        locName: 'Sewer pipe',
+        action: 'Search',
+        toTile: { x: 2529, z: 3304, level: 0 },
+        arrivalRadius: 2,
+        label: 'Plague City sewer pipe → West Ardougne (#366)'
+    },
+    {
+        x: 2529,
+        z: 3303,
+        level: 0,
+        locName: 'Manhole',
+        action: 'Climb-down',
+        toTile: { x: 2530, z: 9703, level: 0 },
+        arrivalRadius: 2,
+        label: 'West Ardougne manhole → sewer (#366)'
+    },
+
     { x: 2568, z: 9893, level: 0, locName: 'Door', action: 'Open', useItem: { id: 298, name: 'A key' }, label: 'Baxtorian keyed door' },
 
     // Baxtorian Falls approach (#369 / #320) — same stands as FireGiantLogic:

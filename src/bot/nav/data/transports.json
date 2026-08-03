@@ -1987,6 +1987,113 @@
   },
   {
     "from": {
+      "x": 2566,
+      "z": 3330,
+      "level": 0
+    },
+    "to": {
+      "x": 2562,
+      "z": 9737,
+      "level": 0
+    },
+    "locName": "Mud patch",
+    "action": "Dig",
+    "kind": "dungeon",
+    "locId": 2531,
+    "locX": 2566,
+    "locZ": 3331,
+    "debugName": "plaguemudpatch",
+    "options": [
+      "Dig"
+    ],
+    "requires": {
+      "items": [
+        {
+          "name": "Spade",
+          "count": 1,
+          "consumed": false
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2562,
+      "z": 9737,
+      "level": 0
+    },
+    "to": {
+      "x": 2566,
+      "z": 3331,
+      "level": 0
+    },
+    "locName": "Mud pile",
+    "action": "Climb",
+    "kind": "dungeon",
+    "locId": 2533,
+    "locX": 2562,
+    "locZ": 9737,
+    "debugName": "plaguemudpile",
+    "options": [
+      "Climb"
+    ]
+  },
+  {
+    "from": {
+      "x": 2530,
+      "z": 9703,
+      "level": 0
+    },
+    "to": {
+      "x": 2529,
+      "z": 3304,
+      "level": 0
+    },
+    "locName": "Sewer pipe",
+    "action": "Search",
+    "kind": "dungeon",
+    "locId": 2541,
+    "locX": 2530,
+    "locZ": 9701,
+    "debugName": "plaguesewerpipe",
+    "options": [
+      "Search"
+    ],
+    "requires": {
+      "items": [
+        {
+          "name": "Gas mask",
+          "count": 1,
+          "consumed": false
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2529,
+      "z": 3304,
+      "level": 0
+    },
+    "to": {
+      "x": 2530,
+      "z": 9703,
+      "level": 0
+    },
+    "locName": "Manhole",
+    "action": "Climb-down",
+    "kind": "dungeon",
+    "locId": 2544,
+    "locX": 2529,
+    "locZ": 3303,
+    "debugName": "plaguemanhole",
+    "options": [
+      "Climb-down",
+      "Open"
+    ]
+  },
+  {
+    "from": {
       "x": 2836,
       "z": 9599,
       "level": 0

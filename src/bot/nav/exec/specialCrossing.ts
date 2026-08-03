@@ -226,6 +226,16 @@ export async function handleSpecialCrossing(
             }
         }
     }
+    // Plague City sewer pipe: content requires a worn gas mask after the quest.
+    if (/sewer pipe|plague city/i.test(sc.label) && /pipe/i.test(sc.locName)) {
+        if (!Equipment.contains('Gas mask')) {
+            if (!(await Equipment.equip('Gas mask'))) {
+                log(`${sc.label}: need Gas mask worn — skipping`);
+                return false;
+            }
+        }
+    }
+
     const maxOpens = sc.reopenAfterDialogue ? GATE_REOPENS : 1;
     for (let open = 0; open < maxOpens && !crossed(); open++) {
         // useItem (e.g. rope on Rock) must not require a menu action that is not
@@ -313,7 +323,7 @@ export async function handleSpecialCrossing(
                 log(`${sc.label}: use-item hop did not land at toTile — repathing`);
                 return false;
             }
-        } else if (!loc.interact(sc.action)) {
+        } else if (!(await loc.interact(sc.action))) {
             log(`${sc.label}: '${sc.action}' not offered (ops: ${loc.actions().join(', ')})`);
             return false;
         }
@@ -327,6 +337,14 @@ export async function handleSpecialCrossing(
             } else {
                 await Execution.delayTicks(1);
             }
+        }
+        // Non-useItem tele hops (pipe, manhole, mud Climb, cave Enter, Jump-From).
+        if (sc.toTile && !sc.useItem && !crossed()) {
+            const rad = sc.arrivalRadius ?? 2;
+            await Execution.delayUntil(() => {
+                const me = reader.worldTile();
+                return me !== null && isNearTile(me, sc.toTile!, rad);
+            }, 14_000);
         }
     }
     if (crossed()) {
