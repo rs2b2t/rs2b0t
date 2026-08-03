@@ -3,7 +3,7 @@
  */
 
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
-import { reader } from '../../adapter/ClientAdapter.js';
+import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Banking, isDisposableGatherJunk } from '../../api/Banking.js';
 import { Execution } from '../../api/Execution.js';
 import { Bank } from '../../api/hud/Bank.js';
@@ -138,12 +138,22 @@ export async function handleSpecialCrossing(
             const me = reader.worldTile();
             return me !== null && sc.toTile !== undefined && me.level === sc.toTile.level && isNear(me, sc.toTile, rad);
         };
+        let mapClicked = false;
         for (let i = 0; i < SHIP_DIALOGUE_STEPS && !arrived(); i++) {
             const pick = sc.dialogue ? pickChoice(ChatDialog.options(), sc.dialogue.choose) : null;
             if (pick) {
                 await ChatDialog.chooseOption(pick);
             } else if (ChatDialog.canContinue()) {
                 await ChatDialog.continue();
+            } else if (sc.mapChoice && !mapClicked) {
+                // Glidermap (and similar): click dest button nearest label after dialog closes.
+                const comId = reader.mainModalButtonNearText(sc.mapChoice);
+                if (comId !== -1 && actions.ifButton(comId)) {
+                    mapClicked = true;
+                    log(`${sc.label}: map → ${sc.mapChoice}`);
+                } else {
+                    await Execution.delayTicks(1);
+                }
             } else {
                 await Execution.delayTicks(1);
             }

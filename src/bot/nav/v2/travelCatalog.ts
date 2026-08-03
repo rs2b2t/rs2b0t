@@ -133,6 +133,7 @@ export function spiritTreeEdges(): TransportEdgeData[] {
 /**
  * Gnome glider pads (gnome_glider.rs2).
  * Content forces non-hub hops via Ta Quir Priw — encode only hub↔pad edges.
+ * Execution is Talk-to **Gnome pilot** + glidermap click (not a loc named glider).
  */
 export function gliderEdges(): TransportEdgeData[] {
     const hub = GLIDER_PAD.taQuirPriw;
@@ -146,8 +147,8 @@ export function gliderEdges(): TransportEdgeData[] {
     const req: TransportRequires = { ...REQ.grandTreeComplete };
     const out: TransportEdgeData[] = [];
     for (const p of pads) {
-        out.push(edge(hub, p.to, 'Gnome glider', 'Glider', 'portal', `glider_hub_to_${p.id}`, req));
-        out.push(edge(p.to, hub, 'Gnome glider', 'Glider', 'portal', `glider_${p.id}_to_hub`, req));
+        out.push(edge(hub, p.to, 'Gnome pilot', 'Talk-to', 'ship', `glider_hub_to_${p.id}`, req));
+        out.push(edge(p.to, hub, 'Gnome pilot', 'Talk-to', 'ship', `glider_${p.id}_to_hub`, req));
     }
     return out;
 }

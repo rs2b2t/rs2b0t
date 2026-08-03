@@ -757,6 +757,47 @@ export const reader = {
         return walkComponents(rootComId).find(com => (com.buttonText ?? '').toLowerCase() === want)?.id ?? -1;
     },
 
+    /**
+     * Find a clickable main-modal button nearest a text label (substring match).
+     * Used for maps like glidermap where dest buttons have no buttonText but sit
+     * beside / over a text component (e.g. "Gandius", "Ta Quir Priw").
+     */
+    mainModalButtonNearText(label: string): number {
+        if (!raw || raw.mainModalId === -1) {
+            return -1;
+        }
+        const want = label.toLowerCase();
+        const positioned = walkPositionedComponents(raw.mainModalId);
+        const texts = positioned.filter(
+            p =>
+                p.com.type === ComponentType.TYPE_TEXT
+                && p.com.text
+                && p.com.text.toLowerCase().includes(want)
+        );
+        if (texts.length === 0) {
+            return -1;
+        }
+        const labelPos = texts[0]!;
+        const buttons = positioned.filter(
+            p =>
+                p.com.buttonType === ButtonType.BUTTON_OK
+                || p.com.buttonType === ButtonType.BUTTON_TARGET
+                || p.com.buttonType === ButtonType.BUTTON_SELECT
+        );
+        if (buttons.length === 0) {
+            return -1;
+        }
+        const dist = (a: PositionedComponent, b: PositionedComponent): number => {
+            const ax = a.x + (a.com.width ?? 0) / 2;
+            const ay = a.y + (a.com.height ?? 0) / 2;
+            const bx = b.x + (b.com.width ?? 0) / 2;
+            const by = b.y + (b.com.height ?? 0) / 2;
+            return Math.hypot(ax - bx, ay - by);
+        };
+        buttons.sort((a, b) => dist(a, labelPos) - dist(b, labelPos));
+        return buttons[0]!.com.id;
+    },
+
     targetButtonByBase(rootComId: number, base: string): number {
         if (!raw) {
             return -1;

@@ -12,6 +12,11 @@ export interface SpecialCrossing {
     npc?: string;
     toTile?: { x: number; z: number; level: number };
     /**
+     * After dialogue opens a main-modal map (e.g. glidermap), click the button
+     * nearest the label matching this text (case-insensitive substring).
+     */
+    mapChoice?: string;
+    /**
      * Chebyshev radius for toTile arrival (default 2). Larger for random landings
      * (e.g. essence mine pads).
      */
@@ -303,6 +308,113 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         dialogue: { choose: ['Yes please'] },
         toTile: { x: 2542, z: 3169, level: 0 },
         label: 'Khazard young spirit → Village'
+    },
+
+    // Gnome glider (gnome_glider.rs2): Talk-to Gnome pilot → glidermap destination click.
+    // Content only allows hub↔pad (not pad↔pad). Labels match glidermap.if text.
+    {
+        x: 2465,
+        z: 3501,
+        level: 3,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Gandius',
+        toTile: { x: 2971, z: 2969, level: 0 },
+        arrivalRadius: 4,
+        label: 'Glider hub → Gandius'
+    },
+    {
+        x: 2465,
+        z: 3501,
+        level: 3,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Sindarpos',
+        toTile: { x: 2850, z: 3497, level: 0 },
+        arrivalRadius: 4,
+        label: 'Glider hub → Sindarpos'
+    },
+    {
+        x: 2465,
+        z: 3501,
+        level: 3,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Lemanto Andra',
+        toTile: { x: 3320, z: 3430, level: 0 },
+        arrivalRadius: 4,
+        label: 'Glider hub → Lemanto Andra'
+    },
+    {
+        x: 2465,
+        z: 3501,
+        level: 3,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Kar-Hewo',
+        toTile: { x: 3284, z: 3211, level: 0 },
+        arrivalRadius: 4,
+        label: 'Glider hub → Kar-Hewo'
+    },
+    {
+        x: 2971,
+        z: 2969,
+        level: 0,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Ta Quir Priw',
+        toTile: { x: 2465, z: 3501, level: 3 },
+        arrivalRadius: 4,
+        label: 'Glider Gandius → hub'
+    },
+    {
+        x: 2850,
+        z: 3497,
+        level: 0,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Ta Quir Priw',
+        toTile: { x: 2465, z: 3501, level: 3 },
+        arrivalRadius: 4,
+        label: 'Glider Sindarpos → hub'
+    },
+    {
+        x: 3320,
+        z: 3430,
+        level: 0,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Ta Quir Priw',
+        toTile: { x: 2465, z: 3501, level: 3 },
+        arrivalRadius: 4,
+        label: 'Glider Lemanto Andra → hub'
+    },
+    {
+        x: 3284,
+        z: 3211,
+        level: 0,
+        npc: 'Gnome pilot',
+        locName: 'Gnome pilot',
+        action: 'Talk-to',
+        dialogue: { choose: ['Can you take me on the glider?'] },
+        mapChoice: 'Ta Quir Priw',
+        toTile: { x: 2465, z: 3501, level: 3 },
+        arrivalRadius: 4,
+        label: 'Glider Kar-Hewo → hub'
     }
 ];
 
@@ -310,6 +422,19 @@ export function specialCrossingAt(x: number, z: number, level: number): SpecialC
     return SPECIAL_CROSSINGS.find(c => c.x === x && c.z === z && c.level === level) ?? null;
 }
 
+function toTileMatches(
+    sc: SpecialCrossing,
+    step: { x: number; z: number; level: number }
+): boolean {
+    if (!sc.toTile) {
+        return true;
+    }
+    return (
+        sc.toTile.x === step.x
+        && sc.toTile.z === step.z
+        && (sc.toTile.level === undefined || sc.toTile.level === step.level)
+    );
+}
 
 /**
  * Resolve a special crossing for a path transport hop.
@@ -317,9 +442,13 @@ export function specialCrossingAt(x: number, z: number, level: number): SpecialC
  * Try both approach and destination levels: ships (and similar) are stored as
  * from L0 → to L1 while SPECIAL_CROSSINGS are keyed at the stand/boarding level
  * (often 1). Pre-refactor matching used step.level; approach-only missed ships.
+ *
+ * When a candidate has `toTile`, it must match the hop destination — otherwise
+ * a reverse ship (Customs on the Brimhaven deck) can steal a gangplank hop that
+ * lands on the same pier tile at a different level (#live transport-heavy).
  */
 export function specialCrossingForTransport(
-    transport: { locX: number; locZ: number },
+    transport: { locX: number; locZ: number; locName?: string },
     approach: { x: number; z: number; level: number },
     step?: { x: number; z: number; level: number }
 ): SpecialCrossing | null {
@@ -339,7 +468,7 @@ export function specialCrossingForTransport(
         );
     };
 
-    const candidates: SpecialCrossing[] = [];
+    let candidates: SpecialCrossing[] = [];
     for (const level of levels) {
         for (const sc of SPECIAL_CROSSINGS) {
             if (matchesOrigin(sc, level)) {
@@ -350,15 +479,35 @@ export function specialCrossingForTransport(
     if (candidates.length === 0) {
         return null;
     }
-    // Multi-dest hubs (spirit trees): pick the crossing whose toTile matches the hop.
-    if (step !== undefined && candidates.length > 1) {
-        const byDest = candidates.find(
+
+    // Prefer loc/npc name match when the transport carries a name.
+    const tname = (transport.locName ?? '').toLowerCase();
+    if (tname) {
+        const byName = candidates.filter(
             sc =>
-                sc.toTile !== undefined
-                && sc.toTile.x === step.x
-                && sc.toTile.z === step.z
-                && (sc.toTile.level === undefined || sc.toTile.level === step.level)
+                sc.locName.toLowerCase() === tname
+                || (sc.npc !== undefined && sc.npc.toLowerCase() === tname)
         );
+        if (byName.length > 0) {
+            candidates = byName;
+        }
+    }
+
+    // Drop ship/tele SC whose landing does not match this hop's destination.
+    // Keeps loc-only gates (no toTile) for doors/tolls.
+    if (step !== undefined) {
+        const destOk = candidates.filter(sc => toTileMatches(sc, step));
+        if (destOk.length > 0) {
+            candidates = destOk;
+        } else if (candidates.some(sc => sc.toTile !== undefined)) {
+            // Only mismatched landings — do not steal a gangplank/loc hop.
+            return null;
+        }
+    }
+
+    // Multi-dest hubs: exact toTile match wins.
+    if (step !== undefined && candidates.length > 1) {
+        const byDest = candidates.find(sc => sc.toTile !== undefined && toTileMatches(sc, step));
         if (byDest) {
             return byDest;
         }
