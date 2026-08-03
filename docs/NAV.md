@@ -281,8 +281,13 @@ or `walkTo(dest, { navEngine: 'v2' })`.
 | Path camera follow | optional (`navCameraFollow`) | optional (`navCameraFollow`) |
 | Path paint | optional | optional (`showNavPath`) |
 
-**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads on
-`#overlay` (see `pathPaintTheme.ts`). Not under 3D depth.
+**Path paint:** Global **Show nav path** + group **Nav path paint** (`showIf`). Tile quads paint
+into the **game surface** after the 3D world (`BotClient.onAfterWorldRender` →
+`pathScenePaint.ts`) using the same camera projection as the scene — so the path lines up
+with the ground under the current view. Transport **loc** placements (often 1 tile off the
+stand tile) get a separate ring; the walker’s next click tile is outlined. Hop labels stay
+on the HTML overlay for crisp text. Quads are still drawn after the model composite (not
+true z-buffer under people); depth-correct under entities would need World inject.
 
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw rings/glories
 (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.

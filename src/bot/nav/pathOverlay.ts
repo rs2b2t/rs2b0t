@@ -210,7 +210,10 @@ function fillQuad(
     ctx.stroke();
 }
 
-export function paintNavPath(ctx: CanvasRenderingContext2D): void {
+export function paintNavPath(
+    ctx: CanvasRenderingContext2D,
+    opts?: { labelsOnly?: boolean }
+): void {
     if (!isNavPathPaintEnabled()) {
         return;
     }
@@ -235,26 +238,48 @@ export function paintNavPath(ctx: CanvasRenderingContext2D): void {
         return;
     }
 
+    const labelsOnly = opts?.labelsOnly === true;
+
     ctx.save();
     try {
         ctx.beginPath();
         ctx.rect(GAME_VIEW_CLIP.x, GAME_VIEW_CLIP.y, GAME_VIEW_CLIP.w, GAME_VIEW_CLIP.h);
         ctx.clip();
 
-        for (const q of quads) {
-            if (!q.done) {
-                continue;
+        if (!labelsOnly) {
+            for (const q of quads) {
+                if (!q.done) {
+                    continue;
+                }
+                fillQuad(ctx, q.corners, theme.doneFill, theme.doneStroke, 1);
             }
-            fillQuad(ctx, q.corners, theme.doneFill, theme.doneStroke, 1);
-        }
-        for (const q of quads) {
-            if (q.done) {
-                continue;
+            for (const q of quads) {
+                if (q.done) {
+                    continue;
+                }
+                if (q.transport) {
+                    fillQuad(ctx, q.corners, theme.hopFill, theme.hopStroke, 1.5);
+                } else {
+                    fillQuad(ctx, q.corners, theme.walkFill, theme.walkStroke, 1);
+                }
             }
-            if (q.transport) {
-                fillQuad(ctx, q.corners, theme.hopFill, theme.hopStroke, 1.5);
-            } else {
-                fillQuad(ctx, q.corners, theme.walkFill, theme.walkStroke, 1);
+
+            if (path.clickIdx >= 0 && path.clickIdx < path.tiles.length) {
+                const ct = path.tiles[path.clickIdx]!;
+                if (ct.level === me.level) {
+                    const corners = projectTileQuad(ct, project);
+                    if (corners) {
+                        ctx.beginPath();
+                        ctx.moveTo(corners[0].x, corners[0].y);
+                        ctx.lineTo(corners[1].x, corners[1].y);
+                        ctx.lineTo(corners[2].x, corners[2].y);
+                        ctx.lineTo(corners[3].x, corners[3].y);
+                        ctx.closePath();
+                        ctx.strokeStyle = theme.clickStroke;
+                        ctx.lineWidth = 2.5;
+                        ctx.stroke();
+                    }
+                }
             }
         }
 
@@ -265,24 +290,6 @@ export function paintNavPath(ctx: CanvasRenderingContext2D): void {
                 }
                 const c = quadCenter(q.corners);
                 drawHopLabel(ctx, q.label, c.x, c.y, theme, { done: q.done });
-            }
-        }
-
-        if (path.clickIdx >= 0 && path.clickIdx < path.tiles.length) {
-            const ct = path.tiles[path.clickIdx]!;
-            if (ct.level === me.level) {
-                const corners = projectTileQuad(ct, project);
-                if (corners) {
-                    ctx.beginPath();
-                    ctx.moveTo(corners[0].x, corners[0].y);
-                    ctx.lineTo(corners[1].x, corners[1].y);
-                    ctx.lineTo(corners[2].x, corners[2].y);
-                    ctx.lineTo(corners[3].x, corners[3].y);
-                    ctx.closePath();
-                    ctx.strokeStyle = theme.clickStroke;
-                    ctx.lineWidth = 2.5;
-                    ctx.stroke();
-                }
             }
         }
     } finally {

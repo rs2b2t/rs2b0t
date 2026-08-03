@@ -4356,6 +4356,9 @@ export class Client extends GameShell {
         Pix2D.cls();
         this.world?.renderAll(this.camX, this.camY, this.camZ, level, this.camYaw, this.camPitch);
         this.world?.removeSprites();
+        // Bot hook: paint into areaGame while Pix2D is still bound to the 3D surface
+        // (same projection as the scene; before UI overlays). See BotClient.onAfterWorldRender.
+        this.onAfterWorldRender();
         this.entityOverlays();
         this.coordArrow();
         this.textureRunAnims(cycle);
@@ -5121,12 +5124,20 @@ export class Client extends GameShell {
         this.getOverlayPos(entity.x, entity.z, height);
     }
 
-    // Scene point -> canvas pixel, for overlays drawn on the layer above the client.
-    // areaGame is a 512x334 surface blitted at (4,4), and getOverlayPos projects into
-    // that surface, so the viewport origin is the only correction needed.
-    overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null {
-        // originX/originY belong to whichever surface was last bound, so outside the
-        // scene pass they are wrong; pin them to the game viewport and put them back.
+    /**
+     * Bot extension point: called after the 3D world is rendered into areaGame
+     * (Pix2D still bound to that surface) and before entity/name 2D overlays.
+     * Default no-op; BotClient draws nav path tile quads here.
+     */
+    protected onAfterWorldRender(): void {
+        // bot override
+    }
+
+    /**
+     * Scene point → areaGame pixel (512×334). No canvas offset.
+     * Use during onAfterWorldRender while Pix2D is the game surface.
+     */
+    projectAreaGame(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null {
         const originX: number = Pix3D.originX;
         const originY: number = Pix3D.originY;
         Pix3D.originX = 256;
@@ -5134,12 +5145,21 @@ export class Client extends GameShell {
         this.getOverlayPos(sceneX, sceneZ, height);
         Pix3D.originX = originX;
         Pix3D.originY = originY;
-        // -1/-1 is getOverlayPos's off-scene sentinel; a real projection may still be
-        // negative when the point sits above or left of the viewport, which is fine
         if (this.projectX === -1 && this.projectY === -1) {
             return null;
         }
-        return { x: this.projectX + 4, y: this.projectY + 4 };
+        return { x: this.projectX, y: this.projectY };
+    }
+
+    // Scene point -> canvas pixel, for overlays drawn on the layer above the client.
+    // areaGame is a 512x334 surface blitted at (4,4), and getOverlayPos projects into
+    // that surface, so the viewport origin is the only correction needed.
+    overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null {
+        const p = this.projectAreaGame(sceneX, sceneZ, height);
+        if (!p) {
+            return null;
+        }
+        return { x: p.x + 4, y: p.y + 4 };
     }
 
     private getOverlayPos(x: number, z: number, height: number): void {

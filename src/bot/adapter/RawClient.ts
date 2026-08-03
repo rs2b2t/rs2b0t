@@ -77,6 +77,8 @@ export interface RawClient {
     redrawIcons: boolean;
 
     overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
+    /** Scene → areaGame pixel (no +4 canvas offset). Optional on older builds. */
+    projectAreaGame?(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
 }
 
 export const SELF_TEST = [
@@ -131,7 +133,8 @@ export const SELF_TEST = [
     'activeIcon',
     'redrawSide',
     'redrawIcons',
-    'overlayPos'
+    'overlayPos',
+    'projectAreaGame'
 ] as const satisfies readonly (keyof RawClient)[];
 
 type AssertNever<T extends never> = T;

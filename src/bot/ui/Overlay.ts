@@ -20,10 +20,11 @@ export default class Overlay {
 
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Path paint is independent of script onPaint (operator toggle).
+        // Path *tile quads* paint into areaGame (BotClient.onAfterWorldRender).
+        // HTML overlay keeps hop labels + click caption so text stays crisp.
         try {
             ctx.save();
-            paintNavPath(ctx);
+            paintNavPath(ctx, { labelsOnly: true });
         } catch (err) {
             console.error('[rs2b0t] path overlay error', err);
         } finally {

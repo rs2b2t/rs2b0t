@@ -16,6 +16,28 @@ const SCRATCH_SLOT = 499;
 let raw: RawClient | null = null;
 let packetListener: ((ptype: number) => void) | null = null;
 
+function worldTileToScene(
+    x: number,
+    z: number,
+    u: number,
+    v: number
+): { sceneX: number; sceneZ: number } | null {
+    if (!raw) {
+        return null;
+    }
+    const lx = x - raw.mapBuildBaseX;
+    const lz = z - raw.mapBuildBaseZ;
+    if (lx < 0 || lz < 0 || lx >= SCENE_SIZE || lz >= SCENE_SIZE) {
+        return null;
+    }
+    const uu = Math.max(0, Math.min(1, u));
+    const vv = Math.max(0, Math.min(1, v));
+    return {
+        sceneX: (lx << 7) + Math.min(127, Math.floor(uu * 128)),
+        sceneZ: (lz << 7) + Math.min(127, Math.floor(vv * 128))
+    };
+}
+
 export interface WorldTile {
     x: number;
     z: number;
@@ -159,17 +181,31 @@ export const reader = {
         if (!raw) {
             return null;
         }
-        const lx = x - raw.mapBuildBaseX;
-        const lz = z - raw.mapBuildBaseZ;
-        if (lx < 0 || lz < 0 || lx >= SCENE_SIZE || lz >= SCENE_SIZE) {
+        const scene = worldTileToScene(x, z, u, v);
+        if (!scene) {
             return null;
         }
-        // Stay inside this tile's 128 scene units (u/v=1 → 127) so map-edge tiles work.
-        const uu = Math.max(0, Math.min(1, u));
-        const vv = Math.max(0, Math.min(1, v));
-        const sceneX = (lx << 7) + Math.min(127, Math.floor(uu * 128));
-        const sceneZ = (lz << 7) + Math.min(127, Math.floor(vv * 128));
-        return raw.overlayPos(sceneX, sceneZ, height);
+        return raw.overlayPos(scene.sceneX, scene.sceneZ, height);
+    },
+
+    /**
+     * Project a world tile corner into **areaGame** pixels (512×334, no canvas +4).
+     * Call only while the client has bound Pix2D to areaGame (onAfterWorldRender).
+     */
+    projectAreaGameWorld(x: number, z: number, height = 0, u = 0.5, v = 0.5): { x: number; y: number } | null {
+        if (!raw) {
+            return null;
+        }
+        const scene = worldTileToScene(x, z, u, v);
+        if (!scene) {
+            return null;
+        }
+        if (typeof raw.projectAreaGame === 'function') {
+            return raw.projectAreaGame(scene.sceneX, scene.sceneZ, height);
+        }
+        // Fallback: strip canvas offset from overlayPos.
+        const p = raw.overlayPos(scene.sceneX, scene.sceneZ, height);
+        return p ? { x: p.x - 4, y: p.y - 4 } : null;
     },
 
     selfAnim(): number {

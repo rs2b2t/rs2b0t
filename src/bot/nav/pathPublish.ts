@@ -14,6 +14,9 @@ export interface PublishedPathTile {
      * Only set on transport tiles.
      */
     label?: string;
+    /** Loc placement the executor will interact with (may differ from stand tile). */
+    locX?: number;
+    locZ?: number;
 }
 
 export interface PublishedPath {
