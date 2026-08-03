@@ -22,20 +22,21 @@ import {
 } from './v2/essenceExit.js';
 
 /**
- * A* search key = tile nodeId (30 bits) | essenceReturnIdx << 30.
+ * A* search key = tileId * 16 + essenceReturnIdx (0..15).
+ * Must not use `idx << 30` — JS bitwise ops are 32-bit; idx≥4 wraps to 0 and
+ * wipes path-state (brimstail/cromperty wormhole regression).
  * Return idx 0 = unknown (exit edges fail-open); 1..n = known session return.
- * Entry hops set return via requires.essenceEntrySetsReturn so entry+exit cannot
- * form a false surface wormhole.
  */
 const TILE_KEY_MASK = 0x3fffffff;
+const ESSENCE_STATE_SLOTS = 16;
 function packSearchKey(tileId: number, essenceReturnIdx: number): number {
-    return (tileId & TILE_KEY_MASK) | ((essenceReturnIdx & 0xf) << 30);
+    return (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
 }
 function searchTileId(key: number): number {
-    return key & TILE_KEY_MASK;
+    return (key / ESSENCE_STATE_SLOTS) | 0;
 }
 function searchEssenceIdx(key: number): number {
-    return (key >>> 30) & 0xf;
+    return key % ESSENCE_STATE_SLOTS;
 }
 
 export interface NavPoint {
