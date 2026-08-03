@@ -179,7 +179,8 @@ Server debug cheats are fair game.
 | Goal | How (local Server) |
 |---|---|
 | Item in **inventory** | engine `give bronze_pickaxe 1` (prefer) or content `~item bronze_pickaxe 1` (needs `p_finduid` — silent no-op after long walks) |
-| Jewellery live legs | `nav-script-routes-live` / `nav-v2-stress-live` seed via **`give`**, not `~item` (regressed after transport-heavy) |
+| Jewellery in live OD | `nav-script-routes-live` seeds charged duel/glory/games at **start** (+ top-up each leg) so real HARD paths may Rub; use `JEWELLERY_ONLY=1` for isolation legs |
+| Item seed after long walks | Prefer engine **`give`** over `~item` (`~item` needs `p_finduid` and silent-no-ops when busy) |
 | Item in **bank** | engine `givebank bronze_pickaxe 1` (or content `~bankitem bronze_pickaxe 1`) |
 | Wipe pack | `~clearinv` / `clearinv inv` |
 | Wipe bank | `~clearbank` |

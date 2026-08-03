@@ -21,12 +21,13 @@
  * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
  * TRANSPORT_HEAVY=1 reads tools/nav/transport-heavy.routes.json
  *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=14).
- *   Includes essence enter *and* exit (session multiloc — live setvars exit_essence_mine_coord).
+ *   Essence multiloc: TH-ess-round-* wizard→mine→portal (no setvar).
  * SHIP_352=1 → Ardougne↔Brimhaven board+gangplank legs (issue #352 stuck-on-boat).
  * NAV_ENGINE=classic|v2 (default v2 for this harness) — forces walkTo.navEngine + Global setting.
  * PATH_PAINT=1 (default) enables showNavPath + explore scene expand + cyan client segment.
- *   PATH_PAINT=0 off; PATH_PAINT_SCENE_EXPAND=0 / PATH_PAINT_CLIENT_SEG=0 toggle explore bits.
- * Non-HARD builds seeds from script-route-corpus (happy-dom registered on demand).
+ * Jewellery: charged duel/glory/games neck seeded at start (and topped up each leg) so
+ *   real OD paths may Rub; not a fake end-of-run allowlist test. JEWELLERY_ONLY=1 restores
+ *   synthetic JEWEL-* isolation legs if needed.
  * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
  */
 import type { Page } from 'playwright-core';
@@ -548,26 +549,79 @@ async function seedItem(
     );
 }
 
-async function clearInvForSeed(page: Page): Promise<void> {
-    await cheatQuiet(page, '~clearinv');
-    await page.waitForTimeout(500);
+/** Charged jewellery for real OD Rub (plan scans inventory names). */
+const JEWELLERY_SEEDS: readonly { debug: string; match: RegExp; label: string }[] = [
+    { debug: 'ring_of_dueling_8', match: /Ring of dueling\(/, label: 'duel ring' },
+    { debug: 'amulet_of_glory_4', match: /Amulet of glory\(/, label: 'glory' },
+    { debug: 'necklace_of_minigames_8', match: /Games necklace\(/, label: 'games neck' }
+];
+
+const RUNE_SEEDS: readonly { debug: string; match: RegExp; qty: number }[] = [
+    { debug: 'lawrune', match: /Law rune/i, qty: 80 },
+    { debug: 'airrune', match: /Air rune/i, qty: 200 },
+    { debug: 'firerune', match: /Fire rune/i, qty: 80 },
+    { debug: 'waterrune', match: /Water rune/i, qty: 80 },
+    { debug: 'earthrune', match: /Earth rune/i, qty: 80 }
+];
+
+async function invHas(page: Page, match: RegExp): Promise<boolean> {
+    return page.evaluate(pattern => {
+        const rx = new RegExp(pattern, 'i');
+        return (globalThis as never as Abi).__rs2b0t.Inventory.items().some(
+            it => it.name !== null && rx.test(it.name)
+        );
+    }, match.source);
+}
+
+/** Seed runes + charged jewellery once at harness start (engine `give`). */
+async function seedTeleKit(page: Page, stamp: () => string): Promise<void> {
+    for (const r of RUNE_SEEDS) {
+        if (!(await invHas(page, r.match))) {
+            await seedItem(page, r.debug, r.match, r.qty);
+        }
+    }
+    if (NAV_ENGINE === 'v2') {
+        for (const j of JEWELLERY_SEEDS) {
+            if (!(await invHas(page, j.match))) {
+                await seedItem(page, j.debug, j.match, 1);
+            }
+        }
+        console.log(
+            `${stamp()} seeded tele kit: runes + ${JEWELLERY_SEEDS.map(j => j.label).join(', ')} (real OD may Rub)`
+        );
+    } else {
+        console.log(`${stamp()} seeded tele runes (classic — no jewellery catalog)`);
+    }
 }
 
 /**
- * Jewellery is inventory-only at plan time (PathFinder scans state.items).
- * Bank planner deliberately does not withdraw glory/duel rings.
- * These legs clear pack, seed jewellery via engine `give`, pin allowTeleportIds so Rub must fire.
+ * Top up jewellery if charges were spent (or lost) so later HARD legs still see Rub options.
+ * Does not clear inventory — keeps coins/quest junk from earlier legs.
+ */
+async function ensureJewellery(page: Page): Promise<void> {
+    if (NAV_ENGINE !== 'v2') {
+        return;
+    }
+    for (const j of JEWELLERY_SEEDS) {
+        if (!(await invHas(page, j.match))) {
+            await seedItem(page, j.debug, j.match, 1);
+        }
+    }
+}
+
+/**
+ * Optional isolation legs (JEWELLERY_ONLY=1): clear pack, force allowlist Rub.
+ * Default HARD/transport runs use seedTeleKit on real routes instead.
  */
 async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: string; ok: boolean; detail: string }[]> {
     const out: { id: string; ok: boolean; detail: string }[] = [];
 
-    // Duel ring: Lumb → Duel Arena
     {
         const id = 'JEWEL-duel-arena';
-        console.log(`\n══ ${id} ══ inventory Rub only (no runes, no bank cache)`);
+        console.log(`\n══ ${id} ══ isolation Rub (JEWELLERY_ONLY=1)`);
         try {
-            await clearInvForSeed(page);
-            // Display name: Ring of dueling(8) — engine give, not ~item (busy-guard).
+            await cheatQuiet(page, '~clearinv');
+            await page.waitForTimeout(500);
             await seedItem(page, 'ring_of_dueling_8', /Ring of dueling\(/);
             await restoreRunEnergy(page);
             await teleArrive(page, { x: 3222, z: 3218, level: 0 });
@@ -593,12 +647,12 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
         }
     }
 
-    // Glory: Al Kharid → Edgeville
     {
         const id = 'JEWEL-glory-edge';
-        console.log(`\n══ ${id} ══ inventory Rub only (no runes, no bank cache)`);
+        console.log(`\n══ ${id} ══ isolation Rub (JEWELLERY_ONLY=1)`);
         try {
-            await clearInvForSeed(page);
+            await cheatQuiet(page, '~clearinv');
+            await page.waitForTimeout(500);
             await seedItem(page, 'amulet_of_glory_4', /Amulet of glory\(/);
             await restoreRunEnergy(page);
             await teleArrive(page, { x: 3293, z: 3174, level: 0 });
@@ -625,6 +679,10 @@ async function runJewelleryLegs(page: Page, budget: number): Promise<{ id: strin
     }
 
     return out;
+}
+
+function jewelleryUsedInLogs(logs: string[]): boolean {
+    return logs.some(l => /rubbing|jewellery tele|dueling_|glory_|games_necklace|Ring of dueling|Amulet of glory|Games necklace/i.test(l));
 }
 
 const all = USE_HARDEST || USE_TRANSPORT_HEAVY || USE_SHIP_352 ? [] : await loadSeedRoutes();
@@ -723,27 +781,30 @@ try {
         }
     }
 
-    // Tele runes so v2 can collapse long hub legs (still pure-walk when no tele).
-    // Classic ignores the tele catalog — still seed so mixed harnesses can switch mid-session.
-    for (const cmd of ['~item lawrune 80', '~item airrune 200', '~item firerune 80', '~item waterrune 80', '~item earthrune 80']) {
-        await cheatQuiet(page, cmd);
-    }
+    // Runes + charged jewellery at start so real OD paths may spell/Rub (not a fake end test).
+    await seedTeleKit(page, stamp);
     // Coins for cart / toll / ship fares (classic + transport-heavy + #352 ships).
-    if (USE_TRANSPORT_HEAVY || USE_SHIP_352 || NAV_ENGINE === 'classic') {
-        await cheatQuiet(page, '~item coins 5000');
+    if (USE_TRANSPORT_HEAVY || USE_SHIP_352 || NAV_ENGINE === 'classic' || USE_HARDEST) {
+        await cheatQuiet(page, 'give coins 5000');
         console.log(`${stamp()} seeded coins for fares (ship/cart/toll)`);
     }
     console.log(`${stamp()} set tick ${TICK_MS}ms + full run energy`);
     await setTickRate(page, TICK_MS);
     await restoreRunEnergy(page);
 
+    let jewelleryHops = 0;
+
     for (const r of routes) {
         const thr = r as TransportHeavyRoute;
         console.log(`\n══ ${r.id} ══ ${r.note}`);
         try {
             await restoreRunEnergy(page);
+            await ensureJewellery(page);
             if (thr.family === 'essence_roundtrip' || thr.essenceRoundtrip) {
                 const res = await runEssenceRoundtrip(page, thr, stamp);
+                if (jewelleryUsedInLogs(res.logs)) {
+                    jewelleryHops++;
+                }
                 console.log(`${stamp()} ${res.ok ? 'PASS' : 'FAIL'} ${r.id}: ${res.detail}`);
                 if (!res.ok) {
                     console.log(res.logs.slice(-16).join('\n'));
@@ -758,8 +819,14 @@ try {
                 ...(thr.useTeleports === false ? { useTeleports: false } : {})
             });
             const dist = res.tile ? cheb(res.tile, r.to) : 9999;
+            const usedJew = jewelleryUsedInLogs(res.logs);
+            if (usedJew) {
+                jewelleryHops++;
+            }
             const ok = dist <= ARRIVAL;
-            const detail = `dist=${dist} walkOk=${res.walkOk} from=${r.from.x},${r.from.z} to=${r.to.x},${r.to.z} [${r.source}]`;
+            const detail = `dist=${dist} walkOk=${res.walkOk} from=${r.from.x},${r.from.z} to=${r.to.x},${r.to.z} [${r.source}]${
+                usedJew ? ' jewelleryRub=1' : ''
+            }`;
             console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${r.id}: ${detail}`);
             if (!ok) {
                 console.log(res.logs.slice(-12).join('\n'));
@@ -771,12 +838,15 @@ try {
         }
     }
 
-    // Jewellery: v2-only (inventory Rub + teleport catalog). Classic has no tele inject.
-    if (NAV_ENGINE === 'v2' && process.env.SKIP_JEWELLERY !== '1') {
+    if (NAV_ENGINE === 'v2') {
+        console.log(
+            `${stamp()} jewellery Rub observed on ${jewelleryHops}/${routes.length} OD leg(s) (seeded at start; natural plan)`
+        );
+    }
+    // Optional synthetic isolation (clear inv + allowlist) — not the default path.
+    if (process.env.JEWELLERY_ONLY === '1' || process.env.JEWELLERY_ONLY === 'true') {
         const jew = await runJewelleryLegs(page, BUDGET_MS);
         results.push(...jew);
-    } else if (NAV_ENGINE === 'classic') {
-        console.log(`${stamp()} skip jewellery legs (navEngine=classic — no tele catalog)`);
     }
 
     const passed = results.filter(x => x.ok).length;

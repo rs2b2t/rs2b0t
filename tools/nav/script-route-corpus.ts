@@ -11,8 +11,9 @@
  *   2. Optional near-endpoint collapse (`--endpoint-radius`, default 3) for
  *      obvious generator twins (BOT camp↔bank vs COMMUTE).
  *   3. After pack A*, collapse routes whose **journey signature** matches —
- *      destination map-square only (not approach, doors, or tele vs walk).
- *      Any seed that finishes at Grand Tree bank = one HARD leg.
+ *      end map-square + hop sequence (not start). Pure-walks into the same
+ *      region collapse (all *→Rellekka walk → one HARD leg); tele vs walk stay
+ *      separate.
  *
  * Generated JSON / hardest list are written **after** pack journey dedupe.
  * **Hardest ranking uses teleports by default** (full runes + magic 99 WorldState),
@@ -134,15 +135,18 @@ export type PathHopLike = {
 export type WaypointLike = { x: number; z: number; level: number };
 
 /**
- * Journey fingerprint for stress / corpus dedupe.
+ * Journey fingerprint for stress / HARD dedupe.
  *
- * Groups routes that share the same start map-square, end map-square, and
- * transport-hop sequence. Distinct starts (Edgeville dungeon vs Draynor),
- * tele vs pure-walk, or different hop kinds stay separate so the corpus
- * retains execution diversity (#331).
+ * **End map-square + hop sequence only** — not the start tile. Otherwise the
+ * HARD list is flooded with near-identical pure-walks into the same region
+ * (Varrock/Falador/… → Rellekka all cost≈295, hops=1).
  *
- * Reverse legs stay distinct (start/end swap). `sampleEvery` is reserved for
- * future walk-corridor sampling; default `grid` **64** = one map square.
+ * - Same pure-walk destination → one representative (keep hardest).
+ * - Tele vs walk (or different hop kinds) stay distinct.
+ * - Reverse legs stay distinct (destination map-square swaps).
+ *
+ * `sampleEvery` is reserved for future walk-corridor sampling; default
+ * `grid` **64** = one map square.
  */
 export function pathCorridorSignature(
     waypoints: WaypointLike[],
@@ -156,7 +160,6 @@ export function pathCorridorSignature(
         return 'empty';
     }
 
-    const start = waypoints[0]!;
     const end = waypoints[waypoints.length - 1]!;
     const hopKey =
         hops.length === 0
@@ -168,11 +171,7 @@ export function pathCorridorSignature(
                   })
                   .join('+');
 
-    return [
-        `s:${start.level}:${(start.x / grid) | 0}:${(start.z / grid) | 0}`,
-        `e:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`,
-        `h:${hopKey}`
-    ].join('|');
+    return [`e:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`, `h:${hopKey}`].join('|');
 }
 
 /**
@@ -423,12 +422,41 @@ if (isMain) {
     const ranked: RankedScriptRoute[] = [];
     const t0 = performance.now();
 
-    // Match live v2 stress: spell/jewellery catalog + full rune bag so “hard”
-    // is remaining graph cost after teles, not pure Lumb→Rellekka footpaths.
+    // Match live v2 / maxme stress: teles + skill-gated guild doors open.
+    // Magic-only was wrong: Fishing Guild doors need fishing 68 (specialRequires).
+    // Missing skills default to 0 → fail-closed → A* burns the expansion budget
+    // on real script targets (BANK_* → Fishing Guild, ShopRunner feather stand).
+    const maxedSkills: Record<string, number> = {
+        magic: 99,
+        Magic: 99,
+        fishing: 99,
+        Fishing: 99,
+        agility: 99,
+        Agility: 99,
+        crafting: 99,
+        Crafting: 99,
+        cooking: 99,
+        Cooking: 99,
+        ranged: 99,
+        Ranged: 99,
+        mining: 99,
+        Mining: 99,
+        thieving: 99,
+        strength: 99,
+        attack: 99,
+        defence: 99,
+        hitpoints: 99,
+        prayer: 99,
+        herblore: 99,
+        fletching: 99,
+        woodcutting: 99,
+        firemaking: 99,
+        smithing: 99
+    };
     const teleState: WorldStateData | undefined = useTele
         ? {
             members: true,
-            skills: { magic: 99, Magic: 99 },
+            skills: maxedSkills,
             quests: {
                 // Journal names (+ aliases resolved in worldStateData)
                 'Plague City': 'complete',
@@ -449,6 +477,9 @@ if (isMain) {
                 'Ring of dueling(8)': 1,
                 'Games necklace(8)': 1,
                 'Amulet of glory(4)': 1
+            },
+            worn: {
+                "Chef's hat": 1
             },
             freeSlots: 20
         }
@@ -552,7 +583,7 @@ if (isMain) {
                     {
                         description:
                             'Pack-probed paths from BANK/WALK/NAV/mainland sources. '
-                            + 'Deduped by journey signature (destination map-square). '
+                            + 'Deduped by journey signature (end map-square + hop sequence). '
                             + `Path cost ${useTele ? 'with' : 'without'} tele catalog. `
                             + 'Do not hand-edit — run script-route-corpus.ts --write.',
                         ...meta,
@@ -573,7 +604,7 @@ if (isMain) {
                     {
                         description:
                             `Hardest unique journeys (useTeleports=${useTele}). `
-                            + 'Journey-deduped (destination map-square). '
+                            + 'Journey-deduped (end map-square + hop sequence; pure-walks to same dest collapse). '
                             + 'Regenerate with script-route-corpus.ts [--hardest=N] [--no-tele]. '
                             + 'Live: HARD=1 bun tools/nav-script-routes-live.ts',
                         metric: 'difficulty = cost*1000 + min(expanded,500k) + hops*10 + cheb',
