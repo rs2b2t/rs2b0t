@@ -10,6 +10,7 @@
 
 import type { TransportEdgeData } from '../PathFinder.js';
 import { parseLcCoord } from './lcCoord.js';
+import { REQ } from './transportQuestReqs.js';
 import type { NavPoint, TransportRequires } from './types.js';
 
 /** Content-constant landings (spirit_tree.constant / glider.constant). */
@@ -103,14 +104,8 @@ function edge(
  * Encoded as members + quest complete on each origin family.
  */
 export function spiritTreeEdges(): TransportEdgeData[] {
-    const strongholdReq: TransportRequires = {
-        ...members,
-        quests: [{ quest: 'The Grand Tree', minStatus: 'complete' }]
-    };
-    const villageReq: TransportRequires = {
-        ...members,
-        quests: [{ quest: 'Tree Gnome Village', minStatus: 'complete' }]
-    };
+    const strongholdReq: TransportRequires = { ...REQ.grandTreeComplete };
+    const villageReq: TransportRequires = { ...REQ.treeGnomeComplete };
     const out: TransportEdgeData[] = [];
     const link = (
         from: NavPoint,
@@ -147,10 +142,8 @@ export function gliderEdges(): TransportEdgeData[] {
         { id: 'lemanto_andra', to: GLIDER_PAD.lemantoAndra },
         { id: 'kar_hewo', to: GLIDER_PAD.karHewo }
     ];
-    const req: TransportRequires = {
-        ...members,
-        quests: [{ quest: 'The Grand Tree', minStatus: 'started' }]
-    };
+    // Glider pads open once Grand Tree is finished (content checks complete for free flight).
+    const req: TransportRequires = { ...REQ.grandTreeComplete };
     const out: TransportEdgeData[] = [];
     for (const p of pads) {
         out.push(edge(hub, p.to, 'Gnome glider', 'Glider', 'portal', `glider_hub_to_${p.id}`, req));
@@ -197,7 +190,7 @@ export function shiloCartEdges(): TransportEdgeData[] {
     };
     const shiloDone: TransportRequires = {
         ...coins10,
-        quests: [{ quest: 'Shilo Village', minStatus: 'complete' }]
+        quests: REQ.shiloComplete.quests
     };
     return [
         edge(
@@ -226,12 +219,10 @@ export function shiloCartEdges(): TransportEdgeData[] {
  * Landing is random in-content; we plan to a representative pad + acceptAnyLanding.
  */
 export function essenceEntryEdges(): TransportEdgeData[] {
-    const f2p: TransportRequires = {
-        quests: [{ quest: 'Rune Mysteries', minStatus: 'complete' }]
-    };
-    const members: TransportRequires = {
+    const f2p: TransportRequires = { ...REQ.runeMysteriesComplete };
+    const membersReq: TransportRequires = {
         members: true,
-        quests: [{ quest: 'Rune Mysteries', minStatus: 'complete' }]
+        ...REQ.runeMysteriesComplete
     };
     const mine = ESSENCE_MINE_PAD;
     const mk = (
@@ -245,9 +236,9 @@ export function essenceEntryEdges(): TransportEdgeData[] {
     return [
         mk(ESSENCE_RETURN.aubury, 'Aubury', 'ess_entry_aubury', f2p),
         mk(ESSENCE_RETURN.sedridor, 'Sedridor', 'ess_entry_sedridor', f2p),
-        mk(ESSENCE_RETURN.distentor, 'Wizard Distentor', 'ess_entry_distentor', members),
-        mk(ESSENCE_RETURN.cromperty, 'Wizard Cromperty', 'ess_entry_cromperty', members),
-        mk(ESSENCE_RETURN.brimstail, 'Brimstail', 'ess_entry_brimstail', members)
+        mk(ESSENCE_RETURN.distentor, 'Wizard Distentor', 'ess_entry_distentor', membersReq),
+        mk(ESSENCE_RETURN.cromperty, 'Wizard Cromperty', 'ess_entry_cromperty', membersReq),
+        mk(ESSENCE_RETURN.brimstail, 'Brimstail', 'ess_entry_brimstail', membersReq)
     ];
 }
 

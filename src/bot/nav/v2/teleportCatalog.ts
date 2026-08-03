@@ -90,6 +90,7 @@ export const SPELL_TELEPORTS: readonly TeleportDestination[] = [
             members: true,
             skills: [{ name: 'magic', level: 51 }],
             items: [water(2), law(2)],
+            // Journal display name (questlist.if); alias "Plague City" also resolves.
             quests: [{ quest: 'Plague City', minStatus: 'complete' }]
         },
         source: 'magic_spell_teleport_ardougne',

@@ -109,18 +109,33 @@ Audit: `CONTENT_DIR=… bun tools/nav/content-transport-audit.ts` prints disable
 
 ```bash
 # catalog unit tests
-bun test test/nav/travelCatalog.test.ts
+bun test test/nav/travelCatalog.test.ts test/nav/transportQuestReqs.test.ts
 
 # pack walkability of curated endpoints
 bun tools/nav/curated-travel-probe.ts
 
 # ~12 transport-heavy OD pairs (pack + JSON for live)
 bun tools/nav/transport-heavy-routes.ts --write --n=12 --explain
+# Live: setvar quest seeds + relog + Quests.status check are automatic when:
 HEADED=1 TRANSPORT_HEAVY=1 LIMIT=12 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
 
 # content family scan + disabled buckets
 CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.ts
 ```
+
+### Quest seeds (prod / live)
+
+| Journal name | setvar | complete | Used by |
+|---|---|---:|---|
+| Rune Mysteries Quest | `runemysteries` | 6 | Essence entry |
+| The Grand Tree | `grandtree` | 160 | Spirit (stronghold), glider |
+| Tree Gnome Village | `treequest` | 9 | Spirit (village/young) |
+| Shilo Village | `zombiequeen` | 15 | Hajedy cart → Shilo |
+| Plague City | `elenaquest` | 29 | Ardougne spell tele |
+| Watchtower | `itwatchtower` | 13 | Watchtower spell |
+| Eadgar's Ruse | `eadgar` | 110 | Trollheim spell |
+
+Source: `src/bot/nav/v2/transportQuestReqs.ts`. After `setvar`, **relog** so the quest-list colour updates (`Quests.status` is colour-based).
 
 ---
 

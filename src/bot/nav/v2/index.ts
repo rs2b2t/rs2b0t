@@ -11,6 +11,7 @@ export * from './policy.js';
 export * from './teleportCatalog.js';
 export * from './lcCoord.js';
 export * from './travelCatalog.js';
+export * from './transportQuestReqs.js';
 export * from './worldStateData.js';
 export * from './hops.js';
 export * from './plannedEdge.js';

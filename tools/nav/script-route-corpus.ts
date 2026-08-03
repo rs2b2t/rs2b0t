@@ -430,9 +430,14 @@ if (isMain) {
             members: true,
             skills: { magic: 99, Magic: 99 },
             quests: {
+                // Journal names (+ aliases resolved in worldStateData)
                 'Plague City': 'complete',
                 Watchtower: 'complete',
-                "Eadgar's Ruse": 'complete'
+                "Eadgar's Ruse": 'complete',
+                'Rune Mysteries Quest': 'complete',
+                'The Grand Tree': 'complete',
+                'Tree Gnome Village': 'complete',
+                'Shilo Village': 'complete'
             },
             items: {
                 'Law rune': 200,

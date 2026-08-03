@@ -139,10 +139,10 @@ describe('essence / levers', () => {
         expect(WILDY_LEVER.ardougne).toEqual({ x: 2562, z: 3311, level: 0 });
     });
 
-    test('essence entries require Rune Mysteries', () => {
+    test('essence entries require Rune Mysteries Quest (journal name)', () => {
         for (const e of essenceEntryEdges()) {
             const q = (e as { requires?: { quests?: { quest: string }[] } }).requires?.quests;
-            expect(q?.some(x => x.quest === 'Rune Mysteries')).toBe(true);
+            expect(q?.some(x => x.quest === 'Rune Mysteries Quest')).toBe(true);
             expect(e.action).toBe('Teleport');
             expect(e.to.x).toBe(ESSENCE_MINE_PAD.x);
         }

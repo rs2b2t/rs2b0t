@@ -24,8 +24,12 @@
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
-import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
+import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, relog } from './tutorial/harness.js';
 import type { ScriptRoute } from './nav/script-route-corpus.ts';
+import {
+    transportQuestJournalNames,
+    transportQuestSetvarCommands
+} from '../src/bot/nav/v2/transportQuestReqs.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -476,9 +480,59 @@ try {
     });
 
     await maxmeAndClearDialogs(page);
+
+    // Transport-heavy / HARD: seed quest varps then relog so quest-list colours update
+    // (content only recolours via ~update_questlist at login).
+    if (USE_TRANSPORT_HEAVY || USE_HARDEST) {
+        const setvars = transportQuestSetvarCommands();
+        console.log(`${stamp()} seeding ${setvars.length} transport quest varps…`);
+        for (const cmd of setvars) {
+            if (!(await cheatQuiet(page, cmd))) {
+                console.warn(`${stamp()} WARN setvar failed: ${cmd}`);
+            }
+        }
+        // Coins for cart / tolls
+        await cheatQuiet(page, '~item coins 5000');
+        console.log(`${stamp()} relog so quest journal colours match setvar`);
+        await relog(page, user);
+        // Re-apply settings after relog
+        await setSettings(page, 'Global', { showNavPath: true, navEngine: 'v2', navCameraFollow: true });
+        await page.evaluate(() => {
+            const g = globalThis as never as Abi;
+            g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
+            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
+            g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
+        });
+        await maxmeAndClearDialogs(page);
+
+        type QStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
+        const statuses = await page.evaluate((names: string[]) => {
+            const g = globalThis as never as {
+                __rs2b0t: { Quests: { status(n: string): QStatus } };
+            };
+            return names.map(n => ({ name: n, status: g.__rs2b0t.Quests.status(n) }));
+        }, transportQuestJournalNames());
+        let bad = 0;
+        for (const q of statuses) {
+            const ok = q.status === 'complete';
+            console.log(`${stamp()} quest ${ok ? 'OK' : 'FAIL'}  ${q.name} → ${q.status}`);
+            if (!ok) {
+                bad++;
+            }
+        }
+        if (bad > 0) {
+            throw new Error(
+                `${bad} transport quest(s) not complete after setvar+relog — check varp names/values`
+            );
+        }
+    }
+
     // Tele runes so v2 can collapse long hub legs (still pure-walk when no tele).
     for (const cmd of ['~item lawrune 80', '~item airrune 200', '~item firerune 80', '~item waterrune 80', '~item earthrune 80']) {
         await cheatQuiet(page, cmd);
+    }
+    if (USE_TRANSPORT_HEAVY) {
+        await cheatQuiet(page, '~item coins 5000');
     }
     console.log(`${stamp()} set tick ${TICK_MS}ms + full run energy`);
     await setTickRate(page, TICK_MS);

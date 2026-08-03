@@ -1,0 +1,152 @@
+/**
+ * Quest gates for curated 2004 travel — journal display names + engine varps.
+ *
+ * Display names must match the quest-list row text (questlist.if) so live
+ * `Quests.status` / worldStateLive snapshots open the same edges as pack probes.
+ *
+ * Complete values from content `general/configs/quest.constant`.
+ * After setvar, live harnesses must relog so `~update_questlist` recolours the tab.
+ */
+
+import type { QuestProgress, TransportRequires } from './types.js';
+import type { WorldStateData } from './worldStateData.js';
+
+/** Engine permanent varp + complete stage (setvar seed). */
+export interface QuestVarSeed {
+    /** Journal / quest-list display name. */
+    journal: string;
+    /** Content varp name for `setvar <varp> <stage>`. */
+    varp: string;
+    /** Value at which the quest is complete (quest.constant). */
+    complete: number;
+    /** Optional bit-varp seeds (e.g. Shilo map mechanisms). */
+    extra?: { varp: string; value: number }[];
+    /** Why this quest is needed for travel. */
+    usedBy: string[];
+}
+
+/**
+ * All quests that gate curated travel or common teleports used with them.
+ * Aliases map short catalog names → journal name for WorldState lookup.
+ */
+export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
+    {
+        journal: 'Rune Mysteries Quest',
+        varp: 'runemysteries',
+        complete: 6,
+        usedBy: ['essence_entry (Aubury/Sedridor/Distentor/Cromperty/Brimstail)']
+    },
+    {
+        journal: 'The Grand Tree',
+        varp: 'grandtree',
+        complete: 160,
+        usedBy: ['spirit_tree (stronghold)', 'gnome_glider']
+    },
+    {
+        journal: 'Tree Gnome Village',
+        varp: 'treequest',
+        complete: 9,
+        usedBy: ['spirit_tree (village / young trees)']
+    },
+    {
+        journal: 'Shilo Village',
+        varp: 'zombiequeen',
+        complete: 15,
+        // Cart Brimhaven→Shilo checks %zombiequeen >= complete; prereq jungle potion
+        // is content-side for quest start only — complete shilo is enough for cart.
+        usedBy: ['shilo_cart (Brimhaven→Shilo Hajedy)']
+    },
+    {
+        journal: 'Plague City',
+        varp: 'elenaquest',
+        complete: 29,
+        usedBy: ['spell: Ardougne teleport (combo routes)']
+    },
+    {
+        journal: 'Watchtower',
+        varp: 'itwatchtower',
+        complete: 13,
+        usedBy: ['spell: Watchtower teleport']
+    },
+    {
+        journal: "Eadgar's Ruse",
+        varp: 'eadgar',
+        complete: 110,
+        usedBy: ['spell: Trollheim teleport']
+    }
+] as const;
+
+/** Short names used in older catalog strings → quest-list display name. */
+export const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
+    'rune mysteries': 'Rune Mysteries Quest',
+    'rune mysteries quest': 'Rune Mysteries Quest',
+    'the grand tree': 'The Grand Tree',
+    'grand tree': 'The Grand Tree',
+    'tree gnome village': 'Tree Gnome Village',
+    'shilo village': 'Shilo Village',
+    'plague city': 'Plague City',
+    watchtower: 'Watchtower',
+    "eadgar's ruse": "Eadgar's Ruse"
+};
+
+export function canonicalQuestName(name: string): string {
+    const hit = TRANSPORT_QUEST_ALIASES[name.toLowerCase()];
+    return hit ?? name;
+}
+
+/** Requires helpers matching travelCatalog gates (journal names). */
+export const REQ = {
+    runeMysteriesComplete: {
+        quests: [{ quest: 'Rune Mysteries Quest', minStatus: 'complete' as const }]
+    },
+    grandTreeComplete: {
+        members: true,
+        quests: [{ quest: 'The Grand Tree', minStatus: 'complete' as const }]
+    },
+    grandTreeStarted: {
+        members: true,
+        quests: [{ quest: 'The Grand Tree', minStatus: 'started' as const }]
+    },
+    treeGnomeComplete: {
+        members: true,
+        quests: [{ quest: 'Tree Gnome Village', minStatus: 'complete' as const }]
+    },
+    shiloComplete: {
+        members: true,
+        quests: [{ quest: 'Shilo Village', minStatus: 'complete' as const }]
+    }
+} as const satisfies Record<string, TransportRequires>;
+
+/** WorldStateData.quests map with every transport seed marked complete. */
+export function richTransportQuestMap(): Record<string, QuestProgress> {
+    const q: Record<string, QuestProgress> = {};
+    for (const s of TRANSPORT_QUEST_SEEDS) {
+        q[s.journal] = 'complete';
+        q[s.journal.toLowerCase()] = 'complete';
+        for (const [alias, journal] of Object.entries(TRANSPORT_QUEST_ALIASES)) {
+            if (journal === s.journal) {
+                q[alias] = 'complete';
+            }
+        }
+    }
+    return q;
+}
+
+/** setvar lines for live harness (after mainlandAccount, before relog). */
+export function transportQuestSetvarCommands(): string[] {
+    const cmds: string[] = [];
+    for (const s of TRANSPORT_QUEST_SEEDS) {
+        cmds.push(`setvar ${s.varp} ${s.complete}`);
+        if (s.extra) {
+            for (const e of s.extra) {
+                cmds.push(`setvar ${e.varp} ${e.value}`);
+            }
+        }
+    }
+    return cmds;
+}
+
+/** Journal names to assert complete after relog. */
+export function transportQuestJournalNames(): string[] {
+    return TRANSPORT_QUEST_SEEDS.map(s => s.journal);
+}

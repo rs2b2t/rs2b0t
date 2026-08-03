@@ -3,6 +3,7 @@
  */
 
 import type { QuestProgress, WorldState } from './types.js';
+import { canonicalQuestName } from './transportQuestReqs.js';
 
 export interface WorldStateData {
     members: boolean;
@@ -36,7 +37,16 @@ export function worldStateFromData(data: WorldStateData): WorldState {
         members: data.members,
         skills: data.skills,
         freeSlots: data.freeSlots,
-        questStatus: q => data.quests[q] ?? data.quests[q.toLowerCase()] ?? 'unknown',
+        questStatus: q => {
+            const canon = canonicalQuestName(q);
+            return (
+                data.quests[q]
+                ?? data.quests[q.toLowerCase()]
+                ?? data.quests[canon]
+                ?? data.quests[canon.toLowerCase()]
+                ?? 'unknown'
+            );
+        },
         itemCount: name => lookupItem(data.items, name)
     };
 }
