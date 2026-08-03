@@ -8,10 +8,8 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import doorsJson from '#/bot/nav/data/doors.json';
-import transportsJson from '#/bot/nav/data/transports.json';
-import stairsJson from '#/bot/nav/data/stairEdges.json';
-import { PathFinder, type DoorEdgeData, type NavPoint } from '#/bot/nav/PathFinder.js';
+import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
 
 function parseTile(s: string): NavPoint {
     const [x, z, level] = s.split(',').map(Number);
@@ -49,7 +47,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
     bytes = gunzipSync(bytes);
 }
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
+loadDefaultNavEdges(finder);
 
 console.log(`seeds: ${seeds.length}, maxExpansions ${maxExp}`);
 console.log('pairwise pathability (ok cost / FAIL):');

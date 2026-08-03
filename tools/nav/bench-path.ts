@@ -2,10 +2,8 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import doorsJson from '#/bot/nav/data/doors.json';
-import transportsJson from '#/bot/nav/data/transports.json';
-import stairsJson from '#/bot/nav/data/stairEdges.json';
-import { PathFinder, type DoorEdgeData, type NavPoint, type Waypoint } from '#/bot/nav/PathFinder.js';
+import { PathFinder, type NavPoint, type Waypoint } from '#/bot/nav/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
 
 const args = process.argv.slice(2);
 let packPath = 'out/collision.lcnav.gz';
@@ -24,7 +22,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
 }
 
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson, stairsJson);
+loadDefaultNavEdges(finder);
 console.log(`pack: ${finder.mapsquares} mapsquares, ${finder.doorEdges} door edges, ${finder.transportEdges} transport edges (members=${finder.members})`);
 
 const describe = (wp: Waypoint): string => (wp.transport ? `(${wp.x},${wp.z},${wp.level})[${wp.transport.action} ${wp.transport.locName}@${wp.transport.locX},${wp.transport.locZ}${wp.transport.toLevel !== undefined ? `->L${wp.transport.toLevel}` : ''}]` : `(${wp.x},${wp.z},${wp.level})`);

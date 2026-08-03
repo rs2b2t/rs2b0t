@@ -32,11 +32,9 @@ import { gunzipSync } from 'fflate';
 
 import { BANK_LOCATIONS } from '#/bot/api/BankLocations.js';
 import { WALK_DESTINATIONS } from '#/bot/api/WalkDestinations.js';
-import doorsJson from '#/bot/nav/data/doors.json';
 import { NAV_TARGETS } from '#/bot/nav/data/navTargets.js';
-import stairsJson from '#/bot/nav/data/stairEdges.json';
-import transportsJson from '#/bot/nav/data/transports.json';
-import { PathFinder, type DoorEdgeData, type NavPoint } from '#/bot/nav/PathFinder.js';
+import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
 import { formatHops } from '#/bot/nav/v2/hops.js';
 import type { PathPolicy } from '#/bot/nav/v2/types.js';
 import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
@@ -418,7 +416,7 @@ if (isMain) {
         bytes = gunzipSync(bytes);
     }
     const finder = new PathFinder(bytes);
-    finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
+    loadDefaultNavEdges(finder);
 
     let fail = 0;
     let pass = 0;

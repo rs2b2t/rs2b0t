@@ -172,7 +172,7 @@ Maintain as a living table in this doc (or generate later). Status key:
 
 | Item | Status | Notes |
 |---|---|---|
-| Content→edge audit script | todo | Scan Server content for `p_telejump`/`set_sail`/glider/spirit; diff vs transports.json |
+| Content→edge audit script | **partial** | `tools/nav/content-transport-audit.ts` scans CONTENT_DIR families |
 | Disabled-row report | todo | Group by reason; % state-deferred with/without activation |
 | Connectivity seeds | partial | `component-report`, `coverage.ts` — expand seed set per region |
 
@@ -180,14 +180,17 @@ Maintain as a living table in this doc (or generate later). Status key:
 
 | Item | Status | Content anchor |
 |---|---|---|
-| Entrana ferry (monk, weapon rules) | todo | `monk_of_entrana.rs2` |
-| Shilo↔Brimhaven cart | todo | `vigroy.rs2` / `hajedy.rs2` |
-| Spirit trees (4 dests) | todo | `spirit_tree.rs2` |
-| Gnome glider (5 pads, hub rule) | todo | `gnome_glider.rs2` |
+| Entrana ferry (monk, weapon rules) | **partial** | edges + specialCrossing in `travelCatalog` / `specialCrossings` (execute weapon strip still soft) |
+| Shilo↔Brimhaven cart | **partial** | edges + specialCrossing (fare min 10 coins; Brim→Shilo needs quest) |
+| Spirit trees (4 dests) | **partial** | catalog edges in graph load; dialog execute still generic Talk-to |
+| Gnome glider (5 pads, hub rule) | **partial** | hub↔pad only; map UI execute not wired |
 | Agility shortcuts that split components | todo | `shortcuts.rs2` vs component-report |
 | Shantay Pass | todo | `shantay_pass.rs2` |
 | Essence **entry** (Aubury / Sedridor / guild) | todo | area scripts + `essence_mine.rs2` |
 | Wildy Ardougne lever execute | todo | lever catalog + executor |
+
+**Local progress (feat/nav-v2-2004-transports):** `travelCatalog.ts`, `lcCoord.ts`,
+`tools/nav/content-transport-audit.ts`, NavWorker merges curated edges.
 
 ### Priority 2 — state-aware ladder activation
 

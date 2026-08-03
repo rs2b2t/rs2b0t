@@ -9,6 +9,8 @@ export * from './requires.js';
 export * from './fromV1.js';
 export * from './policy.js';
 export * from './teleportCatalog.js';
+export * from './lcCoord.js';
+export * from './travelCatalog.js';
 export * from './worldStateData.js';
 export * from './hops.js';
 export * from './plannedEdge.js';

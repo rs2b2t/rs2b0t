@@ -101,7 +101,57 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     },
 
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
-    { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' }
+    { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
+
+    // Entrana ferry — content: areas/area_port_sarim|entrana/monk_of_entrana.rs2 (Talk-to, members, weapon strip).
+    {
+        x: 3048,
+        z: 3236,
+        level: 0,
+        npc: 'Monk of Entrana',
+        locName: 'Monk of Entrana',
+        action: 'Talk-to',
+        dialogue: { choose: ["Yes, okay, I'm ready to go."] },
+        toTile: { x: 2834, z: 3331, level: 1 },
+        label: 'Port Sarim → Entrana'
+    },
+    {
+        x: 2834,
+        z: 3335,
+        level: 0,
+        npc: 'Monk of Entrana',
+        locName: 'Monk of Entrana',
+        action: 'Talk-to',
+        dialogue: { choose: ["Yes, I'm ready to go."] },
+        toTile: { x: 3048, z: 3231, level: 1 },
+        label: 'Entrana → Port Sarim'
+    },
+
+    // Shilo ↔ Brimhaven cart — vigroy.rs2 / hajedy.rs2 (fare 10–200 coins).
+    {
+        x: 2834,
+        z: 2954,
+        level: 0,
+        npc: 'Vigroy',
+        locName: 'Vigroy',
+        action: 'Talk-to',
+        requires: { item: 'Coins', count: 10 },
+        dialogue: { choose: ["Yes please, I'd like to go to Brimhaven."] },
+        toTile: { x: 2776, z: 3214, level: 0 },
+        label: 'Shilo → Brimhaven cart'
+    },
+    {
+        x: 2779,
+        z: 3212,
+        level: 0,
+        npc: 'Hajedy',
+        locName: 'Hajedy',
+        action: 'Talk-to',
+        requires: { item: 'Coins', count: 10 },
+        dialogue: { choose: ["Yes please, I'd like to go to Shilo Village."] },
+        toTile: { x: 2834, z: 2951, level: 0 },
+        label: 'Brimhaven → Shilo cart'
+    }
 ];
 
 export function specialCrossingAt(x: number, z: number, level: number): SpecialCrossing | null {

@@ -1,10 +1,8 @@
 // docs/NAV.md#the-collision-pack
 import { gunzipSync } from 'fflate';
 
-import doors from './data/doors.json';
-import transports from './data/transports.json';
-import stairs from './data/stairEdges.json';
-import { PathFinder, type DoorEdgeData, type NavRequest, type NavResponse } from './PathFinder.js';
+import { PathFinder, type NavRequest, type NavResponse } from './PathFinder.js';
+import { loadDefaultNavEdges } from './loadTransportGraph.js';
 
 type WorkerScope = {
     postMessage(message: NavResponse, transfer?: Transferable[]): void;
@@ -22,7 +20,7 @@ function init(pack: ArrayBuffer): void {
     }
 
     finder = new PathFinder(bytes);
-    finder.addEdges(doors as DoorEdgeData[], transports, stairs);
+    loadDefaultNavEdges(finder);
     worker.postMessage({ type: 'ready', mapsquares: finder.mapsquares, doorEdges: finder.doorEdges, transportEdges: finder.transportEdges });
 }
 

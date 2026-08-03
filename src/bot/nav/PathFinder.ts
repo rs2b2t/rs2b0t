@@ -99,6 +99,8 @@ export interface TransportEdgeData {
     options?: string[];
     /** Keep a known-invalid derived row documented without making it routable. */
     disabledReason?: string;
+    /** Optional plan-time gates (curated travel / state-aware activations). */
+    requires?: TransportRequires;
 }
 
 export type NavRequest =
@@ -346,10 +348,15 @@ export class PathFinder {
                 toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
                 // Portals land on a fixed tile (or any tile for multi-exit) — executor waits on toTile.
                 toTile:
-                    edge.kind === 'dungeon' || edge.kind === 'portal' || edge.kind === 'ship' || edge.kind === 'gangplank'
+                    edge.kind === 'dungeon'
+                    || edge.kind === 'portal'
+                    || edge.kind === 'ship'
+                    || edge.kind === 'gangplank'
+                    || edge.kind === 'teleport'
                         ? { x: edge.to.x, z: edge.to.z }
                         : undefined,
-                acceptAnyLanding: edge.kind === 'portal' ? true : undefined
+                // Portals and hub teles may land a few tiles off exact stand.
+                acceptAnyLanding: edge.kind === 'portal' || edge.kind === 'teleport' ? true : undefined
             };
             const requires = edge.requires ?? specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
             this.addEdge(

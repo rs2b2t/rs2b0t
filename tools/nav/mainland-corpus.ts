@@ -11,10 +11,8 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import doorsJson from '#/bot/nav/data/doors.json';
-import transportsJson from '#/bot/nav/data/transports.json';
-import stairsJson from '#/bot/nav/data/stairEdges.json';
-import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
+import { PathFinder } from '#/bot/nav/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
 import { formatHops } from '#/bot/nav/v2/hops.js';
 
 import { buildScriptRoutes } from './script-route-corpus.js';
@@ -40,7 +38,7 @@ if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
     bytes = gunzipSync(bytes);
 }
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
+loadDefaultNavEdges(finder);
 
 let fail = 0;
 for (const r of routes) {
