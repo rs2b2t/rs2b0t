@@ -127,6 +127,15 @@ export interface TransportEdgeData {
     options?: string[];
     /** Keep a known-invalid derived row documented without making it routable. */
     disabledReason?: string;
+    /**
+     * When true, never enter the path graph. Use for transports whose destination
+     * is not a static function of the loc placement (RNG, session varps, multi-exit
+     * without a single plan-time dest). Scripts own those hops; nav plans around them.
+     * Distinct from `disabledReason` (broken/invalid derived rows kept for audit).
+     */
+    blacklist?: boolean;
+    /** Why the edge is blacklisted (docs / audits). */
+    blacklistReason?: string;
     /** Optional plan-time gates (curated travel / state-aware activations). */
     requires?: TransportRequires;
 }
@@ -379,7 +388,9 @@ export class PathFinder {
 
         const activated = activateTransportRows([...transports, ...stairs]);
         for (const edge of activated) {
-            if (edge.disabledReason) {
+            // disabledReason: permanently invalid or still state-deferred after activate.
+            // blacklist: intentionally excluded — destination not statically modelable (#388).
+            if (edge.disabledReason || edge.blacklist === true) {
                 continue;
             }
             if (!this.walkable(edge.from.x, edge.from.z, edge.from.level) || !this.walkable(edge.to.x, edge.to.z, edge.to.level)) {

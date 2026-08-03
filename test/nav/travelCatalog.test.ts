@@ -64,7 +64,8 @@ describe('spirit / glider catalogs', () => {
                 || (e.to.x === hub.x && e.to.z === hub.z && e.to.level === hub.level);
             expect(touchesHub).toBe(true);
         }
-        expect(edges.length).toBe(8); // 4 pads × 2
+        // 3 round-trip pads × 2 + Lemanto Andra hub→pad only (no return in content)
+        expect(edges.length).toBe(7);
     });
 });
 
@@ -146,13 +147,14 @@ describe('essence / levers', () => {
         expect(WILDY_LEVER.ardougne).toEqual({ x: 2562, z: 3311, level: 0 });
     });
 
-    test('essence entries require Rune Mysteries Quest (journal name)', () => {
+    test('essence entries require Rune Mysteries Quest and are blacklisted (#388)', () => {
         for (const e of essenceEntryEdges()) {
             const q = (e as { requires?: { quests?: { quest: string }[] } }).requires?.quests;
             expect(q?.some(x => x.quest === 'Rune Mysteries Quest')).toBe(true);
             expect(e.action).toBe('Teleport');
             expect(e.to.x).toBe(ESSENCE_MINE_PAD.x);
-            expect(e.disabledReason).toBeUndefined();
+            expect(e.blacklist).toBe(true);
+            expect(e.blacklistReason).toMatch(/random|essence_mine/i);
             expect(e.requires?.essenceEntrySetsReturn).toBeDefined();
         }
         expect(essenceEntryEdges()).toHaveLength(5);
@@ -161,13 +163,13 @@ describe('essence / levers', () => {
         );
     });
 
-    test('essence exits are session-gated portal×return edges', () => {
+    test('essence exits are blacklisted portal×return audit rows (#388)', () => {
         const exits = essenceExitEdges();
         expect(exits).toHaveLength(20);
-        expect(exits.every(e => e.kind === 'portal' && e.action === 'Use')).toBe(true);
+        expect(exits.every(e => e.kind === 'portal' && e.action === 'Use' && e.blacklist === true)).toBe(true);
         const returns = new Set(exits.map(e => e.requires?.essenceExitReturn));
         expect(returns).toEqual(new Set(['aubury', 'sedridor', 'distentor', 'brimstail', 'cromperty']));
-        // Aubury return matches surface entry stand.
+        // Aubury return matches surface entry stand (catalog metadata).
         const toAubury = exits.find(e => e.requires?.essenceExitReturn === 'aubury');
         expect(toAubury?.to).toEqual(ESSENCE_RETURN.aubury);
     });
