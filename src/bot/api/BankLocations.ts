@@ -65,7 +65,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
 ];
 
 /**
- * Straight-line (Euclidean) distance on the same plane.
+ * Straight-line (Euclidean) distance, ignoring plane.
  * Chebyshev (king-move) wrongly prefers Falador East over Edgeville from
  * Barbarian Village tin/coal — the walk is shorter north to Edge.
  */
@@ -78,13 +78,18 @@ export function bankDistance(from: WorldTile, bank: WorldTile): number {
 /**
  * Every bank this account can use, nearest first by straight line.
  *
+ * Ranked on x/z across planes: stair edges are baked into the nav graph, so a
+ * bank one floor down is a walk like any other. Matching planes instead made
+ * the Grand Tree — the one bank off level 0 — the sole candidate for anyone
+ * standing upstairs anywhere in the world.
+ *
  * Straight-line order is a shortlist, not an answer: it cannot see a toll gate
  * or a fare, so a caller that needs the bank it can actually walk to should
  * probe these in order rather than take the head.
  */
 export function nearestBanks(from: WorldTile): BankLocation[] {
     return BANK_LOCATIONS
-        .filter(bank => bank.tile.level === from.level && meetsRequirement(bank))
+        .filter(bank => meetsRequirement(bank))
         .sort((a, b) => bankDistance(from, a.tile) - bankDistance(from, b.tile));
 }
 
@@ -92,7 +97,7 @@ export function nearestUsableBank(from: WorldTile, usable: (bank: BankLocation) 
     let best: BankLocation | null = null;
     let bestD = Infinity;
     for (const bank of BANK_LOCATIONS) {
-        if (bank.tile.level !== from.level || !usable(bank)) {
+        if (!usable(bank)) {
             continue;
         }
         const d = bankDistance(from, bank.tile);

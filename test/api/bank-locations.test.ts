@@ -57,12 +57,35 @@ test('Barbarian Village tin/coal banks at Edgeville (not Falador East)', () => {
     expect(nearestBank({ x: 3078, z: 3415, level: 0 })?.name).toBe('Edgeville');
 });
 
-test('nearestBank returns null when no bank is on the tile level', () => {
-    expect(nearestBank({ x: 2612, z: 3092, level: 2 })).toBeNull();
-});
-
 test('nearestBank on Grand Tree 1F picks Grand Tree (ungated)', () => {
     expect(nearestBank({ x: 2449, z: 3482, level: 1 })?.name).toBe('Grand Tree');
+});
+
+test('Grand Tree still wins from the ground floor beneath it', () => {
+    expect(nearestBank({ x: 2460, z: 3490, level: 0 })?.name).toBe('Grand Tree');
+});
+
+describe('upstairs banks at the nearest bank, not the only bank off level 0', () => {
+    // The Grand Tree is the one bank that is not on level 0. While bank choice
+    // filtered by plane it was the sole candidate for anyone standing upstairs
+    // anywhere in the world, so a clue trail ending on a first floor walked the
+    // map to Gnome Stronghold. Stairs are baked into the nav graph; rank on x/z.
+    test('Varrock East 1F banks downstairs, not at the Grand Tree', () => {
+        expect(nearestBank({ x: 3250, z: 3420, level: 1 })?.name).toBe('Varrock East');
+    });
+
+    test('Al Kharid palace 1F banks at Al Kharid', () => {
+        expect(nearestBank({ x: 3301, z: 3169, level: 1 })?.name).toBe('Al Kharid');
+    });
+
+    test('Falador 1F banks at Falador West', () => {
+        expect(nearestBank({ x: 2971, z: 3386, level: 1 })?.name).toBe('Falador West');
+    });
+
+    test('level 2 finds a bank rather than giving up', () => {
+        expect(nearestBank({ x: 2748, z: 3495, level: 2 })?.name).toBe('Seers');
+        expect(nearestBank({ x: 2612, z: 3092, level: 2 })?.name).toBe('Yanille');
+    });
 });
 
 const openOnly = (b: BankLocation): boolean => b.requires === undefined;
@@ -116,8 +139,9 @@ describe('nearestUsableBank', () => {
         expect(picked?.name).toBe('Canifis');
     });
 
-    test('level filter still applies (no level-2 banks)', () => {
-        expect(nearestUsableBank({ x: 2600, z: 3420, level: 2 }, all)).toBeNull();
+    test('an upstairs caller still gets its nearest bank', () => {
+        expect(nearestUsableBank({ x: 2600, z: 3420, level: 2 }, all)?.name).toBe('Fishing Guild');
+        expect(nearestUsableBank({ x: 2600, z: 3420, level: 2 }, openOnly)?.name).toBe('Ardougne West');
     });
 
     test('on Grand Tree 1F, banks at Grand Tree without a quest gate', () => {
@@ -152,8 +176,10 @@ describe('nearestBanks', () => {
         }
     });
 
-    test('leaves out banks on another plane', () => {
+    test('shortlists banks on another plane too', () => {
         const upstairs = nearestBanks({ x: 2449, z: 3482, level: 1 }).map(b => b.name);
-        expect(upstairs).toEqual(['Grand Tree']);
+        expect(upstairs[0]).toBe('Grand Tree');
+        expect(upstairs).toContain('Ardougne West');
+        expect(upstairs.length).toBeGreaterThan(1);
     });
 });

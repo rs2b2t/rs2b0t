@@ -224,7 +224,19 @@ export function shiloCartEdges(): TransportEdgeData[] {
 /**
  * Rune Mysteries complete → essence mine via wizard Teleport.
  * Landing is random in-content; we plan to a representative pad + acceptAnyLanding.
+ *
+ * Recorded but disabled: the mine is exit-only in the graph. essence_mine.rs2
+ * keeps the entry NPC in %exit_essence_mine_coord and the exit portal telejumps
+ * back to it, so entry-then-portal returns you where you started. transports.json
+ * bakes that portal as a fixed Sedridor landing — true only for a Sedridor entry —
+ * so enabling these hands A* a cost-20 wormhole from any of five wizards to the
+ * Wizards' Tower basement. Live it teleports in, lands back at the entry NPC, and
+ * re-plans the same teleport forever. Bots that want the mine drive the NPC
+ * themselves; only the exit belongs in the graph.
  */
+const ESSENCE_ENTRY_DISABLED =
+    'Exit portal returns to the entry NPC (%exit_essence_mine_coord), so entry + portal is a no-op round trip, not a shortcut.';
+
 export function essenceEntryEdges(): TransportEdgeData[] {
     const f2p: TransportRequires = { ...REQ.runeMysteriesComplete };
     const membersReq: TransportRequires = {
@@ -237,8 +249,10 @@ export function essenceEntryEdges(): TransportEdgeData[] {
         npc: string,
         debug: string,
         requires: TransportRequires
-    ): TransportEdgeData =>
-        edge(from, mine, npc, 'Teleport', 'portal', debug, requires);
+    ): TransportEdgeData => ({
+        ...edge(from, mine, npc, 'Teleport', 'portal', debug, requires),
+        disabledReason: ESSENCE_ENTRY_DISABLED
+    });
 
     return [
         mk(ESSENCE_RETURN.aubury, 'Aubury', 'ess_entry_aubury', f2p),
