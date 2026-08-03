@@ -19,17 +19,12 @@
  * @see docs/CLUES.md#clues-the-pack-cannot-reach
  */
 export const PACK_UNREACHABLE: Record<number, string> = {
-    // ---- NO QUEST: the crossing is open today, it is simply not baked -------
-    // Lumber Yard, NE of Varrock. Its fence has one way in: a Climb-over broken
-    // fence, which derive-doors cannot see (centrepiece shape, not a wall, and
-    // the op is Climb-over rather than Open).
-    2722: 'Lumber Yard fence: Climb-over gertrudefence @ (3305,3493) — not baked; members-only, no quest',
-    // The islet is one tile of water away. druidjump_loc is a real bidirectional
-    // crossing with an agility check that can drop you in the swamp.
-    3542: 'Nature Grotto islet: Jump druidjump_loc @ (3440,3331) <-> (3441,3329), agility check — not baked',
-    // Shantay sells the pass; going south consumes one and runs a dialogue.
-    3552: 'Kharidian desert: Shantay pass consumed entering south (shantay_pass.rs2) — state-aware crossing',
-    3554: 'Kharidian desert: Shantay pass consumed entering south (shantay_pass.rs2) — state-aware crossing',
+    // ---- NO QUEST -----------------------------------------------------------
+    // The southbound crossing is now baked, but it consumes a Shantay pass, and a
+    // requires-gated edge is skipped when no world state is supplied. So the bot
+    // walks it holding a pass; the offline audit correctly still calls it closed.
+    3552: 'Kharidian desert: baked, but entry consumes a Shantay pass — the bot must carry one',
+    3554: 'Kharidian desert: baked, but entry consumes a Shantay pass — the bot must carry one',
 
     // ---- QUEST: assume complete, then bake ---------------------------------
     3560: 'Isafdar: Sticks [Pass] @ (2200,3169) — requires Underground Pass/Regicide',

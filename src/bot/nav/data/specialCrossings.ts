@@ -48,6 +48,21 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
 
     { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
 
+    // Heading south into the desert costs a Shantay pass and, the first time,
+    // a disclaimer prompt. Coming back north is free, which is why only this
+    // direction needs an entry. (shantay_pass.rs2)
+    {
+        x: 3304,
+        z: 3118,
+        level: 0,
+        locName: 'Shantay pass',
+        action: 'Go-through',
+        requires: { item: 'Shantay pass', count: 1 },
+        dialogue: { choose: ["Yeah, that poster doesn't scare me!"] },
+        toTile: { x: 3304, z: 3114, level: 0 },
+        label: 'Shantay Pass -> Kharidian desert'
+    },
+
     // Mort Myre gate (#115). Server: Open is a hard mesbox while Nature Spirit is not
     // started; once started/complete the gate opens with no dialog. Unlock = walk back
     // to Drezel (post–Priest in Peril mausoleum), start Nature Spirit, return.
