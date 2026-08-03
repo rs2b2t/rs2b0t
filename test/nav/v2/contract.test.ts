@@ -25,16 +25,21 @@ function state(partial: Partial<{
     skills: Record<string, number>;
     quests: Record<string, 'not_started' | 'started' | 'complete' | 'unknown'>;
     items: Record<string, number>;
+    worn: Record<string, number>;
     freeSlots: number;
+    entranaRestrictedGear: boolean;
 }> = {}): WorldState {
     const quests = partial.quests ?? {};
     const items = partial.items ?? {};
+    const worn = partial.worn ?? {};
     return {
         members: partial.members ?? true,
         skills: partial.skills ?? {},
         freeSlots: partial.freeSlots ?? 28,
+        entranaRestrictedGear: partial.entranaRestrictedGear ?? false,
         questStatus: q => quests[q] ?? 'unknown',
-        itemCount: name => items[name] ?? 0
+        itemCount: name => items[name] ?? 0,
+        wornCount: name => worn[name] ?? 0
     };
 }
 
@@ -103,6 +108,19 @@ describe('nav v2 meetsRequires', () => {
         const req = { members: true };
         expect(meetsRequires(req, state({ members: false })).ok).toBe(false);
         expect(meetsRequires(req, state({ members: true })).ok).toBe(true);
+    });
+
+    test('worn Chef hat required (Cooking Guild)', () => {
+        const req = { worn: [{ name: "Chef's hat", count: 1 }] };
+        expect(meetsRequires(req, state({ worn: {} })).ok).toBe(false);
+        expect(meetsRequires(req, state({ items: { "Chef's hat": 1 } })).ok).toBe(false);
+        expect(meetsRequires(req, state({ worn: { "Chef's hat": 1 } })).ok).toBe(true);
+    });
+
+    test('forbidEntranaRestricted blocks when flag set', () => {
+        const req = { members: true, forbidEntranaRestricted: true };
+        expect(meetsRequires(req, state({ entranaRestrictedGear: true })).ok).toBe(false);
+        expect(meetsRequires(req, state({ entranaRestrictedGear: false })).ok).toBe(true);
     });
 });
 

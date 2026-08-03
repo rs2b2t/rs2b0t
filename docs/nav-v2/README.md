@@ -20,7 +20,6 @@ WorldState requires. **v2 only:** teleport catalog inject, path-scoped bank, hop
 when using v2 policy.
 
 **Still deferred:** bank cache API, multi-dest quest ladders (Horror/Watchtower maze),
-Ranging Guild door (not in doors.json), fairy rings / post-era matrix, Entrana gear /
-chef’s hat at plan-time, live CI harness suite.
+fairy rings / post-era matrix, live CI harness suite.
 
 Operator live tools live under `tools/nav-*.ts` (not CI). Do not document personal deploy paths here.

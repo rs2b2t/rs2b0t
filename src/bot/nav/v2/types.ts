@@ -52,6 +52,11 @@ export interface TransportRequires {
     skills?: SkillRequirement[];
     /** Any-of sets can be expressed as multiple edges; each item is ANDed. */
     items?: ItemRequirement[];
+    /**
+     * Must be worn (equipment), not merely in inventory.
+     * e.g. Chef's hat for the Cooking Guild.
+     */
+    worn?: ItemRequirement[];
     quests?: QuestRequirement[];
     freeSlots?: number;
     /**
@@ -59,6 +64,11 @@ export interface TransportRequires {
      * Equivalent to items[] but kept explicit for explain output.
      */
     currency?: { name: string; amount: number };
+    /**
+     * When true, edge is blocked if WorldState reports Entrana-restricted gear
+     * (weapons/armour heuristic matching content category bans).
+     */
+    forbidEntranaRestricted?: boolean;
 }
 
 export interface TransportLoc {
@@ -121,7 +131,11 @@ export interface WorldState {
     skills: Readonly<Record<string, number>>;
     questStatus(quest: string): QuestProgress;
     itemCount(name: string): number;
+    /** Worn equipment count (0 if not equipped). */
+    wornCount(name: string): number;
     freeSlots: number;
+    /** True when inv/worn matches Entrana restricted-gear heuristic. */
+    entranaRestrictedGear: boolean;
 }
 
 /**

@@ -17,7 +17,10 @@ import {
     curatedTravelEdges
 } from '#/bot/nav/v2/travelCatalog.js';
 import { specialCrossingForTransport } from '#/bot/nav/data/specialCrossings.js';
-import { hasEntranaRestrictedGear } from '#/bot/nav/exec/specialCrossing.js';
+import {
+    hasEntranaRestrictedGear,
+    namesHaveEntranaRestrictedGear
+} from '#/bot/nav/exec/specialCrossing.js';
 
 describe('parseLcCoord', () => {
     test('decodes content constants', () => {
@@ -67,10 +70,20 @@ describe('spirit / glider catalogs', () => {
 });
 
 describe('ferries / cart', () => {
-    test('Entrana ferry is members ship Talk-to', () => {
+    test('Entrana ferry is members ship Talk-to; outbound forbids restricted gear', () => {
         const e = entranaFerryEdges();
         expect(e).toHaveLength(2);
         expect(e.every(x => x.kind === 'ship' && x.action === 'Talk-to')).toBe(true);
+        const to = e.find(x => x.debugName === 'ferry_port_sarim_to_entrana') as {
+            requires?: { members?: boolean; forbidEntranaRestricted?: boolean };
+        };
+        const from = e.find(x => x.debugName === 'ferry_entrana_to_port_sarim') as {
+            requires?: { members?: boolean; forbidEntranaRestricted?: boolean };
+        };
+        expect(to?.requires?.members).toBe(true);
+        expect(to?.requires?.forbidEntranaRestricted).toBe(true);
+        expect(from?.requires?.members).toBe(true);
+        expect(from?.requires?.forbidEntranaRestricted).toBeUndefined();
     });
 
     test('Shilo cart Brimhaven→Shilo needs quest complete', () => {
@@ -128,6 +141,11 @@ describe('entrana gear gate', () => {
         // Without client equipment the helper is false (empty pack).
         expect(typeof hasEntranaRestrictedGear).toBe('function');
         expect(hasEntranaRestrictedGear()).toBe(false);
+    });
+    test('name heuristic matches weapons/armour, not plain food', () => {
+        expect(namesHaveEntranaRestrictedGear(['Bronze sword', 'Lobster'])).toBe(true);
+        expect(namesHaveEntranaRestrictedGear(['Rune platebody'])).toBe(true);
+        expect(namesHaveEntranaRestrictedGear(['Lobster', 'Coins', 'Air rune'])).toBe(false);
     });
 });
 

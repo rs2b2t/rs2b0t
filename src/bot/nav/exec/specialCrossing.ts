@@ -38,16 +38,24 @@ export type WalkToFn = (
     opts?: { radius?: number; timeoutMs?: number; log?: (msg: string) => void }
 ) => Promise<boolean>;
 
-/** Approx content category bans for Entrana (monk_of_entrana.rs2 has_entrana_restricted_items). */
-const ENTRANA_RESTRICTED =
+/**
+ * Approx content category bans for Entrana (monk_of_entrana.rs2 has_entrana_restricted_items).
+ * Pure helper so plan-time WorldState can reuse the same heuristic.
+ */
+export const ENTRANA_RESTRICTED_GEAR_RE =
     /\b(sword|dagger|scimitar|longsword|2h|two.handed|mace|warhammer|battleaxe|axe|pickaxe|spear|hasta|halberd|maul|claws|whip|bow|crossbow|javelin|dart|thrownaxe|knife|staff|wand|battlestaff|halberd|cannon|helmet|full helm|med helm|coif|platebody|chainbody|platelegs|plateskirt|skirt of|kiteshield|square shield|sq shield|dragon square|god cape|fire cape|obsidian cape|defender)\b/i;
+
+/** True if any of the given item names looks like Entrana-banned gear. */
+export function namesHaveEntranaRestrictedGear(names: readonly string[]): boolean {
+    return names.some(n => n.length > 0 && ENTRANA_RESTRICTED_GEAR_RE.test(n));
+}
 
 export function hasEntranaRestrictedGear(): boolean {
     const names = [
         ...Inventory.items().map(i => i.name ?? ''),
         ...Equipment.items().map(i => i.name ?? '')
     ];
-    return names.some(n => n.length > 0 && ENTRANA_RESTRICTED.test(n));
+    return namesHaveEntranaRestrictedGear(names);
 }
 
 export async function handleSpecialCrossing(

@@ -16,8 +16,14 @@ describe('specialRequiresAt — guild skill gates (content-backed)', () => {
         expect(specialRequiresAt(2933, 3289, 0)?.skills).toEqual([{ name: 'crafting', level: 40 }]);
     });
 
-    test('Cooking Guild door requires cooking 32 (hat is execute-time)', () => {
-        expect(specialRequiresAt(3143, 3444, 0)?.skills).toEqual([{ name: 'cooking', level: 32 }]);
+    test('Cooking Guild door requires cooking 32 and Chef hat worn', () => {
+        const r = specialRequiresAt(3143, 3444, 0);
+        expect(r?.skills).toEqual([{ name: 'cooking', level: 32 }]);
+        expect(r?.worn).toEqual([{ name: "Chef's hat", count: 1 }]);
+    });
+
+    test('Ranging Guild door requires ranged 40', () => {
+        expect(specialRequiresAt(2658, 3438, 0)?.skills).toEqual([{ name: 'ranged', level: 40 }]);
     });
 
     test('Mining Guild ladder descent requires mining 60 on all four surface stands', () => {

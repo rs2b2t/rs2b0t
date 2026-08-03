@@ -155,7 +155,13 @@ export function gliderEdges(): TransportEdgeData[] {
 
 /** Port Sarim ↔ Entrana (monk Talk-to + weapon search; members). */
 export function entranaFerryEdges(): TransportEdgeData[] {
-    const req: TransportRequires = { members: true };
+    // Port Sarim → Entrana: monks refuse weapons/armour (plan + execute).
+    const toEntrana: TransportRequires = {
+        members: true,
+        forbidEntranaRestricted: true
+    };
+    // Return ferry has no gear gate.
+    const fromEntrana: TransportRequires = { members: true };
     return [
         edge(
             TRAVEL_STANDS.portSarimMonk,
@@ -164,7 +170,7 @@ export function entranaFerryEdges(): TransportEdgeData[] {
             'Talk-to',
             'ship',
             'ferry_port_sarim_to_entrana',
-            req
+            toEntrana
         ),
         edge(
             TRAVEL_STANDS.entranaMonk,
@@ -173,7 +179,7 @@ export function entranaFerryEdges(): TransportEdgeData[] {
             'Talk-to',
             'ship',
             'ferry_entrana_to_port_sarim',
-            req
+            fromEntrana
         )
     ];
 }

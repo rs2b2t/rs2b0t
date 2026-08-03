@@ -287,6 +287,7 @@
     {"x":2656,"z":3161,"level":0,"locId":1530,"locName":"Door","dir":"N"},
     {"x":2656,"z":3292,"level":0,"locId":1530,"locName":"Door","dir":"E"},
     {"x":2657,"z":3496,"level":0,"locId":99,"locName":"Door","dir":"N"},
+    {"x":2658,"z":3438,"level":0,"locId":2514,"locName":"Guild door","dir":"S"},
     {"x":2659,"z":3320,"level":0,"locId":1530,"locName":"Door","dir":"N"},
     {"x":2661,"z":9803,"level":0,"locId":90,"locName":"Gate","dir":"S"},
     {"x":2661,"z":9815,"level":0,"locId":95,"locName":"Gate","dir":"S"},

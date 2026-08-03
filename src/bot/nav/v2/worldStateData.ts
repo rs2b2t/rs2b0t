@@ -11,7 +11,11 @@ export interface WorldStateData {
     quests: Record<string, QuestProgress>;
     /** Item display name → total count in backpack. */
     items: Record<string, number>;
+    /** Worn equipment display name → count (usually 1). */
+    worn?: Record<string, number>;
     freeSlots: number;
+    /** Live Entrana restricted-gear heuristic (weapons/armour names). */
+    entranaRestrictedGear?: boolean;
 }
 
 function lookupItem(items: Record<string, number>, name: string): number {
@@ -33,10 +37,12 @@ function lookupItem(items: Record<string, number>, name: string): number {
 }
 
 export function worldStateFromData(data: WorldStateData): WorldState {
+    const worn = data.worn ?? {};
     return {
         members: data.members,
         skills: data.skills,
         freeSlots: data.freeSlots,
+        entranaRestrictedGear: data.entranaRestrictedGear === true,
         questStatus: q => {
             const canon = canonicalQuestName(q);
             return (
@@ -47,10 +53,19 @@ export function worldStateFromData(data: WorldStateData): WorldState {
                 ?? 'unknown'
             );
         },
-        itemCount: name => lookupItem(data.items, name)
+        itemCount: name => lookupItem(data.items, name),
+        wornCount: name => lookupItem(worn, name)
     };
 }
 
 export function emptyWorldStateData(members = true): WorldStateData {
-    return { members, skills: {}, quests: {}, items: {}, freeSlots: 28 };
+    return {
+        members,
+        skills: {},
+        quests: {},
+        items: {},
+        worn: {},
+        freeSlots: 28,
+        entranaRestrictedGear: false
+    };
 }

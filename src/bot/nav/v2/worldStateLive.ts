@@ -5,8 +5,10 @@
 import { Client } from '#/client/Client.js';
 
 import { reader } from '../../adapter/ClientAdapter.js';
+import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Quests, type QuestStatus } from '../../api/hud/Quests.js';
+import { namesHaveEntranaRestrictedGear } from '../exec/specialCrossing.js';
 import type { QuestProgress, WorldState } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
 import { worldStateFromData } from './worldStateData.js';
@@ -59,6 +61,23 @@ export function snapshotWorldStateData(): WorldStateData {
         }
     }
 
+    const worn: Record<string, number> = {};
+    const wornNames: string[] = [];
+    for (const item of Equipment.items()) {
+        const name = item.name;
+        if (!name) {
+            continue;
+        }
+        wornNames.push(name);
+        worn[name] = (worn[name] ?? 0) + item.count;
+        worn[name.toLowerCase()] = (worn[name.toLowerCase()] ?? 0) + item.count;
+        worn[name.toLowerCase().replace(/\s+/g, '')] =
+            (worn[name.toLowerCase().replace(/\s+/g, '')] ?? 0) + item.count;
+    }
+
+    const invNames = Inventory.items().map(i => i.name ?? '').filter(Boolean);
+    const entranaRestrictedGear = namesHaveEntranaRestrictedGear([...invNames, ...wornNames]);
+
     return {
         // Client.memServer is set at boot from world config (members vs free world).
         // Never hardcode true — free-world snapshots must fail members-gated edges.
@@ -66,7 +85,9 @@ export function snapshotWorldStateData(): WorldStateData {
         skills,
         quests,
         items,
-        freeSlots: Inventory.free()
+        worn,
+        freeSlots: Inventory.free(),
+        entranaRestrictedGear
     };
 }
 
