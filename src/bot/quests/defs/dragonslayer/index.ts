@@ -184,15 +184,53 @@ async function buyMapFromWormbrain(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => heldById(DS_ID.MAP_WORMBRAIN), 6000);
 }
 
+/** Open the magic door (both ways). Stand west to enter, east to leave (#379). */
+async function openOracleMagicDoor(log: (m: string) => void, wantEast: boolean): Promise<boolean> {
+    if (!(await mazeSceneLoaded())) {
+        return false;
+    }
+    const stand = wantEast ? DS_LOC.ORACLE_DOOR_STAND : new Tile(3051, 9840, 0);
+    // Enter from west stand; leave from just east of the door tile.
+    const leaveStand = new Tile(3052, 9840, 0);
+    if (!(await walk(wantEast ? stand : leaveStand, log, 0))) {
+        return false;
+    }
+    const door = Locs.query().name('Door').where(l => {
+        const t = l.tile();
+        return t.x === DS_LOC.ORACLE_DOOR.x && t.z === DS_LOC.ORACLE_DOOR.z;
+    }).first();
+    if (!door) {
+        log('the magic door is not in the scene yet');
+        return false;
+    }
+    log(wantEast ? 'opening the magic door with the four charms' : 'opening the magic door to leave the oracle chest room');
+    if (!(await door.interact('Open'))) {
+        return false;
+    }
+    return Execution.delayUntil(() => {
+        const t = Game.tile();
+        if (!t || t.z < 9800) {
+            return false;
+        }
+        return wantEast ? t.x >= 3051 : t.x < 3051;
+    }, 8000);
+}
+
 /** The Oracle's door eats a mind bomb, unfired bowl, lobster pot and silk. */
 async function oracleChest(log: (m: string) => void): Promise<boolean> {
-    if (heldById(DS_ID.MAP_ORACLE)) {
-        return true;
-    }
     const here = Game.tile();
     const pastDoor = here !== null && here.z >= 9800 && here.x >= 3051;
+    // #379: after the piece is looted, the room has no nav edge out — open the
+    // door west and only then return true so coinsShort/bank can run.
+    if (heldById(DS_ID.MAP_ORACLE)) {
+        if (pastDoor) {
+            log('map piece in hand — leaving the oracle chest room');
+            return openOracleMagicDoor(log, false);
+        }
+        return true;
+    }
     if (!pastDoor) {
-        if (!(await walk(DS_LOC.ORACLE_DOOR_STAND, log, 0)) || !(await mazeSceneLoaded())) {
+        if (!(await walk(DS_LOC.ORACLE_DOOR_STAND, log, 0))) {
             return false;
         }
         // Once it has been through, the door opens for nothing. Try it either
@@ -200,28 +238,18 @@ async function oracleChest(log: (m: string) => void): Promise<boolean> {
         if (!ORACLE_DOOR_ITEMS.every(id => Inventory.countById(id) > 0)) {
             log('not carrying all four charms — the door may already be open to me');
         }
-        const door = Locs.query().name('Door').where(l => {
-            const t = l.tile();
-            return t.x === DS_LOC.ORACLE_DOOR.x && t.z === DS_LOC.ORACLE_DOOR.z;
-        }).first();
-        if (!door) {
-            log('the magic door is not in the scene yet');
-            return false;
-        }
-        log('opening the magic door with the four charms');
-        if (!(await door.interact('Open'))) {
-            return false;
-        }
-        // Like every scripted door here, it teleports the player through.
-        return Execution.delayUntil(() => {
-            const t = Game.tile();
-            return t !== null && t.x >= 3051;
-        }, 8000);
+        return openOracleMagicDoor(log, true);
     }
     if (!(await walk(DS_LOC.ORACLE_CHEST_STAND, log, 1)) || !(await mazeSceneLoaded())) {
         return false;
     }
-    return lootChest(DS_ID.MAP_ORACLE, log);
+    if (!(await lootChest(DS_ID.MAP_ORACLE, log))) {
+        return false;
+    }
+    // Immediately walk out so the next decide (coins / Wormbrain) is not planned
+    // from inside a sealed room.
+    log('looted oracle map piece — leaving through the magic door');
+    return openOracleMagicDoor(log, false);
 }
 
 async function combineMap(log: (m: string) => void): Promise<boolean> {
@@ -710,8 +738,22 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         // Oziach sets the three briefing flags and hands over the maze key across
         // several dialogue branches, so keep returning until they are all set.
+        // #379: a banked (or unseen-bank) key must not thrash Oziach — he will not
+        // re-issue it. Scan/withdraw first; only treat truly missing as nowhere.
         const key = where(snap, DS_ID.MAZE_KEY);
-        if (hasFlag(snap.progress, 'needs-briefing') || key === 'nowhere') {
+        if (hasFlag(snap.progress, 'needs-briefing')) {
+            return custom(`get the briefing from Oziach — ${describeJournal()} mazekey=${key}`, talkOziach);
+        }
+        if (key === 'banked') {
+            return {
+                kind: 'withdraw',
+                items: [{ name: DS_ITEM.MAZE_KEY, qty: 1, id: DS_ID.MAZE_KEY }]
+            };
+        }
+        if (key === 'nowhere' && !snap.bankKnown) {
+            return { kind: 'scanBank' };
+        }
+        if (key === 'nowhere') {
             return custom(`get the briefing from Oziach — ${describeJournal()} mazekey=${key}`, talkOziach);
         }
         // The map comes first and in one pass. Each piece sits behind a one-way

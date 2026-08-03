@@ -46,6 +46,27 @@ describe('Dragon Slayer decide()', () => {
         expect((step as { name?: string }).name ?? '').not.toContain('Oziach');
     });
 
+    test('#379 banked maze key withdraws instead of Oziach', () => {
+        const step = decide(snapshot({
+            banked: [DS_ID.MAZE_KEY],
+            flags: []
+        }));
+        expect(step).toMatchObject({
+            kind: 'withdraw',
+            items: [{ id: DS_ID.MAZE_KEY, qty: 1, name: DS_ITEM.MAZE_KEY }]
+        });
+    });
+
+    test('#379 unseen bank scans before Oziach when key is nowhere', () => {
+        const step = decide(snapshot({
+            bankKnown: false,
+            banked: [],
+            carried: [],
+            flags: []
+        }));
+        expect(step).toMatchObject({ kind: 'scanBank' });
+    });
+
     test('an unfinished briefing outranks everything else', () => {
         const step = decide(snapshot({ flags: ['needs-briefing'], carried: [DS_ID.MAZE_KEY] }));
         expect(step).toMatchObject({ kind: 'custom' });
