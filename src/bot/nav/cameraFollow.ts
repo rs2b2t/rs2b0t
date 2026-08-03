@@ -102,8 +102,29 @@ export function lookAheadTile(tiles: TileLike[], pathIdx: number, lookAhead = 12
 }
 
 /**
+ * Same-plane dungeon/portal hops use large coordinate jumps (e.g. z ± 6400).
+ * Averaging past that boundary points the camera at the remote landing instead
+ * of the local ladder/object being approached (#332).
+ */
+const TRANSPORT_JUMP_TILES = 32;
+
+function isTransportBoundary(a: TileLike, b: TileLike): boolean {
+    if (a.level !== undefined && b.level !== undefined && a.level !== b.level) {
+        return true;
+    }
+    // Explicit transport waypoint (PathStep carries transport metadata).
+    if ((b as TileLike & { transport?: unknown }).transport) {
+        return true;
+    }
+    const dx = Math.abs(b.x - a.x);
+    const dz = Math.abs(b.z - a.z);
+    return Math.max(dx, dz) >= TRANSPORT_JUMP_TILES;
+}
+
+/**
  * Average heading from `from` across several path tiles ahead — smoother than a
- * single far point on zigzags.
+ * single far point on zigzags. Stops at the next transport / discontinuity so
+ * same-plane dungeon landings do not yank yaw toward the remote side.
  */
 export function pathFacingYaw(
     from: TileLike,
@@ -122,14 +143,20 @@ export function pathFacingYaw(
     let dx = 0;
     let dz = 0;
     let n = 0;
+    let prev: TileLike = from;
     for (let i = start; i <= end; i++) {
         const t = tiles[i]!;
+        // Stop before including a transport landing / level hop in the average.
+        if (isTransportBoundary(prev, t)) {
+            break;
+        }
         if (from.level !== undefined && t.level !== undefined && from.level !== t.level) {
-            continue;
+            break;
         }
         dx += t.x - from.x;
         dz += t.z - from.z;
         n++;
+        prev = t;
     }
     if (n === 0 || (dx === 0 && dz === 0)) {
         return null;

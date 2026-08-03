@@ -115,4 +115,36 @@ describe('lookAheadTile / pathFacingYaw', () => {
         // Sum of (tile - me) for pathIdx+1 .. pathIdx+4: dx=1+5+10+10, dz=0+0+0+10
         expect(y).toBe(yawTowardDelta(26, 10));
     });
+
+    test('pathFacingYaw stops before same-plane dungeon landing', () => {
+        // Mining Guild-style: local east approach then z+6400 landing on level 0.
+        const dungeonPath = [
+            { x: 3010, z: 3339, level: 0 },
+            { x: 3015, z: 3339, level: 0 },
+            { x: 3020, z: 3339, level: 0 },
+            { x: 3020, z: 9739, level: 0 } // landing — must not dominate yaw
+        ];
+        const y = pathFacingYaw(dungeonPath[0]!, dungeonPath, 0, 12);
+        expect(y).not.toBeNull();
+        // Local samples only: eastbound, not north toward dungeon coords.
+        expect(y).toBe(yawTowardDelta(15, 0)); // (5+10, 0+0) from me at 3010
+    });
+
+    test('pathFacingYaw stops at transport metadata waypoint', () => {
+        const withTransport = [
+            { x: 3200, z: 3200, level: 0 },
+            { x: 3205, z: 3200, level: 0 },
+            {
+                x: 3210,
+                z: 3200,
+                level: 0,
+                transport: { locName: 'Ladder', action: 'Climb', locX: 3210, locZ: 3200 }
+            },
+            { x: 3210, z: 3200, level: 1 }
+        ];
+        const y = pathFacingYaw(withTransport[0]!, withTransport, 0, 12);
+        expect(y).not.toBeNull();
+        // Only first non-transport sample (3205): east
+        expect(y).toBe(yawTowardDelta(5, 0));
+    });
 });
