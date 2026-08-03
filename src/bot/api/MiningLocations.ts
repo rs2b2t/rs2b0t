@@ -182,6 +182,16 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         ['runite'],
         "Requires Heroes' Quest; basement rune rocks east of ladder"
     ),
+    mine(
+        'South-east Ardougne Mine',
+        // Monastery mine south of East Ardougne (~2621,3212). Members-only; ring of
+        // iron/coal around the sewer entrance. Seed unverified — needs live polish.
+        new Tile(2597, 3233, 0),
+        BANK.ardougneEast,
+        ['iron', 'coal'],
+        'Members; Monastery mine, iron + coal; seed unverified.',
+        false
+    ),
     // #160 tick-manip iron camps — verified:false until live polish.
     mine(
         'Legends Guild Iron (west)',

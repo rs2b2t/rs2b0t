@@ -32,6 +32,13 @@ describe('resolveMiningLocation', () => {
     test('named match is case-insensitive', () => {
         expect(resolveMiningLocation('rimmington mine', new Tile(0, 0, 0))?.name).toBe('Rimmington Mine');
     });
+
+    test('named match for South-east Ardougne Mine', () => {
+        const loc = resolveMiningLocation('South-east Ardougne Mine', new Tile(0, 0, 0));
+        expect(loc?.name).toBe('South-east Ardougne Mine');
+        expect(loc?.bankStand.x).toBe(2655);
+        expect(loc?.bankStand.z).toBe(3283);
+    });
 });
 
 describe('MINING_LOCATIONS table', () => {
@@ -52,7 +59,11 @@ describe('MINING_LOCATIONS table', () => {
     });
 
     test('core catalog entries are verified; tick-manip camps may be provisional', () => {
-        const provisional = new Set(['Legends Guild Iron (west)', 'Legends Guild Iron (east)']);
+        const provisional = new Set([
+            'Legends Guild Iron (west)',
+            'Legends Guild Iron (east)',
+            'South-east Ardougne Mine'
+        ]);
         for (const loc of MINING_LOCATIONS) {
             if (provisional.has(loc.name)) {
                 expect(loc.verified, loc.name).toBe(false);
