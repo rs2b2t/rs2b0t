@@ -423,6 +423,10 @@ class WalkExecutorImpl {
             await Bank.close().catch(() => undefined);
         }
         await Execution.delayTicks(1);
+        // Live avoid list was built pre-bank from empty inventory. Recompute
+        // special-crossing item/skill gates so the post-bank repath can use
+        // newly affordable tolls (#338).
+        this.refreshSpecialCrossingAvoids();
         return true;
     }
 
@@ -575,9 +579,14 @@ class WalkExecutorImpl {
         return avoid;
     }
 
-    private resetAvoids(): void {
-        this.doorStrikes.clear();
-        this.avoidDoors = [];
+    /**
+     * Drop special-crossing prefilters and re-add only those still unmet from
+     * live inventory/skills. Preserves session blacklists and runtime door
+     * strikes (non-special avoid entries).
+     */
+    private refreshSpecialCrossingAvoids(): void {
+        const specialKeys = new Set(SPECIAL_CROSSINGS.map(sc => `${sc.x}|${sc.z}`));
+        this.avoidDoors = this.avoidDoors.filter(d => !specialKeys.has(`${d.x}|${d.z}`));
         for (const sc of SPECIAL_CROSSINGS) {
             const shortItem = sc.requires && !meetsRequirement(Inventory.count(sc.requires.item), sc.requires);
             const shortSkill = sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill);
@@ -587,8 +596,17 @@ class WalkExecutorImpl {
         }
         for (const key of this.sessionBlacklistDoors) {
             const [x, z] = key.split('|').map(Number);
-            this.avoidDoors.push({ x: x!, z: z! });
+            const already = this.avoidDoors.some(d => d.x === x && d.z === z);
+            if (!already) {
+                this.avoidDoors.push({ x: x!, z: z! });
+            }
         }
+    }
+
+    private resetAvoids(): void {
+        this.doorStrikes.clear();
+        this.avoidDoors = [];
+        this.refreshSpecialCrossingAvoids();
     }
 
     /** Blacklist a door for this walk session after quest-lock dialogue. */
