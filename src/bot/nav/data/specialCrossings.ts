@@ -93,6 +93,52 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         label: 'West Ardougne manhole → sewer (#366)'
     },
 
+    // Gu'Tanoth chasm (#364 dig 3546) — Jump-From rock, 25 Agility, 20gp to guard.
+    {
+        x: 2530,
+        z: 3026,
+        level: 0,
+        locName: 'Rock',
+        action: 'Jump-From',
+        requires: { item: 'Coins', count: 20 },
+        requiresSkill: { name: 'agility', level: 25 },
+        dialogue: { choose: ["Okay, I'll pay it."] },
+        toTile: { x: 2530, z: 3029, level: 0 },
+        arrivalRadius: 2,
+        label: "Gu'Tanoth chasm jump in (#364)"
+    },
+    {
+        x: 2531,
+        z: 3029,
+        level: 0,
+        locName: 'Rock',
+        action: 'Jump-From',
+        toTile: { x: 2531, z: 3026, level: 0 },
+        arrivalRadius: 2,
+        label: "Gu'Tanoth chasm jump out (#364)"
+    },
+    // Toban camp (#364 dig 3548) — cave enter / ladder leave.
+    {
+        x: 2499,
+        z: 2988,
+        level: 0,
+        locName: 'Cave entrance',
+        action: 'Enter',
+        toTile: { x: 2576, z: 3029, level: 0 },
+        arrivalRadius: 3,
+        label: "Toban cave enter (#364)"
+    },
+    {
+        x: 2575,
+        z: 3029,
+        level: 0,
+        locName: 'Ladder',
+        action: 'Climb-down',
+        toTile: { x: 2500, z: 2988, level: 0 },
+        arrivalRadius: 2,
+        label: "Toban ladder leave (#364)"
+    },
+
     { x: 2568, z: 9893, level: 0, locName: 'Door', action: 'Open', useItem: { id: 298, name: 'A key' }, label: 'Baxtorian keyed door' },
 
     // Baxtorian Falls approach (#369 / #320) — same stands as FireGiantLogic:

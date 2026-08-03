@@ -1987,6 +1987,109 @@
   },
   {
     "from": {
+      "x": 2531,
+      "z": 3026,
+      "level": 0
+    },
+    "to": {
+      "x": 2530,
+      "z": 3029,
+      "level": 0
+    },
+    "locName": "Rock",
+    "action": "Jump-From",
+    "kind": "shortcut",
+    "locId": 2830,
+    "locX": 2530,
+    "locZ": 3026,
+    "debugName": "tanothjump1",
+    "options": [
+      "Jump-From"
+    ],
+    "requires": {
+      "skills": [
+        {
+          "name": "agility",
+          "level": 25
+        }
+      ],
+      "items": [
+        {
+          "name": "Coins",
+          "count": 20,
+          "consumed": true
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2530,
+      "z": 3029,
+      "level": 0
+    },
+    "to": {
+      "x": 2531,
+      "z": 3026,
+      "level": 0
+    },
+    "locName": "Rock",
+    "action": "Jump-From",
+    "kind": "shortcut",
+    "locId": 2831,
+    "locX": 2531,
+    "locZ": 3029,
+    "debugName": "tanothjump2",
+    "options": [
+      "Jump-From"
+    ]
+  },
+  {
+    "from": {
+      "x": 2499,
+      "z": 2988,
+      "level": 0
+    },
+    "to": {
+      "x": 2576,
+      "z": 3029,
+      "level": 0
+    },
+    "locName": "Cave entrance",
+    "action": "Enter",
+    "kind": "dungeon",
+    "locId": 2811,
+    "locX": 2499,
+    "locZ": 2988,
+    "debugName": "tobancave",
+    "options": [
+      "Enter"
+    ]
+  },
+  {
+    "from": {
+      "x": 2575,
+      "z": 3028,
+      "level": 0
+    },
+    "to": {
+      "x": 2500,
+      "z": 2988,
+      "level": 0
+    },
+    "locName": "Ladder",
+    "action": "Climb-down",
+    "kind": "dungeon",
+    "locId": 2812,
+    "locX": 2575,
+    "locZ": 3029,
+    "debugName": "tobanladderdown",
+    "options": [
+      "Climb-down"
+    ]
+  },
+  {
+    "from": {
       "x": 2566,
       "z": 3330,
       "level": 0

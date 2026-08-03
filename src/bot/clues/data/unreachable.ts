@@ -30,9 +30,10 @@ export const PACK_UNREACHABLE: Record<number, string> = {
     3560: 'Isafdar: Sticks [Pass] @ (2200,3169) — requires Underground Pass/Regicide',
     3562: 'Isafdar: Sticks [Pass] @ (2181,3209) — requires Underground Pass/Regicide',
     3564: 'elf camp: Dense forest [Enter] @ (2231,3248) / Log balance @ (2197,3237) — requires Regicide',
-    3546: "Gu'Tanoth: ogre guard gates (ogre_guard.rs2, %gutanoth_gold) — requires Watch Tower",
-    3548: "Gu'Tanoth: ogre guard gates (ogre_guard.rs2, %gutanoth_gold) — requires Watch Tower",
-    // 3522 West Ardougne: mud dig + sewer pipe baked (#366); needs Plague City complete + Gas mask worn.
+    // 3546/3548: "Gu'Tanoth Toban camp: cave/ladder baked — hill access may need Watch Tower",
+    // (ogre gates / Watch Tower path) to reach the stands from the mainland.
+    3546: "Gu'Tanoth ledge: chasm Jump-From baked — need 25 Agility + 20gp; hill access may need Watch Tower",
+    3548: "Gu'Tanoth Toban camp: cave/ladder baked — hill access may need Watch Tower",
     3522: 'West Ardougne: baked sewer pipe path — requires Plague City complete and Gas mask worn',
     2815: 'Crandor: baked secret wall + rock/rope — requires Dragon Slayer complete',
     3526: 'Trollheim/Death Plateau: death_climbingrocks need climbing boots worn — requires Death Plateau',
