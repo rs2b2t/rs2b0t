@@ -9,16 +9,24 @@ const arg = (name: string): string | null => {
     return i !== -1 ? argv[i + 1] : null;
 };
 const WORKERS = Number(arg('workers') ?? 5);
-const CLUE_DEADLINE_MS = Number(arg('mins') ?? 8) * 60_000;
+const tier = arg('tier');
+// Hard trails run up to 6 legs, several through the deep Wilderness, and a
+// guarded dig adds a lvl-108 fight, so they need a longer default deadline.
+const CLUE_DEADLINE_MS = Number(arg('mins') ?? (tier === 'hard' ? 16 : 8)) * 60_000;
 const only = arg('ids')?.split(',').map(Number);
-const EXPECTED_ABANDON = new Set([2811, 2815]);
+// Mirrors KNOWN_UNREACHABLE in audit-clues.ts — nav-pack gaps, not clue bugs.
+const EXPECTED_ABANDON = new Set([
+    2722, 2776, 2790, 2811, 2815, 2855, 3522, 3526, 3528, 3532,
+    3534, 3536, 3542, 3546, 3548, 3552, 3554, 3560, 3562, 3564, 3572, 3579
+]);
 
-const ids = (only ?? Object.keys(CLUE_DB).map(Number)).sort((a, b) => a - b);
+const inTier = (id: number): boolean => tier === null || CLUE_DB[id].obj.includes(`_${tier}_`);
+const ids = (only ?? Object.keys(CLUE_DB).map(Number).filter(inTier)).sort((a, b) => a - b);
 const queue = [...ids];
 type Verdict = 'pass' | 'abandon' | 'stuck' | 'slow';
 const results: { id: number; obj: string; type: string; ok: boolean; verdict: Verdict; expected?: boolean; ms: number; reason?: string; tail?: string[] }[] = [];
 
-const PROGRESS_RE = /step done|arrived|leg \d+ —|crossed '|Climb-(up|down)|Enter .* at|acquiring|Swim to|sailed|got a spade|banking loot/;
+const PROGRESS_RE = /step done|arrived|leg \d+ —|crossed '|Climb-(up|down)|Enter .* at|acquiring|Swim to|sailed|got a spade|banking loot|guards this dig|Wizard killed|puzzle: \d+ moves|puzzle solved|praying at the/;
 const STALL_LOG_RE = /blocked live — as close as reachable|stuck at .* — repathing|giving up after/;
 
 type R = {
@@ -78,6 +86,25 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
         }
     }
     await cheatBoot(page, 'give coins 2000');
+    // Hard coordinate digs spawn a lvl-65 or lvl-108 wizard. The solver assumes
+    // the account arrives geared, so the sweep equips it the same way a player
+    // would before starting a hard trail.
+    if (tier === 'hard' || tier === null) {
+        for (const item of ['rune_platebody', 'rune_platelegs', 'rune_full_helm', 'rune_kiteshield', 'rune_scimitar', 'amulet_of_glory']) {
+            await cheatBoot(page, `give ${item}`);
+        }
+        await page.evaluate(async () => {
+            const abi = (globalThis as never as { __rs2b0t: { Inventory: { items(): { name: string | null; interact(op: string): Promise<boolean> | boolean }[] } } }).__rs2b0t;
+            for (const it of abi.Inventory.items()) {
+                if (/rune |amulet/i.test(it.name ?? '')) {
+                    await it.interact('Wear');
+                    await it.interact('Wield');
+                    await new Promise(r => setTimeout(r, 250));
+                }
+            }
+        });
+        await cheatBoot(page, 'give lobster 20');
+    }
     log(`worker ${w} ready (${username})`);
     return page;
 }

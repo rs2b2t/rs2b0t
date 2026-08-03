@@ -24,12 +24,20 @@ describe('kill-for-key anchors (KILL_ANCHORS ↔ keyFrom)', () => {
 
 const present = auditInputsPresent();
 
+// Destinations the baked nav pack cannot route to. Each is a pack gap with a
+// diagnosis in KNOWN_UNREACHABLE, not a clue-database bug: the solver abandons
+// cleanly, and fixing the pack makes the clue start working untouched.
+const EXPECTED_ABANDON = [
+    2722, 2776, 2790, 2811, 2815, 2855, 3522, 3526, 3528, 3532,
+    3534, 3536, 3542, 3546, 3548, 3552, 3554, 3560, 3562, 3564, 3572, 3579
+];
+
 describe.skipIf(!present)('clue audit (pack-gated)', () => {
     test('every clue variant is solvable: reachable, interact-legal, egress, loc/npc present', () => {
         const { total, findings, expectedAbandon, clean } = runClueAudit();
         expect(findings.map(f => `${f.obj} [${f.id}] ${f.type}: ${f.problem}`)).toEqual([]);
-        expect(expectedAbandon).toEqual([2811, 2815]);
-        expect(clean).toBe(120);
-        expect(total).toBe(122);
+        expect(expectedAbandon).toEqual(EXPECTED_ABANDON);
+        expect(total).toBe(186);
+        expect(clean).toBe(total - EXPECTED_ABANDON.length);
     }, 240_000);
 });

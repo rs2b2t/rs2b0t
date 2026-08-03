@@ -35,5 +35,21 @@ export const TALK_ANCHORS: Record<number, Tile> = {
     3615: new Tile(3493, 3471, 0), // Roavar — Hair of the Dog tavern, Canifis
     3616: new Tile(3358, 3276, 0), // Jaraah — Duel Arena hospital, east of Al Kharid
     3617: new Tile(2791, 3182, 0), // Kangai Mau — Brimhaven food store
-    3618: new Tile(2650, 9393, 0) // Fycie — Feldip Hills cave, S of Yanille (Rantz area)
+    3618: new Tile(2650, 9393, 0), // Fycie — Feldip Hills cave, S of Yanille (Rantz area)
+
+    2778: new Tile(3013, 3225, 0), // Gerrant — Port Sarim fishing shop
+    2792: new Tile(3207, 3233, 0), // Hans — Lumbridge Castle courtyard
+    2793: new Tile(3058, 3484, 0), // Abbot Langley — Edgeville Monastery
+    2794: new Tile(3069, 3517, 0), // Oziach — hut NW of Edgeville
+    2796: new Tile(3204, 3473, 0), // Sir Prysin — Varrock Palace
+    2797: new Tile(3221, 3435, 0), // Wilough — Varrock square, by the fountain
+    2799: new Tile(2958, 3511, 0), // General Bentnoze — Goblin Village, N of Falador
+    3564: new Tile(2205, 3252, 0), // Lord Iorwerth — elf camp, Isafdar (Regicide-gated)
+    3566: new Tile(3360, 3343, 0), // Examiner — Digsite Exam Centre
+    3568: new Tile(3375, 3285, 0), // Hamid — Duel Arena chapel
+    // Six gnomepilot spawns exist; riddle021 only counts the one within 8 tiles
+    // of ^sindarpos (2850,3497) — White Wolf Mountain.
+    3570: new Tile(2847, 3499, 0), // Gnome pilot — White Wolf Mountain glider
+    3575: new Tile(2493, 3488, 1), // Heckel Funch — Grand Tree, 1st floor
+    3577: new Tile(2469, 3423, 0) // Gnome trainer — Gnome Stronghold agility course
 };

@@ -28,7 +28,7 @@
  *     Lobster 'speed 300' '2725,3491'
  *
  * @see docs/TESTING.md#seeding-inventory-vs-bank
- * @see docs/QUESTS.md#official-reqs-vs-bot-proven-floors
+ * @see docs/QUESTS.md#official-reqs-vs-bot-proven-floors-polish-goal
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser } from './lib/harness.js';

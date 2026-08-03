@@ -1,9 +1,12 @@
 import { EventSignal } from '#/bot/api/EventSignal.js';
 import { Execution } from '#/bot/api/Execution.js';
 import { Game } from '#/bot/api/Game.js';
+import { nearestAltar } from '#/bot/api/Altars.js';
 import { nearestBank } from '#/bot/api/BankLocations.js';
 import type { Task } from '#/bot/api/Bot.js';
+import { Prayer } from '#/bot/api/Prayer.js';
 import { Traversal } from '#/bot/api/Traversal.js';
+import { Locs } from '#/bot/api/queries/Locs.js';
 import { Bank } from '#/bot/api/hud/Bank.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { ClueExecutor } from '#/bot/clues/ClueExecutor.js';
@@ -14,6 +17,10 @@ import { trailKit } from '#/bot/clues/data/toolAcquire.js';
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
 const CLUE_COINS = 1_000;
+const ALTAR_OP = 'Pray-at';
+const ALTAR_RADIUS = 2;
+const ALTAR_WALK_MS = 180_000;
+const ALTAR_RESTORE_MS = 6000;
 
 export function heldClueLikeId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
@@ -34,6 +41,8 @@ export interface SolveClueHost {
     spadeName(): string;
     weaponName?(): string;
     enabled?(): boolean;
+    /** Hard-clue dig guardians are fought under Protect from Magic. */
+    restorePrayer?(): boolean;
 }
 
 export class SolveClue implements Task {
@@ -175,6 +184,50 @@ export class SolveClue implements Task {
             await ensureCoordTools(m => this.host.log(`[clue] ${m}`));
         }
 
+        await this.topUpPrayer(scrollId);
+
         return true;
+    }
+
+    /**
+     * Top up prayer at an altar before a hard trail starts, since any of its legs
+     * can be a guarded dig. Low prayer never blocks a trail — the fight simply
+     * runs without a protection prayer.
+     */
+    private async topUpPrayer(scrollId: number | null): Promise<void> {
+        const hardTrail = scrollId !== null && (CLUE_DB[scrollId]?.obj.includes('_hard_') ?? false);
+        if (!hardTrail || !(this.host.restorePrayer?.() ?? true) || Prayer.max() === 0 || Prayer.full()) {
+            return;
+        }
+        const here = Game.tile();
+        const altar = here ? nearestAltar(here) : null;
+        if (!altar) {
+            this.host.log('[clue] prayer is low but no known altar to restore at');
+            return;
+        }
+
+        this.status = 'restoring prayer';
+        this.host.setStatus(`clue — restoring prayer at ${altar.name}`);
+        this.host.log(`[clue] prayer ${Prayer.points()}/${Prayer.max()} — praying at the ${altar.name} altar (${altar.tile})`);
+
+        const walked = await Traversal.walkResilient(altar.tile, {
+            radius: ALTAR_RADIUS,
+            attempts: 4,
+            timeoutMs: ALTAR_WALK_MS,
+            log: m => this.host.log(`  ${m}`)
+        });
+        if (!walked) {
+            this.host.log('[clue] could not reach the altar — starting the trail with the prayer we have');
+            return;
+        }
+
+        const loc = Locs.query().name(altar.loc).action(ALTAR_OP).nearest();
+        if (!loc) {
+            this.host.log(`[clue] no '${altar.loc}' to pray at here — starting the trail with the prayer we have`);
+            return;
+        }
+        await loc.interact(ALTAR_OP);
+        await Execution.delayUntil(() => Prayer.full(), ALTAR_RESTORE_MS);
+        this.host.log(`[clue] prayer now ${Prayer.points()}/${Prayer.max()}`);
     }
 }

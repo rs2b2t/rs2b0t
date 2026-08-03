@@ -15,8 +15,11 @@ import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
+import { clueGate } from '#/bot/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import { ensureSpade, ensureCoordTools } from '#/bot/clues/AcquireTools.js';
+import { fightGuardian } from '#/bot/clues/Guardian.js';
+import { PuzzleBox } from '#/bot/clues/PuzzleBox.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { talkThrough } from '#/bot/quests/exec/primitives.js';
@@ -202,12 +205,30 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             if (!step.coord) {
                 return;
             }
-            if (!(await Traversal.walkResilient(step.coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log }))) {
+            const coord = step.coord;
+            const standOnIt = (): Promise<boolean> =>
+                Traversal.walkResilient(coord, { radius: ARRIVE_RADIUS, attempts: WALK_ATTEMPTS, timeoutMs: WALK_TIMEOUT_MS, log });
+            const dig = async (): Promise<void> => {
+                const spade = Inventory.first(SPADE);
+                if (spade) {
+                    await spade.interact('Dig');
+                }
+            };
+
+            if (!(await standOnIt())) {
                 return;
             }
-            const spade = Inventory.first(SPADE);
-            if (spade) {
-                await spade.interact('Dig');
+            await dig();
+
+            // A guarded coord yields the wizard on the first dig and the casket
+            // only on a dig after it dies, so both happen in one attempt. The
+            // fight chases, so walk back before the second dig.
+            const guardian = (step as ClueRow).guardian;
+            if (guardian) {
+                const outcome = await fightGuardian(guardian, log);
+                if (outcome.killed && (await standOnIt())) {
+                    await dig();
+                }
             }
             return;
         }
@@ -215,6 +236,11 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             const anchor = TALK_ANCHORS[step.id];
             if (!anchor || !step.npc) {
                 return;
+            }
+            const puzzle = (step as ClueRow).puzzle;
+            if (puzzle && Inventory.items().some(i => i.id === puzzle.id)) {
+                await PuzzleBox.solveHeld(puzzle.id, log);
+                // Fall through: the solved box is handed back by re-talking.
             }
             if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
                 await talkThrough(step.npc, [], log);
@@ -237,6 +263,12 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
 }
 
 function blockReason(step: ClueStep): string | null {
+    if (step.type !== 'open-casket') {
+        const gated = clueGate(step.id);
+        if (gated) {
+            return gated;
+        }
+    }
     if (step.type === 'dig' && !Inventory.first(SPADE)) {
         return 'no Spade held';
     }

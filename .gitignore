@@ -26,6 +26,9 @@ tools/nav/script-routes.hardest.json
 # brainstorm visual-companion mockups
 .superpowers/
 
+# specs and implementation plans — written, never committed
+docs/superpowers/
+
 # local Claude tooling scratch (agents, worktrees, session state)
 .claude/
 

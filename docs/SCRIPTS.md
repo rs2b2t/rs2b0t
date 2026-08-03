@@ -794,6 +794,7 @@ Tags: `clues`, `banking`, `utility`
 | `foodWithdraw` | number (1–27) | `8` | Food to withdraw |
 | `eatAtHp` | number (1–99) | `50` | Eat below HP% |
 | `spade` | string | `"Spade"` | Spade item (dig clues) |
+| `restorePrayer` | boolean | `true` | Top up prayer between trails |
 
 ## Tutorial
 

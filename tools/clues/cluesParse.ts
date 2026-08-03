@@ -11,12 +11,19 @@ export interface ParsedClueObj {
     casket?: string;
     desc?: string;
     sextant?: string;
+    guardian?: string;
 }
 
 export interface TalkMapping {
     obj: string;
     npc: string;
 }
+
+export interface PuzzleMapping extends TalkMapping {
+    puzzleObj: string;
+}
+
+export type ClueTier = 'easy' | 'medium' | 'hard';
 
 export interface BuildInput {
     clueNames: string[];
@@ -26,6 +33,9 @@ export interface BuildInput {
     npcDisplay: Map<string, string>;
     specials?: Record<string, { type: ClueType; coord: NavPoint }>;
     killForKey?: Record<string, { npc: string; keyObj: string; keyId: number }>;
+    puzzles?: PuzzleMapping[];
+    guardians?: Record<string, string>;
+    items?: Record<string, string[]>;
 }
 
 export interface ClueDb {
@@ -78,16 +88,17 @@ export function parseClueObjs(text: string): Record<string, ParsedClueObj> {
             loc: param(b.lines, 'trail_loc'),
             casket: param(b.lines, 'trail_casket'),
             desc: param(b.lines, 'trail_desc'),
-            sextant: param(b.lines, 'trail_sextant')
+            sextant: param(b.lines, 'trail_sextant'),
+            guardian: param(b.lines, 'trail_guardian')
         };
     }
     return out;
 }
 
 const OPNPC_RE = /^\[opnpc\d+,([a-z0-9_]+)\]/;
-const progressRe = (tier: 'easy' | 'medium'): RegExp => new RegExp(`~progress_clue_${tier}\\(\\s*(trail_clue_${tier}_[a-z0-9]+)`);
+const progressRe = (tier: ClueTier): RegExp => new RegExp(`~progress_clue_${tier}\\(\\s*(trail_clue_${tier}_[a-z0-9]+)`);
 
-export function parseTalkMappings(scriptText: string, tier: 'easy' | 'medium' = 'easy'): TalkMapping[] {
+export function parseTalkMappings(scriptText: string, tier: ClueTier = 'easy'): TalkMapping[] {
     const re = progressRe(tier);
     const out: TalkMapping[] = [];
     let npc = '';
@@ -100,6 +111,30 @@ export function parseTalkMappings(scriptText: string, tier: 'easy' | 'medium' = 
         const c = re.exec(line);
         if (c && npc) {
             out.push({ obj: c[1], npc });
+        }
+    }
+    return out;
+}
+
+const GIVE_PUZZLE_RE = /~give_trail_puzzle\(\s*(trail_clue_hard_[a-z0-9]+)_puzzlebox/;
+
+/**
+ * Hard talk clues that hand over a sliding puzzle instead of the next scroll.
+ * The handing NPC is the enclosing opnpc block, same attribution rule as
+ * parseTalkMappings.
+ */
+export function parsePuzzleTalk(scriptText: string): PuzzleMapping[] {
+    const out: PuzzleMapping[] = [];
+    let npc = '';
+    for (const raw of scriptText.split('\n')) {
+        const line = raw.trim();
+        const h = OPNPC_RE.exec(line);
+        if (h) {
+            npc = h[1];
+        }
+        const g = GIVE_PUZZLE_RE.exec(line);
+        if (g && npc) {
+            out.push({ obj: g[1], npc, puzzleObj: `${g[1]}_puzzlebox` });
         }
     }
     return out;
@@ -142,6 +177,14 @@ export function parseChallengeTalk(scriptText: string): TalkMapping[] {
 
 export function buildClueDb(input: BuildInput): ClueDb {
     const talkByObj = new Map(input.talk.map(t => [t.obj, t.npc]));
+    const puzzleByObj = new Map((input.puzzles ?? []).map(p => [p.obj, p]));
+    for (const p of input.puzzles ?? []) {
+        // A puzzle NPC is the clue's talk target even when the hand-back
+        // progress call sits in a branch parseTalkMappings cannot attribute.
+        if (!talkByObj.has(p.obj)) {
+            talkByObj.set(p.obj, p.npc);
+        }
+    }
     const db: Record<number, ClueRow> = {};
     const caskets: Record<number, string> = {};
 
@@ -161,10 +204,12 @@ export function buildClueDb(input: BuildInput): ClueDb {
         const special = input.specials?.[obj];
         const row: ClueRow = { obj, id, type: 'talk' };
 
+        // A casket alone does not make a dig: hard riddle004 carries a casket
+        // param but no coord and is answered by talking to Gerrant.
         if (special) {
             row.type = special.type;
             row.coord = special.coord;
-        } else if (parsed.casket) {
+        } else if (parsed.casket && parsed.coord) {
             row.type = 'dig';
             row.casketObj = parsed.casket;
             const cid = input.objIds.get(parsed.casket);
@@ -173,9 +218,7 @@ export function buildClueDb(input: BuildInput): ClueDb {
             }
             row.casketId = cid;
             caskets[cid] = parsed.casket;
-            if (parsed.coord) {
-                row.coord = decodeCoord(parsed.coord);
-            }
+            row.coord = decodeCoord(parsed.coord);
             if (parsed.sextant === 'yes') {
                 row.needsSextant = true;
             }
@@ -200,6 +243,25 @@ export function buildClueDb(input: BuildInput): ClueDb {
         const kfk = input.killForKey?.[obj];
         if (kfk) {
             row.keyFrom = { npc: kfk.npc, keyObj: kfk.keyObj, keyId: kfk.keyId };
+        }
+
+        const guardian = input.guardians?.[obj];
+        if (guardian) {
+            row.guardian = guardian;
+        }
+
+        const items = input.items?.[obj];
+        if (items && items.length > 0) {
+            row.items = [...items];
+        }
+
+        const puzzle = puzzleByObj.get(obj);
+        if (puzzle) {
+            const pid = input.objIds.get(puzzle.puzzleObj);
+            if (pid === undefined) {
+                throw new Error(`no obj id for puzzle box ${puzzle.puzzleObj}`);
+            }
+            row.puzzle = { obj: puzzle.puzzleObj, id: pid };
         }
 
         db[id] = row;

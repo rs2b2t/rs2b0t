@@ -7,7 +7,7 @@ in your inventory, and the last yields a reward casket. The solver reads the hel
 clue, performs the step, and repeats — while staying a good citizen of whatever bot
 is hosting it.
 
-Easy and medium trails are implemented, 122 clues in total.
+Easy, medium and hard trails are implemented, 186 clues in total.
 
 ## Contents
 
@@ -16,6 +16,11 @@ Easy and medium trails are implemented, 122 clues in total.
 - [Yielding to the host loop](#yielding-to-the-host-loop)
 - [Tool acquisition](#tool-acquisition)
 - [Challenges and keys](#challenges-and-keys)
+- [Dig guardians](#dig-guardians)
+- [Puzzle boxes](#puzzle-boxes)
+- [Prayer between trails](#prayer-between-trails)
+- [Gated clues](#gated-clues)
+- [Clues the pack cannot reach](#clues-the-pack-cannot-reach)
 - [Tracing a failure](#tracing-a-failure)
 - [The audit harness](#the-audit-harness)
 
@@ -45,20 +50,32 @@ export interface ClueRow {
     needsSextant?: boolean;
     keyFrom?: { npc: string; keyObj: string; keyId: number };
     items?: string[];
+    guardian?: string;
+    puzzle?: { obj: string; id: number };
 }
 ```
 
-The extra fields are additive: a medium clue that needs a sextant, or a key from a
-killed NPC, is the same row shape with more filled in. That is what let medium trails
-land without disturbing easy ones.
+The extra fields are additive: a medium clue that needs a sextant, or a hard clue
+whose dig is guarded, is the same row shape with more filled in. That is what let
+medium and then hard trails land without disturbing easy ones.
+
+One classification rule is worth stating, because the content pack invites the
+wrong one: a `trail_casket` param alone does **not** make a dig. Hard `riddle004`
+carries a casket and no coord and is answered by talking to Gerrant, so the
+generator requires `casket && coord`.
+
+Two hard clues keep their coordinate in the handler script rather than the obj
+params, so the generator passes them in by hand: `map001` (the Gertrude crate at
+3309,3503, from `quest_fluffs.rs2`) and `riddle022` (the bookcase at 2702,3409,1,
+from `bookcases.rs2`).
 
 ## Step kinds
 
 | Type | Count | What the solver does |
 |---|---|---|
-| `search` | 58 | walk to the coordinate and search the named object |
-| `dig` | 30 | walk to the coordinate and dig — needs a spade |
-| `talk` | 34 | find the named NPC and talk to them |
+| `search` | 68 | walk to the coordinate and search the named object |
+| `dig` | 71 | walk to the coordinate and dig — needs a spade |
+| `talk` | 47 | find the named NPC and talk to them |
 
 A trail step is either a `ClueRow` or the terminal `open-casket`:
 
@@ -123,6 +140,83 @@ Some clues do not resolve to a location:
   anchors are in [`data/killAnchors.ts`](../src/bot/clues/data/killAnchors.ts).
 - **Talk anchors** in [`data/talkAnchors.ts`](../src/bot/clues/data/talkAnchors.ts)
   give a starting point for NPCs that move.
+
+## Dig guardians
+
+30 of the hard coordinate digs carry `param=trail_guardian`. The first dig at such
+a coord does not yield the casket — it spawns a wizard beside you, and only a dig
+*after* it dies produces the casket ([`spade.rs2`](https://github.com/LostCityRS/Content)):
+
+| Guardian | Level | Style |
+|---|---|---|
+| Zamorak Wizard | 65 | magic |
+| Saradomin Wizard | 108 | magic, plus a poisoning dragon dagger |
+
+The flag the server sets on the kill (`%trail_status` bit 4) is **not transmitted**,
+so the bot cannot ask whether it already killed one. It observes instead:
+[`Guardian.ts`](../src/bot/clues/Guardian.ts) digs, waits out the spawn window, and
+if a wizard appears it turns on Protect from Magic, fights, then digs again — all
+inside one step attempt, so a level-108 fight does not consume the retry budget.
+
+The solver does **not** withdraw combat gear; it assumes the account arrives
+equipped and only takes food from the bank. A guardian the server refuses ("It's
+not after you...") belongs to another player, so the fight skips it.
+
+## Puzzle boxes
+
+Nine hard talk clues hand over a 5×5 sliding puzzle instead of the next scroll. The
+board is the interactable inv component inside the `trail_puzzle` main modal; its 24
+pieces are all named "Sliding piece", so they are identified by obj id through the
+generated [`data/puzzlePieces.ts`](../src/bot/clues/data/puzzlePieces.ts).
+
+[`puzzleLogic.ts`](../src/bot/clues/puzzleLogic.ts) is pure and does the thinking.
+It solves in batches — row 0, column 0, row 1, column 1, then the final 3×3 —
+running a small breadth-first search per batch over the positions of just that
+batch's pieces plus the gap. Batching the awkward cases (a row's last two) lets the
+search *discover* the rotation that frees them rather than hard-coding an escape
+sequence, and every batch's state space stays in the thousands.
+
+The engine shuffles by 101 legal moves from the solved state, so every board handed
+to the bot is solvable; the solver is proven against 10,000 such shuffles.
+
+[`PuzzleBox.ts`](../src/bot/clues/PuzzleBox.ts) drives it: plan the whole move list
+once, apply it against an internal model, and re-read the board every few moves.
+That check is not optional — the engine silently drops a click whose slot no longer
+holds that obj, so drift would otherwise go unnoticed.
+
+## Prayer between trails
+
+Guardians are fought under Protect from Magic, so the pre-trail bank stop tops
+prayer up: if it is below full, the solver walks to the nearest altar from
+[`Altars.ts`](../src/bot/api/Altars.ts) and prays. Low prayer never blocks a trail —
+the fight simply runs without the protection prayer.
+
+## Gated clues
+
+[`data/clueGates.ts`](../src/bot/clues/data/clueGates.ts) lists clues behind a quest
+or region the bot has no route through. The solver reports the reason and abandons
+immediately rather than walking until the navigator gives up. Only permanent locks
+belong here; a clue that is merely awkward to walk to does not.
+
+## Clues the pack cannot reach
+
+Twenty-two clue destinations sit in components the baked nav graph cannot route to.
+These are gaps in the **nav data**, not the clue database: the solver abandons
+cleanly, and fixing one is a `transports.json`/`doors.json` change that makes the
+clue start working with no solver edit. Each is listed with its diagnosis in
+`KNOWN_UNREACHABLE` in [`audit-clues.ts`](../tools/clues/audit-clues.ts), so the
+audit stays at zero findings while the list stays honest about what is missing.
+
+The recurring causes are worth knowing, because they affect more than clues:
+
+- **Underground is entered one-way.** Several cellars had a climb-*out* edge and no
+  climb-*in*, so the whole area was unreachable. Fixed for the Lumbridge cellar and
+  the Varrock manhole; other cellars likely have the same gap.
+- **Double doors and gates are not derived.** `derive-doors` emits single
+  `WALL_STRAIGHT` doors, so paired gates — the Varrock sewer gates, the West
+  Ardougne wall — leave whole regions islanded.
+- **State-aware crossings are deferred.** Entering the Kharidian desert consumes a
+  bought Shantay pass, which the graph does not model.
 
 ## Tracing a failure
 

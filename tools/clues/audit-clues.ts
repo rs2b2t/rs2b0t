@@ -9,6 +9,7 @@ import transportsJson from '#/bot/nav/data/transports.json';
 import stairsJson from '#/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData, type NavPoint, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { CLUE_GATES } from '#/bot/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
@@ -16,6 +17,7 @@ import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLa
 
 const SEARCH_OPS = ['search', 'open'];
 const NPC_LEASH = 10;
+const GUARDIANS = new Set(['Zamorak Wizard', 'Saradomin Wizard']);
 const STARTS: NavPoint[] = [
     { x: 3253, z: 3420, level: 0 },
     { x: 2725, z: 3491, level: 0 }
@@ -23,7 +25,40 @@ const STARTS: NavPoint[] = [
 
 const AUDIT_BUDGET = 600_000;
 
-const KNOWN_UNREACHABLE = new Set<number>([2811, 2815]);
+/**
+ * Clue destinations the baked pack cannot route to. Each is a gap in the nav
+ * data, not in the clue database: the solver abandons cleanly, and fixing one
+ * is a transports/doors change that will make the clue start working with no
+ * solver edit. Diagnosed by flood-filling the destination's component and
+ * looking for the loc that should bridge it.
+ *
+ * @see docs/CLUES.md#clues-the-pack-cannot-reach
+ */
+const KNOWN_UNREACHABLE = new Map<number, string>([
+    [2811, 'Baxtorian Falls ledge'],
+    [2815, 'Crandor'],
+    // Pre-existing: Sinclair Mansion upstairs is a pocket the ladder edge misses.
+    [2855, 'Sinclair Mansion upstairs pocket (2745,3576,1)'],
+    [2722, 'fenced compound at (3293..3325, 3493..3517) has no baked entrance'],
+    [2776, 'Varrock sewer sections are split by double gates derive-doors does not emit (3191/3192,9825)'],
+    [2790, 'west Varrock sewer is behind a slashable Web at (3210,9898); nav does not model webs'],
+    [3522, 'West Ardougne (2433..2556, 3266..3334) has no baked entrance'],
+    [3526, 'island at (2833..2916, 3654..3711) has no baked entrance'],
+    [3528, 'island at (2833..2916, 3654..3711) has no baked entrance'],
+    [3532, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
+    [3534, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
+    [3536, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
+    [3542, 'Mort Myre islet reached by the Bridge jump at (3440,3331), not baked'],
+    [3546, 'islet reached by the Rock Jump-From at (2531,3029), not baked'],
+    [3548, 'pocket reached by the Ladder at (2575,3029), not baked'],
+    [3552, 'Kharidian desert entry consumes a bought Shantay pass (state-aware crossing)'],
+    [3554, 'Kharidian desert entry consumes a bought Shantay pass (state-aware crossing)'],
+    [3560, 'Isafdar — requires Regicide'],
+    [3562, 'Isafdar — requires Regicide'],
+    [3564, 'elf camp — requires Regicide'],
+    [3572, 'the ladder at (2701,3408) lands on a 1-tile pocket at level 1'],
+    [3579, 'region at (2802..2878, 3329..3393) has no baked entrance']
+]);
 
 export interface ClueAuditFinding {
     id: number;
@@ -209,13 +244,34 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
             if (!near && !exact) {
                 return { msg: `terminal (${last.x},${last.z}) not ${slack === 'interact' ? 'interact-legal' : `within ${slack}`} of coord (cheb ${d})`, unreachable: false };
             }
-            const back = finder.findPath(last, start, undefined, AUDIT_BUDGET);
-            if (!back.ok) {
-                return { msg: `no return path from terminal (${last.x},${last.z},${last.level}): ${back.reason}`, unreachable: true };
+            // The bot stands within a tile of the coord, so a terminal with no
+            // egress of its own (a walkable-but-sealed gate tile) is fine as
+            // long as some neighbouring stand gets home.
+            const stands: NavPoint[] = [last];
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx !== 0 || dz !== 0) {
+                        stands.push({ x: coord.x + dx, z: coord.z + dz, level: coord.level });
+                    }
+                }
             }
-            const home = back.waypoints[back.waypoints.length - 1];
-            if (home.level !== start.level || cheb(home, start) > 2) {
-                return { msg: `return path from (${last.x},${last.z},${last.level}) ends at (${home.x},${home.z},${home.level}), short of (${start.x},${start.z})`, unreachable: false };
+            let back: { home: NavPoint; from: NavPoint } | null = null;
+            let firstFail = '';
+            for (const stand of stands) {
+                const r2 = finder.findPath(stand, start, undefined, AUDIT_BUDGET);
+                if (!r2.ok) {
+                    firstFail ||= r2.reason;
+                    continue;
+                }
+                const home = r2.waypoints[r2.waypoints.length - 1];
+                if (home.level === start.level && cheb(home, start) <= 2) {
+                    back = { home, from: stand };
+                    break;
+                }
+                firstFail ||= `ends at (${home.x},${home.z},${home.level})`;
+            }
+            if (!back) {
+                return { msg: `no return path from (${last.x},${last.z},${last.level}) or any adjacent stand: ${firstFail}`, unreachable: true };
             }
         }
         return null;
@@ -287,9 +343,34 @@ export function runClueAudit(opts: ClueAuditOptions = {}, log: (m: string) => vo
         if (clue.type === 'dig' && /_sextant\d+$/.test(clue.obj) && clue.needsSextant !== true) {
             fail('sextant clue missing needsSextant flag');
         }
+
+        if (clue.guardian !== undefined) {
+            if (clue.type !== 'dig') {
+                fail(`guardian '${clue.guardian}' on a ${clue.type} clue — only digs spawn one`);
+            }
+            if (!GUARDIANS.has(clue.guardian)) {
+                fail(`unknown guardian '${clue.guardian}' (expected one of ${[...GUARDIANS].join(', ')})`);
+            }
+        }
+
+        if (clue.puzzle !== undefined) {
+            if (clue.type !== 'talk') {
+                fail(`puzzle box on a ${clue.type} clue — only talk NPCs hand one over`);
+            }
+            if (!Number.isInteger(clue.puzzle.id) || clue.puzzle.id <= 0) {
+                fail(`puzzle box '${clue.puzzle.obj}' has no obj id`);
+            }
+        }
     }
 
-    for (const id of KNOWN_UNREACHABLE) {
+    for (const idStr of Object.keys(CLUE_GATES)) {
+        const id = Number(idStr);
+        if (!CLUE_DB[id]) {
+            findings.push({ id, obj: `clue_${id}`, type: '?', problem: `CLUE_GATES[${id}] is not a clue in the database — stale gate` });
+        }
+    }
+
+    for (const id of KNOWN_UNREACHABLE.keys()) {
         if (expectedAbandon.has(id)) {
             continue;
         }

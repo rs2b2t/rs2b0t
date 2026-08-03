@@ -682,6 +682,30 @@ export const reader = {
         return readInvComponent(comId, () => IfType.list[comId].iop ?? []);
     },
 
+    // The sliding-puzzle board is the interactable inv in the open main modal.
+    // The hint panel beside it is the same 5x5 shape but is not interactable.
+    puzzleBoardComId(): number {
+        if (!raw || raw.mainModalId === -1) {
+            return -1;
+        }
+
+        return findInvComponentIn(raw.mainModalId, com => com.objOps === true);
+    },
+
+    puzzleBoard(): InvItemSnapshot[] {
+        const comId = reader.puzzleBoardComId();
+        if (comId === -1) {
+            return [];
+        }
+
+        return readInvComponent(comId, type => heldOps(type.iop));
+    },
+
+    puzzleBoardSize(): number {
+        const comId = reader.puzzleBoardComId();
+        return comId === -1 ? 0 : (IfType.list[comId].linkObjType?.length ?? 0);
+    },
+
     // offer screen = main modal 3323 (pack in side 3321); confirm screen = main modal 3443
     tradeOfferOpen(): boolean {
         return raw?.mainModalId === 3323;

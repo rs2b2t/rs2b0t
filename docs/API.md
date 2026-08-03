@@ -21,7 +21,7 @@ surface (`apiVersion 1`) over the game client. This is the complete reference.
 - [Execution](#execution) — the only legal way to sleep
 - [Game](#game) — world state
 - [Entities & queries](#entities--queries)
-- [Inventory & Equipment](#inventory--equipment) · [Bank](#bank) · [Banking](#banking) · [Skills](#skills) · [ChatDialog](#chatdialog) · [Shop](#shop) · [Trade](#trade) · [Quests](#quests)
+- [Inventory & Equipment](#inventory--equipment) · [Bank](#bank) · [Banking](#banking) · [Skills](#skills) · [Prayer](#prayer) · [ChatDialog](#chatdialog) · [Shop](#shop) · [Trade](#trade) · [Quests](#quests)
 - [Movement](#movement)
 - [Events](#events)
 - [Settings](#settings)
@@ -478,6 +478,27 @@ Skills.effective(name: string): number  // current (boosted/drained)
 Skills.xp(name: string): number
 Skills.hpFraction(): number             // effective/base hitpoints (1 while unreadable)
 ```
+
+## Prayer
+
+Prayer points and the protection prayers. Prayer buttons live in the tab-bound
+prayer overlay, and the engine treats any tab root as visible, so a prayer can be
+toggled without switching to the prayer tab first.
+
+```ts
+Prayer.points(): number                 // current, drains while a prayer is on
+Prayer.max(): number                    // base prayer level
+Prayer.full(): boolean
+Prayer.known(name: string): boolean     // e.g. 'Protect from Magic'
+Prayer.available(name: string): boolean // level met and points remain
+Prayer.active(name: string): boolean
+Prayer.set(name: string, on: boolean): Promise<boolean>
+Prayer.clear(): Promise<void>           // turn off everything that is draining
+```
+
+[`nearestAltar`](../src/bot/api/Altars.ts) finds somewhere to restore them.
+[Clue trails](CLUES.md#prayer-between-trails) use both to fight hard-clue dig
+guardians under Protect from Magic.
 
 ## ChatDialog
 

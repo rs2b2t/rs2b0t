@@ -18,7 +18,8 @@ export const SETTINGS: SettingsSchema = {
     food: { type: 'string', default: '', label: 'Food item name', help: 'withdrawn during the pre-trail bank stop and kept out of the deposit; blank = run foodless (easy trails are low-risk)' },
     foodWithdraw: { type: 'number', default: 8, min: 1, max: 27, label: 'Food to withdraw' },
     eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', help: 'eats mid-walk too — hostiles along a trail chip HP' },
-    spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' }
+    spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' },
+    restorePrayer: { type: 'boolean', default: true, label: 'Top up prayer between trails', help: 'prays at the nearest altar after the bank stop; hard dig guardians are fought under Protect from Magic' }
 };
 
 export default class ClueSolver extends TaskBot {
@@ -47,7 +48,8 @@ export default class ClueSolver extends TaskBot {
             foodName: () => food,
             foodWithdraw: () => this.settings.num('foodWithdraw', 8),
             spadeName: () => this.settings.str('spade', 'Spade'),
-            weaponName: () => this.settings.str('weapon', '')
+            weaponName: () => this.settings.str('weapon', ''),
+            restorePrayer: () => this.settings.bool('restorePrayer', true)
         });
 
         const eatAt = this.settings.num('eatAtHp', 50) / 100;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { decodeCoord } from '../../tools/nav/stairsParse.js';
-import { buildClueDb, parseClueObjs, parseEnum, parseTalkMappings } from '../../tools/clues/cluesParse.js';
+import { buildClueDb, parseClueObjs, parseEnum, parsePuzzleTalk, parseTalkMappings } from '../../tools/clues/cluesParse.js';
 
 const ENUM_FIXTURE = `
 [trail_easy_enum]
@@ -69,6 +69,65 @@ if(inv_total(inv, trail_clue_easy_vague029) > 0) {
 @duel_arena_spectator_dialogue;
 `;
 
+const HARD_OBJ_FIXTURE = `
+[trail_clue_hard_sextant001]
+name=Clue scroll
+category=trail_clue_hard
+param=trail_desc,22 degrees 35 minutes North|19 degrees 18 minutes East
+param=trail_sextant,yes
+param=trail_casket,trail_clue_hard_sextant001_casket
+param=trail_coord,0_47_60_50_44
+param=trail_guardian,trail_hard
+tradeable=no
+
+[trail_clue_hard_riddle004]
+name=Clue scroll
+category=trail_clue_hard
+param=trail_desc,Speak to the keeper of my trail.
+param=trail_casket,trail_clue_hard_riddle004_casket
+tradeable=no
+
+[trail_clue_hard_riddle019]
+name=Clue scroll
+category=trail_clue_hard
+param=trail_desc,find me where words of wisdom speak volumes.
+tradeable=no
+`;
+
+const HARD_ENUM_FIXTURE = `
+[trail_hard_enum]
+inputtype=int
+outputtype=namedobj
+val=0,trail_clue_hard_sextant001
+val=1,trail_clue_hard_riddle004
+val=2,trail_clue_hard_riddle019
+`;
+
+const GERRANT_SCRIPT = `
+[opnpc1,gerrant]
+if(inv_total(inv, trail_clue_hard_riddle004) > 0) {
+    ~progress_clue_hard(trail_clue_hard_riddle004, "Gerrant has given you another clue scroll!");
+    return;
+}
+@gerrant_shop;
+`;
+
+const EXAMINER_SCRIPT = `
+[opnpc1,examiner]
+if(inv_total(inv, trail_clue_hard_riddle019) > 0) {
+    if(~obj_gettotal(trail_clue_hard_riddle019_puzzlebox) > 0) {
+        if(~trail_puzzle_complete(trail_clue_hard_riddle019_puzzlebox) = true) {
+            inv_del(inv, trail_clue_hard_riddle019_puzzlebox, 1);
+            ~progress_clue_hard(trail_clue_hard_riddle019, "The examiner has given you another clue scroll!");
+            return;
+        }
+        return;
+    }
+    ~give_trail_puzzle(trail_clue_hard_riddle019_puzzlebox, "<p,neutral>Hi! Please complete this.", "The examiner has given you a puzzle box!");
+    return;
+}
+`;
+
 describe('parseEnum', () => {
     test('maps enum vals to obj names indexed by val', () => {
         const names = parseEnum(ENUM_FIXTURE);
@@ -107,6 +166,81 @@ describe('parseTalkMappings', () => {
     });
     test('picks the last opnpc header before the call among single-line headers', () => {
         expect(parseTalkMappings(DUEL_SCRIPT)).toEqual([{ obj: 'trail_clue_easy_vague029', npc: 'duel_crowdfemale3' }]);
+    });
+});
+
+describe('parsePuzzleTalk', () => {
+    test('pairs a give_trail_puzzle call with its clue and the enclosing npc', () => {
+        expect(parsePuzzleTalk(EXAMINER_SCRIPT)).toEqual([
+            { obj: 'trail_clue_hard_riddle019', npc: 'examiner', puzzleObj: 'trail_clue_hard_riddle019_puzzlebox' }
+        ]);
+    });
+
+    test('ignores scripts with no puzzle hand-over', () => {
+        expect(parsePuzzleTalk(GERRANT_SCRIPT)).toEqual([]);
+    });
+});
+
+describe('parseTalkMappings — hard tier', () => {
+    test('reads progress_clue_hard call sites', () => {
+        expect(parseTalkMappings(GERRANT_SCRIPT, 'hard')).toEqual([{ obj: 'trail_clue_hard_riddle004', npc: 'gerrant' }]);
+    });
+});
+
+describe('buildClueDb — hard tier', () => {
+    const objIds = new Map<string, number>([
+        ['trail_clue_hard_sextant001', 3520],
+        ['trail_clue_hard_sextant001_casket', 3521],
+        ['trail_clue_hard_riddle004', 3530],
+        ['trail_clue_hard_riddle004_casket', 3531],
+        ['trail_clue_hard_riddle019', 3540],
+        ['trail_clue_hard_riddle019_puzzlebox', 3541]
+    ]);
+    const built = buildClueDb({
+        clueNames: parseEnum(HARD_ENUM_FIXTURE),
+        objs: parseClueObjs(HARD_OBJ_FIXTURE),
+        objIds,
+        talk: [...parseTalkMappings(GERRANT_SCRIPT, 'hard'), ...parseTalkMappings(EXAMINER_SCRIPT, 'hard')],
+        npcDisplay: new Map([
+            ['gerrant', 'Gerrant'],
+            ['examiner', 'Examiner']
+        ]),
+        puzzles: parsePuzzleTalk(EXAMINER_SCRIPT),
+        guardians: { trail_clue_hard_sextant001: 'Zamorak Wizard' }
+    });
+
+    test('a guarded sextant dig carries needsSextant and the guardian name', () => {
+        expect(built.db[3520]).toEqual({
+            obj: 'trail_clue_hard_sextant001',
+            id: 3520,
+            type: 'dig',
+            coord: decodeCoord('0_47_60_50_44'),
+            casketObj: 'trail_clue_hard_sextant001_casket',
+            casketId: 3521,
+            needsSextant: true,
+            guardian: 'Zamorak Wizard'
+        });
+    });
+
+    // riddle004 has a trail_casket param but no trail_coord: it is a talk clue,
+    // and classifying on the casket alone would make it an un-diggable dig.
+    test('a casket param without a coord stays a talk clue', () => {
+        expect(built.db[3530]).toEqual({
+            obj: 'trail_clue_hard_riddle004',
+            id: 3530,
+            type: 'talk',
+            npc: 'Gerrant'
+        });
+    });
+
+    test('a puzzle-box talk carries the puzzle obj and id', () => {
+        expect(built.db[3540]).toEqual({
+            obj: 'trail_clue_hard_riddle019',
+            id: 3540,
+            type: 'talk',
+            npc: 'Examiner',
+            puzzle: { obj: 'trail_clue_hard_riddle019_puzzlebox', id: 3541 }
+        });
     });
 });
 

@@ -13,6 +13,11 @@ export interface ClueRow {
     needsSextant?: boolean;
     keyFrom?: { npc: string; keyObj: string; keyId: number };
     items?: string[];
+    // Hard tier: the first dig spawns this NPC instead of the casket, and the
+    // casket only appears once it is dead.
+    guardian?: string;
+    // Hard tier: the talk NPC hands over a sliding puzzle to solve first.
+    puzzle?: { obj: string; id: number };
 }
 
 export type ClueStep = ClueRow | { type: 'open-casket'; casketObj: string; casketId: number };
