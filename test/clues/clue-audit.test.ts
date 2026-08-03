@@ -28,8 +28,8 @@ const present = auditInputsPresent();
 // diagnosis in KNOWN_UNREACHABLE, not a clue-database bug: the solver abandons
 // cleanly, and fixing the pack makes the clue start working untouched.
 const EXPECTED_ABANDON = [
-    2811, 2815, 2855, 3522, 3526, 3528, 3532, 3534, 3536,
-    3546, 3548, 3552, 3554, 3560, 3562, 3564, 3579
+    2815, 2855, 3522, 3526, 3528, 3532, 3534, 3536,
+    3546, 3548, 3552, 3554, 3560, 3562, 3564
 ];
 
 describe.skipIf(!present)('clue audit (pack-gated)', () => {

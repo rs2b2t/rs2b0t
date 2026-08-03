@@ -38,10 +38,7 @@ export const PACK_UNREACHABLE: Record<number, string> = {
     3528: 'Trollheim/Death Plateau: death_climbingrocks need climbing boots worn — requires Death Plateau',
 
     // ---- KIT: an item or skill, no quest -----------------------------------
-    // riddle027's own text is the gate: "When no weapons are at hand".
-    3579: 'Entrana: monk boat from Port Sarim, refused while carrying ANY weapon or armour (has_entrana_restricted_items) — needs a ship edge and a bank-the-gear step',
-    // 2811: Baxtorian rope rock+tree baked (#369) — leave via barrel_waterfall_quest
-    // 2790: west Varrock sewer web baked (#370)
+    // 2811 Baxtorian rope baked (#369); 2790 sewer web baked (#370); 3579 Entrana ferry+planks (#368).
     3532: 'Kharazi jungle: boundary is cut tile-by-tile with a machete (jungle_tree.rs2) — a traversal mode, not one edge',
     3534: 'Kharazi jungle: boundary is cut tile-by-tile with a machete (jungle_tree.rs2) — a traversal mode, not one edge',
     3536: 'Kharazi jungle: boundary is cut tile-by-tile with a machete (jungle_tree.rs2) — a traversal mode, not one edge',

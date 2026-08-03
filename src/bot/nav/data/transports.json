@@ -677,6 +677,94 @@
   },
   {
     "from": {
+      "x": 2834,
+      "z": 3331,
+      "level": 1
+    },
+    "to": {
+      "x": 2834,
+      "z": 3335,
+      "level": 0
+    },
+    "locName": "Gangplank",
+    "action": "Cross",
+    "kind": "gangplank",
+    "locId": 2415,
+    "locX": 2834,
+    "locZ": 3333,
+    "debugName": "ship_from_entrana_off",
+    "options": [
+      "Cross"
+    ]
+  },
+  {
+    "from": {
+      "x": 2834,
+      "z": 3335,
+      "level": 0
+    },
+    "to": {
+      "x": 2834,
+      "z": 3331,
+      "level": 1
+    },
+    "locName": "Gangplank",
+    "action": "Cross",
+    "kind": "gangplank",
+    "locId": 2414,
+    "locX": 2834,
+    "locZ": 3334,
+    "debugName": "ship_from_entrana_on",
+    "options": [
+      "Cross"
+    ]
+  },
+  {
+    "from": {
+      "x": 3048,
+      "z": 3231,
+      "level": 1
+    },
+    "to": {
+      "x": 3048,
+      "z": 3234,
+      "level": 0
+    },
+    "locName": "Gangplank",
+    "action": "Cross",
+    "kind": "gangplank",
+    "locId": 2413,
+    "locX": 3048,
+    "locZ": 3232,
+    "debugName": "ship_to_entrana_off",
+    "options": [
+      "Cross"
+    ]
+  },
+  {
+    "from": {
+      "x": 3048,
+      "z": 3234,
+      "level": 0
+    },
+    "to": {
+      "x": 3048,
+      "z": 3231,
+      "level": 1
+    },
+    "locName": "Gangplank",
+    "action": "Cross",
+    "kind": "gangplank",
+    "locId": 2412,
+    "locX": 3048,
+    "locZ": 3233,
+    "debugName": "ship_to_entrana_on",
+    "options": [
+      "Cross"
+    ]
+  },
+  {
+    "from": {
       "x": 2709,
       "z": 3209,
       "level": 0
