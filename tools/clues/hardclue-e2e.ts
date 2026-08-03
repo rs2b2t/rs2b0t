@@ -9,12 +9,19 @@
  *   bun tools/clues/hardclue-e2e.ts                     # start from a random hard clue
  *   bun tools/clues/hardclue-e2e.ts --id 2794 --mins 45 # start from a chosen one
  *   bun tools/clues/hardclue-e2e.ts --trails 3          # run three trails back to back
+ *   bun tools/clues/hardclue-e2e.ts --speed 150         # 4x world tick rate
+ *   bun tools/clues/hardclue-e2e.ts --no-teleports      # force everything on foot
+ *
+ * HEADED=1 (optionally SLOWMO=ms) opens a visible window to watch a trail run.
  */
 import fs from 'node:fs';
 
-import { chromium, type Browser, type Page } from 'playwright-core';
+import type { Browser, Page } from 'playwright-core';
 
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { PACK_UNREACHABLE } from '#/bot/clues/data/unreachable.js';
+
+import { boot as bootClient, cheatQuiet, launchBrowser, login, logout, setSettings } from '../lib/harness.js';
 
 const base = process.env.CLUE_BASE ?? 'http://localhost:8890';
 const argv = process.argv.slice(2);
@@ -23,6 +30,10 @@ const arg = (name: string): string | null => {
     return i !== -1 ? argv[i + 1] : null;
 };
 
+// World.TICKRATE is 600ms; ::speed floors at 20.
+const DEFAULT_TICK_MS = 600;
+const MIN_TICK_MS = 20;
+
 const TRAIL_DEADLINE_MS = Number(arg('mins') ?? 45) * 60_000;
 const TRAILS = Number(arg('trails') ?? 1);
 const HARD_IDS = Object.keys(CLUE_DB)
@@ -30,8 +41,25 @@ const HARD_IDS = Object.keys(CLUE_DB)
     .filter(id => CLUE_DB[id].obj.includes('_hard_'))
     .sort((a, b) => a - b);
 const startId = arg('id') !== null ? Number(arg('id')) : null;
+const tickMs = arg('speed') !== null ? Math.max(MIN_TICK_MS, Number(arg('speed'))) : null;
+const teleports = !argv.includes('--no-teleports');
 
-const GEAR = ['rune_platebody', 'rune_platelegs', 'rune_full_helm', 'rune_kiteshield', 'rune_scimitar'];
+// Chainbody, not platebody: rune_platebody is gated behind Dragon Slayer
+// (levelrequire tier40) and silently refuses to equip on a fresh account.
+const GEAR = ['rune_chainbody', 'rune_platelegs', 'rune_full_helm', 'rune_kiteshield', 'rune_scimitar'];
+const FOOD = 'Lobster';
+const FOOD_OBJ = 'lobster';
+const FOOD_COUNT = 12;
+// Teleport kit, so long legs can actually route through the catalog rather than
+// walking because the runes were never in the pack.
+const TELEPORT_KIT: [string, number][] = [
+    ['lawrune', 40],
+    ['airrune', 100],
+    ['firerune', 40],
+    ['waterrune', 40],
+    ['earthrune', 40],
+    ['ring_of_dueling_8', 1]
+];
 const KIT: [string, string][] = [
     ['spade', 'spade'],
     ['trail_sextant', 'sextant'],
@@ -59,52 +87,40 @@ function log(m: string): void {
     console.log(`[${new Date().toISOString().slice(11, 19)}] ${m}`);
 }
 
-async function cheat(page: Page, text: string): Promise<void> {
-    await page.evaluate(t => {
-        const c = (globalThis as never as R).rs2b0t.client as never as { out: { p1Enc(op: number): void; p1(v: number): void; pjstr(s: string): void } };
-        c.out.p1Enc(224);
-        c.out.p1(t.length + 1);
-        c.out.pjstr(t);
-    }, text);
-    await page.waitForTimeout(900);
-}
+const cheat = (page: Page, text: string): Promise<boolean> => cheatQuiet(page, text, 900);
 
 async function boot(browser: Browser): Promise<Page> {
     const page = await browser.newPage();
     const username = `he${Date.now().toString(36).slice(-6)}`;
-    const ready = (): Promise<unknown> =>
-        page.waitForFunction(() => ((globalThis as never as { rs2b0t?: { client: { constructor: { loopCycle: number } } } }).rs2b0t?.client.constructor.loopCycle ?? 0) > 10, undefined, { timeout: 60_000 });
-    const login = async (): Promise<boolean> => {
-        await page.evaluate(([u, p]) => {
-            const c = (globalThis as never as R).rs2b0t.client;
-            c.loginUser = u;
-            c.loginPass = p;
-            void c.login(u, p, false);
-        }, [username, 'test']);
-        return page
-            .waitForFunction(() => (globalThis as never as R).rs2b0t.client.ingame && (globalThis as never as R).rs2b0t.client.sceneState === 2, undefined, { timeout: 12_000 })
-            .then(() => true)
-            .catch(() => false);
-    };
 
+    log(`booting ${base} as ${username}`);
     await page.goto(`${base}/bot.html`);
-    await ready();
-    for (let i = 0; i < 6 && !(await login()); i++) {
+    await bootClient(page);
+    log('client up — logging in');
+    for (let i = 0; i < 6 && !(await login(page, username)); i++) {
         await page.waitForTimeout(3000);
     }
-    // Skip the tutorial, then come back in on a clean scene.
+    // Skip the tutorial, then come back in on a clean scene. Log out through the
+    // game's button first: reloading alone leaves the server holding the player
+    // online, and the relogin loop then burns minutes waiting for it to drop.
+    log('skipping the tutorial');
     await cheat(page, 'tele 0,50,50,20,20');
+    const cleanExit = await logout(page);
     await page.reload();
-    await ready();
-    let backIn = false;
+    await bootClient(page);
+    let backIn = await login(page, username);
     for (let i = 0; i < 8 && !backIn; i++) {
         await page.waitForTimeout(5000);
-        backIn = await login();
+        backIn = await login(page, username);
     }
     if (!backIn) {
         throw new Error('relogin failed');
     }
+    if (!cleanExit) {
+        log('note: clean logout did not take — the relogin waited out the server grace period');
+    }
 
+    log('seeding stats, kit and gear');
     await cheat(page, '~maxme');
     await page.evaluate(async () => {
         const a = (globalThis as never as R).rs2b0t.actions;
@@ -124,18 +140,45 @@ async function boot(browser: Browser): Promise<Page> {
     for (const item of GEAR) {
         await cheat(page, `give ${item}`);
     }
-    await page.evaluate(async () => {
+    const worn: string[] = await page.evaluate(async () => {
         const abi = (globalThis as never as Abi).__rs2b0t;
+        const on: string[] = [];
         for (const it of abi.Inventory.items()) {
             if (/^rune /i.test(it.name ?? '')) {
                 await it.interact('Wear');
                 await it.interact('Wield');
-                await new Promise(r => setTimeout(r, 250));
+                await new Promise(r => setTimeout(r, 300));
             }
         }
+        // Anything still in the pack refused to equip — a level or quest gate.
+        for (const it of abi.Inventory.items()) {
+            if (/^rune /i.test(it.name ?? '')) {
+                on.push(it.name!);
+            }
+        }
+        return on;
     });
-    await cheat(page, 'give lobster 20');
+    if (worn.length > 0) {
+        log(`WARNING: these would not equip and stayed in the pack: ${worn.join(', ')}`);
+    }
+
+    await cheat(page, `give ${FOOD_OBJ} ${FOOD_COUNT}`);
     await cheat(page, 'give coins 2000');
+    if (teleports) {
+        for (const [obj, count] of TELEPORT_KIT) {
+            await cheat(page, `give ${obj} ${count}`);
+        }
+    }
+
+    // Without this the solver's bank stop treats the food as loot and deposits
+    // it, because ClueSolver's `food` setting defaults to blank.
+    await setSettings(page, 'ClueSolver', { food: FOOD, foodWithdraw: FOOD_COUNT, eatAtHp: 60, restorePrayer: true, useTeleports: teleports });
+
+    if (tickMs !== null) {
+        await cheat(page, `speed ${tickMs}`);
+        log(`world tick rate ${tickMs}ms (${(DEFAULT_TICK_MS / tickMs).toFixed(1)}x)`);
+    }
+
     await cheat(page, 'tele 0,50,53,53,28');
     log(`ready (${username})`);
     return page;
@@ -148,12 +191,35 @@ interface TrailResult {
     startId: number;
     startObj: string;
     ok: boolean;
+    /** Died on a clue the nav pack cannot reach — a known gap, not a regression. */
+    blocked?: string;
     legs: number;
     guardians: number;
     puzzles: number;
     ms: number;
     reason?: string;
     tail: string[];
+}
+
+/**
+ * A third of hard clues sit behind a known nav-pack gap, and a trail that rolls
+ * one dies through no fault of the solver. Name it so a long run's failures can
+ * be read apart from real regressions.
+ */
+function blockedBy(seedId: number, lines: string[]): string | null {
+    const name = (id: number): string => CLUE_DB[id]?.obj ?? `clue_${id}`;
+    // The seed itself may never reach a leg line — an unreachable coord just
+    // grinds the walker — so check it directly before scanning the log.
+    if (PACK_UNREACHABLE[seedId]) {
+        return `${name(seedId)}: ${PACK_UNREACHABLE[seedId]}`;
+    }
+    for (const [idStr, why] of Object.entries(PACK_UNREACHABLE)) {
+        const obj = CLUE_DB[Number(idStr)]?.obj;
+        if (obj && lines.some(l => l.includes(obj))) {
+            return `${obj}: ${why}`;
+        }
+    }
+    return null;
 }
 
 async function runTrail(page: Page, seedId: number): Promise<TrailResult> {
@@ -187,7 +253,7 @@ async function runTrail(page: Page, seedId: number): Promise<TrailResult> {
         await page.waitForTimeout(5000);
         const all: string[] = await page.evaluate(n => ((globalThis as never as R).rs2b0t.runner.ctx?.log ?? []).slice(n).map(l => l.msg), before);
         for (const line of all.slice(lastLen)) {
-            if (/leg \d+ —|guards this dig|Wizard killed|puzzle solved|trail complete|abandoning /.test(line)) {
+            if (/leg \d+ —|guards this dig|Wizard killed|puzzle solved|puzzle already solved|trail complete|abandoning |teleport ok|tele \w+ ok|rubbing /.test(line)) {
                 log(`  ${line}`);
             }
         }
@@ -201,9 +267,10 @@ async function runTrail(page: Page, seedId: number): Promise<TrailResult> {
                 startId: seedId,
                 startObj: row.obj,
                 ok: Boolean(done),
+                blocked: done ? undefined : (blockedBy(seedId, all.slice(-40)) ?? undefined),
                 legs: count(/leg \d+ —/),
                 guardians: count(/Wizard killed/),
-                puzzles: count(/puzzle solved/),
+                puzzles: count(/puzzle solved in \d+ moves/),
                 ms: Date.now() - started,
                 reason: done ? undefined : abandoned?.replace(/^.*abandoning /, 'abandon: '),
                 tail: all.slice(-25)
@@ -217,20 +284,19 @@ async function runTrail(page: Page, seedId: number): Promise<TrailResult> {
         startId: seedId,
         startObj: row.obj,
         ok: false,
+        blocked: blockedBy(seedId, tail.slice(-40)) ?? undefined,
         legs: tail.filter(l => /leg \d+ —/.test(l)).length,
         guardians: tail.filter(l => /Wizard killed/.test(l)).length,
-        puzzles: tail.filter(l => /puzzle solved/.test(l)).length,
+        puzzles: tail.filter(l => /puzzle solved in \d+ moves/.test(l)).length,
         ms: Date.now() - started,
         reason: `deadline at (${at?.x},${at?.z},${at?.level})`,
         tail: tail.slice(-25)
     };
 }
 
-const browser = await chromium.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-    args: ['--no-sandbox']
-});
+const verdict = (r: TrailResult): string => (r.ok ? 'COMPLETE' : r.blocked ? 'BLOCKED ' : 'FAILED  ');
+
+const browser = await launchBrowser();
 
 const results: TrailResult[] = [];
 try {
@@ -240,7 +306,7 @@ try {
         log(`trail ${n + 1}/${TRAILS} — seeding ${CLUE_DB[seed].obj} [${seed}]`);
         const r = await runTrail(page, seed);
         results.push(r);
-        log(`trail ${n + 1}: ${r.ok ? 'COMPLETE' : 'FAILED'} — ${r.legs} legs, ${r.guardians} guardians, ${r.puzzles} puzzles, ${Math.round(r.ms / 1000)}s${r.reason ? ` — ${r.reason}` : ''}`);
+        log(`trail ${n + 1}: ${verdict(r).trim()} — ${r.legs} legs, ${r.guardians} guardians, ${r.puzzles} puzzles, ${Math.round(r.ms / 1000)}s${r.blocked ? ` — blocked by ${r.blocked}` : r.reason ? ` — ${r.reason}` : ''}`);
     }
 } finally {
     await browser.close();
@@ -249,13 +315,24 @@ try {
 fs.writeFileSync('out/hardclue-e2e.json', JSON.stringify(results, null, 1));
 console.log('\n==== HARD TRAIL E2E ====');
 for (const r of results) {
-    console.log(`${r.ok ? 'COMPLETE' : 'FAILED  '} from ${r.startObj} [${r.startId}] — ${r.legs} legs, ${r.guardians} guardians, ${r.puzzles} puzzles, ${Math.round(r.ms / 1000)}s${r.reason ? ` — ${r.reason}` : ''}`);
-    if (!r.ok) {
+    const why = r.blocked ? ` — blocked by ${r.blocked}` : r.reason ? ` — ${r.reason}` : '';
+    console.log(`${verdict(r)} from ${r.startObj} [${r.startId}] — ${r.legs} legs, ${r.guardians} guardians, ${r.puzzles} puzzles, ${Math.round(r.ms / 1000)}s${why}`);
+    if (!r.ok && !r.blocked) {
         for (const l of r.tail) {
             console.log(`    ${l}`);
         }
     }
 }
-const passed = results.filter(r => r.ok).length;
-console.log(`\n${passed}/${results.length} trails complete. Details: out/hardclue-e2e.json`);
-process.exit(passed === results.length ? 0 : 1);
+
+const done = results.filter(r => r.ok);
+const blocked = results.filter(r => !r.ok && r.blocked);
+const failed = results.filter(r => !r.ok && !r.blocked);
+const legs = results.reduce((n, r) => n + r.legs, 0);
+console.log(
+    `\n${done.length} COMPLETE · ${blocked.length} BLOCKED (known nav-pack gaps) · ${failed.length} FAILED` +
+        `\n${legs} legs solved, ${results.reduce((n, r) => n + r.guardians, 0)} guardians killed, ${results.reduce((n, r) => n + r.puzzles, 0)} puzzles solved` +
+        '\nDetails: out/hardclue-e2e.json'
+);
+// A trail that rolled an unreachable clue is not a regression, so it does not
+// fail the run; anything else does.
+process.exit(failed.length === 0 ? 0 : 1);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { PACK_UNREACHABLE } from '#/bot/clues/data/unreachable.js';
 
 const base = process.env.CLUE_BASE ?? 'http://localhost:8890';
 const argv = process.argv.slice(2);
@@ -14,11 +15,9 @@ const tier = arg('tier');
 // guarded dig adds a lvl-108 fight, so they need a longer default deadline.
 const CLUE_DEADLINE_MS = Number(arg('mins') ?? (tier === 'hard' ? 16 : 8)) * 60_000;
 const only = arg('ids')?.split(',').map(Number);
-// Mirrors KNOWN_UNREACHABLE in audit-clues.ts — nav-pack gaps, not clue bugs.
-const EXPECTED_ABANDON = new Set([
-    2722, 2776, 2790, 2811, 2815, 2855, 3522, 3526, 3528, 3532,
-    3534, 3536, 3542, 3546, 3548, 3552, 3554, 3560, 3562, 3564, 3572, 3579
-]);
+// World.TICKRATE is 600ms; ::speed floors at 20.
+const tickMs = arg('speed') !== null ? Math.max(20, Number(arg('speed'))) : null;
+const EXPECTED_ABANDON = new Set(Object.keys(PACK_UNREACHABLE).map(Number));
 
 const inTier = (id: number): boolean => tier === null || CLUE_DB[id].obj.includes(`_${tier}_`);
 const ids = (only ?? Object.keys(CLUE_DB).map(Number).filter(inTier)).sort((a, b) => a - b);
@@ -90,7 +89,9 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
     // the account arrives geared, so the sweep equips it the same way a player
     // would before starting a hard trail.
     if (tier === 'hard' || tier === null) {
-        for (const item of ['rune_platebody', 'rune_platelegs', 'rune_full_helm', 'rune_kiteshield', 'rune_scimitar', 'amulet_of_glory']) {
+        // Chainbody, not platebody: rune_platebody is gated behind Dragon Slayer
+        // and silently refuses to equip on a fresh account.
+        for (const item of ['rune_chainbody', 'rune_platelegs', 'rune_full_helm', 'rune_kiteshield', 'rune_scimitar', 'amulet_of_glory']) {
             await cheatBoot(page, `give ${item}`);
         }
         await page.evaluate(async () => {
@@ -105,6 +106,24 @@ async function bootWorker(browser: Browser, w: number): Promise<Page> {
         });
         await cheatBoot(page, 'give lobster 20');
     }
+
+    // Without this the solver's bank stop treats the food as loot and deposits
+    // it, because ClueSolver's `food` setting defaults to blank.
+    await page.evaluate(entries => {
+        for (const [k, v] of Object.entries(entries)) {
+            sessionStorage.setItem(`rs2b0t:set:ClueSolver:${k}`, String(v));
+            try {
+                localStorage.setItem(`rs2b0t:set:ClueSolver:${k}`, String(v));
+            } catch {
+                // private mode
+            }
+        }
+    }, { food: 'Lobster', foodWithdraw: 12, eatAtHp: 60 } as Record<string, string | number>);
+
+    if (tickMs !== null) {
+        await cheatBoot(page, `speed ${tickMs}`);
+    }
+
     log(`worker ${w} ready (${username})`);
     return page;
 }

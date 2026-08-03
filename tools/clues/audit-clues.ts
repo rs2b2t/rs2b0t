@@ -11,6 +11,7 @@ import { PathFinder, type DoorEdgeData, type NavPoint, type TransportEdgeData } 
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { CLUE_GATES } from '#/bot/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
+import { PACK_UNREACHABLE } from '#/bot/clues/data/unreachable.js';
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from '../nav/lib.js';
@@ -25,40 +26,7 @@ const STARTS: NavPoint[] = [
 
 const AUDIT_BUDGET = 600_000;
 
-/**
- * Clue destinations the baked pack cannot route to. Each is a gap in the nav
- * data, not in the clue database: the solver abandons cleanly, and fixing one
- * is a transports/doors change that will make the clue start working with no
- * solver edit. Diagnosed by flood-filling the destination's component and
- * looking for the loc that should bridge it.
- *
- * @see docs/CLUES.md#clues-the-pack-cannot-reach
- */
-const KNOWN_UNREACHABLE = new Map<number, string>([
-    [2811, 'Baxtorian Falls ledge'],
-    [2815, 'Crandor'],
-    // Pre-existing: Sinclair Mansion upstairs is a pocket the ladder edge misses.
-    [2855, 'Sinclair Mansion upstairs pocket (2745,3576,1)'],
-    [2722, 'fenced compound at (3293..3325, 3493..3517) has no baked entrance'],
-    [2776, 'Varrock sewer sections are split by double gates derive-doors does not emit (3191/3192,9825)'],
-    [2790, 'west Varrock sewer is behind a slashable Web at (3210,9898); nav does not model webs'],
-    [3522, 'West Ardougne (2433..2556, 3266..3334) has no baked entrance'],
-    [3526, 'island at (2833..2916, 3654..3711) has no baked entrance'],
-    [3528, 'island at (2833..2916, 3654..3711) has no baked entrance'],
-    [3532, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
-    [3534, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
-    [3536, 'south Karamja (2757..2974, 2881..2946) has no baked entrance'],
-    [3542, 'Mort Myre islet reached by the Bridge jump at (3440,3331), not baked'],
-    [3546, 'islet reached by the Rock Jump-From at (2531,3029), not baked'],
-    [3548, 'pocket reached by the Ladder at (2575,3029), not baked'],
-    [3552, 'Kharidian desert entry consumes a bought Shantay pass (state-aware crossing)'],
-    [3554, 'Kharidian desert entry consumes a bought Shantay pass (state-aware crossing)'],
-    [3560, 'Isafdar — requires Regicide'],
-    [3562, 'Isafdar — requires Regicide'],
-    [3564, 'elf camp — requires Regicide'],
-    [3572, 'the ladder at (2701,3408) lands on a 1-tile pocket at level 1'],
-    [3579, 'region at (2802..2878, 3329..3393) has no baked entrance']
-]);
+const KNOWN_UNREACHABLE = new Map<number, string>(Object.entries(PACK_UNREACHABLE).map(([id, why]) => [Number(id), why]));
 
 export interface ClueAuditFinding {
     id: number;

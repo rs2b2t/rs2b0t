@@ -6,6 +6,7 @@
 //   bun tools/dragonslayer-solo-test.ts --stage 2           jump to "spoken to Oziach"
 //   bun tools/dragonslayer-solo-test.ts --stage 3 --var 2   ... with 2 of 3 hull holes patched
 //   bun tools/dragonslayer-solo-test.ts --stage 2 --oracle 3 --shield 1 --goblin 1
+//   bun tools/dragonslayer-solo-test.ts --speed 100         server ms/tick, default 300
 //
 // The quest is quest-point gated at 32, which no fresh account has, so `qp` is set
 // after the last relog — `~update_questlist` recounts it from completed quests at
@@ -36,6 +37,7 @@ const questPoints = Number(opt('--qp') ?? 40);
 const minutes = Number(opt('--minutes') ?? 90);
 const tele = opt('--tele');
 const food = opt('--food') ?? 'Lobster';
+const speed = Number(opt('--speed') ?? 300);
 
 /** Every dragon-slayer server varp the harness can jump. */
 const VARS: Record<string, string> = {
@@ -83,6 +85,25 @@ interface SeedResult {
     banked: number;
 }
 
+/** The server rejects anything under 20ms and ignores junk, so confirm from chat rather than assume. */
+async function setSpeed(page: Page, ms: number): Promise<void> {
+    if (!Number.isInteger(ms) || ms < 20) {
+        fail(`--speed must be an integer >= 20 (got ${opt('--speed')})`);
+    }
+    await cheat(page, `speed ${ms}`);
+    const confirmed = await page.evaluate(
+        expected =>
+            (globalThis as never as { rs2b0t: { reader: { chat(n: number): { text: string }[] } } }).rs2b0t.reader
+                .chat(8)
+                .some(line => line.text.includes(`World speed was changed to ${expected}ms`)),
+        ms
+    );
+    if (!confirmed) {
+        fail(`server did not confirm the ${ms}ms tick rate`);
+    }
+    console.log(`tick rate → ${ms}ms`);
+}
+
 // The page loads the BUILT bundle, so a source edit is invisible until it is rebuilt
 // and copied into the engine's public/bot/.
 if (!argv.includes('--no-deploy')) {
@@ -105,7 +126,7 @@ try {
     await mainlandAccount(page, base, user);
     console.log(`mainland-ready as '${user}'`);
 
-    await cheat(page, 'speed 300');
+    await setSpeed(page, speed);
     if (!(await cheatQuiet(page, '~maxme'))) {
         fail('could not max stats');
     }

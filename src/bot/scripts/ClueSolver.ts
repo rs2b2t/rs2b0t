@@ -10,7 +10,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
-import { ClueExecutor } from '../clues/ClueExecutor.js';
+import { ClueExecutor, tilesTo } from '../clues/ClueExecutor.js';
 import { SolveClue, heldClueLikeId } from '../clues/SolveClue.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
@@ -19,7 +19,8 @@ export const SETTINGS: SettingsSchema = {
     foodWithdraw: { type: 'number', default: 8, min: 1, max: 27, label: 'Food to withdraw' },
     eatAtHp: { type: 'number', default: 50, min: 1, max: 99, label: 'Eat below HP%', help: 'eats mid-walk too — hostiles along a trail chip HP' },
     spade: { type: 'string', default: 'Spade', label: 'Spade item (dig clues)' },
-    restorePrayer: { type: 'boolean', default: true, label: 'Top up prayer between trails', help: 'prays at the nearest altar after the bank stop; hard dig guardians are fought under Protect from Magic' }
+    restorePrayer: { type: 'boolean', default: true, label: 'Top up prayer between trails', help: 'prays at the nearest altar after the bank stop; hard dig guardians are fought under Protect from Magic' },
+    useTeleports: { type: 'boolean', default: true, label: 'Use teleports', help: 'routes long legs through spell teleports and the ring of dueling, and stocks the runes at the bank stop' }
 };
 
 export default class ClueSolver extends TaskBot {
@@ -49,8 +50,11 @@ export default class ClueSolver extends TaskBot {
             foodWithdraw: () => this.settings.num('foodWithdraw', 8),
             spadeName: () => this.settings.str('spade', 'Spade'),
             weaponName: () => this.settings.str('weapon', ''),
-            restorePrayer: () => this.settings.bool('restorePrayer', true)
+            restorePrayer: () => this.settings.bool('restorePrayer', true),
+            useTeleports: () => this.settings.bool('useTeleports', true)
         });
+
+        ClueExecutor.setTeleports(this.settings.bool('useTeleports', true));
 
         const eatAt = this.settings.num('eatAtHp', 50) / 100;
         const isFood = (name: string | null | undefined): boolean => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat);
@@ -108,6 +112,12 @@ export default class ClueSolver extends TaskBot {
         } else if (cur) {
             p.text(`${cur.name} — leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
             p.text(cur.step, '#8a919a');
+            const left = tilesTo(cur.target);
+            if (cur.target && left !== null) {
+                // Full bar means standing on it; it fills as the gap closes.
+                p.bar('Travel', cur.startDist > 0 ? 1 - left / cur.startDist : 1);
+                p.text(`${left} tiles to (${cur.target.x},${cur.target.z},${cur.target.level})`, '#8a919a');
+            }
         } else {
             p.text('no clue in progress', '#8a919a');
         }

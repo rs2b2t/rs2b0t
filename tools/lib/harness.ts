@@ -109,6 +109,29 @@ export async function cheatQuiet(page: Page, command: string, waitMs = 700): Pro
     return sent;
 }
 
+// logout:try_logout — an if_button whose handler calls p_logout. Tab-rooted, so
+// the engine accepts it without the logout tab being the open one.
+const LOGOUT_BUTTON = 2458;
+
+/**
+ * Log out through the game's own button rather than by dropping the socket.
+ * Reloading the page leaves the server holding the player online for its
+ * disconnect grace period, which costs a relogin loop minutes of waiting.
+ */
+export async function logout(page: Page, waitMs = 8000): Promise<boolean> {
+    const sent = await page.evaluate(com => {
+        const a = (globalThis as never as { rs2b0t?: { actions?: { ifButton?(c: number): boolean } } }).rs2b0t?.actions;
+        return a?.ifButton?.(com) ?? false;
+    }, LOGOUT_BUTTON);
+    if (!sent) {
+        return false;
+    }
+    return page
+        .waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, { timeout: waitMs })
+        .then(() => true)
+        .catch(() => false);
+}
+
 export async function type(page: Page, text: string, waitMs?: number): Promise<void> {
     await page.locator('#canvas').click({ position: { x: 380, y: 250 } });
     await page.waitForTimeout(400);

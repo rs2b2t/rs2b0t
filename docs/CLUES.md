@@ -19,6 +19,7 @@ Easy, medium and hard trails are implemented, 186 clues in total.
 - [Dig guardians](#dig-guardians)
 - [Puzzle boxes](#puzzle-boxes)
 - [Prayer between trails](#prayer-between-trails)
+- [Teleports](#teleports)
 - [Gated clues](#gated-clues)
 - [Clues the pack cannot reach](#clues-the-pack-cannot-reach)
 - [Tracing a failure](#tracing-a-failure)
@@ -179,10 +180,17 @@ sequence, and every batch's state space stays in the thousands.
 The engine shuffles by 101 legal moves from the solved state, so every board handed
 to the bot is solvable; the solver is proven against 10,000 such shuffles.
 
-[`PuzzleBox.ts`](../src/bot/clues/PuzzleBox.ts) drives it: plan the whole move list
-once, apply it against an internal model, and re-read the board every few moves.
-That check is not optional — the engine silently drops a click whose slot no longer
-holds that obj, so drift would otherwise go unnoticed.
+[`PuzzleBox.ts`](../src/bot/clues/PuzzleBox.ts) drives it, and it re-reads and
+re-plans after **every single move**. That is not caution for its own sake: the
+engine silently drops a click whose slot no longer holds that obj, and a batched
+plan wedges the moment one is dropped — the board visibly advanced from a 44-move
+state to a 20-move state and then froze, replanning the same 20 moves forever. A
+search is a few milliseconds and cannot desynchronise.
+
+The piece's `Move` label may also never reach the client: `ObjType` blanks `op`/`iop`
+for members objects when the client's `memServer` flag is false. The driver prefers
+the label but falls back to sending op 5 directly, which the server validates against
+its own definition rather than against anything the client rendered.
 
 ## Prayer between trails
 
@@ -190,6 +198,23 @@ Guardians are fought under Protect from Magic, so the pre-trail bank stop tops
 prayer up: if it is below full, the solver walks to the nearest altar from
 [`Altars.ts`](../src/bot/api/Altars.ts) and prays. Low prayer never blocks a trail —
 the fight simply runs without the protection prayer.
+
+## Teleports
+
+Trails cross the map — Varrock to Feldip, Varrock to the level-50 Wilderness — so
+clue legs route through the nav-v2 teleport catalog: the standard spellbook and the
+rubbed jewellery (ring of dueling, games necklace, glory). A teleport is only
+admitted once the route is longer than `TELEPORT_MIN_SPAN`, so a walk across a town
+stays a walk.
+
+The bank stop keeps the kit out of the deposit and tops the runes up.
+[`teleportKit.ts`](../src/bot/clues/teleportKit.ts) derives both lists from the
+catalog rather than restating them, so a new destination cannot leave its runes
+being banked. Jewellery is kept if the account carries it but never withdrawn —
+charges make the names inexact ("Amulet of glory(4)").
+
+Missing runes are not an error: the router simply walks instead. Turn the whole
+thing off with the `useTeleports` setting.
 
 ## Gated clues
 
