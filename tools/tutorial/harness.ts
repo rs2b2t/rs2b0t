@@ -158,7 +158,7 @@ export async function cheat(page: Page, command: string): Promise<void> {
     await page.waitForTimeout(600);
 }
 
-export async function cheatQuiet(page: Page, command: string): Promise<boolean> {
+export async function cheatQuiet(page: Page, command: string, waitMs = 700): Promise<boolean> {
     const sent = await page.evaluate(c => {
         const { client } = (globalThis as never as Rs2b0t).rs2b0t;
         if (!client.ingame) {
@@ -169,7 +169,7 @@ export async function cheatQuiet(page: Page, command: string): Promise<boolean> 
         client.out.pjstr(c);
         return true;
     }, command);
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(waitMs);
     return sent;
 }
 

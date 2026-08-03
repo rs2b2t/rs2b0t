@@ -17,7 +17,7 @@ import stairsJson from '#/bot/nav/data/stairEdges.json';
 import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
 import { formatHops } from '#/bot/nav/v2/hops.js';
 
-import { buildScriptRoutes } from './script-route-corpus.ts';
+import { buildScriptRoutes } from './script-route-corpus.js';
 
 const explain = process.argv.includes('--explain');
 const packPath = 'out/collision.lcnav.gz';
