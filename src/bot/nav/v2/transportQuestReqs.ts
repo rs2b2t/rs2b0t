@@ -59,18 +59,23 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
     {
         journal: 'Plague City',
         varp: 'elenaquest',
-        complete: 29,
+        // ^elena_complete = 29; spell also requires ^elena_complete_read_scroll = 30
+        // ("You haven't learnt how to cast this spell yet." if only 29).
+        complete: 30,
         usedBy: ['spell: Ardougne teleport (combo routes)']
     },
     {
-        journal: 'Watchtower',
+        // questlist.if text=Watch Tower (space)
+        journal: 'Watch Tower',
         varp: 'itwatchtower',
-        complete: 13,
+        // ^itwatchtower_complete = 13; spell needs ^itwatchtower_complete_read_scroll = 14
+        complete: 14,
         usedBy: ['spell: Watchtower teleport']
     },
     {
         journal: "Eadgar's Ruse",
-        varp: 'eadgar',
+        // content: %eadgar_quest (not %eadgar) — quests.rs2 / teleport.rs2
+        varp: 'eadgar_quest',
         complete: 110,
         usedBy: ['spell: Trollheim teleport']
     }
@@ -85,7 +90,8 @@ export const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
     'tree gnome village': 'Tree Gnome Village',
     'shilo village': 'Shilo Village',
     'plague city': 'Plague City',
-    watchtower: 'Watchtower',
+    watchtower: 'Watch Tower',
+    'watch tower': 'Watch Tower',
     "eadgar's ruse": "Eadgar's Ruse"
 };
 

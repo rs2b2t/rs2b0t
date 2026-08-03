@@ -131,9 +131,9 @@ CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.t
 | The Grand Tree | `grandtree` | 160 | Spirit (stronghold), glider |
 | Tree Gnome Village | `treequest` | 9 | Spirit (village/young) |
 | Shilo Village | `zombiequeen` | 15 | Hajedy cart → Shilo |
-| Plague City | `elenaquest` | 29 | Ardougne spell tele |
-| Watchtower | `itwatchtower` | 13 | Watchtower spell |
-| Eadgar's Ruse | `eadgar` | 110 | Trollheim spell |
+| Plague City | `elenaquest` | 30 | Ardougne spell (complete_read_scroll; 29 alone is not enough) |
+| Watch Tower | `itwatchtower` | 14 | Watchtower spell (complete_read_scroll) |
+| Eadgar's Ruse | `eadgar_quest` | 110 | Trollheim spell |
 
 Source: `src/bot/nav/v2/transportQuestReqs.ts`. After `setvar`, **relog** so the quest-list colour updates (`Quests.status` is colour-based).
 

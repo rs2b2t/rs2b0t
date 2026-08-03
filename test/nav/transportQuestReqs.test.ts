@@ -26,16 +26,26 @@ describe('transport quest seeds', () => {
         expect(cmds).toContain('setvar grandtree 160');
         expect(cmds).toContain('setvar treequest 9');
         expect(cmds).toContain('setvar zombiequeen 15');
-        expect(cmds).toContain('setvar elenaquest 29');
+        // read-scroll stages so spell teles actually cast (not just quest-complete)
+        expect(cmds).toContain('setvar elenaquest 30');
+        expect(cmds).toContain('setvar itwatchtower 14');
+        // content %eadgar_quest, not %eadgar
+        expect(cmds).toContain('setvar eadgar_quest 110');
+        expect(cmds).not.toContain('setvar eadgar 110');
     });
 
     test('journal names for live Quests.status check', () => {
         expect(transportQuestJournalNames()).toContain('Rune Mysteries Quest');
+        // questlist.if text=Watch Tower (space)
+        expect(transportQuestJournalNames()).toContain('Watch Tower');
+        expect(transportQuestJournalNames()).toContain("Eadgar's Ruse");
     });
 
     test('aliases map short catalog names to journal names', () => {
         expect(canonicalQuestName('Rune Mysteries')).toBe('Rune Mysteries Quest');
         expect(canonicalQuestName('Grand Tree')).toBe('The Grand Tree');
+        expect(canonicalQuestName('Watchtower')).toBe('Watch Tower');
+        expect(canonicalQuestName('Watch Tower')).toBe('Watch Tower');
     });
 
     test('rich map + aliases satisfy essence requires', () => {
