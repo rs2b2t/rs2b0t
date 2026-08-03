@@ -322,8 +322,8 @@ are **generated and gitignored** — regenerate before `HARD=1` live runs.
 
 | Artifact | Role |
 |---|---|
-| `out/script-routes.generated.json` | Full successful probe set after endpoint + corridor dedupe |
-| `out/script-routes.hardest.json` | Top-N by difficulty for live HARD walks |
+| `tools/nav/script-routes.generated.json` | Full successful probe set after endpoint + corridor dedupe (gitignored) |
+| `tools/nav/script-routes.hardest.json` | Top-N by difficulty for live HARD walks (gitignored) |
 
 **Generate (requires collision pack):**
 
@@ -337,13 +337,14 @@ bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts
 1. **Endpoint near-dedupe** (`dedupePaths`) — drop generator twins with nearly the
    same directed from→to.
 2. **Corridor / journey fingerprint** (`pathCorridorSignature` + `dedupeByCorridor`)
-   — keep one highest-difficulty row per start map-square + end map-square + hop
-   sequence so transport-diverse routes are retained.
+   — fingerprint is start map-square + end map-square + hop sequence (tele vs
+   pure-walk and distinct starts stay separate); keep the highest-difficulty row
+   per signature.
 3. **HARD top-N** (`rankHardest`) — score cost / expansions / hop count for the
    live sample list.
 
-**Live HARD:** operator harnesses under `tools/nav-*.ts` read
-`script-routes.hardest.json` when `HARD=1`. Fresh checkouts without the pack or
+**Live HARD:** `tools/nav-script-routes-live.ts` with `HARD=1` reads
+`tools/nav/script-routes.hardest.json`. Fresh checkouts without the pack or
 generated JSON will not exercise collision-backed corpus coverage; unit tests that
 need the pack use `test.skipIf` rather than silent pass.
 
