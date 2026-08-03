@@ -29,6 +29,10 @@ tools/nav/script-routes.hardest.json
 # specs and implementation plans — written, never committed
 docs/superpowers/
 
+# python bytecode from the nav derivation tools
+__pycache__/
+*.pyc
+
 # local Claude tooling scratch (agents, worktrees, session state)
 .claude/
 
