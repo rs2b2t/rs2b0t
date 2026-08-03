@@ -677,10 +677,10 @@ class WalkExecutorImpl {
         let warnedCombat = false;
         let lastTile: WorldTile | null = null;
         let stillIters = 0;
-        /** GameMessages watermark after the last walk click — watch for server can't-reach. */
+        /** GameMessages watermark after the last *successful* walk click. */
         let walkClickMark: number | null = null;
-        /** Consecutive client walk rejects this follow (reset on successful walk). */
-        let walkRejects = 0;
+        /** Player tile when that walk was issued — CANT_REACH only counts if still here. */
+        let walkClickAt: WorldTile | null = null;
 
         const clickable = (t: WorldTile): boolean =>
             reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
@@ -696,14 +696,32 @@ class WalkExecutorImpl {
                 return 'failed';
             }
 
-            // Server rejected the last walk/op pathfind — do not wait for stall ticks.
-            // (Transport/door hops already fail-fast on CANT_REACH; this covers plain walk clicks
-            // and residual server rejections mid-follow. Not a regression: walk clicks never listened.)
-            if (walkClickMark !== null && GameMessages.sawSince(walkClickMark, CANT_REACH)) {
+            // Clear walk-click watermark once we leave the click tile (route accepted).
+            if (
+                walkClickAt
+                && (me.x !== walkClickAt.x || me.z !== walkClickAt.z || me.level !== walkClickAt.level)
+            ) {
+                walkClickMark = null;
+                walkClickAt = null;
+            }
+
+            // Server "I can't reach that!" after OUR walk click, while still stuck on the
+            // click tile — repath immediately. Unrelated later CANT_REACH (doors/NPCs) is
+            // ignored once we've moved. Transport hops already fail-fast on their own mark.
+            // Not a nav-v2 regression: plain walk follow never listened before.
+            if (
+                walkClickMark !== null
+                && walkClickAt !== null
+                && me.x === walkClickAt.x
+                && me.z === walkClickAt.z
+                && me.level === walkClickAt.level
+                && GameMessages.sawSince(walkClickMark, CANT_REACH)
+            ) {
                 log(
                     `server "I can't reach that!" after walk click toward path idx ${clickIdx} — repathing immediately (${clicks} clicks)`
                 );
                 walkClickMark = null;
+                walkClickAt = null;
                 return 'repath';
             }
 
@@ -798,6 +816,7 @@ class WalkExecutorImpl {
                             const mark = GameMessages.mark();
                             if (ActionRouter.driver.walk(local.lx, local.lz)) {
                                 walkClickMark = mark;
+                                walkClickAt = { x: me.x, z: me.z, level: me.level };
                                 clickIdx = recover;
                                 clicks++;
                                 stallRetries = 1;
@@ -878,12 +897,13 @@ class WalkExecutorImpl {
                     if (!local) {
                         return false;
                     }
-                    // Client tryMove: false = scene BFS found no route (no packet).
-                    // Also watermark chat so a server "I can't reach that!" repaths next tick.
+                    // Client tryMove: false = scene BFS found no route (no MOVE packet).
+                    // On success, watermark chat so a server can't-reach while still here repaths.
                     const mark = GameMessages.mark();
                     const ok = ActionRouter.driver.walk(local.lx, local.lz);
                     if (ok) {
                         walkClickMark = mark;
+                        walkClickAt = { x: me.x, z: me.z, level: me.level };
                     }
                     return ok;
                 };
@@ -901,38 +921,33 @@ class WalkExecutorImpl {
                 if (chosen !== -1) {
                     clickIdx = chosen;
                     clicks++;
-                    walkRejects = 0;
                     stallTicks = 0;
                     this.publishPath(tiles, pathIdx, clickIdx);
                 } else {
-                    walkRejects++;
                     walkClickMark = null;
+                    walkClickAt = null;
                     // Client pathfind rejected every candidate — repath immediately (no stall budget).
-                    if (walkRejects >= 1) {
-                        if (nextCrossingIdx !== -1) {
-                            const appr = tiles[nextCrossingIdx - 1]!;
-                            if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
-                                const handled = await this.handleTransport(appr, tiles[nextCrossingIdx]!, log);
-                                if (handled) {
-                                    tiles[nextCrossingIdx]!.transport = undefined;
-                                    pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
-                                    stallTicks = 0;
-                                    stallRetries = 0;
-                                    clickIdx = -1;
-                                    lastTile = null;
-                                    walkRejects = 0;
-                                    continue;
-                                }
-                                noteFailedDoor(tiles[nextCrossingIdx]!, this.doorStrikes, this.avoidDoors);
-                                return 'repath';
+                    if (nextCrossingIdx !== -1) {
+                        const appr = tiles[nextCrossingIdx - 1]!;
+                        if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
+                            const handled = await this.handleTransport(appr, tiles[nextCrossingIdx]!, log);
+                            if (handled) {
+                                tiles[nextCrossingIdx]!.transport = undefined;
+                                pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                                stallTicks = 0;
+                                stallRetries = 0;
+                                clickIdx = -1;
+                                lastTile = null;
+                                continue;
                             }
+                            noteFailedDoor(tiles[nextCrossingIdx]!, this.doorStrikes, this.avoidDoors);
+                            return 'repath';
                         }
-                        log(
-                            `client walk pathfind failed for all click candidates near path idx ${pathIdx} — repathing immediately (${clicks} clicks)`
-                        );
-                        return 'repath';
                     }
-                    stallTicks += 2;
+                    log(
+                        `client walk pathfind failed for all click candidates near path idx ${pathIdx} — repathing immediately (${clicks} clicks)`
+                    );
+                    return 'repath';
                 }
             }
 

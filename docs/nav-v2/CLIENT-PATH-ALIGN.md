@@ -53,8 +53,9 @@ client BFS polyline from `tryMove`.
 2. **Expand waypoints with local BFS** — for same-level segments inside the scene,
    replace Chebyshev fill with `canStepLocal` / flag-aware BFS so paint matches
    what `tryMove` would walk.
-3. **Prefer tryMove when choosing click** — already done for walk clicks via
-   `selectClientWalkTarget`; extend stall recovery the same way (done).
+3. **Prefer tryMove when choosing click** — walk clicks use `selectClientWalkTarget`
+   (far→near until `tryMove` accepts). Stall recovery still issues a single recovery
+   walk and repaths if the client rejects it.
 4. **Scene-flag repath triggers** — on door open/close packets, invalidate pack
    path if the current click target becomes unwalkable in scene flags.
 5. **Optional clone of engine client** under `/tmp` for side-by-side `tryMove`
