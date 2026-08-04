@@ -1490,8 +1490,28 @@ function heldOps(iop: (string | null)[] | null): (string | null)[] {
     return ops;
 }
 
+// Client stamps combatCycle at loopCycle + 400 and treats a target as fighting until
+// 100 cycles remain -- a 300-cycle window, i.e. 6s at the era client's 20ms tick. Both
+// ends are loop cycles, so a bot client running that loop slower would stretch the window
+// and see every target as still in combat. Express the window in time instead.
+const COMBAT_STAMP_CYCLES = 400;
+const COMBAT_WINDOW_MS = 6000;
+
+/** Cycles-remaining threshold that keeps the combat window at {@link COMBAT_WINDOW_MS}. */
+export function combatShowingThreshold(deltimeMs: number): number {
+    return COMBAT_STAMP_CYCLES - COMBAT_WINDOW_MS / deltimeMs;
+}
+
 function combatShowing(combatCycle: number): boolean {
-    return combatCycle > loopCycleNow() + 100;
+    return combatCycle > loopCycleNow() + combatShowingThreshold(deltimeNow());
+}
+
+function deltimeNow(): number {
+    const deltime = raw?.deltime ?? 0;
+    if (deltime <= 0) {
+        throw new Error(`[rs2b0t] client deltime is ${deltime} — cycle-stamped state (combat, animations) cannot be read against it`);
+    }
+    return deltime;
 }
 
 function loopCycleNow(): number {

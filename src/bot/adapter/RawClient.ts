@@ -77,6 +77,8 @@ export interface RawClient {
 
     redrawSide: boolean;
     redrawIcons: boolean;
+    /** ms per client logic tick; cycle-stamped state has to be read against it. */
+    deltime: number;
 
     overlayPos(sceneX: number, sceneZ: number, height: number): { x: number; y: number } | null;
     /** Scene → areaGame pixel (no +4 canvas offset). Optional on older builds. */
@@ -127,6 +129,7 @@ export const SELF_TEST = [
     'out',
     'ptype0',
     'tcpIn',
+    'deltime',
     'loginUser',
     'loginPass',
     'loginMes1',
