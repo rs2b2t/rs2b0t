@@ -219,9 +219,10 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
 
     { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
 
-    // Heading south into the desert costs a Shantay pass and, the first time,
-    // a disclaimer prompt. Coming back north is free, which is why only this
-    // direction needs an entry. (shantay_pass.rs2)
+    // Shantay pass (shantay_pass.rs2): one loc, direction from coordz vs loc.
+    // Southbound (player north of loc) consumes a pass + disclaimer; northbound free.
+    // transports.json already has dual directed edges; only south needs specialCrossing
+    // for plan-time item + dialog (#403 / #371).
     {
         x: 3304,
         z: 3118,

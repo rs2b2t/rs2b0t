@@ -300,6 +300,53 @@ export function wildyLeverEdges(): TransportEdgeData[] {
 }
 
 /**
+ * Mage Arena outdoor barrier (`magearena_scan`, loc 2880, map m48_61).
+ *
+ * Content (`mage_arena.rs2`): one placement pair; direction from player vs loc.
+ * - **Inbound** (north → south): needs `%magearena >= complete` + no armour/weapons
+ *   (`~can_enter_mage_arena`). Miniquest is not on the quest list — plan uses
+ *   members + `forbidEntranaRestricted` (same gear heuristic as Entrana); incomplete
+ *   miniquest still fails at the loc.
+ * - **Outbound** (south → north): free tele to north of loc.
+ *
+ * Dual directed edges so pathfind cannot pin a single approach and drop a side (#403).
+ */
+export function mageArenaBarrierEdges(): TransportEdgeData[] {
+    // Placements: 0_48_61_33_49 + 0_48_61_34_49 → (3105|3106, 3953).
+    const locX = 3105;
+    const locZ = 3953;
+    const north = { x: 3105, z: 3954, level: 0 };
+    const south = { x: 3105, z: 3952, level: 0 };
+    const inbound: TransportRequires = {
+        members: true,
+        forbidEntranaRestricted: true
+    };
+    const outbound: TransportRequires = { members: true };
+    const mk = (
+        from: NavPoint,
+        to: NavPoint,
+        debug: string,
+        requires: TransportRequires
+    ): TransportEdgeData => ({
+        from: { ...from },
+        to: { ...to },
+        locName: 'Mystic portal',
+        action: 'Walk-through',
+        kind: 'gate',
+        locId: 2880,
+        locX,
+        locZ,
+        debugName: debug,
+        options: ['Walk-through'],
+        requires
+    });
+    return [
+        mk(north, south, 'magearena_scan_in', inbound),
+        mk(south, north, 'magearena_scan_out', outbound)
+    ];
+}
+
+/**
  * OD-relevant agility shortcuts from skill_agility/shortcuts.rs2 (not full courses).
  * Coal logs + island ropes already live in transports.json — these fill remaining OD gaps.
  */
@@ -346,6 +393,7 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         // Replaces the four hard-coded Sedridor-only rows formerly in transports.json.
         ...essenceExitEdges(),
         ...wildyLeverEdges(),
+        ...mageArenaBarrierEdges(),
         ...agilityShortcutEdges()
     ];
 }
@@ -363,6 +411,7 @@ export const TRAVEL_FAMILIES = [
     'wildy_lever',
     'essence_entry',
     'essence_exit',
+    'mage_arena_barrier',
     'agility_shortcut'
 ] as const;
 

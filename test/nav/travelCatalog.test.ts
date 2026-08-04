@@ -13,6 +13,7 @@ import {
     shiloCartEdges,
     essenceEntryEdges,
     wildyLeverEdges,
+    mageArenaBarrierEdges,
     agilityShortcutEdges,
     curatedTravelEdges
 } from '#/bot/nav/v2/travelCatalog.js';
@@ -104,6 +105,7 @@ describe('ferries / cart', () => {
             + essenceEntryEdges().length
             + essenceExitEdges().length
             + wildyLeverEdges().length
+            + mageArenaBarrierEdges().length
             + agilityShortcutEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
@@ -114,6 +116,8 @@ describe('ferries / cart', () => {
         expect(names.has('ess_exit_ne_to_sedridor')).toBe(true);
         expect(names.has('ess_exit_ne_to_aubury')).toBe(true);
         expect(names.has('lever_ardougne_to_wild')).toBe(true);
+        expect(names.has('magearena_scan_in')).toBe(true);
+        expect(names.has('magearena_scan_out')).toBe(true);
         expect(names.has('agi_castle_crumbling_wall')).toBe(true);
     });
 });
