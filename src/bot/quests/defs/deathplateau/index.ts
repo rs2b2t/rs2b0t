@@ -1112,32 +1112,79 @@ async function drainUntil(done: () => boolean, log: (m: string) => void, max = 4
     return done();
 }
 
+/** Certificate dropped underfoot when Denulth grants it into a full pack. */
+async function takeEntranceCertFromGround(log: (m: string) => void): Promise<boolean> {
+    if (liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0) {
+        return true;
+    }
+    if (Inventory.isFull()) {
+        log('pack full — cannot take entrance certificate from the ground');
+        return false;
+    }
+    const drop = GroundItems.query()
+        .where(item => item.id === DEATH_ITEM.ENTRANCE_CERT.id)
+        .within(8)
+        .nearest()
+        ?? GroundItems.query().name(DEATH_ITEM.ENTRANCE_CERT.name).within(8).nearest();
+    if (!drop) {
+        return false;
+    }
+    log(`taking entrance certificate from the ground at ${drop.tile()}`);
+    if (!(await drop.interact('Take'))) {
+        return false;
+    }
+    return Execution.delayUntil(() => liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0, 8000);
+}
+
 /** Denulth auto-runs denulth_cert when map is spoken_smithy..got_entrancecert. */
 async function getEntranceCertFromDenulth(log: (m: string) => void): Promise<boolean> {
     if (liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0) {
         return true;
     }
+    // Prior full-pack grant leaves the cert on the floor near Denulth.
+    if (await takeEntranceCertFromGround(log)) {
+        return true;
+    }
+
     for (let attempt = 0; attempt < 3; attempt++) {
         if (!(await walkTo(TILE.DENULTH, 2, log))) {
             return false;
         }
         await settleScene();
-        // Free a slot — inv_add fails silently when full.
-        if (Inventory.free() < 1) {
-            log('need a free slot for the entrance certificate');
+        // Retry floor loot after walking over (drop may only stream in scene).
+        if (await takeEntranceCertFromGround(log)) {
+            return true;
+        }
+        // Caller should have made space via decide(); refuse to talk if still full
+        // so the cert does not drop again.
+        if (Inventory.isFull() || Inventory.free() < 1) {
+            log('need a free inventory slot before Denulth gives the certificate');
             return false;
         }
         if (!(await openDialogue('Denulth', log))) {
             await Execution.delayTicks(2);
             continue;
         }
-        if (await drainUntil(() => liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0, log)) {
-            log(`entrance cert — held=${liveId(DEATH_ITEM.ENTRANCE_CERT.id)}`);
-            return true;
+        if (await drainUntil(
+            () => liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0
+                || GroundItems.query().where(i => i.id === DEATH_ITEM.ENTRANCE_CERT.id).within(6).nearest() !== null,
+            log
+        )) {
+            if (liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0) {
+                log(`entrance cert — held=${liveId(DEATH_ITEM.ENTRANCE_CERT.id)}`);
+                return true;
+            }
+            // Server dumped it underfoot despite free-slot check (race / inv_add).
+            if (await takeEntranceCertFromGround(log)) {
+                return true;
+            }
         }
     }
     log(`entrance cert — held=${liveId(DEATH_ITEM.ENTRANCE_CERT.id)}`);
-    return liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0;
+    if (liveId(DEATH_ITEM.ENTRANCE_CERT.id) > 0) {
+        return true;
+    }
+    return takeEntranceCertFromGround(log);
 }
 
 /** Give cert to Dunstan → map given_cert; may immediately offer spiked boots bargain. */
@@ -1285,11 +1332,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
             });
         }
         if (!map.tenzing) {
-            return custom('ask Tenzing for the secret way', async log => {
-                if (inSabaCave(Game.tile()) && !(await leaveSabaCave(log))) return false;
-                if (!(await openTenzingDoor(log))) return false;
-                return talkAt(TENZING_HELP, log);
-            });
+            // Tenzing hands climbing boots — need 1 free slot or they hit the floor.
+            return makeSpace(snap, 1)
+                ?? custom('ask Tenzing for the secret way', async log => {
+                    if (inSabaCave(Game.tile()) && !(await leaveSabaCave(log))) return false;
+                    if (!(await openTenzingDoor(log))) return false;
+                    return talkAt(TENZING_HELP, log);
+                });
         }
         if (!map.smithy) {
             return custom('ask Dunstan to spike the climbing boots', async log => {
@@ -1298,7 +1347,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
             });
         }
         if (!map.entrancecert || (map.entrancecert && heldId(snap, DEATH_ITEM.ENTRANCE_CERT.id) === 0 && !map.given_cert)) {
-            return custom("get Dunstan's son signed up with Denulth (certificate)", getEntranceCertFromDenulth);
+            // Denulth grants the certificate via inv_add — full pack drops it.
+            return makeSpace(snap, 1)
+                ?? custom("get Dunstan's son signed up with Denulth (certificate)", getEntranceCertFromDenulth);
         }
         if (!map.given_cert) {
             return custom('give Dunstan the entrance certificate', giveCertToDunstan);

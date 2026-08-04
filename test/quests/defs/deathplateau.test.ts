@@ -356,6 +356,30 @@ describe('decide', () => {
         expect(customName(step)).toMatch(/Dunstan/i);
     });
 
+    test('smithy done, full pack → make space before Denulth cert', () => {
+        // 28 junk slots — freeSlots 0 forces a bank deposit before Denulth grants the cert
+        // (full inv would drop Certificate on the floor).
+        const junk = Array.from({ length: 28 }, (_, i) => `junk${i}`);
+        const step = decide(snap({
+            progress: progress(DP_STAGE.UNLOCKED_DOOR, [
+                DP_FLAG.SABA, DP_FLAG.TENZING, DP_FLAG.SMITHY
+            ]),
+            inv: junk,
+            freeSlots: 0
+        }));
+        expect(step.kind).toBe('deposit');
+    });
+
+    test('smithy done with free slot → talk Denulth for cert', () => {
+        const step = decide(snap({
+            progress: progress(DP_STAGE.UNLOCKED_DOOR, [
+                DP_FLAG.SABA, DP_FLAG.TENZING, DP_FLAG.SMITHY
+            ]),
+            freeSlots: 4
+        }));
+        expect(customName(step)).toMatch(/certificate|Denulth/i);
+    });
+
     test('unlocked + scouted + map + combo → Denulth hand-in', () => {
         const step = decide(snap({
             progress: progress(DP_STAGE.UNLOCKED_DOOR, [
