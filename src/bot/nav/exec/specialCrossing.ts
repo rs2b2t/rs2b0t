@@ -141,16 +141,23 @@ export async function handleSpecialCrossing(
                 ? sc.action
                 : 'Talk-to';
         const tryActs = preferred === 'Talk-to' ? (['Talk-to'] as const) : ([preferred, 'Talk-to'] as const);
+        // Key on specialCrossing stand tile, not type alone — one NPC type can serve
+        // multiple routes (Customs officer: coordx(npc) < 2815 → Ardougne, else Port Sarim).
+        // Global nearest() would be fine while piers are far apart, but prefer the instance
+        // at this pier so a wrong officer can never steal the hop (#404).
+        const stand = { x: sc.x, z: sc.z, level: sc.level };
         let interacted = false;
         for (const act of tryActs) {
-            const npc = Npcs.query().name(sc.npc).action(act).nearest();
+            const npc =
+                Npcs.query().name(sc.npc).action(act).withinOf(stand, 10).nearest()
+                ?? Npcs.query().name(sc.npc).action(act).within(12).nearest();
             if (npc && (await npc.interact(act))) {
                 interacted = true;
                 break;
             }
         }
         if (!interacted) {
-            log(`${sc.label}: '${sc.npc}' not interactable (${preferred})`);
+            log(`${sc.label}: '${sc.npc}' not interactable (${preferred}) near (${sc.x},${sc.z})`);
             return false;
         }
         const rad = sc.arrivalRadius ?? 2;

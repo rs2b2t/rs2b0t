@@ -24,6 +24,37 @@ describe('specialCrossingForTransport', () => {
         expect(sc!.npc).toBe('Customs officer');
     });
 
+    test('Customs officer: Musa and Brimhaven routes stay instance-keyed (#404)', () => {
+        const musa = specialCrossingForTransport(
+            { locX: 2955, locZ: 3146, locName: 'Customs officer' },
+            { x: 2955, z: 3146, level: 0 },
+            { x: 3032, z: 3217, level: 1 }
+        );
+        const brim = specialCrossingForTransport(
+            { locX: 2772, locZ: 3234, locName: 'Customs officer' },
+            { x: 2772, z: 3234, level: 0 },
+            { x: 2683, z: 3268, level: 1 }
+        );
+        expect(musa?.label).toBe('Musa->Port Sarim ship');
+        expect(brim?.label).toBe('Brimhaven->Ardougne ship');
+        expect(musa?.toTile).not.toEqual(brim?.toTile);
+        // Wrong landing for this pier → do not steal the other Customs route.
+        expect(
+            specialCrossingForTransport(
+                { locX: 2955, locZ: 3146, locName: 'Customs officer' },
+                { x: 2955, z: 3146, level: 0 },
+                { x: 2683, z: 3268, level: 1 }
+            )
+        ).toBeNull();
+        expect(
+            specialCrossingForTransport(
+                { locX: 2772, locZ: 3234, locName: 'Customs officer' },
+                { x: 2772, z: 3234, level: 0 },
+                { x: 3032, z: 3217, level: 1 }
+            )
+        ).toBeNull();
+    });
+
     test('glider multi-dest picks by hop landing', () => {
         const gandius = specialCrossingForTransport(
             { locX: 2465, locZ: 3501, locName: 'Gnome pilot' },

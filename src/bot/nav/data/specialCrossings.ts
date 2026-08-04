@@ -188,10 +188,34 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     },
 
     { x: 3027, z: 3218, level: 1, npc: 'Seaman Thresnor', locName: 'Seaman Thresnor', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2956, z: 3143, level: 1 }, label: 'Port Sarim->Musa ship' },
-    { x: 2955, z: 3146, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 3032, z: 3217, level: 1 }, label: 'Musa->Port Sarim ship' },
+    // Customs officer is ONE npc type; content branches on coordx(npc_coord) < 2815
+    // (customs_officer.rs2). Key each reverse ship by pier stand + toTile — never type alone (#404).
+    {
+        x: 2955,
+        z: 3146,
+        level: 1,
+        npc: 'Customs officer',
+        locName: 'Customs officer',
+        action: 'Pay-fare',
+        requires: { item: 'Coins', count: 30 },
+        dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] },
+        toTile: { x: 3032, z: 3217, level: 1 },
+        label: 'Musa->Port Sarim ship' // npc x ~2953–2955 ≥ 2815 → Port Sarim
+    },
 
     { x: 2683, z: 3272, level: 1, npc: 'Captain Barnaby', locName: 'Captain Barnaby', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Yes please.'] }, toTile: { x: 2775, z: 3234, level: 1 }, label: 'Ardougne->Brimhaven ship' },
-    { x: 2772, z: 3234, level: 1, npc: 'Customs officer', locName: 'Customs officer', action: 'Pay-fare', requires: { item: 'Coins', count: 30 }, dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] }, toTile: { x: 2683, z: 3268, level: 1 }, label: 'Brimhaven->Ardougne ship' },
+    {
+        x: 2772,
+        z: 3234,
+        level: 1,
+        npc: 'Customs officer',
+        locName: 'Customs officer',
+        action: 'Pay-fare',
+        requires: { item: 'Coins', count: 30 },
+        dialogue: { choose: ['Can I journey on this ship?', 'Search away, I have nothing to hide.', 'Ok.'] },
+        toTile: { x: 2683, z: 3268, level: 1 },
+        label: 'Brimhaven->Ardougne ship' // npc x ~2772–2773 < 2815 → Ardougne
+    },
 
     { x: 2461, z: 3382, level: 0, locName: 'Gate', action: 'Open', dialogue: { choose: ['OK then'] }, reopenAfterDialogue: true, label: 'Gnome Stronghold gate (Femi boxes)' },
 
