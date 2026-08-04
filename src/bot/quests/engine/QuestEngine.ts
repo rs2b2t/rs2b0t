@@ -39,6 +39,19 @@ function bankFor(module: QuestModule): Tile | undefined {
     return module.bank === 'nearest' ? undefined : (module.bank ?? PROVISION_BANK);
 }
 
+/**
+ * Main-modal roots the engine must not auto-close. Pack ids from
+ * content/pack/interface.pack (rev 274).
+ */
+const INTERACTIVE_QUEST_MAIN: ReadonlySet<number> = new Set([
+    6675, // death_dice — Harold gambling (Death Plateau)
+    8119 // messagescroll_handwriting — combination after reading the IOU
+]);
+
+function isInteractiveQuestMainModal(mainId: number): boolean {
+    return INTERACTIVE_QUEST_MAIN.has(mainId);
+}
+
 function advancesWorld(step: QuestStep): boolean {
     return step.kind !== 'wait' && step.kind !== 'done';
 }
@@ -115,7 +128,17 @@ export class QuestEngine implements Task {
             return;
         }
 
-        if (reader.modals().main !== -1 && !Bank.isOpen() && !ChatDialog.isMakeMenu() && !ChatDialog.isMainMakePanel()) {
+        // Quest-complete scrolls (and similar leftovers) sit on main and block the
+        // next decide() tick. Interactive quest UIs also use main — never auto-close
+        // those (Death Plateau dice / combination handwriting were being killed mid-step).
+        const mainModal = reader.modals().main;
+        if (
+            mainModal !== -1
+            && !Bank.isOpen()
+            && !ChatDialog.isMakeMenu()
+            && !ChatDialog.isMainMakePanel()
+            && !isInteractiveQuestMainModal(mainModal)
+        ) {
             if (actions.closeModal()) {
                 this.host.log('closed a leftover main modal (quest-complete scroll)');
                 await Execution.delayTicks(1);

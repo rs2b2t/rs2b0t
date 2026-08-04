@@ -71,9 +71,22 @@ export function multiLandingNeedsRepath(
     return chebyshev(live, transport.toTile) > 3;
 }
 
+/** Display-name aliases for the same stair family (Burthorpe castle = "Stairs", many inns = "Staircase"). */
+function transportNameAliases(locName: string): string[] {
+    const base = locName.trim();
+    const names = [base];
+    if (/^staircase$/i.test(base)) {
+        names.push('Stairs');
+    } else if (/^stairs$/i.test(base)) {
+        names.push('Staircase');
+    }
+    return names;
+}
+
 export function findTransportLoc(transport: TransportInfo): Loc | null {
+    const names = transportNameAliases(transport.locName);
     const byMeta = Locs.query()
-        .name(transport.locName)
+        .name(...names)
         .action(transport.action)
         .where(loc => matchesTransportLoc(transport, loc))
         .nearest();
@@ -83,7 +96,7 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     // Fallback: name+action near the recorded placement (scene lag / id drift after
     // ship hops — gangplanks on Brimhaven deck after Barnaby).
     const nearName = Locs.query()
-        .name(transport.locName)
+        .name(...names)
         .action(transport.action)
         .where(loc => {
             const t = loc.tile();
@@ -92,6 +105,23 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
         .nearest();
     if (nearName) {
         return nearName;
+    }
+    // Last resort for stairs: any Climb-* loc at the placement tile, regardless of
+    // Stairs vs Staircase (content packs differ; edge data may lag).
+    if (/climb/i.test(transport.action) && /stair/i.test(transport.locName)) {
+        const byTile = Locs.query()
+            .action(transport.action)
+            .where(loc => {
+                const t = loc.tile();
+                return (
+                    Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 2
+                    && /stair/i.test(loc.name ?? '')
+                );
+            })
+            .nearest();
+        if (byTile) {
+            return byTile;
+        }
     }
     // Closed→open transform: doors keep the same name but swap Open↔Close and id.
     // Nearby open leaf ⇒ treat as not-shut so the walker steps through.

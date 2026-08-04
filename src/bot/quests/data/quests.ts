@@ -254,11 +254,10 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'death', name: 'Death Plateau', questPoints: 1,
         requirements: {},
-        items: [
-            { name: 'Bread', qty: 10, kind: 'mustHave' },
-            { name: 'Trout', qty: 10, kind: 'mustHave' },
-            { name: 'Iron bar', qty: 1, kind: 'mustHave' }
-        ]
+        // Bread ×10, Trout ×10, Iron bar ×1 are mid-quest Tenzing/Dunstan supplies.
+        // The deathplateau module withdraws them when the map track needs them; listing
+        // them as mustHave here parks the queue before Denulth even starts (Tourist Trap pattern).
+        items: []
     },
     {
         id: 'desertrescue', name: 'The Tourist Trap', questPoints: 2,
