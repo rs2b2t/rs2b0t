@@ -600,6 +600,18 @@ class BuryBones implements Task {
     }
 }
 
+/**
+ * Scene can keep a ground stack visible after Take fails (already taken by another
+ * bot, client desync, multibox). Without a skip, LootDrops spins forever on the
+ * same "ghost" pile — #424. Mirror FireGiant: blacklist that tile+id for a while.
+ */
+const LOOT_SKIP_MS = 30_000;
+const lootSkip = new Map<string, number>();
+
+function lootDropKey(id: number, tile: Tile): string {
+    return `${id}|${tile.x}|${tile.z}|${tile.level}`;
+}
+
 class LootDrops implements Task {
     constructor(private bot: ChickenKiller) {}
 
@@ -617,31 +629,40 @@ class LootDrops implements Task {
         this.bot.setStatus(`looting ${name} at ${drop.tile()}`);
         const id = drop.id;
         const tile = drop.tile();
+        const key = lootDropKey(id, tile);
         const find = () =>
             GroundItems.query()
                 .where(item => item.id === id && item.tile().equals(tile))
                 .nearest();
         const before = Inventory.used();
+        const countBefore = Inventory.count(name);
         const status = await Reach.entityOp({
             find,
             op: 'Take',
-            expect: () => Inventory.used() > before,
+            // Stackables may not free a pack slot; also watch the named count.
+            expect: () => Inventory.used() > before || Inventory.count(name) > countBefore,
             expectMs: 6000,
             what: name,
             log: message => this.bot.log(message)
         });
-        if (status === 'done' && Inventory.used() > before) {
+        if (status === 'done' && (Inventory.used() > before || Inventory.count(name) > countBefore)) {
+            lootSkip.delete(key);
             this.bot.log(`looted ${name}`);
-        } else if (status === 'retry') {
-            this.bot.log('loot attempt did not complete');
+        } else if (status === 'retry' || status === 'unreachable') {
+            lootSkip.set(key, performance.now() + LOOT_SKIP_MS);
+            this.bot.log(
+                `loot attempt did not complete — ignoring ${name} at ${tile.x},${tile.z} for ${LOOT_SKIP_MS / 1000}s (#424)`
+            );
         }
     }
 
     private find() {
         const terms = this.bot.lootTerms();
+        const now = performance.now();
         return GroundItems.query()
             .where(g => terms.some(t => t.length > 0 && (g.name?.toLowerCase() ?? '').includes(t)))
             .where(g => this.bot.acceptsLootAt(g.tile()))
+            .where(g => (lootSkip.get(lootDropKey(g.id, g.tile())) ?? 0) < now)
             .within(this.bot.leashRadius() + 4)
             .nearest();
     }
