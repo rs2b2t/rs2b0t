@@ -27,7 +27,8 @@ const TARGET = 'Giant';
 // Verified on a rev-274 engine: the hut door is opened by USING the key on it
 // (oploc1 only says "The door is locked"), and the ladder inside drops into the
 // Edgeville dungeon giant pit.
-const BANK_TILE = new Tile(3253, 3420, 0);
+// Varrock West is closer to the Edgeville dungeon hut than East (#428).
+const BANK_TILE = new Tile(3185, 3440, 0);
 const HUT_DOOR = new Tile(3115, 3450, 0);
 const HUT_LADDER = new Tile(3116, 3452, 0);
 const HUT_OUTSIDE = new Tile(3116, 3448, 0);
@@ -323,7 +324,7 @@ class BankRun implements Task {
     async execute(): Promise<void> {
         const { food, foodPerTrip, lootSlots } = this.bot.cfg();
         this.bot.setStatus('banking');
-        if (!(await this.bot.walkTo(BANK_TILE, 'the Varrock East bank'))) {
+        if (!(await this.bot.walkTo(BANK_TILE, 'the Varrock West bank'))) {
             return;
         }
         if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))) {
