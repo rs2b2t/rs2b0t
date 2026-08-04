@@ -70,7 +70,11 @@ class SchedulerImpl {
         }
         ctx.waiters = still;
 
-        if (!ctx.loopInFlight && now >= ctx.nextLoopAt && this.launchLoop) {
+        // Both gates must pass: wall-clock (`nextLoopAt`) and optional server-tick
+        // (`nextLoopTick`). Tick-aligned loops set nextLoopAt=0 and nextLoopTick=N.
+        const wallOk = now >= ctx.nextLoopAt;
+        const tickOk = ctx.nextLoopTick === 0 || tick >= ctx.nextLoopTick;
+        if (!ctx.loopInFlight && wallOk && tickOk && this.launchLoop) {
             ctx.progress();
             this.launchLoop(ctx);
         }

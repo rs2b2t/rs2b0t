@@ -6,8 +6,52 @@ import type Tile from './Tile.js';
  * Base class for every bot.
  * @see docs/API.md#bot-base-classes
  */
+/**
+ * How the runner schedules the next `loop()` after one finishes.
+ * - `server-tick` (default): wait for N observed `Game.tick()` / PLAYER_INFO advances
+ * - `frame`: eligible on the next client frame (~20 ms) — use for hot TaskBots that
+ *   already guard against double-dispatch
+ * - `time`: deliberate wall-clock pacing (dashboards, humanisation)
+ *
+ * Numeric `loopDelay` is still accepted for compatibility; see {@link resolveLoopCadence}.
+ */
+export type LoopCadence =
+    | { kind: 'frame' }
+    | { kind: 'server-tick'; ticks?: number }
+    | { kind: 'time'; ms: number };
+
+/**
+ * Map legacy `loopDelay` ms to an explicit cadence.
+ * - `0` → next client frame
+ * - `600` (historical "one tick" default and most overrides) → next server tick
+ * - any other value → wall-clock ms
+ */
+export function resolveLoopCadence(loopDelayMs: number, override?: LoopCadence | null): LoopCadence {
+    if (override) {
+        return override;
+    }
+    if (loopDelayMs <= 0) {
+        return { kind: 'frame' };
+    }
+    // The long-standing default and the value ~30 scripts hardcode: meant "about one
+    // game tick", not a free-running wall-clock timer that drifts vs PLAYER_INFO.
+    if (loopDelayMs === 600) {
+        return { kind: 'server-tick', ticks: 1 };
+    }
+    return { kind: 'time', ms: loopDelayMs };
+}
+
 export abstract class AbstractBot {
+    /**
+     * Legacy wall-clock-ish pacing between `loop()` calls.
+     * Prefer {@link loopCadence}. The value `600` is interpreted as **one server tick**
+     * (see {@link resolveLoopCadence}); use an explicit `loopCadence: { kind: 'time', ms }`
+     * if you truly need wall-clock 600 ms.
+     */
     loopDelay = 600;
+
+    /** When set, overrides the cadence derived from {@link loopDelay}. */
+    loopCadence: LoopCadence | null = null;
 
     settings: SettingsBag = new SettingsBag({});
 

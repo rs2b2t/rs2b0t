@@ -1,17 +1,35 @@
 import { reader } from '../adapter/ClientAdapter.js';
-import type { AbstractBot } from '../api/Bot.js';
+import { resolveLoopCadence, type AbstractBot, type LoopCadence } from '../api/Bot.js';
 import { Execution } from '../api/Execution.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Sustain } from '../api/Sustain.js';
 import type { PaintFrame } from '../api/hud/Paint.js';
 import { paintState } from '../api/hud/paintLogic.js';
 import { ActionRouter } from '../input/ActionRouter.js';
+import { BotHost } from '../BotHost.js';
 import { RecoveryHints } from './RecoveryHints.js';
 import { Scheduler } from './Scheduler.js';
 import { ScriptAborted, ScriptContext } from './ScriptContext.js';
 import type { ScriptMeta } from './ScriptRegistry.js';
 import { SettingsBag, SettingsStore } from './Settings.js';
 import { Supervisor } from './Supervisor.js';
+
+/** Schedule the next `loop()` according to the bot's cadence (see #427). */
+function scheduleNextLoop(ctx: ScriptContext, cadence: LoopCadence): void {
+    ctx.nextLoopAt = 0;
+    ctx.nextLoopTick = 0;
+    if (cadence.kind === 'frame') {
+        // Eligible on the next Scheduler.pump (next client frame). nextLoopAt=0 is
+        // already due; loopInFlight prevented re-entry during this iteration.
+        return;
+    }
+    if (cadence.kind === 'server-tick') {
+        const n = Math.max(1, cadence.ticks ?? 1);
+        ctx.nextLoopTick = BotHost.tickCount + n;
+        return;
+    }
+    ctx.nextLoopAt = performance.now() + Math.max(0, cadence.ms);
+}
 
 /**
  * Logged out (or mid scene load) the adapter serves stale or empty state, so a
@@ -177,7 +195,8 @@ class ScriptRunnerImpl {
             }
             // deliberate wait, not a stall: keep StallGuard from churn-restarting
             ctx.progress();
-            ctx.nextLoopAt = performance.now() + 600;
+            // Wall-clock poll while logged out — no server ticks arrive.
+            scheduleNextLoop(ctx, { kind: 'time', ms: 600 });
             return;
         }
         if (this.loggedOutSince > 0) {
@@ -205,7 +224,15 @@ class ScriptRunnerImpl {
                     return;
                 }
 
-                ctx.nextLoopAt = performance.now() + (takeover ? 600 : typeof delay === 'number' ? delay : bot.loopDelay);
+                // Takeover / supervisor: one server tick between intercepts.
+                // Numeric return from loop() keeps legacy wall-clock meaning only when
+                // it is not the historical "600 = one tick" value (resolveLoopCadence).
+                const cadence = takeover
+                    ? ({ kind: 'server-tick', ticks: 1 } satisfies LoopCadence)
+                    : typeof delay === 'number'
+                      ? resolveLoopCadence(delay, null)
+                      : resolveLoopCadence(bot.loopDelay, bot.loopCadence);
+                scheduleNextLoop(ctx, cadence);
             })
             .catch(err => this.settleFailure(ctx, err));
     }

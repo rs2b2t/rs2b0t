@@ -29,7 +29,13 @@ export class ScriptContext {
     waiters: Waiter[] = [];
 
     loopInFlight = false;
+    /** Wall-clock eligibility (0 = no wall-clock gate). */
     nextLoopAt = 0;
+    /**
+     * Server-tick eligibility via `BotHost.tickCount` (0 = no tick gate).
+     * When set, both this and `nextLoopAt` must pass before the next loop runs.
+     */
+    nextLoopTick = 0;
     loopCount = 0;
 
     lastProgressAt = performance.now();

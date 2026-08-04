@@ -70,7 +70,8 @@ All bots extend `AbstractBot` (usually via `LoopingBot`, `TaskBot`, or
 
 ```ts
 abstract class AbstractBot {
-    loopDelay: number;                 // wall-clock ms between loop() iterations
+    loopDelay: number;                 // legacy pacing; 600 = one server tick (see loopCadence)
+    loopCadence: LoopCadence | null;   // optional explicit frame | server-tick | time
     readonly settings: SettingsBag;    // resolved run parameters
 
     onStart?(): void | Promise<void>;  // before the first loop
@@ -90,8 +91,10 @@ abstract class AbstractBot {
 
 ### LoopingBot
 
-The common case: implement `loop()`. Return a number to override `loopDelay` for
-the next iteration.
+The common case: implement `loop()`. Return a number to override pacing for the
+next iteration (`0` = next frame, `600` = next server tick, other = wall-clock ms).
+Set `loopCadence` on the bot for an explicit `{ kind: 'frame' | 'server-tick' | 'time' }`
+policy (see #427).
 
 ```ts
 abstract class LoopingBot extends AbstractBot {
