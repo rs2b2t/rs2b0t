@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **47 scripts** across 20 categories. They double as worked
+The client ships **48 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 

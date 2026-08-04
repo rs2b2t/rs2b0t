@@ -1,7 +1,13 @@
 import * as RealInventory from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
+import { expect, test, describe, beforeEach, afterAll } from 'bun:test';
 
+import { Execution } from '#/bot/api/Execution.js';
+import { Game } from '#/bot/api/Game.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import { Locs } from '#/bot/api/queries/Locs.js';
+import { bus } from '#/bot/events/EventBus.js';
 import Tile from '#/bot/api/Tile.js';
+import { stubProps } from '../lib/stubSingletons.js';
 
 let tick: number;
 let cakeCount: number;
@@ -15,32 +21,27 @@ let onClick: () => void;
 let pollHook: () => void;
 let walkFails: number;
 
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (fn: () => boolean, _ms?: number): Promise<boolean> => {
-            for (let i = 0; i < 60; i++) {
-                if (fn()) {
-                    return true;
-                }
-                tick++;
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (fn: () => boolean, _ms?: number): Promise<boolean> => {
+        for (let i = 0; i < 60; i++) {
+            if (fn()) {
+                return true;
             }
-            return fn();
-        },
-        delayTicks: async (n: number = 1): Promise<void> => {
-            tick += n;
+            tick++;
         }
+        return fn();
+    },
+    delayTicks: async (n: number = 1): Promise<void> => {
+        tick += n;
     }
-}));
-mock.module('#/bot/api/Game.js', () => ({
-    Game: {
-        tick: () => tick,
-        inCombat: () => inCombat,
-        tile: () => playerTile,
-        ingame: () => true
-    }
-}));
-// Mutate the singleton instead of mock.module: a module replacement is global and
-// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
+});
+const restoreGame = stubProps(Game, {
+    tick: () => tick,
+    inCombat: () => inCombat,
+    tile: () => playerTile,
+    ingame: () => true
+});
 const realInventoryFns = { ...RealInventory.Inventory };
 const stubInventory = {
     items: () => Array.from({ length: cakeCount }, (_, i) => ({ id: 1891, name: 'Cake', count: 1, slot: i })),
@@ -49,63 +50,63 @@ const stubInventory = {
     used: () => cakeCount,
     first: () => null
 };
-beforeEach(() => Object.assign(RealInventory.Inventory, stubInventory));
-afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {
-            walks.push(`${dest.x},${dest.z}`);
-            if (walkFails > 0) {
-                walkFails--;
-                return false;
+const restoreTraversal = stubProps(Traversal, {
+    walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {
+        walks.push(`${dest.x},${dest.z}`);
+        if (walkFails > 0) {
+            walkFails--;
+            return false;
+        }
+        playerTile = new Tile(dest.x, dest.z, 0);
+        return true;
+    },
+    walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
+        walks.push(`${dest.x},${dest.z}`);
+        playerTile = new Tile(dest.x, dest.z, 0);
+        return true;
+    }
+});
+const restoreLocs = stubProps(Locs, {
+    query: () => {
+        const chain = {
+            name: () => chain,
+            action: () => chain,
+            where: () => chain,
+            results: () => [],
+            nearest: () => {
+                pollHook();
+                return stallStocked
+                    ? {
+                          tile: () => new Tile(2667, 3310, 0),
+                          interact: async (): Promise<boolean> => {
+                              clicks++;
+                              onClick();
+                              return true;
+                          }
+                      }
+                    : null;
             }
-            playerTile = new Tile(dest.x, dest.z, 0);
-            return true;
-        },
-        walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
-            walks.push(`${dest.x},${dest.z}`);
-            playerTile = new Tile(dest.x, dest.z, 0);
-            return true;
-        }
+        };
+        return chain as never;
     }
-}));
-mock.module('#/bot/api/queries/Locs.js', () => ({
-    Locs: {
-        query: () => {
-            const chain = {
-                name: () => chain,
-                action: () => chain,
-                where: () => chain,
-                results: () => [],
-                nearest: () => {
-                    pollHook();
-                    return stallStocked
-                        ? {
-                            tile: () => new Tile(2667, 3310, 0),
-                            interact: async (): Promise<boolean> => {
-                                clicks++;
-                                onClick();
-                                return true;
-                            }
-                        }
-                        : null;
-                }
-            };
-            return chain;
-        }
-    }
-}));
-mock.module('#/bot/events/EventBus.js', () => ({
-    bus: {
-        on: (_event: string, cb: (e: { text: string }) => void): (() => void) => {
-            chatHandler = cb;
-            return () => {
-                chatHandler = null;
-            };
-        },
-        emit: () => {}
-    }
-}));
+});
+const restoreBus = stubProps(bus, {
+    on: (_event: string, cb: (e: { text: string }) => void): (() => void) => {
+        chatHandler = cb;
+        return () => {
+            chatHandler = null;
+        };
+    },
+    emit: () => {}
+});
+afterAll(() => {
+    restoreExec();
+    restoreGame();
+    restoreTraversal();
+    restoreLocs();
+    restoreBus();
+    Object.assign(RealInventory.Inventory, realInventoryFns);
+});
 
 const { stealCakes } = await import('#/bot/scripts/CakeStall.js');
 
@@ -125,6 +126,7 @@ function opts(over: Record<string, unknown> = {}) {
 
 describe('stealCakes driver', () => {
     beforeEach(() => {
+        Object.assign(RealInventory.Inventory, stubInventory);
         tick = 100;
         cakeCount = 0;
         inCombat = false;

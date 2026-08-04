@@ -1,7 +1,12 @@
-import * as RealNpcs from '#/bot/api/queries/Npcs.js';
-import { expect, test, describe, mock, beforeEach } from 'bun:test';
+import { expect, test, describe, beforeEach, afterAll } from 'bun:test';
 
+import { Execution } from '#/bot/api/Execution.js';
+import { Game } from '#/bot/api/Game.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import { Locs } from '#/bot/api/queries/Locs.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
 import Tile from '#/bot/api/Tile.js';
+import { stubProps } from '../../lib/stubSingletons.js';
 
 interface WorldTileLike {
     x: number;
@@ -33,28 +38,32 @@ const npcChain = {
     nearest: () => null
 };
 
-mock.module('#/bot/api/Game.js', () => ({ Game: { tile: () => current } }));
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
-        delayTicks: async (): Promise<void> => {}
-    }
-}));
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkResilient: async (dest: WorldTileLike): Promise<boolean> => {
-            walkTargets.push(dest);
-            const landed = walkScript(dest);
-            if (landed === false) {
-                return false;
-            }
-            current = landed;
-            return true;
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
+const restoreGame = stubProps(Game, { tile: () => current });
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
+    delayTicks: async (): Promise<void> => {}
+});
+const restoreTraversal = stubProps(Traversal, {
+    walkResilient: async (dest: WorldTileLike): Promise<boolean> => {
+        walkTargets.push(dest);
+        const landed = walkScript(dest);
+        if (landed === false) {
+            return false;
         }
+        current = landed;
+        return true;
     }
-}));
-mock.module('#/bot/api/queries/Locs.js', () => ({ Locs: { query: () => locChain } }));
-mock.module('#/bot/api/queries/Npcs.js', () => ({ ...RealNpcs, Npcs: { query: () => npcChain } }));
+});
+const restoreLocs = stubProps(Locs, { query: () => locChain as never });
+const restoreNpcs = stubProps(Npcs, { query: () => npcChain as never });
+afterAll(() => {
+    restoreGame();
+    restoreExec();
+    restoreTraversal();
+    restoreLocs();
+    restoreNpcs();
+});
 
 const { gotoNpc } = await import('#/bot/quests/exec/primitives.js');
 

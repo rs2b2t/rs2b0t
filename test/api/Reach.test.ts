@@ -1,4 +1,14 @@
-import { describe, expect, mock, test, beforeEach } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import { reader } from '#/bot/adapter/ClientAdapter.js';
+import { Execution } from '#/bot/api/Execution.js';
+import { Reachability } from '#/bot/api/Reachability.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import { ChatDialog } from '#/bot/api/hud/ChatDialog.js';
+import { Locs } from '#/bot/api/queries/Locs.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
+import { WalkExecutor } from '#/bot/nav/WalkExecutor.js';
+import { stubProps } from '../lib/stubSingletons.js';
 
 let sceneLoc: { name: string; ops: string[]; tile: { x: number; z: number; level: number }; interactResult: boolean } | null;
 let sceneDoor: { name: string; ops: string[]; tile: { x: number; z: number; level: number }; distance: number; interactResult: boolean } | null;
@@ -16,93 +26,124 @@ let dialogOpen: boolean;
 let expectFlips: boolean;
 let onDoorOpen: (() => void) | null;
 
-const { isOpenableBarrier, isOpenBarrierLeaf } = await import('#/bot/nav/WalkExecutor.js');
-
-const RealAdapter = await import('#/bot/adapter/ClientAdapter.js');
-mock.module('#/bot/adapter/ClientAdapter.js', () => ({
-    ...RealAdapter,
-    reader: { ...RealAdapter.reader, worldTile: () => ({ x: 0, z: 0, level: 0 }) }
-}));
 const { GameMessages } = await import('#/bot/events/gameMessages.js');
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (cond: () => boolean) => cond(),
-        delayTicks: async () => {}
-    }
-}));
 
-const locHandle = () => (sceneLoc ? {
-    name: sceneLoc.name, tile: () => sceneLoc!.tile, actions: () => sceneLoc!.ops,
-    interact: async () => { locInteractCount++; if (cantReach) { GameMessages.record("I can't reach that!"); } return sceneLoc!.interactResult; }
-} : null);
-const doorHandle = () => (sceneDoor ? {
-    name: sceneDoor.name, tile: () => sceneDoor!.tile, actions: () => sceneDoor!.ops, distance: () => sceneDoor!.distance,
-    interact: async () => {
-        doorInteractCount++;
-        if (!sceneDoor!.interactResult) { return false; }
-        onDoorOpen?.();
-        sceneDoor = null;
-        return true;
-    }
-} : null);
-const npcHandle = () => (sceneNpc ? {
-    name: sceneNpc.name,
-    tile: () => sceneNpc!.tile,
-    distance: () => 1,
-    actions: () => ['Talk-to', 'Attack'],
-    interact: async () => {
-        npcInteractCount++;
-        onNpcInteract?.();
-        if (cantReach) { GameMessages.record("I can't reach that!"); }
-        return sceneNpc?.interactResult ?? false;
-    }
-} : null);
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
+const restoreReader = stubProps(reader, { worldTile: () => ({ x: 0, z: 0, level: 0 }) });
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (cond: () => boolean) => cond(),
+    delayTicks: async () => {}
+});
+
+const locHandle = () =>
+    sceneLoc
+        ? {
+              name: sceneLoc.name,
+              tile: () => sceneLoc!.tile,
+              actions: () => sceneLoc!.ops,
+              interact: async () => {
+                  locInteractCount++;
+                  if (cantReach) {
+                      GameMessages.record("I can't reach that!");
+                  }
+                  return sceneLoc!.interactResult;
+              }
+          }
+        : null;
+const doorHandle = () =>
+    sceneDoor
+        ? {
+              name: sceneDoor.name,
+              tile: () => sceneDoor!.tile,
+              actions: () => sceneDoor!.ops,
+              distance: () => sceneDoor!.distance,
+              interact: async () => {
+                  doorInteractCount++;
+                  if (!sceneDoor!.interactResult) {
+                      return false;
+                  }
+                  onDoorOpen?.();
+                  sceneDoor = null;
+                  return true;
+              }
+          }
+        : null;
+const npcHandle = () =>
+    sceneNpc
+        ? {
+              name: sceneNpc.name,
+              tile: () => sceneNpc!.tile,
+              distance: () => 1,
+              actions: () => ['Talk-to', 'Attack'],
+              interact: async () => {
+                  npcInteractCount++;
+                  onNpcInteract?.();
+                  if (cantReach) {
+                      GameMessages.record("I can't reach that!");
+                  }
+                  return sceneNpc?.interactResult ?? false;
+              }
+          }
+        : null;
 function whereChain(preds: ((l: unknown) => boolean)[]): unknown {
     return {
         where: (p: (l: unknown) => boolean) => whereChain([...preds, p]),
-        nearest: () => { const h = doorHandle(); return h && preds.every(p => p(h)) ? h : null; }
+        nearest: () => {
+            const h = doorHandle();
+            return h && preds.every(p => p(h)) ? h : null;
+        }
     };
 }
-mock.module('#/bot/api/queries/Locs.js', () => ({
-    Locs: {
-        query: () => ({
-            name: () => ({ action: () => ({ within: () => ({ nearest: locHandle }) }) }),
+const restoreLocs = stubProps(Locs, {
+    query: () =>
+        ({
+            name: () => ({
+                action: () => ({
+                    within: () => ({ nearest: locHandle }),
+                    where: (p: (l: unknown) => boolean) => whereChain([p]),
+                    nearest: locHandle
+                }),
+                where: (p: (l: unknown) => boolean) => whereChain([p]),
+                nearest: locHandle
+            }),
             where: (p: (l: unknown) => boolean) => whereChain([p])
-        })
-    }
-}));
-mock.module('#/bot/api/queries/Npcs.js', () => {
-    return {
-        Npcs: {
-            query: () => ({
-                name: () => ({
-                    nearest: npcHandle,
-                    action: () => ({ nearest: npcHandle }),
-                    where: (pred: (n: unknown) => boolean) => ({ nearest: () => { const h = npcHandle(); return h && pred(h) ? h : null; } })
+        }) as never
+});
+const restoreNpcs = stubProps(Npcs, {
+    query: () =>
+        ({
+            name: () => ({
+                nearest: npcHandle,
+                action: () => ({ nearest: npcHandle }),
+                where: (pred: (n: unknown) => boolean) => ({
+                    nearest: () => {
+                        const h = npcHandle();
+                        return h && pred(h) ? h : null;
+                    }
                 })
             })
-        }
-    };
+        }) as never
 });
-mock.module('#/bot/api/hud/ChatDialog.js', () => ({
-    ChatDialog: { isOpen: () => dialogOpen, canContinue: () => false }
-}));
-mock.module('#/bot/api/Reachability.js', () => ({
-    Reachability: { canReach: () => canReachResult }
-}));
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkResilient: async (dest: { x: number; z: number; level: number }) => {
-            walkCalls.push(dest);
-            return walkResult;
-        }
+const restoreChat = stubProps(ChatDialog, { isOpen: () => dialogOpen, canContinue: () => false });
+const restoreReach = stubProps(Reachability, { canReach: () => canReachResult });
+const restoreTraversal = stubProps(Traversal, {
+    walkResilient: async (dest: { x: number; z: number; level: number }) => {
+        walkCalls.push(dest);
+        return walkResult;
     }
-}));
-mock.module('#/bot/nav/WalkExecutor.js', () => ({
-    WalkExecutor: { get lastOutcome() { return walkLastOutcome; } },
-    isOpenableBarrier,
-    isOpenBarrierLeaf
-}));
+});
+// Real WalkExecutor — pin lastOutcome via the writable field (no module mock).
+const realLastOutcome = WalkExecutor.lastOutcome;
+afterAll(() => {
+    restoreReader();
+    restoreExec();
+    restoreLocs();
+    restoreNpcs();
+    restoreChat();
+    restoreReach();
+    restoreTraversal();
+    WalkExecutor.lastOutcome = realLastOutcome;
+});
 
 const { Reach } = await import('#/bot/api/Reach.js');
 
@@ -113,6 +154,7 @@ beforeEach(() => {
     walkCalls = [];
     walkResult = true;
     walkLastOutcome = 'failed';
+    WalkExecutor.lastOutcome = 'failed';
     canReachResult = true;
     cantReach = false;
     locInteractCount = 0;
@@ -233,6 +275,7 @@ describe('Reach.locOp', () => {
     test('hint walk proven unreachable → unreachable', async () => {
         walkResult = false;
         walkLastOutcome = 'unreachable';
+        WalkExecutor.lastOutcome = 'unreachable';
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('unreachable');
     });
@@ -268,6 +311,7 @@ describe('Reach.locOp', () => {
         sceneLoc = { name: 'Staircase', ops: ['Climb-up'], tile: { x: 8, z: 5, level: 0 }, interactResult: true };
         walkResult = false;
         walkLastOutcome = 'unreachable';
+        WalkExecutor.lastOutcome = 'unreachable';
         const r = await Reach.locOp({ name: 'Staircase', op: 'Climb-up', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('unreachable');
         expect(locInteractCount).toBe(0);

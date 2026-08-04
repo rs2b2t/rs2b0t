@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import { Execution } from '#/bot/api/Execution.js';
+import { Game } from '#/bot/api/Game.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import * as RealInventory from '#/bot/api/hud/Inventory.js';
+import { GroundItems } from '#/bot/api/queries/GroundItems.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
+import { stubProps } from '../../lib/stubSingletons.js';
 
 interface TestNpc {
     id: number;
@@ -26,94 +34,84 @@ let attackedIds: number[];
 let takenIds: number[];
 let walks: { x: number; z: number; level: number; radius: number }[];
 
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (condition: () => boolean): Promise<boolean> => condition(),
-        delayTicks: async (): Promise<void> => {}
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (condition: () => boolean): Promise<boolean> => condition(),
+    delayTicks: async (): Promise<void> => {}
+});
+const restoreGame = stubProps(Game, {
+    inCombat: (): boolean => playerInCombat,
+    tile: () => ({ x: 3144, z: 3231, level: 0 })
+});
+const realInventoryFns = { ...RealInventory.Inventory };
+const stubInventory = {
+    count: (name: string): number => (name.toLowerCase() === 'bones' ? boneCount : 0),
+    contains: (): boolean => false,
+    first: () => null,
+    isFull: (): boolean => false,
+    items: () => []
+};
+const restoreTraversal = stubProps(Traversal, {
+    walkResilient: async (
+        tile: { x: number; z: number; level: number },
+        options: { radius: number }
+    ): Promise<boolean> => {
+        walks.push({ ...tile, radius: options.radius });
+        return true;
     }
-}));
-
-mock.module('#/bot/api/Game.js', () => ({
-    Game: {
-        inCombat: (): boolean => playerInCombat,
-        tile: () => ({ x: 3144, z: 3231, level: 0 })
+});
+const restoreGround = stubProps(GroundItems, {
+    query: () => {
+        let matches = [...groundItems];
+        const chain = {
+            name: (...names: string[]) => {
+                matches = matches.filter(item => names.includes(item.name));
+                return chain;
+            },
+            where: (predicate: (item: TestGroundItem) => boolean) => {
+                matches = matches.filter(predicate);
+                return chain;
+            },
+            within: (distance: number) => {
+                matches = matches.filter(item => item.distance() <= distance);
+                return chain;
+            },
+            nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
+        };
+        return chain as never;
     }
-}));
-
-mock.module('#/bot/api/hud/Inventory.js', () => ({
-    InvItem: class {},
-    backpackCapacity: (): number => 28,
-    backpackSnapshots: () => [],
-    Inventory: {
-        count: (name: string): number => (name.toLowerCase() === 'bones' ? boneCount : 0),
-        contains: (): boolean => false,
-        first: () => null,
-        isFull: (): boolean => false,
-        items: () => []
-    }
-}));
-
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkResilient: async (tile: { x: number; z: number; level: number }, options: { radius: number }): Promise<boolean> => {
-            walks.push({ ...tile, radius: options.radius });
-            return true;
-        }
-    }
-}));
-
-mock.module('#/bot/api/queries/GroundItems.js', () => ({
-    GroundItem: class {},
-    GroundItems: {
-        query: () => {
-            let matches = [...groundItems];
-            const chain = {
-                name: (...names: string[]) => {
-                    matches = matches.filter(item => names.includes(item.name));
-                    return chain;
-                },
-                where: (predicate: (item: TestGroundItem) => boolean) => {
-                    matches = matches.filter(predicate);
-                    return chain;
-                },
-                within: (distance: number) => {
-                    matches = matches.filter(item => item.distance() <= distance);
-                    return chain;
-                },
-                nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
-            };
-            return chain;
-        }
-    }
-}));
-
-mock.module('#/bot/api/queries/Npcs.js', () => ({
-    Npc: class {},
-    talkOp: (actions: string[]): string | null => actions.find(action => /^talk/i.test(action)) ?? null,
-    Npcs: {
-        query: () => {
-            let matches = [...npcs];
-            const chain = {
-                name: (...names: string[]) => {
-                    matches = matches.filter(npc => names.includes(npc.name));
-                    return chain;
-                },
-                action: () => chain,
-                where: (predicate: (npc: TestNpc) => boolean) => {
-                    matches = matches.filter(predicate);
-                    return chain;
-                },
-                within: (distance: number) => {
-                    matches = matches.filter(npc => npc.distance() <= distance);
-                    return chain;
-                },
-                nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
-            };
-            return chain;
-        },
-        all: (): TestNpc[] => npcs
-    }
-}));
+});
+const restoreNpcs = stubProps(Npcs, {
+    query: () => {
+        let matches = [...npcs];
+        const chain = {
+            name: (...names: string[]) => {
+                matches = matches.filter(npc => names.includes(npc.name));
+                return chain;
+            },
+            action: () => chain,
+            where: (predicate: (npc: TestNpc) => boolean) => {
+                matches = matches.filter(predicate);
+                return chain;
+            },
+            within: (distance: number) => {
+                matches = matches.filter(npc => npc.distance() <= distance);
+                return chain;
+            },
+            nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
+        };
+        return chain as never;
+    },
+    all: (): TestNpc[] => npcs as never
+});
+afterAll(() => {
+    restoreExec();
+    restoreGame();
+    restoreTraversal();
+    restoreGround();
+    restoreNpcs();
+    Object.assign(RealInventory.Inventory, realInventoryFns);
+});
 
 const { demonslayer } = await import('#/bot/quests/defs/demonslayer.js');
 
@@ -169,6 +167,7 @@ async function gatherBones(): Promise<boolean> {
 }
 
 beforeEach(() => {
+    Object.assign(RealInventory.Inventory, stubInventory);
     boneCount = 0;
     playerInCombat = false;
     npcs = [];

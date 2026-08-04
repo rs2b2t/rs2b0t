@@ -1,9 +1,14 @@
-import * as RealNpcs from '#/bot/api/queries/Npcs.js';
-import * as RealGroundItems from '#/bot/api/queries/GroundItems.js';
 import * as RealInventory from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
+import { expect, test, describe, beforeEach, afterAll } from 'bun:test';
 
+import { EventSignal } from '#/bot/api/EventSignal.js';
+import { Execution } from '#/bot/api/Execution.js';
+import { Game } from '#/bot/api/Game.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import { GroundItems } from '#/bot/api/queries/GroundItems.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
 import Tile from '#/bot/api/Tile.js';
+import { stubProps } from '../lib/stubSingletons.js';
 
 const COORD_CLUE_ID = 2801;
 
@@ -15,17 +20,80 @@ let groundSpades: Tile[];
 let takes: number;
 let npcByName: Record<string, { x: number; z: number }>;
 
-mock.module('#/bot/api/Game.js', () => ({ Game: { tile: () => playerTile, ingame: () => true, inCombat: () => false } }));
-mock.module('#/bot/api/EventSignal.js', () => ({ EventSignal: { pending: () => false } }));
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
-        delayTicks: async (): Promise<void> => {}
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
+const restoreGame = stubProps(Game, {
+    tile: () => playerTile,
+    ingame: () => true,
+    inCombat: () => false
+});
+const restoreEvent = stubProps(EventSignal, { pending: () => false });
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
+    delayTicks: async (): Promise<void> => {}
+});
+const restoreTraversal = stubProps(Traversal, {
+    walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
+        walks.push(`${dest.x},${dest.z}`);
+        playerTile = new Tile(dest.x, dest.z, 0);
+        return true;
+    },
+    walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {
+        walks.push(`${dest.x},${dest.z}`);
+        playerTile = new Tile(dest.x, dest.z, 0);
+        return true;
     }
-}));
-// Mutate the singleton instead of mock.module: a module replacement is global and
-// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
-// Mutation has to be scoped the same way — install per test, restore after the file.
+});
+const restoreGround = stubProps(GroundItems, {
+    query: () => {
+        let list = groundSpades.map(t => ({
+            id: 952,
+            name: 'Spade',
+            tile: () => t,
+            distance: () => t.distanceTo(playerTile),
+            interact: async (): Promise<boolean> => {
+                takes++;
+                groundSpades = groundSpades.filter(g => g !== t);
+                held.push('Spade');
+                return true;
+            }
+        }));
+        const chain = {
+            where: (p: (g: (typeof list)[number]) => boolean) => {
+                list = list.filter(p);
+                return chain;
+            },
+            nearest: () => list.sort((a, b) => a.distance() - b.distance())[0] ?? null
+        };
+        return chain as never;
+    }
+});
+const restoreNpcs = stubProps(Npcs, {
+    query: () => {
+        let name = '';
+        const chain = {
+            name: (n: string) => {
+                name = n;
+                return chain;
+            },
+            action: () => chain,
+            where: () => chain,
+            results: () => [],
+            nearest: () => {
+                const s = npcByName[name];
+                return s
+                    ? {
+                          name,
+                          tile: () => new Tile(s.x, s.z, 0),
+                          distance: () => new Tile(s.x, s.z, 0).distanceTo(playerTile),
+                          actions: () => ['Talk-to'],
+                          interact: async () => true
+                      }
+                    : null;
+            }
+        };
+        return chain as never;
+    }
+});
 const realInventoryFns = { ...RealInventory.Inventory };
 const stubInventory = {
     items: () => {
@@ -36,72 +104,15 @@ const stubInventory = {
     first: (name: string) => (held.includes(name) ? { name } : null),
     count: (name: string) => held.filter(n => n === name).length
 };
-afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
-            walks.push(`${dest.x},${dest.z}`);
-            playerTile = new Tile(dest.x, dest.z, 0);
-            return true;
-        },
-        walkTo: async (dest: { x: number; z: number }): Promise<boolean> => {
-            walks.push(`${dest.x},${dest.z}`);
-            playerTile = new Tile(dest.x, dest.z, 0);
-            return true;
-        }
-    }
-}));
-mock.module('#/bot/api/queries/GroundItems.js', () => ({
-    ...RealGroundItems,
-    GroundItems: {
-        query: () => {
-            let list = groundSpades.map(t => ({
-                id: 952,
-                name: 'Spade',
-                tile: () => t,
-                distance: () => t.distanceTo(playerTile),
-                interact: async (): Promise<boolean> => {
-                    takes++;
-                    groundSpades = groundSpades.filter(g => g !== t);
-                    held.push('Spade');
-                    return true;
-                }
-            }));
-            const chain = {
-                where: (p: (g: (typeof list)[number]) => boolean) => {
-                    list = list.filter(p);
-                    return chain;
-                },
-                nearest: () => list.sort((a, b) => a.distance() - b.distance())[0] ?? null
-            };
-            return chain;
-        }
-    }
-}));
-mock.module('#/bot/api/queries/Npcs.js', () => ({
-    ...RealNpcs,
-    Npcs: {
-        query: () => {
-            let name = '';
-            const chain = {
-                name: (n: string) => {
-                    name = n;
-                    return chain;
-                },
-                action: () => chain,
-                where: () => chain,
-                results: () => [],
-                nearest: () => {
-                    const s = npcByName[name];
-                    return s
-                        ? { name, tile: () => new Tile(s.x, s.z, 0), distance: () => new Tile(s.x, s.z, 0).distanceTo(playerTile), actions: () => ['Talk-to'], interact: async () => true }
-                        : null;
-                }
-            };
-            return chain;
-        }
-    }
-}));
+afterAll(() => {
+    restoreGame();
+    restoreEvent();
+    restoreExec();
+    restoreTraversal();
+    restoreGround();
+    restoreNpcs();
+    Object.assign(RealInventory.Inventory, realInventoryFns);
+});
 
 const { ensureSpade, ensureCoordTools } = await import('#/bot/clues/AcquireTools.js');
 

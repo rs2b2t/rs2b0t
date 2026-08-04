@@ -1,11 +1,17 @@
-import * as RealNpcs from '#/bot/api/queries/Npcs.js';
-import * as RealLocs from '#/bot/api/queries/Locs.js';
-import * as RealGroundItems from '#/bot/api/queries/GroundItems.js';
 import * as RealInventory from '#/bot/api/hud/Inventory.js';
-import { expect, test, describe, mock, beforeEach, afterAll } from 'bun:test';
+import { expect, test, describe, beforeEach, afterAll } from 'bun:test';
 
+import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
+import { Execution } from '#/bot/api/Execution.js';
+import { Game } from '#/bot/api/Game.js';
+import { Traversal } from '#/bot/api/Traversal.js';
+import { ChatDialog } from '#/bot/api/hud/ChatDialog.js';
+import { GroundItems } from '#/bot/api/queries/GroundItems.js';
+import { Locs } from '#/bot/api/queries/Locs.js';
+import { Npcs } from '#/bot/api/queries/Npcs.js';
 import Tile from '#/bot/api/Tile.js';
 import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
+import { stubProps } from '../lib/stubSingletons.js';
 
 const CLUE_ID = 2853;
 const ANSWER = 5096;
@@ -18,92 +24,89 @@ let answered: number[];
 let continues: number;
 let walks: string[];
 
-const RealAdapter = await import('#/bot/adapter/ClientAdapter.js');
-mock.module('#/bot/adapter/ClientAdapter.js', () => ({
-    ...RealAdapter,
-    reader: {
-        ...RealAdapter.reader,
-        countDialogOpen: () => countDialog,
-        modals: () => ({ main: -1, chat: pages.length > 0 ? 5 : -1, side: -1 }),
-        worldTile: () => ({ x: 2394, z: 3488, level: 0 })
+const restoreReader = stubProps(reader, {
+    countDialogOpen: () => countDialog,
+    modals: () => ({ main: -1, chat: pages.length > 0 ? 5 : -1, side: -1 }),
+    worldTile: () => ({ x: 2394, z: 3488, level: 0 })
+});
+const restoreActions = stubProps(actions, {
+    answerCountDialog: (n: number): boolean => {
+        answered.push(n);
+        countDialog = false;
+        pages.push('well-done');
+        return true;
     },
-    actions: {
-        ...RealAdapter.actions,
-        answerCountDialog: (n: number): boolean => {
-            answered.push(n);
-            countDialog = false;
-            pages.push('well-done');
-            return true;
-        },
-        closeModal: (): boolean => true
-    }
-}));
-mock.module('#/bot/api/hud/ChatDialog.js', () => ({
-    ChatDialog: {
-        isOpen: () => pages.length > 0,
-        canContinue: () => pages.length > 0,
-        continue: async (): Promise<boolean> => {
-            continues++;
-            const page = pages.shift();
-            if (page === 'well-done') {
-                inv = inv.filter(id => id !== CLUE_ID);
-                pages.push('found-clue');
-            }
-            return true;
-        },
-        options: () => [],
-        chooseOption: async (): Promise<boolean> => false
-    }
-}));
-// Mutate the singleton instead of mock.module: a module replacement is global and
-// permanent in Bun, so it hands every later test a stub (docs/TESTING.md#unit-tests).
+    closeModal: (): boolean => true
+});
+const restoreChat = stubProps(ChatDialog, {
+    isOpen: () => pages.length > 0,
+    canContinue: () => pages.length > 0,
+    continue: async (): Promise<boolean> => {
+        continues++;
+        const page = pages.shift();
+        if (page === 'well-done') {
+            inv = inv.filter(id => id !== CLUE_ID);
+            pages.push('found-clue');
+        }
+        return true;
+    },
+    options: () => [],
+    chooseOption: async (): Promise<boolean> => false
+});
+// Mutate singletons — mock.module is permanent in Bun (docs/TESTING.md#unit-tests).
 const realInventoryFns = { ...RealInventory.Inventory };
 const stubInventory = {
     items: () => inv.map(id => ({ id, count: 1 })),
-    first: (name: string) => (invNames.some(n => n.toLowerCase() === name.toLowerCase()) ? { id: 0, count: 1, interact: async (): Promise<boolean> => true } : null)
+    first: (name: string) =>
+        invNames.some(n => n.toLowerCase() === name.toLowerCase())
+            ? { id: 0, count: 1, interact: async (): Promise<boolean> => true }
+            : null
 };
-beforeEach(() => Object.assign(RealInventory.Inventory, stubInventory));
-afterAll(() => Object.assign(RealInventory.Inventory, realInventoryFns));
-mock.module('#/bot/api/Execution.js', () => ({
-    Execution: {
-        delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
-        delayTicks: async (): Promise<void> => {}
+const restoreExec = stubProps(Execution, {
+    delayUntil: async (fn: () => boolean): Promise<boolean> => fn(),
+    delayTicks: async (): Promise<void> => {}
+});
+const restoreGame = stubProps(Game, {
+    inCombat: () => false,
+    tile: () => new Tile(2394, 3488, 0)
+});
+const restoreTraversal = stubProps(Traversal, {
+    walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
+        walks.push(`walk ${dest.x},${dest.z}`);
+        return true;
     }
-}));
-mock.module('#/bot/api/Game.js', () => ({
-    Game: {
-        inCombat: () => false,
-        tile: () => new Tile(2394, 3488, 0)
-    }
-}));
-mock.module('#/bot/api/Traversal.js', () => ({
-    Traversal: {
-        walkResilient: async (dest: { x: number; z: number }): Promise<boolean> => {
-            walks.push(`walk ${dest.x},${dest.z}`);
-            return true;
-        }
-    }
-}));
-const queryStub = {
-    query: () => {
-        const chain = {
-            name: () => chain,
-            action: () => chain,
-            where: () => chain,
-            nearest: () => null,
-            results: () => []
-        };
-        return chain;
-    }
+});
+const emptyQuery = () => {
+    const chain = {
+        name: () => chain,
+        action: () => chain,
+        where: () => chain,
+        nearest: () => null,
+        results: () => []
+    };
+    return chain as never;
 };
-mock.module('#/bot/api/queries/Npcs.js', () => ({ ...RealNpcs, Npcs: queryStub }));
-mock.module('#/bot/api/queries/Locs.js', () => ({ ...RealLocs, Locs: queryStub }));
-mock.module('#/bot/api/queries/GroundItems.js', () => ({ ...RealGroundItems, GroundItems: queryStub }));
+const restoreNpcs = stubProps(Npcs, { query: emptyQuery });
+const restoreLocs = stubProps(Locs, { query: emptyQuery });
+const restoreGround = stubProps(GroundItems, { query: emptyQuery });
+afterAll(() => {
+    restoreReader();
+    restoreActions();
+    restoreChat();
+    restoreExec();
+    restoreGame();
+    restoreTraversal();
+    restoreNpcs();
+    restoreLocs();
+    restoreGround();
+    Object.assign(RealInventory.Inventory, realInventoryFns);
+});
 
 const { ClueExecutor } = await import('#/bot/clues/ClueExecutor.js');
 
 describe('challenge reply handling', () => {
     beforeEach(() => {
+        Object.assign(RealInventory.Inventory, stubInventory);
         inv = [CLUE_ID];
         countDialog = true;
         pages = [];
@@ -123,6 +126,7 @@ describe('challenge reply handling', () => {
 
 describe('tool acquisition before abandon', () => {
     beforeEach(() => {
+        Object.assign(RealInventory.Inventory, stubInventory);
         countDialog = false;
         pages = [];
         answered = [];
@@ -145,6 +149,7 @@ describe('tool acquisition before abandon', () => {
 
 describe('per-clue required items (2811 Baxtorian Falls rope)', () => {
     beforeEach(() => {
+        Object.assign(RealInventory.Inventory, stubInventory);
         inv = [2811];
         invNames = [];
         countDialog = false;
