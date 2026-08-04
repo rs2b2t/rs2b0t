@@ -50,3 +50,6 @@ screenshots/
 # operator-only notes (not for token-hungry upstream clones)
 docs/local/
 tools/nav/transport-heavy.routes.json
+
+# Local test convenience — soundfont lives in the engine public/, not this repo
+src/3rdparty/SCC1_Florestan.sf2

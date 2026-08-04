@@ -6,6 +6,7 @@ import { Equipment } from '../../api/hud/Equipment.js';
 import { Inventory } from '../../api/hud/Inventory.js';
 import { Quests } from '../../api/hud/Quests.js';
 import { Skills } from '../../api/hud/Skills.js';
+import { Prayer } from '../../api/Prayer.js';
 import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
@@ -254,6 +255,10 @@ function sourceCombatFood(snap: QuestSnapshot): QuestStep | null {
     return withdraw([{ name: food, qty: missing }]);
 }
 
+/**
+ * Top up toward `target` HP fraction before a fight. Keep this well below 1.0 —
+ * the old 0.9 target burned food for tiny heal scraps (#393).
+ */
 async function restoreWithSelectedFood(target: number): Promise<void> {
     for (let i = 0; i < LOST_CITY_FOOD_TARGET && Skills.hpFraction() < target; i++) {
         const beforeHp = Skills.effective('hitpoints');
@@ -264,10 +269,37 @@ async function restoreWithSelectedFood(target: number): Promise<void> {
     }
 }
 
-async function waitOutCombat(timeoutMs: number): Promise<boolean> {
+/** Drink a prayer potion dose when points are low (optional; user-supplied pots). */
+async function sipPrayerIfNeeded(): Promise<void> {
+    if (Prayer.max() < 43 || Prayer.points() > Math.max(5, Prayer.max() * 0.25)) {
+        return;
+    }
+    const pot = Inventory.items().find(i => {
+        const n = (i.name ?? '').toLowerCase();
+        return n.includes('prayer potion') && i.actions().some(a => a.toLowerCase() === 'drink');
+    });
+    if (!pot) {
+        return;
+    }
+    const before = Prayer.points();
+    await pot.interact('Drink');
+    await Execution.delayUntil(() => Prayer.points() > before, 3000);
+}
+
+async function waitOutCombat(timeoutMs: number, opts?: { protectMelee?: boolean }): Promise<boolean> {
+    if (opts?.protectMelee && Prayer.available('Protect from Melee') && !Prayer.active('Protect from Melee')) {
+        await Prayer.set('Protect from Melee', true);
+    }
     const deadline = performance.now() + timeoutMs;
     while (Game.inCombat() && performance.now() < deadline) {
+        // Sustain respects AIO eatBelowHp (Lost City policy is 50% — not 90%).
         await Sustain.run();
+        if (opts?.protectMelee) {
+            await sipPrayerIfNeeded();
+            if (Prayer.available('Protect from Melee') && !Prayer.active('Protect from Melee')) {
+                await Prayer.set('Protect from Melee', true);
+            }
+        }
         await Execution.delayTicks(1);
     }
     return !Game.inCombat();
@@ -373,7 +405,7 @@ async function acquireDungeonAxe(log: (m: string) => void): Promise<boolean> {
         await Execution.delayTicks(2);
         return false;
     }
-    await restoreWithSelectedFood(0.9);
+    await restoreWithSelectedFood(0.7);
     if (!(await zombie.interact('Attack'))) {
         return false;
     }
@@ -414,14 +446,16 @@ async function defeatTreeSpirit(log: (m: string) => void): Promise<boolean> {
     if (!spirit) {
         return false;
     }
-    await restoreWithSelectedFood(0.9);
+    // Heal into the fight, not to 90% every scrap of HP (#393).
+    await restoreWithSelectedFood(0.7);
     if (!Game.inCombat() && !(await spirit.interact('Attack'))) {
         return false;
     }
     if (!(await Execution.delayUntil(() => Game.inCombat() || !spirit!.valid(), 5000))) {
         return false;
     }
-    await waitOutCombat(180_000);
+    // Melee crush spirit — Protect from Melee + optional prayer pots when prayer ≥ 43.
+    await waitOutCombat(180_000, { protectMelee: true });
     // The next journal read verifies that this player, rather than another attacker, got credit.
     return true;
 }
@@ -696,7 +730,8 @@ export const lostcity: QuestModule = {
     grind: ['Zombie', 'Tree spirit'],
     tools: ['knife', 'axe', 'dramen branch', 'dramen staff'],
     ownsInventory: true,
-    sustain: { foods: [], eatBelowHp: 0.9 },
+    // 0.9 burned food during the tree spirit fight (Sustain every tick) (#393).
+    sustain: { foods: [], eatBelowHp: 0.5 },
     readStage: readLostCityStage,
     decide
 };

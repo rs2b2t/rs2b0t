@@ -313,6 +313,7 @@ describe('Lost City stages 5-6', () => {
     });
 
     test('uses the AIO-selected food at the quest-safe combat threshold', () => {
-        expect(lostcity.sustain).toEqual({ foods: [], eatBelowHp: 0.9 });
+        // 0.5 — not 0.9; the tree spirit fight was burning food every tick (#393).
+        expect(lostcity.sustain).toEqual({ foods: [], eatBelowHp: 0.5 });
     });
 });
