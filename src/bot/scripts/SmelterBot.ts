@@ -9,10 +9,12 @@ import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { Locs } from '../api/queries/Locs.js';
+import { Npcs } from '../api/queries/Npcs.js';
 import { walkOpening } from '../api/walkOpening.js';
 import { actions, reader } from '../adapter/ClientAdapter.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
+import { FOOD_OPTIONS, foodForms } from '../api/combat/food.js';
 import {
     BAR_OPTIONS,
     recipeForBar,
@@ -39,8 +41,45 @@ export const SETTINGS: SettingsSchema = {
     furnaceName: { type: 'string', default: 'Furnace', label: 'Furnace loc name' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
     obstacle: { type: 'string', default: 'door, gate', label: 'Openable obstacles (contains)', help: 'the bank-building door on the route' },
-    leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Furnace search radius (tiles)' }
+    leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Furnace search radius (tiles)' },
+    food: {
+        type: 'string',
+        default: 'Trout',
+        options: FOOD_OPTIONS,
+        label: 'Food (blank = none)',
+        group: 'Combat',
+        help: 'eaten when a random-event Swarm (or other attacker) hits you mid-trip (#422)'
+    },
+    eatAtHp: {
+        type: 'number',
+        default: 50,
+        min: 1,
+        max: 99,
+        label: 'Eat below HP%',
+        group: 'Combat'
+    }
 };
+
+/**
+ * True face-target hostiles (Swarm random event, etc.). Sticky combatCycle alone
+ * is not enough — same filter as ChopBurn / GatheringBot flee.
+ */
+function hostileAttacker() {
+    return (
+        Npcs.query()
+            .where(n => n.inCombat && n.targetsMe() && n.actions().includes('Attack'))
+            .nearest()
+        ?? Npcs.query()
+            .where(
+                n =>
+                    n.inCombat
+                    && !n.targetsAnotherPlayer()
+                    && n.actions().includes('Attack')
+                    && n.distance() <= 2
+            )
+            .nearest()
+    );
+}
 
 export default class SmelterBot extends TaskBot {
     override loopDelay = 600;
@@ -58,6 +97,8 @@ export default class SmelterBot extends TaskBot {
     private boothName = 'Bank booth';
     private obstacle: string[] = ['door', 'gate'];
     private leash = 8;
+    private foodName = 'Trout';
+    private eatAt = 0.5;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -70,13 +111,18 @@ export default class SmelterBot extends TaskBot {
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
         this.obstacle = this.settings.str('obstacle', 'door, gate').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
         this.leash = this.settings.num('leashRadius', 8);
+        this.foodName = this.settings.str('food', 'Trout');
+        this.eatAt = this.settings.num('eatAtHp', 50) / 100;
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('smithing');
 
         const plan = withdrawPlan(this.recipe).map(p => `${p.count} ${p.ore}`).join(' + ');
-        this.log(`SmelterBot smelting '${this.recipe.bar}' (${plan}) — bank ${this.bankStand}, furnace ${this.furnaceStand}`);
-        this.add(new ContinueDialog(), new BankTrip(this), new SmeltTrip(this));
+        this.log(
+            `SmelterBot smelting '${this.recipe.bar}' (${plan}) — bank ${this.bankStand}, furnace ${this.furnaceStand}`
+            + (this.foodName !== '' ? `, food '${this.foodName}' eat<${Math.round(this.eatAt * 100)}%` : '')
+        );
+        this.add(new ContinueDialog(), new ClearHostiles(this), new BankTrip(this), new SmeltTrip(this));
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -105,21 +151,90 @@ export default class SmelterBot extends TaskBot {
     boothLocName(): string { return this.boothName; }
     primaryCount(): number { return countPrimary(Inventory.items(), this.recipe); }
     canSmelt(): boolean { return canSmelt(Inventory.items(), this.recipe); }
+    food(): string { return this.foodName; }
+    eatThreshold(): number { return this.eatAt; }
+
+    foodCount(): number {
+        if (this.foodName === '') {
+            return 0;
+        }
+        const forms = foodForms(this.foodName);
+        return Inventory.items().filter(i => forms.includes((i.name ?? '').toLowerCase())).length;
+    }
+
+    async eatIfNeeded(): Promise<void> {
+        if (this.foodName === '' || Skills.hpFraction() >= this.eatAt) {
+            return;
+        }
+        const forms = foodForms(this.foodName);
+        const food = Inventory.items().find(i => forms.includes((i.name ?? '').toLowerCase()));
+        if (!food) {
+            return;
+        }
+        this.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
+        const before = Skills.effective('hitpoints');
+        await food.interact('Eat');
+        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+    }
+}
+
+/**
+ * Random-event Swarm (and similar) soft-locks walks: the bot keeps repathing while
+ * getting hit and never reaches bank/furnace (#422). Clear real attackers first.
+ * Priority above bank/smelt so combat is not ignored for a full 15s walk timeout.
+ */
+class ClearHostiles implements Task {
+    constructor(private bot: SmelterBot) {}
+
+    validate(): boolean {
+        return hostileAttacker() !== null;
+    }
+
+    async execute(): Promise<void> {
+        const foe = hostileAttacker();
+        if (!foe) {
+            return;
+        }
+        this.bot.setStatus(`fighting off ${foe.name ?? 'attacker'}`);
+        this.bot.log(`under attack by ${foe.name ?? 'npc'} — clearing before the next trip (#422)`);
+        await this.bot.eatIfNeeded();
+        if (!Game.inCombat()) {
+            await foe.interact('Attack');
+            await Execution.delayUntil(() => Game.inCombat() || !foe.valid(), 4000);
+        }
+        const deadline = Date.now() + 90_000;
+        while (Date.now() < deadline && hostileAttacker() !== null) {
+            await this.bot.eatIfNeeded();
+            if (!Game.inCombat()) {
+                const again = hostileAttacker();
+                if (again) {
+                    await again.interact('Attack');
+                }
+            }
+            await Execution.delayTicks(2);
+        }
+        if (hostileAttacker() !== null) {
+            this.bot.log('attacker still up after 90s — will retry next loop');
+        }
+    }
 }
 
 class BankTrip implements Task {
     constructor(private bot: SmelterBot) {}
     // anything the pack cannot make a bar from means go and restock, not just an
     // empty primary ore — iron without coal is equally unsmeltable
-    validate(): boolean { return !this.bot.canSmelt(); }
+    validate(): boolean { return !this.bot.canSmelt() && hostileAttacker() === null; }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
+        await this.bot.eatIfNeeded();
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
         if (!(await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — will retry');
             return;
         }
-        await Bank.depositInventory();
+        // Keep food for Swarm / random-event fights between bank and furnace (#422).
+        const keepFood = foodForms(this.bot.food());
+        await Bank.depositAllMatching(name => !keepFood.includes(name.toLowerCase()));
 
         // Two different empties look identical through Bank.count: the list refills
         // asynchronously after a deposit, and the window can be closed outright (the run
@@ -132,6 +247,18 @@ class BankTrip implements Task {
                 ? 'the bank list has not filled in yet — retrying this trip'
                 : 'the bank window closed — reopening and retrying this trip');
             return;
+        }
+        // Restock a few food after the list is reliable.
+        if (this.bot.food() !== '' && this.bot.foodCount() < 3) {
+            const want = 5;
+            const forms = foodForms(this.bot.food());
+            const bankFood = Bank.items().find(i => i.name !== null && forms.includes(i.name.toLowerCase()));
+            if (bankFood?.name) {
+                const need = want - this.bot.foodCount();
+                if (need > 0) {
+                    await Bank.withdrawX(bankFood.name, need);
+                }
+            }
         }
         this.bot.countTrip();
 
@@ -174,7 +301,9 @@ class BankTrip implements Task {
 
 class SmeltTrip implements Task {
     constructor(private bot: SmelterBot) {}
-    validate(): boolean { return this.bot.canSmelt() && !ChatDialog.canContinue(); }
+    validate(): boolean {
+        return this.bot.canSmelt() && !ChatDialog.canContinue() && hostileAttacker() === null;
+    }
     async execute(): Promise<void> {
         const furnace = () =>
             Locs.query()
@@ -185,10 +314,17 @@ class SmeltTrip implements Task {
         const here = Game.tile();
         if (!here || this.bot.furnaceTile().distanceTo(here) > 1 || !furnace()) {
             this.bot.setStatus('crossing to the furnace');
+            await this.bot.eatIfNeeded();
             await walkOpening(this.bot.furnaceTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
+        }
+        if (hostileAttacker() !== null) {
+            return; // ClearHostiles next loop
         }
         const stand = this.bot.furnaceTile();
         for (let w = 0; w < 5; w++) {
+            if (hostileAttacker() !== null) {
+                return;
+            }
             const now = Game.tile();
             if (now && now.x === stand.x && now.z === stand.z) { break; }
             const local = reader.toLocal(stand.x, stand.z);
@@ -217,7 +353,13 @@ class SmeltTrip implements Task {
         const before = this.bot.primaryCount();
         this.bot.setStatus(`smelting ${recipe.bar}`);
         if (await ChatDialog.makeX(barKeyword, SMELT_X)) {
-            await Execution.delayUntil(() => this.bot.primaryCount() === 0 || ChatDialog.canContinue(), 120000);
+            await Execution.delayUntil(
+                () =>
+                    this.bot.primaryCount() === 0
+                    || ChatDialog.canContinue()
+                    || hostileAttacker() !== null,
+                120000
+            );
             if (this.bot.primaryCount() < before) { this.bot.recordSmelt(before - this.bot.primaryCount()); }
         } else {
             this.bot.log(`Smelt panel open but couldn't Smelt-X '${barKeyword}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
