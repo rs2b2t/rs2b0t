@@ -111,19 +111,15 @@ export function essenceReturnTile(id: EssenceReturnId): NavPoint {
  * Plan-time edges: each portal placement × each known return.
  *
  * Content (`blankrunestone_exit_portal`): destination is `%exit_essence_mine_coord`
- * (set by the entry wizard), then `map_findsquare(..., 0, 2, …)` — not a function of
- * which of the four portal locs you click. Blacklisted from the path graph (#388);
- * scripts that run essence transit own enter/exit themselves.
+ * (set by the entry wizard) then `map_findsquare(..., 0, 2, lineofwalk)` — fully
+ * determined by session return, not which of the four portal tiles you click.
+ * That session is modelled via `requires.essenceExitReturn` + PathFinder path-state
+ * (#377). **Not** blacklisted: the landing is fixed given entry wizard (wizard tile ±2).
  *
- * Rows remain for audits; PathFinder skips `blacklist: true`.
+ * Entry *into* the mine remains blacklisted (#388) — random over 22 pads.
  */
 export function essenceExitEdges(): TransportEdgeData[] {
     const out: TransportEdgeData[] = [];
-    const bl = {
-        blacklist: true as const,
-        blacklistReason:
-            'Essence mine exit: destination is session var %exit_essence_mine_coord (set on entry), not portal placement (content essence_mine.rs2). Scripts own the hop.'
-    };
     for (const portal of ESSENCE_EXIT_PORTALS) {
         for (const [returnId, to] of Object.entries(ESSENCE_EXIT_RETURNS) as [EssenceReturnId, NavPoint][]) {
             out.push({
@@ -137,8 +133,7 @@ export function essenceExitEdges(): TransportEdgeData[] {
                 locZ: portal.locZ,
                 options: ['Use'],
                 debugName: `${portal.debug}_to_${returnId}`,
-                requires: { essenceExitReturn: returnId },
-                ...bl
+                requires: { essenceExitReturn: returnId }
             });
         }
     }

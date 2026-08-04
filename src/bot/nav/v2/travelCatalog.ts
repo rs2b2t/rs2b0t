@@ -230,13 +230,14 @@ export function shiloCartEdges(): TransportEdgeData[] {
 /**
  * Rune Mysteries complete → essence mine via wizard Teleport.
  *
- * Content (`essence_mine.rs2`): landing is `random(enum essence_mine_teleports)` then
- * `map_findsquare(..., 0, 1, …)` — **not** a static destination. Blacklisted from the
- * path graph (#388); scripts that need the mine own the wizard hop (see specialCrossings
- * Talk-to edges for execution when a script explicitly walks to a wizard).
+ * Content (`essence_mine.rs2`): landing is `random(enum essence_mine_teleports)` over
+ * **22** tiles across mapsquare 45_75, then `map_findsquare(..., 0, 1, lineofsight)`.
+ * That is not a static destination — blacklisted from the path graph (#388). Scripts
+ * that need the mine own the wizard hop (specialCrossings Talk-to for execution).
  *
- * Rows stay in the catalog for audits / specialCrossing labels; PathFinder skips
- * `blacklist: true`.
+ * `essenceEntrySetsReturn` is kept on the audit rows so docs/tests know which
+ * wizard sets which session return; it is not plan-usable while blacklisted.
+ * Exit edges stay routable and require the matching `essenceExitReturn` (#377).
  */
 export function essenceEntryEdges(): TransportEdgeData[] {
     const f2p: TransportRequires = { ...REQ.runeMysteriesComplete };
@@ -248,7 +249,7 @@ export function essenceEntryEdges(): TransportEdgeData[] {
     const bl = {
         blacklist: true as const,
         blacklistReason:
-            'Essence mine entry: destination is random over essence_mine_teleports + map_findsquare (content essence_mine.rs2). Scripts own the hop.'
+            'Essence mine entry: landing is random(enum essence_mine_teleports) over 22 pads + map_findsquare r=1 (content essence_mine.rs2) — not a static destination. Scripts own entry.'
     };
     const mk = (
         from: NavPoint,

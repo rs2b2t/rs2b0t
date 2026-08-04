@@ -163,13 +163,13 @@ describe('essence / levers', () => {
         );
     });
 
-    test('essence exits are blacklisted portal×return audit rows (#388)', () => {
+    test('essence exits are session-gated portal×return edges (not blacklisted)', () => {
         const exits = essenceExitEdges();
         expect(exits).toHaveLength(20);
-        expect(exits.every(e => e.kind === 'portal' && e.action === 'Use' && e.blacklist === true)).toBe(true);
+        expect(exits.every(e => e.kind === 'portal' && e.action === 'Use' && e.blacklist !== true)).toBe(true);
         const returns = new Set(exits.map(e => e.requires?.essenceExitReturn));
         expect(returns).toEqual(new Set(['aubury', 'sedridor', 'distentor', 'brimstail', 'cromperty']));
-        // Aubury return matches surface entry stand (catalog metadata).
+        // Aubury return matches surface entry stand.
         const toAubury = exits.find(e => e.requires?.essenceExitReturn === 'aubury');
         expect(toAubury?.to).toEqual(ESSENCE_RETURN.aubury);
     });
