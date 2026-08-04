@@ -39,6 +39,20 @@ export const Game = {
         return reader.ingame();
     },
 
+    /**
+     * True when the client is logged in and the local scene is fully built
+     * (`sceneState === 2`) with a known world tile. Injecting menu/walk packets
+     * before this returns true soft-fails or thrash-retries (see #445).
+     */
+    sceneReady(): boolean {
+        return reader.ingame() && reader.sceneState() === 2 && reader.worldTile() !== null;
+    },
+
+    /** Raw client scene build state: 0 idle/loading, 1 building, 2 ready. */
+    sceneState(): number {
+        return reader.sceneState();
+    },
+
     tile(): WorldTile | null {
         return reader.worldTile();
     },

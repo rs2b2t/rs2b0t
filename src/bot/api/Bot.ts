@@ -1,5 +1,6 @@
 import { bus, type EventMap } from '../events/EventBus.js';
 import { SettingsBag } from '../runtime/Settings.js';
+import { Game } from './Game.js';
 import type Tile from './Tile.js';
 
 /**
@@ -75,12 +76,23 @@ export interface Task {
  */
 export abstract class TaskBot extends LoopingBot {
     private readonly tasks: Task[] = [];
+    private lastSceneWaitLogAt = 0;
 
     protected add(...tasks: Task[]): void {
         this.tasks.push(...tasks);
     }
 
     async loop(): Promise<number | void> {
+        // Mid-zone rebuilds leave ingame=true while sceneState is 0/1 — tasks that
+        // still validate would thrash soft-failed injects (#445).
+        if (!Game.sceneReady()) {
+            const now = performance.now();
+            if (now - this.lastSceneWaitLogAt > 2000) {
+                this.lastSceneWaitLogAt = now;
+                this.log(`waiting for scene (state=${Game.sceneState()}) before tasks`);
+            }
+            return;
+        }
         for (const task of this.tasks) {
             if (await task.validate()) {
                 await task.execute();
@@ -112,8 +124,17 @@ export type TreeNode = BranchTask | LeafTask;
 
 export abstract class TreeBot extends LoopingBot {
     abstract root(): TreeNode;
+    private lastSceneWaitLogAt = 0;
 
     async loop(): Promise<number | void> {
+        if (!Game.sceneReady()) {
+            const now = performance.now();
+            if (now - this.lastSceneWaitLogAt > 2000) {
+                this.lastSceneWaitLogAt = now;
+                this.log(`waiting for scene (state=${Game.sceneState()}) before tree`);
+            }
+            return;
+        }
         let node = this.root();
         while (node instanceof BranchTask) {
             node = node.validate() ? node.success() : node.failure();

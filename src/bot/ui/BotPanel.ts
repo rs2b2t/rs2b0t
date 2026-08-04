@@ -432,7 +432,14 @@ export default class BotPanel {
         }
 
         const ingame = reader.ingame();
-        this.stateCell.textContent = ingame ? 'ingame' : 'title screen';
+        const scene = reader.sceneState();
+        // Ready = logged in + scene fully built (2). Show partial scene so operators
+        // do not confuse "ingame" with "safe to inject" (#445).
+        this.stateCell.textContent = !ingame
+            ? 'title screen'
+            : scene === 2
+              ? 'ready (scene 2)'
+              : `ingame · scene ${scene} (wait)`;
 
         this.playerCell.textContent = reader.localPlayerName() ?? '-';
 
