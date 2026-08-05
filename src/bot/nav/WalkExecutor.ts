@@ -930,13 +930,28 @@ class WalkExecutorImpl {
                             continue;
                         }
                     }
-                    // Prefer doors on the path corridor (placement multiloc), not merely nearest-in-3.
+                    // Only open doors on the published route (hop placement or corridor).
+                    // Never open a nearer house/shop door off the path — that yanks us
+                    // off-corridor and triggers repath ("interrupted" walks).
+                    const hopDoors: { x: number; z: number }[] = [];
+                    const hopHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
+                    for (let i = Math.max(0, pathIdx); i < hopHi; i++) {
+                        const tr = tiles[i]!.transport;
+                        if (
+                            tr
+                            && (tr.kind === 'door' || /(door|gate)/i.test(tr.locName ?? ''))
+                        ) {
+                            hopDoors.push({ x: tr.locX, z: tr.locZ });
+                        }
+                    }
                     if (
                         await tryNearbyDoor(log, {
                             tiles,
                             pathIdx,
-                            corridor: CORRIDOR,
-                            window: PROGRESS_WINDOW
+                            // Door placement must be a path tile or hop loc (default corridor 0).
+                            // CORRIDOR (3) / even 1 treated street-front doors as on-path.
+                            window: PROGRESS_WINDOW,
+                            hopDoors
                         })
                     ) {
                         stallRetries = 0;

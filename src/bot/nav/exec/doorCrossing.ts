@@ -55,23 +55,35 @@ export function noteFailedDoor(
 }
 
 /**
- * Path corridor for stall recovery: prefer doors on the published route over
- * the nearest closed door within 3 (multiloc placement — same loc name/type,
- * wrong doorway).
+ * Path-scoped stall recovery: only open doors that belong on the published route.
+ * Street-front house doors sit *next* to the path corridor — proximity must not win.
  */
 export interface PathDoorHint {
     tiles: readonly { x: number; z: number; level: number }[];
     pathIdx: number;
-    /** Chebyshev distance to a path tile to count as "on corridor" (default 2). */
+    /**
+     * Max Chebyshev distance from a path *tile* to count as on-route.
+     * Default **0** (door placement must be a path tile). Pathfinder door edges
+     * put the closed loc on an edge endpoint; lateral house doors are d≥1.
+     */
     corridor?: number;
     /** How far ahead of pathIdx to consider (default 12). */
     window?: number;
+    /**
+     * Planned door/gate hop placements (transport.locX/Z) ahead on the path.
+     * Highest priority — exact map placement we intend to cross.
+     */
+    hopDoors?: readonly { x: number; z: number }[];
 }
 
 /**
  * Pick which nearby closed barrier to open.
- * Prefer doors adjacent to the path corridor ahead of the player; else nearest.
- * Pure helper so tests can pin corridor preference without a live scene.
+ *
+ * - **With path hint:** only doors whose placement is a path tile (or matches a
+ *   planned hop). Never open an off-path house/shop door because it is nearer.
+ * - **Without path:** nearest closed barrier (walkResilient unstick only).
+ *
+ * Pure helper so tests can pin preference without a live scene.
  */
 export function pickNearbyDoorTile(
     candidates: readonly { x: number; z: number; level: number }[],
@@ -81,8 +93,12 @@ export function pickNearbyDoorTile(
     if (candidates.length === 0) {
         return null;
     }
-    const corridor = path?.corridor ?? 2;
+    const hasPath = !!(path && path.tiles.length > 0);
+    // Default 0: must be *on* a path tile. corridor=1 treats every street-front
+    // door as on-route and re-opens the "tour the house" failure mode.
+    const corridor = path?.corridor ?? 0;
     const window = path?.window ?? 12;
+    const hopDoors = path?.hopDoors ?? [];
     let best: { x: number; z: number; level: number } | null = null;
     let bestScore = -Infinity;
 
@@ -91,15 +107,19 @@ export function pickNearbyDoorTile(
             continue;
         }
         const distMe = Math.max(Math.abs(c.x - me.x), Math.abs(c.z - me.z));
-        // Base: nearer to player is better (negative distance).
-        let score = -distMe;
-        if (path && path.tiles.length > 0) {
-            const lo = Math.max(0, path.pathIdx);
-            const hi = Math.min(path.tiles.length - 1, path.pathIdx + window);
+        let score: number;
+
+        if (!hasPath) {
+            // Unstick / no route: nearest closed barrier only.
+            score = -distMe;
+        } else {
+            const hopMatch = hopDoors.some(h => h.x === c.x && h.z === c.z);
+            const lo = Math.max(0, path!.pathIdx);
+            const hi = Math.min(path!.tiles.length - 1, path!.pathIdx + window);
             let onPath = false;
             let pathDist = 999;
             for (let i = lo; i <= hi; i++) {
-                const t = path.tiles[i]!;
+                const t = path!.tiles[i]!;
                 if (t.level !== c.level) {
                     continue;
                 }
@@ -111,14 +131,17 @@ export function pickNearbyDoorTile(
                     onPath = true;
                 }
             }
-            // Strong boost for doors on the forward corridor; still prefer nearer among them.
-            if (onPath) {
+            if (hopMatch) {
+                // Exact planned hop placement beats path-tile proximity.
+                score = 2000 - distMe;
+            } else if (onPath) {
                 score = 1000 - pathDist - distMe * 0.01;
             } else {
-                // Off-path doors: keep as last resort only (negative, worse than any on-path).
-                score = -100 - distMe;
+                // Off-path: never open when we have a published route.
+                continue;
             }
         }
+
         if (score > bestScore) {
             bestScore = score;
             best = c;
@@ -158,12 +181,18 @@ export async function tryNearbyDoor(
                   return t.x === pick.x && t.z === pick.z;
               }) ?? null;
     if (!door) {
+        // Path-scoped stall with only off-path doors nearby — repath, don't tour houses.
+        if (path && path.tiles.length > 0) {
+            log('stalled with no path-corridor door to open — leaving door-hunt to repath');
+        }
         return false;
     }
 
     const op = door.actions().find(a => /^open/i.test(a));
     const t = door.tile();
-    const scoped = path && path.tiles.length > 0 ? ' (path-scoped)' : '';
+    const hopHit = path?.hopDoors?.some(h => h.x === t.x && h.z === t.z) ?? false;
+    const scoped =
+        path && path.tiles.length > 0 ? (hopHit ? ' (path hop)' : ' (path corridor)') : '';
     log(`stalled next to closed '${door.name}' at (${t.x},${t.z})${scoped} — opening it`);
     if (!op || !door.interact(op)) {
         return false;
