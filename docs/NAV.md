@@ -372,7 +372,7 @@ Global default): on → explicit force-on (cost decides; no span floor); off →
 
 ### Costs (lowest wins)
 
-Path costs are **tile-equivalents of time** (`src/bot/nav/edgeCosts.ts`, idea **@lolwut**).
+Path costs are **tile-equivalents of time** (`src/bot/nav/edgeCosts.ts`, idea **@lulwut**).
 Walk steps cost ~1; doors/stairs/ships/gliders/spirit trees/teles carry calibrated action
 costs (dialogue, cast anim, bank withdraw). A* picks the cheapest total. Prefer that over
 static gates.

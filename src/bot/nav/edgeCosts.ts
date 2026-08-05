@@ -6,7 +6,7 @@
  * time converted into the same units so a teleport/glider/ship only wins when
  * it actually saves travel.
  *
- * Design (lolwut): prefer calibrated action costs over static gates like
+ * Design (@lulwut): prefer calibrated action costs over static gates like
  * `distanceBeforeTeleport`. Bank-for-tele is `toBank + BANK_WITHDRAW_COST +
  * bank→dest (with virtual items)` vs pure-walk direct — same currency.
  *

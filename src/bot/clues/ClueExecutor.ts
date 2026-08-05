@@ -37,7 +37,7 @@ const WALK_TIMEOUT_MS = 45_000;
 // Trails cross the map — Varrock to Feldip, Varrock to level-50 Wilderness — so
 // they route through the teleport catalog when the kit is held. Short hops stay
 // on foot: a tele is only admitted once the route is longer than this.
-/** Cost model decides; no hard Chebyshev floor (lolwut / edgeCosts.ts). */
+/** Cost model decides; no hard Chebyshev floor (@lulwut / edgeCosts.ts). */
 const TELEPORT_MIN_SPAN = 0;
 const STEP_ATTEMPTS = 4;
 const PROGRESS_MS = 6000;
