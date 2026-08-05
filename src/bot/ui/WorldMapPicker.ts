@@ -19,6 +19,8 @@
 import { gunzipSync } from 'fflate';
 import { PathFinder } from '../nav/PathFinder.js';
 import { WALK_DESTINATIONS } from '../api/WalkDestinations.js';
+import { Game } from '../api/Game.js';
+import { BotHost } from '../BotHost.js';
 import {
     BASEMAP_MANIFEST_NAME,
     basemapSourceRect,
@@ -128,10 +130,12 @@ async function loadDeployBasemap(): Promise<LoadedBasemap | null> {
     const image = await blobToImage(blob);
     // Pre-baked overlays (schema ≥ 2) — free toggles at paint time.
     const typeEntries = Object.entries(json.keyTypeOverlayUrls ?? {});
-    const [keyOverlay, multiOverlay, freeOverlay, ...typeImgs] = await Promise.all([
+    const [keyOverlay, multiOverlay, freeOverlay, labelsOverlay, playerMarker, ...typeImgs] = await Promise.all([
         fetchOptionalImage(manUrl, json.keyOverlayUrl),
         fetchOptionalImage(manUrl, json.multiOverlayUrl),
         fetchOptionalImage(manUrl, json.freeOverlayUrl),
+        fetchOptionalImage(manUrl, json.labelsOverlayUrl),
+        fetchOptionalImage(manUrl, json.playerMarkerUrl),
         ...typeEntries.map(([, rel]) => fetchOptionalImage(manUrl, rel))
     ]);
     const keyTypeOverlays = new Map<string, CanvasImageSource>();
@@ -147,7 +151,9 @@ async function loadDeployBasemap(): Promise<LoadedBasemap | null> {
         keyOverlay: keyOverlay ?? undefined,
         keyTypeOverlays: keyTypeOverlays.size > 0 ? keyTypeOverlays : undefined,
         multiOverlay: multiOverlay ?? undefined,
-        freeOverlay: freeOverlay ?? undefined
+        freeOverlay: freeOverlay ?? undefined,
+        labelsOverlay: labelsOverlay ?? undefined,
+        playerMarker: playerMarker ?? undefined
     };
 }
 
@@ -161,12 +167,98 @@ export type LoadedBasemap = {
     keyTypeOverlays?: Map<string, CanvasImageSource>;
     multiOverlay?: CanvasImageSource;
     freeOverlay?: CanvasImageSource;
+    /** Pre-baked place-name / town labels. */
+    labelsOverlay?: CanvasImageSource;
+    /** Classic media mapmarker pin (you-are-here). */
+    playerMarker?: CanvasImageSource;
     /**
      * Optional UI hint when the image is still usable but not a perfect cache hit.
      * Never set for a clean CRC+prefs hit.
      */
     hint?: 'stale-crc' | 'prefs-mismatch' | 'crc-unverified';
 };
+
+function tileKey(t: { x: number; z: number; level: number } | null): string {
+    return t ? `${t.x},${t.z},${t.level}` : '';
+}
+
+/**
+ * You Are Here marker.
+ * - Basemap mode: classic media `mapmarker` pin when available, else yellow X.
+ * - Classic dots mode: soft yellow glow + “You Are Here” label.
+ */
+function paintYouAreHere(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    basemapMode: boolean,
+    marker: CanvasImageSource | null
+): void {
+    if (basemapMode && marker) {
+        // mapmarker pin: tip sits near bottom-center of the 15×30 cell.
+        const mw = 15;
+        const mh = 30;
+        const scale = Math.max(1, Math.min(2.2, 18 / mw));
+        const dw = mw * scale;
+        const dh = mh * scale;
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        // Soft glow under the pin so it reads on dark terrain.
+        const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, 14);
+        g.addColorStop(0, 'rgba(255, 220, 40, 0.55)');
+        g.addColorStop(1, 'rgba(255, 220, 40, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.drawImage(marker, sx - dw / 2, sy - dh + 2, dw, dh);
+        ctx.restore();
+        return;
+    }
+
+    if (basemapMode) {
+        // Fallback yellow X (era minimap vibe when marker PNG missing).
+        ctx.save();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(sx - 8, sy - 8);
+        ctx.lineTo(sx + 8, sy + 8);
+        ctx.moveTo(sx + 8, sy - 8);
+        ctx.lineTo(sx - 8, sy + 8);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffe040';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
+
+    // Classic dots mode: yellow glow + label.
+    ctx.save();
+    const g = ctx.createRadialGradient(sx, sy, 1, sx, sy, 16);
+    g.addColorStop(0, 'rgba(255, 230, 60, 0.95)');
+    g.addColorStop(0.35, 'rgba(255, 200, 20, 0.55)');
+    g.addColorStop(1, 'rgba(255, 180, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffe040';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = 'bold 11px sans-serif';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillStyle = '#ffe040';
+    ctx.strokeText('You Are Here', sx + 10, sy - 6);
+    ctx.fillText('You Are Here', sx + 10, sy - 6);
+    ctx.restore();
+}
 
 /**
  * Load basemap once per page (never runs MapView):
@@ -340,6 +432,13 @@ export class WorldMapPicker {
             let basemap: LoadedBasemap | null = null;
             /** ready | missing | error — stable hook for live smoke (dataset may show off). */
             let basemapState: 'loading' | 'ready' | 'missing' | 'error' = 'loading';
+
+            // Stand tile: snapshot once, then refresh only on PLAYER_INFO (no poll).
+            let here: PickedTile | null = (() => {
+                const t = Game.tile();
+                return t ? { x: t.x, z: t.z, level: t.level } : null;
+            })();
+            let hereKey = tileKey(here);
 
             const overlay = document.createElement('div');
             overlay.className = 'rs2b0t-modal-overlay rs2b0t-walkmap-overlay';
@@ -587,6 +686,10 @@ export class WorldMapPicker {
                             ctx.drawImage(basemap.keyOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
                         }
                     }
+                    // Town / place names last so they sit above icons.
+                    if (theme.showPlaceLabels && basemap.labelsOverlay) {
+                        ctx.drawImage(basemap.labelsOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                    }
                 } catch {
                     /* out-of-bounds source rects on some browsers — skip frame */
                 }
@@ -689,6 +792,14 @@ export class WorldMapPicker {
                     ctx.lineWidth = 1;
                 }
 
+                // You Are Here — stand tile (all modes; level must match).
+                if (here && here.level === level) {
+                    const { sx, sy } = worldToScreen(here.x + 0.5, here.z + 0.5);
+                    if (sx >= -20 && sy >= -20 && sx <= w + 20 && sy <= h + 20) {
+                        paintYouAreHere(ctx, sx, sy, theme.showBasemap, basemap?.playerMarker ?? null);
+                    }
+                }
+
                 // Crosshair at centre
                 ctx.strokeStyle = 'rgba(255,255,255,0.15)';
                 ctx.beginPath();
@@ -723,12 +834,29 @@ export class WorldMapPicker {
                 }
             });
 
+            // Stand tile: PLAYER_INFO only (post-process). No interval poll.
+            const unsubTick = BotHost.addTickListener(() => {
+                if (closed) {
+                    return;
+                }
+                const t = Game.tile();
+                const next = t ? { x: t.x, z: t.z, level: t.level } : null;
+                const key = tileKey(next);
+                if (key === hereKey) {
+                    return;
+                }
+                hereKey = key;
+                here = next;
+                requestPaint();
+            });
+
             const cleanup = (): void => {
                 closed = true;
                 if (paintRaf !== 0) {
                     cancelAnimationFrame(paintRaf);
                     paintRaf = 0;
                 }
+                unsubTick();
                 unsubSettings();
                 settingsModal.close();
                 canvas.removeEventListener('wheel', onWheel);
@@ -782,11 +910,6 @@ export class WorldMapPicker {
                 settingsModal.open(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, {
                     title: 'Map picker settings',
                     zIndex: 1200,
-                    intro:
-                        'Show basemap (default on): classic worldmap terrain. Key icons / multi / free are '
-                        + 'pre-baked overlays — pick types under Worldmap layers (instant, no freeze). '
-                        + 'Show basemap off: original walkable-dot grid + destination markers. '
-                        + 'Rebuild map… is rare (game update / experimental stamps); everyday use needs none.',
                     onClose: () => {
                         if (bakeSettingsSnapshot) {
                             restoreMapPickerBakeSettings(bakeSettingsSnapshot);

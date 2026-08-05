@@ -18,6 +18,8 @@ class BotHostImpl {
 
     private frameListeners = new Set<FrameListener>();
     private drawListeners = new Set<FrameListener>();
+    /** Fires after each processed PLAYER_INFO (server tick / player block). */
+    private tickListeners = new Set<FrameListener>();
 
     attach(client: unknown): void {
         if (this.attached) {
@@ -84,6 +86,9 @@ class BotHostImpl {
             }
         }
         this.lastTickAt = now;
+
+        // After the client has applied player movement for this packet.
+        this.fire(this.tickListeners);
     }
 
     addFrameListener(cb: FrameListener): () => void {
@@ -94,6 +99,15 @@ class BotHostImpl {
     addDrawListener(cb: FrameListener): () => void {
         this.drawListeners.add(cb);
         return () => this.drawListeners.delete(cb);
+    }
+
+    /**
+     * Subscribe to PLAYER_INFO (post-process). Prefer this over polling for
+     * stand-tile updates while UI is open. Returns unsubscribe.
+     */
+    addTickListener(cb: FrameListener): () => void {
+        this.tickListeners.add(cb);
+        return () => this.tickListeners.delete(cb);
     }
 
     private fire(listeners: Set<FrameListener>): void {

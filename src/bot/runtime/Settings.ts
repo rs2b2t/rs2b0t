@@ -308,13 +308,26 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         type: 'string[]',
         default: [],
         options: [...WORLDMAP_KEY_NAMES],
+        // Worldmap Key panel has a literal "???" entry (mapfunction type 38, ~7 sites).
+        optionLabels: { '???': 'Unknown (Key ???)' },
         label: 'Key icons',
         group: 'Worldmap layers',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
         help:
-            'Which classic Key legend types to draw (Bank, Altar, Fishing Spot, …). '
+            'Which Key legend types to draw (Bank, Altar, Fishing Spot, …). '
             + 'Each type is a pre-baked transparent overlay — toggle free, no rebuild. '
+            + '“Unknown (Key ???)” is Jagex’s unnamed Key row (type 38). '
             + 'Default none = terrain only.'
+    },
+    showPlaceLabels: {
+        type: 'boolean',
+        default: false,
+        label: 'Place names',
+        group: 'Worldmap layers',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help:
+            'Town / area names from the classic worldmap labels pack (pre-baked overlay). '
+            + 'Default off. Free — no rebuild.'
     },
     showMultiTint: {
         type: 'boolean',
@@ -332,14 +345,14 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         showIf: { key: 'showBasemap', anyOf: ['true'] },
         help: 'Green free-to-play tint (pre-baked). Free — no rebuild.'
     },
-    // Live Rebuild is rare — deploy already bakes terrain + Key/multi/free at 1 ppt.
+    // Live Rebuild is rare — deploy already bakes terrain + Key/labels/multi/free.
     bakeLabels: {
         type: 'boolean',
         default: false,
-        label: 'Place labels',
+        label: 'Stamp labels into rebuild',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'City/area names stamped into a live Rebuild (not on the deploy PNG).'
+        help: 'Prefer Worldmap layers → Place names (pre-baked). Only for live Rebuild stamps.'
     },
     bakeBorders: {
         type: 'boolean',

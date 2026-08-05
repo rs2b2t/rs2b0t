@@ -19,6 +19,7 @@ export const MAP_PICKER_BASEMAP_KEY = 'showBasemap';
 export const MAP_PICKER_COLOR_KEY = 'dotColor';
 export const MAP_PICKER_ALPHA_KEY = 'dotAlpha';
 export const MAP_PICKER_KEY_TYPES_KEY = 'keyIconTypes';
+export const MAP_PICKER_LABELS_KEY = 'showPlaceLabels';
 export const MAP_PICKER_MULTI_KEY = 'showMultiTint';
 export const MAP_PICKER_FREE_KEY = 'showFreeTint';
 
@@ -32,6 +33,8 @@ export type MapPickerDotTheme = {
     showWalkable: boolean;
     /** Selected Key legend type names (empty = none). */
     keyIconTypes: string[];
+    /** Pre-baked town / place-name labels. */
+    showPlaceLabels: boolean;
     showMultiTint: boolean;
     showFreeTint: boolean;
     fill: string;
@@ -80,6 +83,7 @@ export function resolveMapPickerDotTheme(): MapPickerDotTheme {
         showBasemap,
         showWalkable,
         keyIconTypes: getMapPickerKeyIconTypes(),
+        showPlaceLabels: g.bool(MAP_PICKER_LABELS_KEY, false),
         showMultiTint: g.bool(MAP_PICKER_MULTI_KEY, false),
         showFreeTint: g.bool(MAP_PICKER_FREE_KEY, false),
         fill: rgba(rgb, alpha),
@@ -95,6 +99,7 @@ export function isMapPickerThemeSettingKey(key: string): boolean {
         key === MAP_PICKER_COLOR_KEY ||
         key === MAP_PICKER_ALPHA_KEY ||
         key === MAP_PICKER_KEY_TYPES_KEY ||
+        key === MAP_PICKER_LABELS_KEY ||
         key === MAP_PICKER_MULTI_KEY ||
         key === MAP_PICKER_FREE_KEY
     );

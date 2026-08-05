@@ -139,15 +139,14 @@ try {
         fail('Rebuild map button hidden while showBasemap=true');
     }
 
-    // Settings modal: intro text + close without rebuild (bake draft discard path)
+    // Settings modal opens (help text lives on each control — no intro banner)
     await settingsBtn.click();
-    await page.locator('.rs2b0t-modal-backdrop .rs2b0t-param-intro').waitFor({ state: 'visible', timeout: 5_000 });
-    const intro = await page.locator('.rs2b0t-param-intro').textContent();
-    if (!intro || !/basemap/i.test(intro) || !/Key/i.test(intro)) {
-        fail(`settings intro missing basemap/Key note: ${intro}`);
-    }
-    console.log('settings intro ok');
-    await page.locator('.rs2b0t-modal-backdrop').filter({ has: page.locator('.rs2b0t-param-intro') }).locator('button').filter({ hasText: '✕' }).click();
+    await page.locator('.rs2b0t-modal-backdrop .rs2b0t-modal-title').filter({ hasText: /Map picker/i }).waitFor({
+        state: 'visible',
+        timeout: 5_000
+    });
+    console.log('settings modal ok');
+    await page.locator('.rs2b0t-modal-backdrop').filter({ has: page.locator('.rs2b0t-modal-title') }).locator('button').filter({ hasText: '✕' }).first().click();
     await page.waitForTimeout(200);
 
     await page.locator('.rs2b0t-walkmap-zoom-in').click();

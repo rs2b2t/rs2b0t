@@ -25,6 +25,7 @@ Runs MapView **once** and writes:
 | `worldmap-basemap.<fp>.png` | Terrain only (no Key icons) |
 | `worldmap-key-type-<id>.<fp>.png` | One transparent overlay **per Key legend type** (Bank, Altar, …) |
 | `worldmap-key.<fp>.png` | All Key icons (composite; fallback) |
+| `worldmap-labels.<fp>.png` | Town / place names (transparent) |
 | `worldmap-key-index.<fp>.json` | Names + placements |
 | `worldmap-multi.<fp>.png` / `worldmap-free.<fp>.png` | Zone tints |
 | `worldmap-basemap.manifest.json` | URLs + geometry |
@@ -42,6 +43,7 @@ Default basemap view is **terrain only** (no Key types selected).
 | `showBasemap` | `true` | Display | Mode: worldmap vs classic dots+destinations |
 | `dotColor` / `dotAlpha` | dark blue | Display | Dot style (**classic mode only**) |
 | `keyIconTypes` | `[]` | Worldmap layers | Multiselect of Key legend types (pre-baked per type) |
+| `showPlaceLabels` | `false` | Worldmap layers | Town / place names (pre-baked) |
 | `showMultiTint` / `showFreeTint` | `false` | Worldmap layers | Zone tints (pre-baked) |
 | `bakeLabels` … | `false` | Basemap rebuild | Rare live MapView stamps |
 | `skipRebuildConfirm` | `false` | Basemap rebuild | Skip freeze warning |

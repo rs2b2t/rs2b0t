@@ -40,10 +40,17 @@ export type BasemapManifest = {
      * (Bank, Altar, …). Generated once at deploy; picker composites selected types free.
      */
     keyTypeOverlayUrls?: Record<string, string>;
+    /** Pre-baked place-name / town labels (transparent). */
+    labelsOverlayUrl?: string;
     /** Pre-baked multicombat tint overlay (transparent). */
     multiOverlayUrl?: string;
     /** Pre-baked free-to-play tint overlay (transparent). */
     freeOverlayUrl?: string;
+    /**
+     * Classic media `mapmarker` sprite (you-are-here pin) as a small PNG.
+     * Optional; picker falls back to a drawn yellow X if missing.
+     */
+    playerMarkerUrl?: string;
     /** Byte length of source worldmap.jag used for the bake (debug). */
     jagBytes?: number;
 };

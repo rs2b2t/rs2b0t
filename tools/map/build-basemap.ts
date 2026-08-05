@@ -230,6 +230,8 @@ type BakeResult = {
     keyRgba: Uint8Array;
     /** Per mapfunction type id → transparent sheet with only that Key type. */
     keyTypeRgba: Record<string, Uint8Array>;
+    /** Town / place-name labels (transparent; pixels that differ from terrain). */
+    labelsRgba: Uint8Array;
     multiRgba: Uint8Array;
     freeRgba: Uint8Array;
     keyIndex: WorldmapKeyIndex;
@@ -297,6 +299,28 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
     view.renderWorldMap(0, 0, width, height, 0, 0, width, height);
     const terrain = new Int32Array(pix.data);
 
+    // Place names: re-render with labels on, keep pixels that differ from terrain.
+    // Uses the same WorldMapFont path as the classic worldmap (zoom 4 full-map bake).
+    MapView.shouldDrawLabels = true;
+    const pixLabeled = new PixMap(width, height);
+    pixLabeled.setPixels();
+    view.renderWorldMap(0, 0, width, height, 0, 0, width, height);
+    const labeled = pixLabeled.data;
+    MapView.shouldDrawLabels = false;
+    const labelsRgba = new Uint8Array(width * height * 4);
+    for (let i = 0; i < terrain.length; i++) {
+        const a = terrain[i] >>> 0;
+        const b = labeled[i] >>> 0;
+        if (a === b) {
+            continue;
+        }
+        const o = i * 4;
+        labelsRgba[o] = (b >> 16) & 0xff;
+        labelsRgba[o + 1] = (b >> 8) & 0xff;
+        labelsRgba[o + 2] = b & 0xff;
+        labelsRgba[o + 3] = 0xff;
+    }
+
     // Key icons: per-type transparent overlays + composite (same −7 offset as MapView).
     const keyRgba = new Uint8Array(width * height * 4);
     const keyTypeRgba: Record<string, Uint8Array> = {};
@@ -339,6 +363,7 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
         terrain,
         keyRgba,
         keyTypeRgba,
+        labelsRgba,
         multiRgba,
         freeRgba,
         keyIndex,
@@ -368,17 +393,20 @@ async function main(): Promise<void> {
 
     const terrainName = `worldmap-basemap.${fp}.png`;
     const keyName = `worldmap-key.${fp}.png`;
+    const labelsName = `worldmap-labels.${fp}.png`;
     const multiName = `worldmap-multi.${fp}.png`;
     const freeName = `worldmap-free.${fp}.png`;
     const keyIndexName = `worldmap-key-index.${fp}.json`;
 
     const terrainPng = encodePngRgba(pix2dToRgba(result.terrain), width, height);
     const keyPng = encodePngRgba(result.keyRgba, width, height);
+    const labelsPng = encodePngRgba(result.labelsRgba, width, height);
     const multiPng = encodePngRgba(result.multiRgba, width, height);
     const freePng = encodePngRgba(result.freeRgba, width, height);
 
     fs.writeFileSync(path.join(opts.outDir, terrainName), terrainPng);
     fs.writeFileSync(path.join(opts.outDir, keyName), keyPng);
+    fs.writeFileSync(path.join(opts.outDir, labelsName), labelsPng);
     fs.writeFileSync(path.join(opts.outDir, multiName), multiPng);
     fs.writeFileSync(path.join(opts.outDir, freeName), freePng);
     fs.writeFileSync(
@@ -396,6 +424,21 @@ async function main(): Promise<void> {
         keyTypeBytes += png.length;
     }
 
+    // Classic media mapmarker (you-are-here pin) for the basemap picker.
+    let playerMarkerUrl: string | undefined;
+    const mediaPath = path.join(opts.engine, 'data/pack/client/media');
+    if (fs.existsSync(mediaPath)) {
+        try {
+            const marker = await extractMapmarkerPng(new Uint8Array(fs.readFileSync(mediaPath)), 0);
+            const markerName = `worldmap-player-marker.${fp}.png`;
+            fs.writeFileSync(path.join(opts.outDir, markerName), marker);
+            playerMarkerUrl = `./${markerName}`;
+            console.log(`  player marker: ${markerName} (${(marker.length / 1024).toFixed(1)} KB)`);
+        } catch (e) {
+            console.warn(`  player marker: skip (${e instanceof Error ? e.message : e})`);
+        }
+    }
+
     const placementCount = Object.values(result.keyIndex.placements).reduce((n, a) => n + a.length, 0);
     const typeCount = Object.keys(result.keyIndex.placements).length;
 
@@ -410,8 +453,10 @@ async function main(): Promise<void> {
         keyOverlayUrl: `./${keyName}`,
         keyIndexUrl: `./${keyIndexName}`,
         keyTypeOverlayUrls,
+        labelsOverlayUrl: `./${labelsName}`,
         multiOverlayUrl: `./${multiName}`,
         freeOverlayUrl: `./${freeName}`,
+        playerMarkerUrl,
         jagBytes: bytes.length
     };
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
@@ -423,12 +468,43 @@ async function main(): Promise<void> {
     console.log(
         `  key types: ${typeCount} PNGs (${(keyTypeBytes / 1024).toFixed(0)} KB total) — ${placementCount} icons`
     );
+    console.log(`  labels overlay: ${labelsName} (${(labelsPng.length / 1024).toFixed(0)} KB)`);
     console.log(`  multi overlay: ${multiName} (${(multiPng.length / 1024).toFixed(0)} KB)`);
     console.log(`  free overlay: ${freeName} (${(freePng.length / 1024).toFixed(0)} KB)`);
     console.log(`  key index: ${keyIndexName}`);
     console.log(`  manifest: ${manPath}`);
     console.log(`  origin: ${result.originX},${result.originZ}`);
     console.log(`  elapsed: ${((performance.now() - started) / 1000).toFixed(1)}s`);
+}
+
+/** Export media `mapmarker` sprite (index 0 = classic pin) to a small RGBA PNG. */
+async function extractMapmarkerPng(mediaBytes: Uint8Array, spriteIndex: number): Promise<Uint8Array> {
+    const JagFile = (await import('#/io/JagFile.js')).default;
+    const Pix32 = (await import('#/graphics/Pix32.js')).default;
+    const jag = new JagFile(mediaBytes);
+    const s = Pix32.depack(jag, 'mapmarker', spriteIndex);
+    const w = s.owi;
+    const h = s.ohi;
+    const rgba = new Uint8Array(w * h * 4);
+    for (let y = 0; y < s.hi; y++) {
+        for (let x = 0; x < s.wi; x++) {
+            const rgb = s.data[y * s.wi + x] >>> 0;
+            if (!rgb) {
+                continue;
+            }
+            const dx = x + s.xof;
+            const dy = y + s.yof;
+            if (dx < 0 || dy < 0 || dx >= w || dy >= h) {
+                continue;
+            }
+            const o = (dy * w + dx) * 4;
+            rgba[o] = (rgb >> 16) & 0xff;
+            rgba[o + 1] = (rgb >> 8) & 0xff;
+            rgba[o + 2] = rgb & 0xff;
+            rgba[o + 3] = 0xff;
+        }
+    }
+    return encodePngRgba(rgba, w, h);
 }
 
 main().catch(err => {

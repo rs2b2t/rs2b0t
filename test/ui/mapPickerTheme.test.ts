@@ -28,6 +28,7 @@ describe('resolveMapPickerDotTheme', () => {
         expect(t.showBasemap).toBe(true);
         expect(t.showWalkable).toBe(false);
         expect(t.keyIconTypes).toEqual([]);
+        expect(t.showPlaceLabels).toBe(false);
         expect(t.showMultiTint).toBe(false);
         expect(t.showFreeTint).toBe(false);
         expect(t.colorRaw).toBe(MAP_PICKER_DOT_DEFAULT);
@@ -85,6 +86,7 @@ describe('isMapPickerThemeSettingKey', () => {
         expect(isMapPickerThemeSettingKey(MAP_PICKER_BASEMAP_KEY)).toBe(true);
         expect(isMapPickerThemeSettingKey('dotColor')).toBe(true);
         expect(isMapPickerThemeSettingKey(MAP_PICKER_KEY_TYPES_KEY)).toBe(true);
+        expect(isMapPickerThemeSettingKey('showPlaceLabels')).toBe(true);
         expect(isMapPickerThemeSettingKey('showMultiTint')).toBe(true);
         expect(isMapPickerThemeSettingKey('showFreeTint')).toBe(true);
         expect(isMapPickerThemeSettingKey('bakeLabels')).toBe(false);
