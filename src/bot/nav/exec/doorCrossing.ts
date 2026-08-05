@@ -338,10 +338,10 @@ export async function tryNearbyDoor(
     const door =
         pick === null
             ? null
-            : candidates.find(l => {
-                  const t = l.tile();
-                  return t.x === pick.x && t.z === pick.z;
-              }) ?? null;
+            : (candidates.find(l => {
+                const t = l.tile();
+                return t.x === pick.x && t.z === pick.z;
+            }) ?? null);
     if (!door) {
         // Path-scoped stall with only off-path doors nearby — repath, don't tour houses.
         if (path && path.tiles.length > 0) {

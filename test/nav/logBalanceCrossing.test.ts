@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SPECIAL_CROSSINGS, meetsSkill, specialCrossingAt } from '#/bot/nav/data/specialCrossings.js';
 import transports from '#/bot/nav/data/transports.json';
+import { allTransportRows } from '#/bot/nav/loadTransportGraph.js';
 
 const WEST = { x: 2598, z: 3477, level: 0 } as const;
 const EAST = { x: 2603, z: 3477, level: 0 } as const;
@@ -57,10 +58,12 @@ describe('log balance special crossings', () => {
     });
 
     test('every skill-gated crossing has a matching transport edge to prune', () => {
+        // Include curated travel (Yanille ledge, etc.) — same set as PathFinder.
+        const graph = allTransportRows();
         const gated = SPECIAL_CROSSINGS.filter(sc => sc.requiresSkill);
         expect(gated.length).toBeGreaterThan(0);
         for (const sc of gated) {
-            const edge = transports.find(t => t.from.x === sc.x && t.from.z === sc.z && t.from.level === sc.level);
+            const edge = graph.find(t => t.from.x === sc.x && t.from.z === sc.z && t.from.level === sc.level);
             expect(edge, `no transport edge starts at ${sc.label} (${sc.x},${sc.z})`).toBeDefined();
         }
     });

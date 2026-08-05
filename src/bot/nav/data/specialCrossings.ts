@@ -138,7 +138,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         action: 'Enter',
         toTile: { x: 2576, z: 3029, level: 0 },
         arrivalRadius: 3,
-        label: "Toban cave enter (#364)"
+        label: 'Toban cave enter (#364)'
     },
     {
         x: 2575,
@@ -148,7 +148,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         action: 'Climb-down',
         toTile: { x: 2500, z: 2988, level: 0 },
         arrivalRadius: 2,
-        label: "Toban ladder leave (#364)"
+        label: 'Toban ladder leave (#364)'
     },
 
     { x: 2568, z: 9893, level: 0, locName: 'Door', action: 'Open', useItem: { id: 298, name: 'A key' }, label: 'Baxtorian keyed door' },

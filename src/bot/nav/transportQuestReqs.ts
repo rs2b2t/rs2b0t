@@ -9,7 +9,6 @@
  */
 
 import type { QuestProgress, TransportRequires } from './types.js';
-import type { WorldStateData } from './worldStateData.js';
 
 /** Engine permanent varp + complete stage (setvar seed). */
 export interface QuestVarSeed {

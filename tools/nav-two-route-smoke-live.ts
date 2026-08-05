@@ -84,7 +84,7 @@ const ROUTES: Route[] = [
                 hops.some(h => /balancing ledge|ledge/i.test(h))
                 || logs.some(l => /balancing ledge/i.test(l));
             if (!walkOk || dist > 4) {
-                return { ok: false, reason: `dist/walkOk (need near 2580,9501, not ledge)` };
+                return { ok: false, reason: 'dist/walkOk (need near 2580,9501, not ledge)' };
             }
             if (!inCamp) {
                 return {

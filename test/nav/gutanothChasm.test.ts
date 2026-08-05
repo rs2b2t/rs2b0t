@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { SPECIAL_CROSSINGS, specialCrossingAt } from '#/bot/nav/data/specialCrossings.js';
 import transports from '#/bot/nav/data/transports.json';
+import { allTransportRows } from '#/bot/nav/loadTransportGraph.js';
 import type { TransportEdgeData } from '#/bot/nav/PathFinder.js';
 
 /**
@@ -70,12 +71,13 @@ describe('skill-gated crossings', () => {
     test('every one has a transport edge starting at its stand', () => {
         // The invariant #398 tripped: a skill-gated crossing whose stand tile is
         // not some edge's `from` can never be pruned, so the walker plans through
-        // a shortcut it has no level for. Guarded here as well as in the log
-        // balance suite, since that is where it first broke.
+        // a shortcut it has no level for. Graph = transports.json + curatedTravelEdges
+        // (PathFinder / NavWorker load the same set via allTransportRows).
+        const graph = allTransportRows();
         const gated = SPECIAL_CROSSINGS.filter(sc => sc.requiresSkill);
         expect(gated.length).toBeGreaterThan(0);
         for (const sc of gated) {
-            const edge = rows.find(
+            const edge = graph.find(
                 t => t.from.x === sc.x && t.from.z === sc.z && t.from.level === sc.level
             );
             expect(edge, `no transport edge starts at ${sc.label} (${sc.x},${sc.z})`).toBeDefined();

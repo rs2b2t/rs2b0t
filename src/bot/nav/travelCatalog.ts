@@ -74,8 +74,6 @@ export const TRAVEL_STANDS = {
     wildLever: { x: 3153, z: 3923, level: 0 } as NavPoint
 } as const;
 
-const members: TransportRequires = { members: true };
-
 function edge(
     from: NavPoint,
     to: NavPoint,
