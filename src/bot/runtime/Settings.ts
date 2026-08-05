@@ -175,6 +175,26 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
             + '(client-only, smoothed each frame like arrow-key turns). Off by default. '
             + 'URL: ?Global.navCameraFollow=true.'
     },
+    navPathStallTicks: {
+        type: 'number',
+        default: 9,
+        min: 1,
+        max: 60,
+        label: 'Path stall repath (ticks)',
+        help:
+            'Server ticks with no tile change before repathing the published route. '
+            + 'Default 9. Scripts may override per walk. URL: ?Global.navPathStallTicks=9.'
+    },
+    navPathDeviation: {
+        type: 'number',
+        default: 10,
+        min: 1,
+        max: 40,
+        label: 'Path deviation repath (Chebyshev)',
+        help:
+            'If the player is farther than this from the published path, repath. '
+            + 'Default 10 (observed client/baked path slop). URL: ?Global.navPathDeviation=10.'
+    },
     // ── Nav path paint (visible when showNavPath) ──
     navPathShowText: {
         type: 'boolean',

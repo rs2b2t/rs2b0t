@@ -3,6 +3,7 @@ import {
     chooseCrossClick,
     crossingEligible,
     locateOnPath,
+    minChebyshevToPath,
     selectClientWalkTarget,
     selectClickTarget,
     shouldApproachClosedBarrier,
@@ -136,8 +137,11 @@ describe('crossingEligible', () => {
         expect(crossingEligible(t(8, 8), approach, far, 4, () => true)).toBe(true);
     });
 
-    test('fires on proximity to the far tile too (horizontal), approach reachable', () => {
-        expect(crossingEligible(t(10, 14), approach, far, 4, () => true)).toBe(true);
+    test('does NOT fire on proximity to the far tile alone (no opportunistic snap)', () => {
+        // Approach is far away; only the landing is nearby — old code snapped on far-side.
+        const farApproach = t(0, 0);
+        const nearLanding = t(20, 20);
+        expect(crossingEligible(t(20, 21), farApproach, nearLanding, 4, () => true)).toBe(false);
     });
 
     test('does NOT fire when the approach tile is unreachable (ladder behind a wall)', () => {
@@ -182,5 +186,17 @@ describe('shouldApproachClosedBarrier', () => {
 
     test('crosses instead of retrying the tile occupied by the open leaf', () => {
         expect(shouldApproachClosedBarrier(t(3106, 3161), approach, false)).toBe(false);
+    });
+});
+
+
+describe('minChebyshevToPath', () => {
+    test('nearest same-level path tile', () => {
+        const tiles = [t(0, 0), t(5, 0), t(10, 0)];
+        expect(minChebyshevToPath(tiles, t(6, 1), 0, 10)).toBe(1);
+    });
+    test('ignores other levels', () => {
+        const tiles = [t(0, 0, 1), t(5, 0, 1)];
+        expect(minChebyshevToPath(tiles, t(0, 0, 0), 0, 10)).toBe(Number.POSITIVE_INFINITY);
     });
 });

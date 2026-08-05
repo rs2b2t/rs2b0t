@@ -73,6 +73,14 @@ export const Traversal = {
         return WalkExecutor.walkTo(dest, opts);
     },
 
+    /**
+     * Force the active (or next) world walk to repath. Always honored —
+     * does not wait for stall/deviation. See path stickiness on WalkExecutor.
+     */
+    requestRepath(reason?: string): void {
+        WalkExecutor.requestRepath(reason);
+    },
+
     async walkResilient(dest: WorldTile, opts: WalkResilientOptions): Promise<boolean> {
         const log = opts.log ?? ((): void => {});
         const radius = opts.radius;

@@ -20,9 +20,12 @@ import {
     chebyshev,
     crossingEligible,
     locateOnPath,
+    minChebyshevToPath,
     selectClientWalkTarget,
     starvedTerminalIndex
 } from './followMath.js';
+import { resolvePathFollowConfig, type PathFollowOverrides } from './pathFollowPolicy.js';
+import { BotHost } from '../BotHost.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
 import { snapshotWorldStateData } from './worldStateLive.js';
@@ -72,14 +75,11 @@ const TARGET_STEPS = 20;
 const TARGET_JITTER = 4;
 const ARRIVE_RADIUS = 4;
 const PROGRESS_WINDOW = 26;
-// docs/NAV.md#corridor-snap
+// Path-index snap only. Deviation repath uses pathFollowPolicy (default 10).
 const CORRIDOR = 3;
-const OFF_CORRIDOR_STRIKES = 2;
-const STALL_TICKS = 6;
 const STALL_REACH_STEPS = 256;
 const TRIGGER_REACH_STEPS = 256;
 const STUCK_ITERS = 12;
-const TRANSPORT_TRIGGER = ARRIVE_RADIUS;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000;
 const TRANSPORT_WAIT_MS = 8000;
@@ -113,6 +113,14 @@ export interface WalkOptions {
      * @see src/bot/nav/data/dangerZones.ts
      */
     avoidZones?: readonly (string | import('./data/dangerZones.js').DangerZoneRect)[];
+    /**
+     * Path stickiness (stall / deviation). Defaults: Global `navPathStallTicks` (9)
+     * and `navPathDeviation` (10). Plan once at request; repath only on stall,
+     * deviation past this Chebyshev, or {@link WalkExecutor.requestRepath}.
+     */
+    pathFollow?: PathFollowOverrides;
+    /** Force a full repath for this walk (scripts that know the route is stale). */
+    forceRepath?: boolean;
 }
 
 interface PathStep extends WorldTile {
@@ -185,12 +193,29 @@ class WalkExecutorImpl {
     /** Danger zones for this walk (resolved rects). */
     private walkAvoidZones: DangerZoneRect[] = [];
 
+    /** Stickiness for the active walk (stall ticks / deviation Chebyshev). */
+    private pathFollow = resolvePathFollowConfig();
+
+    /**
+     * Scripts call this to force a repath on the next followPath loop (or next walkTo).
+     * Always honored — does not wait for stall/deviation.
+     */
+    private forceRepathPending = false;
+
+    requestRepath(_reason?: string): void {
+        this.forceRepathPending = true;
+    }
+
     async walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         const radius = opts?.radius ?? 2;
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
         const maxExpansions = opts?.maxExpansions;
         this.walkUseTeleports = resolveWalkUseTeleports(opts);
+        this.pathFollow = resolvePathFollowConfig(opts?.pathFollow);
+        if (opts?.forceRepath) {
+            this.forceRepathPending = true;
+        }
         // Defaults first; caller policy can set distanceBeforeTeleport: 0 to allow short teles.
         this.walkPolicy = {
             useTeleports: this.walkUseTeleports,
@@ -731,8 +756,6 @@ class WalkExecutorImpl {
         log: (msg: string) => void
     ): Promise<FollowResult> {
         let pathIdx = 0;
-        let offCorridor = 0;
-        let stallTicks = 0;
         let stallRetries = 0;
         let clickIdx = -1;
         let clicks = 0;
@@ -743,6 +766,10 @@ class WalkExecutorImpl {
         let walkClickMark: number | null = null;
         /** Player tile when that walk was issued — CANT_REACH only counts if still here. */
         let walkClickAt: WorldTile | null = null;
+        /** Server tick of last tile change (stall = no move for pathFollow.stallTicks). */
+        let lastMoveTick = BotHost.tickCount;
+        const follow = this.pathFollow;
+        const approachR = follow.transportApproachChebyshev;
 
         const clickable = (t: WorldTile): boolean =>
             reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
@@ -751,6 +778,11 @@ class WalkExecutorImpl {
             if (EventSignal.pending()) {
                 return 'interrupted';
             }
+            if (this.forceRepathPending) {
+                this.forceRepathPending = false;
+                log('repath requested by script/API');
+                return 'repath';
+            }
             await Sustain.run();
 
             const me = reader.worldTile();
@@ -758,7 +790,6 @@ class WalkExecutorImpl {
                 return 'failed';
             }
 
-            // Clear walk-click watermark once we leave the click tile (route accepted).
             if (
                 walkClickAt
                 && (me.x !== walkClickAt.x || me.z !== walkClickAt.z || me.level !== walkClickAt.level)
@@ -767,10 +798,6 @@ class WalkExecutorImpl {
                 walkClickAt = null;
             }
 
-            // Server "I can't reach that!" after OUR walk click, while still stuck on the
-            // click tile — repath immediately. Unrelated later CANT_REACH (doors/NPCs) is
-            // ignored once we've moved. Transport hops already fail-fast on their own mark.
-            // Plain walk follow did not listen to EventSignal before; keep intentional.
             if (
                 walkClickMark !== null
                 && walkClickAt !== null
@@ -808,11 +835,23 @@ class WalkExecutorImpl {
             );
             if (found !== -1) {
                 pathIdx = found;
-                offCorridor = 0;
-            } else if (++offCorridor >= OFF_CORRIDOR_STRIKES) {
-                log(`deviated from path at (${me.x},${me.z},${me.level}) — repathing (${clicks} clicks)`);
+            }
+
+            // Deviation repath: farther than stickiness Chebyshev from published path.
+            const pathDist = minChebyshevToPath(
+                tiles,
+                me,
+                pathIdx,
+                PROGRESS_WINDOW,
+                progressLimit === -1 ? tiles.length - 1 : progressLimit
+            );
+            if (pathDist > follow.deviationChebyshev) {
+                log(
+                    `deviated from path at (${me.x},${me.z},${me.level}) dist=${pathDist} > ${follow.deviationChebyshev} — repathing (${clicks} clicks)`
+                );
                 return 'repath';
             }
+
             this.remaining = tiles.length - 1 - pathIdx;
             RouteState.setPathIdx(pathIdx);
             this.publishPath(tiles, pathIdx, clickIdx);
@@ -820,60 +859,59 @@ class WalkExecutorImpl {
 
             const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
             stillIters = moved ? 0 : stillIters + 1;
-            const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]) > ARRIVE_RADIUS;
-            const noMoveStall =
-                !moved
-                && (shortOfTarget
-                    || stillIters >= STUCK_ITERS
-                    || (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx], { maxSteps: STALL_REACH_STEPS })));
-            stallTicks = noMoveStall ? stallTicks + 2 : 0;
+            if (moved) {
+                lastMoveTick = BotHost.tickCount;
+            }
             lastTile = me;
+
+            const idleTicks = BotHost.tickCount - lastMoveTick;
+            const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]!) > ARRIVE_RADIUS;
+            const hardStuck =
+                !moved
+                && (stillIters >= STUCK_ITERS
+                    || (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx]!, { maxSteps: STALL_REACH_STEPS })));
 
             let nextCrossingIdx = -1;
             for (let i = pathIdx + 1; i < tiles.length; i++) {
-                if (tiles[i].transport) {
+                if (tiles[i]!.transport) {
                     nextCrossingIdx = i;
                     break;
                 }
             }
-            let crossingIdx = -1;
+
+            // Only the **next** planned hop — never scan nearby transports or pathIdx-5.
+            // Engage only at the approach tile once pathIdx has reached the hop.
             const approachable = (t: WorldTile): boolean =>
                 Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
-            const scanHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
-            for (let i = Math.max(1, pathIdx - 5); i < scanHi; i++) {
-                if (tiles[i].transport && crossingEligible(me, tiles[i - 1], tiles[i], TRANSPORT_TRIGGER, approachable)) {
-                    crossingIdx = i;
-                    break;
-                }
-            }
-            if (crossingIdx !== -1) {
-                const hop = tiles[crossingIdx]!;
-                const hopTransport = hop.transport!;
-                const handled = await this.handleTransport(tiles[crossingIdx - 1]!, hop, log);
-                if (handled) {
-                    hop.transport = undefined;
-                    if (multiLandingNeedsRepath(hopTransport, hop.level, reader.worldTile())) {
-                        const live = reader.worldTile();
-                        log(
-                            `multi-landing hop arrived at (${live?.x},${live?.z}) not planned (${hopTransport.toTile!.x},${hopTransport.toTile!.z}) — repathing`
-                        );
-                        return 'repath';
+            if (nextCrossingIdx !== -1 && pathIdx >= nextCrossingIdx - 1) {
+                const appr = tiles[nextCrossingIdx - 1]!;
+                const hop = tiles[nextCrossingIdx]!;
+                if (hop.transport && crossingEligible(me, appr, hop, approachR, approachable)) {
+                    const hopTransport = hop.transport;
+                    const handled = await this.handleTransport(appr, hop, log);
+                    if (handled) {
+                        hop.transport = undefined;
+                        if (multiLandingNeedsRepath(hopTransport, hop.level, reader.worldTile())) {
+                            const live = reader.worldTile();
+                            log(
+                                `multi-landing hop arrived at (${live?.x},${live?.z}) not planned (${hopTransport.toTile!.x},${hopTransport.toTile!.z}) — repathing`
+                            );
+                            return 'repath';
+                        }
+                        pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                        lastMoveTick = BotHost.tickCount;
+                        stallRetries = 0;
+                        clickIdx = -1;
+                        lastTile = null;
+                        continue;
                     }
-                    pathIdx = Math.max(pathIdx, crossingIdx - 1);
-                    stallTicks = 0;
-                    stallRetries = 0;
-                    clickIdx = -1;
-                    lastTile = null;
-                    continue;
+                    noteFailedDoor(hop, this.doorStrikes, this.avoidDoors);
+                    return 'repath';
                 }
-                noteFailedDoor(hop, this.doorStrikes, this.avoidDoors);
-                return 'repath';
             }
 
-            if (stallTicks >= STALL_TICKS) {
-                stallTicks = 0;
+            if (idleTicks >= follow.stallTicks || hardStuck) {
                 if (stallRetries === 0) {
-                    // First stall: pure forward recovery on published path.
                     const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                     const recover = findForwardRecoveryIndex(tiles, me, pathIdx, clickable, {
                         corridor: CORRIDOR,
@@ -881,9 +919,11 @@ class WalkExecutorImpl {
                         limitIdx: limit
                     });
                     if (recover !== -1) {
-                        const local = reader.toLocal(tiles[recover].x, tiles[recover].z);
+                        const local = reader.toLocal(tiles[recover]!.x, tiles[recover]!.z);
                         if (local) {
-                            log(`stall recovery → path idx ${recover} (${tiles[recover].x},${tiles[recover].z})`);
+                            log(
+                                `stall recovery (${idleTicks} ticks idle) → path idx ${recover} (${tiles[recover]!.x},${tiles[recover]!.z})`
+                            );
                             const mark = GameMessages.mark();
                             if (ActionRouter.driver.walk(local.lx, local.lz)) {
                                 walkClickMark = mark;
@@ -892,6 +932,7 @@ class WalkExecutorImpl {
                                 clickIdx = recover;
                                 clicks++;
                                 stallRetries = 1;
+                                lastMoveTick = BotHost.tickCount;
                                 this.publishPath(tiles, pathIdx, clickIdx);
                                 await Execution.delayTicks(2);
                                 continue;
@@ -902,6 +943,7 @@ class WalkExecutorImpl {
                     }
                     stallRetries = 1;
                     clickIdx = -1;
+                    lastMoveTick = BotHost.tickCount;
                 } else if (reader.inCombat()) {
                     if (!warnedCombat) {
                         warnedCombat = true;
@@ -909,8 +951,9 @@ class WalkExecutorImpl {
                     }
                     stallRetries = 0;
                     clickIdx = -1;
+                    lastMoveTick = BotHost.tickCount;
                 } else {
-                    const end = tiles[tiles.length - 1];
+                    const end = tiles[tiles.length - 1]!;
                     const adjacentToEnd = clicks === 0 && me.level === end.level && chebyshev(me, end) <= 1;
                     if (adjacentToEnd) {
                         const openLeaf = Locs.query()
@@ -927,20 +970,15 @@ class WalkExecutorImpl {
                             stallRetries = 0;
                             clickIdx = -1;
                             lastTile = null;
+                            lastMoveTick = BotHost.tickCount;
                             continue;
                         }
                     }
-                    // Only open doors on the published route (hop placement or corridor).
-                    // Never open a nearer house/shop door off the path — that yanks us
-                    // off-corridor and triggers repath ("interrupted" walks).
                     const hopDoors: { x: number; z: number }[] = [];
                     const hopHi = Math.min(tiles.length, pathIdx + PROGRESS_WINDOW);
                     for (let i = Math.max(0, pathIdx); i < hopHi; i++) {
                         const tr = tiles[i]!.transport;
-                        if (
-                            tr
-                            && (tr.kind === 'door' || /(door|gate)/i.test(tr.locName ?? ''))
-                        ) {
+                        if (tr && (tr.kind === 'door' || /(door|gate)/i.test(tr.locName ?? ''))) {
                             hopDoors.push({ x: tr.locX, z: tr.locZ });
                         }
                     }
@@ -948,8 +986,6 @@ class WalkExecutorImpl {
                         await tryNearbyDoor(log, {
                             tiles,
                             pathIdx,
-                            // Door placement must be a path tile or hop loc (default corridor 0).
-                            // CORRIDOR (3) / even 1 treated street-front doors as on-path.
                             window: PROGRESS_WINDOW,
                             hopDoors
                         })
@@ -957,9 +993,9 @@ class WalkExecutorImpl {
                         stallRetries = 0;
                         clickIdx = -1;
                         lastTile = null;
+                        lastMoveTick = BotHost.tickCount;
                         continue;
                     }
-                    // Quest-lock after nearby door open attempt.
                     const lockTile = questLockDoorTileNearPlayer();
                     if (lockTile) {
                         log(`quest-locked door at (${lockTile.x},${lockTile.z}) — blacklisting`);
@@ -974,12 +1010,14 @@ class WalkExecutorImpl {
                         log(`(${end.x},${end.z}) blocked live — as close as reachable`);
                         return 'blocked';
                     }
-                    log(`stuck at (${me.x},${me.z}) — repathing (${clicks} clicks)`);
+                    log(
+                        `stuck at (${me.x},${me.z}) after ${idleTicks} idle ticks (stall=${follow.stallTicks}) — repathing (${clicks} clicks)`
+                    );
                     return 'repath';
                 }
             }
 
-            const needClick = clickIdx === -1 || clickIdx <= pathIdx || chebyshev(me, tiles[clickIdx]) <= ARRIVE_RADIUS;
+            const needClick = clickIdx === -1 || clickIdx <= pathIdx || chebyshev(me, tiles[clickIdx]!) <= ARRIVE_RADIUS;
             if (needClick) {
                 const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const steps = TARGET_STEPS + Math.floor(Math.random() * (2 * TARGET_JITTER + 1)) - TARGET_JITTER;
@@ -992,8 +1030,6 @@ class WalkExecutorImpl {
                     if (!local) {
                         return false;
                     }
-                    // Client tryMove: false = scene BFS found no route (no MOVE packet).
-                    // On success, watermark chat so a server can't-reach while still here repaths.
                     const mark = GameMessages.mark();
                     const ok = ActionRouter.driver.walk(local.lx, local.lz);
                     if (ok) {
@@ -1017,18 +1053,22 @@ class WalkExecutorImpl {
                 if (chosen !== -1) {
                     clickIdx = chosen;
                     clicks++;
-                    stallTicks = 0;
+                    lastMoveTick = BotHost.tickCount;
                     this.publishPath(tiles, pathIdx, clickIdx);
                 } else {
                     walkClickMark = null;
                     walkClickAt = null;
                     PathPublish.setClientSegment(null);
-                    // Client pathfind rejected every candidate — repath immediately (no stall budget).
-                    if (nextCrossingIdx !== -1) {
+                    // Client pathfind failed — only engage next planned hop at approach, then repath.
+                    if (nextCrossingIdx !== -1 && pathIdx >= nextCrossingIdx - 1) {
                         const appr = tiles[nextCrossingIdx - 1]!;
                         const hop = tiles[nextCrossingIdx]!;
-                        if (me.level === appr.level && chebyshev(me, appr) <= TRANSPORT_TRIGGER + 2) {
-                            const hopTransport = hop.transport!;
+                        if (
+                            hop.transport
+                            && me.level === appr.level
+                            && chebyshev(me, appr) <= approachR
+                        ) {
+                            const hopTransport = hop.transport;
                             const handled = await this.handleTransport(appr, hop, log);
                             if (handled) {
                                 hop.transport = undefined;
@@ -1040,7 +1080,7 @@ class WalkExecutorImpl {
                                     return 'repath';
                                 }
                                 pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
-                                stallTicks = 0;
+                                lastMoveTick = BotHost.tickCount;
                                 stallRetries = 0;
                                 clickIdx = -1;
                                 lastTile = null;
@@ -1062,115 +1102,6 @@ class WalkExecutorImpl {
 
         log('walk timed out');
         return 'failed';
-    }
-
-    private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
-        const transport = step.transport!;
-
-        if (transport.teleportId || transport.kind === 'teleport') {
-            const ok = await executeTeleportHop(transport, log);
-            if (ok) {
-                RouteState.noteTransport(approach, step);
-            } else if (transport.teleportId) {
-                // Do not re-pick the same rejected tele on repath (#339).
-                this.sessionSuppressedTeleports.add(transport.teleportId);
-                log(`suppress teleport ${transport.teleportId} for this walk`);
-            }
-            return ok;
-        }
-
-        const special = specialCrossingForTransport(transport, approach, step);
-        if (special) {
-            const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
-            if (ok) {
-                RouteState.noteTransport(approach, step);
-                // Server does not transmit exit_essence_mine_coord — remember return for plan filters.
-                const ess = EssenceSession.noteEntryFromCrossingLabel(special.label)
-                    ?? EssenceSession.noteEntryFromNpc(special.npc ?? special.locName);
-                if (ess) {
-                    log(`essence session return → ${ess} (entry via ${special.label ?? special.locName})`);
-                }
-            }
-            return ok;
-        }
-
-        if (transport.toLevel === undefined && transport.toTile === undefined && chebyshev(approach, step) >= 1) {
-            const ok = await crossMultiTileDoor(approach, step, transport, log, (x, z) => this.blacklistDoor(x, z));
-            if (ok) {
-                RouteState.noteTransport(approach, step);
-            }
-            return ok;
-        }
-
-        for (let attempt = 0; attempt < 2; attempt++) {
-            const loc = findTransportLoc(transport);
-            if (!loc) {
-                if (transport.toLevel === undefined && transport.toTile === undefined) {
-                    // Already open / no shut Open-target: do not burn TRANSPORT_WAIT.
-                    if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
-                        log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
-                        RouteState.noteTransport(approach, step);
-                        return true;
-                    }
-                    log(`transport loc '${transport.locName}' not found but the way is blocked`);
-                    return false;
-                }
-                if (transport.toTile !== undefined && (await openShutTrapdoor(transport, log, Execution.delayUntil.bind(Execution)))) {
-                    continue;
-                }
-                log(`transport loc '${transport.locName}' not found near (${transport.locX},${transport.locZ})`);
-                return false;
-            }
-
-            const before = reader.worldTile();
-            const mark = GameMessages.mark();
-            if (!loc.interact(transport.action)) {
-                log(`'${transport.action}' not offered by ${transport.locName} (ops: ${loc.actions().join(', ')})`);
-                return false;
-            }
-
-            const cantReach = (): boolean => GameMessages.sawSince(mark, CANT_REACH);
-            let crossed: boolean;
-            if (transport.toLevel !== undefined) {
-                const toLevel = transport.toLevel;
-                const climbed = (): boolean => reader.worldTile()?.level === toLevel;
-                crossed = (await Execution.delayUntil(() => climbed() || cantReach(), TRANSPORT_WAIT_MS)) && climbed();
-            } else if (transport.toTile !== undefined) {
-                const landed = (): boolean => matchesTransportLanding(transport, step.level, before, reader.worldTile());
-                crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
-            } else {
-                const open = (): boolean => findTransportLoc(transport) === null || Reachability.canStep(approach, step);
-                crossed = (await Execution.delayUntil(() => open() || cantReach() || chatShowsQuestLock(), TRANSPORT_WAIT_MS)) && open();
-            }
-            if (crossed) {
-                if (transport.toLevel !== undefined) {
-                    // docs/NAV.md#level-change-loc-lag
-                    await Execution.delayTicks(2);
-                }
-                log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
-                RouteState.noteTransport(approach, step);
-                // Catalog entry edges (Teleport wizard) when not routed through specialCrossing.
-                if (/^teleport$/i.test(transport.action ?? '')) {
-                    const ess = EssenceSession.noteEntryFromTransport(transport);
-                    if (ess) {
-                        log(`essence session return → ${ess} (entry transport ${transport.locName})`);
-                    }
-                }
-                return true;
-            }
-            if (chatShowsQuestLock()) {
-                log(`quest-locked '${transport.locName}' at (${transport.locX},${transport.locZ}) — blacklisting`);
-                this.blacklistDoor(transport.locX, transport.locZ);
-                await dismissQuestLockDialogue();
-                return false;
-            }
-            if (cantReach()) {
-                log(`server says can't reach ${transport.locName} at (${transport.locX},${transport.locZ}) — repathing`);
-                return false;
-            }
-            log(`${transport.action} ${transport.locName} did not resolve, retrying`);
-        }
-        return false;
     }
 
     /**
