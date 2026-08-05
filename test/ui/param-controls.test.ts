@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { resolveControl, summarize } from '#/bot/ui/paramControls.js';
-import type { SettingDef } from '#/bot/runtime/Settings.js';
+import { GLOBAL_SETTINGS, MAP_PICKER_SETTINGS, type SettingDef } from '#/bot/runtime/Settings.js';
 
 const def = (d: Partial<SettingDef> & Pick<SettingDef, 'type' | 'default'>): SettingDef => d as SettingDef;
 
@@ -14,6 +14,35 @@ test('resolveControl maps each SettingDef shape to a kind', () => {
     expect(resolveControl(def({ type: 'string[]', default: [], options: ['a', 'b'] }))).toBe('multiselect');
     expect(resolveControl(def({ type: 'string[]', default: [] }))).toBe('taglist');
     expect(resolveControl(def({ type: 'tile', default: null }))).toBe('tile');
+});
+
+test('every Global / MapPicker HTML colour setting uses the colour control', () => {
+    const colorKeys = [
+        ...Object.entries(GLOBAL_SETTINGS),
+        ...Object.entries(MAP_PICKER_SETTINGS)
+    ].filter(([, d]) => d.color === true);
+    expect(colorKeys.length).toBeGreaterThanOrEqual(7);
+    for (const [key, d] of colorKeys) {
+        expect(d.type).toBe('string');
+        expect(typeof d.default).toBe('string');
+        expect(String(d.default)).toMatch(/^#[0-9A-Fa-f]{3,8}$/);
+        expect(resolveControl(d)).toBe('color');
+        // Guard against hex defaults that forgot color: true — already filtered.
+        expect(key.length).toBeGreaterThan(0);
+    }
+    // Nav path paint colours must all opt in (regression vs freeform text fields).
+    for (const key of [
+        'navPathColorPath',
+        'navPathColorTransport',
+        'navPathColorClick',
+        'navPathColorText',
+        'navPathColorClient',
+        'navPathColorClientRunAlt'
+    ]) {
+        expect(GLOBAL_SETTINGS[key]?.color).toBe(true);
+        expect(resolveControl(GLOBAL_SETTINGS[key]!)).toBe('color');
+    }
+    expect(MAP_PICKER_SETTINGS.dotColor?.color).toBe(true);
 });
 
 test('summarize formats each kind compactly', () => {

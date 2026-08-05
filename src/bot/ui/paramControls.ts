@@ -117,6 +117,10 @@ export function summarize(def: SettingDef, value: string): string {
         }
         case 'text':
             return value.trim().length > 0 ? value.trim() : '(empty)';
+        case 'color': {
+            const t = value.trim();
+            return t.length > 0 ? t : '(empty)';
+        }
         default:
             return value;
     }

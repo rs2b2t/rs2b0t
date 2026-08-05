@@ -199,6 +199,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Path colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help: 'HTML #RGB / #RRGGBB — remaining walk tiles (default red)'
     },
     navPathColorTransport: {
@@ -207,6 +208,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Transport colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help: 'HTML #RGB / #RRGGBB — door / ladder / tele hops (default green)'
     },
     navPathColorClick: {
@@ -215,6 +217,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Click target colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help: 'Outline on the next walk click tile'
     },
     navPathColorText: {
@@ -223,6 +226,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Hop label colour',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help: 'HTML #RGB / #RRGGBB — transport captions (default white)'
     },
     // ── Experimental path-paint debug (opt-in; only when showNavPath) ──
@@ -254,6 +258,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Client trail colour (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help:
             'Primary colour for the experimental client-walk trail (solid when walking). '
             + 'Default cyan #00D4FF.'
@@ -264,6 +269,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         label: 'Client run alt colour (experimental)',
         group: 'Nav path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
+        color: true,
         help:
             'When run is on, client-walk tiles alternate primary / this colour. '
             + 'Default yellow #FFFF00.'
