@@ -272,7 +272,7 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                             useTeleportCatalog: teleOn,
                             policy: {
                                 useTeleports: teleOn,
-                                distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
+                                distanceBeforeTeleport: distanceBeforeTeleport ?? 0,
                                 ...(allowTeleportIds ? { allowTeleportIds } : {})
                             },
                             log: m => {

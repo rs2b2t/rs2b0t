@@ -401,7 +401,7 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
                             useTeleportCatalog: teleOn,
                             policy: {
                                 useTeleports: teleOn,
-                                distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
+                                distanceBeforeTeleport: distanceBeforeTeleport ?? 0,
                                 ...(allowTeleportIds ? { allowTeleportIds } : {})
                             },
                             log: m => {
