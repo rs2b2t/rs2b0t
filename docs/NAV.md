@@ -368,7 +368,8 @@ await Traversal.walkTo(dest, { ...NAV_PURE_WALK, radius: 3 });
 ```
 
 **ClueSolver** sets tele inject from its own **Use teleports** script setting (not the
-Global default): on → explicit force-on (cost decides; no span floor); off → force-off.
+Global default): on → force-on with `distanceBeforeTeleport: 40` (unchanged span floor);
+off → force-off. Other scripts use Global / A* cost (default span 0).
 
 ### Costs (lowest wins)
 
