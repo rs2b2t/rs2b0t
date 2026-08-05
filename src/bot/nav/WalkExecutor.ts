@@ -39,6 +39,7 @@ import { PathPublish, formatHopLabel } from './pathPublish.js';
 import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
 import { resolveDangerZones, type DangerZoneRect } from './data/dangerZones.js';
 import { expandWaypoints as expandWaypointsDense, localBfsPath } from './pathExpand.js';
+import { DEFAULT_DISTANCE_BEFORE_TELEPORT } from './policy.js';
 import { SettingsStore } from '../runtime/Settings.js';
 import {
     crossMultiTileDoor,
@@ -173,7 +174,12 @@ class WalkExecutorImpl {
         const maxExpansions = opts?.maxExpansions;
         this.walkUseTeleports =
             opts?.useTeleportCatalog !== false && opts?.policy?.useTeleports !== false;
-        this.walkPolicy = opts?.policy ?? { useTeleports: this.walkUseTeleports };
+        // Defaults first; caller policy can set distanceBeforeTeleport: 0 to allow short teles.
+        this.walkPolicy = {
+            useTeleports: this.walkUseTeleports,
+            distanceBeforeTeleport: DEFAULT_DISTANCE_BEFORE_TELEPORT,
+            ...(opts?.policy ?? {})
+        };
         this.walkBankItemCounts = opts?.bankItemCounts;
         const walkStart = reader.worldTile();
         this.walkAvoidZones = resolveDangerZones(opts?.avoidZones, {
@@ -581,7 +587,9 @@ class WalkExecutorImpl {
             }
         }
         const policy: PathPolicy = {
-            ...(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })
+            useTeleports: this.walkUseTeleports,
+            distanceBeforeTeleport: DEFAULT_DISTANCE_BEFORE_TELEPORT,
+            ...(this.walkPolicy ?? {})
         };
         const useTeleportCatalog = this.walkUseTeleports;
         if (this.sessionSuppressedTeleports.size > 0) {
@@ -685,7 +693,10 @@ class WalkExecutorImpl {
             return { ok: false, terminal: null };
         }
         this.walkUseTeleports = true;
-        this.walkPolicy = { useTeleports: true };
+        this.walkPolicy = {
+            useTeleports: true,
+            distanceBeforeTeleport: DEFAULT_DISTANCE_BEFORE_TELEPORT
+        };
         this.resetAvoids();
         const path = await this.requestPath(me, dest, maxExpansions);
         if (!path.ok || path.waypoints.length === 0) {

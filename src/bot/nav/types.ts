@@ -167,7 +167,8 @@ export interface PathPolicy {
     useTeleports?: boolean;
     /**
      * Min Chebyshev distance (start→goal, or remaining estimate) before a teleport
-     * edge may be used. 0 = always allowed when other gates pass.
+     * edge may be used. Default **40** when unset (`DEFAULT_DISTANCE_BEFORE_TELEPORT`).
+     * Pass `0` to allow teles on any span.
      */
     distanceBeforeTeleport?: number;
     /**

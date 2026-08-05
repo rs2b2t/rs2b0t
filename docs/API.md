@@ -665,8 +665,9 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     log?: (msg: string) => void;
     maxExpansions?: number;
     // Spell/jewellery tele edges in A* (default true). Set false for pure walk.
+    // Or spread Traversal.pureWalk / NAV_PURE_WALK on combat/escape scripts that stock laws.
     useTeleportCatalog?: boolean;
-    // Tele policy (useTeleports, distanceBeforeTeleport, allowTeleportIds, …).
+    // Tele policy. distanceBeforeTeleport defaults to 40 when unset (0 = any span).
     policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
     // Optional bank item counts for path-scoped bank planner.
     bankItemCounts?: Record<string, number>;

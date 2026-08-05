@@ -180,6 +180,16 @@ describe('nav v2 path policy (teleports)', () => {
         expect(teleportAllowedByPolicy(varrockTele, policy, long).ok).toBe(true);
     });
 
+    test('default distanceBeforeTeleport is 40 when policy omits it', () => {
+        // Unset → DEFAULT_DISTANCE_BEFORE_TELEPORT (40); explicit 0 allows any span.
+        expect(teleportAllowedByPolicy(varrockTele, { useTeleports: true }, 20).ok).toBe(false);
+        expect(teleportAllowedByPolicy(varrockTele, { useTeleports: true }, 50).ok).toBe(true);
+        expect(teleportAllowedByPolicy(varrockTele, undefined, 20).ok).toBe(false);
+        expect(teleportAllowedByPolicy(varrockTele, { useTeleports: true, distanceBeforeTeleport: 0 }, 5).ok).toBe(
+            true
+        );
+    });
+
     test('allowTeleportIds restrict to escape tele only', () => {
         const policy = { allowTeleportIds: ['varrock'] as const };
         expect(teleportAllowedByPolicy(varrockTele, policy, 500).ok).toBe(true);

@@ -23,7 +23,7 @@ import { depositAllExcept } from '../api/Banking.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Players } from '../api/queries/Players.js';
-import { Traversal } from '../api/Traversal.js';
+import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
 import { SolveClue } from '../clues/SolveClue.js';
 import { AT_BANK_RADIUS, RETURN_HOLD_MS, escapeNeeded, isGrindForeign, packForcesBank, slotFreeingAction, threatApplies, wantsGroundItem, type SlotAction } from './GreenDragonLogic.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
@@ -360,7 +360,7 @@ class Escape implements Task {
             if (me && me.z > TELE_SAFE_Z) {
                 this.bot.setStatus('escaping — running south to teleport range');
                 this.bot.log(`escaping (${nearbyThreat() ? 'player near' : 'low hp'}) — running to <=lvl20`);
-                await Traversal.walkResilient(new Tile(ANCHOR.x, TELE_SAFE_Z - 5, 0), { radius: 4, attempts: 3, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+                await Traversal.walkResilient(new Tile(ANCHOR.x, TELE_SAFE_Z - 5, 0), { ...NAV_PURE_WALK,  radius: 4, attempts: 3, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
                 return;
             }
             this.bot.setStatus('escaping — Varrock teleport');
@@ -372,7 +372,7 @@ class Escape implements Task {
         }
         this.bot.setStatus('escaping — fleeing to the bank');
         this.bot.log(`escaping (${nearbyThreat() ? 'player near' : 'low hp'}) — fleeing to ${BANK_TILE}`);
-        await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(BANK_TILE, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
@@ -403,7 +403,7 @@ class BankRun implements Task {
 }
 
 async function bankRoutine(bot: GreenDragon): Promise<void> {
-    if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) }))) {
+    if (!(await Traversal.walkResilient(BANK_TILE, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
         return;
     }
@@ -432,7 +432,7 @@ async function bankRoutine(bot: GreenDragon): Promise<void> {
     }
     bot.countBankTrip();
     bot.setStatus('restocked — walking back to the dragons');
-    await Traversal.walkResilient(ANCHOR, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) });
+    await Traversal.walkResilient(ANCHOR, { ...NAV_PURE_WALK,  radius: 4, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) });
 }
 
 /**
@@ -627,7 +627,7 @@ class ReturnToField implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('returning to the dragon field');
         this.bot.log(`returning to the field at ${ANCHOR}`);
-        await Traversal.walkResilient(ANCHOR, { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(ANCHOR, { ...NAV_PURE_WALK,  radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 

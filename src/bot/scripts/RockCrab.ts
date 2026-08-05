@@ -29,7 +29,7 @@ import { Players } from '../api/queries/Players.js';
 import { Sustain } from '../api/Sustain.js';
 import { DEFAULT_SPOTS } from './RockCrabSpots.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
-import { Traversal } from '../api/Traversal.js';
+import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { ROCK_CRAB_RANGED_WEAPONS, rangeSupplyEmpty, rockCrabRangeLoadout } from './RockCrabRangeLogic.js';
@@ -718,7 +718,7 @@ class BankRun implements Task {
         this.bot.setStatus('restocking — walking to the bank');
         this.bot.log(`banking at ${BANK_TILE} (food ${foodCount()}${STYLE === 'mage' ? `, casts ${castsLeft()}` : ''}${STYLE === 'range' ? `, projectiles ${equippedProjectileCount()}` : ''}${this.needWeapon() ? `, need ${WEAPON}` : ''})`);
 
-        if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
+        if (!(await Traversal.walkResilient(BANK_TILE, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
             this.bot.log('walk to the bank failed — will retry');
             return;
         }
@@ -751,7 +751,7 @@ class BankRun implements Task {
         await this.withdrawStyleSupplies();
 
         this.bot.setStatus('restocked — walking back to the field');
-        await Traversal.walkResilient(currentSpot(), { radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(currentSpot(), { ...NAV_PURE_WALK,  radius: 4, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
     }
 
@@ -832,7 +832,7 @@ class GoToField implements Task {
 
     async execute(): Promise<void> {
         this.bot.setStatus('walking to the field');
-        const ok = await Traversal.walkResilient(currentSpot(), { radius: 4, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
+        const ok = await Traversal.walkResilient(currentSpot(), { ...NAV_PURE_WALK,  radius: 4, attempts: 6, timeoutMs: 240_000, log: m => this.bot.log(`  ${m}`) });
         if (ok) {
             this.bot.clearWakes();
         }
@@ -1013,7 +1013,7 @@ class ResetAggro implements Task {
         this.bot.setStatus(low ? 'low HP, no food — retreating to regen' : 'running out to reset aggression');
         this.bot.countReset();
 
-        await Traversal.walkResilient(RESET_TILE, { radius: 1, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(RESET_TILE, { ...NAV_PURE_WALK,  radius: 1, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
 
         if (low) {
             this.bot.log(`resting at the reset tile (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
@@ -1022,7 +1022,7 @@ class ResetAggro implements Task {
             await Execution.delayTicks(5);
         }
 
-        await Traversal.walkResilient(currentSpot(), { radius: 3, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(currentSpot(), { ...NAV_PURE_WALK,  radius: 3, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
         this.bot.clearWakes();
         this.bot.log('back in the field');
     }

@@ -23,7 +23,7 @@ import { combatKeepNames } from '../api/combat/keepList.js';
 import { depositAllExcept, matchesCommonBankLoot } from '../api/Banking.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
-import { Traversal } from '../api/Traversal.js';
+import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -279,7 +279,7 @@ class ArmAutocast implements Task {
 }
 
 async function bankRoutine(bot: MossGiant, withdrawFood: boolean): Promise<void> {
-    if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
+    if (!(await Traversal.walkResilient(BANK_TILE, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
         return;
     }
@@ -311,7 +311,7 @@ async function bankRoutine(bot: MossGiant, withdrawFood: boolean): Promise<void>
 
     bot.countBankTrip();
     bot.setStatus('restocked — walking back to the safespot');
-    await Traversal.walkResilient(SAFESPOT, { radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) });
+    await Traversal.walkResilient(SAFESPOT, { ...NAV_PURE_WALK,  radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) });
 }
 
 async function withdrawStyleSupplies(bot: MossGiant): Promise<void> {
@@ -447,7 +447,7 @@ class ReturnToSafespot implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to the safespot');
-        await Traversal.walkResilient(SAFESPOT, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(SAFESPOT, { ...NAV_PURE_WALK,  radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 

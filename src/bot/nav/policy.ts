@@ -5,6 +5,13 @@ function chebyshev(a: NavPoint, b: NavPoint): number {
 }
 
 /**
+ * Default min Chebyshev(start, goal) before a spell/jewellery tele edge is admissible.
+ * ClueSolver and long ODs share this floor; short city hops stay pure walk.
+ * Pass `distanceBeforeTeleport: 0` to allow teles on any span.
+ */
+export const DEFAULT_DISTANCE_BEFORE_TELEPORT = 40;
+
+/**
  * Whether a transport kind is enabled by path policy (toggles only — not WorldState).
  * Teleports default ON when policy is absent so catalog edges participate once added;
  * scripts that need pure walk pass `{ useTeleports: false }`.
@@ -57,7 +64,7 @@ export function teleportAllowedByPolicy(
             return { ok: false, reason: `teleport ${id} denied for this walk` };
         }
     }
-    const minDist = policy?.distanceBeforeTeleport ?? 0;
+    const minDist = policy?.distanceBeforeTeleport ?? DEFAULT_DISTANCE_BEFORE_TELEPORT;
     if (minDist > 0 && routeSpan < minDist) {
         return {
             ok: false,

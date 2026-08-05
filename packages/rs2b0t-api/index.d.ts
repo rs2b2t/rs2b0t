@@ -733,7 +733,15 @@ export interface WalkResilientOptions {
  * @see docs/API.md#movement
  * @see docs/NAV.md
  */
+/** Disable nav tele inject — use when scripts stock laws for combat/escape/XP. */
+export const NAV_PURE_WALK: {
+    useTeleportCatalog: false;
+    policy: { useTeleports: false };
+};
+
 export const Traversal: {
+    /** Same as NAV_PURE_WALK — spread into walk opts for pure walking. */
+    pureWalk: typeof NAV_PURE_WALK;
     /**
      * Web-walk across the world (A* over the baked collision pack + door/
      * transport graph; opens doors, recovers from stuck). Resolves false on

@@ -304,7 +304,8 @@ One `PathFinder` / `WalkExecutor` / transport graph. No classic/v2 dual stack.
 | Graph | doors + transports + stairs + **travelCatalog** (spirit/glider/Entrana/cart/essence/levers/agi) |
 | Requires | skill / quest / coins via `specialRequires` + catalog; live fail-closed, pack fail-open |
 | Execute | doors, ships, gangplanks, gliders, spirit trees, carts, open-loc fast path — one `exec/` |
-| Tele catalog | spell + jewellery inject by default (jewellery = inventory Rub only; no bank jewellery). Opt out: `useTeleportCatalog: false` |
+| Tele catalog | spell + jewellery inject by default (jewellery = inventory Rub only; no bank jewellery). Opt out: `useTeleportCatalog: false` / `NAV_PURE_WALK` |
+| Tele min span | `distanceBeforeTeleport` defaults to **40** Chebyshev (short city hops stay pure walk; pass `0` to allow any span) |
 | Path-scoped bank | one leg for runes/tolls when the planned path needs items |
 | Hop logs | transport hop logging on walks |
 | Heuristic | Chebyshev; **Dijkstra** when long-range edges exist (#335) |
@@ -326,6 +327,10 @@ do not require that (overlay projection is enough for interact targeting).
 
 **Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw
 rings/glories (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
+
+**Scripts that stock laws for casting/escape** (AIOTeleport magic XP, FireGiant /
+GreenDragon escape, ChaosDruid loot laws, mage AutoFighter / MossGiant / RockCrab)
+pass `NAV_PURE_WALK` so nav cannot spend those runes as route hops.
 
 **2004 travel + gates:** spirit/glider/Entrana/cart/essence/levers/agi
 (`travelCatalog.ts`); quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder

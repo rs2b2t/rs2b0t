@@ -39,12 +39,27 @@ const DEFAULT_MAX_BUDGET = 1_200_000;
 const PROGRESS_LOG_MS = 15_000;
 
 /**
+ * Disable nav spell/jewellery tele inject and path-scoped bank-for-tele.
+ * Use on scripts that stock law runes for combat, escape, or magic XP casting
+ * (AIOTeleport, FireGiant, GreenDragon, ChaosDruid, mage fighters) so routing
+ * cannot spend those runes as walk hops.
+ * @see docs/NAV.md#the-world-walker
+ */
+export const NAV_PURE_WALK = {
+    useTeleportCatalog: false as const,
+    policy: { useTeleports: false as const }
+};
+
+/**
  * World-scale movement over the baked collision pack and the door/transport
  * graph.
  * @see docs/API.md#movement
  * @see docs/NAV.md
  */
 export const Traversal = {
+    /** @see NAV_PURE_WALK */
+    pureWalk: NAV_PURE_WALK,
+
     walkTo(dest: WorldTile, opts?: WalkOptions): Promise<boolean> {
         return WalkExecutor.walkTo(dest, opts);
     },

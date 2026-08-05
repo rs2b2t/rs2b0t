@@ -14,7 +14,7 @@ import { Locs } from '../api/queries/Locs.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import Tile from '../api/Tile.js';
-import { Traversal } from '../api/Traversal.js';
+import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import { GameMessages } from '../events/gameMessages.js';
@@ -332,7 +332,7 @@ export default class ChaosDruidKiller extends TaskBot {
             if (arrived()) {
                 return true;
             }
-            await Traversal.walkTo(destination, {
+            await Traversal.walkTo(destination, { ...NAV_PURE_WALK, 
                 radius,
                 timeoutMs: 25_000,
                 log: message => this.log(`  ${message}`)
@@ -382,7 +382,7 @@ export default class ChaosDruidKiller extends TaskBot {
             ? [INTERMEDIATE_GATE, WILDERNESS_GATE]
             : [WILDERNESS_GATE, INTERMEDIATE_GATE];
         for (const gate of gates) {
-            await Traversal.walkResilient(gate, {
+            await Traversal.walkResilient(gate, { ...NAV_PURE_WALK, 
                 radius: 4,
                 attempts: 8,
                 timeoutMs: 25_000,
@@ -531,7 +531,7 @@ export default class ChaosDruidKiller extends TaskBot {
             return t !== null && t.x === dest.x && t.z === dest.z && t.level === dest.level;
         };
         for (let attempt = 0; attempt < 4 && !here(); attempt++) {
-            await Traversal.walkResilient(dest, {
+            await Traversal.walkResilient(dest, { ...NAV_PURE_WALK, 
                 radius: 0,
                 attempts: 6,
                 timeoutMs: 25_000,
@@ -597,7 +597,7 @@ export default class ChaosDruidKiller extends TaskBot {
             const zone = yanilleZone(here);
             if (zone === 'warrior') {
                 this.setStatus('walking to the Chaos druid warriors');
-                if (await Traversal.walkResilient(this.fieldTile(), {
+                if (await Traversal.walkResilient(this.fieldTile(), { ...NAV_PURE_WALK, 
                     radius: 4,
                     attempts: 8,
                     timeoutMs: 25_000,
@@ -614,7 +614,7 @@ export default class ChaosDruidKiller extends TaskBot {
             }
             // surface or pit: the walker knows the entrance web + staircase and the pit stairs
             this.setStatus(zone === 'pit' ? 'climbing out of the ledge pit' : 'walking to the Yanille dungeon');
-            await Traversal.walkResilient(LEDGE_NORTH_STAND, {
+            await Traversal.walkResilient(LEDGE_NORTH_STAND, { ...NAV_PURE_WALK, 
                 radius: 1,
                 attempts: 8,
                 timeoutMs: 60_000,
@@ -726,7 +726,7 @@ export default class ChaosDruidKiller extends TaskBot {
         }
         this.setStatus('walking to the Chaos druids');
         await this.crossDungeonGates(true);
-        const arrived = await Traversal.walkResilient(this.fieldTile(), {
+        const arrived = await Traversal.walkResilient(this.fieldTile(), { ...NAV_PURE_WALK, 
             radius: 4,
             attempts: 8,
             timeoutMs: 25_000,

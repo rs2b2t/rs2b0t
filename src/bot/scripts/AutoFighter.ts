@@ -14,7 +14,7 @@ import { Equipment } from '../api/hud/Equipment.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Paint } from '../api/hud/Paint.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { Traversal } from '../api/Traversal.js';
+import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Sustain } from '../api/Sustain.js';
 import { nearestBank } from '../api/BankLocations.js';
@@ -361,7 +361,7 @@ class PanicRetreat implements Task {
         }
         this.bot.setStatus('panic: no food — retreating to the bank');
         this.bot.log(`panic retreat at ${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp`);
-        await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(bank.tile, { ...NAV_PURE_WALK,  radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
         if (await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`))) {
             for (let i = 0; i < FOOD_WITHDRAW && !Inventory.isFull(); i++) {
                 const before = foodCount();
@@ -415,7 +415,7 @@ class BankRun implements Task {
         this.bot.log(`BankRun triggered: ${reason}`);
         this.bot.setStatus(this.bot.bankAfterSolve ? 'clue done — banking the loot' : 'banking');
         this.bot.log(`banking at the ${bank.name} bank (${bank.tile})`);
-        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
+        if (!(await Traversal.walkResilient(bank.tile, { ...NAV_PURE_WALK,  radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) }))) {
             return;
         }
         if (!(await Bank.openNearest(BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
@@ -439,7 +439,7 @@ class BankRun implements Task {
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
         this.bot.setStatus('heading back to the spot');
-        await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(ANCHOR, { ...NAV_PURE_WALK,  radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
 
     private async restockStyleSupplies(): Promise<void> {
@@ -670,6 +670,6 @@ class ReturnToAnchor implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('heading to the spot');
-        await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(ANCHOR, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
