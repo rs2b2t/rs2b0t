@@ -16,6 +16,7 @@ import { specialRequiresAt } from './specialRequires.js';
 import { activateTransportRows } from './activateStateAware.js';
 import { tileInDangerZones, type DangerZoneRect } from './data/dangerZones.js';
 import { essenceReturnIdFromStateIndex, essenceReturnStateIndex } from './essenceExit.js';
+import { DEFAULT_EDGE_COST, edgeCostForKind, teleportEdgeCost } from './edgeCosts.js';
 
 /**
  * A* search key = tileId * 16 + essenceReturnIdx (0..15).
@@ -156,8 +157,7 @@ export type NavResponse =
     | { type: 'error'; message: string }
     | ({ type: 'path'; id: number; elapsedMs: number } & PathOutcome);
 
-const DOOR_COST = 4;
-const TRANSPORT_COST = 10;
+const DOOR_COST = DEFAULT_EDGE_COST.door;
 /** HARD long OD pairs (Seers→Rellekka, multi-level manor) need ~350k with Dijkstra. */
 const MAX_EXPANSIONS = 500_000;
 
@@ -427,7 +427,7 @@ export class PathFinder {
             this.addEdge(
                 nodeId(edge.from.x, edge.from.z, edge.from.level),
                 nodeId(edge.to.x, edge.to.z, edge.to.level),
-                TRANSPORT_COST,
+                edgeCostForKind(edge.kind),
                 transport,
                 requires,
                 edge.kind
@@ -607,7 +607,7 @@ export class PathFinder {
                     from,
                     to: dest.to,
                     kind: 'teleport' as const,
-                    cost: dest.cost ?? 40,
+                    cost: dest.cost ?? teleportEdgeCost(dest.family),
                     teleportId: dest.teleportId,
                     requires: dest.requires
                 };
@@ -654,7 +654,7 @@ export class PathFinder {
                 };
                 teleEdges.push({
                     to: nodeId(dest.to.x, dest.to.z, dest.to.level),
-                    cost: dest.cost ?? 40,
+                    cost: dest.cost ?? teleportEdgeCost(dest.family),
                     transport,
                     requires: dest.requires,
                     kind: 'teleport',

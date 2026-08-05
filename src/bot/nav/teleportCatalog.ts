@@ -5,7 +5,8 @@
  */
 
 import { ensureEdgeId } from './edgeId.js';
-import { DEFAULT_EDGE_COST, type NavPoint, type TransportEdge, type TransportRequires } from './types.js';
+import { teleportEdgeCost } from './edgeCosts.js';
+import type { NavPoint, TransportEdge, TransportRequires } from './types.js';
 import { GLORY_MAX_WILDERNESS, SPELL_MAX_WILDERNESS, wildernessLevelAt } from './wilderness.js';
 
 export type TeleportFamily = 'spell' | 'jewellery' | 'lever';
@@ -27,7 +28,7 @@ export interface TeleportDestination {
     label: string;
     /** Approximate landing; server uses map_findsquare radius 2. */
     to: NavPoint;
-    /** Fixed cost override; default DEFAULT_EDGE_COST.teleport */
+    /** Fixed cost override; default {@link teleportEdgeCost}(family). */
     cost?: number;
     requires?: TransportRequires;
     /** Where the player may cast/rub from (wildy thresholds, later spellbook, …). */
@@ -259,7 +260,7 @@ export function teleportDestinationsToEdges(
                 from: ORIGINLESS,
                 to: d.to,
                 kind: 'teleport' as const,
-                cost: d.cost ?? DEFAULT_EDGE_COST.teleport,
+                cost: d.cost ?? teleportEdgeCost(d.family),
                 landing: { toTile: d.to, acceptAnyLanding: true },
                 requires: d.requires,
                 teleportId: d.teleportId,

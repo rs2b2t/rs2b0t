@@ -668,7 +668,7 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     useTeleportCatalog?: boolean;
     policy?: {
         useTeleports?: boolean;
-        distanceBeforeTeleport?: number; // default 40 when teles on; 0 = any span
+        distanceBeforeTeleport?: number; // default 0 (cost decides); set 40 for hard floor
         allowTeleportIds?: string[];
         denyTeleportIds?: string[];
     };
@@ -721,7 +721,7 @@ Spell/jewellery tele hops are **not** used unless enabled:
 
 Resolution: explicit force-off → explicit force-on → Global (default off).
 
-When teles are on, `distanceBeforeTeleport` defaults to **40** Chebyshev so short
+When teles are on, `distanceBeforeTeleport` defaults to **0** so A* cost decides. Short
 city hops stay pure walk. Full behaviour, jewellery limits, and bank-plan rules:
 [Nav teleports](NAV.md#nav-teleports). Transport matrix:
 [`docs/nav/TRANSPORTS-2004.md`](nav/TRANSPORTS-2004.md).

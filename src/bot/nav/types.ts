@@ -167,8 +167,8 @@ export interface PathPolicy {
     useTeleports?: boolean;
     /**
      * Min Chebyshev distance (start→goal, or remaining estimate) before a teleport
-     * edge may be used. Default **40** when unset (`DEFAULT_DISTANCE_BEFORE_TELEPORT`).
-     * Pass `0` to allow teles on any span.
+     * edge may be used. Default **0** when unset (`DEFAULT_DISTANCE_BEFORE_TELEPORT`) — A* cost decides (`edgeCosts.ts`).
+     * Set a positive floor only when a caller wants a hard gate.
      */
     distanceBeforeTeleport?: number;
     /**
@@ -216,20 +216,8 @@ export interface CrossingRecipe {
     label?: string;
 }
 
-/** Default edge costs (v1 parity: door 4, transport 10). Teleports cost more than a door. */
-export const DEFAULT_EDGE_COST: Readonly<Record<TransportKind, number>> = {
-    door: 4,
-    gate: 4,
-    stair: 10,
-    dungeon: 10,
-    ship: 10,
-    gangplank: 10,
-    shortcut: 10,
-    portal: 10,
-    /** Spell cast + load; tuned later against walk tiles. */
-    teleport: 40,
-    other: 10
-};
+/** Default edge costs (tile-equivalent time). Canonical source: `edgeCosts.ts`. */
+export { DEFAULT_EDGE_COST } from './edgeCosts.js';
 
 /** True for originless spell/item teleports (not world portals like essence exit). */
 export function isTeleportKind(kind: TransportKind): boolean {

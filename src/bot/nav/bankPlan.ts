@@ -11,8 +11,10 @@ import { worldStateFromData } from './worldStateData.js';
 import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS } from './teleportCatalog.js';
 import { specialCrossingAt } from './data/specialCrossings.js';
 
-/** Flat cost for opening bank + withdrawing (tile-equivalent). */
-export const WITHDRAW_COST = 50;
+import { BANK_WITHDRAW_COST } from './edgeCosts.js';
+
+/** Flat cost for opening bank + withdrawing (tile-equivalent time). */
+export const WITHDRAW_COST = BANK_WITHDRAW_COST;
 
 export interface MissingItem {
     name: string;

@@ -53,3 +53,6 @@ tools/nav/transport-heavy.routes.json
 
 # Local test convenience — soundfont lives in the engine public/, not this repo
 src/3rdparty/SCC1_Florestan.sf2
+
+# Personal agent rules (always-read locally; never upstream)
+CLAUDE.local.md

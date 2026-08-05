@@ -368,13 +368,20 @@ await Traversal.walkTo(dest, { ...NAV_PURE_WALK, radius: 3 });
 ```
 
 **ClueSolver** sets tele inject from its own **Use teleports** script setting (not the
-Global default): on → explicit force-on with `distanceBeforeTeleport: 40`; off → force-off.
+Global default): on → explicit force-on (cost decides; no span floor); off → force-off.
+
+### Costs (lowest wins)
+
+Path costs are **tile-equivalents of time** (`src/bot/nav/edgeCosts.ts`, idea **@lolwut**).
+Walk steps cost ~1; doors/stairs/ships/gliders/spirit trees/teles carry calibrated action
+costs (dialogue, cast anim, bank withdraw). A* picks the cheapest total. Prefer that over
+static gates.
 
 ### Min span when teles are enabled
 
-When tele inject is active, `policy.distanceBeforeTeleport` defaults to **40** Chebyshev
-tiles (start → goal). Shorter ODs stay pure walk so city hops do not burn a law.
-Pass `distanceBeforeTeleport: 0` to allow any span; ClueSolver uses **40** explicitly.
+When tele inject is active, `policy.distanceBeforeTeleport` defaults to **0** — A* cost
+decides whether a tele beats pure walk (short city hops stay walk because the tele edge
+is ~28 tile-equivalents). Pass a positive floor only if a caller wants a hard gate.
 
 ### Other gates (content / live state)
 

@@ -5,11 +5,11 @@ function chebyshev(a: NavPoint, b: NavPoint): number {
 }
 
 /**
- * Default min Chebyshev(start, goal) before a spell/jewellery tele edge is admissible.
- * ClueSolver and long ODs share this floor; short city hops stay pure walk.
- * Pass `distanceBeforeTeleport: 0` to allow teles on any span.
+ * Default min Chebyshev(start, goal) before a tele edge is admissible.
+ * **0** — let A* cost decide (spell/jewellery edges carry time costs in
+ * `edgeCosts.ts`). Set a positive floor only when a caller wants a hard gate.
  */
-export const DEFAULT_DISTANCE_BEFORE_TELEPORT = 40;
+export const DEFAULT_DISTANCE_BEFORE_TELEPORT = 0;
 
 /**
  * Whether a transport kind is enabled by path policy (toggles only — not WorldState).
