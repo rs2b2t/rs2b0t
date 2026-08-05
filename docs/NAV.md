@@ -306,12 +306,82 @@ One `PathFinder` / `WalkExecutor` / transport graph. No classic/v2 dual stack.
 | Graph | doors + transports + stairs + **travelCatalog** (spirit/glider/Entrana/cart/essence/levers/agi) |
 | Requires | skill / quest / coins via `specialRequires` + catalog; live fail-closed, pack fail-open |
 | Execute | doors, ships, gangplanks, gliders, spirit trees, carts, open-loc fast path — one `exec/` |
-| Tele catalog | **Global `navTeleports` (default off).** When on: spell + jewellery inject (jewellery = inventory Rub only). Per-walk: `useTeleportCatalog: true` / `NAV_WITH_TELES`, or force off with `NAV_PURE_WALK` |
-| Tele min span | When teles are enabled, `distanceBeforeTeleport` defaults to **40** Chebyshev (`0` = any span) |
+| Tele catalog | **Off by default** — see [Nav teleports](#nav-teleports) |
 | Path-scoped bank | one leg for runes/tolls when the planned path needs items (tele bank-plan only when nav teles on) |
 | Hop logs | transport hop logging on walks |
 | Heuristic | Chebyshev; **Dijkstra** when long-range edges exist (#335) |
 | Paint / camera | optional globals (`showNavPath`, `navCameraFollow`) |
+
+## Nav teleports
+
+Spell and jewellery **teleport edges are not part of normal walking unless turned on.**
+They are a separate inject into A* (catalog in `teleportCatalog.ts`), not map doors or ships.
+
+### Global toggle (default off)
+
+| Control | Default | How to enable |
+|---|---|---|
+| Global setting **Nav teleports** (`navTeleports`) | **false** | Bot panel → Global, or `?Global.navTeleports=true` |
+
+With the toggle **off** (default):
+
+- Bare `Traversal.walkTo` / `walkResilient` never inject spell/jewellery hops.
+- Combat escape kits, AIOTeleport law stacks, and looted laws are not spent as *routing*.
+- Ships, gliders, spirit trees, ladders, doors, and other travel-catalog edges still work.
+
+With the toggle **on**:
+
+- A* may inject standard-spellbook teles (Varrock, Lumbridge, Falador, Camelot, …) and
+  jewellery Rub destinations (dueling ring, games necklace, glory, …) when
+  **live inventory** (and magic level / quest gates) can pay for them.
+- Jewellery is **inventory Rub only** — the bank planner does not withdraw rings/glories.
+- Path-scoped bank may withdraw **runes/toll coins** if a cheaper tele path needs them
+  and `bankItemCounts` / open-bank snapshot allows it.
+
+### Per-walk resolution order
+
+For each `walkTo` / `walkResilient`, tele inject is decided as follows (first match wins):
+
+1. **Force off** — `useTeleportCatalog: false`, or `policy: { useTeleports: false }`,
+   or spread `NAV_PURE_WALK` / `Traversal.pureWalk`.
+2. **Force on** — `useTeleportCatalog: true`, or `policy: { useTeleports: true }`,
+   or spread `NAV_WITH_TELES` / `Traversal.withTeles`.
+3. **Else** — Global **`navTeleports`** (default **false**).
+
+```ts
+// Default: pure walk (Global off)
+await Traversal.walkResilient(dest, { radius: 3 });
+
+// Operator enabled nav teles globally; this walk uses them
+// ?Global.navTeleports=true  or panel toggle
+
+// Script/harness forces teles on even if Global is off
+await Traversal.walkTo(dest, { ...NAV_WITH_TELES, radius: 3 });
+
+// Force pure walk even if Global is on
+await Traversal.walkTo(dest, { ...NAV_PURE_WALK, radius: 3 });
+```
+
+**ClueSolver** sets tele inject from its own **Use teleports** script setting (not the
+Global default): on → explicit force-on with `distanceBeforeTeleport: 40`; off → force-off.
+
+### Min span when teles are enabled
+
+When tele inject is active, `policy.distanceBeforeTeleport` defaults to **40** Chebyshev
+tiles (start → goal). Shorter ODs stay pure walk so city hops do not burn a law.
+Pass `distanceBeforeTeleport: 0` to allow any span; ClueSolver uses **40** explicitly.
+
+### Other gates (content / live state)
+
+Even when inject is on, a tele edge is only admitted if:
+
+- magic level / members / quest requires pass (spells),
+- required runes are held (or bank-planned),
+- jewellery name matches a charged inventory item,
+- wilderness origin limits are satisfied (e.g. spells ≤20 wildy at *path start*),
+- optional `allowTeleportIds` / `denyTeleportIds` policy lists allow it.
+
+Failed mid-walk casts are suppressed for the rest of that walk (`denyTeleportIds`).
 
 ### Path paint
 
@@ -327,12 +397,7 @@ Global **Show nav path** + group **Nav path paint** (`showIf`).
 True z-buffer path paint *under* models would need injecting into `World` draw order; object hulls
 do not require that (overlay projection is enough for interact targeting).
 
-**Jewellery:** inventory Rub only at plan+execute. Bank planner does not withdraw
-rings/glories (bank-cache API is separate). **Quest-lock doors:** mesbox → session blacklist + repath.
-
-**Default off** means combat/escape law kits and magic-XP casters (AIOTeleport) are
-safe without per-script opt-outs. Enable Global **Nav teleports** (or pass
-`NAV_WITH_TELES`) when you want long walks to use spells/jewellery.
+**Quest-lock doors:** mesbox → session blacklist + repath.
 
 **2004 travel + gates:** spirit/glider/Entrana/cart/essence/levers/agi
 (`travelCatalog.ts`); quest seeds (`transportQuestReqs.ts`); guild skill doors + mining ladder
