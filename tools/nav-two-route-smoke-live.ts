@@ -63,27 +63,34 @@ type Route = {
 const ROUTES: Route[] = [
     {
         id: 'yanille-bank-dungeon-end',
-        note: 'Yanille bank → chaos druid warrior field (web + stairs + ledge)',
+        note: 'Yanille bank → chaos druid warrior field (web + stairs + ledge + walk in)',
         from: { x: 2612, z: 3092, level: 0 },
-        // ChaosDruidLogic Yanille Dungeon field — furthest practical camp past ledge
+        // ChaosDruidLogic Yanille Dungeon field centre. Ledge south stand is
+        // 2580,9512 — must NOT use radius ≥10 or walkTo "arrives" on the ledge.
+        // radius 3 forces walking into the warrior cluster (script camp).
         to: { x: 2580, z: 9501, level: 0 },
-        radius: 10,
+        radius: 3,
         validate: ({ me, walkOk, dist, logs, hops }) => {
-            const inField =
+            // Warrior zone is z < 9519; ledge land ~9512. Require deep enough
+            // that we left the ledge stand (ChaosDruid field radius ~8 around 9501).
+            const inCamp =
                 me !== null
                 && me.level === 0
-                && me.z >= 9490
-                && me.z <= 9515
-                && me.x >= 2568
-                && me.x <= 2595;
+                && me.z >= 9494
+                && me.z <= 9506
+                && me.x >= 2572
+                && me.x <= 2588;
             const ledge =
                 hops.some(h => /balancing ledge|ledge/i.test(h))
                 || logs.some(l => /balancing ledge/i.test(l));
-            if (!walkOk || dist > 12) {
-                return { ok: false, reason: `dist/walkOk` };
+            if (!walkOk || dist > 4) {
+                return { ok: false, reason: `dist/walkOk (need near 2580,9501, not ledge)` };
             }
-            if (!inField) {
-                return { ok: false, reason: 'not in warrior field' };
+            if (!inCamp) {
+                return {
+                    ok: false,
+                    reason: 'not deep enough in warrior field (still on/near ledge?)'
+                };
             }
             if (!ledge) {
                 return { ok: false, reason: 'balancing ledge not used' };
