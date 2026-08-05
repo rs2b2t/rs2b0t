@@ -138,12 +138,25 @@ try {
     await page.getByRole('button', { name: 'Pause' }).click();
     if ((await runnerState()) !== 'paused') fail('pause did not take');
     const pausedLogLength = await logLength();
+    const pausedLoops = await page.evaluate(
+        () => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.loopCount ?? 0
+    );
     await page.waitForTimeout(2500);
     if ((await logLength()) !== pausedLogLength) fail('script made progress while paused');
+    const loopsWhilePaused = await page.evaluate(
+        () => (globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.loopCount ?? 0
+    );
+    if (loopsWhilePaused !== pausedLoops) fail('script looped while paused');
     console.log('QuestDashboard: paused cleanly (no progress while paused)');
 
     await page.getByRole('button', { name: 'Resume' }).click();
-    await page.waitForFunction(len => ((globalThis as never as { rs2b0t: { runner: { ctx: { log: unknown[] } | null } } }).rs2b0t.runner.ctx?.log.length ?? 0) > len, pausedLogLength, { timeout: 15000 });
+    // Prefer loopCount over log growth: dashboard only logs when eligibility changes
+    // (plus one forced pulse on resume), so log length is a flaky liveness signal.
+    await page.waitForFunction(
+        n => ((globalThis as never as RunnerGlobal).rs2b0t.runner.ctx?.loopCount ?? 0) > n,
+        pausedLoops,
+        { timeout: 15000 }
+    );
     console.log('QuestDashboard: resumed');
 
     await page.getByRole('button', { name: 'Stop' }).click();

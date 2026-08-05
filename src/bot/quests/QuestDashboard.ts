@@ -8,37 +8,68 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { Quests } from '../api/hud/Quests.js';
 import { Skills } from '../api/hud/Skills.js';
 import { evaluateAll } from './EligibilityEvaluator.js';
+import { eligibilityReportKey } from './eligibilityReportKey.js';
 import { loadQuestRecords } from './data/index.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility } from './types.js';
 
+/**
+ * Live eligibility board for the quest catalog. Pure reads + paint — no execution.
+ * Recomputes every ~1 game tick; logs only when the READY/BLOCKED/DONE set changes
+ * (or once after start/resume so harnesses see progress).
+ */
 export default class QuestDashboard extends LoopingBot {
-    override loopDelay = 5000;
+    /** Match the fleet default — ~one server tick once #427 lands; not a 5s free-run. */
+    override loopDelay = 600;
 
     private records = loadQuestRecords();
     private results: QuestEligibility[] = [];
     private banner = '';
     private lastBankCounts: Map<string, number> = new Map();
+    private lastReportKey = '';
+    /** Force one log even when the fingerprint is unchanged (start / resume). */
+    private forceReport = true;
 
     override async onStart(): Promise<void> {
         this.log('QuestDashboard — waiting until ingame');
         await Execution.delayUntil(() => Game.ingame(), 0);
         this.log(`Loaded ${this.records.length} quest records`);
+        this.forceReport = true;
+        this.lastReportKey = '';
+    }
+
+    override onResume(): void {
+        // e2e and operators expect a visible pulse after resume even if state is unchanged.
+        this.forceReport = true;
     }
 
     async loop(): Promise<void> {
         const journal = Quests.all();
         if (journal.length === 0) {
-            this.banner = 'Quest journal not loaded (on Tutorial Island?) — finish the tutorial first; eligibility unavailable';
+            const msg =
+                'Quest journal not loaded (on Tutorial Island?) — finish the tutorial first; eligibility unavailable';
             this.results = [];
-            this.log(this.banner);
+            this.publish(msg, []);
             return;
         }
-        this.banner = '';
 
         const player = this.readPlayerState();
         const snapshot = this.readItemSnapshot();
         this.results = evaluateAll(this.records, player, snapshot, name => Quests.status(name));
+        this.publish('', this.results);
+    }
 
+    private publish(banner: string, results: QuestEligibility[]): void {
+        this.banner = banner;
+        const key = eligibilityReportKey(results, banner);
+        if (!this.forceReport && key === this.lastReportKey) {
+            return;
+        }
+        this.lastReportKey = key;
+        this.forceReport = false;
+        if (banner) {
+            this.log(banner);
+            return;
+        }
         this.report();
     }
 
@@ -83,7 +114,9 @@ export default class QuestDashboard extends LoopingBot {
     }
 
     private counts(): { ready: number; blocked: number; done: number } {
-        let ready = 0, blocked = 0, done = 0;
+        let ready = 0,
+            blocked = 0,
+            done = 0;
         for (const r of this.results) {
             if (r.status === 'READY') ready++;
             else if (r.status === 'BLOCKED') blocked++;
