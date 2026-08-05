@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
     SettingsStore,
     GLOBAL_SETTINGS,
+    GLOBAL_SETTINGS_CORE,
+    NAV_SETTINGS,
     MAP_PICKER_SETTINGS,
     MAP_PICKER_SETTINGS_NS,
     type SettingsSchema
@@ -35,6 +37,20 @@ describe('GLOBAL_SETTINGS', () => {
     test('exposes navCameraFollow (bool, default off) for optional path-facing camera', () => {
         expect(GLOBAL_SETTINGS.navCameraFollow.type).toBe('boolean');
         expect(GLOBAL_SETTINGS.navCameraFollow.default).toBe(false);
+        expect(NAV_SETTINGS.navCameraFollow?.default).toBe(false);
+    });
+
+    test('splits core Global vs Nav schemas (storage still Global namespace via GLOBAL_SETTINGS)', () => {
+        expect(GLOBAL_SETTINGS_CORE.lampSkill).toBeDefined();
+        expect((GLOBAL_SETTINGS_CORE as SettingsSchema).navTeleports).toBeUndefined();
+        expect(NAV_SETTINGS.navTeleports).toBeDefined();
+        expect(NAV_SETTINGS.navPathStallTicks?.group).toBe('Routing');
+        expect(NAV_SETTINGS.showNavPath?.group).toBe('Display');
+        expect(NAV_SETTINGS.navPathColorPath?.group).toBe('Path paint');
+        expect(NAV_SETTINGS.navPathSceneExpand?.group).toBe('Experimental');
+        // Full bag keeps both for SettingsStore.globalBag / resolve
+        expect(GLOBAL_SETTINGS.lampSkill).toBeDefined();
+        expect(GLOBAL_SETTINGS.navTeleports).toBeDefined();
     });
 
 

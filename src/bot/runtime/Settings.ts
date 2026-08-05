@@ -142,38 +142,54 @@ const LAMP_SKILLS: string[] = [
     'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'fletching'
 ];
 
-export const GLOBAL_SETTINGS: SettingsSchema = {
-    lampSkill: { type: 'string', default: 'strength', options: LAMP_SKILLS, label: 'Genie lamp skill', help: 'which skill genie/lamp random events train' },
-    bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs/caskets (default)' },
-    runAuto: { type: 'boolean', default: true, label: 'Auto re-enable run', help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)' },
-    runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' },
+/**
+ * Account / bot-wide settings (not nav). Shown under the panel "Global settings" button.
+ * Storage namespace: `Global`.
+ */
+export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
+    lampSkill: {
+        type: 'string',
+        default: 'strength',
+        options: LAMP_SKILLS,
+        label: 'Genie lamp skill',
+        help: 'which skill genie/lamp random events train'
+    },
+    bankCommonJunk: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank gems/fruit/beer/kebabs/caskets (default)'
+    },
+    runAuto: {
+        type: 'boolean',
+        default: true,
+        label: 'Auto re-enable run',
+        help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)'
+    },
+    runEnergyMin: {
+        type: 'number',
+        default: 20,
+        min: 0,
+        max: 100,
+        label: 'Re-enable run at energy %',
+        help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately'
+    }
+};
+
+/**
+ * World-walk / path paint settings. Shown under the panel "Nav settings" button.
+ * Still stored under the `Global` namespace (same keys as before) so URL/storage stay stable.
+ */
+export const NAV_SETTINGS: SettingsSchema = {
     navTeleports: {
         type: 'boolean',
         default: false,
         label: 'Nav teleports',
+        group: 'Routing',
         help:
             'When on, world walks may inject spell/jewellery teleport edges (runes or charged jewellery '
-            + 'in inventory; min span ~40 tiles). Off by default so combat/escape law kits are not '
-            + 'spent as routing hops. Per-walk override: walkTo({ useTeleportCatalog: true }) or '
-            + 'NAV_PURE_WALK to force off. URL: ?Global.navTeleports=true.'
-    },
-    showNavPath: {
-        type: 'boolean',
-        default: false,
-        label: 'Show nav path',
-        help:
-            'Draw the current world-walk route on the game overlay (debug / operator). '
-            + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true. '
-            + 'Sub-options appear when enabled (path/transport/text colours, hop labels).'
-    },
-    navCameraFollow: {
-        type: 'boolean',
-        default: false,
-        label: 'Camera follows path',
-        help:
-            'While world-walking, ease the orbit camera toward the path heading '
-            + '(client-only, smoothed each frame like arrow-key turns). Off by default. '
-            + 'URL: ?Global.navCameraFollow=true.'
+            + 'in inventory). Off by default so combat/escape law kits are not spent as routing hops. '
+            + 'Per-walk override: walkTo({ useTeleportCatalog: true }) or NAV_PURE_WALK to force off. '
+            + 'URL: ?Global.navTeleports=true.'
     },
     navPathStallTicks: {
         type: 'number',
@@ -181,6 +197,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         min: 1,
         max: 60,
         label: 'Path stall repath (ticks)',
+        group: 'Routing',
         help:
             'Server ticks with no tile change before repathing the published route. '
             + 'Default 9. Scripts may override per walk. URL: ?Global.navPathStallTicks=9.'
@@ -191,16 +208,36 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         min: 1,
         max: 40,
         label: 'Path deviation repath (Chebyshev)',
+        group: 'Routing',
         help:
             'If the player is farther than this from the published path, repath. '
             + 'Default 10 (observed client/baked path slop). URL: ?Global.navPathDeviation=10.'
     },
-    // ── Nav path paint (visible when showNavPath) ──
+    navCameraFollow: {
+        type: 'boolean',
+        default: false,
+        label: 'Camera follows path',
+        group: 'Display',
+        help:
+            'While world-walking, ease the orbit camera toward the path heading '
+            + '(client-only, smoothed each frame like arrow-key turns). Off by default. '
+            + 'URL: ?Global.navCameraFollow=true.'
+    },
+    showNavPath: {
+        type: 'boolean',
+        default: false,
+        label: 'Show nav path',
+        group: 'Display',
+        help:
+            'Draw the current world-walk route on the game overlay (debug / operator). '
+            + 'Does not change routing. Off by default. URL: ?Global.showNavPath=true. '
+            + 'Sub-options appear when enabled (path/transport/text colours, hop labels).'
+    },
     navPathShowText: {
         type: 'boolean',
         default: true,
         label: 'Hop labels',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help: 'Captions on doors / ladders / teles (Open Door, Varrock teleport, …)'
     },
@@ -210,14 +247,14 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         min: 8,
         max: 28,
         label: 'Hop label size (px)',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] }
     },
     navPathColorPath: {
         type: 'string',
         default: '#FF0000',
         label: 'Path colour',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help: 'HTML #RGB / #RRGGBB — remaining walk tiles (default red)'
@@ -226,7 +263,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'string',
         default: '#00FF00',
         label: 'Transport colour',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help: 'HTML #RGB / #RRGGBB — door / ladder / tele hops (default green)'
@@ -235,7 +272,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'string',
         default: '#FFFFFF',
         label: 'Click target colour',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help: 'Outline on the next walk click tile'
@@ -244,17 +281,16 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'string',
         default: '#FFFFFF',
         label: 'Hop label colour',
-        group: 'Nav path paint',
+        group: 'Path paint',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help: 'HTML #RGB / #RRGGBB — transport captions (default white)'
     },
-    // ── Experimental path-paint debug (opt-in; only when showNavPath) ──
     navPathSceneExpand: {
         type: 'boolean',
         default: false,
         label: 'Scene-aware path expand (experimental)',
-        group: 'Nav path paint',
+        group: 'Experimental',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
             'Experimental debug: fill pack path segments with live scene collision '
@@ -265,7 +301,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'boolean',
         default: false,
         label: 'Paint client walk trail (experimental)',
-        group: 'Nav path paint',
+        group: 'Experimental',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         help:
             'Experimental debug: after each walk click, paint the exact client '
@@ -276,7 +312,7 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'string',
         default: '#00D4FF',
         label: 'Client trail colour (experimental)',
-        group: 'Nav path paint',
+        group: 'Experimental',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help:
@@ -287,13 +323,19 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
         type: 'string',
         default: '#FFFF00',
         label: 'Client run alt colour (experimental)',
-        group: 'Nav path paint',
+        group: 'Experimental',
         showIf: { key: 'showNavPath', anyOf: ['true'] },
         color: true,
         help:
             'When run is on, client-walk tiles alternate primary / this colour. '
             + 'Default yellow #FFFF00.'
     }
+};
+
+/** Full Global storage schema = core + nav (URL / SettingsStore.globalBag). */
+export const GLOBAL_SETTINGS: SettingsSchema = {
+    ...GLOBAL_SETTINGS_CORE,
+    ...NAV_SETTINGS
 };
 
 /**

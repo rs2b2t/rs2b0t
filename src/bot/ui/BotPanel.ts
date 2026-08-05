@@ -7,7 +7,7 @@ import { boxId, boxKey, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
-import { GLOBAL_SETTINGS, SettingsStore } from '../runtime/Settings.js';
+import { GLOBAL_SETTINGS_CORE, NAV_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
 import { isVisible, summarize } from './paramControls.js';
@@ -101,12 +101,32 @@ export default class BotPanel {
         this.settingsBox = el('div', 'rs2b0t-settings');
         settings.appendChild(this.settingsBox);
 
+        const settingsBtns = el('div', 'rs2b0t-settings-btns');
         const globalBtn = document.createElement('button');
         globalBtn.className = 'rs2b0t-button rs2b0t-param-edit';
         globalBtn.textContent = 'Global settings';
-        globalBtn.title = 'Settings shared across all scripts (e.g. genie lamp skill); a script’s own value overrides these';
-        globalBtn.addEventListener('click', () => this.paramsModal.open('Global', GLOBAL_SETTINGS));
-        settings.appendChild(globalBtn);
+        globalBtn.title =
+            'Account and bot-wide options (lamp skill, run, bank junk). Script params still override when set.';
+        globalBtn.addEventListener('click', () =>
+            this.paramsModal.open('Global', GLOBAL_SETTINGS_CORE, {
+                title: 'Global settings',
+                showGlobalExtra: true
+            })
+        );
+        const navBtn = document.createElement('button');
+        navBtn.className = 'rs2b0t-button rs2b0t-param-edit';
+        navBtn.textContent = 'Nav settings';
+        navBtn.title =
+            'World-walk routing, path stickiness, and path paint. Stored under Global (same keys as before).';
+        navBtn.addEventListener('click', () =>
+            this.paramsModal.open('Global', NAV_SETTINGS, {
+                title: 'Nav settings',
+                showGlobalExtra: false
+            })
+        );
+        settingsBtns.appendChild(globalBtn);
+        settingsBtns.appendChild(navBtn);
+        settings.appendChild(settingsBtns);
 
         root.appendChild(settings);
 
@@ -444,8 +464,8 @@ export default class BotPanel {
         this.stateCell.textContent = !ingame
             ? 'title screen'
             : scene === 2
-              ? 'ready (scene 2)'
-              : `ingame · scene ${scene} (wait)`;
+                ? 'ready (scene 2)'
+                : `ingame · scene ${scene} (wait)`;
 
         this.playerCell.textContent = reader.localPlayerName() ?? '-';
 

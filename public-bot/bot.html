@@ -451,6 +451,17 @@
         .rs2b0t-param-skey { color: #7d8590; }
         .rs2b0t-param-sval { color: #fff; margin-left: 4px; overflow-wrap: anywhere; }
         .rs2b0t-param-edit { width: 100%; color: #ffb86c; }
+        /* Global settings | Nav settings side-by-side (equal half width) */
+        .rs2b0t-settings-btns {
+            display: flex;
+            gap: 6px;
+            width: 100%;
+        }
+        .rs2b0t-settings-btns .rs2b0t-param-edit {
+            flex: 1 1 0;
+            width: auto;
+            min-width: 0;
+        }
 
         /* parameters modal body */
         .rs2b0t-params-body { padding: 4px 4px 8px; max-height: 60vh; overflow: auto; }

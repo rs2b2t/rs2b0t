@@ -12,6 +12,8 @@ export default class ParamsModal {
     private openIntro: string | null = null;
     private onCloseCb: (() => void) | null = null;
     private globalExtra: HTMLElement | null = null;
+    /** When false, skip credentials strip even if scriptName is Global (Nav settings). */
+    private showGlobalExtra = true;
     private collapsed = new Map<string, Set<string>>();
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
@@ -58,13 +60,21 @@ export default class ParamsModal {
     open(
         scriptName: string,
         schema: SettingsSchema,
-        opts?: { title?: string; zIndex?: number; onClose?: () => void; intro?: string }
+        opts?: {
+            title?: string;
+            zIndex?: number;
+            onClose?: () => void;
+            intro?: string;
+            /** Default true when scriptName is Global. Set false for Nav settings. */
+            showGlobalExtra?: boolean;
+        }
     ): void {
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;
         this.openIntro = opts?.intro ?? null;
         this.onCloseCb = opts?.onClose ?? null;
+        this.showGlobalExtra = opts?.showGlobalExtra ?? scriptName === 'Global';
         this.backdrop.style.zIndex = opts?.zIndex !== undefined ? String(opts.zIndex) : '';
         this.render();
         this.backdrop.style.display = 'flex';
@@ -105,7 +115,7 @@ export default class ParamsModal {
             intro.textContent = this.openIntro;
             this.bodyEl.appendChild(intro);
         }
-        if (this.scriptName === 'Global' && this.globalExtra) {
+        if (this.scriptName === 'Global' && this.showGlobalExtra && this.globalExtra) {
             this.bodyEl.appendChild(this.globalExtra);
         }
         const disabled = this.isActive();
