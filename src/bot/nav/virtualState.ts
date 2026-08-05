@@ -2,6 +2,7 @@
  * Clone WorldStateData with virtual inventory counts (e.g. bank items assumed held).
  */
 
+import { recordsHaveSlashTool } from './slashTool.js';
 import type { WorldStateData } from './worldStateData.js';
 
 /** Return a shallow clone with extra item counts merged (max of existing + add). */
@@ -20,16 +21,19 @@ export function virtualizeWithItems(state: WorldStateData, add: Record<string, n
             }
         }
     }
+    const worn = state.worn ? { ...state.worn } : {};
     return {
         members: state.members,
         skills: { ...state.skills },
         quests: { ...state.quests },
         items,
-        worn: state.worn ? { ...state.worn } : {},
+        worn,
         freeSlots: state.freeSlots,
         // Bank virtualization does not strip gear; preserve Entrana / worn gates.
         entranaRestrictedGear: state.entranaRestrictedGear === true,
-        wildernessLevel: state.wildernessLevel
+        wildernessLevel: state.wildernessLevel,
+        // Knife withdrawn from bank unlocks slash webs for the virtual plan.
+        canSlashWeb: state.canSlashWeb === true || recordsHaveSlashTool(items, worn)
     };
 }
 

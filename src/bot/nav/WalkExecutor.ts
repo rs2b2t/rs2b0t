@@ -899,7 +899,8 @@ class WalkExecutorImpl {
                             );
                             return 'repath';
                         }
-                        pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                        // Landed on hop tile — snap index to the hop, not approach.
+                        pathIdx = Math.max(pathIdx, nextCrossingIdx);
                         lastMoveTick = BotHost.tickCount;
                         stallRetries = 0;
                         clickIdx = -1;
@@ -1083,7 +1084,7 @@ class WalkExecutorImpl {
                                     );
                                     return 'repath';
                                 }
-                                pathIdx = Math.max(pathIdx, nextCrossingIdx - 1);
+                                pathIdx = Math.max(pathIdx, nextCrossingIdx);
                                 lastMoveTick = BotHost.tickCount;
                                 stallRetries = 0;
                                 clickIdx = -1;

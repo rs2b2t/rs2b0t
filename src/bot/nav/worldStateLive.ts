@@ -11,6 +11,7 @@ import { Quests, type QuestStatus } from '../api/hud/Quests.js';
 import { namesHaveEntranaRestrictedGear } from './exec/specialCrossing.js';
 import type { EssenceReturnId } from './essenceExit.js';
 import { EssenceSession } from './essenceSession.js';
+import { recordsHaveSlashTool } from './slashTool.js';
 import type { QuestProgress, WorldState } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
 import { worldStateFromData } from './worldStateData.js';
@@ -102,6 +103,7 @@ export function snapshotWorldStateData(): WorldStateData {
     // wildernessLevelAt(from) rather than treating missing as safe level 0.
     const wildernessLevel = here ? wildernessLevelAt(here) : undefined;
     const essenceExitReturn = snapshotEssenceExitReturn();
+    const canSlashWeb = recordsHaveSlashTool(items, worn);
 
     return {
         // Client.memServer is set at boot from world config (members vs free world).
@@ -113,6 +115,7 @@ export function snapshotWorldStateData(): WorldStateData {
         worn,
         freeSlots: Inventory.free(),
         entranaRestrictedGear,
+        canSlashWeb,
         ...(wildernessLevel !== undefined ? { wildernessLevel } : {}),
         ...(essenceExitReturn !== undefined ? { essenceExitReturn } : {})
     };

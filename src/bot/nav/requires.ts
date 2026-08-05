@@ -69,6 +69,12 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         return { ok: false, reason: 'remove weapons/armour before Entrana' };
     }
 
+    // Web slash (content web.rs2): Knife use-on or bladed weapon. Fail open when
+    // canSlashWeb is unset (offline pack probes without a live snapshot).
+    if (requires.slashTool === true && state.canSlashWeb === false) {
+        return { ok: false, reason: 'need Knife or a bladed weapon to slash webs' };
+    }
+
     if (requires.quests) {
         for (const q of requires.quests) {
             const status = state.questStatus(q.quest);
@@ -113,6 +119,7 @@ export function hasGatingRequires(requires: TransportRequires | undefined): bool
         || requires.currency !== undefined
         || (requires.quests !== undefined && requires.quests.length > 0)
         || requires.forbidEntranaRestricted === true
+        || requires.slashTool === true
         || requires.essenceExitReturn !== undefined
     );
 }

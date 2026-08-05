@@ -70,6 +70,13 @@ export interface TransportRequires {
      */
     forbidEntranaRestricted?: boolean;
     /**
+     * Slashable webs (content web.rs2): need plain Knife (use-on) or a
+     * slash-capable weapon (worn for menu Slash, or use-on). Plan-time uses
+     * {@link WorldState.canSlashWeb}; bank plan withdraws Knife when missing.
+     * When `canSlashWeb` is undefined (offline / no snapshot), fail open.
+     */
+    slashTool?: boolean;
+    /**
      * Essence mine exit: only usable when the *path's* session return matches
      * this id. PathFinder carries return in the A* key (entry hops set it via
      * `essenceEntrySetsReturn`); live WorldState/EssenceSession seeds the start.
@@ -149,6 +156,11 @@ export interface WorldState {
     freeSlots: number;
     /** True when inv/worn matches Entrana restricted-gear heuristic. */
     entranaRestrictedGear: boolean;
+    /**
+     * Knife or slash-capable blade in inv/worn (web.rs2). Undefined = unknown
+     * (offline pack); meetsRequires slashTool fails open when unset.
+     */
+    canSlashWeb?: boolean;
     /**
      * Active essence-mine return id (`aubury`|`sedridor`|…).
      * Live: `EssenceSession` (server varp 64 is not client-transmitted).

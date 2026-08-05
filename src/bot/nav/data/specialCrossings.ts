@@ -302,6 +302,61 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
     { x: 2598, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
     { x: 2603, z: 3477, level: 0, locName: 'Log balance', action: 'Walk-across', requiresSkill: { name: 'agility', level: 20 }, label: 'Coal trucks log balance' },
 
+    // Yanille dungeon balancing ledge (agility_dungeon.rs2 balancing_ledge3, Agility 40).
+    // Stand tiles match content start coords; fail drops to pit (recovered via pit stairs).
+    // arrivalRadius 0 — mid-ledge tiles (9513–9519) are not walkable; claiming "crossed"
+    // at radius 2 left the player stranded on the gap and repath returned unreachable.
+    {
+        x: 2580,
+        z: 9520,
+        level: 0,
+        locName: 'Balancing ledge',
+        action: 'Walk-across',
+        requiresSkill: { name: 'agility', level: 40 },
+        toTile: { x: 2580, z: 9512, level: 0 },
+        arrivalRadius: 0,
+        label: 'Yanille dungeon balancing ledge (N→S)'
+    },
+    {
+        x: 2580,
+        z: 9512,
+        level: 0,
+        locName: 'Balancing ledge',
+        action: 'Walk-across',
+        requiresSkill: { name: 'agility', level: 40 },
+        toTile: { x: 2580, z: 9520, level: 0 },
+        arrivalRadius: 0,
+        label: 'Yanille dungeon balancing ledge (S→N)'
+    },
+
+    // Elkoy maze escort (elkoy.rs2). Tree Gnome Village started+ (plan: edge requires).
+    // Outside elkoy @ entrance stand → maze land; village elkoy @ maze stand → entrance.
+    // Content p_choice2 "Yes please." / "Not now, thanks." (and postquest "No thanks Elkoy.").
+    {
+        x: 2504,
+        z: 3192,
+        level: 0,
+        npc: 'Elkoy',
+        locName: 'Elkoy',
+        action: 'Talk-to',
+        dialogue: { choose: ['Yes please.'] },
+        toTile: { x: 2515, z: 3159, level: 0 },
+        arrivalRadius: 3,
+        label: 'Elkoy → Tree Gnome Village (maze shortcut in)'
+    },
+    {
+        x: 2515,
+        z: 3159,
+        level: 0,
+        npc: 'Elkoy',
+        locName: 'Elkoy',
+        action: 'Talk-to',
+        dialogue: { choose: ['Yes please.', 'Can you show me out of the village?'] },
+        toTile: { x: 2504, z: 3192, level: 0 },
+        arrivalRadius: 3,
+        label: 'Elkoy → maze entrance (maze shortcut out)'
+    },
+
     // Island ropeswings (shortcuts.rs2) — outer swings need agility 10; execute re-check.
     // Do not gate tree_ropeswing2 (2705,3205) — softlock prevention in content.
     {

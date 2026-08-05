@@ -15,6 +15,7 @@ import {
     wildyLeverEdges,
     mageArenaBarrierEdges,
     agilityShortcutEdges,
+    elkoyMazeEdges,
     curatedTravelEdges
 } from '#/bot/nav/travelCatalog.js';
 import { essenceExitEdges } from '#/bot/nav/essenceExit.js';
@@ -107,6 +108,7 @@ describe('ferries / cart', () => {
             + wildyLeverEdges().length
             + mageArenaBarrierEdges().length
             + agilityShortcutEdges().length
+            + elkoyMazeEdges().length
         );
         const names = new Set(all.map(e => e.debugName));
         expect(names.has('ferry_port_sarim_to_entrana')).toBe(true);

@@ -6,7 +6,7 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/Execution.js';
 import { Inventory } from '../../api/hud/Inventory.js';
-import { Locs } from '../../api/queries/Locs.js';
+import { Locs, type Loc } from '../../api/queries/Locs.js';
 import { Reachability } from '../../api/Reachability.js';
 import { CANT_REACH, GameMessages } from '../../events/gameMessages.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
@@ -17,13 +17,102 @@ import {
     shouldApproachClosedBarrier
 } from '../followMath.js';
 import type { TransportInfo } from '../PathFinder.js';
+import {
+    classifyWebSlashChat,
+    isSlashWeaponName,
+    isSlashWebTransport,
+    WEB_SLASH_FAIL,
+    WEB_SLASH_NO_BLADE,
+    WEB_SLASH_SUCCESS
+} from '../slashTool.js';
 import { findTransportLoc } from './transportLoc.js';
 import { chatShowsQuestLock, dismissQuestLockDialogue } from './questLock.js';
 
 const MULTI_DOOR_CROSS_MS = 36_000;
 const OPEN_WAIT_MS = 4000;
+/** Web cut_web is anim + random roll + mes; allow a few ticks per attempt. */
+const WEB_SLASH_CHAT_MS = 3500;
 const APPROACH_WALK_MS = 3000;
 const SCENE_STEP_MS = 8000;
+
+type WebSlashAttempt = 'success' | 'fail' | 'no_blade' | 'cant_reach' | 'timeout';
+
+/**
+ * One Slash / use-on attempt on a bigweb. Outcome is **chat-driven** (web.rs2):
+ * success → "You slash the web apart."; fail → "You fail to cut through it."
+ * (retry same web); no blade → "Only a sharp blade…".
+ */
+async function attemptSlashWeb(
+    shut: Loc,
+    transport: TransportInfo,
+    mark: number,
+    log: (msg: string) => void
+): Promise<WebSlashAttempt> {
+    // Prefer plain Knife use-on; else slash-capable inv weapon; else menu Slash
+    // (needs worn blade via slash_checker). Metal throwing knives ≠ content knife.
+    let slashItem = Inventory.first('Knife');
+    if (slashItem === null) {
+        slashItem = Inventory.items().find(i => isSlashWeaponName(i.name)) ?? null;
+    }
+    if (slashItem !== null) {
+        log(`using the ${slashItem.name} on ${transport.locName} at (${transport.locX},${transport.locZ})`);
+    } else {
+        log(`Slash ${transport.locName}: no Knife in inv — trying menu Slash (need worn blade)`);
+    }
+    const sent =
+        slashItem !== null
+            ? await Promise.resolve(slashItem.useOn(shut))
+            : shut.interact(transport.action);
+    if (!sent) {
+        log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
+        return 'timeout';
+    }
+
+    await Execution.delayUntil(
+        () =>
+            GameMessages.sawSince(mark, WEB_SLASH_SUCCESS)
+            || GameMessages.sawSince(mark, WEB_SLASH_FAIL)
+            || GameMessages.sawSince(mark, WEB_SLASH_NO_BLADE)
+            || GameMessages.sawSince(mark, CANT_REACH)
+            || findTransportLoc(transport) === null,
+        WEB_SLASH_CHAT_MS
+    );
+
+    if (GameMessages.sawSince(mark, CANT_REACH)) {
+        log(`server says can't reach ${transport.locName} — repathing`);
+        return 'cant_reach';
+    }
+    if (GameMessages.sawSince(mark, WEB_SLASH_NO_BLADE)) {
+        log(`${transport.locName}: need Knife or a bladed weapon (server)`);
+        return 'no_blade';
+    }
+    if (GameMessages.sawSince(mark, WEB_SLASH_FAIL)) {
+        log(`${transport.locName}: failed to cut — retrying immediately`);
+        return 'fail';
+    }
+    if (GameMessages.sawSince(mark, WEB_SLASH_SUCCESS) || findTransportLoc(transport) === null) {
+        log(`slashed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+        return 'success';
+    }
+    // Fallback: any classified chat since mark
+    for (const m of GameMessages.since(mark)) {
+        const kind = classifyWebSlashChat(m.text);
+        if (kind === 'success') {
+            log(`slashed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+            return 'success';
+        }
+        if (kind === 'fail') {
+            log(`${transport.locName}: failed to cut — retrying immediately`);
+            return 'fail';
+        }
+        if (kind === 'no_blade') {
+            log(`${transport.locName}: need Knife or a bladed weapon (server)`);
+            return 'no_blade';
+        }
+    }
+    log(`${transport.locName}: no slash chat within ${WEB_SLASH_CHAT_MS}ms — retrying`);
+    return 'fail';
+}
 
 export interface PathStepTile extends WorldTile {
     transport?: TransportInfo;
@@ -320,11 +409,31 @@ export async function crossMultiTileDoor(
                     return p !== null && p.x === approach.x && p.z === approach.z && p.level === approach.level;
                 }, APPROACH_WALK_MS);
             }
-            const knife = transport.action === 'Slash' ? Inventory.first('Knife') : null;
-            if (knife !== null) {
-                log(`using the ${knife.name} on ${transport.locName} at (${transport.locX},${transport.locZ})`);
+            // Slashable webs (content web.rs2): chat decides success/fail.
+            // random(2) fail → "You fail to cut through it." — retry same web now.
+            if (isSlashWebTransport(transport.locName, transport.action)) {
+                const outcome = await attemptSlashWeb(shut, transport, mark, log);
+                if (outcome === 'no_blade' || outcome === 'cant_reach') {
+                    return false;
+                }
+                if (outcome === 'fail') {
+                    // Immediate retry on the same placement (still shut).
+                    continue;
+                }
+                if (outcome === 'success') {
+                    await Execution.delayTicks(1);
+                    DirectNavigator.walk(step);
+                    await Execution.delayUntil(
+                        () => isOnFarSide(reader.worldTile(), approach, step),
+                        4000
+                    );
+                    continue;
+                }
+                // timeout / unknown — fall through to generic repath path via loop
+                continue;
             }
-            const sent = knife !== null ? await Promise.resolve(knife.useOn(shut)) : shut.interact(transport.action);
+
+            const sent = await shut.interact(transport.action);
             if (!sent) {
                 log(`'${transport.action}' not offered by ${transport.locName} (ops: ${shut.actions().join(', ')})`);
                 return false;

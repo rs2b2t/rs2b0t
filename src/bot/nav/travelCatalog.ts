@@ -366,6 +366,24 @@ export function agilityShortcutEdges(): TransportEdgeData[] {
     // Edgeville dungeon monkeybars (loc params).
     const mbA = parseLcCoord('0_48_155_48_44');
     const mbB = parseLcCoord('0_48_155_49_49');
+    // Yanille agility dungeon balancing ledge (area_yanille/agility_dungeon.rs2).
+    // Content start tiles 0_40_148_20_48 / _20_40; dual placements (2580,9519)/(2580,9513);
+    // Agility 40. Without this edge bank→chaos-druid-warrior field is disconnected.
+    const yanilleLedgeN = parseLcCoord('0_40_148_20_48'); // 2580,9520
+    const yanilleLedgeS = parseLcCoord('0_40_148_20_40'); // 2580,9512
+    const yanilleLedge = (from: NavPoint, to: NavPoint, locZ: number, debug: string): TransportEdgeData => ({
+        from: { ...from },
+        to: { ...to },
+        locName: 'Balancing ledge',
+        action: 'Walk-across',
+        kind: 'shortcut',
+        locId: 2303,
+        locX: 2580,
+        locZ,
+        debugName: debug,
+        options: ['Walk-across'],
+        requires: membersAgi(40)
+    });
     return [
         edge(
             castleFrom,
@@ -377,7 +395,36 @@ export function agilityShortcutEdges(): TransportEdgeData[] {
             membersAgi(5)
         ),
         edge(mbA, mbB, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_n', agi(15)),
-        edge(mbB, mbA, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_s', agi(15))
+        edge(mbB, mbA, 'Monkeybars', 'Swing across', 'shortcut', 'agi_edgeville_monkeybars_s', agi(15)),
+        yanilleLedge(yanilleLedgeN, yanilleLedgeS, 9519, 'agi_yanille_balancing_ledge_ns'),
+        yanilleLedge(yanilleLedgeS, yanilleLedgeN, 9513, 'agi_yanille_balancing_ledge_sn')
+    ];
+}
+
+/**
+ * Elkoy maze escort (areas/area_gnome/scripts/elkoy.rs2).
+ * Outside `elkoy` → ^elkoy_maze_coord; village `elkoy_village` → ^elkoy_entrance_coord.
+ * Requires Tree Gnome Village **started** (escort dialogue; not_started is intro only).
+ */
+export function elkoyMazeEdges(): TransportEdgeData[] {
+    const entrance = parseLcCoord('0_39_49_8_56'); // 2504,3192
+    const maze = parseLcCoord('0_39_49_19_23'); // 2515,3159
+    const req: TransportRequires = { ...REQ.treeGnomeStarted };
+    const mk = (from: NavPoint, to: NavPoint, debug: string): TransportEdgeData => ({
+        from: { ...from },
+        to: { ...to },
+        locName: 'Elkoy',
+        action: 'Talk-to',
+        kind: 'portal',
+        locX: from.x,
+        locZ: from.z,
+        debugName: debug,
+        options: ['Talk-to'],
+        requires: req
+    });
+    return [
+        mk(entrance, maze, 'elkoy_outside_to_village'),
+        mk(maze, entrance, 'elkoy_village_to_outside')
     ];
 }
 
@@ -394,7 +441,8 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...essenceExitEdges(),
         ...wildyLeverEdges(),
         ...mageArenaBarrierEdges(),
-        ...agilityShortcutEdges()
+        ...agilityShortcutEdges(),
+        ...elkoyMazeEdges()
     ];
 }
 
@@ -412,7 +460,8 @@ export const TRAVEL_FAMILIES = [
     'essence_entry',
     'essence_exit',
     'mage_arena_barrier',
-    'agility_shortcut'
+    'agility_shortcut',
+    'elkoy_maze'
 ] as const;
 
 export type TravelFamilyId = (typeof TRAVEL_FAMILIES)[number];

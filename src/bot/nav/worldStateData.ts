@@ -17,6 +17,11 @@ export interface WorldStateData {
     /** Live Entrana restricted-gear heuristic (weapons/armour names). */
     entranaRestrictedGear?: boolean;
     /**
+     * Knife or slash blade available (inv/worn). Set on live snapshot + after
+     * bank virtualization. Undefined = offline / unknown → slashTool fail open.
+     */
+    canSlashWeb?: boolean;
+    /**
      * Current wilderness combat level (0 outside wild).
      * Used for origin-aware teleport admission (#339). When omitted, planners
      * compute from the path start tile via `wildernessLevelAt`.
@@ -54,6 +59,7 @@ export function worldStateFromData(data: WorldStateData): WorldState {
         skills: data.skills,
         freeSlots: data.freeSlots,
         entranaRestrictedGear: data.entranaRestrictedGear === true,
+        ...(data.canSlashWeb !== undefined ? { canSlashWeb: data.canSlashWeb } : {}),
         ...(data.essenceExitReturn !== undefined ? { essenceExitReturn: data.essenceExitReturn } : {}),
         questStatus: q => {
             const canon = canonicalQuestName(q);

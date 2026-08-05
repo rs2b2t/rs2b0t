@@ -26,9 +26,9 @@ function fullyWalkablePack(): Uint8Array {
 
 describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
     test('prefers a cheap long-range transport over pure walk', () => {
-        // Synthetic: start (0,0) → goal (60,0); transport (0,10)→(59,0) cost 10.
-        // Optimal: walk 10 + hop 10 + walk 1 = 21. Inadmissible Chebyshev would
-        // return direct walk cost 60 when first-goal A* closes early.
+        // Synthetic: start (0,0) → goal (60,0); portal (0,10)→(59,0).
+        // Portal kind cost is ticksToCost(10)=20 (time-based model). Optimal:
+        // walk 10 + hop 20 + walk 1 = 31. Pure walk would be 60.
         const finder = new PathFinder(fullyWalkablePack());
         const hop: TransportEdgeData = {
             from: { x: 0, z: 10, level: 0 },
@@ -47,7 +47,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         if (!out.ok) {
             return;
         }
-        expect(out.cost).toBe(21);
+        expect(out.cost).toBe(31);
         expect(out.waypoints.some(w => w.transport?.kind === 'portal')).toBe(true);
     });
 

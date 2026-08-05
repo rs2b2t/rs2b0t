@@ -142,6 +142,11 @@ export const REQ = {
         members: true,
         quests: [{ quest: 'Tree Gnome Village', minStatus: 'complete' as const }]
     },
+    /** Elkoy maze escort (elkoy.rs2) once Tree Gnome Village is started. */
+    treeGnomeStarted: {
+        members: true,
+        quests: [{ quest: 'Tree Gnome Village', minStatus: 'started' as const }]
+    },
     shiloComplete: {
         members: true,
         quests: [{ quest: 'Shilo Village', minStatus: 'complete' as const }]

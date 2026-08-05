@@ -411,19 +411,26 @@ export class PathFinder {
                 openLocId: edge.openLocId,
                 kind: edge.kind,
                 toLevel: edge.to.level !== edge.from.level ? edge.to.level : undefined,
-                // Portals land on a fixed tile (or any tile for multi-exit) — executor waits on toTile.
+                // Portals / dungeon / agility shortcuts land on a fixed tile —
+                // executor waits on toTile (balancing ledge, log balance, …).
                 toTile:
                     edge.kind === 'dungeon' ||
                     edge.kind === 'portal' ||
                     edge.kind === 'ship' ||
                     edge.kind === 'gangplank' ||
-                    edge.kind === 'teleport'
+                    edge.kind === 'teleport' ||
+                    edge.kind === 'shortcut'
                         ? { x: edge.to.x, z: edge.to.z }
                         : undefined,
                 // Portals and hub teles may land a few tiles off exact stand.
                 acceptAnyLanding: edge.kind === 'portal' || edge.kind === 'teleport' ? true : undefined
             };
-            const requires = edge.requires ?? specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
+            const baseReq = edge.requires ?? specialRequiresAt(edge.from.x, edge.from.z, edge.from.level);
+            // Content web.rs2: Slash webs need Knife or a slash-capable blade.
+            const requires =
+                /^slash$/i.test(edge.action) && /web/i.test(edge.locName)
+                    ? { ...(baseReq ?? {}), slashTool: true as const }
+                    : baseReq;
             this.addEdge(
                 nodeId(edge.from.x, edge.from.z, edge.from.level),
                 nodeId(edge.to.x, edge.to.z, edge.to.level),
@@ -923,7 +930,8 @@ function hasOtherGates(requires: TransportRequires): boolean {
         (requires.worn !== undefined && requires.worn.length > 0) ||
         requires.currency !== undefined ||
         (requires.quests !== undefined && requires.quests.length > 0) ||
-        requires.forbidEntranaRestricted === true
+        requires.forbidEntranaRestricted === true ||
+        requires.slashTool === true
     );
 }
 

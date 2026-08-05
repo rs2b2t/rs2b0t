@@ -123,7 +123,7 @@ export default class BotPanel {
                 title: 'Nav settings',
                 showGlobalExtra: false,
                 intro:
-                    'Defaults are known-safe and meant for script authors. Changing them without '
+                    'These settings are intended for script authors. Defaults are known-safe. Changing them without '
                     + 'understanding the effect can break scripts that assume those defaults.'
             })
         );
