@@ -870,8 +870,10 @@ class WalkExecutorImpl {
                 && (stillIters >= STUCK_ITERS
                     || (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx]!, { maxSteps: STALL_REACH_STEPS })));
 
+            // Next hop = first transport at or after pathIdx (pathIdx can sit ON the hop
+            // tile after locateOnPath; scanning from pathIdx+1 would skip it forever).
             let nextCrossingIdx = -1;
-            for (let i = pathIdx + 1; i < tiles.length; i++) {
+            for (let i = Math.max(1, pathIdx); i < tiles.length; i++) {
                 if (tiles[i]!.transport) {
                     nextCrossingIdx = i;
                     break;
