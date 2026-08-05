@@ -1,3 +1,4 @@
+import { BUILD_INFO, formatBuildInfo } from '../../config/buildInfo.js';
 import { installWorkerClockHub } from '../../util/WorkerClock.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
@@ -15,6 +16,13 @@ if (typeof window !== 'undefined') {
 }
 
 function boot(): void {
+    console.log(`[rs2b0t] multibox build ${formatBuildInfo()}`);
+    const buildEl = document.getElementById('mbx-build');
+    if (buildEl) {
+        buildEl.textContent = BUILD_INFO.label;
+        buildEl.title = `commit ${BUILD_INFO.commit}${BUILD_INFO.dirty ? ' (dirty tree)' : ''}\nbuilt ${BUILD_INFO.builtAt || '—'}`;
+    }
+
     const rail = document.getElementById('mbx-rail')!;
     const addTile = document.getElementById('mbx-add')!;
 
@@ -332,6 +340,7 @@ function boot(): void {
     renderRail();
 
     (globalThis as Record<string, unknown>).multibox = {
+        build: BUILD_INFO,
         controller,
         add: (a?: Account) => {
             const slot = controller.add(a);

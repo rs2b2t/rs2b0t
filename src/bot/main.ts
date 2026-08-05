@@ -21,6 +21,7 @@ import BotPanel from './ui/BotPanel.js';
 import Overlay from './ui/Overlay.js';
 import { installPaintInput } from './ui/PaintInput.js';
 import { paintState } from './api/hud/paintLogic.js';
+import { BUILD_INFO, formatBuildInfo } from '../config/buildInfo.js';
 import './scripts/index.js';
 
 export { BotClient, BotHost };
@@ -80,11 +81,14 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
         });
     }
 
+    console.log(`[rs2b0t] build ${formatBuildInfo()}`);
+
     (globalThis as Record<string, unknown>).rs2b0t = {
         client, host: BotHost, runner: ScriptRunner, registry: ScriptRegistry,
         reader, actions, navigator: Navigator,
         router: ActionRouter, scheduler: Scheduler,
         renderGate: RenderGate,
+        build: BUILD_INFO,
         setRenderMode: (mode: RenderMode) => RenderGate.setMode(mode),
         setCredentials: (u: string, p: string) => AutoRelogin.setCredentials(u, p),
         setAutoLogin: (on: boolean) => AutoRelogin.setAutoLogin(on),

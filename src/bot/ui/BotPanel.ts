@@ -1,3 +1,4 @@
+import { BUILD_INFO } from '../../config/buildInfo.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../BotHost.js';
 import { ActionRouter } from '../input/ActionRouter.js';
@@ -63,6 +64,11 @@ export default class BotPanel {
             title.appendChild(wall);
         }
         root.appendChild(title);
+
+        const buildLine = el('div', 'rs2b0t-build');
+        buildLine.textContent = BUILD_INFO.label;
+        buildLine.title = `commit ${BUILD_INFO.commit}${BUILD_INFO.dirty ? ' (dirty tree)' : ''}\nbuilt ${BUILD_INFO.builtAt || '—'}`;
+        root.appendChild(buildLine);
 
         this.banner = el('div', 'rs2b0t-banner');
         root.appendChild(this.banner);

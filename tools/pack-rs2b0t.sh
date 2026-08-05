@@ -35,6 +35,11 @@ mkdir -p "$DEST/bot"
 cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/navworker.js out/navworker.js.map out/multibox.js out/multibox.js.map \
    out/collision.lcnav.gz out/tinymidipcm.wasm "$DEST/bot/"
+# deploy fingerprint — curl /rs2b0t/version.json (also under /rs2b0t/bot/)
+if [ -f out/version.json ]; then
+    cp out/version.json "$DEST/version.json"
+    cp out/version.json "$DEST/bot/version.json"
+fi
 if [ -f out/worldmap-basemap.manifest.json ]; then
     cp out/worldmap-basemap.manifest.json "$DEST/bot/"
     for f in out/worldmap-basemap.*.png out/worldmap-key.*.png out/worldmap-key-type-*.png \
@@ -72,4 +77,8 @@ if [ -f "$ENGINE/public/client/SCC1_Florestan.sf2" ]; then
     cp "$ENGINE/public/client/SCC1_Florestan.sf2" "$DEST/bot/"
 fi
 
-echo "packed: $DEST/index.html + multibox.html (+ /rs2b0t/bot, botclient.js?v=$V, multibox.js?v=$M)"
+GIT_LABEL=''
+if [ -f out/version.json ]; then
+    GIT_LABEL=" git=$(sed -n 's/.*"label": "\([^"]*\)".*/\1/p' out/version.json | head -1)"
+fi
+echo "packed: $DEST/index.html + multibox.html (+ /rs2b0t/bot, botclient.js?v=$V, multibox.js?v=$M)$GIT_LABEL"

@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import { buildIdentityDefines, resolveBuildIdentity, writeVersionJson } from './tools/lib/buildIdentity.js';
+
 // rs2b0t build — clone of bundle.ts with three deliberate differences:
 //   1. entrypoint is src/bot/main.ts (the bot client), emitted as botclient.js
 //   2. NO terser pass and therefore NO property mangling: the bot API surface
@@ -48,12 +50,14 @@ if ((TARGET_NAME === 'live' || TARGET_NAME === 'prod') && rsa.rsan === '') {
     process.exit(1);
 }
 
+const identity = resolveBuildIdentity();
+
 const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
     'process.env.LOGIN_RSAN': JSON.stringify(rsa.rsan),
-    'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString())
+    ...buildIdentityDefines(identity)
 };
 
 const args = process.argv.slice(2);
@@ -96,4 +100,7 @@ for (const [entry, output] of entrypoints) {
     fs.writeFileSync(`out/${output}.map`, sourcemap);
 }
 
-console.log(`bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js`);
+writeVersionJson('out/version.json', identity);
+console.log(
+    `bot bundle built (${prod ? 'prod' : 'dev'}): out/botclient.js  git=${identity.dirty ? `${identity.short}-dirty` : identity.short}`
+);

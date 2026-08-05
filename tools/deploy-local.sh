@@ -61,6 +61,9 @@ sed "s|botclient.js?v=nav-v2|botclient.js?v=${BUST}|g; s|botclient.js\"|botclien
     public-bot/bot.html > "$ENGINE/public/bot.html"
 cp out/multibox.js out/multibox.js.map "$ENGINE/public/bot/"
 cp public-bot/multibox.html "$ENGINE/public/multibox.html"
+if [ -f out/version.json ]; then
+    cp out/version.json "$ENGINE/public/bot/version.json"
+fi
 
 # soundfont lives in the engine repo, not ours; the bot bundle resolves it
 # relative to itself

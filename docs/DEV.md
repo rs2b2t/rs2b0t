@@ -287,6 +287,30 @@ The single-instance client is served same-origin from the engine at
    trailing slash would push every one of them a directory deeper.
 4. `make build → push → deploy` ships it. Rollback: `make deploy TAG=<prev>`.
 
+### Which git commit is on the wall?
+
+Every `bun run build:bot` bakes the current git SHA into the JS and writes
+`out/version.json`. `pack-rs2b0t.sh` stages that file at **`/rs2b0t/version.json`**
+(and `/rs2b0t/bot/version.json`).
+
+```bash
+curl -sS https://w1.rs2b2t.com/rs2b0t/version.json
+# → { "commit": "…", "short": "e978193", "dirty": false, "builtAt": "…", "label": "e978193" }
+```
+
+In the UI:
+
+- **Wall** rail → resource card → **Build** row (hover for full SHA + builtAt)
+- **Single client** panel under the `rs2b0t` title
+- Console: `[rs2b0t] build e978193 @ 2026-…`
+- JS: `rs2b0t.build` / `multibox.build` / `__rs2b0t.BUILD_INFO`
+
+Override when the build tree has no `.git`: `RS2B0T_GIT_COMMIT=<sha>`
+(or `GITHUB_SHA`). Mark dirty with `RS2B0T_GIT_DIRTY=1`.
+
+Note: `botclient.js?v=…` is still a **content hash** of the file (cache-bust),
+not the git SHA — use `version.json` or the Build row for the commit.
+
 Verify locally without touching prod: run `pack-rs2b0t.sh` with the **local** modulus
 against the local engine, then `bun tools/hosted-proof-test.ts` (single client) and
 `bun tools/hosted-wall-test.ts` (the wall — two accounts ingame, slot iframes resolving

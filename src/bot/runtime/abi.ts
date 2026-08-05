@@ -1,4 +1,5 @@
 // docs/ARCHITECTURE.md#the-abi-boundary
+import { BUILD_INFO } from '../../config/buildInfo.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import { PathPublish } from '../nav/pathPublish.js';
 import { isNavPathPaintEnabled } from '../nav/pathOverlay.js';
@@ -422,6 +423,9 @@ export function installAbi(): void {
         knownDangerZoneIds,
         resolveDangerZones,
         tileInDangerZones,
+
+        // Deploy fingerprint (git SHA baked at bundle time)
+        BUILD_INFO,
 
         reader
     });
