@@ -70,10 +70,11 @@ try {
     }
     console.log('Swarm present');
 
-    await setSettings(page, {
+    // setSettings(page, scriptName, flat map) — tiles are "x,z,level".
+    await setSettings(page, 'SmelterBot', {
         bar: 'Bronze',
-        bankStand: { x: 3269, z: 3167, level: 0 },
-        furnaceStand: { x: FURNACE.x, z: FURNACE.z, level: 0 }
+        bankStand: '3269,3167,0',
+        furnaceStand: `${FURNACE.x},${FURNACE.z},0`
     });
 
     const started = await page.evaluate(() => {
