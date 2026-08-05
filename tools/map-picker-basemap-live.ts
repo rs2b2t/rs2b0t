@@ -113,7 +113,7 @@ try {
     console.log('ingame');
 
     await setMapPicker('showBasemap', 'true');
-    await setMapPicker('showWalkable', 'true');
+    // Key icons default off (terrain only); classic dots only when basemap off.
 
     await openPicker();
     console.log('opened Pick on Map (basemap on)');
@@ -143,8 +143,8 @@ try {
     await settingsBtn.click();
     await page.locator('.rs2b0t-modal-backdrop .rs2b0t-param-intro').waitFor({ state: 'visible', timeout: 5_000 });
     const intro = await page.locator('.rs2b0t-param-intro').textContent();
-    if (!intro || !/Rebuild map/i.test(intro) || !/freez/i.test(intro)) {
-        fail(`settings intro missing regen note: ${intro}`);
+    if (!intro || !/basemap/i.test(intro) || !/Key/i.test(intro)) {
+        fail(`settings intro missing basemap/Key note: ${intro}`);
     }
     console.log('settings intro ok');
     await page.locator('.rs2b0t-modal-backdrop').filter({ has: page.locator('.rs2b0t-param-intro') }).locator('button').filter({ hasText: '✕' }).click();

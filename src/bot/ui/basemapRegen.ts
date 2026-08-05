@@ -24,6 +24,8 @@ export type BasemapBakePrefs = {
     borders: boolean;
     npcs: boolean;
     items: boolean;
+    /** Stamp Key icons into live Rebuild raster (prefer pre-baked overlay). */
+    keyIcons: boolean;
     multimap: boolean;
     freemap: boolean;
 };
@@ -40,12 +42,13 @@ let pendingJag: Uint8Array | null = null;
  */
 let regenTail: Promise<unknown> = Promise.resolve();
 
-/** Defaults for first-time / unset prefs: full world, no labels, no overlays. */
+/** Defaults for live Rebuild: nothing stamped (terrain-like). Prefer pre-baked overlays. */
 export const DEFAULT_BASEMAP_BAKE_PREFS: BasemapBakePrefs = {
     labels: false,
     borders: false,
     npcs: false,
     items: false,
+    keyIcons: false,
     multimap: false,
     freemap: false
 };
@@ -56,6 +59,7 @@ export const MAP_PICKER_BAKE_KEYS = [
     'bakeBorders',
     'bakeNpcs',
     'bakeItems',
+    'bakeKeyIcons',
     'bakeMultimap',
     'bakeFreemap'
 ] as const;
@@ -69,6 +73,7 @@ export function resolveBasemapBakePrefs(): BasemapBakePrefs {
         borders: g.bool('bakeBorders', DEFAULT_BASEMAP_BAKE_PREFS.borders),
         npcs: g.bool('bakeNpcs', DEFAULT_BASEMAP_BAKE_PREFS.npcs),
         items: g.bool('bakeItems', DEFAULT_BASEMAP_BAKE_PREFS.items),
+        keyIcons: g.bool('bakeKeyIcons', DEFAULT_BASEMAP_BAKE_PREFS.keyIcons),
         multimap: g.bool('bakeMultimap', DEFAULT_BASEMAP_BAKE_PREFS.multimap),
         freemap: g.bool('bakeFreemap', DEFAULT_BASEMAP_BAKE_PREFS.freemap)
     };
@@ -100,6 +105,7 @@ export function prefsFingerprint(prefs: BasemapBakePrefs): string {
         prefs.borders ? 'B' : 'b',
         prefs.npcs ? 'N' : 'n',
         prefs.items ? 'I' : 'i',
+        prefs.keyIcons ? 'K' : 'k',
         prefs.multimap ? 'M' : 'm',
         prefs.freemap ? 'F' : 'f'
     ].join('');
@@ -189,6 +195,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
 
     const prev = {
         labels: MapView.shouldDrawLabels,
+        mapfunctions: MapView.shouldDrawMapfunctions,
         borders: MapView.shouldDrawBorders,
         npcs: MapView.shouldDrawNpcs,
         items: MapView.shouldDrawItems,
@@ -197,6 +204,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
     };
 
     MapView.shouldDrawLabels = prefs.labels;
+    MapView.shouldDrawMapfunctions = prefs.keyIcons;
     MapView.shouldDrawBorders = prefs.borders;
     MapView.shouldDrawNpcs = prefs.npcs;
     MapView.shouldDrawItems = prefs.items;
@@ -328,6 +336,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
             clearTimeout(timeoutId);
         }
         MapView.shouldDrawLabels = prev.labels;
+        MapView.shouldDrawMapfunctions = prev.mapfunctions;
         MapView.shouldDrawBorders = prev.borders;
         MapView.shouldDrawNpcs = prev.npcs;
         MapView.shouldDrawItems = prev.items;
@@ -351,6 +360,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
 export const BASEMAP_REGEN_TITLE = 'Rebuild basemap?';
 
 export const BASEMAP_REGEN_BODY =
-    'This regenerates the full worldmap basemap from worldmap.jag with your current rebuild-layer preferences.\n\n'
-    + 'The tab will freeze for several seconds while the map is decoded and painted. '
-    + 'Only do this when you change rebuild layers or after a game update.';
+    'This re-runs MapView from worldmap.jag and freezes the tab for several seconds.\n\n'
+    + 'Everyday Key icons / multi / free layers are already pre-baked at deploy — toggle them under '
+    + 'Settings → Worldmap layers without rebuilding.\n\n'
+    + 'Use Rebuild only after a game update, or for experimental stamps (place labels, NPC/item dots, …).';

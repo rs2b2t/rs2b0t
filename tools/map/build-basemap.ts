@@ -1,18 +1,20 @@
 /**
- * Bake a full-world basemap PNG + fingerprint manifest from worldmap.jag.
+ * Bake full-world basemap assets from worldmap.jag (once per deploy / rev).
+ *
+ * Emits a **terrain-only** basemap plus pre-baked transparent overlays so the
+ * map picker can toggle classic Key icons / multi / free without re-running MapView:
+ *
+ *   out/worldmap-basemap.<fp>.png          terrain (nothing else)
+ *   out/worldmap-key.<fp>.png              all Key legend icons (transparent)
+ *   out/worldmap-key-index.<fp>.json       per-type placements + names
+ *   out/worldmap-multi.<fp>.png            multicombat tint (transparent)
+ *   out/worldmap-free.<fp>.png             free-to-play tint (transparent)
+ *   out/worldmap-basemap.manifest.json
  *
  * Usage:
  *   bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG]
  *
- * Resolution order for the jag:
- *   1. --jag PATH
- *   2. $ENGINE/data/pack/mapview/worldmap.jag (or --engine)
- *   3. out/worldmap.jag (cached download)
- *   4. https://2004.lostcity.rs/worldmap.jag (download once into out/)
- *
- * Emits:
- *   out/worldmap-basemap.<fingerprint>.png
- *   out/worldmap-basemap.manifest.json
+ * worldmap.jag resolution: --jag → $ENGINE/data/pack/mapview → out/ → download from 2004scape.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,7 +25,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import {
     BASEMAP_MANIFEST_NAME,
     BASEMAP_SCHEMA,
-    type BasemapManifest
+    type BasemapManifest,
+    type WorldmapKeyIndex
 } from '#/bot/ui/worldMapBasemap.js';
 import { encodePngRgba, pix2dToRgba } from './encodePng.js';
 
@@ -85,7 +88,6 @@ async function resolveJag(opts: ReturnType<typeof parseArgs>): Promise<{ bytes: 
         return { bytes: new Uint8Array(fs.readFileSync(cacheJag)), source: cacheJag };
     }
     console.log(`worldmap.jag missing under engine; downloading ${opts.fetchUrl}…`);
-    // Use Bun's native fetch before happy-dom is registered (CORS).
     const res = await fetch(opts.fetchUrl);
     if (!res.ok) {
         throw new Error(`download failed HTTP ${res.status}`);
@@ -143,7 +145,6 @@ function installCanvasMock(): void {
         };
     }
 
-    // happy-dom's canvas getContext returns null; MapView/PixMap need a 2d context.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (HTMLCanvasElement.prototype as any).getContext = function (type: string) {
         if (type === '2d') {
@@ -159,16 +160,88 @@ function installCanvasMock(): void {
     document.body.appendChild(el);
 }
 
-async function bake(jagBytes: Uint8Array): Promise<{
-    pixels: Int32Array;
+/** Blit a MapView Pix32 (0x00RRGGBB, 0 = transparent) into an RGBA buffer. */
+function blitSpriteRgba(
+    rgba: Uint8Array,
+    mapW: number,
+    mapH: number,
+    sprite: { data: Int32Array; wi: number; hi: number; xof: number; yof: number },
+    destX: number,
+    destY: number
+): void {
+    const x0 = (destX + sprite.xof) | 0;
+    const y0 = (destY + sprite.yof) | 0;
+    for (let sy = 0; sy < sprite.hi; sy++) {
+        const dy = y0 + sy;
+        if (dy < 0 || dy >= mapH) {
+            continue;
+        }
+        for (let sx = 0; sx < sprite.wi; sx++) {
+            const dx = x0 + sx;
+            if (dx < 0 || dx >= mapW) {
+                continue;
+            }
+            const rgb = sprite.data[sy * sprite.wi + sx] >>> 0;
+            if (rgb === 0) {
+                continue;
+            }
+            const o = (dy * mapW + dx) * 4;
+            rgba[o] = (rgb >> 16) & 0xff;
+            rgba[o + 1] = (rgb >> 8) & 0xff;
+            rgba[o + 2] = rgb & 0xff;
+            rgba[o + 3] = 0xff;
+        }
+    }
+}
+
+/** Zone tint overlay from a boolean[][] grid (same layout as MapView multiPos/freePos). */
+function bakeTintRgba(
+    grid: boolean[][],
+    width: number,
+    height: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number
+): Uint8Array {
+    const rgba = new Uint8Array(width * height * 4);
+    for (let x = 0; x < width; x++) {
+        const col = grid[x];
+        if (!col) {
+            continue;
+        }
+        for (let y = 0; y < height; y++) {
+            if (!col[y]) {
+                continue;
+            }
+            const o = (y * width + x) * 4;
+            rgba[o] = r;
+            rgba[o + 1] = g;
+            rgba[o + 2] = b;
+            rgba[o + 3] = a;
+        }
+    }
+    return rgba;
+}
+
+type BakeResult = {
+    terrain: Int32Array;
+    /** All Key icons on one transparent sheet (optional “everything” layer). */
+    keyRgba: Uint8Array;
+    /** Per mapfunction type id → transparent sheet with only that Key type. */
+    keyTypeRgba: Record<string, Uint8Array>;
+    multiRgba: Uint8Array;
+    freeRgba: Uint8Array;
+    keyIndex: WorldmapKeyIndex;
     width: number;
     height: number;
     originX: number;
     originZ: number;
-}> {
+};
+
+async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
     installCanvasMock();
 
-    // Module-level jag for subclass (TS param props are not available during super()).
     (globalThis as { __basemapJag?: Uint8Array }).__basemapJag = jagBytes;
 
     const { MapView } = await import('#/mapview/MapView.js');
@@ -196,8 +269,9 @@ async function bake(jagBytes: Uint8Array): Promise<{
         }
     }
 
-    // Default basemap: full-world (1 px/tile of entire map) with no place labels.
+    // Terrain only: no Key icons, labels, tints, dots, borders.
     MapView.shouldDrawLabels = false;
+    MapView.shouldDrawMapfunctions = false;
     MapView.shouldDrawBorders = false;
     MapView.shouldDrawNpcs = false;
     MapView.shouldDrawItems = false;
@@ -215,16 +289,59 @@ async function bake(jagBytes: Uint8Array): Promise<{
 
     const width = view.mapWidth;
     const height = view.mapHeight;
-    // Full map extent = max zoom-out (1 world tile → 1 pixel). Labels stay off.
     view.zoom = 4;
     view.targetZoom = 4;
 
     const pix = new PixMap(width, height);
     pix.setPixels();
     view.renderWorldMap(0, 0, width, height, 0, 0, width, height);
+    const terrain = new Int32Array(pix.data);
+
+    // Key icons: per-type transparent overlays + composite (same −7 offset as MapView).
+    const keyRgba = new Uint8Array(width * height * 4);
+    const keyTypeRgba: Record<string, Uint8Array> = {};
+    const placements: Record<string, [number, number][]> = {};
+    const names = [...MapView.KEY_NAMES];
+
+    for (let i = 0; i < view.activeMapFunctionCount; i++) {
+        const type = view.activeMapFunctions[i];
+        const lx = view.activeMapFunctionX[i];
+        const ly = view.activeMapFunctionZ[i];
+        const key = String(type);
+        if (!placements[key]) {
+            placements[key] = [];
+            keyTypeRgba[key] = new Uint8Array(width * height * 4);
+        }
+        // Centre of the 1×1 tile cell (matches startX + lengthX/2 at 1 ppt).
+        const cx = lx;
+        const cy = ly;
+        placements[key].push([cx, cy]);
+
+        const sprite = view.mapfunction[type];
+        if (sprite) {
+            // MapView: plotSprite(startX + lengthX/2 - 7, startY + lengthY/2 - 7)
+            blitSpriteRgba(keyRgba, width, height, sprite, cx - 7, cy - 7);
+            blitSpriteRgba(keyTypeRgba[key]!, width, height, sprite, cx - 7, cy - 7);
+        }
+    }
+
+    // Multi / free tints match MapView fillRectTrans colours (0xff0000 / 0x00ff00 @ alpha 96).
+    const multiRgba = bakeTintRgba(view.multiPos, width, height, 0xff, 0x00, 0x00, 96);
+    const freeRgba = bakeTintRgba(view.freePos, width, height, 0x00, 0xff, 0x00, 96);
+
+    const keyIndex: WorldmapKeyIndex = {
+        schema: 1,
+        names,
+        placements
+    };
 
     return {
-        pixels: pix.data,
+        terrain,
+        keyRgba,
+        keyTypeRgba,
+        multiRgba,
+        freeRgba,
+        keyIndex,
         width,
         height,
         originX: view.mapOriginX,
@@ -241,35 +358,76 @@ async function main(): Promise<void> {
     console.log(`source: ${source}`);
     console.log(`fingerprint: ${fp}`);
     console.log(`revision: ${opts.revision}`);
+    console.log(`schema: ${BASEMAP_SCHEMA} (terrain + per-type Key overlays + multi/free)`);
 
-    const { pixels, width, height, originX, originZ } = await bake(bytes);
+    const result = await bake(bytes);
+    const { width, height } = result;
     console.log(`raster: ${width}×${height} (${((performance.now() - started) / 1000).toFixed(1)}s so far)`);
 
-    const rgba = pix2dToRgba(pixels);
-    const png = encodePngRgba(rgba, width, height);
-
     fs.mkdirSync(opts.outDir, { recursive: true });
-    const pngName = `worldmap-basemap.${fp}.png`;
-    const pngPath = path.join(opts.outDir, pngName);
-    fs.writeFileSync(pngPath, png);
+
+    const terrainName = `worldmap-basemap.${fp}.png`;
+    const keyName = `worldmap-key.${fp}.png`;
+    const multiName = `worldmap-multi.${fp}.png`;
+    const freeName = `worldmap-free.${fp}.png`;
+    const keyIndexName = `worldmap-key-index.${fp}.json`;
+
+    const terrainPng = encodePngRgba(pix2dToRgba(result.terrain), width, height);
+    const keyPng = encodePngRgba(result.keyRgba, width, height);
+    const multiPng = encodePngRgba(result.multiRgba, width, height);
+    const freePng = encodePngRgba(result.freeRgba, width, height);
+
+    fs.writeFileSync(path.join(opts.outDir, terrainName), terrainPng);
+    fs.writeFileSync(path.join(opts.outDir, keyName), keyPng);
+    fs.writeFileSync(path.join(opts.outDir, multiName), multiPng);
+    fs.writeFileSync(path.join(opts.outDir, freeName), freePng);
+    fs.writeFileSync(
+        path.join(opts.outDir, keyIndexName),
+        JSON.stringify(result.keyIndex, null, 2) + '\n'
+    );
+
+    const keyTypeOverlayUrls: Record<string, string> = {};
+    let keyTypeBytes = 0;
+    for (const [typeId, rgba] of Object.entries(result.keyTypeRgba)) {
+        const name = `worldmap-key-type-${typeId}.${fp}.png`;
+        const png = encodePngRgba(rgba, width, height);
+        fs.writeFileSync(path.join(opts.outDir, name), png);
+        keyTypeOverlayUrls[typeId] = `./${name}`;
+        keyTypeBytes += png.length;
+    }
+
+    const placementCount = Object.values(result.keyIndex.placements).reduce((n, a) => n + a.length, 0);
+    const typeCount = Object.keys(result.keyIndex.placements).length;
 
     const manifest: BasemapManifest = {
         schema: BASEMAP_SCHEMA,
         revision: opts.revision,
         fingerprint: fp,
-        origin: { x: originX, z: originZ },
+        origin: { x: result.originX, z: result.originZ },
         sizeTiles: { w: width, h: height },
         pixelsPerTile: 1,
-        basemapUrl: `./${pngName}`,
+        basemapUrl: `./${terrainName}`,
+        keyOverlayUrl: `./${keyName}`,
+        keyIndexUrl: `./${keyIndexName}`,
+        keyTypeOverlayUrls,
+        multiOverlayUrl: `./${multiName}`,
+        freeOverlayUrl: `./${freeName}`,
         jagBytes: bytes.length
     };
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
     fs.writeFileSync(manPath, JSON.stringify(manifest, null, 2) + '\n');
 
     console.log('report:');
-    console.log(`  png: ${pngPath} (${(png.length / 1024).toFixed(0)} KB)`);
+    console.log(`  terrain: ${terrainName} (${(terrainPng.length / 1024).toFixed(0)} KB)`);
+    console.log(`  key all: ${keyName} (${(keyPng.length / 1024).toFixed(0)} KB)`);
+    console.log(
+        `  key types: ${typeCount} PNGs (${(keyTypeBytes / 1024).toFixed(0)} KB total) — ${placementCount} icons`
+    );
+    console.log(`  multi overlay: ${multiName} (${(multiPng.length / 1024).toFixed(0)} KB)`);
+    console.log(`  free overlay: ${freeName} (${(freePng.length / 1024).toFixed(0)} KB)`);
+    console.log(`  key index: ${keyIndexName}`);
     console.log(`  manifest: ${manPath}`);
-    console.log(`  origin: ${originX},${originZ}`);
+    console.log(`  origin: ${result.originX},${result.originZ}`);
     console.log(`  elapsed: ${((performance.now() - started) / 1000).toFixed(1)}s`);
 }
 

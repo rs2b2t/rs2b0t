@@ -3,6 +3,7 @@
  * Not part of Global settings.
  */
 import { parseHtmlColor, rgba } from '../nav/pathPaintTheme.js';
+import { WORLDMAP_KEY_NAMES } from '../../mapview/worldmapKeyNames.js';
 import {
     MAP_PICKER_SETTINGS,
     MAP_PICKER_SETTINGS_NS,
@@ -15,17 +16,27 @@ export const MAP_PICKER_DOT_DEFAULT = '#0a3d7a';
 export const MAP_PICKER_DOT_ALPHA_DEFAULT = 0.85;
 
 export const MAP_PICKER_BASEMAP_KEY = 'showBasemap';
-export const MAP_PICKER_SHOW_KEY = 'showWalkable';
 export const MAP_PICKER_COLOR_KEY = 'dotColor';
 export const MAP_PICKER_ALPHA_KEY = 'dotAlpha';
+export const MAP_PICKER_KEY_TYPES_KEY = 'keyIconTypes';
+export const MAP_PICKER_MULTI_KEY = 'showMultiTint';
+export const MAP_PICKER_FREE_KEY = 'showFreeTint';
 
 export type MapPickerDotTheme = {
+    /** Classic worldmap terrain mode (vs collision-dot mode). */
     showBasemap: boolean;
+    /**
+     * Walkable collision dots — only drawn when basemap is **off** (classic mode).
+     * Always true in classic mode; always false in basemap mode.
+     */
     showWalkable: boolean;
+    /** Selected Key legend type names (empty = none). */
+    keyIconTypes: string[];
+    showMultiTint: boolean;
+    showFreeTint: boolean;
     fill: string;
     colorRaw: string;
     alpha: number;
-    showWalkableUrlLocked: boolean;
 };
 
 function mapPickerBag(): SettingsBag {
@@ -40,41 +51,51 @@ export function setMapPickerShowBasemap(show: boolean): void {
     SettingsStore.save(MAP_PICKER_SETTINGS_NS, MAP_PICKER_BASEMAP_KEY, show ? 'true' : 'false');
 }
 
-export function getMapPickerShowWalkable(): boolean {
-    return mapPickerBag().bool(MAP_PICKER_SHOW_KEY, false);
+/** Key type names enabled in settings (classic Key legend names). */
+export function getMapPickerKeyIconTypes(): string[] {
+    const list = mapPickerBag().list(MAP_PICKER_KEY_TYPES_KEY, []);
+    // Drop unknown names (schema options are the source of truth).
+    const allowed = new Set(WORLDMAP_KEY_NAMES.map(n => n.toLowerCase()));
+    return list.filter(n => allowed.has(n.toLowerCase()));
 }
 
-export function setMapPickerShowWalkable(show: boolean): void {
-    SettingsStore.save(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SHOW_KEY, show ? 'true' : 'false');
-}
-
-export function isMapPickerShowWalkableUrlLocked(): boolean {
-    return SettingsStore.isUrlOverride(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SHOW_KEY);
+/**
+ * Map Key legend name → mapfunction type id (index in WORLDMAP_KEY_NAMES).
+ */
+export function keyNameToTypeId(name: string): number | null {
+    const wanted = name.trim().toLowerCase();
+    const i = WORLDMAP_KEY_NAMES.findIndex(n => n.toLowerCase() === wanted);
+    return i >= 0 ? i : null;
 }
 
 export function resolveMapPickerDotTheme(): MapPickerDotTheme {
     const g = mapPickerBag();
     const showBasemap = g.bool(MAP_PICKER_BASEMAP_KEY, true);
-    const showWalkable = g.bool(MAP_PICKER_SHOW_KEY, false);
+    // Classic mode always shows the walkable grid; basemap mode never does.
+    const showWalkable = !showBasemap;
     const colorRaw = g.str(MAP_PICKER_COLOR_KEY, MAP_PICKER_DOT_DEFAULT);
     const alpha = g.num(MAP_PICKER_ALPHA_KEY, MAP_PICKER_DOT_ALPHA_DEFAULT);
     const rgb = parseHtmlColor(colorRaw, MAP_PICKER_DOT_DEFAULT);
     return {
         showBasemap,
         showWalkable,
+        keyIconTypes: getMapPickerKeyIconTypes(),
+        showMultiTint: g.bool(MAP_PICKER_MULTI_KEY, false),
+        showFreeTint: g.bool(MAP_PICKER_FREE_KEY, false),
         fill: rgba(rgb, alpha),
         colorRaw,
-        alpha,
-        showWalkableUrlLocked: isMapPickerShowWalkableUrlLocked()
+        alpha
     };
 }
 
-/** Display keys that should repaint the open map picker when saved. */
+/** Display / layer keys that should repaint the open map picker when saved. */
 export function isMapPickerThemeSettingKey(key: string): boolean {
     return (
         key === MAP_PICKER_BASEMAP_KEY ||
-        key === MAP_PICKER_SHOW_KEY ||
         key === MAP_PICKER_COLOR_KEY ||
-        key === MAP_PICKER_ALPHA_KEY
+        key === MAP_PICKER_ALPHA_KEY ||
+        key === MAP_PICKER_KEY_TYPES_KEY ||
+        key === MAP_PICKER_MULTI_KEY ||
+        key === MAP_PICKER_FREE_KEY
     );
 }

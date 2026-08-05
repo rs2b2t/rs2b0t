@@ -37,7 +37,8 @@ cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworke
    out/collision.lcnav.gz out/tinymidipcm.wasm "$DEST/bot/"
 if [ -f out/worldmap-basemap.manifest.json ]; then
     cp out/worldmap-basemap.manifest.json "$DEST/bot/"
-    for f in out/worldmap-basemap.*.png; do
+    for f in out/worldmap-basemap.*.png out/worldmap-key.*.png out/worldmap-key-type-*.png \
+             out/worldmap-multi.*.png out/worldmap-free.*.png out/worldmap-key-index.*.json; do
         [ -f "$f" ] && cp "$f" "$DEST/bot/"
     done
 fi

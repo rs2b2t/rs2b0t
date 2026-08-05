@@ -1,4 +1,5 @@
 import Tile from '../api/Tile.js';
+import { WORLDMAP_KEY_NAMES } from '../../mapview/worldmapKeyNames.js';
 import { boxKey } from './box.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
@@ -278,22 +279,19 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         default: true,
         label: 'Show basemap',
         group: 'Display',
-        help: 'Worldmap underlay. Off = destination pins (and optional walkable dots) only.'
+        help:
+            'On (default): classic worldmap terrain + optional Key / multi / free layers. '
+            + 'Off: original collision-dot grid with named destination markers. '
+            + 'Clicks always snap to nearest walkable tile either way.'
     },
-    showWalkable: {
-        type: 'boolean',
-        default: false,
-        label: 'Walkable dots',
-        group: 'Display',
-        help: 'Collision-pack walkable grid. Default off. Clicks still snap to nearest walkable tile.'
-    },
+    // Dot style only applies in classic mode (basemap off).
     dotColor: {
         type: 'string',
         default: '#0a3d7a',
         label: 'Walkable colour',
         group: 'Display',
-        showIf: { key: 'showWalkable', anyOf: ['true'] },
-        help: 'HTML #RGB / #RRGGBB for walkable dots (default #0a3d7a).'
+        showIf: { key: 'showBasemap', anyOf: ['false'] },
+        help: 'HTML #RGB / #RRGGBB for walkable dots when basemap is off (default #0a3d7a).'
     },
     dotAlpha: {
         type: 'number',
@@ -302,24 +300,54 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         max: 1,
         label: 'Walkable opacity',
         group: 'Display',
-        showIf: { key: 'showWalkable', anyOf: ['true'] },
-        help: '0.15–1 (default 0.85).'
+        showIf: { key: 'showBasemap', anyOf: ['false'] },
+        help: '0.15–1 (default 0.85). Only used when basemap is off.'
     },
+    // Pre-baked per-type Key overlays (deploy gen:basemap) — free toggles, no MapView.
+    keyIconTypes: {
+        type: 'string[]',
+        default: [],
+        options: [...WORLDMAP_KEY_NAMES],
+        label: 'Key icons',
+        group: 'Worldmap layers',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help:
+            'Which classic Key legend types to draw (Bank, Altar, Fishing Spot, …). '
+            + 'Each type is a pre-baked transparent overlay — toggle free, no rebuild. '
+            + 'Default none = terrain only.'
+    },
+    showMultiTint: {
+        type: 'boolean',
+        default: false,
+        label: 'Multicombat areas',
+        group: 'Worldmap layers',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Red multicombat tint (pre-baked). Free — no rebuild.'
+    },
+    showFreeTint: {
+        type: 'boolean',
+        default: false,
+        label: 'Free-to-play areas',
+        group: 'Worldmap layers',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Green free-to-play tint (pre-baked). Free — no rebuild.'
+    },
+    // Live Rebuild is rare — deploy already bakes terrain + Key/multi/free at 1 ppt.
     bakeLabels: {
         type: 'boolean',
         default: false,
         label: 'Place labels',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Include place-name labels when regenerating. Default off (full-world, unlabelled).'
+        help: 'City/area names stamped into a live Rebuild (not on the deploy PNG).'
     },
     bakeBorders: {
         type: 'boolean',
         default: false,
-        label: 'Borders',
+        label: 'Map-square borders',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Map borders when regenerating.'
+        help: '64×64 map-square grid when regenerating (dev).'
     },
     bakeNpcs: {
         type: 'boolean',
@@ -327,7 +355,7 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         label: 'NPC dots',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'NPC map dots when regenerating.'
+        help: 'NPC positions from worldmap data when regenerating.'
     },
     bakeItems: {
         type: 'boolean',
@@ -335,23 +363,31 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         label: 'Item dots',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Ground-item map dots when regenerating.'
+        help: 'Ground-item positions when regenerating.'
+    },
+    bakeKeyIcons: {
+        type: 'boolean',
+        default: false,
+        label: 'Stamp Key icons into rebuild',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Prefer Worldmap layers → Key icons (pre-baked per type).'
     },
     bakeMultimap: {
         type: 'boolean',
         default: false,
-        label: 'Multicombat overlay',
+        label: 'Stamp multicombat into rebuild',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Tint multicombat zones when regenerating.'
+        help: 'Prefer Worldmap layers → Multicombat areas (pre-baked).'
     },
     bakeFreemap: {
         type: 'boolean',
         default: false,
-        label: 'Free-to-play overlay',
+        label: 'Stamp free-to-play into rebuild',
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Tint free-to-play zones when regenerating.'
+        help: 'Prefer Worldmap layers → Free-to-play areas (pre-baked).'
     },
     skipRebuildConfirm: {
         type: 'boolean',
@@ -359,7 +395,9 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         label: "Don't ask before rebuild",
         group: 'Basemap rebuild',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
-        help: 'Skip the freeze-warning dialog when using Rebuild map…. Uncheck to see the warning again.'
+        help:
+            'Rebuild map… re-runs MapView (tab freezes). Mainly useful after a game update or if you '
+            + 'want a custom stamp (labels / higher detail). Everyday Key layers need no rebuild.'
     }
 };
 

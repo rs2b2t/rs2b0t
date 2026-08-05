@@ -10,15 +10,21 @@ import { downloadUrl, sleep } from '#/util/JsUtil.js';
 import { canvas, saveDataURL } from '#/graphics/Canvas.js';
 import PixMap from '#/graphics/PixMap.js';
 import WorldMapFont from '#/mapview/WorldMapFont.js';
+import { WORLDMAP_KEY_NAMES } from '#/mapview/worldmapKeyNames.js';
 
 export class MapView extends GameShell {
     static shouldDrawBorders: boolean = false;
     static shouldDrawLabels: boolean = true;
+    /** Key legend icons (mapfunction sprites). Classic worldmap always draws these. */
+    static shouldDrawMapfunctions: boolean = true;
 
     static shouldDrawNpcs: boolean = false;
     static shouldDrawItems: boolean = false;
     static shouldDrawMultimap: boolean = false;
     static shouldDrawFreemap: boolean = false;
+
+    /** @see WORLDMAP_KEY_NAMES — classic Key legend order. */
+    static readonly KEY_NAMES: readonly string[] = WORLDMAP_KEY_NAMES;
 
     mapStartX: number = 50 << 6;
     mapStartZ: number = 50 << 6;
@@ -117,57 +123,7 @@ export class MapView extends GameShell {
     zoom: number = 4;
     targetZoom: number = 4;
 
-    readonly keyNames: string[] = [
-        'General Store',
-        'Sword Shop',
-        'Magic Shop',
-        'Axe Shop',
-        'Helmet Shop',
-        'Bank',
-        'Quest Start',
-        'Amulet Shop',
-        'Mining Site',
-        'Furnace',
-        'Anvil',
-        'Combat Training',
-        'Dungeon',
-        'Staff Shop',
-        'Platebody Shop',
-        'Platelegs Shop',
-        'Scimitar Shop',
-        'Archery Shop',
-        'Shield Shop',
-        'Altar',
-        'Herbalist',
-        'Jewelery',
-        'Gem Shop',
-        'Crafting Shop',
-        'Candle Shop',
-        'Fishing Shop',
-        'Fishing Spot',
-        'Clothes Shop',
-        'Apothecary',
-        'Silk Trader',
-        'Kebab Seller',
-        'Pub/Bar',
-        'Mace Shop',
-        'Tannery',
-        'Rare Trees',
-        'Spinning Wheel',
-        'Food Shop',
-        'Cookery Shop',
-        '???',
-        'Water Source',
-        'Cooking Range',
-        'Skirt Shop',
-        'Potters Wheel',
-        'Windmill',
-        'Mining Shop',
-        'Chainmail Shop',
-        'Silver Shop',
-        'Fur Trader',
-        'Spice Shop'
-    ];
+    readonly keyNames: string[] = [...MapView.KEY_NAMES];
 
     constructor() {
         super();
@@ -478,6 +434,10 @@ export class MapView extends GameShell {
                 this.redraw = true;
             } else if (key == 'l'.charCodeAt(0) || key == 'L'.charCodeAt(0)) {
                 MapView.shouldDrawLabels = !MapView.shouldDrawLabels;
+                this.redraw = true;
+            } else if (key == 'u'.charCodeAt(0) || key == 'U'.charCodeAt(0)) {
+                // "Key" icons (mapfunctions) — classic worldmap always shows these; toggle for tools/bake.
+                MapView.shouldDrawMapfunctions = !MapView.shouldDrawMapfunctions;
                 this.redraw = true;
             } else if (key == 'b'.charCodeAt(0) || key == 'B'.charCodeAt(0)) {
                 MapView.shouldDrawBorders = !MapView.shouldDrawBorders;
@@ -1118,8 +1078,10 @@ export class MapView extends GameShell {
             }
         }
 
-        for (let i: number = 0; i < visibleMapFunctionCount; i++) {
-            this.mapfunction[this.visibleMapFunctions[i]].plotSprite(this.visibleMapFunctionsX[i] - 7, this.visibleMapFunctionsY[i] - 7);
+        if (MapView.shouldDrawMapfunctions) {
+            for (let i: number = 0; i < visibleMapFunctionCount; i++) {
+                this.mapfunction[this.visibleMapFunctions[i]].plotSprite(this.visibleMapFunctionsX[i] - 7, this.visibleMapFunctionsY[i] - 7);
+            }
         }
 
         if (MapView.shouldDrawFreemap) {
@@ -1244,7 +1206,7 @@ export class MapView extends GameShell {
             }
         }
 
-        if (this.flashTimer > 0) {
+        if (MapView.shouldDrawMapfunctions && this.flashTimer > 0) {
             for (let i: number = 0; i < visibleMapFunctionCount; i++) {
                 if (this.visibleMapFunctions[i] == this.currentKey) {
                     this.mapfunction[this.visibleMapFunctions[i]].plotSprite(this.visibleMapFunctionsX[i] - 7, this.visibleMapFunctionsY[i] - 7);

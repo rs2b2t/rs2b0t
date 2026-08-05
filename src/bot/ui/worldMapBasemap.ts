@@ -1,13 +1,18 @@
 /**
  * Shared basemap manifest + coordinate helpers for the walkable map picker.
  *
- * Basemap is a baked full-world raster (1 px/tile by default) aligned to
- * MapView origin/size. Walkability still comes from collision.lcnav.gz.
+ * Deploy bake (schema ≥ 2) produces:
+ *  - terrain-only basemap (no Key icons, labels, or zone tints)
+ *  - pre-baked transparent **overlays** (Key icons, multi, free) generated once
+ *
+ * The picker composites overlays at paint time — toggling Key / multi / free is free
+ * (no MapView). Walkability still comes from collision.lcnav.gz.
  */
 
-export const BASEMAP_SCHEMA = 1;
+/** Bump when bake layout / overlay contract changes. */
+export const BASEMAP_SCHEMA = 2;
 
-/** Filename served next to botclient (not fingerprinted — points at fingerprinted PNG). */
+/** Filename served next to botclient (not fingerprinted — points at fingerprinted assets). */
 export const BASEMAP_MANIFEST_NAME = 'worldmap-basemap.manifest.json';
 
 export type BasemapManifest = {
@@ -19,10 +24,43 @@ export type BasemapManifest = {
     /** Map extent in tiles (matches MapView mapWidth × mapHeight). */
     sizeTiles: { w: number; h: number };
     pixelsPerTile: number;
-    /** Relative URL of the raster (e.g. ./worldmap-basemap.<fp>.png). */
+    /** Relative URL of the terrain raster (no Key icons / labels / tints). */
     basemapUrl: string;
+    /**
+     * Pre-baked composite of all Key icons (optional convenience). Prefer
+     * `keyTypeOverlayUrls` for per-type toggles.
+     */
+    keyOverlayUrl?: string;
+    /**
+     * Per-type placement index (names + pixel centres). Used with per-type overlays.
+     */
+    keyIndexUrl?: string;
+    /**
+     * Mapfunction type id → transparent PNG of only that Key legend type
+     * (Bank, Altar, …). Generated once at deploy; picker composites selected types free.
+     */
+    keyTypeOverlayUrls?: Record<string, string>;
+    /** Pre-baked multicombat tint overlay (transparent). */
+    multiOverlayUrl?: string;
+    /** Pre-baked free-to-play tint overlay (transparent). */
+    freeOverlayUrl?: string;
     /** Byte length of source worldmap.jag used for the bake (debug). */
     jagBytes?: number;
+};
+
+/** key-index JSON next to the basemap (fingerprinted). */
+export type WorldmapKeyIndex = {
+    schema: 1;
+    /** Same order as MapView.KEY_NAMES / classic Key legend. */
+    names: string[];
+    /**
+     * Mapfunction type id → basemap pixel centres `[px, py]` (sprite is drawn
+     * centred with a −7,−7 offset like MapView.plotSprite).
+     */
+    placements: Record<string, [number, number][]>;
+    /** Optional sprite strip for runtime per-type draw (width = cell * n). */
+    spriteStripUrl?: string;
+    spriteCell?: number;
 };
 
 /** Defaults matching MapView.ts field initializers. */
@@ -105,4 +143,12 @@ export function isBasemapManifest(v: unknown): v is BasemapManifest {
         typeof m.sizeTiles.w === 'number' &&
         typeof m.sizeTiles.h === 'number'
     );
+}
+
+export function isWorldmapKeyIndex(v: unknown): v is WorldmapKeyIndex {
+    if (!v || typeof v !== 'object') {
+        return false;
+    }
+    const k = v as WorldmapKeyIndex;
+    return Array.isArray(k.names) && k.placements != null && typeof k.placements === 'object';
 }

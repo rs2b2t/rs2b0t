@@ -28,6 +28,7 @@ import {
 import {
     getMapPickerShowBasemap,
     isMapPickerThemeSettingKey,
+    keyNameToTypeId,
     resolveMapPickerDotTheme
 } from './mapPickerTheme.js';
 import {
@@ -88,7 +89,22 @@ async function loadFinder(): Promise<PathFinder> {
     return finderPromise;
 }
 
-async function loadDeployBasemap(): Promise<{ manifest: BasemapManifest; image: CanvasImageSource } | null> {
+async function fetchOptionalImage(manUrl: URL, rel: string | undefined): Promise<CanvasImageSource | null> {
+    if (!rel) {
+        return null;
+    }
+    try {
+        const res = await fetch(new URL(rel, manUrl));
+        if (!res.ok) {
+            return null;
+        }
+        return blobToImage(await res.blob());
+    } catch {
+        return null;
+    }
+}
+
+async function loadDeployBasemap(): Promise<LoadedBasemap | null> {
     const manUrl = new URL(`./${BASEMAP_MANIFEST_NAME}`, import.meta.url);
     const manRes = await fetch(manUrl);
     if (!manRes.ok) {
@@ -109,12 +125,42 @@ async function loadDeployBasemap(): Promise<{ manifest: BasemapManifest; image: 
         return null;
     }
     const blob = await imgRes.blob();
-    return { manifest: json, image: await blobToImage(blob) };
+    const image = await blobToImage(blob);
+    // Pre-baked overlays (schema ≥ 2) — free toggles at paint time.
+    const typeEntries = Object.entries(json.keyTypeOverlayUrls ?? {});
+    const [keyOverlay, multiOverlay, freeOverlay, ...typeImgs] = await Promise.all([
+        fetchOptionalImage(manUrl, json.keyOverlayUrl),
+        fetchOptionalImage(manUrl, json.multiOverlayUrl),
+        fetchOptionalImage(manUrl, json.freeOverlayUrl),
+        ...typeEntries.map(([, rel]) => fetchOptionalImage(manUrl, rel))
+    ]);
+    const keyTypeOverlays = new Map<string, CanvasImageSource>();
+    for (let i = 0; i < typeEntries.length; i++) {
+        const img = typeImgs[i];
+        if (img) {
+            keyTypeOverlays.set(typeEntries[i]![0], img);
+        }
+    }
+    return {
+        manifest: json,
+        image,
+        keyOverlay: keyOverlay ?? undefined,
+        keyTypeOverlays: keyTypeOverlays.size > 0 ? keyTypeOverlays : undefined,
+        multiOverlay: multiOverlay ?? undefined,
+        freeOverlay: freeOverlay ?? undefined
+    };
 }
 
 export type LoadedBasemap = {
     manifest: BasemapManifest;
+    /** Terrain raster (ideally no Key icons / tints). */
     image: CanvasImageSource;
+    /** All Key icons (optional; prefer keyTypeOverlays). */
+    keyOverlay?: CanvasImageSource;
+    /** Per mapfunction type id → transparent overlay of that Key type only. */
+    keyTypeOverlays?: Map<string, CanvasImageSource>;
+    multiOverlay?: CanvasImageSource;
+    freeOverlay?: CanvasImageSource;
     /**
      * Optional UI hint when the image is still usable but not a perfect cache hit.
      * Never set for a clean CRC+prefs hit.
@@ -401,7 +447,7 @@ export class WorldMapPicker {
             rebuildBtn.className = 'rs2b0t-button rs2b0t-walkmap-rebuild';
             rebuildBtn.textContent = 'Rebuild map…';
             rebuildBtn.title =
-                'Re-render basemap from worldmap.jag using Settings → Basemap rebuild layers. Freezes the tab briefly.';
+                'Rare: re-run MapView from worldmap.jag (tab freezes). Everyday Key/multi/free layers are pre-baked — use Settings, not Rebuild.';
             toolbar.appendChild(rebuildBtn);
 
             /** Reflect showBasemap on dataset without clobbering load state when toggled back on. */
@@ -509,11 +555,38 @@ export class WorldMapPicker {
                     manifest.sizeTiles,
                     manifest.pixelsPerTile
                 );
-                // Dim slightly so walkable dots stay readable.
+                const theme = resolveMapPickerDotTheme();
                 ctx.save();
-                ctx.globalAlpha = level === 0 ? 0.92 : 0.35;
+                // Full opacity on L0; dim upper levels so it's obvious you're not on the surface.
+                ctx.globalAlpha = level === 0 ? 1 : 0.4;
                 try {
                     ctx.drawImage(image, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                    // Pre-baked overlays (free toggles — no MapView). Same source rect as terrain.
+                    if (theme.showFreeTint && basemap.freeOverlay) {
+                        ctx.drawImage(basemap.freeOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                    }
+                    if (theme.showMultiTint && basemap.multiOverlay) {
+                        ctx.drawImage(basemap.multiOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                    }
+                    // Per-type Key overlays (classic Key legend). Fall back to all-icons sheet if
+                    // only that is present and every type is selected (unlikely).
+                    if (theme.keyIconTypes.length > 0) {
+                        if (basemap.keyTypeOverlays && basemap.keyTypeOverlays.size > 0) {
+                            for (const name of theme.keyIconTypes) {
+                                const id = keyNameToTypeId(name);
+                                if (id === null) {
+                                    continue;
+                                }
+                                const layer = basemap.keyTypeOverlays.get(String(id));
+                                if (layer) {
+                                    ctx.drawImage(layer, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                                }
+                            }
+                        } else if (basemap.keyOverlay) {
+                            // Old deploy without per-type sheets: show composite only.
+                            ctx.drawImage(basemap.keyOverlay, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
+                        }
+                    }
                 } catch {
                     /* out-of-bounds source rects on some browsers — skip frame */
                 }
@@ -552,7 +625,8 @@ export class WorldMapPicker {
                 const minZ = Math.floor(centreZ - halfH) - step;
                 const maxZ = Math.ceil(centreZ + halfH) + step;
 
-                // Walkable dots — visibility/colour from MapPicker settings
+                // Classic mode (basemap off): walkable collision dots + named destinations.
+                // Basemap mode: terrain + Key layers only — no old grid/pins over the map.
                 syncBasemapChrome();
                 const theme = resolveMapPickerDotTheme();
                 if (theme.showWalkable) {
@@ -572,24 +646,23 @@ export class WorldMapPicker {
                             ctx.fillRect(sx - half, sy - half, size, size);
                         }
                     }
-                }
 
-                // Named destinations
-                ctx.font = '11px sans-serif';
-                for (const dest of WALK_DESTINATIONS) {
-                    if (dest.tile.level !== level) {
-                        continue;
+                    ctx.font = '11px sans-serif';
+                    for (const dest of WALK_DESTINATIONS) {
+                        if (dest.tile.level !== level) {
+                            continue;
+                        }
+                        const { sx, sy } = worldToScreen(dest.tile.x, dest.tile.z);
+                        if (sx < 0 || sy < 0 || sx > w || sy > h) {
+                            continue;
+                        }
+                        ctx.fillStyle = '#00ffff';
+                        ctx.fillRect(sx - 3, sy - 3, 6, 6);
+                        ctx.strokeStyle = '#000';
+                        ctx.strokeRect(sx - 3, sy - 3, 6, 6);
+                        ctx.fillStyle = '#9cf';
+                        ctx.fillText(dest.name, sx + 6, sy + 4);
                     }
-                    const { sx, sy } = worldToScreen(dest.tile.x, dest.tile.z);
-                    if (sx < 0 || sy < 0 || sx > w || sy > h) {
-                        continue;
-                    }
-                    ctx.fillStyle = '#00ffff';
-                    ctx.fillRect(sx - 3, sy - 3, 6, 6);
-                    ctx.strokeStyle = '#000';
-                    ctx.strokeRect(sx - 3, sy - 3, 6, 6);
-                    ctx.fillStyle = '#9cf';
-                    ctx.fillText(dest.name, sx + 6, sy + 4);
                 }
 
                 // Selection crosshair
@@ -710,11 +783,10 @@ export class WorldMapPicker {
                     title: 'Map picker settings',
                     zIndex: 1200,
                     intro:
-                        'Display options apply immediately. Basemap rebuild layers only apply after '
-                        + 'Rebuild map… (confirm freezes the tab briefly while the map regenerates). '
-                        + 'Closing this panel without rebuilding discards rebuild-layer changes. '
-                        + 'If the client /crc (game rev) or rebuild layers no longer match the local '
-                        + 'cache, the deploy basemap is shown until you Rebuild.',
+                        'Show basemap (default on): classic worldmap terrain. Key icons / multi / free are '
+                        + 'pre-baked overlays — pick types under Worldmap layers (instant, no freeze). '
+                        + 'Show basemap off: original walkable-dot grid + destination markers. '
+                        + 'Rebuild map… is rare (game update / experimental stamps); everyday use needs none.',
                     onClose: () => {
                         if (bakeSettingsSnapshot) {
                             restoreMapPickerBakeSettings(bakeSettingsSnapshot);

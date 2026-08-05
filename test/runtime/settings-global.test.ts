@@ -92,10 +92,15 @@ describe('displayString mirrors resolve for global-eligible keys', () => {
 });
 
 describe('MAP_PICKER_SETTINGS (in-picker only, not Global)', () => {
-    test('is a separate schema with Display + Basemap rebuild defaults', () => {
+    test('is a separate schema with Display + Worldmap layers + rebuild defaults', () => {
         expect(MAP_PICKER_SETTINGS_NS).toBe('MapPicker');
         expect(MAP_PICKER_SETTINGS.showBasemap?.default).toBe(true);
-        expect(MAP_PICKER_SETTINGS.showWalkable?.default).toBe(false);
+        expect(MAP_PICKER_SETTINGS.keyIconTypes?.type).toBe('string[]');
+        expect(MAP_PICKER_SETTINGS.keyIconTypes?.default).toEqual([]);
+        expect(MAP_PICKER_SETTINGS.keyIconTypes?.options?.length).toBeGreaterThan(40);
+        expect(MAP_PICKER_SETTINGS.keyIconTypes?.options).toContain('Bank');
+        expect(MAP_PICKER_SETTINGS.showMultiTint?.default).toBe(false);
+        expect(MAP_PICKER_SETTINGS.showFreeTint?.default).toBe(false);
         expect(MAP_PICKER_SETTINGS.bakeLabels?.default).toBe(false);
         expect((GLOBAL_SETTINGS as SettingsSchema).showBasemap).toBeUndefined();
         expect((GLOBAL_SETTINGS as SettingsSchema).mapPickerShowBasemap).toBeUndefined();

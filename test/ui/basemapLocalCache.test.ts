@@ -13,6 +13,7 @@ const prefs = (over: Partial<BasemapBakePrefs> = {}): BasemapBakePrefs => ({
     borders: false,
     npcs: false,
     items: false,
+    keyIcons: false,
     multimap: false,
     freemap: false,
     ...over
@@ -22,12 +23,12 @@ describe('prefsKeyFromBakePrefs', () => {
     test('matches basemapRegen prefsFingerprint', () => {
         const p = prefs({ labels: true, borders: true });
         expect(prefsKeyFromBakePrefs(p)).toBe(prefsFingerprint(p));
-        expect(prefsKeyFromBakePrefs(p)).toBe('LBnimf');
+        expect(prefsKeyFromBakePrefs(p)).toBe('LBnikmf');
     });
 
-    test('default bake prefs fingerprint is unlabelled full-world', () => {
-        // labels off → 'l', all overlays off
-        expect(prefsKeyFromBakePrefs(prefs())).toBe('lbnimf');
+    test('default bake prefs fingerprint is terrain-only (nothing stamped)', () => {
+        // labels/key/overlays off
+        expect(prefsKeyFromBakePrefs(prefs())).toBe('lbnikmf');
     });
 });
 
