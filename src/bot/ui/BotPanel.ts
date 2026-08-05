@@ -121,7 +121,10 @@ export default class BotPanel {
         navBtn.addEventListener('click', () =>
             this.paramsModal.open('Global', NAV_SETTINGS, {
                 title: 'Nav settings',
-                showGlobalExtra: false
+                showGlobalExtra: false,
+                intro:
+                    'Defaults are known-safe and meant for script authors. Changing them without '
+                    + 'understanding the effect can break scripts that assume those defaults.'
             })
         );
         settingsBtns.appendChild(globalBtn);
