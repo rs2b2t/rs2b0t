@@ -164,6 +164,11 @@ class RandomEventsImpl {
     private lastCheckTick = -1;
     private lastPending = false;
 
+    /**
+     * True when a random is active and not currently being solved.
+     * Quiet while {@link handling} so the handler's own walks do not self-interrupt;
+     * Supervisor / EventSignal still gate scripts between loops via detect + handling.
+     */
     pending(): boolean {
         if (this.handling) {
             return false;

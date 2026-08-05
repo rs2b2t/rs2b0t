@@ -1,14 +1,19 @@
 import { Game } from '../api/Game.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { BotHost } from '../BotHost.js';
+import { Scheduler } from './Scheduler.js';
 import { ScriptRunner } from './ScriptRunner.js';
 
 /**
  * Always-on random-event solver while the scene is live (`ingame` + sceneState 2),
  * **whether or not a script is running**.
  *
- * Scripted bots still yield via Supervisor / EventSignal; this covers AFK players
- * and the gap between script loops. Work is tick-gated and single-flight.
+ * Scripted bots still yield via Supervisor / EventSignal; this covers AFK players,
+ * paused scripts, and the gap between script loops.
+ *
+ * Waits go through {@link Scheduler.runHost} so they settle on hostWaiters even
+ * when a script context is active (script waiters freeze while paused / not running).
+ * Work is tick-gated and single-flight with Supervisor.
  */
 class RandomEventGuardianImpl {
     private enabled = false;
@@ -20,8 +25,13 @@ class RandomEventGuardianImpl {
             return;
         }
         this.enabled = true;
+        // Frames settle Execution waits; ticks catch events even if the tab is
+        // background-throttled and frames are sparse (packets still arrive).
         BotHost.addFrameListener(() => {
-            void this.onFrame();
+            void this.kick();
+        });
+        BotHost.addTickListener(() => {
+            void this.kick();
         });
     }
 
@@ -34,7 +44,7 @@ class RandomEventGuardianImpl {
         console.log(`[rs2b0t] ${msg}`);
     }
 
-    private async onFrame(): Promise<void> {
+    private async kick(): Promise<void> {
         if (this.inFlight || RandomEvents.handling) {
             return;
         }
@@ -52,7 +62,8 @@ class RandomEventGuardianImpl {
         this.lastKickTick = tick;
         this.inFlight = true;
         try {
-            await RandomEvents.handle(msg => this.log(msg));
+            // Host scope: never park guardian delays on a (possibly paused) script queue.
+            await Scheduler.runHost(() => RandomEvents.handle(msg => this.log(msg)));
         } catch (err) {
             console.error('[rs2b0t] RandomEventGuardian error', err);
         } finally {

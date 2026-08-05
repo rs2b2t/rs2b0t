@@ -16,21 +16,44 @@ class SchedulerImpl {
     private lastPumpAt = 0;
 
     /**
-     * Waiters from {@link Execution} when no script is active (RandomEventGuardian,
-     * panel helpers). Settled every frame regardless of ScriptRunner state.
+     * Waiters from {@link Execution} when no script is active, or when
+     * {@link runHost} is nested (RandomEventGuardian). Settled every frame
+     * regardless of ScriptRunner state — including paused scripts.
      */
     private hostWaiters: Waiter[] = [];
+
+    /**
+     * Nesting depth for host-scoped Execution. When > 0, every enqueue lands on
+     * {@link hostWaiters} even if a script is active (paused, mid-loop, etc.).
+     */
+    private hostScopeDepth = 0;
 
     constructor() {
         BotHost.addFrameListener(() => this.pump());
     }
 
+    /**
+     * Run `fn` with Execution waits forced onto hostWaiters.
+     * Used by RandomEventGuardian so always-on event solving is not bound to
+     * the script waiter queue (which is frozen while paused / not running).
+     */
+    async runHost<T>(fn: () => Promise<T>): Promise<T> {
+        this.hostScopeDepth++;
+        try {
+            return await fn();
+        } finally {
+            this.hostScopeDepth--;
+        }
+    }
+
     enqueue(spec: WaiterSpec): Promise<boolean> {
-        const ctx = this.active;
-        if (!ctx) {
-            // Always-on systems (random-event guardian) may wait with no script.
+        // Host scope wins even with an active script (guardian mid-handle while
+        // a bot is paused or mid long walk).
+        if (this.hostScopeDepth > 0 || !this.active) {
             return this.enqueueHost(spec);
         }
+
+        const ctx = this.active;
         if (ctx.aborted) {
             return Promise.reject(new ScriptAborted());
         }
