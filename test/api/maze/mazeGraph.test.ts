@@ -107,11 +107,13 @@ describe('solveRoute (synthetic 1-D corridor)', () => {
 describe('solveRoute on real map', () => {
     const g = buildMaze(parseJm2Locs(readFileSync(MAP, 'utf8')));
     const routes = MAZE_SPAWNS.map(s => solveRoute(g, s));
-    test('every spawn yields a non-empty route ending adjacent to the shrine', () => {
+    /** West chamber door into the 3×3 shrine — south of SW is walled. */
+    const CHAMBER_DOOR = { x: 2910, z: 4576 };
+    test('every spawn yields a non-empty route ending at the chamber door', () => {
         for (const r of routes) {
             expect(r.length).toBeGreaterThan(0);
             const last = r[r.length - 1];
-            expect(Math.abs(last.x - MAZE_SHRINE.x) + Math.abs(last.z - MAZE_SHRINE.z)).toBeLessThanOrEqual(4);
+            expect(last).toEqual(CHAMBER_DOOR);
         }
     });
     test('all four routes share a common tail (convergence onto the final path)', () => {
@@ -121,5 +123,11 @@ describe('solveRoute on real map', () => {
         };
         const tails = new Set(routes.map(tailKey));
         expect(tails.size).toBe(1);
+    });
+    test('does not treat walled south-of-SW as a finish (regression)', () => {
+        // Old goal Math.abs(dx)+Math.abs(dz)===1 accepted (2911,4574) through a wall.
+        for (const r of routes) {
+            expect(r.some(d => d.x === 2911 && d.z === 4574)).toBe(false);
+        }
     });
 });

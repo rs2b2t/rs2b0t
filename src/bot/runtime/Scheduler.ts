@@ -15,6 +15,12 @@ class SchedulerImpl {
 
     private lastPumpAt = 0;
 
+    /**
+     * Waiters from {@link Execution} when no script is active (RandomEventGuardian,
+     * panel helpers). Settled every frame regardless of ScriptRunner state.
+     */
+    private hostWaiters: Waiter[] = [];
+
     constructor() {
         BotHost.addFrameListener(() => this.pump());
     }
@@ -22,7 +28,8 @@ class SchedulerImpl {
     enqueue(spec: WaiterSpec): Promise<boolean> {
         const ctx = this.active;
         if (!ctx) {
-            return Promise.reject(new Error('Execution.* called with no script running'));
+            // Always-on systems (random-event guardian) may wait with no script.
+            return this.enqueueHost(spec);
         }
         if (ctx.aborted) {
             return Promise.reject(new ScriptAborted());
@@ -34,10 +41,31 @@ class SchedulerImpl {
         });
     }
 
+    private enqueueHost(spec: WaiterSpec): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            this.hostWaiters.push({ ...spec, resolve, reject });
+        });
+    }
+
     private pump(): void {
         const now = performance.now();
         const gap = this.lastPumpAt > 0 ? now - this.lastPumpAt : 0;
         this.lastPumpAt = now;
+        const tick = BotHost.tickCount;
+
+        // Host-level waits (no script) — always pump so guardian/maze can sleep.
+        if (this.hostWaiters.length > 0) {
+            if (gap > FRAME_GAP_MS) {
+                this.shiftWaiters(this.hostWaiters, gap - NOMINAL_FRAME_MS);
+            }
+            const stillHost: Waiter[] = [];
+            for (const waiter of this.hostWaiters) {
+                if (!this.trySettle(waiter, now, tick, null)) {
+                    stillHost.push(waiter);
+                }
+            }
+            this.hostWaiters = stillHost;
+        }
 
         const ctx = this.active;
         if (!ctx || ctx.state !== 'running') {
@@ -46,22 +74,17 @@ class SchedulerImpl {
 
         if (gap > FRAME_GAP_MS) {
             const shift = gap - NOMINAL_FRAME_MS;
-            for (const waiter of ctx.waiters) {
-                if (waiter.kind === 'time') {
-                    waiter.dueAt += shift;
-                } else if (waiter.kind === 'cond' && waiter.timeoutAt !== null) {
-                    waiter.timeoutAt += shift;
-                }
-            }
+            this.shiftWaiters(ctx.waiters, shift);
             ctx.nextLoopAt += shift;
             ctx.progress();
             this.gapShifts++;
-            ctx.addLog('warn', `frame gap of ${(gap / 1000).toFixed(1)}s (throttled tab or system sleep) — shifted timers to compensate`);
+            ctx.addLog(
+                'warn',
+                `frame gap of ${(gap / 1000).toFixed(1)}s (throttled tab or system sleep) — shifted timers to compensate`
+            );
         }
 
-        const tick = BotHost.tickCount;
         const still: Waiter[] = [];
-
         for (const waiter of ctx.waiters) {
             const settled = this.trySettle(waiter, now, tick, ctx);
             if (!settled) {
@@ -79,16 +102,38 @@ class SchedulerImpl {
             this.launchLoop(ctx);
         }
 
-        if (ctx.loopInFlight && ctx.waiters.length === 0 && now - ctx.lastProgressAt > WATCHDOG_MS && !ctx.watchdogWarned) {
+        if (
+            ctx.loopInFlight &&
+            ctx.waiters.length === 0 &&
+            now - ctx.lastProgressAt > WATCHDOG_MS &&
+            !ctx.watchdogWarned
+        ) {
             ctx.watchdogWarned = true;
-            ctx.addLog('warn', `watchdog: loop() has made no scheduler progress for ${Math.round((now - ctx.lastProgressAt) / 1000)}s — sync-stuck or awaiting a non-Execution promise`);
+            ctx.addLog(
+                'warn',
+                `watchdog: loop() has made no scheduler progress for ${Math.round((now - ctx.lastProgressAt) / 1000)}s — sync-stuck or awaiting a non-Execution promise`
+            );
         }
     }
 
-    private trySettle(waiter: Waiter, now: number, tick: number, ctx: ScriptContext): boolean {
+    private shiftWaiters(waiters: Waiter[], shift: number): void {
+        for (const waiter of waiters) {
+            if (waiter.kind === 'time') {
+                waiter.dueAt += shift;
+            } else if (waiter.kind === 'cond' && waiter.timeoutAt !== null) {
+                waiter.timeoutAt += shift;
+            }
+        }
+    }
+
+    private trySettle(waiter: Waiter, now: number, tick: number, ctx: ScriptContext | null): boolean {
+        const progress = (): void => {
+            ctx?.progress();
+        };
+
         if (waiter.kind === 'time') {
             if (now >= waiter.dueAt) {
-                ctx.progress();
+                progress();
                 waiter.resolve(true);
                 return true;
             }
@@ -97,7 +142,7 @@ class SchedulerImpl {
 
         if (waiter.kind === 'tick') {
             if (tick >= waiter.dueTick) {
-                ctx.progress();
+                progress();
                 waiter.resolve(true);
                 return true;
             }
@@ -106,18 +151,18 @@ class SchedulerImpl {
 
         try {
             if (waiter.cond()) {
-                ctx.progress();
+                progress();
                 waiter.resolve(true);
                 return true;
             }
         } catch (err) {
-            ctx.progress();
+            progress();
             waiter.reject(err instanceof Error ? err : new Error(String(err)));
             return true;
         }
 
         if (waiter.timeoutAt !== null && now >= waiter.timeoutAt) {
-            ctx.progress();
+            progress();
             waiter.resolve(false);
             return true;
         }

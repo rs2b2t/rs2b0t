@@ -16,6 +16,7 @@ import { ScriptRegistry } from './runtime/ScriptRegistry.js';
 import { ScriptRunner } from './runtime/ScriptRunner.js';
 import { SettingsStore } from './runtime/Settings.js';
 import { StallGuard } from './runtime/StallGuard.js';
+import { RandomEventGuardian } from './runtime/RandomEventGuardian.js';
 import BotPanel from './ui/BotPanel.js';
 import Overlay from './ui/Overlay.js';
 import { installPaintInput } from './ui/PaintInput.js';
@@ -63,6 +64,11 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     StallGuard.enable();
 
     WelcomeDismisser.enable();
+
+    // Always solve randoms when the scene is live — not only while a script loops.
+    if (params.get('randomevents') !== '0') {
+        RandomEventGuardian.enable();
+    }
 
     if (params.get('run') !== '0') {
         RunManager.enable();

@@ -1,5 +1,6 @@
 import { reader, type WorldTile } from '../adapter/ClientAdapter.js';
 import type { AbstractBot } from '../api/Bot.js';
+import { Execution } from '../api/Execution.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { Traversal } from '../api/Traversal.js';
 import { bus } from '../events/EventBus.js';
@@ -39,10 +40,13 @@ class SupervisorImpl {
     }
 
     intercept(ctx: ScriptContext, bot: AbstractBot): SupervisorIteration | null {
+        // RandomEventGuardian runs the solver whenever sceneState===2 (script or not).
+        // While an event is active or being handled, yield the script loop so bots
+        // do not walk/bank through it; do not double-enter handle() (single-flight).
         const event = RandomEvents.detect();
-        if (event) {
-            const label = `${event.kind}: ${event.name}`;
-            if (ctx.activeEvent === null) {
+        if (event || RandomEvents.handling) {
+            const label = event ? `${event.kind}: ${event.name}` : (ctx.activeEvent ?? 'random event');
+            if (ctx.activeEvent === null && event) {
                 ctx.addLog('warn', `⚡ random event: ${event.name} — script paused`);
             }
             ctx.activeEvent = label;
@@ -50,12 +54,22 @@ class SupervisorImpl {
                 label,
                 run: async () => {
                     try {
-                        await RandomEvents.handle(msg => ctx.addLog('info', msg));
+                        if (!RandomEvents.handling) {
+                            await RandomEvents.handle(msg => ctx.addLog('info', msg));
+                        }
+                        // Wait out guardian/handle so we do not resume mid-evade.
+                        await Execution.delayUntil(
+                            () => !RandomEvents.handling && RandomEvents.detect() === null,
+                            180_000
+                        );
                     } catch (err) {
                         if (err instanceof ScriptAborted) {
                             throw err;
                         }
-                        ctx.addLog('error', `event handler (${label}) threw: ${err instanceof Error ? err.message : String(err)} — ignoring; attempt/cooldown backstop applies`);
+                        ctx.addLog(
+                            'error',
+                            `event handler (${label}) threw: ${err instanceof Error ? err.message : String(err)} — ignoring; attempt/cooldown backstop applies`
+                        );
                     }
                 }
             };

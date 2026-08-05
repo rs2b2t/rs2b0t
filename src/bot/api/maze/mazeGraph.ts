@@ -7,7 +7,16 @@ export interface MazeLoc {
 }
 
 export const MAZE_ORIGIN = { x: 45 * 64, z: 71 * 64 } as const; // (2880, 4544)
-export const MAZE_SHRINE = { x: 2911, z: 4575 } as const;       // local (31,31)
+/** SW origin of 3×3 Strange shrine (loc 3634 macro_maze_complete). */
+export const MAZE_SHRINE = { x: 2911, z: 4575 } as const; // local (31,31)
+/** Content pack: length=3 width=3 on macro_maze_complete. */
+export const MAZE_SHRINE_SIZE = 3 as const;
+/**
+ * West door into the shrine chamber (local 30,32). Routes must include this —
+ * the south face of the shrine SW is a solid wall, so manhattan-adjacent south
+ * is not operable.
+ */
+export const MAZE_SHRINE_DOOR = { x: 2910, z: 4576 } as const;
 export const MAZE_SPAWNS = [
     { x: 2891, z: 4597 }, // NW  local (11,53)
     { x: 2933, z: 4597 }, // NE  local (53,53)
@@ -105,6 +114,42 @@ export function doorPassable(door: DoorInfo, fromX: number, fromZ: number): bool
 
 const CARDINAL: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+/**
+ * True when (x,z) is outside the shrine footprint and shares an **open**
+ * (non-wall) edge with it — i.e. a tile from which OPLOC Touch can succeed.
+ *
+ * Shrine is 3×3 solid (content length/width=3). Goal must not be manhattan-1
+ * of the SW corner alone: south/west of SW are walls, so that wrongly ends the
+ * route one door short of the chamber.
+ */
+export function isShrineTouchStand(
+    g: MazeGraph,
+    x: number,
+    z: number,
+    shrine: { x: number; z: number } = MAZE_SHRINE,
+    size: number = MAZE_SHRINE_SIZE
+): boolean {
+    const x1 = shrine.x + size - 1;
+    const z1 = shrine.z + size - 1;
+    if (x >= shrine.x && x <= x1 && z >= shrine.z && z <= z1) {
+        return false;
+    }
+    for (const [dx, dz] of CARDINAL) {
+        const nx = x + dx;
+        const nz = z + dz;
+        if (nx < shrine.x || nx > x1 || nz < shrine.z || nz > z1) {
+            continue;
+        }
+        const ek = edgeKey(x, z, nx, nz);
+        if (g.wallEdge.has(ek)) {
+            continue;
+        }
+        // Door edge counts as passable once we open it on the route.
+        return true;
+    }
+    return false;
+}
+
 export function solveRoute(g: MazeGraph, spawn: { x: number; z: number }, shrine: { x: number; z: number } = MAZE_SHRINE): { x: number; z: number }[] {
     const finite = Number.isFinite(g.minx);
     const lo = {
@@ -119,11 +164,10 @@ export function solveRoute(g: MazeGraph, spawn: { x: number; z: number }, shrine
     const prev = new Map<string, { px: number; pz: number; door: DoorInfo | null } | null>();
     prev.set(key(spawn.x, spawn.z), null);
     const queue: { x: number; z: number }[] = [{ x: spawn.x, z: spawn.z }];
-    const adjacent = (x: number, z: number): boolean => Math.abs(x - shrine.x) + Math.abs(z - shrine.z) === 1;
 
     for (let head = 0; head < queue.length; head++) {
         const cur = queue[head];
-        if (adjacent(cur.x, cur.z)) {
+        if (isShrineTouchStand(g, cur.x, cur.z, shrine)) {
             const doors: { x: number; z: number }[] = [];
             let node = prev.get(key(cur.x, cur.z));
             let px = cur.x, pz = cur.z;
@@ -132,12 +176,35 @@ export function solveRoute(g: MazeGraph, spawn: { x: number; z: number }, shrine
                 px = node.px; pz = node.pz;
                 node = prev.get(key(px, pz)) ?? null;
             }
+            // Standing on the west door tile is a valid touch stand, but the door
+            // edge into the 3×3 is never *crossed* by BFS — still must Open it.
+            for (const [dx, dz] of CARDINAL) {
+                const nx = cur.x + dx;
+                const nz = cur.z + dz;
+                if (
+                    nx < shrine.x || nx >= shrine.x + MAZE_SHRINE_SIZE ||
+                    nz < shrine.z || nz >= shrine.z + MAZE_SHRINE_SIZE
+                ) {
+                    continue;
+                }
+                const edgeDoor = g.door.get(edgeKey(cur.x, cur.z, nx, nz));
+                if (edgeDoor && !doors.some(d => d.x === edgeDoor.tile.x && d.z === edgeDoor.tile.z)) {
+                    doors.push({ x: edgeDoor.tile.x, z: edgeDoor.tile.z });
+                }
+            }
             return doors;
         }
         for (const [dx, dz] of CARDINAL) {
             const nx = cur.x + dx;
             const nz = cur.z + dz;
             if (nx < lo.x || nx > hi.x || nz < lo.z || nz > hi.z) { continue; }
+            // Shrine footprint is solid — do not path through it.
+            if (
+                nx >= shrine.x && nx < shrine.x + MAZE_SHRINE_SIZE &&
+                nz >= shrine.z && nz < shrine.z + MAZE_SHRINE_SIZE
+            ) {
+                continue;
+            }
             const nk = key(nx, nz);
             if (prev.has(nk)) { continue; }
             const ek = edgeKey(cur.x, cur.z, nx, nz);

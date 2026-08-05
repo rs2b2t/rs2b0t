@@ -277,6 +277,10 @@ class RandomEventsImpl {
     }
 
     async handle(log: (msg: string) => void): Promise<boolean> {
+        // Single-flight: frame guardian + Supervisor must not nest.
+        if (this.handling) {
+            return false;
+        }
         this.handling = true;
         try {
             const event = this.detect();
