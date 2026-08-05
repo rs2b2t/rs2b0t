@@ -15,6 +15,9 @@ const SLASH_NAME_RE =
 /** Exact display name of content obj `knife` (not bronze_knife etc.). */
 export const WEB_SLASH_KNIFE_NAME = 'Knife';
 
+/** Content `bigweb_slashed` display name after a successful cut. */
+export const WEB_SLASHED_NAME = 'Slashed web';
+
 export function isSlashWeaponName(name: string | null | undefined): boolean {
     if (!name) {
         return false;

@@ -42,13 +42,17 @@ export function locPlacementKey(p: LocPlacement): string {
 
 /** Build a LocRef from a compiled transport hop. */
 export function locRefFromTransport(transport: TransportInfo, level = 0): LocRef {
+    // Slashable webs sit one tile apart (e.g. Yanille 2569/2570,3118) with the same
+    // locId. Slack 3 would match the neighbour and double-slash; exact placement only.
+    const webSlash =
+        /^slash$/i.test(transport.action ?? '') && /web/i.test(transport.locName ?? '');
     return {
         placement: { level, x: transport.locX, z: transport.locZ },
         locId: transport.locId,
         openLocId: transport.openLocId,
         name: transport.locName,
         action: transport.action,
-        slack: 3
+        slack: webSlash ? 0 : 3
     };
 }
 
@@ -140,6 +144,18 @@ export function probeLocRef(ref: LocRef, scene: readonly LocSceneSnap[]): LocRef
     });
     if (matching) {
         return { status: 'matching' };
+    }
+
+    // Slashable web already cut: content loc_change → bigweb_slashed ("Slashed web").
+    if (ref.action && /^slash$/i.test(ref.action) && ref.name && /web/i.test(ref.name)) {
+        const slashed = scene.some(
+            s =>
+                Math.max(Math.abs(s.x - ref.placement.x), Math.abs(s.z - ref.placement.z)) <= 1
+                && /slashed\s*web/i.test(s.name ?? '')
+        );
+        if (slashed) {
+            return { status: 'openLeaf' };
+        }
     }
 
     // Barrier already open: same name near placement with Close option.

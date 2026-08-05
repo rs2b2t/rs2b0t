@@ -23,7 +23,8 @@ import {
     isSlashWebTransport,
     WEB_SLASH_FAIL,
     WEB_SLASH_NO_BLADE,
-    WEB_SLASH_SUCCESS
+    WEB_SLASH_SUCCESS,
+    WEB_SLASHED_NAME
 } from '../slashTool.js';
 import { findTransportLoc } from './transportLoc.js';
 import { chatShowsQuestLock, dismissQuestLockDialogue } from './questLock.js';
@@ -32,8 +33,80 @@ const MULTI_DOOR_CROSS_MS = 36_000;
 const OPEN_WAIT_MS = 4000;
 /** Web cut_web is anim + random roll + mes; allow a few ticks per attempt. */
 const WEB_SLASH_CHAT_MS = 3500;
+/** After slash success / already-slashed: content p_delay + collision catch-up. */
+const WEB_PASSAGE_MS = 4000;
 const APPROACH_WALK_MS = 3000;
 const SCENE_STEP_MS = 8000;
+
+/** True when content has swapped this placement to bigweb_slashed (walkable). */
+function slashedWebAtPlacement(locX: number, locZ: number): boolean {
+    return (
+        Locs.query()
+            .name(WEB_SLASHED_NAME)
+            .where(loc => {
+                const t = loc.tile();
+                return Math.max(Math.abs(t.x - locX), Math.abs(t.z - locZ)) <= 1;
+            })
+            .nearest() !== null
+    );
+}
+
+/**
+ * Web is passable: slashed leaf visible, or no Slash-target and can step the edge.
+ * Prefer slashed-leaf — collision lags a tick after loc_change (blockwalk=no).
+ */
+function webPassageReady(
+    transport: TransportInfo,
+    approach: PathStepTile,
+    step: PathStepTile
+): boolean {
+    if (slashedWebAtPlacement(transport.locX, transport.locZ)) {
+        return true;
+    }
+    if (findTransportLoc(transport) !== null) {
+        return false;
+    }
+    return (
+        Reachability.canStep(approach, step)
+        || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })
+    );
+}
+
+/** Walk the planned web edge; wait briefly for server collision after slash. */
+async function walkThroughWeb(
+    approach: PathStepTile,
+    step: PathStepTile,
+    transport: TransportInfo,
+    log: (msg: string) => void,
+    why: string
+): Promise<boolean> {
+    log(`${transport.locName} at (${transport.locX},${transport.locZ}) ${why} — walking through`);
+    // Content: p_delay(1) then loc_change; collision may lag a tick after slashed leaf.
+    await Execution.delayUntil(
+        () =>
+            isOnFarSide(reader.worldTile(), approach, step)
+            || Reachability.canStep(approach, step)
+            || slashedWebAtPlacement(transport.locX, transport.locZ),
+        WEB_PASSAGE_MS
+    );
+    DirectNavigator.walk(step);
+    const ok = await Execution.delayUntil(
+        () => isOnFarSide(reader.worldTile(), approach, step),
+        4000
+    );
+    if (ok || isOnFarSide(reader.worldTile(), approach, step)) {
+        log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+        return true;
+    }
+    // Slashed / open but still not past — one more scene step.
+    DirectNavigator.walk(step);
+    await Execution.delayTicks(2);
+    if (isOnFarSide(reader.worldTile(), approach, step)) {
+        log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
+        return true;
+    }
+    return false;
+}
 
 type WebSlashAttempt = 'success' | 'fail' | 'no_blade' | 'cant_reach' | 'timeout';
 
@@ -343,6 +416,28 @@ export async function crossMultiTileDoor(
     const dir = { x: Math.sign(step.x - approach.x), z: Math.sign(step.z - approach.z) };
     const landing = { x: step.x + dir.x, z: step.z + dir.z, level: step.level };
 
+    // Web already slashed (multiloc / prior cut): walk through as soon as we see
+    // "Slashed web" or passage — do not wait on a long canStep-only poll, and do
+    // not try to Slash the neighbour (exact placement match only).
+    if (isSlashWebTransport(transport.locName, transport.action)) {
+        const here0 = reader.worldTile();
+        if (isOnFarSide(here0, approach, step)) {
+            log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ}) (already past)`);
+            return true;
+        }
+        if (webPassageReady(transport, approach, step)) {
+            return walkThroughWeb(
+                approach,
+                step,
+                transport,
+                log,
+                slashedWebAtPlacement(transport.locX, transport.locZ)
+                    ? 'already slashed'
+                    : 'already open'
+            );
+        }
+    }
+
     // Fast path: already open (or gone). Skip approach-Open-wait loops that feel
     // like a multi-second pause at every previously-opened door on the route.
     if (barrierLooksOpen(transport)) {
@@ -384,6 +479,21 @@ export async function crossMultiTileDoor(
             log(`crossed '${transport.locName}' at (${transport.locX},${transport.locZ})`);
             return true;
         }
+        // Mid-loop: web became slashed (us or someone else) → walk, do not re-Slash.
+        if (
+            isSlashWebTransport(transport.locName, transport.action)
+            && webPassageReady(transport, approach, step)
+        ) {
+            return walkThroughWeb(
+                approach,
+                step,
+                transport,
+                log,
+                slashedWebAtPlacement(transport.locX, transport.locZ)
+                    ? 'slashed'
+                    : 'passage open'
+            );
+        }
         const shut = findTransportLoc(transport);
         if (shouldApproachClosedBarrier(here, approach, shut !== null)) {
             DirectNavigator.walk(approach);
@@ -411,6 +521,8 @@ export async function crossMultiTileDoor(
             }
             // Slashable webs (content web.rs2): chat decides success/fail.
             // random(2) fail → "You fail to cut through it." — retry same web now.
+            // Success → wait for Slashed web / passage, walk through once, return
+            // (do not continue-loop onto the neighbour web).
             if (isSlashWebTransport(transport.locName, transport.action)) {
                 const outcome = await attemptSlashWeb(shut, transport, mark, log);
                 if (outcome === 'no_blade' || outcome === 'cant_reach') {
@@ -421,15 +533,9 @@ export async function crossMultiTileDoor(
                     continue;
                 }
                 if (outcome === 'success') {
-                    await Execution.delayTicks(1);
-                    DirectNavigator.walk(step);
-                    await Execution.delayUntil(
-                        () => isOnFarSide(reader.worldTile(), approach, step),
-                        4000
-                    );
-                    continue;
+                    return walkThroughWeb(approach, step, transport, log, 'just slashed');
                 }
-                // timeout / unknown — fall through to generic repath path via loop
+                // timeout / unknown — retry same placement
                 continue;
             }
 

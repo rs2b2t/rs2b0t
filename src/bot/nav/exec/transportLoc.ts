@@ -138,6 +138,20 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
             return null; // open — caller should walk through, not re-Open
         }
     }
+    // Web already slashed: content loc_change → bigweb_slashed ("Slashed web", no Slash).
+    // Exact placement only — dual webs share locId one tile apart.
+    if (/^slash$/i.test(transport.action) && /web/i.test(transport.locName)) {
+        const slashed = Locs.query()
+            .name('Slashed web')
+            .where(loc => {
+                const t = loc.tile();
+                return Math.max(Math.abs(t.x - transport.locX), Math.abs(t.z - transport.locZ)) <= 1;
+            })
+            .nearest();
+        if (slashed) {
+            return null; // open — walk through after server collision catch-up
+        }
+    }
     return null;
 }
 

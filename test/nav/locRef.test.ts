@@ -76,6 +76,39 @@ describe('LocRef placement identity', () => {
         expect(matchesLocRef(ref, loc(2492, 2933, 4854))).toBe(true);
         expect(matchesLocRef(ref, loc(2492, 2940, 4854))).toBe(false);
     });
+
+    test('slashable webs use exact placement (dual Yanille webs share locId)', () => {
+        const west: TransportInfo = {
+            locName: 'Web',
+            action: 'Slash',
+            locX: 2569,
+            locZ: 3118,
+            locId: 733
+        };
+        const ref = locRefFromTransport(west);
+        expect(ref.slack).toBe(0);
+        // Exact tile only — neighbour at 2570 must not match (was double-slash).
+        expect(matchesLocRef(ref, loc(733, 2569, 3118))).toBe(true);
+        expect(matchesLocRef(ref, loc(733, 2570, 3118))).toBe(false);
+    });
+
+    test('probeLocRef treats Slashed web as openLeaf for Slash hops', () => {
+        const web: TransportInfo = {
+            locName: 'Web',
+            action: 'Slash',
+            locX: 2570,
+            locZ: 3118,
+            locId: 733
+        };
+        const ref = locRefFromTransport(web);
+        // No slashable form — only slashed leaf at placement.
+        expect(
+            probeLocRef(ref, [snap(734, 2570, 3118, 'Slashed web', [])])
+        ).toEqual({ status: 'openLeaf' });
+        expect(
+            probeLocRef(ref, [snap(733, 2570, 3118, 'Web', ['Slash'])])
+        ).toEqual({ status: 'matching' });
+    });
 });
 
 describe('locRef valid / stale (scene probe)', () => {
