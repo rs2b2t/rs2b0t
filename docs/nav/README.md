@@ -1,8 +1,8 @@
 # Nav (world walker)
 
-There is **one** world walker. Historical dual-run “classic / v2” is gone; the
-former v2 features (tele inject, path-scoped bank, hop logs, travel catalog) are
-the default stack.
+There is **one** world walker. Historical dual-run “classic / v2” is gone.
+Travel catalog and skill/quest gates are always on the stack. **Nav teleports**
+(spell/jewellery inject) are **Global `navTeleports`, default off**.
 
 | | |
 |---|---|

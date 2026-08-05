@@ -664,10 +664,10 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    // Spell/jewellery tele edges in A* (default true). Set false for pure walk.
-    // Or spread Traversal.pureWalk / NAV_PURE_WALK on combat/escape scripts that stock laws.
+    // Spell/jewellery tele edges. Default follows Global `navTeleports` (off).
+    // Force on: true / NAV_WITH_TELES. Force off: false / NAV_PURE_WALK.
     useTeleportCatalog?: boolean;
-    // Tele policy. distanceBeforeTeleport defaults to 40 when unset (0 = any span).
+    // Tele policy. When teles on, distanceBeforeTeleport defaults to 40 (0 = any span).
     policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
     // Optional bank item counts for path-scoped bank planner.
     bankItemCounts?: Record<string, number>;
@@ -698,9 +698,9 @@ Traversal.remaining(): number  // path tiles left in the active walk
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
 There is **one** walker: live **WorldState** (skills, quests, inventory, members)
-gates skill doors, tolls, and quest transports; spell/jewellery tele inject and
-path-scoped bank for runes/tolls are on by default (opt out via
-`useTeleportCatalog: false`). See [World-walking](NAV.md) and
+gates skill doors, tolls, and quest transports. Spell/jewellery tele inject is
+**off by default** (Global `navTeleports`); enable in settings or per-walk via
+`useTeleportCatalog: true` / `NAV_WITH_TELES`. See [World-walking](NAV.md) and
 [`docs/nav/`](nav/TRANSPORTS-2004.md).
 
 **Essence mine (session multiloc):** multi-entry, **same-origin exit only**. Exit

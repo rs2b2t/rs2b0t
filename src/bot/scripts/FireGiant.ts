@@ -22,7 +22,7 @@ import { combatKeepNames } from '../api/combat/keepList.js';
 import { depositAllExcept, matchesCommonBankLoot } from '../api/Banking.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
-import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
+import { Traversal } from '../api/Traversal.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -488,7 +488,7 @@ async function castEscape(bot: FireGiant): Promise<boolean> {
 async function exitViaBarrel(bot: FireGiant): Promise<boolean> {
     if (inDungeon()) {
         bot.setStatus('walking to the dungeon door');
-        await Traversal.walkResilient(EXIT_DOOR, { ...NAV_PURE_WALK,  radius: 1, attempts: 5, timeoutMs: 180_000, log: m => bot.log(`  ${m}`) });
+        await Traversal.walkResilient(EXIT_DOOR, { radius: 1, attempts: 5, timeoutMs: 180_000, log: m => bot.log(`  ${m}`) });
         const door = Locs.query().name(EXIT_DOOR_LOC).where(l => l.tile().x === EXIT_DOOR.x && l.tile().z === EXIT_DOOR.z).first();
         if (door === null) {
             bot.log('the dungeon door is not in the scene yet — retrying');
@@ -551,7 +551,7 @@ async function bankRoutine(bot: FireGiant, withdrawFood: boolean): Promise<void>
     if (!(await leaveDungeon(bot))) {
         return;
     }
-    if (!(await Traversal.walkResilient(BANK_TILE, { ...NAV_PURE_WALK,  radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
+    if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
         return;
     }
@@ -806,7 +806,7 @@ class ReturnToSafespot implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('returning to the safespot');
-        await Traversal.walkResilient(activeSafespot(), { ...NAV_PURE_WALK,  radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(activeSafespot(), { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 
@@ -840,7 +840,7 @@ class EnterDungeon implements Task {
 
     private async walkToRaft(): Promise<void> {
         this.bot.setStatus('walking to the log raft');
-        await Traversal.walkResilient(RAFT_STAND, { ...NAV_PURE_WALK,  radius: 2, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(RAFT_STAND, { radius: 2, attempts: 6, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
 
     private async boardRaft(): Promise<void> {
@@ -863,7 +863,7 @@ class EnterDungeon implements Task {
         const here = Game.tile();
         if (here === null || here.x !== ROPE_THROW_STAND.x || here.z !== ROPE_THROW_STAND.z) {
             this.bot.setStatus('walking to the rope-throw stand');
-            await Traversal.walkResilient(ROPE_THROW_STAND, { ...NAV_PURE_WALK,  radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+            await Traversal.walkResilient(ROPE_THROW_STAND, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
             return;
         }
         this.bot.setStatus('roping across to the rock');
@@ -883,7 +883,7 @@ class EnterDungeon implements Task {
         const here = Game.tile();
         if (here === null || here.x !== TREE_STAND.x || here.z !== TREE_STAND.z) {
             this.bot.setStatus('walking to the dead tree');
-            await Traversal.walkResilient(TREE_STAND, { ...NAV_PURE_WALK,  radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
+            await Traversal.walkResilient(TREE_STAND, { radius: 0, attempts: 4, timeoutMs: 60_000, log: m => this.bot.log(`  ${m}`) });
             return;
         }
         this.bot.setStatus('roping down the dead tree');
@@ -934,7 +934,7 @@ class WalkToSpot implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus('walking to the fight spot');
-        await Traversal.walkResilient(anchor(), { ...NAV_PURE_WALK,  radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
+        await Traversal.walkResilient(anchor(), { radius: usesSafespot() ? 0 : 3, attempts: 6, timeoutMs: 180_000, log: m => this.bot.log(`  ${m}`) });
     }
 }
 

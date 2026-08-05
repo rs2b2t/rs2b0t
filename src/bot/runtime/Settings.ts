@@ -142,6 +142,16 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs/caskets (default)' },
     runAuto: { type: 'boolean', default: true, label: 'Auto re-enable run', help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)' },
     runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' },
+    navTeleports: {
+        type: 'boolean',
+        default: false,
+        label: 'Nav teleports',
+        help:
+            'When on, world walks may inject spell/jewellery teleport edges (runes or charged jewellery '
+            + 'in inventory; min span ~40 tiles). Off by default so combat/escape law kits are not '
+            + 'spent as routing hops. Per-walk override: walkTo({ useTeleportCatalog: true }) or '
+            + 'NAV_PURE_WALK to force off. URL: ?Global.navTeleports=true.'
+    },
     showNavPath: {
         type: 'boolean',
         default: false,

@@ -679,7 +679,8 @@ export interface WalkOptions {
     };
     /**
      * Include spell/jewellery tele edges in A*.
-     * Default true unless set false or `policy.useTeleports` is false.
+     * Default: Global `navTeleports` (off). Explicit true/false overrides;
+     * `policy.useTeleports: false` forces off.
      */
     useTeleportCatalog?: boolean;
     /**
@@ -733,15 +734,23 @@ export interface WalkResilientOptions {
  * @see docs/API.md#movement
  * @see docs/NAV.md
  */
-/** Disable nav tele inject — use when scripts stock laws for combat/escape/XP. */
+/** Force nav tele inject off for one walk (overrides Global navTeleports). */
 export const NAV_PURE_WALK: {
     useTeleportCatalog: false;
     policy: { useTeleports: false };
 };
 
+/** Force nav tele inject on for one walk (overrides Global navTeleports). */
+export const NAV_WITH_TELES: {
+    useTeleportCatalog: true;
+    policy: { useTeleports: true };
+};
+
 export const Traversal: {
-    /** Same as NAV_PURE_WALK — spread into walk opts for pure walking. */
+    /** Same as NAV_PURE_WALK. */
     pureWalk: typeof NAV_PURE_WALK;
+    /** Same as NAV_WITH_TELES. */
+    withTeles: typeof NAV_WITH_TELES;
     /**
      * Web-walk across the world (A* over the baked collision pack + door/
      * transport graph; opens doors, recovers from stuck). Resolves false on

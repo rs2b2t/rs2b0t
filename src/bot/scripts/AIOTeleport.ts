@@ -6,7 +6,7 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Equipment } from '../api/hud/Equipment.js';
 import { Skills } from '../api/hud/Skills.js';
-import { Traversal, NAV_PURE_WALK } from '../api/Traversal.js';
+import { Traversal } from '../api/Traversal.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 
 // ============================================
@@ -616,8 +616,7 @@ export default class AIOTeleport extends LoopingBot {
             
             if (this.currentBankPos) {
                 this.log(`Walking to nearest bank at ${this.currentBankPos.x},${this.currentBankPos.z}...`);
-                await Traversal.walkTo(new Tile(this.currentBankPos.x, this.currentBankPos.z, 0), { ...NAV_PURE_WALK, 
-                    radius: 3,
+                await Traversal.walkTo(new Tile(this.currentBankPos.x, this.currentBankPos.z, 0), { radius: 3,
                     timeoutMs: 60_000
                 });
             } else {
@@ -693,7 +692,7 @@ export default class AIOTeleport extends LoopingBot {
             // Walk to the bank tile to close the interface
             this.log('Walking to bank tile to close interface...');
             const bankTile = new Tile(this.currentBankPos.x, this.currentBankPos.z, 0);
-            await Traversal.walkTo(bankTile, { ...NAV_PURE_WALK,  radius: 0, timeoutMs: 15_000 });
+            await Traversal.walkTo(bankTile, { radius: 0, timeoutMs: 15_000 });
             
             this.needBanking = false;
             
@@ -835,8 +834,7 @@ export default class AIOTeleport extends LoopingBot {
         
         this.log('Walking to ' + dest.x + ',' + dest.z + '...');
         try {
-            await Traversal.walkResilient(dest, { ...NAV_PURE_WALK,  
-                radius, 
+            await Traversal.walkResilient(dest, { radius, 
                 attempts: 6, 
                 timeoutMs: 30000,
                 log: m => this.log('  ' + m) 
@@ -849,7 +847,7 @@ export default class AIOTeleport extends LoopingBot {
                 return;
             }
             this.log('Retrying walk...');
-            await Traversal.walkTo(dest, { ...NAV_PURE_WALK,  radius, timeoutMs: 15000 });
+            await Traversal.walkTo(dest, { radius, timeoutMs: 15000 });
         }
     }
 

@@ -95,7 +95,8 @@ export interface WalkOptions {
     policy?: PathPolicy;
     /**
      * Include spell/jewellery tele edges in A*.
-     * Default true unless set false or `policy.useTeleports` is false.
+     * Default: Global `navTeleports` (off). Explicit true/false overrides Global;
+     * `policy.useTeleports: false` always forces off.
      */
     useTeleportCatalog?: boolean;
     /**
@@ -137,6 +138,23 @@ function expandWaypoints(waypoints: Waypoint[]): PathStep[] {
     return expandWaypointsDense(waypoints as PathStep[], scene) as PathStep[];
 }
 
+/**
+ * Per-walk tele inject: explicit opts win; else Global `navTeleports` (default off).
+ */
+function resolveWalkUseTeleports(opts?: WalkOptions): boolean {
+    if (opts?.useTeleportCatalog === false || opts?.policy?.useTeleports === false) {
+        return false;
+    }
+    if (opts?.useTeleportCatalog === true || opts?.policy?.useTeleports === true) {
+        return true;
+    }
+    try {
+        return SettingsStore.globalBag().bool('navTeleports', false);
+    } catch {
+        return false;
+    }
+}
+
 class WalkExecutorImpl {
     remaining = 0;
 
@@ -157,7 +175,7 @@ class WalkExecutorImpl {
 
     private walkPolicy: PathPolicy | undefined;
 
-    private walkUseTeleports = true;
+    private walkUseTeleports = false;
 
     /** At most one bank-for-route leg per walkTo. */
     private bankLegDone = false;
@@ -172,8 +190,7 @@ class WalkExecutorImpl {
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
         const maxExpansions = opts?.maxExpansions;
-        this.walkUseTeleports =
-            opts?.useTeleportCatalog !== false && opts?.policy?.useTeleports !== false;
+        this.walkUseTeleports = resolveWalkUseTeleports(opts);
         // Defaults first; caller policy can set distanceBeforeTeleport: 0 to allow short teles.
         this.walkPolicy = {
             useTeleports: this.walkUseTeleports,
@@ -692,9 +709,9 @@ class WalkExecutorImpl {
         if (!me) {
             return { ok: false, terminal: null };
         }
-        this.walkUseTeleports = true;
+        this.walkUseTeleports = resolveWalkUseTeleports(undefined);
         this.walkPolicy = {
-            useTeleports: true,
+            useTeleports: this.walkUseTeleports,
             distanceBeforeTeleport: DEFAULT_DISTANCE_BEFORE_TELEPORT
         };
         this.resetAvoids();
