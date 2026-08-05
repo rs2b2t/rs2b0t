@@ -748,8 +748,6 @@ Tags: `smithing`, `smelting`, `banking`, `afk`
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `obstacle` | string | `"door, gate"` | Openable obstacles (contains) |
 | `leashRadius` | number (2–20) | `8` | Furnace search radius (tiles) |
-| `food` | string | `"Trout"` | Food (blank = none) — one of: Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
-| `eatAtHp` | number (1–99) | `50` | Eat below HP% |
 
 ### SmithingBot
 

@@ -52,22 +52,27 @@ const GEAR_LOSS_WINDOW_MS = 90_000;
  *  only when already adjacent — fishers were dying before distance<=1 fired. */
 const HOSTILE_ENGAGE_DISTANCE = 8;
 
-export function isHostileEventNpc(npc: {
-    id: number;
-    inCombat: boolean;
-    distance: number;
-    faceEntity: number;
-}, selfSlot: number, playerInCombat: boolean): boolean {
+export function isHostileEventNpc(
+    npc: {
+        id: number;
+        inCombat: boolean;
+        distance: number;
+        faceEntity: number;
+    },
+    _selfSlot: number,
+    _playerInCombat: boolean
+): boolean {
     if (!HOSTILE_EVENT_NPC_IDS.has(npc.id)) {
         return false;
     }
     if (npc.distance > HOSTILE_ENGAGE_DISTANCE) {
         return false;
     }
-    const targetsMe = selfSlot >= 0 && npc.faceEntity >= 32768 && npc.faceEntity - 32768 === selfSlot;
-    // Swarm may never flip our combat flag (0 damage); key on the NPC attacking,
-    // facing us, standing on us, or us already being in combat near one.
-    return npc.inCombat || targetsMe || npc.distance <= 1 || playerInCombat;
+    // These antimacro ids only exist as *your* random event — they are not world
+    // mobs you walk past. Soft flags (combatCycle / faceEntity) often lag or never
+    // set for 0-damage Swarm (#422), which left walks repathing until timeout while
+    // Supervisor never intercepted. Presence within engage range is enough.
+    return true;
 }
 
 export class GearLossTracker {

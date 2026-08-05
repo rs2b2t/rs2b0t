@@ -79,16 +79,14 @@ describe('isHostileEventNpc', () => {
         expect(isHostileEventNpc(riverTroll({ distance: 1 }), 3, false)).toBe(true);
     });
 
-    test('hostile facing the local player within engage range is an event', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: 32768 + 3 }), 3, false)).toBe(true);
+    test('hostile id within engage range is an event even with no combat/face flags (#422 Swarm)', () => {
+        // Soft flags lag for 0-damage Swarm; antimacro ids only exist for the victim.
+        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1, inCombat: false }), 3, false)).toBe(true);
+        expect(isHostileEventNpc(riverTroll({ id: 411, distance: 4, faceEntity: -1 }), 3, false)).toBe(true);
     });
 
     test('hostile already in combat within engage range is an event', () => {
         expect(isHostileEventNpc(riverTroll({ distance: 6, inCombat: true }), 3, false)).toBe(true);
-    });
-
-    test('player already in combat near a hostile is an event (swarm 0-dmg case)', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 3 }), 3, true)).toBe(true);
     });
 
     test('hostile far away is ignored until it closes', () => {
@@ -97,9 +95,5 @@ describe('isHostileEventNpc', () => {
 
     test('non-hostile id is never an event', () => {
         expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
-    });
-
-    test('hostile not facing us and not adjacent is ignored when we are calm', () => {
-        expect(isHostileEventNpc(riverTroll({ distance: 5, faceEntity: -1 }), 3, false)).toBe(false);
     });
 });
