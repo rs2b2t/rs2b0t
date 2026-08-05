@@ -258,6 +258,34 @@ HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ewreal elemental_work
   Lobster 'speed 300' '2725,3491'
 ```
 
+**Family Crest — stage-scoped harness**
+
+Family Crest is eleven server stages across four kingdoms, so it has its own
+harness rather than a `tools/aio-quest-test.ts` invocation:
+[`tools/family-crest-210-live.ts`](../tools/family-crest-210-live.ts). It seeds a
+fixed bank, jumps `%crestquest`, and passes when the journal reaches `--until`.
+
+```sh
+HEADED=1 bun tools/family-crest-210-live.ts --stage 7 --until 8 --minutes 28   # the gold mine
+HEADED=1 bun tools/family-crest-210-live.ts --stage 0 --minutes 120            # end to end
+```
+
+Two things that harness has to do and a plain `setvar` does not:
+
+- **Relog after the stage jump.** `update_questlist` recolours the journal entry
+  at login only, and every module reads the tab rather than the varp — so a
+  `setvar crestquest 7` without a relog leaves the quest reading *not started*.
+- **Clear `crest_spells_levers_gauntlets` too.** The lever bits and the
+  four-blasts-cast bits share that varp, so a stage jump that leaves it set
+  starts Chronozon already weakened and the fight proves nothing.
+
+It is **members-only** (`map_members`), so it needs the :8890 world, not :8888.
+
+Caleb's five cooked fish and the two rubies are bank seeds by design — no shop
+in the game stocks cooked bass or shrimp, and the Ardougne gem merchant restocks
+a single ruby every 60k ticks. Everything else (moulds, antipoison, blast runes,
+a pickaxe) is bought live.
+
 Next lower probe (update `EW_PROVEN_COMBAT_FLOOR` only if green):
 
 ```sh

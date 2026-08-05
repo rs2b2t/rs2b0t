@@ -467,6 +467,35 @@ Two habits about verification, both of which cost live runs here:
   A level-1 loc queried in the tick after a climb reads back empty, and blank is not
   absent — the wheel works.
 
+Family Crest added four more, and the first two generalise past this quest:
+
+- **A door whose lock is a lever is still a locked door.** The perfect-gold mine's four
+  doors each advertise `op1=Open` and answer "This door is locked" unless their own
+  combination of three levers is set — and the combination that opens one shuts another.
+  They belong in `SCRIPT_REFUSED` alongside Melzar's, with the module driving the chain.
+  BFS over the collision pack with `(tile, lever-bits)` as the node produced the exact
+  thirteen-leg route; a flood with the doors removed then named the four rooms they cut
+  the mine into, which is what makes the walk between legs a plain walk.
+- **A lever's model is not its state.** `loc_change(loc, 500)` reverts the lever to its
+  down model after five minutes and leaves the varp bit set, so a lever that *looks* down
+  may well be up. Reading the loc is reading a lie; the "The lever is now up." line is
+  emitted exactly when the bit changes. Set levers by pulling until the message confirms
+  the state you want, rather than reading and deciding.
+- **An unread bank is not an empty bank.** `snap.bankIds` is empty until something opens
+  a booth, so "is the pickaxe banked?" answers *no* on the first decide tick and the
+  fallback shop wins. The bot walked from Ardougne to Nurmof in the Dwarven Mine for a
+  pickaxe that was in the bank. Any bank-then-shop chain has to check `snap.bankKnown`
+  and scan first — `fromBank` does; a bare `banked(...) > 0` test does not.
+- **`Sustain` only runs where a step calls it.** The hook the host installs is pumped by
+  `Sustain.run()`, not by the tick loop, so a custom step that fights for two minutes —
+  the hellhounds by the gold rocks, or Chronozon — never eats unless it pumps the hook
+  itself. Every long loop in a `custom` step needs one.
+- **A stage past a hand-over is a claim the item exists; when it does not, look for the
+  re-issue path before writing a `wait`.** Holding one fragment at stage 10 and none of
+  the others parked forever on "waiting to combine". Both brothers have a "I have lost
+  the piece you gave me." branch that hands theirs over again — gated on *neither* the
+  pack nor the bank holding it, which is also why nothing in the module ever banks one.
+
 ## See also
 
 - [Manual index](README.md)

@@ -67,7 +67,13 @@ function main(): void {
             'dragon_slayer_magic_door',
             // Elvarg's lair, locked until the ship has sailed, and Crandor's secret
             // door, which only opens from the island side.
-            'elvarg_gate_right', 'elvarg_gate_left', 'dragonsecretdoor'
+            'elvarg_gate_right', 'elvarg_gate_left', 'dragonsecretdoor',
+            // Family Crest's perfect-gold mine. Each of the four answers "This door
+            // is locked" unless its own combination of the three levers is set, and
+            // the combination that opens one shuts another — the quest drives the
+            // chain itself (defs/familycrest/mine.ts).
+            'famcrest_doorh2', 'famcrest_doorh2i2', 'famcrest_doorg2h1',
+            'famcrest_doori2h1', 'famcrest_doorh2g1'
         ]);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
         if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || SCRIPT_REFUSED.has(type.debugname ?? '')) {

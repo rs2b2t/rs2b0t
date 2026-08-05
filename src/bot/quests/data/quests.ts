@@ -235,20 +235,34 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'crest', name: 'Family Crest', questPoints: 1,
+        // Journal gates. Magic 59 is Fire Blast, the last of the four spells
+        // Chronozon has to be hit with; crafting 40 is the perfect ruby necklace.
         requirements: { skills: [
             { skill: 'mining', level: 40 },
             { skill: 'crafting', level: 40 },
             { skill: 'smithing', level: 40 },
             { skill: 'magic', level: 59 }
         ] },
+        // The module owns its inventory and sources per leg, so this is the
+        // dashboard's view rather than an up-front loadout. No shop in the game
+        // sells cooked bass or shrimp, so Caleb's five come from the bank; the
+        // Ardougne gem merchant restocks one ruby every 60k ticks, so the second
+        // usually does too. The perfect jewellery is made during the quest.
+        //
+        // All `acquirable`: eligibility is evaluated before the bot has opened a
+        // bank, so its item snapshot is empty at that point and any `mustHave`
+        // would block the quest at startup rather than after a bank scan. The
+        // module parks with the exact shortfall instead.
         items: [
             { name: 'Tuna', qty: 1, kind: 'acquirable' },
             { name: 'Bass', qty: 1, kind: 'acquirable' },
             { name: 'Salmon', qty: 1, kind: 'acquirable' },
             { name: 'Shrimps', qty: 1, kind: 'acquirable' },
             { name: 'Swordfish', qty: 1, kind: 'acquirable' },
-            { name: "'perfect' ring", qty: 1, kind: 'acquirable' },
-            { name: "'perfect' necklace", qty: 1, kind: 'acquirable' }
+            { name: 'Ruby', qty: 2, kind: 'acquirable' },
+            { name: 'Ring mould', qty: 1, kind: 'acquirable' },
+            { name: 'Necklace mould', qty: 1, kind: 'acquirable' },
+            { name: 'Death rune', qty: 4, kind: 'acquirable' }
         ]
     },
     {
