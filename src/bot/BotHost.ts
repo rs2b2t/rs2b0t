@@ -2,7 +2,7 @@ import { ServerProt } from '#/io/ServerProt.js';
 
 import { attach as adapterAttach, reader, setPacketListener } from './adapter/ClientAdapter.js';
 import { GameMessages } from './events/gameMessages.js';
-import { pumpProducers } from './events/producers.js';
+import { noteProducerPacket, pumpProducers } from './events/producers.js';
 
 type FrameListener = () => void;
 
@@ -58,6 +58,10 @@ class BotHostImpl {
     }
 
     private handlePacket(ptype: number): void {
+        // Mark producer caches stale *after* the client has applied the packet
+        // (listener runs post-process). Frame pump rescans only dirty families.
+        noteProducerPacket(ptype);
+
         if (ptype === ServerProt.MESSAGE_GAME) {
             const line = reader.chat(1)[0];
             if (line && line.type === 0) {

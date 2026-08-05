@@ -1,53 +1,99 @@
 import { reader } from '../adapter/ClientAdapter.js';
+import { ServerProt } from '#/io/ServerProt.js';
 import { bus } from './EventBus.js';
-import { decideProducerPass, type ProducerCadenceState } from './producerCadence.js';
+import {
+    anyDirty,
+    applyDirty,
+    dirtyFamiliesForPacket,
+    emptyDirty,
+    type ProducerDirtyFlags
+} from './producerDirty.js';
 
+let lastTick = -1;
 let lastXp: number[] | null = null;
 let lastLevel: number[] | null = null;
 let lastInvIds: number[] | null = null;
 let lastInvCounts: number[] | null = null;
 let lastVarps: number[] | null = null;
 let lastChatSig: string | null = null;
+let wasIngame = false;
 
-let cadence: ProducerCadenceState = { lastTick: -1, lastMidAt: 0 };
+/** Families that need a rescan before the next bus emit. */
+let dirty: ProducerDirtyFlags = emptyDirty(true);
 
-/** Test hook — reset producer baselines between cases. */
+/** Test hook — reset caches + dirty state. */
 export function resetProducersForTests(): void {
+    lastTick = -1;
     lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
     lastChatSig = null;
-    cadence = { lastTick: -1, lastMidAt: 0 };
+    wasIngame = false;
+    dirty = emptyDirty(true);
 }
 
-export function pumpProducers(tickCount: number, now: number = performance.now()): void {
+/**
+ * Called from the packet path after the client has applied the opcode.
+ * Marks which cached tables are stale; {@link pumpProducers} does the rescan.
+ */
+export function noteProducerPacket(ptype: number): void {
+    const hit = dirtyFamiliesForPacket(ptype, ServerProt as unknown as Record<string, number>);
+    if (hit === null) {
+        return;
+    }
+    if (hit === 'reset') {
+        lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
+        lastChatSig = null;
+        wasIngame = false;
+        dirty = emptyDirty(true);
+        return;
+    }
+    dirty = applyDirty(dirty, hit);
+}
+
+/**
+ * Frame pump: emit tick on server-tick advance; rescan only dirty families.
+ * Steady-state frames with no packets that affect producers cost ~nothing.
+ */
+export function pumpProducers(tickCount: number): void {
     if (!reader.ingame()) {
         lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
         lastChatSig = null;
-        cadence = { lastTick: -1, lastMidAt: 0 };
+        lastTick = -1;
+        wasIngame = false;
+        dirty = emptyDirty(true);
         return;
     }
 
-    const decision = decideProducerPass(tickCount, now, cadence);
-    cadence = decision.state;
+    // First frame after login: seed caches so subsequent diffs have a baseline.
+    if (!wasIngame) {
+        wasIngame = true;
+        dirty = emptyDirty(true);
+    }
 
-    if (decision.tickAdvanced) {
+    if (tickCount !== lastTick) {
+        lastTick = tickCount;
         bus.emit('tick', { tick: tickCount });
     }
 
-    if (decision.pass === 'skip') {
+    if (!anyDirty(dirty)) {
         return;
     }
 
-    if (decision.pass === 'full') {
+    if (dirty.skills) {
         diffSkills();
-        diffInventory();
-        diffVarps();
-        diffChat();
-        return;
+        dirty.skills = false;
     }
-
-    // Mid-tick: skip the 300-varp + skill tables; keep inv/chat snappy.
-    diffInventory();
-    diffChat();
+    if (dirty.inventory) {
+        diffInventory();
+        dirty.inventory = false;
+    }
+    if (dirty.varps) {
+        diffVarps();
+        dirty.varps = false;
+    }
+    if (dirty.chat) {
+        diffChat();
+        dirty.chat = false;
+    }
 }
 
 function diffSkills(): void {
