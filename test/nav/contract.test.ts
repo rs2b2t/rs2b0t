@@ -282,7 +282,8 @@ describe('nav v2 v1 adapters', () => {
             locZ: 9850
         });
         expect(edge.kind).toBe('dungeon');
-        expect(edge.cost).toBe(10);
+        // edgeCosts: dungeon ≈ 4 ticks × 2 run-tiles/tick
+        expect(edge.cost).toBe(8);
         expect(edge.loc?.locId).toBe(1755);
         expect(edge.landing?.toTile).toEqual({ x: 3019, z: 3451, level: 0 });
         expect(ensureEdgeId(edge)).toBe(edge.id);

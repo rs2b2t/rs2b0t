@@ -372,16 +372,24 @@ Global default): on → explicit force-on (cost decides; no span floor); off →
 
 ### Costs (lowest wins)
 
-Path costs are **tile-equivalents of time** (`src/bot/nav/edgeCosts.ts`, idea **@lulwut**).
-Walk steps cost ~1; doors/stairs/ships/gliders/spirit trees/teles carry calibrated action
-costs (dialogue, cast anim, bank withdraw). A* picks the cheapest total. Prefer that over
-static gates.
+Path costs are **time in run-tile units** (`src/bot/nav/edgeCosts.ts`, idea **@lulwut**),
+aligned with server movement:
+
+| Mode | Server | Cost of one map step |
+|------|--------|----------------------|
+| Run | up to **2** steps/tick (`PathingEntity` + `MoveSpeed.RUN`) | **1** (default A*) |
+| Walk | **1** step/tick | **2** (half speed) |
+
+Run energy drain/recover uses the server agility/weight formulas (`Player.updateEnergy`).
+Action edges (doors, ships, gliders, teles, bank withdraw) are priced with
+`ticksToCost(ticks) = ticks × 2` so they share the same currency. A* picks the cheapest
+total. Prefer that over static span gates.
 
 ### Min span when teles are enabled
 
 When tele inject is active, `policy.distanceBeforeTeleport` defaults to **0** — A* cost
-decides whether a tele beats pure walk (short city hops stay walk because the tele edge
-is ~28 tile-equivalents). Pass a positive floor only if a caller wants a hard gate.
+decides (e.g. a ~5-tick spell tele costs **10** run-tiles; short hops stay walk). Pass a
+positive floor only if a caller wants a hard gate.
 
 ### Other gates (content / live state)
 
