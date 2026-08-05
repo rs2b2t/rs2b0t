@@ -10,6 +10,7 @@ test('resolveControl maps each SettingDef shape to a kind', () => {
     expect(resolveControl(def({ type: 'number', default: 5 }))).toBe('number');
     expect(resolveControl(def({ type: 'string', default: 'a', options: ['a', 'b'] }))).toBe('dropdown');
     expect(resolveControl(def({ type: 'string', default: 'a' }))).toBe('text');
+    expect(resolveControl(def({ type: 'string', default: '#0a3d7a', color: true }))).toBe('color');
     expect(resolveControl(def({ type: 'string[]', default: [], options: ['a', 'b'] }))).toBe('multiselect');
     expect(resolveControl(def({ type: 'string[]', default: [] }))).toBe('taglist');
     expect(resolveControl(def({ type: 'tile', default: null }))).toBe('tile');

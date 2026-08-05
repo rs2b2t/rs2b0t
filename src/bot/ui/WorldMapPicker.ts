@@ -446,27 +446,39 @@ export class WorldMapPicker {
                 position: 'fixed',
                 top: '0',
                 left: '0',
-                width: '100vw',
-                height: '100vh',
+                width: '100%',
+                height: '100%',
+                boxSizing: 'border-box',
+                padding: '8px 10px',
                 backgroundColor: 'rgba(0, 0, 0, 0.85)',
                 // Above .rs2b0t-modal-backdrop (1000); nothing else in bot UI is higher.
                 zIndex: '1100',
+                // Column that always fits the client (1100×620 in multibox). Fixed 540px
+                // canvas used to push toolbar/confirm off-screen and get clipped.
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'flex-start',
+                overflow: 'hidden',
+                gap: '6px'
             });
 
             const canvas = document.createElement('canvas');
-            canvas.width = 720;
-            canvas.height = 540;
+            // Logical size set by sizeCanvas() to remaining space under chrome.
+            canvas.width = 640;
+            canvas.height = 400;
             canvas.className = 'rs2b0t-walkmap-canvas';
             canvas.dataset.basemap = 'loading';
             Object.assign(canvas.style, {
                 backgroundColor: '#0a0e14',
                 border: '2px solid #555',
                 cursor: 'crosshair',
-                touchAction: 'none'
+                touchAction: 'none',
+                flex: '1 1 auto',
+                minHeight: '120px',
+                maxWidth: '100%',
+                width: 'auto',
+                height: 'auto'
             });
             const ctx = canvas.getContext('2d')!;
 
@@ -474,21 +486,26 @@ export class WorldMapPicker {
             instruction.className = 'rs2b0t-walkmap-hint';
             Object.assign(instruction.style, {
                 color: '#aaa',
-                margin: '8px 0 4px',
-                fontSize: '13px',
+                fontSize: '12px',
                 textAlign: 'center',
-                maxWidth: '720px'
+                maxWidth: '100%',
+                flex: '0 0 auto',
+                lineHeight: '1.3'
             });
             instruction.textContent =
-                'Scroll, drag, click to select (snaps to walkable). Open Settings for basemap and dots.';
+                'Scroll, drag, click (snaps to walkable). Level is collision plane — basemap art is surface only.';
 
             const status = document.createElement('div');
             status.className = 'rs2b0t-walkmap-status';
             Object.assign(status.style, {
                 color: '#8ab4f8',
-                fontSize: '12px',
-                marginBottom: '6px',
-                fontFamily: 'monospace'
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                flex: '0 0 auto',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
             });
             status.textContent = 'loading collision pack…';
             status.dataset.basemap = 'loading';
@@ -496,16 +513,26 @@ export class WorldMapPicker {
             const toolbar = document.createElement('div');
             Object.assign(toolbar.style, {
                 display: 'flex',
-                gap: '8px',
+                gap: '6px',
                 alignItems: 'center',
-                marginBottom: '8px',
                 flexWrap: 'wrap',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flex: '0 0 auto',
+                maxWidth: '100%'
             });
+
+            // .rs2b0t-button defaults to flex:1 (panel rows) — that shrinks toolbar
+            // chips and word-wraps "Rebuild map…". Keep them natural width, one line.
+            const toolbarBtnStyle = {
+                flex: '0 0 auto',
+                whiteSpace: 'nowrap',
+                padding: '4px 10px'
+            } as const;
 
             const levelLabel = document.createElement('label');
             levelLabel.style.color = '#ccc';
             levelLabel.style.fontSize = '13px';
+            levelLabel.style.whiteSpace = 'nowrap';
             levelLabel.textContent = 'Level ';
             const levelSelect = document.createElement('select');
             levelSelect.className = 'rs2b0t-walkmap-level';
@@ -526,11 +553,13 @@ export class WorldMapPicker {
             zoomOut.className = 'rs2b0t-button rs2b0t-walkmap-zoom-out';
             zoomOut.textContent = '−';
             zoomOut.title = 'Zoom out';
+            Object.assign(zoomOut.style, toolbarBtnStyle);
             const zoomIn = document.createElement('button');
             zoomIn.type = 'button';
             zoomIn.className = 'rs2b0t-button rs2b0t-walkmap-zoom-in';
             zoomIn.textContent = '+';
             zoomIn.title = 'Zoom in';
+            Object.assign(zoomIn.style, toolbarBtnStyle);
             toolbar.appendChild(zoomOut);
             toolbar.appendChild(zoomIn);
 
@@ -539,6 +568,7 @@ export class WorldMapPicker {
             settingsBtn.className = 'rs2b0t-button rs2b0t-walkmap-settings';
             settingsBtn.textContent = 'Settings';
             settingsBtn.title = 'Basemap, walkable dots, rebuild layers';
+            Object.assign(settingsBtn.style, toolbarBtnStyle);
             toolbar.appendChild(settingsBtn);
 
             const rebuildBtn = document.createElement('button');
@@ -547,6 +577,7 @@ export class WorldMapPicker {
             rebuildBtn.textContent = 'Rebuild map…';
             rebuildBtn.title =
                 'Rare: re-run MapView from worldmap.jag (tab freezes). Everyday Key/multi/free layers are pre-baked — use Settings, not Rebuild.';
+            Object.assign(rebuildBtn.style, toolbarBtnStyle);
             toolbar.appendChild(rebuildBtn);
 
             /** Reflect showBasemap on dataset without clobbering load state when toggled back on. */
@@ -560,26 +591,34 @@ export class WorldMapPicker {
             syncBasemapChrome();
 
             const btnRow = document.createElement('div');
-            Object.assign(btnRow.style, { display: 'flex', gap: '8px', marginTop: '10px' });
+            Object.assign(btnRow.style, {
+                display: 'flex',
+                gap: '8px',
+                flex: '0 0 auto',
+                justifyContent: 'center'
+            });
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
             cancelBtn.className = 'rs2b0t-button rs2b0t-walkmap-cancel';
             cancelBtn.textContent = 'Cancel';
+            Object.assign(cancelBtn.style, toolbarBtnStyle);
 
             const confirmBtn = document.createElement('button');
             confirmBtn.type = 'button';
             confirmBtn.className = 'rs2b0t-button rs2b0t-walkmap-confirm';
             confirmBtn.textContent = 'Confirm';
             confirmBtn.disabled = true;
+            Object.assign(confirmBtn.style, toolbarBtnStyle);
 
             btnRow.appendChild(cancelBtn);
             btnRow.appendChild(confirmBtn);
 
+            // Chrome first / last so controls stay on-screen; canvas takes the middle.
             overlay.appendChild(toolbar);
+            overlay.appendChild(status);
             overlay.appendChild(canvas);
             overlay.appendChild(instruction);
-            overlay.appendChild(status);
             overlay.appendChild(btnRow);
             document.body.appendChild(overlay);
 
@@ -619,7 +658,11 @@ export class WorldMapPicker {
                 let bm = 'basemap off';
                 if (getMapPickerShowBasemap()) {
                     if (basemapState === 'ready') {
-                        bm = `basemap ok ${basemap?.manifest.fingerprint.slice(0, 8) ?? ''}`;
+                        // worldmap.jag is surface art only — not L1–L3 floor plans
+                        bm =
+                            level === 0
+                                ? `surface basemap ${basemap?.manifest.fingerprint.slice(0, 8) ?? ''}`
+                                : `surface basemap (L${level} walkables)`;
                         if (basemap?.hint === 'stale-crc') {
                             bm += ' · outdated (Rebuild map…)';
                         } else if (basemap?.hint === 'prefs-mismatch') {
@@ -656,8 +699,9 @@ export class WorldMapPicker {
                 );
                 const theme = resolveMapPickerDotTheme();
                 ctx.save();
-                // Full opacity on L0; dim upper levels so it's obvious you're not on the surface.
-                ctx.globalAlpha = level === 0 ? 1 : 0.4;
+                // Surface map art only (worldmap.jag has no L1–L3 floor rasters).
+                // Dim when selecting upper levels so walkable dots for that plane read clearly.
+                ctx.globalAlpha = level === 0 ? 1 : 0.32;
                 try {
                     ctx.drawImage(image, src.sx, src.sy, src.sw, src.sh, 0, 0, w, h);
                     // Pre-baked overlays (free toggles — no MapView). Same source rect as terrain.
@@ -728,14 +772,19 @@ export class WorldMapPicker {
                 const minZ = Math.floor(centreZ - halfH) - step;
                 const maxZ = Math.ceil(centreZ + halfH) + step;
 
-                // Classic mode (basemap off): walkable collision dots + named destinations.
-                // Basemap mode: terrain + Key layers only — no old grid/pins over the map.
+                // Walkable dots:
+                // - basemap off → always (classic picker)
+                // - basemap on + L1–L3 → yes (surface basemap is L0 art only; dots prove level changed)
+                // - basemap on + L0 → no (clean map look)
                 syncBasemapChrome();
                 const theme = resolveMapPickerDotTheme();
-                if (theme.showWalkable) {
+                const showDots = theme.showWalkable || (theme.showBasemap && level !== 0);
+                const showDestPins = theme.showWalkable; // destinations stay classic-mode only
+                if (showDots) {
                     // fillRect is cheaper than arc for many samples
                     const size = Math.max(1, Math.min(4, ppt * 0.45));
                     const half = size / 2;
+                    // Always honour Walkable colour / opacity (including L1+ over basemap).
                     ctx.fillStyle = theme.fill;
                     for (let x = minX; x <= maxX; x += step) {
                         for (let z = minZ; z <= maxZ; z += step) {
@@ -749,7 +798,8 @@ export class WorldMapPicker {
                             ctx.fillRect(sx - half, sy - half, size, size);
                         }
                     }
-
+                }
+                if (showDestPins) {
                     ctx.font = '11px sans-serif';
                     for (const dest of WALK_DESTINATIONS) {
                         if (dest.tile.level !== level) {
@@ -822,6 +872,36 @@ export class WorldMapPicker {
                 });
             };
 
+            /**
+             * Fit canvas bitmap to leftover space under chrome.
+             * Multibox client is 1100×620 — a fixed 720×540 map used to push
+             * toolbar/confirm off-screen and get clipped.
+             */
+            const sizeCanvas = (): void => {
+                if (closed) {
+                    return;
+                }
+                const pad = 16;
+                const chrome =
+                    toolbar.offsetHeight +
+                    status.offsetHeight +
+                    instruction.offsetHeight +
+                    btnRow.offsetHeight +
+                    6 * 4 + // column gap
+                    pad;
+                const availW = Math.max(280, Math.floor(overlay.clientWidth - pad));
+                const availH = Math.max(140, Math.floor(overlay.clientHeight - chrome));
+                const w = Math.min(720, availW);
+                const h = Math.min(480, availH);
+                if (canvas.width !== w || canvas.height !== h) {
+                    canvas.width = w;
+                    canvas.height = h;
+                }
+                canvas.style.width = `${w}px`;
+                canvas.style.height = `${h}px`;
+                requestPaint();
+            };
+
             // In-picker Settings modal (not Global settings).
             const settingsModal = new ParamsModal(
                 () => false,
@@ -850,6 +930,9 @@ export class WorldMapPicker {
                 requestPaint();
             });
 
+            const onResize = (): void => sizeCanvas();
+            window.addEventListener('resize', onResize);
+
             const cleanup = (): void => {
                 closed = true;
                 if (paintRaf !== 0) {
@@ -858,6 +941,7 @@ export class WorldMapPicker {
                 }
                 unsubTick();
                 unsubSettings();
+                window.removeEventListener('resize', onResize);
                 settingsModal.close();
                 canvas.removeEventListener('wheel', onWheel);
                 canvas.removeEventListener('pointerdown', onPointerDown);
@@ -1147,7 +1231,8 @@ export class WorldMapPicker {
                     requestPaint();
                 });
 
-            requestPaint();
+            // After layout: size map to leftover space, then first paint.
+            sizeCanvas();
         });
     }
 }

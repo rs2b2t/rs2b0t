@@ -40,7 +40,7 @@ export function visibilityDeps(schema: SettingsSchema): Set<string> {
 }
 
 type ControlKind =
-    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'multiselect' | 'taglist' | 'tile';
+    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'color' | 'multiselect' | 'taglist' | 'tile';
 
 export function resolveControl(def: SettingDef): ControlKind {
     switch (def.type) {
@@ -51,10 +51,44 @@ export function resolveControl(def: SettingDef): ControlKind {
         case 'tile':
             return 'tile';
         case 'string':
+            if (def.color) {
+                return 'color';
+            }
             return def.options && def.options.length > 0 ? 'dropdown' : 'text';
         case 'string[]':
             return def.options && def.options.length > 0 ? 'multiselect' : 'taglist';
     }
+}
+
+function numberStep(def: SettingDef): string {
+    if (def.step !== undefined && Number.isFinite(def.step) && def.step > 0) {
+        return String(def.step);
+    }
+    // Fractional ranges need a fractional step; integers keep step=1.
+    if (
+        def.min !== undefined &&
+        def.max !== undefined &&
+        (def.min % 1 !== 0 || def.max % 1 !== 0 || (typeof def.default === 'number' && def.default % 1 !== 0))
+    ) {
+        return '0.01';
+    }
+    return '1';
+}
+
+/** Normalize #RGB / #RRGGBB for <input type="color"> (needs #rrggbb). */
+function toColorInputValue(raw: string, fallback = '#000000'): string {
+    const t = raw.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{6}$/.test(t)) {
+        return `#${t.toLowerCase()}`;
+    }
+    if (/^[0-9a-fA-F]{3}$/.test(t)) {
+        return `#${t[0]}${t[0]}${t[1]}${t[1]}${t[2]}${t[2]}`.toLowerCase();
+    }
+    const fb = fallback.replace(/^#/, '');
+    if (/^[0-9a-fA-F]{6}$/.test(fb)) {
+        return `#${fb.toLowerCase()}`;
+    }
+    return '#000000';
 }
 
 function listItems(value: string): string[] {
@@ -108,22 +142,35 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
     slider: {
         edit(def, current, onChange, { disabled }) {
             const wrap = el('div', 'rs2b0t-ctl-slider');
+            const step = numberStep(def);
             const range = el('input', 'rs2b0t-param-range');
             range.type = 'range';
             range.min = String(def.min ?? 0);
             range.max = String(def.max ?? 100);
+            range.step = step;
             range.value = current;
             range.disabled = disabled;
             const num = el('input', 'rs2b0t-param-num');
             num.type = 'number';
             num.min = range.min;
             num.max = range.max;
+            num.step = step;
             num.value = current;
             num.disabled = disabled;
             const rng = el('span', 'rs2b0t-param-rangelbl');
             rng.textContent = `${range.min}–${range.max}`;
-            range.addEventListener('input', () => { num.value = range.value; onChange(range.value); });
-            num.addEventListener('change', () => { range.value = num.value; onChange(num.value); });
+            range.addEventListener('input', () => {
+                num.value = range.value;
+                onChange(range.value);
+            });
+            num.addEventListener('input', () => {
+                range.value = num.value;
+                onChange(num.value);
+            });
+            num.addEventListener('change', () => {
+                range.value = num.value;
+                onChange(num.value);
+            });
             wrap.appendChild(range);
             wrap.appendChild(num);
             wrap.appendChild(rng);
@@ -136,11 +183,54 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
             num.type = 'number';
             if (def.min !== undefined) num.min = String(def.min);
             if (def.max !== undefined) num.max = String(def.max);
+            num.step = numberStep(def);
             num.value = current;
             num.disabled = disabled;
             num.addEventListener('change', () => onChange(num.value.trim()));
             const wrap = el('div', 'rs2b0t-ctl-number');
             wrap.appendChild(num);
+            return wrap;
+        }
+    },
+    color: {
+        edit(def, current, onChange, { disabled }) {
+            const wrap = el('div', 'rs2b0t-ctl-color');
+            Object.assign(wrap.style, { display: 'flex', alignItems: 'center', gap: '8px' });
+            const fallback = typeof def.default === 'string' ? def.default : '#000000';
+            const pick = document.createElement('input');
+            pick.type = 'color';
+            pick.className = 'rs2b0t-param-color';
+            pick.value = toColorInputValue(current, fallback);
+            pick.disabled = disabled;
+            pick.title = 'Pick colour';
+            Object.assign(pick.style, {
+                width: '36px',
+                height: '28px',
+                padding: '0',
+                border: '1px solid #333',
+                background: '#111',
+                cursor: disabled ? 'default' : 'pointer'
+            });
+            const hex = el('input', 'rs2b0t-param-text');
+            hex.type = 'text';
+            hex.value = current.startsWith('#') ? current : (current ? `#${current}` : fallback);
+            hex.disabled = disabled;
+            hex.placeholder = '#RRGGBB';
+            hex.spellcheck = false;
+            Object.assign(hex.style, { width: '7.5em', fontFamily: 'monospace' });
+            pick.addEventListener('input', () => {
+                hex.value = pick.value;
+                onChange(pick.value);
+            });
+            hex.addEventListener('change', () => {
+                const raw = hex.value.trim();
+                const normalized = toColorInputValue(raw, fallback);
+                pick.value = normalized;
+                // Persist what the user typed if it was already a valid hex; else normalized.
+                onChange(/^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(raw) ? (raw.startsWith('#') ? raw : `#${raw}`) : normalized);
+            });
+            wrap.appendChild(pick);
+            wrap.appendChild(hex);
             return wrap;
         }
     },

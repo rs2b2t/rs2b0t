@@ -215,7 +215,9 @@ class DomSlotHandle implements SlotHandle {
         const focused = this.mode === 'focused';
         this.el.classList.toggle('is-focused', focused);
         if (focused) {
-            // fill the main pane (viewport minus the rail), centered, whole client visible
+            // Fill the main pane (viewport minus the rail): contain-fit so the whole
+            // 1100×620 client stays visible (letterbox is empty space, not clipped UI).
+            // Map-picker chrome must fit *inside* the 620px client — see WorldMapPicker.
             const mainW = window.innerWidth - railWidth();
             const mainH = window.innerHeight;
             const k = Math.min(mainW / LOGICAL_W, mainH / LOGICAL_H);

@@ -7,8 +7,8 @@ two display modes:
 
 | **Show basemap** | What you see |
 |---|---|
-| **On** (default) | Classic [2004scape worldmap](https://2004.lostcity.rs/worldmap) terrain + optional Key / multi / free layers |
-| **Off** | Original collision-dot grid + named destination markers |
+| **On** (default) | Classic [2004scape worldmap](https://2004.lostcity.rs/worldmap) **surface** terrain + optional Key / multi / free / labels. `worldmap.jag` has no L1–L3 floor rasters — upper **Level** still uses collision dots for that plane so the control is not a no-op. |
+| **Off** | Collision-dot grid + named destination markers |
 
 Clicks always **snap to the nearest walkable tile**. The basemap is never used for pathing.
 

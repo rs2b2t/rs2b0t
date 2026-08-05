@@ -10,12 +10,16 @@ export interface SettingDef {
     label?: string;
     min?: number;
     max?: number;
+    /** Step for number / range controls (e.g. 0.05 for opacity). Default 1 for integers. */
+    step?: number;
     help?: string;
     options?: string[];
     /** Optional display labels keyed by the persisted option value. */
     optionLabels?: Record<string, string>;
     group?: string;
     showIf?: { key: string; anyOf: string[] };
+    /** Render a freeform string as an HTML colour picker + hex field. */
+    color?: boolean;
 }
 
 /** Return an option's display label without changing its persisted value. */
@@ -290,33 +294,35 @@ export const MAP_PICKER_SETTINGS: SettingsSchema = {
         default: '#0a3d7a',
         label: 'Walkable colour',
         group: 'Display',
+        color: true,
         showIf: { key: 'showBasemap', anyOf: ['false'] },
-        help: 'HTML #RGB / #RRGGBB for walkable dots when basemap is off (default #0a3d7a).'
+        help: 'Walkable-dot colour when basemap is off (default #0a3d7a).'
     },
     dotAlpha: {
         type: 'number',
         default: 0.85,
-        min: 0.15,
+        min: 0.05,
         max: 1,
+        step: 0.05,
         label: 'Walkable opacity',
         group: 'Display',
         showIf: { key: 'showBasemap', anyOf: ['false'] },
-        help: '0.15–1 (default 0.85). Only used when basemap is off.'
+        help: '0.05–1 in steps of 0.05 (default 0.85). Only when basemap is off.'
     },
     // Pre-baked per-type Key overlays (deploy gen:basemap) — free toggles, no MapView.
     keyIconTypes: {
         type: 'string[]',
         default: [],
         options: [...WORLDMAP_KEY_NAMES],
-        // Worldmap Key panel has a literal "???" entry (mapfunction type 38, ~7 sites).
-        optionLabels: { '???': 'Unknown (Key ???)' },
+        // Worldmap Key panel labels type 38 as "???"; visually these are minigame sites.
+        optionLabels: { '???': 'Minigames' },
         label: 'Key icons',
         group: 'Worldmap layers',
         showIf: { key: 'showBasemap', anyOf: ['true'] },
         help:
             'Which Key legend types to draw (Bank, Altar, Fishing Spot, …). '
             + 'Each type is a pre-baked transparent overlay — toggle free, no rebuild. '
-            + '“Unknown (Key ???)” is Jagex’s unnamed Key row (type 38). '
+            + 'Minigames is Jagex’s “???” Key row (mapfunction type 38). '
             + 'Default none = terrain only.'
     },
     showPlaceLabels: {

@@ -56,7 +56,15 @@ describe('resolveMapPickerDotTheme', () => {
         const t = resolveMapPickerDotTheme();
         expect(t.colorRaw).toBe('#ff0000');
         expect(t.alpha).toBeCloseTo(0.5, 5);
-        expect(t.fill).toMatch(/^rgba\(255, 0, 0,/);
+        expect(t.fill).toBe('rgba(255, 0, 0, 0.5)');
+    });
+
+    test('fractional opacity is not rounded to an integer', () => {
+        setMapPickerShowBasemap(false);
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'dotAlpha', '0.35');
+        const t = resolveMapPickerDotTheme();
+        expect(t.alpha).toBeCloseTo(0.35, 5);
+        expect(t.fill).toContain('0.35');
     });
 });
 
