@@ -608,12 +608,12 @@ class WalkExecutorImpl {
         const avoid = stateOverride
             ? this.avoidListForState(stateOverride)
             : [
-                  ...this.avoidDoors,
-                  ...[...this.sessionBlacklistDoors].map(k => {
-                      const [x, z] = k.split('|').map(Number);
-                      return { x: x!, z: z! };
-                  })
-              ];
+                ...this.avoidDoors,
+                ...[...this.sessionBlacklistDoors].map(k => {
+                    const [x, z] = k.split('|').map(Number);
+                    return { x: x!, z: z! };
+                })
+            ];
 
         // Snapshot WorldState so requirements-gated transports
         // (agility shortcuts, quest doors, tolls) are evaluated for the live player.
@@ -865,7 +865,6 @@ class WalkExecutorImpl {
             lastTile = me;
 
             const idleTicks = BotHost.tickCount - lastMoveTick;
-            const shortOfTarget = clickIdx === -1 || chebyshev(me, tiles[clickIdx]!) > ARRIVE_RADIUS;
             const hardStuck =
                 !moved
                 && (stillIters >= STUCK_ITERS
@@ -937,7 +936,7 @@ class WalkExecutorImpl {
                                 await Execution.delayTicks(2);
                                 continue;
                             }
-                            log(`stall recovery walk rejected by client — repathing`);
+                            log('stall recovery walk rejected by client — repathing');
                             return 'repath';
                         }
                     }
@@ -1102,6 +1101,115 @@ class WalkExecutorImpl {
 
         log('walk timed out');
         return 'failed';
+    }
+
+    private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
+        const transport = step.transport!;
+
+        if (transport.teleportId || transport.kind === 'teleport') {
+            const ok = await executeTeleportHop(transport, log);
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+            } else if (transport.teleportId) {
+                // Do not re-pick the same rejected tele on repath (#339).
+                this.sessionSuppressedTeleports.add(transport.teleportId);
+                log(`suppress teleport ${transport.teleportId} for this walk`);
+            }
+            return ok;
+        }
+
+        const special = specialCrossingForTransport(transport, approach, step);
+        if (special) {
+            const ok = await handleSpecialCrossing(approach, step, special, log, (d, o) => this.walkTo(d, o));
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+                // Server does not transmit exit_essence_mine_coord — remember return for plan filters.
+                const ess = EssenceSession.noteEntryFromCrossingLabel(special.label)
+                    ?? EssenceSession.noteEntryFromNpc(special.npc ?? special.locName);
+                if (ess) {
+                    log(`essence session return → ${ess} (entry via ${special.label ?? special.locName})`);
+                }
+            }
+            return ok;
+        }
+
+        if (transport.toLevel === undefined && transport.toTile === undefined && chebyshev(approach, step) >= 1) {
+            const ok = await crossMultiTileDoor(approach, step, transport, log, (x, z) => this.blacklistDoor(x, z));
+            if (ok) {
+                RouteState.noteTransport(approach, step);
+            }
+            return ok;
+        }
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const loc = findTransportLoc(transport);
+            if (!loc) {
+                if (transport.toLevel === undefined && transport.toTile === undefined) {
+                    // Already open / no shut Open-target: do not burn TRANSPORT_WAIT.
+                    if (Reachability.canStep(approach, step) || Reachability.canReach(step, { maxSteps: 64, adjacentOk: true })) {
+                        log(`${transport.locName} at (${transport.locX},${transport.locZ}) already open`);
+                        RouteState.noteTransport(approach, step);
+                        return true;
+                    }
+                    log(`transport loc '${transport.locName}' not found but the way is blocked`);
+                    return false;
+                }
+                if (transport.toTile !== undefined && (await openShutTrapdoor(transport, log, Execution.delayUntil.bind(Execution)))) {
+                    continue;
+                }
+                log(`transport loc '${transport.locName}' not found near (${transport.locX},${transport.locZ})`);
+                return false;
+            }
+
+            const before = reader.worldTile();
+            const mark = GameMessages.mark();
+            if (!loc.interact(transport.action)) {
+                log(`'${transport.action}' not offered by ${transport.locName} (ops: ${loc.actions().join(', ')})`);
+                return false;
+            }
+
+            const cantReach = (): boolean => GameMessages.sawSince(mark, CANT_REACH);
+            let crossed: boolean;
+            if (transport.toLevel !== undefined) {
+                const toLevel = transport.toLevel;
+                const climbed = (): boolean => reader.worldTile()?.level === toLevel;
+                crossed = (await Execution.delayUntil(() => climbed() || cantReach(), TRANSPORT_WAIT_MS)) && climbed();
+            } else if (transport.toTile !== undefined) {
+                const landed = (): boolean => matchesTransportLanding(transport, step.level, before, reader.worldTile());
+                crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
+            } else {
+                const open = (): boolean => findTransportLoc(transport) === null || Reachability.canStep(approach, step);
+                crossed = (await Execution.delayUntil(() => open() || cantReach() || chatShowsQuestLock(), TRANSPORT_WAIT_MS)) && open();
+            }
+            if (crossed) {
+                if (transport.toLevel !== undefined) {
+                    // docs/NAV.md#level-change-loc-lag
+                    await Execution.delayTicks(2);
+                }
+                log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
+                RouteState.noteTransport(approach, step);
+                // Catalog entry edges (Teleport wizard) when not routed through specialCrossing.
+                if (/^teleport$/i.test(transport.action ?? '')) {
+                    const ess = EssenceSession.noteEntryFromTransport(transport);
+                    if (ess) {
+                        log(`essence session return → ${ess} (entry transport ${transport.locName})`);
+                    }
+                }
+                return true;
+            }
+            if (chatShowsQuestLock()) {
+                log(`quest-locked '${transport.locName}' at (${transport.locX},${transport.locZ}) — blacklisting`);
+                this.blacklistDoor(transport.locX, transport.locZ);
+                await dismissQuestLockDialogue();
+                return false;
+            }
+            if (cantReach()) {
+                log(`server says can't reach ${transport.locName} at (${transport.locX},${transport.locZ}) — repathing`);
+                return false;
+            }
+            log(`${transport.action} ${transport.locName} did not resolve, retrying`);
+        }
+        return false;
     }
 
     /**

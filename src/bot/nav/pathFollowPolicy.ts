@@ -41,8 +41,8 @@ export function resolvePathFollowConfig(over?: PathFollowOverrides | null): Path
     let gDev = DEFAULT_PATH_DEVIATION_CHEBYSHEV;
     try {
         const bag = SettingsStore.globalBag();
-        gStall = bag.int('navPathStallTicks', DEFAULT_PATH_STALL_TICKS);
-        gDev = bag.int('navPathDeviation', DEFAULT_PATH_DEVIATION_CHEBYSHEV);
+        gStall = bag.num('navPathStallTicks', DEFAULT_PATH_STALL_TICKS);
+        gDev = bag.num('navPathDeviation', DEFAULT_PATH_DEVIATION_CHEBYSHEV);
     } catch {
         // Detached unit tests / pre-settings boot.
     }
