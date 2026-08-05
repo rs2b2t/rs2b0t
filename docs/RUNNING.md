@@ -122,8 +122,14 @@ it), and then:
 1. builds the stock client (`bun run build`) and the bot client (`bun run build:bot`);
 2. builds the baked navigation collision pack from **that engine's** map data on
    first run, if `out/collision.lcnav.gz` is absent — see [World-walking](NAV.md#the-collision-pack);
-3. copies the client bundles into `public/client/` and `public/bot/`;
-4. installs `public-bot/bot.html` as `public/bot.html` and `public-bot/multibox.html`
+3. builds the classic **worldmap basemap** on first run if
+   `out/worldmap-basemap.manifest.json` is absent (`bun run gen:basemap` /
+   [`tools/map/build-basemap.ts`](../tools/map/build-basemap.ts)) — see
+   [Map tile picker](MAP-PICKER.md);
+4. copies the client bundles into `public/client/` and `public/bot/` (including
+   collision pack, basemap PNG + manifest, and `worldmap.jag` when available for
+   optional in-picker basemap rebuild);
+5. installs `public-bot/bot.html` as `public/bot.html` and `public-bot/multibox.html`
    as `public/multibox.html`.
 
 Both output artifacts live in the repo's `out/` directory, which is shared across

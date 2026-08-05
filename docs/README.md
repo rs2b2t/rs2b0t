@@ -23,6 +23,7 @@ pure Lost City or 2004scape projects and is not maintained for those targets.
 | [Architecture](ARCHITECTURE.md) | the layers, the fences, the ABI boundary, how a call becomes a packet |
 | [Scripting API](API.md) | the complete `@rs2b0t/api` surface, with examples |
 | [World-walking](NAV.md) | the world walker: pack, doors, transports, teles, arrival |
+| [Map tile picker](MAP-PICKER.md) | Pick on Map: basemap bake, walkable overlay, in-picker settings, live rebuild |
 | [Quests](QUESTS.md) | the quest engine, quest modules, exec primitives, provisioning |
 | [Clue scrolls](CLUES.md) | the clue database, step kinds, tool acquisition, tracing |
 | [MultiBox](MULTIBOX.md) | the wall: slots, profiles, login coordination, telemetry |

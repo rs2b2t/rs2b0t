@@ -33,6 +33,7 @@ shut door, or on another level.
 - [The Reach primitive](#the-reach-primitive)
 - [When it gets stuck](#when-it-gets-stuck)
 - [Tuning constants](#tuning-constants)
+- [Map tile picker](#map-tile-picker)
 
 ## The collision pack
 
@@ -43,8 +44,12 @@ needs the whole map, so collision is **baked ahead of time** from an engine's da
 
 The pack is built from *the engine you are deploying into*
 ([`tools/deploy-local.sh`](../tools/deploy-local.sh) does it on first run), so it
-matches that server's map. Alongside the raw collision it carries a graph of
-traversal edges that plain collision cannot express:
+matches that server's map. The **map tile picker** uses the same pack for its
+walkable overlay (and a separately baked worldmap basemap for decoration) — see
+[Map tile picker](MAP-PICKER.md).
+
+Alongside the raw collision the pack carries a graph of traversal edges that plain
+collision cannot express:
 
 | Data | Source | What it adds |
 |---|---|---|
@@ -593,12 +598,21 @@ numbers. What they govern:
 | `MULTI_DOOR_CROSS_MS` | budget for a door-dense interior |
 | `OPEN_WAIT_MS` | how long to wait for a leaf to open |
 
+## Map tile picker
+
+Script settings of `type: 'tile'` open **Pick on Map**: a pan/zoom modal that
+draws an optional classic basemap under a walkable-dot grid from
+`collision.lcnav.gz`, then snaps the selection to a walkable tile.
+
+Full detail (bake, in-picker settings, live rebuild, smokes): **[Map tile picker](MAP-PICKER.md)**.
+
 ## See also
 
 - [Manual index](README.md)
+- [Map tile picker](MAP-PICKER.md) — basemap bake, walkable overlay, rebuild
 - [Scripting API](API.md#movement) — the script-facing movement surface
 - [Architecture](ARCHITECTURE.md#from-interact-to-a-packet) — how a click reaches the client
-- [Running locally](RUNNING.md#deploying-the-client) — building the collision pack
+- [Running locally](RUNNING.md#deploying-the-client) — building the collision pack and basemap
 - [Quests](QUESTS.md) — a heavy consumer of walking and doors
 - [Clue scrolls](CLUES.md) — coordinate clues and chasing NPCs
 - [Testing](TESTING.md) — the nav unit tests and live route harnesses

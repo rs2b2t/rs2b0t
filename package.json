@@ -27,7 +27,10 @@
         "verify:gather-locs": "bun tools/verify-gathering-locations.ts",
         "verify:gatheringbot": "bun tools/gatheringbot-test.ts",
         "verify:thievingbot": "bun tools/thievingbot-test.ts",
-    "verify:coaltrucks": "bun tools/coaltrucks-test.ts"
+        "verify:coaltrucks": "bun tools/coaltrucks-test.ts",
+        "gen:basemap": "bun tools/map/build-basemap.ts",
+        "verify:map-picker": "bun tools/map-picker-basemap-live.ts",
+        "verify:map-picker-e2e": "bun tools/map-picker-walkto-e2e-live.ts"
     },
     "dependencies": {
         "fflate": "^0.8.2"

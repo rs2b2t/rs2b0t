@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
 import { PathFinder } from '#/bot/nav/PathFinder.js';
-import { nearestWalkable, sampleStep } from '#/bot/ui/WorldMapPicker.js';
+import { cappedSampleStep, nearestWalkable, sampleStep } from '#/bot/ui/WorldMapPicker.js';
 
 const PACK_PATH = 'out/collision.lcnav.gz';
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
@@ -19,6 +19,19 @@ describe('sampleStep', () => {
     test('denser at higher zoom', () => {
         expect(sampleStep(8)).toBeLessThan(sampleStep(1));
         expect(sampleStep(0.5)).toBeGreaterThanOrEqual(sampleStep(2));
+    });
+});
+
+describe('cappedSampleStep', () => {
+    test('raises step when the viewport would sample too many tiles', () => {
+        // Very zoomed out: large tile span must not use step=1
+        const step = cappedSampleStep(0.35, 900, 700, 96);
+        expect(step).toBeGreaterThanOrEqual(Math.ceil(900 / 96));
+        expect(step).toBeGreaterThan(sampleStep(0.35));
+    });
+
+    test('leaves fine step alone when viewport is small', () => {
+        expect(cappedSampleStep(8, 40, 30, 96)).toBe(sampleStep(8));
     });
 });
 

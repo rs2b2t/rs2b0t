@@ -8,6 +8,9 @@ export default class ParamsModal {
     private bodyEl: HTMLElement;
     private scriptName = '';
     private schema: SettingsSchema = {};
+    private openTitle: string | null = null;
+    private openIntro: string | null = null;
+    private onCloseCb: (() => void) | null = null;
     private globalExtra: HTMLElement | null = null;
     private collapsed = new Map<string, Set<string>>();
 
@@ -39,6 +42,10 @@ export default class ParamsModal {
 
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && this.isOpen()) {
+                // Stop bubble so nested hosts (map picker window keydown) do not
+                // also treat this Escape as "close the whole modal".
+                e.preventDefault();
+                e.stopPropagation();
                 this.close();
             }
         });
@@ -48,15 +55,31 @@ export default class ParamsModal {
         return this.backdrop.style.display === 'flex';
     }
 
-    open(scriptName: string, schema: SettingsSchema): void {
+    open(
+        scriptName: string,
+        schema: SettingsSchema,
+        opts?: { title?: string; zIndex?: number; onClose?: () => void; intro?: string }
+    ): void {
         this.scriptName = scriptName;
         this.schema = schema;
+        this.openTitle = opts?.title ?? null;
+        this.openIntro = opts?.intro ?? null;
+        this.onCloseCb = opts?.onClose ?? null;
+        this.backdrop.style.zIndex = opts?.zIndex !== undefined ? String(opts.zIndex) : '';
         this.render();
         this.backdrop.style.display = 'flex';
     }
 
     close(): void {
+        if (!this.isOpen()) {
+            return;
+        }
         this.backdrop.style.display = 'none';
+        this.backdrop.style.zIndex = '';
+        this.openIntro = null;
+        const cb = this.onCloseCb;
+        this.onCloseCb = null;
+        cb?.();
     }
 
     // extra DOM shown atop the Global popup only (account/login controls)
@@ -65,8 +88,23 @@ export default class ParamsModal {
     }
 
     private render(): void {
-        this.titleEl.textContent = `${this.scriptName} · parameters`;
+        this.titleEl.textContent = this.openTitle ?? `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
+        if (this.openIntro) {
+            const intro = el('div', 'rs2b0t-param-intro');
+            Object.assign(intro.style, {
+                margin: '0 0 10px',
+                padding: '8px 10px',
+                borderRadius: '4px',
+                border: '1px solid #333',
+                background: '#141414',
+                color: '#aaa',
+                fontSize: '12px',
+                lineHeight: '1.45'
+            });
+            intro.textContent = this.openIntro;
+            this.bodyEl.appendChild(intro);
+        }
         if (this.scriptName === 'Global' && this.globalExtra) {
             this.bodyEl.appendChild(this.globalExtra);
         }

@@ -241,6 +241,10 @@ if [ ! -f out/collision.lcnav.gz ]; then
     echo "→ collision pack missing — baking it from the engine map cache…"
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
 fi
+if [ ! -f out/worldmap-basemap.manifest.json ]; then
+    echo "→ worldmap basemap missing — baking from worldmap.jag…"
+    bun tools/map/build-basemap.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}"
+fi
 
 RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rs2b0t.XXXXXX")
 RESOURCE_PID_FILE="$RUN_DIR/viewer.pid"

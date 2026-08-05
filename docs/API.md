@@ -969,11 +969,17 @@ GAS_ROCK_IDS / GAS_ROCK_TICKS / BROKEN_PICKAXE
 
 ### Walk destinations
 
-City / bank presets used by WalkTo and the map picker.
+City / bank presets used by WalkTo and the **map tile picker** (named pins on the
+pick modal). Full picker behaviour (basemap, walkable snap, Global settings):
+[Map tile picker](MAP-PICKER.md).
 
 ```ts
 WALK_DESTINATIONS / WALK_OPTIONS / resolveDestination(name)
 ```
+
+Settings of `type: 'tile'` in a script schema get a **Pick on Map** button in the
+parameters UI. That modal is bot-panel chrome (`WorldMapPicker`), not part of
+`@rs2b0t/api`; scripts only receive the chosen `x,z,level` string.
 
 ### Pickpocket targets
 

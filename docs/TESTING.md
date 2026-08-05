@@ -134,6 +134,20 @@ rs2b0t.actions
 | `bringUpOffIsland(page, opts)` | new account, teleported off tutorial island |
 | `startFromLibrary(page, category, script)` | pick and start a script from the panel |
 
+**Map picker (basemap + walkable dots).** Product docs:
+[Map tile picker](MAP-PICKER.md). Bake once with `bun run gen:basemap` (writes
+`out/worldmap-basemap.<fp>.png` + manifest; deploy copies them next to
+`collision.lcnav.gz`, plus `worldmap.jag` when available for optional rebuild).
+Smoke:
+
+| Command | Proves |
+|---|---|
+| `bun run verify:map-picker -- <base>` | UI pick → Confirm → tile fields (`tools/map-picker-basemap-live.ts`); asserts `data-basemap` settled |
+| `bun run verify:map-picker-e2e -- <base>` | login + pick + WalkTo arrives (`tools/map-picker-walkto-e2e-live.ts`; needs a loggable world / cheats for short hops) |
+
+Unit: `test/ui/worldMapBasemap.test.ts`, `test/ui/mapPickerTheme.test.ts`,
+`test/ui/worldMapPicker.test.ts` (collision pack for snap tests).
+
 **Viewport (local preference).** Headed Chrome should use the **smaller** client scale
 used by GatheringBot / `verify-gather-locs` / plain `browser.newPage()` — Playwright’s
 default **1280×720**, exported as `HARNESS_VIEWPORT`. Do **not** set

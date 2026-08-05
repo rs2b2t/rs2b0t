@@ -55,6 +55,26 @@ test('showIf rows are hidden until the master dropdown matches, and re-render in
     modal.close();
 });
 
+test('Escape closes the open modal and stops propagation (nested hosts)', () => {
+    const modal = new ParamsModal(() => false, () => {});
+    modal.open('DemoEsc', schema);
+    expect(modal.isOpen()).toBe(true);
+
+    let outerSawEscape = false;
+    const outer = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') {
+            outerSawEscape = true;
+        }
+    };
+    // Same phase/order as WorldMapPicker window keydown (bubble on window).
+    window.addEventListener('keydown', outer);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    window.removeEventListener('keydown', outer);
+
+    expect(modal.isOpen()).toBe(false);
+    expect(outerSawEscape).toBe(false);
+});
+
 test('group headers collapse/expand and remember state across re-renders', () => {
     SettingsStore.save('Styled2', 'style', 'mage');
     const modal = new ParamsModal(() => false, () => {});

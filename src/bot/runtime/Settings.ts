@@ -265,6 +265,104 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     }
 };
 
+/**
+ * Settings for the tile map picker only (in-picker Settings modal).
+ * Not shown under Global settings. Storage namespace: {@link MAP_PICKER_SETTINGS_NS}.
+ * URL: `?MapPicker.showBasemap=false` etc.
+ */
+export const MAP_PICKER_SETTINGS_NS = 'MapPicker';
+
+export const MAP_PICKER_SETTINGS: SettingsSchema = {
+    showBasemap: {
+        type: 'boolean',
+        default: true,
+        label: 'Show basemap',
+        group: 'Display',
+        help: 'Worldmap underlay. Off = destination pins (and optional walkable dots) only.'
+    },
+    showWalkable: {
+        type: 'boolean',
+        default: false,
+        label: 'Walkable dots',
+        group: 'Display',
+        help: 'Collision-pack walkable grid. Default off. Clicks still snap to nearest walkable tile.'
+    },
+    dotColor: {
+        type: 'string',
+        default: '#0a3d7a',
+        label: 'Walkable colour',
+        group: 'Display',
+        showIf: { key: 'showWalkable', anyOf: ['true'] },
+        help: 'HTML #RGB / #RRGGBB for walkable dots (default #0a3d7a).'
+    },
+    dotAlpha: {
+        type: 'number',
+        default: 0.85,
+        min: 0.15,
+        max: 1,
+        label: 'Walkable opacity',
+        group: 'Display',
+        showIf: { key: 'showWalkable', anyOf: ['true'] },
+        help: '0.15–1 (default 0.85).'
+    },
+    bakeLabels: {
+        type: 'boolean',
+        default: false,
+        label: 'Place labels',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Include place-name labels when regenerating. Default off (full-world, unlabelled).'
+    },
+    bakeBorders: {
+        type: 'boolean',
+        default: false,
+        label: 'Borders',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Map borders when regenerating.'
+    },
+    bakeNpcs: {
+        type: 'boolean',
+        default: false,
+        label: 'NPC dots',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'NPC map dots when regenerating.'
+    },
+    bakeItems: {
+        type: 'boolean',
+        default: false,
+        label: 'Item dots',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Ground-item map dots when regenerating.'
+    },
+    bakeMultimap: {
+        type: 'boolean',
+        default: false,
+        label: 'Multicombat overlay',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Tint multicombat zones when regenerating.'
+    },
+    bakeFreemap: {
+        type: 'boolean',
+        default: false,
+        label: 'Free-to-play overlay',
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Tint free-to-play zones when regenerating.'
+    },
+    skipRebuildConfirm: {
+        type: 'boolean',
+        default: false,
+        label: "Don't ask before rebuild",
+        group: 'Basemap rebuild',
+        showIf: { key: 'showBasemap', anyOf: ['true'] },
+        help: 'Skip the freeze-warning dialog when using Rebuild map…. Uncheck to see the warning again.'
+    }
+};
+
 const hasSession = typeof sessionStorage !== 'undefined';
 const hasLocal = typeof localStorage !== 'undefined';
 
@@ -274,8 +372,12 @@ function storageKey(name: string, key: string): string {
     return boxKey(`set:${name}:${key}`);
 }
 
+export type SettingChangeListener = (name: string, key: string, value: string) => void;
+
 class SettingsStoreImpl {
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    /** Same-tab subscribers (open modals). `storage` events only fire across tabs. */
+    private changeListeners = new Set<SettingChangeListener>();
 
     private urlOverride(name: string, key: string): string | null {
         if (!this.urlParams) {
@@ -313,6 +415,29 @@ class SettingsStoreImpl {
         if (hasLocal) {
             localStorage.setItem(storageKey(name, key), rawString);
         }
+        for (const fn of this.changeListeners) {
+            try {
+                fn(name, key, rawString);
+            } catch {
+                /* listener errors must not break save */
+            }
+        }
+    }
+
+    /**
+     * Subscribe to SettingsStore.save (same tab). Returns unsubscribe.
+     * Used so an open map picker stays aligned with Global settings edits.
+     */
+    onChange(listener: SettingChangeListener): () => void {
+        this.changeListeners.add(listener);
+        return () => {
+            this.changeListeners.delete(listener);
+        };
+    }
+
+    /** True when `?Name.key=` wins over saved/default (toggle cannot stick). */
+    isUrlOverride(name: string, key: string): boolean {
+        return this.urlOverride(name, key) !== null;
     }
 
     clear(name: string, key: string): void {

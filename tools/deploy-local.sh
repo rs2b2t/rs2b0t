@@ -19,6 +19,11 @@ if [ ! -f out/collision.lcnav.gz ]; then
     bun tools/nav/build-collision.ts --engine "$ENGINE"
 fi
 
+# classic worldmap basemap for the tile picker (fingerprint-keyed; optional degrade)
+if [ ! -f out/worldmap-basemap.manifest.json ]; then
+    bun tools/map/build-basemap.ts --engine "$ENGINE"
+fi
+
 cp out/client.js out/client.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/tinymidipcm.wasm "$ENGINE/public/client/"
 
@@ -26,6 +31,20 @@ mkdir -p "$ENGINE/public/bot"
 cp out/botclient.js out/botclient.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/navworker.js out/navworker.js.map out/collision.lcnav.gz \
    out/tinymidipcm.wasm "$ENGINE/public/bot/"
+# basemap PNG + manifest (fingerprinted PNG name comes from the manifest)
+if [ -f out/worldmap-basemap.manifest.json ]; then
+    cp out/worldmap-basemap.manifest.json "$ENGINE/public/bot/"
+    # copy every matching fingerprinted basemap asset
+    for f in out/worldmap-basemap.*.png; do
+        [ -f "$f" ] && cp "$f" "$ENGINE/public/bot/"
+    done
+fi
+# worldmap.jag so the picker can optionally rebuild the basemap live
+if [ -f out/worldmap.jag ]; then
+    cp out/worldmap.jag "$ENGINE/public/bot/"
+elif [ -f "$ENGINE/data/pack/mapview/worldmap.jag" ]; then
+    cp "$ENGINE/data/pack/mapview/worldmap.jag" "$ENGINE/public/bot/"
+fi
 # Bust browser / Playwright cache of the ES module (otherwise tele path edges
 # never appear live while the pack probe offline is already green).
 BUST=$(date +%s)

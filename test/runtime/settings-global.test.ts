@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { SettingsStore, GLOBAL_SETTINGS, type SettingsSchema } from '#/bot/runtime/Settings.js';
+import {
+    SettingsStore,
+    GLOBAL_SETTINGS,
+    MAP_PICKER_SETTINGS,
+    MAP_PICKER_SETTINGS_NS,
+    type SettingsSchema
+} from '#/bot/runtime/Settings.js';
 
 const SCHEMA: SettingsSchema = { bankCommonJunk: { type: 'boolean', default: true } };
 const K = (ns: string, key: string) => `rs2b0t:set:${ns}:${key}`;
@@ -30,6 +36,7 @@ describe('GLOBAL_SETTINGS', () => {
         expect(GLOBAL_SETTINGS.navCameraFollow.type).toBe('boolean');
         expect(GLOBAL_SETTINGS.navCameraFollow.default).toBe(false);
     });
+
 
     test('runEnergyMin saved values clamp to 0-100 through the global bag', () => {
         sessionStorage.setItem(K('Global', 'runEnergyMin'), '250');
@@ -81,6 +88,17 @@ describe('displayString mirrors resolve for global-eligible keys', () => {
     test('non-global keys still show their own schema default', () => {
         const def = { type: 'number', default: 7 } as const;
         expect(SettingsStore.displayString('MyBot', 'width', def)).toBe('7');
+    });
+});
+
+describe('MAP_PICKER_SETTINGS (in-picker only, not Global)', () => {
+    test('is a separate schema with Display + Basemap rebuild defaults', () => {
+        expect(MAP_PICKER_SETTINGS_NS).toBe('MapPicker');
+        expect(MAP_PICKER_SETTINGS.showBasemap?.default).toBe(true);
+        expect(MAP_PICKER_SETTINGS.showWalkable?.default).toBe(false);
+        expect(MAP_PICKER_SETTINGS.bakeLabels?.default).toBe(false);
+        expect((GLOBAL_SETTINGS as SettingsSchema).showBasemap).toBeUndefined();
+        expect((GLOBAL_SETTINGS as SettingsSchema).mapPickerShowBasemap).toBeUndefined();
     });
 });
 
