@@ -664,12 +664,14 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    // Spell/jewellery tele edges. Default follows Global `navTeleports` (off).
-    // Force on: true / NAV_WITH_TELES. Force off: false / NAV_PURE_WALK.
+    // Spell/jewellery tele edges — see Nav teleports below.
     useTeleportCatalog?: boolean;
-    // Tele policy. When teles on, distanceBeforeTeleport defaults to 40 (0 = any span).
-    policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
-    // Optional bank item counts for path-scoped bank planner.
+    policy?: {
+        useTeleports?: boolean;
+        distanceBeforeTeleport?: number; // default 40 when teles on; 0 = any span
+        allowTeleportIds?: string[];
+        denyTeleportIds?: string[];
+    };
     bankItemCounts?: Record<string, number>;
     // Optional: ban map rects from A* (ids or ad-hoc). See docs/NAV.md#danger-zones
     avoidZones?: readonly (string | { minX: number; maxX: number; minZ: number; maxZ: number; level?: number })[];
@@ -677,6 +679,7 @@ Traversal.walkTo(dest: WorldTile, opts?: {
 
 // Prefer for unattended walks — escalates re-path / big-budget / scene bridge
 // and by default never gives up (only random-event or Stop ends it early).
+// Forwards useTeleportCatalog / policy / bankItemCounts on every baked repath.
 Traversal.walkResilient(dest: WorldTile, opts: {
     radius: number;
     attempts?: number;
@@ -684,11 +687,17 @@ Traversal.walkResilient(dest: WorldTile, opts: {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
-    useTeleportCatalog?: boolean; // forwarded on every baked repath
+    useTeleportCatalog?: boolean;
     policy?: WalkOptions['policy'];
     bankItemCounts?: WalkOptions['bankItemCounts'];
-    avoidZones?: WalkOptions['avoidZones']; // forwarded on every baked repath
+    avoidZones?: WalkOptions['avoidZones'];
 }): Promise<boolean>
+
+// Spread helpers (override Global navTeleports for one walk)
+NAV_PURE_WALK   // { useTeleportCatalog: false, policy: { useTeleports: false } }
+NAV_WITH_TELES  // { useTeleportCatalog: true,  policy: { useTeleports: true } }
+Traversal.pureWalk   // same as NAV_PURE_WALK
+Traversal.withTeles  // same as NAV_WITH_TELES
 
 Traversal.preload(): void      // warm the nav worker before the first walk
 Traversal.remaining(): number  // path tiles left in the active walk
@@ -698,10 +707,24 @@ Traversal.remaining(): number  // path tiles left in the active walk
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
 There is **one** walker: live **WorldState** (skills, quests, inventory, members)
-gates skill doors, tolls, and quest transports. Spell/jewellery tele inject is
-**off by default** (Global `navTeleports`); enable in settings or per-walk via
-`useTeleportCatalog: true` / `NAV_WITH_TELES`. See [World-walking](NAV.md) and
-[`docs/nav/`](nav/TRANSPORTS-2004.md).
+gates skill doors, tolls, and quest transports.
+
+### Nav teleports (default off)
+
+Spell/jewellery tele hops are **not** used unless enabled:
+
+| Source | Default | Enable |
+|---|---|---|
+| Global **Nav teleports** (`navTeleports`) | **off** | Panel or `?Global.navTeleports=true` |
+| Per-walk override | inherits Global | `useTeleportCatalog: true` or `...NAV_WITH_TELES` |
+| Force pure walk | — | `useTeleportCatalog: false` or `...NAV_PURE_WALK` |
+
+Resolution: explicit force-off → explicit force-on → Global (default off).
+
+When teles are on, `distanceBeforeTeleport` defaults to **40** Chebyshev so short
+city hops stay pure walk. Full behaviour, jewellery limits, and bank-plan rules:
+[Nav teleports](NAV.md#nav-teleports). Transport matrix:
+[`docs/nav/TRANSPORTS-2004.md`](nav/TRANSPORTS-2004.md).
 
 **Essence mine (session multiloc):** multi-entry, **same-origin exit only**. Exit
 portals share one loc type but telejump to the wizard you entered with

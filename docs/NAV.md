@@ -25,6 +25,7 @@ shut door, or on another level.
 - [Doors](#doors)
 - [Special crossings](#special-crossings)
 - [The world walker](#the-world-walker)
+- [Nav teleports](#nav-teleports)
 - [Path camera](#path-camera)
 - [Route corpus / HARD stress](#route-corpus--hard-stress)
 - [Level-change loc lag](#level-change-loc-lag)
