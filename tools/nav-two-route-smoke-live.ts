@@ -12,8 +12,12 @@
  *   outside maze ~2493,3187 · elkoy entrance 0_39_49_8_56 · maze land 0_39_49_19_23
  *   balancing ledge 2580,9520 / 2580,9512 · web needs plain Knife
  *
+ * Path paint + camera (same as nav-script-routes-live / nav-path-paint-live):
+ *   PATH_PAINT=1 (default) → showNavPath + navCameraFollow + red pack / cyan client
+ *   PATH_PAINT=0 to disable
+ *
  *   ~/redeploy.sh
- *   HEADED=0 bun tools/nav-two-route-smoke-live.ts [http://localhost:8890]
+ *   HEADED=1 bun tools/nav-two-route-smoke-live.ts [http://localhost:8890]
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
@@ -21,6 +25,16 @@ import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, relog } from './tutorial/harness.js';
 
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 300) * 1000;
+/** PATH_PAINT=0 disables showNavPath / camera follow; default on for operator visuals. */
+const PATH_PAINT = process.env.PATH_PAINT !== '0' && process.env.PATH_PAINT !== 'false';
+const PATH_PAINT_SCENE_EXPAND =
+    PATH_PAINT
+    && process.env.PATH_PAINT_SCENE_EXPAND !== '0'
+    && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
+const PATH_PAINT_CLIENT_SEG =
+    PATH_PAINT
+    && process.env.PATH_PAINT_CLIENT_SEG !== '0'
+    && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
 const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
 });
@@ -117,10 +131,8 @@ const ROUTES: Route[] = [
             // still passes, and postquest Elkoy still offers "Yes please."
             await cheatQuiet(page, 'setvar treequest 9', 800);
             await relog(page, user);
-            await setSettings(page, 'Global', {
-                navTeleports: 'false',
-                showNavPath: 'true'
-            });
+            // Relog drops Global settings — re-enable paint + camera like other smokes.
+            await applyNavPaintSettings(page);
             await cheatQuiet(page, 'give knife 1', 600);
             // Confirm journal after relog (plan-time gate reads list colour).
             const st = await page.evaluate(() => {
@@ -168,12 +180,50 @@ type Abi = {
         PathPublish: {
             get(): { tiles: Tile[]; pathIdx: number } | null;
         };
+        SettingsStore: {
+            save(ns: string, key: string, value: string): void;
+        };
+        isNavPathPaintEnabled(): boolean;
     };
     rs2b0t: {
         runner: { start(meta: unknown): void; stop(): void; state: string };
     };
     __twoRoute?: { walkOk: boolean; tile: Tile | null; logs: string[]; hops: string[] };
 };
+
+/**
+ * Dual red pack path + cyan client segment paint, and yaw-follow camera.
+ * Mirrors tools/nav-script-routes-live.ts applyNavPaintSettings (setSettings + Store.save).
+ */
+async function applyNavPaintSettings(page: Page): Promise<void> {
+    await setSettings(page, 'Global', {
+        navTeleports: false,
+        showNavPath: PATH_PAINT,
+        navCameraFollow: true,
+        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
+        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
+        navPathColorClient: '#00D4FF',
+        navPathColorPath: '#FF0000'
+    });
+    await page.evaluate(
+        flags => {
+            const g = globalThis as never as Abi;
+            const s = g.__rs2b0t.SettingsStore;
+            s.save('Global', 'navTeleports', 'false');
+            s.save('Global', 'showNavPath', flags.paint ? 'true' : 'false');
+            s.save('Global', 'navCameraFollow', 'true');
+            s.save('Global', 'navPathSceneExpand', flags.sceneExpand ? 'true' : 'false');
+            s.save('Global', 'navPathClientSegment', flags.clientSeg ? 'true' : 'false');
+            s.save('Global', 'navPathColorClient', '#00D4FF');
+            s.save('Global', 'navPathColorPath', '#FF0000');
+        },
+        {
+            paint: PATH_PAINT,
+            sceneExpand: PATH_PAINT_SCENE_EXPAND,
+            clientSeg: PATH_PAINT_CLIENT_SEG
+        }
+    );
+}
 
 function cheb(a: Tile, b: Tile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
@@ -276,18 +326,27 @@ const results: { id: string; ok: boolean; detail: string }[] = [];
 try {
     await proof.ensureDirs();
     const user = `n2r${Date.now().toString(36).slice(-6)}`;
-    console.log(`nav-two-route-smoke base=${base} tele=false budget≈${Math.round(BUDGET_MS / 1000)}s`);
+    console.log(
+        `nav-two-route-smoke base=${base} tele=false paint=${PATH_PAINT} `
+            + `sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} `
+            + `budget≈${Math.round(BUDGET_MS / 1000)}s`
+    );
     console.log(`${stamp()} boot '${user}'`);
     const page = await browser.newPage();
     await mainlandAccount(page, base, user);
+    await applyNavPaintSettings(page);
     await maxmeAndClearDialogs(page);
     // Plain knife for Yanille web use-on (content obj `knife`, not bronze_knife).
     // Do not complete Tree Gnome Village for pure maze; Elkoy leg seeds started.
     await cheatQuiet(page, 'give knife 1', 800);
-    await setSettings(page, 'Global', {
-        navTeleports: 'false',
-        showNavPath: 'true'
-    });
+    const paintOn = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.isNavPathPaintEnabled());
+    console.log(
+        `${stamp()} showNavPath=${paintOn} navCameraFollow=true `
+            + `sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG}`
+    );
+    if (PATH_PAINT && !paintOn) {
+        console.warn('WARNING: showNavPath still false after applyNavPaintSettings — paint will not draw');
+    }
 
     for (const route of ROUTES) {
         console.log(`\n══ ${route.id} ══ ${route.note}`);
