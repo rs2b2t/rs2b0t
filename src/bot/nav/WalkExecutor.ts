@@ -879,7 +879,7 @@ class WalkExecutorImpl {
             }
 
             // Only the **next** planned hop — never scan nearby transports or pathIdx-5.
-            // Engage only at the approach tile once pathIdx has reached the hop.
+            // Engage at the approach tile when path progress has reached that hop.
             const approachable = (t: WorldTile): boolean =>
                 Reachability.canReach(t, { maxSteps: TRIGGER_REACH_STEPS, adjacentOk: true });
             if (nextCrossingIdx !== -1 && pathIdx >= nextCrossingIdx - 1) {
@@ -1058,16 +1058,19 @@ class WalkExecutorImpl {
                     walkClickMark = null;
                     walkClickAt = null;
                     PathPublish.setClientSegment(null);
-                    // Client pathfind failed — only engage next planned hop at approach, then repath.
-                    if (nextCrossingIdx !== -1 && pathIdx >= nextCrossingIdx - 1) {
+                    // Client pathfind failed: if the next planned hop's approach is nearby,
+                    // execute that hop (doors/stairs/trees). Do not scan other transports.
+                    // Slightly looser than normal approachR — walk tiles before a door often
+                    // fail client tryMove while the approach stand is still a few tiles away.
+                    if (nextCrossingIdx !== -1) {
                         const appr = tiles[nextCrossingIdx - 1]!;
                         const hop = tiles[nextCrossingIdx]!;
-                        if (
+                        const nearApproach =
                             hop.transport
                             && me.level === appr.level
-                            && chebyshev(me, appr) <= approachR
-                        ) {
-                            const hopTransport = hop.transport;
+                            && chebyshev(me, appr) <= Math.max(approachR, ARRIVE_RADIUS);
+                        if (nearApproach) {
+                            const hopTransport = hop.transport!;
                             const handled = await this.handleTransport(appr, hop, log);
                             if (handled) {
                                 hop.transport = undefined;
