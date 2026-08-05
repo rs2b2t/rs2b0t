@@ -1,7 +1,7 @@
 import { reader } from '../adapter/ClientAdapter.js';
 import { bus } from './EventBus.js';
+import { decideProducerPass, type ProducerCadenceState } from './producerCadence.js';
 
-let lastTick = 0;
 let lastXp: number[] | null = null;
 let lastLevel: number[] | null = null;
 let lastInvIds: number[] | null = null;
@@ -9,21 +9,44 @@ let lastInvCounts: number[] | null = null;
 let lastVarps: number[] | null = null;
 let lastChatSig: string | null = null;
 
-export function pumpProducers(tickCount: number): void {
+let cadence: ProducerCadenceState = { lastTick: -1, lastMidAt: 0 };
+
+/** Test hook — reset producer baselines between cases. */
+export function resetProducersForTests(): void {
+    lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
+    lastChatSig = null;
+    cadence = { lastTick: -1, lastMidAt: 0 };
+}
+
+export function pumpProducers(tickCount: number, now: number = performance.now()): void {
     if (!reader.ingame()) {
         lastXp = lastLevel = lastInvIds = lastInvCounts = lastVarps = null;
         lastChatSig = null;
+        cadence = { lastTick: -1, lastMidAt: 0 };
         return;
     }
 
-    if (tickCount !== lastTick) {
-        lastTick = tickCount;
+    const decision = decideProducerPass(tickCount, now, cadence);
+    cadence = decision.state;
+
+    if (decision.tickAdvanced) {
         bus.emit('tick', { tick: tickCount });
     }
 
-    diffSkills();
+    if (decision.pass === 'skip') {
+        return;
+    }
+
+    if (decision.pass === 'full') {
+        diffSkills();
+        diffInventory();
+        diffVarps();
+        diffChat();
+        return;
+    }
+
+    // Mid-tick: skip the 300-varp + skill tables; keep inv/chat snappy.
     diffInventory();
-    diffVarps();
     diffChat();
 }
 
@@ -111,7 +134,8 @@ function diffChat(): void {
         return;
     }
 
-    const sig = (l: { type: number; username: string | null; text: string }) => `${l.type}|${l.username ?? ''}|${l.text}`;
+    const sig = (l: { type: number; username: string | null; text: string }) =>
+        `${l.type}|${l.username ?? ''}|${l.text}`;
 
     if (lastChatSig === null) {
         lastChatSig = sig(lines[0]);
