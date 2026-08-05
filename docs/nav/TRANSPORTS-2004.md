@@ -192,7 +192,7 @@ CONTENT_DIR=~/experiments/Server/content bun tools/nav/content-transport-audit.t
 | Watch Tower | `itwatchtower` | 14 | Watchtower spell (complete_read_scroll) |
 | Eadgar's Ruse | `eadgar_quest` | 110 | Trollheim spell |
 
-Source: `src/bot/nav/v2/transportQuestReqs.ts`. After `setvar`, **relog** so the quest-list colour updates (`Quests.status` is colour-based).
+Source: `src/bot/nav/transportQuestReqs.ts`. After `setvar`, **relog** so the quest-list colour updates (`Quests.status` is colour-based).
 
 Aliases (`Watchtower` → `Watch Tower`, etc.) resolve in `worldStateData` / `canonicalQuestName`.
 
@@ -216,9 +216,9 @@ Aliases (`Watchtower` → `Watch Tower`, etc.) resolve in `worldStateData` / `ca
 
 | Doc / code | Role |
 |---|---|
-| `src/bot/nav/v2/travelCatalog.ts` | Curated edges |
-| `src/bot/nav/v2/specialRequires.ts` | Door + transport skill gates |
-| `src/bot/nav/v2/transportQuestReqs.ts` | Quest journal + setvar seeds |
+| `src/bot/nav/travelCatalog.ts` | Curated edges |
+| `src/bot/nav/specialRequires.ts` | Door + transport skill gates |
+| `src/bot/nav/transportQuestReqs.ts` | Quest journal + setvar seeds |
 | `src/bot/nav/loadTransportGraph.ts` | Graph merge |
 | `src/bot/nav/data/specialCrossings.ts` | Execute dialogs |
 | `src/bot/nav/exec/specialCrossing.ts` | Entrana gear + spirit + glider map |

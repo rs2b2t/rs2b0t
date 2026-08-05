@@ -10,18 +10,18 @@ import doorsJson from '#/bot/nav/data/doors.json';
 import stairsJson from '#/bot/nav/data/stairEdges.json';
 import transportsJson from '#/bot/nav/data/transports.json';
 import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
-import { teleportAllowedByPolicy } from '#/bot/nav/v2/policy.js';
+import { teleportAllowedByPolicy } from '#/bot/nav/policy.js';
 import {
     SPELL_TELEPORTS,
     teleportAllowedFromOrigin,
     teleportById
-} from '#/bot/nav/v2/teleportCatalog.js';
+} from '#/bot/nav/teleportCatalog.js';
 import {
     GLORY_MAX_WILDERNESS,
     SPELL_MAX_WILDERNESS,
     wildernessLevelAt
-} from '#/bot/nav/v2/wilderness.js';
-import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
+} from '#/bot/nav/wilderness.js';
+import type { WorldStateData } from '#/bot/nav/worldStateData.js';
 
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_PACK = fs.existsSync(PACK_PATH);

@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 
-import { EssenceSession } from '#/bot/nav/v2/essenceSession.js';
-import { worldStateFromData, emptyWorldStateData } from '#/bot/nav/v2/worldStateData.js';
-import { meetsRequires } from '#/bot/nav/v2/requires.js';
+import { EssenceSession } from '#/bot/nav/essenceSession.js';
+import { worldStateFromData, emptyWorldStateData } from '#/bot/nav/worldStateData.js';
+import { meetsRequires } from '#/bot/nav/requires.js';
 
 describe('EssenceSession (server varp not on wire)', () => {
     beforeEach(() => {

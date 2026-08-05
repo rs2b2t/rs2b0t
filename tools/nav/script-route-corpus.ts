@@ -36,9 +36,9 @@ import { WALK_DESTINATIONS } from '#/bot/api/WalkDestinations.js';
 import { NAV_TARGETS } from '#/bot/nav/data/navTargets.js';
 import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
-import { formatHops } from '#/bot/nav/v2/hops.js';
-import type { PathPolicy } from '#/bot/nav/v2/types.js';
-import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
+import { formatHops } from '#/bot/nav/hops.js';
+import type { PathPolicy } from '#/bot/nav/types.js';
+import type { WorldStateData } from '#/bot/nav/worldStateData.js';
 
 export interface ScriptRoute {
     id: string;

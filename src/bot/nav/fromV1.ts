@@ -1,6 +1,5 @@
 /**
- * Adapters that lift today's doors / stairs / transports JSON into TransportEdge.
- * Phase 1 of nav-v2: one in-memory graph without forcing a single on-disk artifact yet.
+ * Adapters that lift doors / stairs / transports JSON into TransportEdge.
  */
 
 import { ensureEdgeId } from './edgeId.js';

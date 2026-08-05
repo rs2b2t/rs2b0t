@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { specialRequiresAt } from '#/bot/nav/v2/specialRequires.js';
+import { specialRequiresAt } from '#/bot/nav/specialRequires.js';
 
 describe('specialRequiresAt — guild skill gates (content-backed)', () => {
     test('Fishing Guild doors require fishing 68', () => {

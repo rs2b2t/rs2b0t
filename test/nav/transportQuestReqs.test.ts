@@ -5,10 +5,10 @@ import {
     transportQuestJournalNames,
     richTransportQuestMap,
     canonicalQuestName
-} from '#/bot/nav/v2/transportQuestReqs.js';
-import { worldStateFromData } from '#/bot/nav/v2/worldStateData.js';
-import { meetsRequires } from '#/bot/nav/v2/requires.js';
-import { REQ } from '#/bot/nav/v2/transportQuestReqs.js';
+} from '#/bot/nav/transportQuestReqs.js';
+import { worldStateFromData } from '#/bot/nav/worldStateData.js';
+import { meetsRequires } from '#/bot/nav/requires.js';
+import { REQ } from '#/bot/nav/transportQuestReqs.js';
 
 describe('transport quest seeds', () => {
     test('covers essence, trees, shilo, ardy tele quests', () => {

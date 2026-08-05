@@ -9,7 +9,7 @@ import {
     matchesLocRef,
     probeLocRef,
     type LocSceneSnap
-} from '#/bot/nav/v2/locRef.js';
+} from '#/bot/nav/locRef.js';
 import type { TransportInfo } from '#/bot/nav/PathFinder.js';
 
 const gate: TransportInfo = {

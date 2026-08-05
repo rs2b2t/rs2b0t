@@ -17,9 +17,9 @@ import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
-import { formatHops } from '#/bot/nav/v2/hops.js';
-import type { PathPolicy } from '#/bot/nav/v2/types.js';
-import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
+import { formatHops } from '#/bot/nav/hops.js';
+import type { PathPolicy } from '#/bot/nav/types.js';
+import type { WorldStateData } from '#/bot/nav/worldStateData.js';
 import {
     SPIRIT_TREE,
     GLIDER_PAD,
@@ -30,12 +30,12 @@ import {
     ESSENCE_MINE_PAD,
     WILDY_LEVER,
     TRAVEL_STANDS
-} from '#/bot/nav/v2/travelCatalog.js';
-import type { EssenceReturnId } from '#/bot/nav/v2/essenceExit.js';
+} from '#/bot/nav/travelCatalog.js';
+import type { EssenceReturnId } from '#/bot/nav/essenceExit.js';
 import {
     richTransportQuestMap,
     TRANSPORT_QUEST_SEEDS
-} from '#/bot/nav/v2/transportQuestReqs.js';
+} from '#/bot/nav/transportQuestReqs.js';
 
 const packPath =
     process.argv.find(a => a.startsWith('--pack='))?.split('=')[1]

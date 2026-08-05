@@ -11,9 +11,9 @@ import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
-import { formatHops } from '#/bot/nav/v2/hops.js';
-import type { PathPolicy } from '#/bot/nav/v2/types.js';
-import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
+import { formatHops } from '#/bot/nav/hops.js';
+import type { PathPolicy } from '#/bot/nav/types.js';
+import type { WorldStateData } from '#/bot/nav/worldStateData.js';
 
 function parseTile(s: string): NavPoint {
     const [x, z, level] = s.split(',').map(Number);

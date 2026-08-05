@@ -194,7 +194,7 @@ import { Players } from '../api/queries/Players.js';
 import EntityQuery from '../api/queries/Query.js';
 import { bus, type EventMap } from '../events/EventBus.js';
 import { DirectNavigator } from '../nav/DirectNavigator.js';
-import { EssenceSession } from '../nav/v2/essenceSession.js';
+import { EssenceSession } from '../nav/essenceSession.js';
 import {
     liveFortressStep,
     liveMordredBriefed,

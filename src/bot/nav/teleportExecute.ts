@@ -1,15 +1,14 @@
 /**
  * Execute originless teleport hops (spell cast or jewellery Rub).
- * Used by WalkExecutor when navEngine is v2.
  */
 
-import { reader } from '../../adapter/ClientAdapter.js';
-import { Execution } from '../../api/Execution.js';
-import { Game } from '../../api/Game.js';
-import { ChatDialog } from '../../api/hud/ChatDialog.js';
-import { Inventory } from '../../api/hud/Inventory.js';
-import type { TransportInfo } from '../PathFinder.js';
-import { pickChoice } from '../data/specialCrossings.js';
+import { reader } from '../adapter/ClientAdapter.js';
+import { Execution } from '../api/Execution.js';
+import { Game } from '../api/Game.js';
+import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Inventory } from '../api/hud/Inventory.js';
+import type { TransportInfo } from './PathFinder.js';
+import { pickChoice } from './data/specialCrossings.js';
 import {
     inventoryNameMatchesJewellery,
     teleportById,

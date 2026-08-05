@@ -3,7 +3,7 @@
  * Also door-only skill gates (not transport rows) e.g. Fishing Guild.
  */
 
-import { SPECIAL_CROSSINGS } from '../data/specialCrossings.js';
+import { SPECIAL_CROSSINGS } from './data/specialCrossings.js';
 import type { TransportRequires } from './types.js';
 
 /**

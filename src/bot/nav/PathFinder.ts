@@ -1,25 +1,24 @@
 // docs/NAV.md#pathfinding
-// nav-v2: docs/nav-v2/README.md
-import type { PathHop, PathPolicy, TransportRequires, WorldState } from './v2/types.js';
-import type { WorldStateData } from './v2/worldStateData.js';
-import { worldStateFromData } from './v2/worldStateData.js';
-import { meetsRequires } from './v2/requires.js';
-import { kindAllowedByPolicy, routeSpanChebyshev, teleportAllowedByPolicy } from './v2/policy.js';
-import { hopsFromWaypoints } from './v2/hops.js';
+import type { PathHop, PathPolicy, TransportRequires, WorldState } from './types.js';
+import type { WorldStateData } from './worldStateData.js';
+import { worldStateFromData } from './worldStateData.js';
+import { meetsRequires } from './requires.js';
+import { kindAllowedByPolicy, routeSpanChebyshev, teleportAllowedByPolicy } from './policy.js';
+import { hopsFromWaypoints } from './hops.js';
 import {
     SPELL_TELEPORTS,
     inventoryNameMatchesJewellery,
     JEWELLERY_TELEPORTS,
     teleportAllowedFromOrigin
-} from './v2/teleportCatalog.js';
-import { wildernessLevelAt } from './v2/wilderness.js';
-import { specialRequiresAt } from './v2/specialRequires.js';
-import { activateTransportRows } from './v2/activateStateAware.js';
+} from './teleportCatalog.js';
+import { wildernessLevelAt } from './wilderness.js';
+import { specialRequiresAt } from './specialRequires.js';
+import { activateTransportRows } from './activateStateAware.js';
 import { tileInDangerZones, type DangerZoneRect } from './data/dangerZones.js';
 import {
     essenceReturnIdFromStateIndex,
     essenceReturnStateIndex
-} from './v2/essenceExit.js';
+} from './essenceExit.js';
 
 /**
  * A* search key = tileId * 16 + essenceReturnIdx (0..15).
@@ -61,9 +60,9 @@ export interface TransportInfo {
     toTile?: { x: number; z: number };
     /** Portal multi-exit landings (e.g. essence mine). */
     acceptAnyLanding?: boolean;
-    /** nav-v2: edge kind for hops / tele executor. */
+    /** Edge kind for hops / tele executor. */
     kind?: string;
-    /** nav-v2: spell/jewellery teleport id (varrock, dueling_arena, …). */
+    /** Spell/jewellery teleport id (varrock, dueling_arena, …). */
     teleportId?: string;
     /**
      * Graph edge cost when known (set during A* reconstruction). Used by

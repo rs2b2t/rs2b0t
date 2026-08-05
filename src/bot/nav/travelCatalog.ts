@@ -8,7 +8,7 @@
  * Content root (operator machine): experiments/Server/content/scripts/
  */
 
-import type { TransportEdgeData } from '../PathFinder.js';
+import type { TransportEdgeData } from './PathFinder.js';
 import { essenceExitEdges } from './essenceExit.js';
 import { parseLcCoord } from './lcCoord.js';
 import { REQ } from './transportQuestReqs.js';

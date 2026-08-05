@@ -22,8 +22,6 @@ const PATH_PAINT_SCENE_EXPAND =
     process.env.PATH_PAINT_SCENE_EXPAND !== '0' && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
 const PATH_PAINT_CLIENT_SEG =
     process.env.PATH_PAINT_CLIENT_SEG !== '0' && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
-const NAV_ENGINE: 'classic' | 'v2' =
-    process.env.NAV_ENGINE === 'v2' ? 'v2' : 'classic';
 
 const proof = createHarnessProof({ slug: 'nav-path-paint' });
 const { base } = parseArgs(process.argv.slice(2), {
@@ -51,8 +49,7 @@ type Abi = {
                     radius?: number;
                     timeoutMs?: number;
                     log?: (m: string) => void;
-                    navEngine?: string;
-                    useTeleportCatalog?: boolean;
+                                        useTeleportCatalog?: boolean;
                 }
             ): Promise<boolean>;
         };
@@ -158,7 +155,7 @@ async function restoreRunEnergy(page: Page): Promise<void> {
 
 async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPaint']>> {
     await page.evaluate(
-        ({ destination, budgetMs, engine }) => {
+        ({ destination, budgetMs }) => {
             const g = globalThis as never as Abi;
             const logs: string[] = [];
             const samples: Sample[] = [];
@@ -181,8 +178,8 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: 4,
                             timeoutMs: budgetMs,
-                            navEngine: engine,
                             useTeleportCatalog: false,
+                            policy: { useTeleports: false },
                             log: m => {
                                 logs.push(m);
                                 this.log(m);
@@ -219,7 +216,7 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
                 g.__rs2b0t.registerScript({ name: `NavPathPaint${Date.now()}`, create: () => new Probe() })
             );
         },
-        { destination: dest, budgetMs: BUDGET_MS, engine: NAV_ENGINE }
+        { destination: dest, budgetMs: BUDGET_MS }
     );
 
     for (let i = 0; i < Math.ceil(BUDGET_MS / 1000) + 40; i++) {
@@ -259,7 +256,7 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
 
 const cases = pickCases();
 console.log(
-    `nav-path-paint-live base=${base} engine=${NAV_ENGINE} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} cases=${cases.map(c => c.id).join(',')} budget≈${Math.round(BUDGET_MS / 1000)}s`
+    `nav-path-paint-live base=${base}  sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} cases=${cases.map(c => c.id).join(',')} budget≈${Math.round(BUDGET_MS / 1000)}s`
 );
 console.log('  watch: red = pack path, cyan = client walk segment (after each click)');
 
@@ -294,7 +291,6 @@ try {
 
     await setSettings(page, 'Global', {
         showNavPath: true,
-        navEngine: NAV_ENGINE,
         navCameraFollow: true,
         navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
         navPathClientSegment: PATH_PAINT_CLIENT_SEG,
@@ -305,13 +301,12 @@ try {
         const g = globalThis as never as Abi;
         const s = g.__rs2b0t.SettingsStore;
         s.save('Global', 'showNavPath', 'true');
-        s.save('Global', 'navEngine', flags.engine);
         s.save('Global', 'navCameraFollow', 'true');
         s.save('Global', 'navPathSceneExpand', flags.scene ? 'true' : 'false');
         s.save('Global', 'navPathClientSegment', flags.client ? 'true' : 'false');
         s.save('Global', 'navPathColorClient', '#00D4FF');
         s.save('Global', 'navPathColorPath', '#FF0000');
-    }, { engine: NAV_ENGINE, scene: PATH_PAINT_SCENE_EXPAND, client: PATH_PAINT_CLIENT_SEG });
+    }, { scene: PATH_PAINT_SCENE_EXPAND, client: PATH_PAINT_CLIENT_SEG });
 
     await maxmeAndClearDialogs(page);
     await cheatQuiet(page, 'speed 300');

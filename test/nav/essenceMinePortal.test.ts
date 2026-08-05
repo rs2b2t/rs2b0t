@@ -8,9 +8,9 @@ import {
     essenceExitEdges,
     essenceReturnIdFromPacked,
     essenceReturnIdFromTile
-} from '#/bot/nav/v2/essenceExit.js';
-import { packNavPoint } from '#/bot/nav/v2/lcCoord.js';
-import { emptyWorldStateData } from '#/bot/nav/v2/worldStateData.js';
+} from '#/bot/nav/essenceExit.js';
+import { packNavPoint } from '#/bot/nav/lcCoord.js';
+import { emptyWorldStateData } from '#/bot/nav/worldStateData.js';
 import transports from '#/bot/nav/data/transports.json';
 
 const REPORTED_START = { x: 2924, z: 4849, level: 0 } as const;

@@ -11,7 +11,7 @@ import {
     locRefValid,
     matchesLocRef,
     type LocSceneSnap
-} from '../v2/locRef.js';
+} from '../locRef.js';
 
 export function matchesTransportLoc(
     transport: TransportInfo,

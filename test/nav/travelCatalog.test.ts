@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseLcCoord, lcCoord } from '#/bot/nav/v2/lcCoord.js';
+import { parseLcCoord, lcCoord } from '#/bot/nav/lcCoord.js';
 import {
     SPIRIT_TREE,
     GLIDER_PAD,
@@ -16,8 +16,8 @@ import {
     mageArenaBarrierEdges,
     agilityShortcutEdges,
     curatedTravelEdges
-} from '#/bot/nav/v2/travelCatalog.js';
-import { essenceExitEdges } from '#/bot/nav/v2/essenceExit.js';
+} from '#/bot/nav/travelCatalog.js';
+import { essenceExitEdges } from '#/bot/nav/essenceExit.js';
 import { specialCrossingForTransport } from '#/bot/nav/data/specialCrossings.js';
 // namesHaveEntranaRestrictedGear / hasEntranaRestrictedGear live in exec/specialCrossing
 // (client-heavy). Keep pure catalog tests free of that import graph.

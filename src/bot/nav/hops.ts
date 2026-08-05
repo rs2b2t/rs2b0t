@@ -1,5 +1,5 @@
 import type { PathHop, TransportKind } from './types.js';
-import type { TransportInfo, Waypoint } from '../PathFinder.js';
+import type { TransportInfo, Waypoint } from './PathFinder.js';
 
 function kindOf(t: TransportInfo): TransportKind | 'walk' {
     if (t.teleportId || t.kind === 'teleport') {

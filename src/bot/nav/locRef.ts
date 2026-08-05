@@ -11,7 +11,7 @@
  * Docs: docs/NAV.md (multiloc), docs/local/nav-multiloc-plan.md
  */
 
-import type { TransportInfo } from '../PathFinder.js';
+import type { TransportInfo } from './PathFinder.js';
 
 /** Where scenery lives in the world (map placement). */
 export interface LocPlacement {

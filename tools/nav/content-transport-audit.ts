@@ -22,8 +22,8 @@ import {
     essenceEntryEdges,
     wildyLeverEdges,
     agilityShortcutEdges
-} from '../../src/bot/nav/v2/travelCatalog.ts';
-import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/v2/teleportCatalog.ts';
+} from '../../src/bot/nav/travelCatalog.ts';
+import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/teleportCatalog.ts';
 
 const contentRoot =
     process.argv.find(a => a.startsWith('--content='))?.split('=')[1]

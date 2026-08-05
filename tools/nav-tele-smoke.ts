@@ -1,12 +1,12 @@
 /**
- * Live smoke: nav-v2 spell teleport in the path graph.
+ * Live smoke: nav spell teleport in the path graph.
  *
  * Lumbridge → Varrock with useTeleportCatalog + runes. Expect hop log
  * "casting Varrock teleport" and arrival near Varrock square.
  *
  * Operator tooling — not an upstream CI gate. Deploy the bot client into
  * whatever engine you run (see docs/RUNNING.md / your local deploy script),
- * then: HEADED=1 bun tools/nav-v2-tele-smoke.ts
+ * then: HEADED=1 bun tools/nav-tele-smoke.ts
  *
  * Optional: BASE=… BUDGET_S=90
  */
@@ -19,7 +19,7 @@ const START = { x: 3222, z: 3218, level: 0 }; // Lumbridge
 const DEST = { x: 3213, z: 3424, level: 0 }; // Varrock tele landing
 const ARRIVAL = 8;
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 90) * 1000;
-const proof = createHarnessProof({ issue: 0, slug: 'nav-v2-tele' });
+const proof = createHarnessProof({ issue: 0, slug: 'nav-tele' });
 
 const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
@@ -99,7 +99,7 @@ async function seedRunes(page: Page): Promise<void> {
     }
 }
 
-console.log(`nav-v2-tele-smoke base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s`);
+console.log(`nav-tele-smoke base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s`);
 await proof.ensureDirs();
 const browser = await launchBrowser({ swiftshader: true });
 const t0 = Date.now();
@@ -161,8 +161,6 @@ try {
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: 4,
                             timeoutMs: budget,
-                            // Force v2 for this smoke regardless of Global settings default (classic).
-                            navEngine: 'v2',
                             useTeleportCatalog: true,
                             policy: {
                                 useTeleports: true,
@@ -250,7 +248,7 @@ try {
         okLog,
         logTail: logs.slice(-20)
     });
-    console.log('PASS nav-v2-tele-smoke Lumbridge → Varrock via spell tele');
+    console.log('PASS nav-tele-smoke Lumbridge → Varrock via spell tele');
     process.exit(0);
 } catch (e) {
     console.error(e);

@@ -25,17 +25,16 @@ import {
 } from './followMath.js';
 import { classifyReason } from './walkLadder.js';
 import { isArrived } from './arrival.js';
-import { snapshotWorldStateData } from './v2/worldStateLive.js';
-import type { PathPolicy } from './v2/types.js';
-import type { WorldStateData } from './v2/worldStateData.js';
-import { formatHops } from './v2/hops.js';
-import { isNavV2, type NavEngineId } from './navEngine.js';
-import { executeTeleportHop } from './v2/teleportExecute.js';
-import { missingItemsForPath, pathHasTeleport, planBankLeg } from './v2/bankPlan.js';
-import { virtualizeWithItems } from './v2/virtualState.js';
-import { findForwardRecoveryIndex } from './v2/routeRecovery.js';
-import { RouteState } from './v2/routeState.js';
-import { EssenceSession } from './v2/essenceSession.js';
+import { snapshotWorldStateData } from './worldStateLive.js';
+import type { PathPolicy } from './types.js';
+import type { WorldStateData } from './worldStateData.js';
+import { formatHops } from './hops.js';
+import { executeTeleportHop } from './teleportExecute.js';
+import { missingItemsForPath, pathHasTeleport, planBankLeg } from './bankPlan.js';
+import { virtualizeWithItems } from './virtualState.js';
+import { findForwardRecoveryIndex } from './routeRecovery.js';
+import { RouteState } from './routeState.js';
+import { EssenceSession } from './essenceSession.js';
 import { PathPublish, formatHopLabel } from './pathPublish.js';
 import { PathCameraFollow, pathFacingYaw } from './cameraFollow.js';
 import { resolveDangerZones, type DangerZoneRect } from './data/dangerZones.js';
@@ -91,20 +90,15 @@ export interface WalkOptions {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    /**
-     * Force walker engine for this walk. Default: Global setting `navEngine`
-     * (`classic` | `v2`). Classic preserves pre–nav-v2 routing.
-     */
-    navEngine?: NavEngineId;
-    /** nav-v2 only: path policy (tele toggles, distanceBeforeTeleport, …). */
+    /** Path policy (tele toggles, distanceBeforeTeleport, deny lists, …). */
     policy?: PathPolicy;
     /**
-     * nav-v2 only: include spell/jewellery tele edges in A*.
-     * When navEngine is v2, defaults to true unless set false or policy.useTeleports is false.
+     * Include spell/jewellery tele edges in A*.
+     * Default true unless set false or `policy.useTeleports` is false.
      */
     useTeleportCatalog?: boolean;
     /**
-     * nav-v2 only: optional known bank item counts for the bank planner
+     * Optional known bank item counts for the bank planner
      * (tests / when bank is not open). When omitted, planner uses open-bank
      * counts only and never opens a bank just to probe.
      */
@@ -113,7 +107,7 @@ export interface WalkOptions {
      * Danger / no-go zones the pathfinder must not enter.
      * Pass known ids (`'white-wolf-mountain'`) and/or ad-hoc rects.
      * Automatic catalog zones are also resolved from live player state.
-     * Applies to classic and v2. Idea credit: @lolwut.
+     * Idea credit: @lolwut.
      * @see src/bot/nav/data/dangerZones.ts
      */
     avoidZones?: readonly (string | import('./data/dangerZones.js').DangerZoneRect)[];
@@ -162,10 +156,7 @@ class WalkExecutorImpl {
 
     private walkPolicy: PathPolicy | undefined;
 
-    private walkUseTeleports = false;
-
-    /** Resolved engine for the current walkTo (classic | v2). */
-    private walkEngine: NavEngineId = 'classic';
+    private walkUseTeleports = true;
 
     /** At most one bank-for-route leg per walkTo. */
     private bankLegDone = false;
@@ -180,13 +171,10 @@ class WalkExecutorImpl {
         const timeoutMs = opts?.timeoutMs ?? 300_000;
         const log = opts?.log ?? ((): void => {});
         const maxExpansions = opts?.maxExpansions;
-        this.walkEngine = isNavV2(opts?.navEngine) ? 'v2' : 'classic';
-        this.walkPolicy = this.walkEngine === 'v2' ? opts?.policy : undefined;
         this.walkUseTeleports =
-            this.walkEngine === 'v2'
-            && opts?.useTeleportCatalog !== false
-            && opts?.policy?.useTeleports !== false;
-        this.walkBankItemCounts = this.walkEngine === 'v2' ? opts?.bankItemCounts : undefined;
+            opts?.useTeleportCatalog !== false && opts?.policy?.useTeleports !== false;
+        this.walkPolicy = opts?.policy ?? { useTeleports: this.walkUseTeleports };
+        this.walkBankItemCounts = opts?.bankItemCounts;
         const walkStart = reader.worldTile();
         this.walkAvoidZones = resolveDangerZones(opts?.avoidZones, {
             includeAutomatic: true,
@@ -206,9 +194,9 @@ class WalkExecutorImpl {
         this.lastOutcome = null;
         this.resetAvoids();
         RouteState.reset();
-        if (this.walkEngine === 'v2' && outer) {
+        if (outer) {
             log(
-                `nav engine=v2 tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })}`
+                `nav tele=${this.walkUseTeleports} policy=${JSON.stringify(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })}`
             );
         }
 
@@ -231,8 +219,8 @@ class WalkExecutorImpl {
                     return false;
                 }
 
-                // Path-scoped bank planner (v2 only, at most once).
-                if (this.walkEngine === 'v2' && !this.bankLegDone) {
+                // Path-scoped bank planner (at most once per walk).
+                if (!this.bankLegDone) {
                     const banked = await this.maybeBankForRoute(me, dest, path, maxExpansions, log);
                     if (banked) {
                         this.bankLegDone = true;
@@ -241,17 +229,11 @@ class WalkExecutorImpl {
                 }
 
                 const hops = path.hops ?? [];
-                if (this.walkEngine === 'v2') {
-                    log(
-                        `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`
-                    );
-                    if (hops.length > 0) {
-                        log(`hops:\n${formatHops(hops)}`);
-                    }
-                } else {
-                    log(
-                        `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms${repaths > 0 ? ` (repath ${repaths})` : ''}`
-                    );
+                log(
+                    `path: cost ${path.cost}, ${path.waypoints.length} waypoints, expanded ${path.expanded}, worker ${path.elapsedMs?.toFixed(1)}ms, hops=${hops.length}${repaths > 0 ? ` (repath ${repaths})` : ''}`
+                );
+                if (hops.length > 0) {
+                    log(`hops:\n${formatHops(hops)}`);
                 }
 
                 const tiles = expandWaypoints(path.waypoints);
@@ -585,9 +567,8 @@ class WalkExecutorImpl {
                   })
               ];
 
-        // Snapshot WorldState for **both** engines so requirements-gated transports
+        // Snapshot WorldState so requirements-gated transports
         // (agility shortcuts, quest doors, tolls) are evaluated for the live player.
-        // Classic still does not inject the v2 teleport catalog or bank planner (#340).
         let state: WorldStateData | undefined;
         if (stateOverride) {
             state = stateOverride;
@@ -596,23 +577,19 @@ class WalkExecutorImpl {
                 state = snapshotWorldStateData();
             } catch (e) {
                 state = undefined;
-                if (this.walkEngine === 'v2') {
-                    console.warn('[nav-v2] worldState snapshot failed', e);
-                }
+                console.warn('[nav] worldState snapshot failed', e);
             }
         }
-        let policy: PathPolicy | undefined;
-        let useTeleportCatalog = false;
-        if (this.walkEngine === 'v2') {
-            policy = { ...(this.walkPolicy ?? { useTeleports: this.walkUseTeleports }) };
-            useTeleportCatalog = this.walkUseTeleports;
-            if (this.sessionSuppressedTeleports.size > 0) {
-                const denied = new Set([
-                    ...(policy.denyTeleportIds ?? []),
-                    ...this.sessionSuppressedTeleports
-                ]);
-                policy.denyTeleportIds = [...denied];
-            }
+        const policy: PathPolicy = {
+            ...(this.walkPolicy ?? { useTeleports: this.walkUseTeleports })
+        };
+        const useTeleportCatalog = this.walkUseTeleports;
+        if (this.sessionSuppressedTeleports.size > 0) {
+            const denied = new Set([
+                ...(policy.denyTeleportIds ?? []),
+                ...this.sessionSuppressedTeleports
+            ]);
+            policy.denyTeleportIds = [...denied];
         }
 
         Navigator.findPath(from, to, {
@@ -707,9 +684,8 @@ class WalkExecutorImpl {
         if (!me) {
             return { ok: false, terminal: null };
         }
-        this.walkEngine = isNavV2() ? 'v2' : 'classic';
-        this.walkUseTeleports = this.walkEngine === 'v2';
-        this.walkPolicy = undefined;
+        this.walkUseTeleports = true;
+        this.walkPolicy = { useTeleports: true };
         this.resetAvoids();
         const path = await this.requestPath(me, dest, maxExpansions);
         if (!path.ok || path.waypoints.length === 0) {
@@ -766,7 +742,7 @@ class WalkExecutorImpl {
             // Server "I can't reach that!" after OUR walk click, while still stuck on the
             // click tile — repath immediately. Unrelated later CANT_REACH (doors/NPCs) is
             // ignored once we've moved. Transport hops already fail-fast on their own mark.
-            // Not a nav-v2 regression: plain walk follow never listened before.
+            // Plain walk follow did not listen to EventSignal before; keep intentional.
             if (
                 walkClickMark !== null
                 && walkClickAt !== null
@@ -1048,7 +1024,7 @@ class WalkExecutorImpl {
     private async handleTransport(approach: PathStep, step: PathStep, log: (msg: string) => void): Promise<boolean> {
         const transport = step.transport!;
 
-        if (this.walkEngine === 'v2' && (transport.teleportId || transport.kind === 'teleport')) {
+        if (transport.teleportId || transport.kind === 'teleport') {
             const ok = await executeTeleportHop(transport, log);
             if (ok) {
                 RouteState.noteTransport(approach, step);

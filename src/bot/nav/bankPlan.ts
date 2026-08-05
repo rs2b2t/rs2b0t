@@ -5,11 +5,11 @@
  * transports on the chosen route, withdraw only those — never random tele runes.
  */
 
-import type { Waypoint } from '../PathFinder.js';
+import type { Waypoint } from './PathFinder.js';
 import type { WorldStateData } from './worldStateData.js';
 import { worldStateFromData } from './worldStateData.js';
 import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS } from './teleportCatalog.js';
-import { specialCrossingAt } from '../data/specialCrossings.js';
+import { specialCrossingAt } from './data/specialCrossings.js';
 
 /** Flat cost for opening bank + withdrawing (tile-equivalent). */
 export const WITHDRAW_COST = 50;

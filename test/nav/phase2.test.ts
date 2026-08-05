@@ -7,9 +7,9 @@ import doorsJson from '#/bot/nav/data/doors.json';
 import stairsJson from '#/bot/nav/data/stairEdges.json';
 import transportsJson from '#/bot/nav/data/transports.json';
 import { PathFinder, type DoorEdgeData } from '#/bot/nav/PathFinder.js';
-import { hopsFromWaypoints, formatHops } from '#/bot/nav/v2/hops.js';
-import { plannedEdge, isAdjacentSameLevel } from '#/bot/nav/v2/plannedEdge.js';
-import type { WorldStateData } from '#/bot/nav/v2/worldStateData.js';
+import { hopsFromWaypoints, formatHops } from '#/bot/nav/hops.js';
+import { plannedEdge, isAdjacentSameLevel } from '#/bot/nav/plannedEdge.js';
+import type { WorldStateData } from '#/bot/nav/worldStateData.js';
 
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 /** Pack is gitignored — pack-dependent tests must skip, never silent-pass (#341). */

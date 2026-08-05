@@ -101,8 +101,8 @@ function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<
         timeoutMs: WALK_TIMEOUT_MS,
         log,
         ...(teleportsEnabled
-            ? { navEngine: 'v2' as const, useTeleportCatalog: true, policy: { useTeleports: true, distanceBeforeTeleport: TELEPORT_MIN_SPAN } }
-            : {})
+            ? { useTeleportCatalog: true, policy: { useTeleports: true, distanceBeforeTeleport: TELEPORT_MIN_SPAN } }
+            : { useTeleportCatalog: false, policy: { useTeleports: false } })
     };
 }
 

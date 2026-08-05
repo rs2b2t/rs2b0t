@@ -142,21 +142,6 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
     bankCommonJunk: { type: 'boolean', default: true, label: 'Bank gems/fruit/beer/kebabs/caskets (default)' },
     runAuto: { type: 'boolean', default: true, label: 'Auto re-enable run', help: 'flip the run orb back on once energy regenerates (the engine forces it off at 0)' },
     runEnergyMin: { type: 'number', default: 20, min: 0, max: 100, label: 'Re-enable run at energy %', help: 'higher = longer walk-regen phases with faster bursts; 0 = re-enable immediately' },
-    navEngine: {
-        type: 'string',
-        default: 'classic',
-        options: ['classic', 'v2'],
-        optionLabels: {
-            classic: 'Classic (default)',
-            v2: 'v2 (teles + bank plan)'
-        },
-        label: 'World walker',
-        help:
-            'One walker stack with two modes — not two engines. Both share doors, ships, '
-            + 'travel catalog, and skill/quest/coin gates from live WorldState. Classic (default) '
-            + 'omits spell/jewellery tele inject, path-scoped bank for runes/tolls, and hop logs. '
-            + 'v2 turns those on. Change applies on the next walk.'
-    },
     showNavPath: {
         type: 'boolean',
         default: false,

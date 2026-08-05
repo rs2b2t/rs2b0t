@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
 import { allTransportRows } from '#/bot/nav/loadTransportGraph.js';
-import { ESSENCE_MINE_PAD, ESSENCE_RETURN, essenceEntryEdges } from '#/bot/nav/v2/travelCatalog.js';
-import { emptyWorldStateData } from '#/bot/nav/v2/worldStateData.js';
+import { ESSENCE_MINE_PAD, ESSENCE_RETURN, essenceEntryEdges } from '#/bot/nav/travelCatalog.js';
+import { emptyWorldStateData } from '#/bot/nav/worldStateData.js';
 
 /**
  * Essence mine multiloc (#388 / #377):

@@ -22,8 +22,10 @@ export interface WalkResilientOptions {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
-    /** Forwarded to WalkExecutor (classic | v2). Default: Global `navEngine`. */
-    navEngine?: import('../nav/navEngine.js').NavEngineId;
+    /** Forwarded to WalkExecutor on every baked repath. */
+    useTeleportCatalog?: WalkOptions['useTeleportCatalog'];
+    policy?: WalkOptions['policy'];
+    bankItemCounts?: WalkOptions['bankItemCounts'];
     /**
      * Danger / no-go zones for every baked repath (same as WalkOptions.avoidZones).
      * Known ids and/or ad-hoc rects. @see src/bot/nav/data/dangerZones.ts
@@ -54,8 +56,10 @@ export const Traversal = {
         const maxBudget = opts.maxBudget ?? DEFAULT_MAX_BUDGET;
         const bakedTimeout = opts.timeoutMs ?? 90000;
         const maxPasses = opts.attempts;
-        const navEngine = opts.navEngine;
         const avoidZones = opts.avoidZones;
+        const useTeleportCatalog = opts.useTeleportCatalog;
+        const policy = opts.policy;
+        const bankItemCounts = opts.bankItemCounts;
 
         const dist = (): number => {
             const me = reader.worldTile();
@@ -108,7 +112,9 @@ export const Traversal = {
                     radius,
                     timeoutMs: bakedTimeout,
                     log,
-                    ...(navEngine ? { navEngine } : {}),
+                    ...(useTeleportCatalog !== undefined ? { useTeleportCatalog } : {}),
+                    ...(policy ? { policy } : {}),
+                    ...(bankItemCounts ? { bankItemCounts } : {}),
                     ...(avoidZones && avoidZones.length > 0 ? { avoidZones } : {}),
                     ...(action.bigBudget ? { maxExpansions: maxBudget } : {})
                 });

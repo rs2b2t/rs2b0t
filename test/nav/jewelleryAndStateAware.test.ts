@@ -7,8 +7,8 @@ import doorsJson from '#/bot/nav/data/doors.json';
 import stairsJson from '#/bot/nav/data/stairEdges.json';
 import transportsJson from '#/bot/nav/data/transports.json';
 import { PathFinder, type DoorEdgeData, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
-import { activateTransportRows } from '#/bot/nav/v2/activateStateAware.js';
-import { teleportById, JEWELLERY_TELEPORTS } from '#/bot/nav/v2/teleportCatalog.js';
+import { activateTransportRows } from '#/bot/nav/activateStateAware.js';
+import { teleportById, JEWELLERY_TELEPORTS } from '#/bot/nav/teleportCatalog.js';
 
 describe('jewellery catalog execution metadata', () => {
     test('every jewellery dest has dialogueChoose for Rub menus', () => {

@@ -1,11 +1,11 @@
 /**
- * Live stress suite for nav-v2: spell teles, jewellery Rub, pure walk + path paint,
+ * Live stress suite for nav: spell teles, jewellery Rub, pure walk + path paint,
  * trapdoor, multi-destination chain.
  *
  * Operator only — not upstream CI.
  *
  *   ~/redeploy.sh
- *   HEADED=1 bun tools/nav-v2-stress-live.ts
+ *   HEADED=1 bun tools/nav-stress-live.ts
  *
  * Optional: BASE=…  CASES=spell-varrock,jewellery-duel,path-paint,paint-compare  BUDGET_S=120
  * Mid-walk: ENERGY_REFILL_AT=25 (default) — poll ~1s, `~energy` when run ≤ threshold.
@@ -23,8 +23,8 @@ import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/ha
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 120) * 1000;
 /** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
 const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
-// No issue number → out/nav-v2-stress-proof.json (not issue0-…).
-const proof = createHarnessProof({ slug: 'nav-v2-stress' });
+// No issue number → out/nav-stress-proof.json (not issue0-…).
+const proof = createHarnessProof({ slug: 'nav-stress' });
 
 const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
@@ -50,8 +50,7 @@ type Abi = {
                     radius?: number;
                     timeoutMs?: number;
                     log?: (m: string) => void;
-                    navEngine?: string;
-                    useTeleportCatalog?: boolean;
+                                        useTeleportCatalog?: boolean;
                     policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
                 }
             ): Promise<boolean>;
@@ -231,7 +230,6 @@ async function maybeRefillEnergy(page: Page, lowAt = ENERGY_REFILL_AT): Promise<
 type WalkOpts = {
     dest: Tile;
     budget?: number;
-    navEngine?: 'classic' | 'v2';
     useTeleports?: boolean;
     distanceBeforeTeleport?: number;
     allowTeleportIds?: string[];
@@ -242,7 +240,7 @@ type WalkOpts = {
 async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__navStress']>> {
     const budget = opts.budget ?? BUDGET_MS;
     await page.evaluate(
-        ({ destination, budgetMs, navEngine, useTeleports, distanceBeforeTeleport, allowTeleportIds, samplePath, radius }) => {
+        ({ destination, budgetMs, useTeleports, distanceBeforeTeleport, allowTeleportIds, samplePath, radius }) => {
             const g = globalThis as never as Abi;
             const logs: string[] = [];
             const pathSamples: { n: number; pathIdx: number; hasTransport: boolean }[] = [];
@@ -267,19 +265,16 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                                 }
                             }, 400);
                         }
+                        const teleOn = useTeleports !== false;
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: radius ?? 4,
                             timeoutMs: budgetMs,
-                            navEngine,
-                            useTeleportCatalog: useTeleports !== false && navEngine === 'v2',
-                            policy:
-                                navEngine === 'v2'
-                                    ? {
-                                          useTeleports: useTeleports !== false,
-                                          distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
-                                          ...(allowTeleportIds ? { allowTeleportIds } : {})
-                                      }
-                                    : undefined,
+                            useTeleportCatalog: teleOn,
+                            policy: {
+                                useTeleports: teleOn,
+                                distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
+                                ...(allowTeleportIds ? { allowTeleportIds } : {})
+                            },
                             log: m => {
                                 logs.push(m);
                                 this.log(m);
@@ -318,7 +313,6 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
         {
             destination: opts.dest,
             budgetMs: budget,
-            navEngine: opts.navEngine ?? 'v2',
             useTeleports: opts.useTeleports,
             distanceBeforeTeleport: opts.distanceBeforeTeleport,
             allowTeleportIds: opts.allowTeleportIds,
@@ -365,7 +359,9 @@ const ALL_CASES = [
     'jewellery-duel',
     'jewellery-glory',
     'trapdoor-edge',
-    'classic-short'
+    'walk-only-short',
+    'walk-lumb-dray',
+    'walk-varrock-edge'
 ] as const;
 
 type CaseId = (typeof ALL_CASES)[number];
@@ -389,7 +385,7 @@ if (cases.length === 0) {
 }
 
 console.log(
-    `nav-v2-stress-live base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s cases=${cases.join(',')}`
+    `nav-stress-live base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s cases=${cases.join(',')}`
 );
 console.log(`  proof → ${proof.paths.successProof}  screenshot → ${proof.paths.successScreenshot}`);
 await proof.ensureDirs();
@@ -429,7 +425,6 @@ try {
     // Global toggles for path paint + explore dual-paint + engine preference.
     const paintSettings = {
         showNavPath: true,
-        navEngine: 'v2',
         navCameraFollow: true,
         navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
         navPathClientSegment: PATH_PAINT_CLIENT_SEG,
@@ -439,7 +434,7 @@ try {
     await page.evaluate(flags => {
         const g = globalThis as never as Abi;
         g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-        g.__rs2b0t.SettingsStore.save('Global', 'navEngine', 'v2');
+        
         g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
         g.__rs2b0t.SettingsStore.save('Global', 'navPathSceneExpand', flags.scene ? 'true' : 'false');
         g.__rs2b0t.SettingsStore.save('Global', 'navPathClientSegment', flags.client ? 'true' : 'false');
@@ -506,7 +501,6 @@ try {
                 samplePath: true,
                 useTeleports: false,
                 budget: Math.max(BUDGET_MS, 120_000),
-                navEngine: 'classic'
             });
             const dist = r.tile ? cheb(r.tile, dest) : 9999;
             const maxTiles = r.pathSamples.reduce((m, s) => Math.max(m, s.n), 0);
@@ -682,23 +676,22 @@ try {
         }
     }
 
-    // ── classic-short: classic engine, no tele catalog ──────────────────
-    if (cases.includes('classic-short')) {
-        const id = 'classic-short';
+    // ── walk-only-short: no tele catalog ──────────────────
+    if (cases.includes('walk-only-short')) {
+        const id = 'walk-only-short';
         console.log(`\n══ ${id} ══`);
         try {
             await teleArrive(page, { x: 3222, z: 3218, level: 0 });
             const dest = { x: 3232, z: 3298, level: 0 };
             const r = await runWalk(page, {
                 dest,
-                navEngine: 'classic',
                 useTeleports: false,
                 budget: 90_000
             });
             const dist = r.tile ? cheb(r.tile, dest) : 9999;
-            const noV2 = !r.logs.some(l => /nav engine=v2|casting /i.test(l));
-            const ok = dist <= 6 && noV2;
-            const detail = `dist=${dist} noV2tele=${noV2} walkOk=${r.walkOk}`;
+            const noTele = !r.logs.some(l => /casting |jewellery|Rub /i.test(l));
+            const ok = dist <= 6 && noTele;
+            const detail = `dist=${dist} noTele=${noTele} walkOk=${r.walkOk}`;
             console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${id}: ${detail}`);
             if (!ok) {
                 console.log(r.logs.slice(-15).join('\n'));
@@ -710,7 +703,54 @@ try {
         }
     }
 
-    const passed = results.filter(r => r.ok).length;
+    async function pureWalkCase(
+        id: string,
+        from: Tile,
+        dest: Tile,
+        budget = 180_000,
+        arrive = 8
+    ): Promise<void> {
+        console.log(`\n══ ${id} ══`);
+        try {
+            await teleArrive(page, from);
+            const r = await runWalk(page, { dest, useTeleports: false, budget });
+            const dist = r.tile ? cheb(r.tile, dest) : 9999;
+            const ok = dist <= arrive;
+            const detail = `dist=${dist} walkOk=${r.walkOk}`;
+            console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${id}: ${detail}`);
+            if (!ok) {
+                console.log(r.logs.slice(-15).join('\n'));
+            }
+            results.push({ id, ok, detail });
+        } catch (e) {
+            results.push({ id, ok: false, detail: String(e) });
+            console.error(`${stamp()} FAIL ${id}:`, e);
+        }
+    }
+
+    // Lumbridge market → Draynor bank square (pure walk)
+    if (cases.includes('walk-lumb-dray')) {
+        await pureWalkCase(
+            'walk-lumb-dray',
+            { x: 3222, z: 3218, level: 0 },
+            { x: 3092, z: 3243, level: 0 },
+            240_000,
+            10
+        );
+    }
+
+    // Varrock west bank → Edgeville (pure walk)
+    if (cases.includes('walk-varrock-edge')) {
+        await pureWalkCase(
+            'walk-varrock-edge',
+            { x: 3185, z: 3436, level: 0 },
+            { x: 3093, z: 3491, level: 0 },
+            240_000,
+            10
+        );
+    }
+
+    const passed = results.filter(r => r.ok).length
     const failed = results.filter(r => !r.ok);
     console.log(`\n── summary ${passed}/${results.length} pass ──`);
     for (const r of results) {
@@ -733,10 +773,10 @@ try {
     console.log(`wrote ${proof.paths.successProof} (${results.length} case result(s))`);
 
     if (failed.length > 0) {
-        console.error(`FAIL nav-v2-stress-live ${failed.length} case(s)`);
+        console.error(`FAIL nav-stress-live ${failed.length} case(s)`);
         process.exit(1);
     }
-    console.log('PASS nav-v2-stress-live all cases');
+    console.log('PASS nav-stress-live all cases');
     process.exit(0);
 } catch (e) {
     console.error(e);

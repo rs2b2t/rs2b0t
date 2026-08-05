@@ -1,6 +1,6 @@
 import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
-import type { PathPolicy } from './v2/types.js';
-import type { WorldStateData } from './v2/worldStateData.js';
+import type { PathPolicy } from './types.js';
+import type { WorldStateData } from './worldStateData.js';
 
 export type PathResult = PathOutcome & { elapsedMs?: number };
 

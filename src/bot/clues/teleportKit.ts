@@ -1,5 +1,5 @@
 // docs/CLUES.md#teleports
-import { ALL_TELEPORT_DESTINATIONS } from '#/bot/nav/v2/teleportCatalog.js';
+import { ALL_TELEPORT_DESTINATIONS } from '#/bot/nav/teleportCatalog.js';
 
 /**
  * Runes any catalog teleport consumes, and the per-cast count of the hungriest

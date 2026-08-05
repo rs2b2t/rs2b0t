@@ -18,7 +18,7 @@ import {
     v1TransportToEdge,
     type TransportEdge,
     type WorldState
-} from '#/bot/nav/v2/index.js';
+} from '#/bot/nav/index.js';
 
 function state(partial: Partial<{
     members: boolean;

@@ -5,9 +5,9 @@ import {
     pathHasTeleport,
     planBankLeg,
     WITHDRAW_COST
-} from '#/bot/nav/v2/bankPlan.js';
-import { virtualizeWithItems } from '#/bot/nav/v2/virtualState.js';
-import { emptyWorldStateData } from '#/bot/nav/v2/worldStateData.js';
+} from '#/bot/nav/bankPlan.js';
+import { virtualizeWithItems } from '#/bot/nav/virtualState.js';
+import { emptyWorldStateData } from '#/bot/nav/worldStateData.js';
 import type { Waypoint } from '#/bot/nav/PathFinder.js';
 
 const wp = (x: number, z: number, transport?: Waypoint['transport']): Waypoint => ({

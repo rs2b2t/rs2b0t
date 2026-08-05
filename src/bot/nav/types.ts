@@ -1,7 +1,7 @@
 /**
  * Nav v2 transport contract.
  *
- * Docs: docs/nav-v2/README.md · docs/NAV.md
+ * Docs: docs/NAV.md · docs/nav/
  *
  * Unified edge shape (origin, destination, skills, items, quests, currency,
  * loc id/action) for a 2004 bot that must *execute* every hop, not only plan it.

@@ -6,7 +6,7 @@
  * per-placement fixed dest). Client varp pack id: 64.
  */
 
-import type { TransportEdgeData } from '../PathFinder.js';
+import type { TransportEdgeData } from './PathFinder.js';
 import { packNavPoint, parseLcCoord } from './lcCoord.js';
 import type { NavPoint } from './types.js';
 

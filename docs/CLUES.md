@@ -202,7 +202,7 @@ the fight simply runs without the protection prayer.
 ## Teleports
 
 Trails cross the map — Varrock to Feldip, Varrock to the level-50 Wilderness — so
-clue legs route through the nav-v2 teleport catalog: the standard spellbook and the
+clue legs route through the nav teleport catalog: the standard spellbook and the
 rubbed jewellery (ring of dueling, games necklace, glory). A teleport is only
 admitted once the route is longer than `TELEPORT_MIN_SPAN`, so a walk across a town
 stays a walk.

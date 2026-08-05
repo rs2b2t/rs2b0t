@@ -3,10 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import transports from '#/bot/nav/data/transports.json';
 import { specialCrossingAt } from '#/bot/nav/data/specialCrossings.js';
 import type { TransportEdgeData } from '#/bot/nav/PathFinder.js';
-import { specialRequiresAt } from '#/bot/nav/v2/specialRequires.js';
-import { mageArenaBarrierEdges } from '#/bot/nav/v2/travelCatalog.js';
-import { emptyWorldStateData, worldStateFromData } from '#/bot/nav/v2/worldStateData.js';
-import { meetsRequires } from '#/bot/nav/v2/requires.js';
+import { specialRequiresAt } from '#/bot/nav/specialRequires.js';
+import { mageArenaBarrierEdges } from '#/bot/nav/travelCatalog.js';
+import { emptyWorldStateData, worldStateFromData } from '#/bot/nav/worldStateData.js';
+import { meetsRequires } from '#/bot/nav/requires.js';
 
 /**
  * Direction-inferred transports (#403): one loc placement, content picks side from

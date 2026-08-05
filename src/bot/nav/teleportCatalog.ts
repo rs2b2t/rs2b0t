@@ -1,7 +1,7 @@
 /**
  * Teleport catalog derived from rs2b2t-era content scripts (revision 274 pack).
  *
- * Not wired into PathFinder yet — Phase D catalog for nav-v2.
+ * Spell + jewellery destinations injected into PathFinder A*.
  */
 
 import { ensureEdgeId } from './edgeId.js';

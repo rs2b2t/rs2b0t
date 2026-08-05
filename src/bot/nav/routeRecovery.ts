@@ -3,7 +3,7 @@
  * the same path chain instead of immediately repathing.
  */
 
-import { chebyshev, type PathTileLike } from '../followMath.js';
+import { chebyshev, type PathTileLike } from './followMath.js';
 
 /**
  * Furthest index in [fromIdx+1, limitIdx] that is on the same level, within

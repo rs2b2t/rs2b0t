@@ -664,15 +664,12 @@ Traversal.walkTo(dest: WorldTile, opts?: {
     timeoutMs?: number;
     log?: (msg: string) => void;
     maxExpansions?: number;
-    // Feature gate on the *single* walker stack (not two engines). Global `navEngine`
-    // unless overridden. classic (default) = shared graph/exec, no tele inject / bank plan.
-    // v2 = same stack + teleport catalog inject + path-scoped bank for runes/tolls.
-    // See docs/NAV.md § One walker, two modes.
-    navEngine?: 'classic' | 'v2';
-    // v2 only: spell/jewellery tele edges (default true when navEngine is v2).
+    // Spell/jewellery tele edges in A* (default true). Set false for pure walk.
     useTeleportCatalog?: boolean;
-    // v2 only: tele policy (useTeleports, distanceBeforeTeleport, allowTeleportIds, …).
+    // Tele policy (useTeleports, distanceBeforeTeleport, allowTeleportIds, …).
     policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
+    // Optional bank item counts for path-scoped bank planner.
+    bankItemCounts?: Record<string, number>;
     // Optional: ban map rects from A* (ids or ad-hoc). See docs/NAV.md#danger-zones
     avoidZones?: readonly (string | { minX: number; maxX: number; minZ: number; maxZ: number; level?: number })[];
 }): Promise<boolean>
@@ -686,7 +683,9 @@ Traversal.walkResilient(dest: WorldTile, opts: {
     sceneRadius?: number;
     maxBudget?: number;
     log?: (msg: string) => void;
-    navEngine?: 'classic' | 'v2'; // forwarded on every baked repath
+    useTeleportCatalog?: boolean; // forwarded on every baked repath
+    policy?: WalkOptions['policy'];
+    bankItemCounts?: WalkOptions['bankItemCounts'];
     avoidZones?: WalkOptions['avoidZones']; // forwarded on every baked repath
 }): Promise<boolean>
 
@@ -697,11 +696,11 @@ Traversal.remaining(): number  // path tiles left in the active walk
 `Traversal.walkTo` web-walks the whole world (A\* over the collision pack + door/
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
-There is **one** walker stack: live **WorldState** (skills, quests, inventory, members)
-gates skill doors, tolls, and quest transports for both modes. **v2** only adds spell/
-jewellery tele inject and path-scoped bank for runes/tolls. See
-[One walker, two modes](NAV.md#one-walker-two-modes-classic--v2) and
-[`docs/nav-v2/`](nav-v2/README.md).
+There is **one** walker: live **WorldState** (skills, quests, inventory, members)
+gates skill doors, tolls, and quest transports; spell/jewellery tele inject and
+path-scoped bank for runes/tolls are on by default (opt out via
+`useTeleportCatalog: false`). See [World-walking](NAV.md) and
+[`docs/nav/`](nav/TRANSPORTS-2004.md).
 
 **Essence mine (session multiloc):** multi-entry, **same-origin exit only**. Exit
 portals share one loc type but telejump to the wizard you entered with
@@ -713,7 +712,7 @@ NPC without the walker should call `__rs2b0t.EssenceSession.noteEntryFromNpc('Au
 (or `noteEntry('aubury')`) after a successful teleport.
 
 **Loc placement (`locRef`):** transport/door edges refer to scenery by placement
-(tile + optional loc id / open id). Helpers in `nav/v2/locRef.ts` match live locs
+(tile + optional loc id / open id). Helpers in `nav/locRef.ts` match live locs
 and probe validity (including already-open barriers).
 
 `walkResilient` wraps the same pathfinder in an escalation ladder — **use it for

@@ -47,7 +47,7 @@ worker.addEventListener('message', event => {
             if (message.useTeleportCatalog) {
                 const teleHops = outcome.ok ? outcome.hops.filter(h => h.kind === 'teleport').length : 0;
                 console.log(
-                    `[nav-v2 worker] teleCatalog=${message.useTeleportCatalog} policy=${JSON.stringify(message.policy)} ok=${outcome.ok} cost=${outcome.ok ? outcome.cost : '-'} teleHops=${teleHops} law=${message.state?.items?.['Law rune'] ?? '?'}`
+                    `[nav worker] teleCatalog=${message.useTeleportCatalog} policy=${JSON.stringify(message.policy)} ok=${outcome.ok} cost=${outcome.ok ? outcome.cost : '-'} teleHops=${teleHops} law=${message.state?.items?.['Law rune'] ?? '?'}`
                 );
             }
             worker.postMessage({ type: 'path', id: message.id, elapsedMs: performance.now() - started, ...outcome });

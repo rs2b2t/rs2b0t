@@ -2,7 +2,7 @@
  * Apply curated state-aware activations: strip disabledReason and attach requires.
  */
 
-import type { TransportEdgeData } from '../PathFinder.js';
+import type { TransportEdgeData } from './PathFinder.js';
 import { activationForEdge, isStateDeferredReason } from './stateAwareRequires.js';
 import type { TransportRequires } from './types.js';
 

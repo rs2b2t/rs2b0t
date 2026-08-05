@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { hopsFromWaypoints, formatHops } from '#/bot/nav/v2/hops.js';
+import { hopsFromWaypoints, formatHops } from '#/bot/nav/hops.js';
 import type { Waypoint } from '#/bot/nav/PathFinder.js';
 
 describe('hopsFromWaypoints (#337)', () => {

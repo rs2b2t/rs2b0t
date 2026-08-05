@@ -14,8 +14,8 @@
  *   HEADED=1 HARD=1 ENERGY_REFILL_AT=25 bun tools/nav-script-routes-live.ts
  *   HEADED=1 TRANSPORT_HEAVY=1 LIMIT=12 bun tools/nav-script-routes-live.ts
  *   HEADED=1 LIMIT=8 BUDGET_S=180 bun tools/nav-script-routes-live.ts
- *   HEADED=1 NAV_ENGINE=classic LIMIT=3 bun tools/nav-script-routes-live.ts
- *   HEADED=1 NAV_ENGINE=classic SHIP_352=1 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 LIMIT=10 bun tools/nav-script-routes-live.ts
+ *   HEADED=1 SHIP_352=1 bun tools/nav-script-routes-live.ts
  *   HEADED=1 LIMIT=2 PATH_PAINT=1 bun tools/nav-script-routes-live.ts   # dual red/cyan paint
  *
  * HARD=1 reads tools/nav/script-routes.hardest.json only (no DOM preload).
@@ -23,7 +23,7 @@
  *   (regenerate: bun tools/nav/transport-heavy-routes.ts --write --n=14).
  *   Essence multiloc: TH-ess-round-* wizard→mine→portal (no setvar).
  * SHIP_352=1 → Ardougne↔Brimhaven board+gangplank legs (issue #352 stuck-on-boat).
- * NAV_ENGINE=classic|v2 (default v2 for this harness) — forces walkTo.navEngine + Global setting.
+ * USE_TELEPORTS=0 to disable spell/jewellery tele inject (default on).
  * PATH_PAINT=1 (default) enables showNavPath + explore scene expand + cyan client segment.
  * Jewellery: charged duel/glory/games neck seeded at start (and topped up each leg) so
  *   real OD paths may Rub; not a fake end-of-run allowlist test. JEWELLERY_ONLY=1 restores
@@ -38,7 +38,7 @@ import type { ScriptRoute } from './nav/script-route-corpus.ts';
 import {
     transportQuestJournalNames,
     transportQuestSetvarCommands
-} from '../src/bot/nav/v2/transportQuestReqs.ts';
+} from '../src/bot/nav/transportQuestReqs.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -53,12 +53,11 @@ const USE_TRANSPORT_HEAVY =
     process.env.TRANSPORT_HEAVY === '1' || process.env.TRANSPORT_HEAVY === 'true';
 /**
  * SHIP_352=1 → Ardougne↔Brimhaven ship legs that reproduce #352 (stuck on boat / no plank).
- * Forces coins seed; classic and v2 both exercise the shared ship/gangplank execute path.
+ * Forces coins seed; ship/gangplank execute path.
  */
 const USE_SHIP_352 = process.env.SHIP_352 === '1' || process.env.SHIP_352 === 'true';
-/** NAV_ENGINE=classic|v2 — default v2 (historical harness default). Classic = no tele inject. */
-const NAV_ENGINE: 'classic' | 'v2' =
-    process.env.NAV_ENGINE === 'classic' || process.env.NAV_ENGINE === 'v1' ? 'classic' : 'v2';
+/** Optional: USE_TELEPORTS=0 to disable spell/jewellery tele inject for a pure-walk smoke. */
+const USE_TELEPORTS = process.env.USE_TELEPORTS !== '0' && process.env.USE_TELEPORTS !== 'false';
 /** PATH_PAINT=0 disables showNavPath; default on for operator visual checks. */
 const PATH_PAINT = process.env.PATH_PAINT !== '0' && process.env.PATH_PAINT !== 'false';
 const PATH_PAINT_SCENE_EXPAND =
@@ -101,7 +100,6 @@ type Abi = {
                     radius?: number;
                     timeoutMs?: number;
                     log?: (m: string) => void;
-                    navEngine?: string;
                     useTeleportCatalog?: boolean;
                     policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
                 }
@@ -340,7 +338,7 @@ async function runEssenceRoundtrip(
 
 /**
  * Issue #352: bots boarded Ardougne→Brimhaven then sat on the deck (no gangplank Cross).
- * OD pairs force Barnaby/Customs Pay-fare + deck→shore gangplank (shared classic/v2 exec).
+ * OD pairs force Barnaby/Customs Pay-fare + deck→shore gangplank (shared exec).
  *
  * Stands from transports.json / specialCrossings (Barnaby 2683,3272 → deck 2775,3234 L1
  * → plank to 2772,3234 L0; reverse Customs 2772,3234 → Ardougne deck 2683,3268 L1 → shore).
@@ -385,14 +383,12 @@ type WalkOpts = {
     allowTeleportIds?: string[];
     distanceBeforeTeleport?: number;
     useTeleports?: boolean;
-    navEngine?: 'classic' | 'v2';
 };
 
 async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; tile: Tile | null; logs: string[] }> {
-    const engine = opts.navEngine ?? NAV_ENGINE;
-    const teleOn = engine === 'v2' && opts.useTeleports !== false;
+    const teleOn = opts.useTeleports !== false && USE_TELEPORTS;
     await page.evaluate(
-        ({ destination, budgetMs, allowTeleportIds, distanceBeforeTeleport, teleOn, engine }) => {
+        ({ destination, budgetMs, allowTeleportIds, distanceBeforeTeleport, teleOn }) => {
             const g = globalThis as never as Abi;
             const logs: string[] = [];
             g.__navScriptRoute = undefined;
@@ -402,16 +398,12 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
                         const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
                             radius: 4,
                             timeoutMs: budgetMs,
-                            navEngine: engine,
                             useTeleportCatalog: teleOn,
-                            policy:
-                                engine === 'v2'
-                                    ? {
-                                          useTeleports: teleOn,
-                                          distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
-                                          ...(allowTeleportIds ? { allowTeleportIds } : {})
-                                      }
-                                    : undefined,
+                            policy: {
+                                useTeleports: teleOn,
+                                distanceBeforeTeleport: distanceBeforeTeleport ?? 40,
+                                ...(allowTeleportIds ? { allowTeleportIds } : {})
+                            },
                             log: m => {
                                 logs.push(m);
                                 this.log(m);
@@ -438,8 +430,7 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
             budgetMs: opts.budget,
             allowTeleportIds: opts.allowTeleportIds,
             distanceBeforeTeleport: opts.distanceBeforeTeleport,
-            teleOn,
-            engine
+            teleOn
         }
     );
 
@@ -471,11 +462,10 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; t
     return result;
 }
 
-/** Global nav engine + explore path paint (red pack / cyan client segment). */
+/** Explore path paint (red pack / cyan client segment). */
 async function applyNavPaintSettings(page: Page): Promise<void> {
     await setSettings(page, 'Global', {
         showNavPath: PATH_PAINT,
-        navEngine: NAV_ENGINE,
         navCameraFollow: true,
         navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
         navPathClientSegment: PATH_PAINT_CLIENT_SEG,
@@ -485,7 +475,6 @@ async function applyNavPaintSettings(page: Page): Promise<void> {
         flags => {
             const g = globalThis as never as Abi;
             g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', flags.paint ? 'true' : 'false');
-            g.__rs2b0t.SettingsStore.save('Global', 'navEngine', flags.engine);
             g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
             g.__rs2b0t.SettingsStore.save(
                 'Global',
@@ -501,7 +490,6 @@ async function applyNavPaintSettings(page: Page): Promise<void> {
         },
         {
             paint: PATH_PAINT,
-            engine: NAV_ENGINE,
             sceneExpand: PATH_PAINT_SCENE_EXPAND,
             clientSeg: PATH_PAINT_CLIENT_SEG
         }
@@ -580,7 +568,7 @@ async function seedTeleKit(page: Page, stamp: () => string): Promise<void> {
             await seedItem(page, r.debug, r.match, r.qty);
         }
     }
-    if (NAV_ENGINE === 'v2') {
+    if (USE_TELEPORTS) {
         for (const j of JEWELLERY_SEEDS) {
             if (!(await invHas(page, j.match))) {
                 await seedItem(page, j.debug, j.match, 1);
@@ -590,7 +578,7 @@ async function seedTeleKit(page: Page, stamp: () => string): Promise<void> {
             `${stamp()} seeded tele kit: runes + ${JEWELLERY_SEEDS.map(j => j.label).join(', ')} (real OD may Rub)`
         );
     } else {
-        console.log(`${stamp()} seeded tele runes (classic — no jewellery catalog)`);
+        console.log(`${stamp()} seeded tele runes only (USE_TELEPORTS=0)`);
     }
 }
 
@@ -599,7 +587,7 @@ async function seedTeleKit(page: Page, stamp: () => string): Promise<void> {
  * Does not clear inventory — keeps coins/quest junk from earlier legs.
  */
 async function ensureJewellery(page: Page): Promise<void> {
-    if (NAV_ENGINE !== 'v2') {
+    if (!USE_TELEPORTS) {
         return;
     }
     for (const j of JEWELLERY_SEEDS) {
@@ -695,7 +683,7 @@ const routes = USE_SHIP_352
         : pickLiveRoutes(all, LIVE_LIMIT);
 
 console.log(
-    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} navEngine=${NAV_ENGINE} pathPaint=${PATH_PAINT} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} budget≈${Math.round(BUDGET_MS / 1000)}s`
+    `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} tele=${USE_TELEPORTS} pathPaint=${PATH_PAINT} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} budget≈${Math.round(BUDGET_MS / 1000)}s`
 );
 console.log(
     USE_SHIP_352
@@ -784,7 +772,7 @@ try {
     // Runes + charged jewellery at start so real OD paths may spell/Rub (not a fake end test).
     await seedTeleKit(page, stamp);
     // Coins for cart / toll / ship fares (classic + transport-heavy + #352 ships).
-    if (USE_TRANSPORT_HEAVY || USE_SHIP_352 || NAV_ENGINE === 'classic' || USE_HARDEST) {
+    if (USE_TRANSPORT_HEAVY || USE_SHIP_352 || USE_HARDEST || !USE_TELEPORTS) {
         await cheatQuiet(page, 'give coins 5000');
         console.log(`${stamp()} seeded coins for fares (ship/cart/toll)`);
     }
@@ -838,7 +826,7 @@ try {
         }
     }
 
-    if (NAV_ENGINE === 'v2') {
+    if (USE_TELEPORTS) {
         console.log(
             `${stamp()} jewellery Rub observed on ${jewelleryHops}/${routes.length} OD leg(s) (seeded at start; natural plan)`
         );
