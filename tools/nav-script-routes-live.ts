@@ -674,10 +674,21 @@ function jewelleryUsedInLogs(logs: string[]): boolean {
 }
 
 const all = USE_HARDEST || USE_TRANSPORT_HEAVY || USE_SHIP_352 ? [] : await loadSeedRoutes();
+/** Pure-walk TH: essence entry is wizard portal into a random mine pad — not pathable as a
+ *  fixed OD with tele catalog off (scripts own entry; expansion budget fails). Skip those
+ *  legs when USE_TELEPORTS=0 so LIMIT counts ship/glider/spirit/cart/Entrana instead. */
+function loadTransportHeavyForLive(limit: number): TransportHeavyRoute[] {
+    const raw = loadTransportHeavyRoutes(0); // full list
+    const filtered =
+        USE_TELEPORTS
+            ? raw
+            : raw.filter(r => !r.essenceRoundtrip && !/^TH-ess-/i.test(r.id));
+    return limit > 0 ? filtered.slice(0, limit) : filtered;
+}
 const routes = USE_SHIP_352
     ? loadShip352Routes(LIVE_LIMIT || 2)
     : USE_TRANSPORT_HEAVY
-      ? loadTransportHeavyRoutes(LIVE_LIMIT || 12)
+      ? loadTransportHeavyForLive(LIVE_LIMIT || 12)
       : USE_HARDEST
         ? loadHardestRoutes(LIVE_LIMIT || 25)
         : pickLiveRoutes(all, LIVE_LIMIT);
