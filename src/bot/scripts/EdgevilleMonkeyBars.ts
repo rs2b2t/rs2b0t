@@ -518,6 +518,7 @@ class NavigateToMonkeyBars implements Task {
 
 class RepeatMonkeyBars implements Task {
     private lastScanLog = 0;
+    private lastXp = -1;
 
     constructor(private bot: EdgevilleMonkeyBars) {}
 
@@ -531,6 +532,17 @@ class RepeatMonkeyBars implements Task {
 
     async execute() {
         this.bot.setStatus('swinging on monkey bars');
+
+        // Spam mode doesn't wait for a swing to finish, so XP for a prior click
+        // lands on a later tick. Count a swing whenever XP increased since the
+        // last loop iteration instead of synchronously after the click.
+        const xpNow = Skills.xp('agility');
+        if (this.lastXp >= 0 && xpNow > this.lastXp) {
+            this.bot.countCompletion();
+            this.bot.log(`Swing complete (+${xpNow - this.lastXp} xp)`);
+        }
+        this.lastXp = xpNow;
+
         const preferredOp = 'Swing across';
         const bars = findMonkeyBars(this.bot);
 
@@ -565,8 +577,6 @@ class RepeatMonkeyBars implements Task {
             return;
         }
 
-        const beforeXp = Skills.xp('agility');
-        const beforeTile = Game.tile();
         this.bot.setStatus(`${op} ${bars.name ?? 'bars'} @ ${bars.tile().x},${bars.tile().z}`);
         this.bot.log(`Interacting bars: ${op} on '${bars.name}' @ ${bars.tile().x},${bars.tile().z} actions=[${bars.actions().join(', ')}]`);
 
@@ -574,51 +584,11 @@ class RepeatMonkeyBars implements Task {
         if (!clicked) {
             this.bot.log(`interact('${op}') returned false`);
             this.bot.countFailedSwing();
-            await Execution.delayTicks(2);
             return;
         }
 
-        // success = agility XP (not HP damage — skeletons hit constantly here)
-        const progressed = await Execution.delayUntil(() => {
-            if (this.bot.died) {
-                return true; // bail early — no XP coming after death
-            }
-            if (Skills.xp('agility') > beforeXp) {
-                return true;
-            }
-            const t = Game.tile();
-            // also accept a clear tile change while animating (swing traversal)
-            if (beforeTile && t && (t.x !== beforeTile.x || t.z !== beforeTile.z) && Game.animating()) {
-                return false; // keep waiting for XP / settle
-            }
-            return false;
-        }, 12_000);
-
-        if (this.bot.died) {
-            return; // let the task scheduler pick up BankAndRestock immediately
-        }
-
-        // settle animation
-        let last = Game.tile();
-        for (let i = 0; i < 20; i++) {
-            if (this.bot.died) {
-                return;
-            }
-            await Execution.delayTicks(1);
-            const now = Game.tile();
-            if (now && last && now.x === last.x && now.z === last.z && !Game.animating()) {
-                break;
-            }
-            last = now;
-        }
-
-        if (Skills.xp('agility') > beforeXp || progressed) {
-            this.bot.countCompletion();
-            this.bot.log(`Swing complete (+${Skills.xp('agility') - beforeXp} xp)`);
-        } else {
-            this.bot.countFailedSwing();
-            this.bot.log('Swing produced no agility XP — retrying');
-        }
+        // Spam mode: no wait for completion — loop back and click again immediately.
+        // Swing is counted on the next loop when the XP for this click lands.
     }
 }
 
