@@ -14,7 +14,8 @@ import {
     FC_ID,
     FC_ITEM,
     FC_NPC,
-    FC_STAGE
+    FC_STAGE,
+    inChronozonLair
 } from './areas.js';
 import { combineCrest, fightChronozon } from './chronozon.js';
 import { readFamilyCrestProgress } from './journal.js';
@@ -44,6 +45,7 @@ import {
     held,
     heldAntipoison,
     heldFood,
+    heldName,
     LEG_BANK,
     MOULD_GP,
     RUBY_GP,
@@ -228,6 +230,17 @@ function sourceRunes(snap: QuestSnapshot): QuestStep | null {
 
 /** Keep-lists for the deposits this quest makes; fragments are kept by id. */
 const ALWAYS_KEEP = ['coins', ...FC_FOODS.map(f => f.toLowerCase())];
+
+/**
+ * Everything worth carrying into the wilderness — note the absence of coins,
+ * which is the point: this deposit exists to leave the float in the bank.
+ */
+const WILDERNESS_KEEP = [
+    ...FC_FOODS.map(f => f.toLowerCase()),
+    ...BLAST_RUNES.map(r => r.item.name.toLowerCase()),
+    'antipoison',
+    'scimitar'
+];
 
 function tidyFor(snap: QuestSnapshot, need: number, keep: string[], bank: Tile): QuestStep | null {
     return (snap.freeSlots ?? 28) >= need ? null : deposit([...ALWAYS_KEEP, ...keep], bank);
@@ -452,13 +465,33 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // --- Chronozon ---
     if (stage === FC_STAGE.CURED_JOHNATHON) {
-        const coins = coinTopUp(snap, 150_000, LEG_BANK.chronozon);
-        if (coins) {
-            return coins;
+        // Everything below is preparation, and preparation re-runs every tick.
+        // Inside the lair that is a trap: eating three sharks or drinking a dose
+        // drops the pack under a threshold and the bot walks out mid-fight to
+        // top up. Once through the gates, the fight owns what it is carrying.
+        if (inChronozonLair(snap.tile)) {
+            return custom('kill Chronozon with the four blasts', fightChronozon);
         }
         const runes = sourceRunes(snap);
         if (runes) {
-            return runes;
+            // Coins only while there is still something to buy, or the deposit
+            // below and this top-up would take turns undoing each other.
+            const coins = coinTopUp(snap, 150_000, LEG_BANK.chronozon);
+            return coins ?? runes;
+        }
+        // A spare dose: curing Johnathon consumes the whole potion, and the
+        // poison spiders sit on the gate tiles into the lair.
+        if (heldAntipoison(snap) === 0) {
+            const banked = bankedAntipoison(snap);
+            const take = banked ? fromBank(snap, banked, 1, LEG_BANK.chronozon) : null;
+            if (take) {
+                return take;
+            }
+            if (!snap.bankKnown) {
+                return { kind: 'scanBank', bank: LEG_BANK.chronozon };
+            }
+            // Not worth the Karamja round trip on its own — the fight is
+            // survivable poisoned, it just costs food.
         }
         const food = foodTopUp(snap, 12, LEG_BANK.chronozon);
         if (food) {
@@ -467,6 +500,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         const arm = wieldWeapon(snap, LEG_BANK.chronozon);
         if (arm) {
             return arm;
+        }
+        // Everything is bought: bank the float before stepping into the
+        // wilderness, where dying drops it. Nothing past this point costs coin.
+        if (heldName(snap, FC_ITEM.COINS) > 0) {
+            return deposit(WILDERNESS_KEEP, LEG_BANK.chronozon);
         }
         return custom('kill Chronozon with the four blasts', fightChronozon);
     }
@@ -490,5 +528,5 @@ export const familycrest: QuestModule = {
 export { parseFamilyCrestJournal, readFamilyCrestProgress, describeJournal } from './journal.js';
 export { FC_STAGE, FC_ID, FC_ITEM, FC_NPC, FC_QUEST, inPerfectGoldZone } from './areas.js';
 export { mineRegion } from './mine.js';
-export { BLASTS } from './chronozon.js';
+export { BLASTS, SAFESPOT } from './chronozon.js';
 export { CREST_KEEP_IDS, warnFamilyCrestReadiness, FC_OFFICIAL_SKILLS } from './supplies.js';

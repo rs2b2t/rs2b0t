@@ -495,6 +495,34 @@ Family Crest added four more, and the first two generalise past this quest:
   the others parked forever on "waiting to combine". Both brothers have a "I have lost
   the piece you gave me." branch that hands theirs over again — gated on *neither* the
   pack nor the bank holding it, which is also why nothing in the module ever banks one.
+- **A safespot is derivable, and "walkable" is not enough.** For a size-N melee NPC:
+  BFS the placements it can slide between, take every tile those placements touch, and
+  the walkable remainder is the safespot set — *intersected with the entrance's
+  connected component*, because the passage that looks ideal on the map is often a
+  sealed island the walker cannot enter. Chronozon's search returns tiles two clear of
+  the furthest north its 3×3 body reaches. Whether a shut gate between the two blocks
+  the cast is not something the configs answer, so the module proves the spot at
+  runtime — three casts that do not land, or the demon's body coming within two
+  tiles, and it drops back to the fight it already knows works. **Not** "did my
+  hitpoints drop": the poison spiders are size 1 and follow into the alcove, so HP
+  loss there says nothing about whether the safespot holds, and using it as the
+  signal made the bot abandon a spot that was working.
+- **Auto-retaliate is what breaks a safespot.** Anything that hits you — a spider,
+  a stray skeleton — draws a swing back, and the swing walks the character off the
+  tile the whole plan depends on. `Game.setAutoRetaliate(false)` for the duration,
+  restored in a `finally` so a thrown step does not leave it off.
+- **Preparation must stop at the door.** A `decide()` that tops up food or potions
+  re-runs every tick, so eating three sharks mid-fight drops the pack under the
+  threshold and the bot walks out of the dungeon to re-bank. Gate the whole
+  provisioning block on being outside the fight area; once through, the fight owns
+  what it is carrying.
+- **Poison is invisible to the client.** `%poison` is `scope=perm` with no transmit, so
+  it reads 0 whether or not you are dying of it. The oracle is the "You have been
+  poisoned!" line, and antipoison sets `%poison = min(%poison, -5)` — a cure *and*
+  about ninety seconds of immunity, so drinking on arrival is worth a dose.
+- **Bank the coin float before the wilderness.** Nothing past the last shop needs coin,
+  and a death there drops it. The top-up has to be conditional on something still being
+  unbought, or it and the deposit take turns undoing each other.
 
 ## See also
 

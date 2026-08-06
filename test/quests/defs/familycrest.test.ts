@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
     BLASTS,
+    SAFESPOT,
     FC_ID,
     FC_STAGE,
     decide,
@@ -401,14 +402,52 @@ describe('Family Crest endgame', () => {
         expect(step.kind === 'buy' && step.shop.npc).toBe('Aubury');
     });
 
-    test('runes, food and a weapon in hand → the fight', () => {
-        expect(customName(decide(snap({
+    const stocked: [number, number][] = [
+        [FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200], [FC_ID.EARTH_RUNE, 200],
+        [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60], [FC_ID.ANTIPOISON_3, 1]
+    ];
+
+    test('a spare antipoison is taken for the spiders on the gate tiles', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.CURED_JOHNATHON,
+            inv: [['shark', 12]],
+            invIds: [[FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200], [FC_ID.EARTH_RUNE, 200],
+                [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60]],
+            bankIds: [[FC_ID.ANTIPOISON_3, 1]],
+            wornIds: [RUNE_SCIM]
+        }));
+        expect(step.kind).toBe('withdraw');
+        expect(step.kind === 'withdraw' && step.items[0]?.id).toBe(FC_ID.ANTIPOISON_3);
+    });
+
+    test('the coin float is banked before stepping into the wilderness', () => {
+        const step = decide(snap({
             stage: FC_STAGE.CURED_JOHNATHON,
             inv: [['coins', 100_000], ['shark', 12]],
-            invIds: [
-                [FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200], [FC_ID.EARTH_RUNE, 200],
-                [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60]
-            ],
+            invIds: stocked,
+            wornIds: [RUNE_SCIM]
+        }));
+        expect(step.kind).toBe('deposit');
+        expect(step.kind === 'deposit' && step.keep).not.toContain('coins');
+        // the fragments must survive that deposit
+        expect(step.kind === 'deposit' && step.keepIds).toContain(FC_ID.CREST_FROM_CALEB);
+    });
+
+    test('inside the lair it fights rather than topping up mid-fight', () => {
+        // Eating or drinking would otherwise drop the pack under a threshold and
+        // walk the bot back to Varrock in the middle of the fight.
+        expect(customName(decide(snap({
+            stage: FC_STAGE.CURED_JOHNATHON,
+            tile: { x: 3092, z: 9940, level: 0 },
+            inv: [['coins', 100_000]]
+        })))).toContain('Chronozon');
+    });
+
+    test('runes, food, a weapon and no coin → the fight', () => {
+        expect(customName(decide(snap({
+            stage: FC_STAGE.CURED_JOHNATHON,
+            inv: [['shark', 12]],
+            invIds: stocked,
             wornIds: [RUNE_SCIM]
         })))).toContain('Chronozon');
     });
@@ -472,5 +511,12 @@ describe('Family Crest module wiring', () => {
 
     test('all four elemental blasts are cast, in the order the demon needs', () => {
         expect([...BLASTS]).toEqual(['Wind blast', 'Water blast', 'Earth blast', 'Fire blast']);
+    });
+
+    test('the safespot is the east alcove, two tiles clear of the demons body', () => {
+        // No 3x3 placement reaches past x=3090 at this row, so 3092 is clear —
+        // and it is in the chamber, not behind the gate that blocks casts.
+        expect({ x: SAFESPOT.x, z: SAFESPOT.z, level: SAFESPOT.level })
+            .toEqual({ x: 3092, z: 9940, level: 0 });
     });
 });

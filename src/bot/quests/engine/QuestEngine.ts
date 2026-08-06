@@ -66,7 +66,9 @@ function describeStep(step: QuestStep): string {
         case 'equip': return `equip ${step.item}`;
         case 'scanBank': return 'check the bank';
         case 'withdraw': return `withdraw ${step.items.map(i => `${i.name}×${i.qty}`).join(', ')}`;
-        case 'deposit': return 'bank spillover from the last quest';
+        // Not always spillover from the previous quest any more — Family Crest
+        // banks its coin float mid-quest before walking into the wilderness.
+        case 'deposit': return `bank all but ${step.keep.length} kept item type(s)`;
         case 'mineRock': return `mine ${step.item}`;
         case 'buy': return `buy ${step.qty}× ${step.item} from ${step.shop.npc}`;
         case 'custom': return step.name;
