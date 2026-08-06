@@ -1528,21 +1528,29 @@ function heldOps(iop: (string | null)[] | null): (string | null)[] {
 const COMBAT_STAMP_CYCLES = 400;
 const COMBAT_WINDOW_MS = 6000;
 
-/** Cycles-remaining threshold that keeps the combat window at {@link COMBAT_WINDOW_MS}. */
+/**
+ * Cycles-remaining threshold that keeps the combat window at {@link COMBAT_WINDOW_MS}.
+ * Guard deltime≤0 — during random-event teleports / scene rebuild deltime can
+ * briefly be zero; division by zero would NaN the combat window and crash handlers.
+ */
 export function combatShowingThreshold(deltimeMs: number): number {
-    return COMBAT_STAMP_CYCLES - COMBAT_WINDOW_MS / deltimeMs;
+    const d = deltimeMs > 0 ? deltimeMs : 20;
+    return COMBAT_STAMP_CYCLES - COMBAT_WINDOW_MS / d;
 }
 
 function combatShowing(combatCycle: number): boolean {
     return combatCycle > loopCycleNow() + combatShowingThreshold(deltimeNow());
 }
 
+/**
+ * Client ms/tick for cycle-stamped combat windows.
+ * Random-event teleports (maze) and scene rebuilds can leave deltime at 0 for a
+ * tick; throwing here crashed AIOQuester mid-maze while RandomEvents was handling
+ * (detect → reader.npcs() → combatShowing). Soft-default to a nominal 20ms tick.
+ */
 function deltimeNow(): number {
     const deltime = raw?.deltime ?? 0;
-    if (deltime <= 0) {
-        throw new Error(`[rs2b0t] client deltime is ${deltime} — cycle-stamped state (combat, animations) cannot be read against it`);
-    }
-    return deltime;
+    return deltime > 0 ? deltime : 20;
 }
 
 function loopCycleNow(): number {

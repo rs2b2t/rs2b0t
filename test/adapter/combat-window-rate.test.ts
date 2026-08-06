@@ -29,4 +29,12 @@ describe('combat window is independent of the client logic rate', () => {
         expect(naive).toBe(15000);
         expect(windowMs(50)).toBe(ERA_WINDOW_MS);
     });
+
+    test('deltime 0 (scene rebuild / maze teleport) does not NaN or throw', () => {
+        // Random-event teleports can leave client.deltime at 0 for a tick.
+        // combatShowingThreshold must stay finite so reader.npcs() / detect never crash.
+        expect(Number.isFinite(combatShowingThreshold(0))).toBe(true);
+        expect(combatShowingThreshold(0)).toBe(combatShowingThreshold(20));
+        expect(Number.isFinite(combatShowingThreshold(-1))).toBe(true);
+    });
 });

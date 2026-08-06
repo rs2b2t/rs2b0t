@@ -176,7 +176,12 @@ class RandomEventsImpl {
         const t = BotHost.tickCount;
         if (t !== this.lastCheckTick) {
             this.lastCheckTick = t;
-            this.lastPending = this.detect() !== null;
+            try {
+                this.lastPending = this.detect() !== null;
+            } catch {
+                // Scene rebuild / deltime-0 during teleports must not poison the tick.
+                this.lastPending = false;
+            }
         }
         return this.lastPending;
     }
@@ -195,11 +200,15 @@ class RandomEventsImpl {
     }
 
     detect(): DetectedEvent | null {
-        const event = this.detectRaw();
-        if (event && this.cooledDown(`${event.kind}:${event.name}`)) {
+        try {
+            const event = this.detectRaw();
+            if (event && this.cooledDown(`${event.kind}:${event.name}`)) {
+                return null;
+            }
+            return event;
+        } catch {
             return null;
         }
-        return event;
     }
 
     private detectRaw(): DetectedEvent | null {
@@ -213,7 +222,15 @@ class RandomEventsImpl {
             }
         }
 
-        for (const npc of reader.npcs()) {
+        // Scene may be empty mid-teleport; npcs() can still walk combatCycle stamps.
+        let npcs: ReturnType<typeof reader.npcs>;
+        try {
+            npcs = reader.npcs();
+        } catch {
+            return null;
+        }
+
+        for (const npc of npcs) {
             const name = npc.name?.toLowerCase();
             if (!name) {
                 continue;
@@ -227,8 +244,13 @@ class RandomEventsImpl {
         }
 
         const selfSlot = reader.selfSlot();
-        const playerInCombat = Game.inCombat();
-        for (const npc of reader.npcs()) {
+        let playerInCombat = false;
+        try {
+            playerInCombat = Game.inCombat();
+        } catch {
+            playerInCombat = false;
+        }
+        for (const npc of npcs) {
             if (isHostileEventNpc(npc, selfSlot, playerInCombat)) {
                 return { kind: 'evade', name: npc.name?.toLowerCase() ?? 'event monster' };
             }
@@ -242,7 +264,7 @@ class RandomEventsImpl {
                 return { kind: 'hazard', name: 'smoking rock' };
             }
         }
-        for (const npc of reader.npcs()) {
+        for (const npc of npcs) {
             if (WHIRLPOOL_NPC_IDS.includes(npc.id) && npc.distance <= 3) {
                 return { kind: 'hazard', name: 'whirlpool' };
             }
@@ -288,65 +310,82 @@ class RandomEventsImpl {
         }
         this.handling = true;
         try {
-            const event = this.detect();
-            if (!event) {
-                return false;
-            }
-
-            const sig = `${event.kind}:${event.name}`;
-            const n = (this.attempts.get(sig) ?? 0) + 1;
-            this.attempts.set(sig, n);
-            if (n > MAX_ATTEMPTS) {
-                this.attempts.delete(sig);
-                this.cooldownUntil.set(sig, performance.now() + GIVE_UP_COOLDOWN_MS);
-                log(`random event: gave up on ${event.name} after ${MAX_ATTEMPTS} attempts — ignoring it for ${GIVE_UP_COOLDOWN_MS / 1000}s`);
-                return false;
-            }
-
-            let acted = false;
-            switch (event.kind) {
-                case 'dialog':
-                    acted = await this.handleDialog(event.name, log);
-                    break;
-                case 'pick':
-                    acted = await this.handlePick(event.name, log);
-                    break;
-                case 'evade':
-                    acted = await this.handleEvade(event.name, log);
-                    break;
-                case 'hazard':
-                    acted = await this.handleHazard(event.name, log);
-                    break;
-                case 'mime':
-                    acted = await performMimeStage(log);
-                    break;
-                case 'maze':
-                    acted = await solveMaze(log);
-                    break;
-                case 'lost-tool':
-                    acted = await this.handleLostTool(log);
-                    break;
-                case 'lost-gear':
-                    acted = await this.handleLostGear(event.name, log);
-                    break;
-                case 'box':
-                    acted = await solveAllBoxes(log);
-                    break;
-                case 'lamp':
-                    acted = await rubLamp(this.lampSkill, log);
-                    break;
-                default:
-                    break;
-            }
-
-            const after = this.detectRaw();
-            if (!after || `${after.kind}:${after.name}` !== sig) {
-                this.attempts.delete(sig);
-            }
-            return acted;
+            // detect/handle must never throw into ScriptRunner — a thrown error
+            // marks the whole script crashed even when the maze/dialog later succeeds.
+            return await this.handleInner(log);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log(`random event: handler error (continuing): ${msg}`);
+            return false;
         } finally {
             this.handling = false;
         }
+    }
+
+    private async handleInner(log: (msg: string) => void): Promise<boolean> {
+        const event = this.detect();
+        if (!event) {
+            return false;
+        }
+
+        const sig = `${event.kind}:${event.name}`;
+        const n = (this.attempts.get(sig) ?? 0) + 1;
+        this.attempts.set(sig, n);
+        if (n > MAX_ATTEMPTS) {
+            this.attempts.delete(sig);
+            this.cooldownUntil.set(sig, performance.now() + GIVE_UP_COOLDOWN_MS);
+            log(
+                `random event: gave up on ${event.name} after ${MAX_ATTEMPTS} attempts — ignoring it for ${GIVE_UP_COOLDOWN_MS / 1000}s`
+            );
+            return false;
+        }
+
+        let acted = false;
+        switch (event.kind) {
+            case 'dialog':
+                acted = await this.handleDialog(event.name, log);
+                break;
+            case 'pick':
+                acted = await this.handlePick(event.name, log);
+                break;
+            case 'evade':
+                acted = await this.handleEvade(event.name, log);
+                break;
+            case 'hazard':
+                acted = await this.handleHazard(event.name, log);
+                break;
+            case 'mime':
+                acted = await performMimeStage(log);
+                break;
+            case 'maze':
+                acted = await solveMaze(log);
+                break;
+            case 'lost-tool':
+                acted = await this.handleLostTool(log);
+                break;
+            case 'lost-gear':
+                acted = await this.handleLostGear(event.name, log);
+                break;
+            case 'box':
+                acted = await solveAllBoxes(log);
+                break;
+            case 'lamp':
+                acted = await rubLamp(this.lampSkill, log);
+                break;
+            default:
+                break;
+        }
+
+        let after: DetectedEvent | null = null;
+        try {
+            after = this.detectRaw();
+        } catch {
+            after = null;
+        }
+        if (!after || `${after.kind}:${after.name}` !== sig) {
+            this.attempts.delete(sig);
+        }
+        return acted;
     }
 
     private async handleDialog(name: string, log: (msg: string) => void): Promise<boolean> {
