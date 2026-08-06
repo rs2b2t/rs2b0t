@@ -1,6 +1,7 @@
 import { Skills } from '../../../api/hud/Skills.js';
+import { SettingsStore } from '../../../runtime/Settings.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { ANTIPOISON_IDS, FC_BANK, FC_ID, FC_ITEM, FC_SHOP, PICKAXES } from './areas.js';
+import { ANTIPOISON_IDS, DUEL_RING_IDS, FC_BANK, FC_ID, FC_ITEM, FC_SHOP, PICKAXES } from './areas.js';
 import type Tile from '../../../api/Tile.js';
 
 export interface FcItem {
@@ -161,6 +162,96 @@ export function wieldWeapon(snap: QuestSnapshot, bank?: Tile): QuestStep | null 
     }
     const fromTheBank = bestBankWeapon(snap);
     return fromTheBank ? fromBank(snap, fromTheBank, 1, bank) : null;
+}
+
+/**
+ * Runes the standard-spellbook hops need, and how many to carry.
+ *
+ * Air covers Camelot (5) and the strike component of the others; law is the
+ * limiting rune at 1–2 a hop. Roughly ten hops over the quest, so this is
+ * generous rather than exact — none of it is consumed by anything else, and
+ * unused runes come home.
+ */
+export const TELEPORT_KIT: readonly { item: FcItem; qty: number }[] = [
+    { item: { id: FC_ID.LAW_RUNE, name: FC_ITEM.LAW_RUNE }, qty: 30 },
+    { item: { id: FC_ID.AIR_RUNE, name: FC_ITEM.AIR_RUNE }, qty: 150 },
+    { item: { id: FC_ID.FIRE_RUNE, name: FC_ITEM.FIRE_RUNE }, qty: 30 },
+    { item: { id: FC_ID.WATER_RUNE, name: FC_ITEM.WATER_RUNE }, qty: 30 }
+];
+
+/** Aubury's rune stock — everything in the kit except law. */
+const AUBURY_STOCKS: ReadonlySet<number> = new Set([FC_ID.AIR_RUNE, FC_ID.FIRE_RUNE, FC_ID.WATER_RUNE]);
+
+/** Global `navTeleports`; the nav layer consults the same setting per walk. */
+export function navTeleportsOn(): boolean {
+    try {
+        return SettingsStore.globalBag().bool('navTeleports', false);
+    } catch {
+        return false;
+    }
+}
+
+export function heldDuelRing(snap: QuestSnapshot): number {
+    return DUEL_RING_IDS.reduce((sum, id) => sum + held(snap, id), 0);
+}
+
+/**
+ * Carry the teleport kit when the operator has nav teleports on and the bank can
+ * pay for it. This is the whole gap between "the navigator can plan a Camelot
+ * hop" and "it does": A* only injects a teleport the **live inventory** can
+ * afford, and nothing else in this quest ever puts a law rune in the pack.
+ *
+ * Costs one bank trip at the start and saves several minutes of walking —
+ * Camelot lands 71 tiles from Caleb against a 379-cost walk, and the duel ring
+ * lands 73 from the Al Kharid furnace against roughly 600 from Witchaven.
+ *
+ * Never blocks: no runes banked simply means the quest walks, as before.
+ */
+export function teleportKitTopUp(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
+    return navTeleportsOn() ? teleportKitPlan(snap, bank) : null;
+}
+
+/** {@link teleportKitTopUp} without the settings read, so it is testable. */
+export function teleportKitPlan(snap: QuestSnapshot, bank?: Tile): QuestStep | null {
+    // Both halves are tested up front. Keying the "already carrying it" check on
+    // one item at a time is how this went wrong twice: on law alone it stopped
+    // before fetching the air every spell needs, and on the runes alone it
+    // stopped before the ring.
+    const runesShort = TELEPORT_KIT.some(want => held(snap, want.item.id) < Math.ceil(want.qty / 3));
+    const ringShort = heldDuelRing(snap) === 0;
+    if (!runesShort && !ringShort) {
+        return null;
+    }
+    if (!snap.bankKnown) {
+        return scanBank(bank);
+    }
+
+    // Law runes are Magic Guild / Mage Arena stock only, so a bank without them
+    // is the normal case rather than a fault — the spell hops are simply off.
+    if (runesShort && banked(snap, TELEPORT_KIT[0]!.item.id) > 0) {
+        for (const want of TELEPORT_KIT) {
+            const step = fromBank(snap, want.item, want.qty, bank);
+            if (step) {
+                return step;
+            }
+            // Aubury stocks air, fire and water and stands twenty tiles from the
+            // Varrock East booth this trip already visits — so only the law runes
+            // actually have to be banked. He does not sell law.
+            if (held(snap, want.item.id) < Math.ceil(want.qty / 3) && AUBURY_STOCKS.has(want.item.id)) {
+                return { kind: 'buy', item: want.item.name, qty: want.qty, shop: FC_SHOP.AUBURY, estGp: RUNE_GP };
+            }
+        }
+    }
+
+    // Independent of the runes: the ring reaches Al Kharid, which no spell on
+    // this book can (Ardougne teleport needs Plague City).
+    if (ringShort) {
+        const ring = DUEL_RING_IDS.find(id => banked(snap, id) > 0);
+        if (ring !== undefined) {
+            return withdraw([{ name: 'Ring of dueling', id: ring, qty: 1 }], bank);
+        }
+    }
+    return null;
 }
 
 export function bestBankFood(snap: QuestSnapshot): string | null {

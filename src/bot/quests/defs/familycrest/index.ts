@@ -51,6 +51,7 @@ import {
     RUBY_GP,
     RUNE_GP,
     SHOP,
+    teleportKitTopUp,
     warnFamilyCrestReadiness,
     wieldWeapon,
     type FcItem
@@ -295,6 +296,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'talk', stop: DIMINTHEIS_START };
     }
 
+    // One bank trip, before the first long leg, and only when the operator has
+    // nav teleports on. A* will not plan a hop the live inventory cannot pay
+    // for, and nothing else in this quest ever carries a law rune.
+    const teleKit = teleportKitTopUp(snap, LEG_BANK.start);
+    if (teleKit) {
+        return teleKit;
+    }
+
     // --- Caleb: the five cooked fish ---
     if (stage <= FC_STAGE.CALEB_PIECE) {
         if (stage === FC_STAGE.SPOKEN_DIMINTHEIS) {
@@ -529,4 +538,4 @@ export { parseFamilyCrestJournal, readFamilyCrestProgress, describeJournal } fro
 export { FC_STAGE, FC_ID, FC_ITEM, FC_NPC, FC_QUEST, inPerfectGoldZone } from './areas.js';
 export { mineRegion } from './mine.js';
 export { BLASTS, SAFESPOT } from './chronozon.js';
-export { CREST_KEEP_IDS, warnFamilyCrestReadiness, FC_OFFICIAL_SKILLS } from './supplies.js';
+export { CREST_KEEP_IDS, warnFamilyCrestReadiness, FC_OFFICIAL_SKILLS, teleportKitTopUp, teleportKitPlan, TELEPORT_KIT } from './supplies.js';

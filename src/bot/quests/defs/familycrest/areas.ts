@@ -49,6 +49,7 @@ export const FC_ID = {
     ANTIPOISON_2: 177,
     ANTIPOISON_1: 179,
 
+    LAW_RUNE: 563,
     AIR_RUNE: 556,
     WATER_RUNE: 555,
     EARTH_RUNE: 557,
@@ -74,6 +75,7 @@ export const FC_ITEM = {
     TUNA: 'Tuna',
     SALMON: 'Salmon',
     SHRIMP: 'Shrimps',
+    LAW_RUNE: 'Law rune',
     AIR_RUNE: 'Air rune',
     WATER_RUNE: 'Water rune',
     EARTH_RUNE: 'Earth rune',
@@ -81,6 +83,13 @@ export const FC_ITEM = {
     DEATH_RUNE: 'Death rune',
     COINS: 'Coins'
 } as const;
+
+/**
+ * Ring of dueling, all eight charge stages. The navigator rubs jewellery from
+ * the **inventory only** — its bank planner never withdraws a ring — so the
+ * quest has to carry one for the Duel Arena hop to be planned at all.
+ */
+export const DUEL_RING_IDS = [2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566] as const;
 
 /** Antipoison in every dose; any of them cures Johnathon. */
 export const ANTIPOISON_IDS = [FC_ID.ANTIPOISON_4, FC_ID.ANTIPOISON_3, FC_ID.ANTIPOISON_2, FC_ID.ANTIPOISON_1] as const;

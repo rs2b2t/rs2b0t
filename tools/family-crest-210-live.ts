@@ -3,6 +3,7 @@
  *
  *   HEADED=1 bun tools/family-crest-210-live.ts --stage 7 --minutes 25
  *   HEADED=1 bun tools/family-crest-210-live.ts --stage 0 --minutes 90     # full run
+ *   HEADED=1 bun tools/family-crest-210-live.ts --stage 0 --teleports       # + tele kit
  *
  * `--stage N` sets `%crestquest` and relogs so `update_questlist` recolours the
  * journal entry — a `setvar` alone leaves the quest tab red and the module
@@ -35,6 +36,8 @@ interface Args {
     until: number;
     minutes: number;
     tickMs: number;
+    /** Turn on Global `navTeleports` and seed a law-rune + duel-ring kit. */
+    teleports: boolean;
 }
 
 function parse(argv: string[]): Args {
@@ -44,7 +47,8 @@ function parse(argv: string[]): Args {
         stage: 0,
         until: 11,
         minutes: 45,
-        tickMs: 300
+        tickMs: 300,
+        teleports: false
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
@@ -56,6 +60,7 @@ function parse(argv: string[]): Args {
         else if (flag === '--until') { out.until = Number(value); }
         else if (flag === '--minutes') { out.minutes = Number(value); }
         else if (flag === '--tick') { out.tickMs = Number(value); }
+        else if (flag === '--teleports') { out.teleports = value !== 'false'; i--; }
     }
     return out;
 }
@@ -90,6 +95,17 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'shark', displayName: 'Shark', qty: 60 },
     { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 },
     { debugName: 'steel_pickaxe', displayName: 'Steel pickaxe', qty: 1 }
+];
+
+/**
+ * Only added with `--teleports`. Law runes are Magic Guild / Mage Arena stock
+ * only, and nothing in the game sells a ring of dueling, so both are bank items
+ * in practice — which is also all the navigator needs: it rubs jewellery from
+ * the inventory and never withdraws it itself.
+ */
+const TELEPORT_SEED: BankSeedItem[] = [
+    { debugName: 'lawrune', displayName: 'Law rune', qty: 200 },
+    { debugName: 'ring_of_dueling_8', displayName: 'Ring of dueling(8)', qty: 2 }
 ];
 
 /** Where each stage's first action is, so the walk under test is the short one. */
@@ -155,8 +171,14 @@ try {
 
     await maxmeAndClearDialogs(page);
 
-    console.log(`seeding ${BANK_SEED.length} item type(s) into the Varrock East bank`);
-    await seedItemsToBank(page, BANK_SEED, VARROCK_EAST_BANK);
+    const seed = args.teleports ? [...BANK_SEED, ...TELEPORT_SEED] : BANK_SEED;
+    console.log(`seeding ${seed.length} item type(s) into the Varrock East bank`);
+    await seedItemsToBank(page, seed, VARROCK_EAST_BANK);
+
+    if (args.teleports) {
+        await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:Global:navTeleports', 'true'));
+        console.log('Global navTeleports = true (spell + jewellery hops allowed in A*)');
+    }
 
     if (args.stage > 0) {
         // The lever bits and the spells-cast bits share one varp; a stage jump has

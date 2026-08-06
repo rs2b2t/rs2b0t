@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
     BLASTS,
     SAFESPOT,
+    teleportKitPlan,
+    teleportKitTopUp,
     FC_ID,
     FC_STAGE,
     decide,
@@ -489,6 +491,70 @@ describe('Family Crest endgame', () => {
             stage: FC_STAGE.CURED_JOHNATHON,
             invIds: [[FC_ID.FAMILY_CREST, 1]]
         })))).toBe('Dimintheis');
+    });
+});
+
+describe('Family Crest teleport kit', () => {
+    const banked: [number, number][] = [[FC_ID.LAW_RUNE, 500], [FC_ID.AIR_RUNE, 500],
+        [FC_ID.FIRE_RUNE, 500], [FC_ID.WATER_RUNE, 500]];
+
+    test('nothing is fetched while nav teleports are off', () => {
+        // The Global defaults off, and the nav layer reads the same setting —
+        // fetching a kit it will never plan a hop with is a wasted bank trip.
+        expect(teleportKitTopUp(snap({ stage: FC_STAGE.SPOKEN_DIMINTHEIS, bankIds: banked }))).toBeNull();
+    });
+
+    test('the whole kit is fetched, not just the law runes', () => {
+        // Every spell hop needs air as well as law; a guard keyed on law alone
+        // stopped after one withdraw and left the spells uncastable.
+        const withLaws = snap({
+            stage: FC_STAGE.SPOKEN_DIMINTHEIS,
+            invIds: [[FC_ID.LAW_RUNE, 30]],
+            bankIds: banked
+        });
+        const step = teleportKitPlan(withLaws);
+        expect(step?.kind).toBe('withdraw');
+        expect(step?.kind === 'withdraw' && step.items[0]?.id).toBe(FC_ID.AIR_RUNE);
+    });
+
+    test('spell runes are bought from Aubury when the bank has none', () => {
+        // Only law actually has to be banked — Aubury stocks the rest and is
+        // twenty tiles from the booth this trip already visits.
+        const step = teleportKitPlan(snap({
+            stage: FC_STAGE.SPOKEN_DIMINTHEIS,
+            invIds: [[FC_ID.LAW_RUNE, 30]],
+            bankIds: [[FC_ID.LAW_RUNE, 200]]
+        }));
+        expect(step?.kind).toBe('buy');
+        expect(step?.kind === 'buy' && step.shop.npc).toBe('Aubury');
+        expect(step?.kind === 'buy' && step.item).toBe('Air rune');
+    });
+
+    test('the ring is fetched even once every rune is already carried', () => {
+        // Twice now a satisfied-runes check returned before reaching the ring.
+        const step = teleportKitPlan(snap({
+            stage: FC_STAGE.SPOKEN_DIMINTHEIS,
+            invIds: [[FC_ID.LAW_RUNE, 30], [FC_ID.AIR_RUNE, 150],
+                [FC_ID.FIRE_RUNE, 30], [FC_ID.WATER_RUNE, 30]],
+            bankIds: [[2552, 1]]
+        }));
+        expect(step?.kind).toBe('withdraw');
+        expect(step?.kind === 'withdraw' && step.items[0]?.id).toBe(2552);
+    });
+
+    test('a banked ring is fetched even with no law runes anywhere', () => {
+        // The ring reaches Al Kharid, which no spell on this book can.
+        const step = teleportKitPlan(snap({
+            stage: FC_STAGE.SPOKEN_DIMINTHEIS,
+            bankIds: [[2560, 1]]
+        }));
+        expect(step?.kind).toBe('withdraw');
+        expect(step?.kind === 'withdraw' && step.items[0]?.id).toBe(2560);
+    });
+
+    test('an empty bank walks rather than blocking', () => {
+        // Law runes are Magic Guild / Mage Arena stock only, so this is normal.
+        expect(teleportKitPlan(snap({ stage: FC_STAGE.SPOKEN_DIMINTHEIS, bankKnown: true }))).toBeNull();
     });
 });
 
