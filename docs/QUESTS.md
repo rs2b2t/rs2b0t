@@ -497,16 +497,21 @@ Family Crest added four more, and the first two generalise past this quest:
   pack nor the bank holding it, which is also why nothing in the module ever banks one.
 - **A safespot is derivable, and "walkable" is not enough.** For a size-N melee NPC:
   BFS the placements it can slide between, take every tile those placements touch, and
-  the walkable remainder is the safespot set — *intersected with the entrance's
-  connected component*, because the passage that looks ideal on the map is often a
-  sealed island the walker cannot enter. Chronozon's search returns tiles two clear of
-  the furthest north its 3×3 body reaches. Whether a shut gate between the two blocks
-  the cast is not something the configs answer, so the module proves the spot at
-  runtime — three casts that do not land, or the demon's body coming within two
-  tiles, and it drops back to the fight it already knows works. **Not** "did my
-  hitpoints drop": the poison spiders are size 1 and follow into the alcove, so HP
-  loss there says nothing about whether the safespot holds, and using it as the
-  signal made the bot abandon a spot that was working.
+  the walkable remainder is the safespot set — *intersected with the component you can
+  actually reach*, because the passage that looks ideal on the map is often a sealed
+  island, and `exitMask` does not cross door edges, so a flood seeded outside a gate
+  never sees the room behind it. Whether a shut gate blocks the cast is not something
+  the configs answer, so the module proves the spot at runtime — three casts that do
+  not land, or the demon's body coming within two tiles, and it drops back to the fight
+  it already knows works. **Not** "did my hitpoints drop": that cannot tell the demon
+  from something else hitting you, and using it as the signal made the bot abandon a
+  spot that was working.
+- **Geometry is necessary, not sufficient — check what else patrols there.** Chronozon's
+  search returns several tiles the demon provably cannot reach. The east alcove is one,
+  and it sits three tiles from poison spiders with `wanderrange=10`, so the bot is safe
+  from the demon and chewed on the whole fight. The south end of the chamber is eleven
+  away, past their limit. Read the neighbours' `wanderrange` / `maxrange`, not just the
+  target's footprint.
 - **Auto-retaliate is what breaks a safespot.** Anything that hits you — a spider,
   a stray skeleton — draws a swing back, and the swing walks the character off the
   tile the whole plan depends on. `Game.setAutoRetaliate(false)` for the duration,
