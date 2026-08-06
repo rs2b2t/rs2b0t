@@ -32,7 +32,6 @@ import {
     ANTIPOISON_GP,
     bankedAntipoison,
     bestBankPickaxe,
-    BLAST_MINIMUM,
     BLAST_RUNES,
     CALEB_FISH,
     coinTopUp,
@@ -213,13 +212,19 @@ function source(
     return { kind: 'wait', reason: `need ${short}x ${item.name} — none in the bank and nothing sells it` };
 }
 
-/** Runes are stackable, so one withdraw covers the whole fight. */
+/**
+ * Runes are stackable, so one withdraw covers the whole fight.
+ *
+ * Topped up against a third of the buy quantity rather than against
+ * `BLAST_MINIMUM`. The minimum is one cast of each — and the teleport kit
+ * happens to carry 30 fire runes, which satisfied it, so the fight went in with
+ * six Fire Blasts and spent the kill phase casting nothing.
+ */
 function sourceRunes(snap: QuestSnapshot): QuestStep | null {
-    for (const floor of BLAST_MINIMUM) {
-        if (held(snap, floor.item.id) >= floor.qty) {
+    for (const want of BLAST_RUNES) {
+        if (held(snap, want.item.id) >= Math.ceil(want.qty / 3)) {
             continue;
         }
-        const want = BLAST_RUNES.find(r => r.item.id === floor.item.id)!;
         const banked = fromBank(snap, want.item, want.qty, LEG_BANK.chronozon);
         if (banked) {
             return banked;
@@ -287,7 +292,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage >= FC_STAGE.CALEB_WHERE && held(snap, FC_ID.CREST_FROM_CALEB) === 0) {
         return { kind: 'talk', stop: CALEB_LOST };
     }
-    if (stage >= FC_STAGE.AVAN_PIECE && held(snap, FC_ID.CREST_FROM_AVAN) === 0) {
+    // Not at stage 8: `switch_int(%crestquest)` sends `crest_avan_piece` to
+    // `avan_where`, which is pure chat about Johnathon and has no "I have lost
+    // the fragment" branch at all — that lives in `avan_pieces`, the `default`
+    // case, from stage 9 on. Talking to Johnathon first advances into it.
+    if (stage >= FC_STAGE.SPOKEN_JOHNATHON && held(snap, FC_ID.CREST_FROM_AVAN) === 0) {
         return custom('ask Avan to replace the fragment', log =>
             talkToAvan(['I have lost the fragment you gave me.'], log));
     }
@@ -299,9 +308,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // One bank trip, before the first long leg, and only when the operator has
     // nav teleports on. A* will not plan a hop the live inventory cannot pay
     // for, and nothing else in this quest ever carries a law rune.
-    const teleKit = teleportKitTopUp(snap, LEG_BANK.start);
-    if (teleKit) {
-        return teleKit;
+    //
+    // Not while Chronozon is still standing: the wilderness deposit banks the
+    // kit on purpose, and re-fetching it here walked thirty law runes and a
+    // ring of dueling straight back into the fight they were banked to avoid.
+    // The walk home afterwards is the price, and it is one leg.
+    const fightPending = stage === FC_STAGE.CURED_JOHNATHON
+        && held(snap, FC_ID.CREST_FROM_CHRONOZON) === 0;
+    if (!fightPending) {
+        const teleKit = teleportKitTopUp(snap, LEG_BANK.start);
+        if (teleKit) {
+            return teleKit;
+        }
     }
 
     // --- Caleb: the five cooked fish ---
@@ -502,7 +520,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
             // Not worth the Karamja round trip on its own — the fight is
             // survivable poisoned, it just costs food.
         }
-        const food = foodTopUp(snap, 12, LEG_BANK.chronozon);
+        // The walk *out* is as dangerous as the fight — the way home crosses the
+        // black demons and giant skeletons in the wilderness half of the
+        // dungeon, and a bot that spent its food on Chronozon dies there. It did.
+        const food = foodTopUp(snap, 24, LEG_BANK.chronozon);
         if (food) {
             return food;
         }

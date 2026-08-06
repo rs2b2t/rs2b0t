@@ -409,6 +409,19 @@ describe('Family Crest endgame', () => {
         [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60], [FC_ID.ANTIPOISON_3, 1]
     ];
 
+    test('the teleport kit does not count as a fighting rune stock', () => {
+        // The kit carries 30 fire — one cast of Fire Blast is 5, so the old
+        // one-cast floor was satisfied and the fight went in unable to finish.
+        const step = decide(snap({
+            stage: FC_STAGE.CURED_JOHNATHON,
+            inv: [['coins', 200_000], ['shark', 12]],
+            invIds: [[FC_ID.AIR_RUNE, 150], [FC_ID.FIRE_RUNE, 30], [FC_ID.WATER_RUNE, 30]],
+            wornIds: [RUNE_SCIM]
+        }));
+        expect(step.kind).toBe('buy');
+        expect(step.kind === 'buy' && step.item).toBe('Air rune');
+    });
+
     test('a spare antipoison is taken for the spiders on the gate tiles', () => {
         const step = decide(snap({
             stage: FC_STAGE.CURED_JOHNATHON,
@@ -420,6 +433,19 @@ describe('Family Crest endgame', () => {
         }));
         expect(step.kind).toBe('withdraw');
         expect(step.kind === 'withdraw' && step.items[0]?.id).toBe(FC_ID.ANTIPOISON_3);
+    });
+
+    test('the teleport kit is not re-fetched while the demon is still standing', () => {
+        // The wilderness deposit banks it on purpose; re-fetching walked the law
+        // runes and the ring back into the fight they were banked to avoid.
+        const step = decide(snap({
+            stage: FC_STAGE.CURED_JOHNATHON,
+            inv: [['shark', 12]],
+            invIds: stocked,
+            bankIds: [[FC_ID.LAW_RUNE, 200], [2552, 1]],
+            wornIds: [RUNE_SCIM]
+        }));
+        expect(step.kind).not.toBe('withdraw');
     });
 
     test('the coin float is banked before stepping into the wilderness', () => {
@@ -476,6 +502,16 @@ describe('Family Crest endgame', () => {
             dropFragments: true,
             invIds: [[FC_ID.CREST_FROM_CALEB, 1]]
         })))).toContain('Avan');
+    });
+
+    test('at stage 8 exactly it goes to Johnathon rather than asking Avan', () => {
+        // `crest_avan_piece` routes to `avan_where` — pure chat, no lost-fragment
+        // branch. That only exists from stage 9, so asking here parks forever.
+        expect(talkTarget(decide(snap({
+            stage: FC_STAGE.AVAN_PIECE,
+            dropFragments: true,
+            invIds: [[FC_ID.CREST_FROM_CALEB, 1]]
+        })))).toBe('Johnathon');
     });
 
     test('holding only Chronozons piece, the brothers are asked again', () => {

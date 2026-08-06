@@ -72,7 +72,11 @@ export const BLAST_RUNES: readonly { item: FcItem; qty: number }[] = [
     { item: { id: FC_ID.DEATH_RUNE, name: FC_ITEM.DEATH_RUNE }, qty: RUNE_BUY.death }
 ];
 
-/** Enough runes left for one cast of every blast — the floor the fight needs. */
+/**
+ * One cast of every blast. Kept for reference and tests — **not** a provisioning
+ * threshold: the teleport kit alone clears it, which left the fight with six
+ * Fire Blasts and no way to finish.
+ */
 export const BLAST_MINIMUM: readonly { item: FcItem; qty: number }[] = [
     { item: { id: FC_ID.AIR_RUNE, name: FC_ITEM.AIR_RUNE }, qty: 13 },
     { item: { id: FC_ID.WATER_RUNE, name: FC_ITEM.WATER_RUNE }, qty: 3 },
