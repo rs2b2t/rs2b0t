@@ -128,6 +128,7 @@ class SchedulerImpl {
         if (
             ctx.loopInFlight &&
             ctx.waiters.length === 0 &&
+            ctx.watchdogHold === null &&
             now - ctx.lastProgressAt > WATCHDOG_MS &&
             !ctx.watchdogWarned
         ) {

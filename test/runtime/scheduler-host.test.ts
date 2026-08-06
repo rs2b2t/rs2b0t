@@ -13,6 +13,26 @@ describe('Scheduler host scope', () => {
         Scheduler.active = null;
     });
 
+    test('watchdog suppresses its warning while the guardian owns an event wait', () => {
+        const ctx = new ScriptContext();
+        Scheduler.active = ctx;
+        ctx.loopInFlight = true;
+        ctx.lastProgressAt = performance.now() - 10_001;
+        ctx.watchdogHold = 'random event: maze';
+
+        BotHost.onFrame();
+
+        expect(ctx.watchdogWarned).toBe(false);
+        expect(ctx.log.some(line => line.msg.startsWith('watchdog:'))).toBe(false);
+
+        // Clearing the hold immediately restores ordinary stalled-loop reporting.
+        ctx.watchdogHold = null;
+        BotHost.onFrame();
+
+        expect(ctx.watchdogWarned).toBe(true);
+        expect(ctx.log.some(line => line.msg.startsWith('watchdog:'))).toBe(true);
+    });
+
     test('runHost settles waits while a paused script is active', async () => {
         const ctx = new ScriptContext();
         ctx.pause();

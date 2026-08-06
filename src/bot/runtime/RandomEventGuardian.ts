@@ -56,17 +56,26 @@ class RandomEventGuardianImpl {
         if (tick === this.lastKickTick) {
             return;
         }
-        if (!RandomEvents.detect()) {
+        const event = RandomEvents.detect();
+        if (!event) {
             return;
         }
         this.lastKickTick = tick;
         this.inFlight = true;
+        const ctx = ScriptRunner.ctx;
+        const watchdogHold = `random event: ${event.kind}: ${event.name}`;
+        if (ctx) {
+            ctx.watchdogHold = watchdogHold;
+        }
         try {
             // Host scope: never park guardian delays on a (possibly paused) script queue.
             await Scheduler.runHost(() => RandomEvents.handle(msg => this.log(msg)));
         } catch (err) {
             console.error('[rs2b0t] RandomEventGuardian error', err);
         } finally {
+            if (ctx?.watchdogHold === watchdogHold) {
+                ctx.watchdogHold = null;
+            }
             this.inFlight = false;
         }
     }
