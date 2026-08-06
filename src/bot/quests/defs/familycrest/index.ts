@@ -234,16 +234,81 @@ function sourceRunes(snap: QuestSnapshot): QuestStep | null {
     return null;
 }
 
+/** One to cure Johnathon, one for the spiders on the gate tiles. */
+const ANTIPOISON_CARRY = 2;
+
+/**
+ * Food for the fight *and* the walk out. Sized to the pack rather than to
+ * appetite: five rune stacks, law, coins, the ring, two doses and the crest
+ * fragments leave about nineteen slots after the pre-wilderness deposit, so
+ * asking for more than this only means a withdraw that cannot complete.
+ */
+const ENDGAME_FOOD = 16;
+
+function sourceAntipoison(snap: QuestSnapshot, want: number): QuestStep | null {
+    if (heldAntipoison(snap) >= want) {
+        return null;
+    }
+    if (!snap.bankKnown) {
+        return { kind: 'scanBank', bank: LEG_BANK.chronozon };
+    }
+    const inBank = bankedAntipoison(snap);
+    if (inBank) {
+        const step = fromBank(snap, inBank, want, LEG_BANK.chronozon);
+        if (step) {
+            return step;
+        }
+    }
+    // Jiminua is a Karamja round trip — worth it for the dose the quest cannot
+    // proceed without, not for a spare.
+    if (heldAntipoison(snap) === 0) {
+        return { kind: 'buy', item: 'Antipoison(3)', qty: ANTIPOISON_CARRY, shop: SHOP.JIMINUA, estGp: ANTIPOISON_GP };
+    }
+    return null;
+}
+
+/**
+ * Everything the Johnathon → Chronozon run needs, in one visit.
+ *
+ * Fetched at stage 8, before the walk to the Jolly Boar Inn, because Varrock
+ * East and Aubury both sit on that walk. Sourcing each piece where it is first
+ * needed instead meant three separate trips back to Varrock: one for the dose
+ * that cures him, one for the blast runes, one for the spare dose.
+ */
+function endgameLoadout(snap: QuestSnapshot): QuestStep | null {
+    const runes = sourceRunes(snap);
+    if (runes) {
+        // Coins only while there is still something to buy, or this and the
+        // pre-wilderness deposit take turns undoing each other.
+        return coinTopUp(snap, 150_000, LEG_BANK.chronozon) ?? runes;
+    }
+    const potions = sourceAntipoison(snap, ANTIPOISON_CARRY);
+    if (potions) {
+        return potions;
+    }
+    const food = foodTopUp(snap, ENDGAME_FOOD, LEG_BANK.chronozon);
+    if (food) {
+        return food;
+    }
+    return wieldWeapon(snap, LEG_BANK.chronozon);
+}
+
 /** Keep-lists for the deposits this quest makes; fragments are kept by id. */
 const ALWAYS_KEEP = ['coins', ...FC_FOODS.map(f => f.toLowerCase())];
 
 /**
- * Everything worth carrying into the wilderness — note the absence of coins,
- * which is the point: this deposit exists to leave the float in the bank.
+ * Everything worth carrying into the wilderness.
+ *
+ * Coins and the ring of dueling are absent on purpose — that is what this
+ * deposit is for. **Law runes are not**: the lair sits at wilderness level 3,
+ * far under the level-20 spell cutoff, so keeping them turns the walk home into
+ * a Varrock teleport the moment the last fragment is in hand. That walk crosses
+ * the black demons and giant skeletons on the way out, and it has killed a run.
  */
 const WILDERNESS_KEEP = [
     ...FC_FOODS.map(f => f.toLowerCase()),
     ...BLAST_RUNES.map(r => r.item.name.toLowerCase()),
+    FC_ITEM.LAW_RUNE.toLowerCase(),
     'antipoison',
     'scimitar'
 ];
@@ -465,27 +530,19 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // --- Johnathon ---
     if (stage === FC_STAGE.AVAN_PIECE) {
+        const load = endgameLoadout(snap);
+        if (load) {
+            return load;
+        }
         return { kind: 'talk', stop: JOHNATHON };
     }
     if (stage === FC_STAGE.SPOKEN_JOHNATHON) {
+        // Normally already carried from stage 8; this only fires after a death.
         if (heldAntipoison(snap) === 0) {
-            const banked = bankedAntipoison(snap);
-            if (banked) {
-                const step = fromBank(snap, banked, 1, LEG_BANK.chronozon);
-                if (step) {
-                    return step;
-                }
+            const potions = sourceAntipoison(snap, ANTIPOISON_CARRY);
+            if (potions) {
+                return potions;
             }
-            if (!snap.bankKnown) {
-                return { kind: 'scanBank', bank: LEG_BANK.chronozon };
-            }
-            return {
-                kind: 'buy',
-                item: 'Antipoison(3)',
-                qty: 2,
-                shop: SHOP.JIMINUA,
-                estGp: ANTIPOISON_GP
-            };
         }
         return custom('cure Johnathon with antipoison', cureJohnathon);
     }
@@ -499,37 +556,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (inChronozonLair(snap.tile)) {
             return custom('kill Chronozon with the four blasts', fightChronozon);
         }
-        const runes = sourceRunes(snap);
-        if (runes) {
-            // Coins only while there is still something to buy, or the deposit
-            // below and this top-up would take turns undoing each other.
-            const coins = coinTopUp(snap, 150_000, LEG_BANK.chronozon);
-            return coins ?? runes;
-        }
-        // A spare dose: curing Johnathon consumes the whole potion, and the
-        // poison spiders sit on the gate tiles into the lair.
-        if (heldAntipoison(snap) === 0) {
-            const banked = bankedAntipoison(snap);
-            const take = banked ? fromBank(snap, banked, 1, LEG_BANK.chronozon) : null;
-            if (take) {
-                return take;
-            }
-            if (!snap.bankKnown) {
-                return { kind: 'scanBank', bank: LEG_BANK.chronozon };
-            }
-            // Not worth the Karamja round trip on its own — the fight is
-            // survivable poisoned, it just costs food.
-        }
-        // The walk *out* is as dangerous as the fight — the way home crosses the
-        // black demons and giant skeletons in the wilderness half of the
-        // dungeon, and a bot that spent its food on Chronozon dies there. It did.
-        const food = foodTopUp(snap, 24, LEG_BANK.chronozon);
-        if (food) {
-            return food;
-        }
-        const arm = wieldWeapon(snap, LEG_BANK.chronozon);
-        if (arm) {
-            return arm;
+        // Normally all fetched at stage 8; this re-runs the same list so a death
+        // re-provisions rather than walking in empty.
+        const load = endgameLoadout(snap);
+        if (load) {
+            return load;
         }
         // Everything is bought: bank the float before stepping into the
         // wilderness, where dying drops it. Nothing past this point costs coin.

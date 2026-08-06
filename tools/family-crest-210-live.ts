@@ -227,7 +227,13 @@ try {
         }
         if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
 
-        if (last.status === 'complete' || stage >= args.until) {
+        // A full run has to see the *journal* go green, not just the varp: the
+        // quest-complete recolour and the QP award land a tick behind
+        // `%crestquest`, and passing on the varp alone reported success while
+        // the tab still read in-progress. Stage-scoped runs have no journal
+        // transition to wait for, so they still pass on the stage.
+        const done = args.until >= 11 ? last.status === 'complete' : stage >= args.until;
+        if (done) {
             console.log(`PASS (crestquest=${stage}, journal=${last.status}, QP=${last.qp})`);
             process.exit(0);
         }

@@ -378,8 +378,41 @@ describe('Family Crest perfect-gold leg', () => {
 });
 
 describe('Family Crest endgame', () => {
-    test('two pieces → Johnathon', () => {
-        expect(talkTarget(decide(snap({ stage: FC_STAGE.AVAN_PIECE })))).toBe('Johnathon');
+    /** What stage 8 now loads before it will walk anywhere. */
+    const endgameKit: [number, number][] = [
+        [FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200], [FC_ID.EARTH_RUNE, 200],
+        [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60],
+        [FC_ID.ANTIPOISON_3, 1], [FC_ID.ANTIPOISON_2, 1]
+    ];
+
+    test('the endgame kit is loaded before the walk to Johnathon', () => {
+        // Varrock East and Aubury both sit on that walk; sourcing each piece
+        // where it is first needed cost three separate trips back to Varrock.
+        const step = decide(snap({ stage: FC_STAGE.AVAN_PIECE, inv: [['coins', 200_000]] }));
+        expect(step.kind).toBe('buy');
+        expect(step.kind === 'buy' && step.shop.npc).toBe('Aubury');
+    });
+
+    test('two antipoison are carried — one cures him, one is for the spiders', () => {
+        const step = decide(snap({
+            stage: FC_STAGE.AVAN_PIECE,
+            inv: [['coins', 200_000], ['shark', 16]],
+            invIds: [[FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200], [FC_ID.EARTH_RUNE, 200],
+                [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60]],
+            bankIds: [[FC_ID.ANTIPOISON_3, 2]],
+            wornIds: [RUNE_SCIM]
+        }));
+        expect(step.kind).toBe('withdraw');
+        expect(step.kind === 'withdraw' && step.items[0]?.qty).toBe(2);
+    });
+
+    test('two pieces and a full pack → Johnathon', () => {
+        expect(talkTarget(decide(snap({
+            stage: FC_STAGE.AVAN_PIECE,
+            inv: [['coins', 200_000], ['shark', 16]],
+            invIds: endgameKit,
+            wornIds: [RUNE_SCIM]
+        })))).toBe('Johnathon');
     });
 
     test('poisoned Johnathon with no antipoison anywhere → Jiminua', () => {
@@ -457,6 +490,9 @@ describe('Family Crest endgame', () => {
         }));
         expect(step.kind).toBe('deposit');
         expect(step.kind === 'deposit' && step.keep).not.toContain('coins');
+        // Law runes stay: the lair is wilderness 3, so the walk home after the
+        // last fragment becomes a Varrock teleport instead of a death march.
+        expect(step.kind === 'deposit' && step.keep).toContain('law rune');
         // the fragments must survive that deposit
         expect(step.kind === 'deposit' && step.keepIds).toContain(FC_ID.CREST_FROM_CALEB);
     });
@@ -466,7 +502,7 @@ describe('Family Crest endgame', () => {
         // walk the bot back to Varrock in the middle of the fight.
         expect(customName(decide(snap({
             stage: FC_STAGE.CURED_JOHNATHON,
-            tile: { x: 3092, z: 9940, level: 0 },
+            tile: { x: 3089, z: 9932, level: 0 },
             inv: [['coins', 100_000]]
         })))).toContain('Chronozon');
     });
@@ -510,7 +546,11 @@ describe('Family Crest endgame', () => {
         expect(talkTarget(decide(snap({
             stage: FC_STAGE.AVAN_PIECE,
             dropFragments: true,
-            invIds: [[FC_ID.CREST_FROM_CALEB, 1]]
+            inv: [['coins', 200_000], ['shark', 16]],
+            invIds: [[FC_ID.CREST_FROM_CALEB, 1], [FC_ID.AIR_RUNE, 600], [FC_ID.WATER_RUNE, 200],
+                [FC_ID.EARTH_RUNE, 200], [FC_ID.FIRE_RUNE, 250], [FC_ID.DEATH_RUNE, 60],
+                [FC_ID.ANTIPOISON_3, 1], [FC_ID.ANTIPOISON_2, 1]],
+            wornIds: [RUNE_SCIM]
         })))).toBe('Johnathon');
     });
 
@@ -615,10 +655,10 @@ describe('Family Crest module wiring', () => {
         expect([...BLASTS]).toEqual(['Wind blast', 'Water blast', 'Earth blast', 'Fire blast']);
     });
 
-    test('the safespot is the east alcove, two tiles clear of the demons body', () => {
-        // No 3x3 placement reaches past x=3090 at this row, so 3092 is clear —
-        // and it is in the chamber, not behind the gate that blocks casts.
+    test('the safespot is the south end, out of the poison spiders roam', () => {
+        // Two tiles clear of the demon's body, and eleven-plus from spider
+        // spawns that wander ten — the east alcove sits three inside it.
         expect({ x: SAFESPOT.x, z: SAFESPOT.z, level: SAFESPOT.level })
-            .toEqual({ x: 3092, z: 9940, level: 0 });
+            .toEqual({ x: 3089, z: 9932, level: 0 });
     });
 });

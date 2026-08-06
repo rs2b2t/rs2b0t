@@ -15,9 +15,15 @@ const WEAKENS = /chronozon weakens/i;
 const POISONED = /you have been poisoned/i;
 
 /**
- * A dead-end alcove on the chamber's east wall, two tiles clear of the furthest
- * east the demon's 3x3 body can stand (x=3090 — a placement centred any further
- * east needs 3091 at z 9939 or 9941, and both are solid).
+ * The south end of the chamber, two tiles clear of the furthest south the
+ * demon's 3x3 body can stand, on an open x=3089 column that keeps line of sight
+ * north to it.
+ *
+ * The east alcove at (3092,9940) is an equally good safespot *from the demon* —
+ * and a bad one in practice. The poison spiders spawn at z 9943-9945 with
+ * `wanderrange=10`, `maxrange=12`, which puts that alcove three to five tiles
+ * inside their roam: they sit on you the whole fight. Down here the nearest
+ * spawn is eleven to thirteen away, at or past their limit.
  *
  * Derived by `tools/nav/chronozon-safespot.ts`: every 3x3 placement the demon
  * can slide between, every tile those placements touch, and the walkable
@@ -29,7 +35,7 @@ const POISONED = /you have been poisoned/i;
  * The runtime check below stays regardless. A safespot that stops working is a
  * quest that never finishes, and fighting in the open is the proven path.
  */
-export const SAFESPOT = new Tile(3092, 9940, 0);
+export const SAFESPOT = new Tile(3089, 9932, 0);
 
 /** How many casts to spend proving the safespot before giving up on it. */
 const SAFESPOT_PROBE_CASTS = 3;
@@ -45,14 +51,18 @@ const SAFESPOT_PROBE_CASTS = 3;
 export const BLASTS = ['Wind blast', 'Water blast', 'Earth blast', 'Fire blast'] as const;
 
 /**
- * Drink antipoison. `%poison` is `scope=perm` with no transmit, so the bot cannot
- * read whether it is poisoned — but the potion sets `%poison` to -5, which is a
- * cure *and* about ninety seconds of immunity, and the server prints "You have
- * been poisoned!" on the transition into poison.
+ * Drink antipoison — on the way *out*, not on arrival.
  *
- * Rate-limited, because a dose inside the immunity window is a dose wasted: the
- * spiders re-poison faster than the potion runs out, and drinking on every
- * message emptied a three-dose potion in one fight.
+ * A dose does set `%poison = min(%poison, -5)`, which is a cure plus a short
+ * immunity window, but spending it on arrival spends it on the fight, and the
+ * safespot is eleven tiles clear of the spiders' roam. The poison is taken
+ * crossing the gate tiles, and what it actually threatens is the long walk home
+ * on whatever food the demon left — which is where a run died.
+ *
+ * `%poison` is `scope=perm` with no transmit, so the bot cannot read whether it
+ * is poisoned; the tell is the server's "You have been poisoned!" line.
+ *
+ * Rate-limited so a retried step does not drink the potion dry.
  */
 const IMMUNITY_MS = 80_000;
 let lastDrink = 0;
@@ -108,7 +118,7 @@ async function takeSafespot(log: (m: string) => void): Promise<boolean> {
     }
     const ok = await Traversal.walkResilient(SAFESPOT, { radius: 0, attempts: 3, timeoutMs: 90_000, log });
     if (ok && onSafespot()) {
-        log(`on the safespot at (${SAFESPOT.x},${SAFESPOT.z}) — no 3x3 placement reaches this alcove`);
+        log(`on the safespot at (${SAFESPOT.x},${SAFESPOT.z}) — no 3x3 placement reaches here, and the spiders do not roam this far south`);
         return true;
     }
     log('could not take the safespot — fighting in the open');
@@ -169,16 +179,11 @@ async function runFight(log: (m: string) => void): Promise<boolean> {
         log('could not reach Chronozon');
         return false;
     }
-    await drinkAntipoison(log);
-    let poisonMark = GameMessages.mark();
+    const poisonMark = GameMessages.mark();
 
     /** One cast, with the upkeep every long custom step owes. */
     const cast = async (spell: string): Promise<'landed' | 'missed' | 'gone' | 'nospell'> => {
         await Sustain.run();
-        if (GameMessages.sawSince(poisonMark, POISONED)) {
-            poisonMark = GameMessages.mark();
-            await drinkAntipoison(log);
-        }
         if (safespot && !onSafespot()) {
             safespot = await takeSafespot(log);
         }
@@ -236,6 +241,10 @@ async function runFight(log: (m: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < 60; attempt++) {
         await Sustain.run();
         if (heldId(FC_ID.CREST_FROM_CHRONOZON) > 0) {
+            // Cure on the way out: the walk home is the part poison decides.
+            if (GameMessages.sawSince(poisonMark, POISONED)) {
+                await drinkAntipoison(log);
+            }
             return true;
         }
         const drop = GroundItems.query().name(FC_ITEM.CREST_PART).within(16).nearest();
@@ -246,14 +255,13 @@ async function runFight(log: (m: string) => void): Promise<boolean> {
             if (await drop.interact('Take')) {
                 if (await Execution.delayUntil(() => heldId(FC_ID.CREST_FROM_CHRONOZON) > before, 6000)) {
                     log("took Johnathon's crest part");
+                    if (GameMessages.sawSince(poisonMark, POISONED)) {
+                        await drinkAntipoison(log);
+                    }
                     return true;
                 }
             }
             continue;
-        }
-        if (GameMessages.sawSince(poisonMark, POISONED)) {
-            poisonMark = GameMessages.mark();
-            await drinkAntipoison(log);
         }
         const target = chronozon();
         if (!target) {
