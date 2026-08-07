@@ -523,7 +523,8 @@ class OfferTrade implements Task {
             role: 'giver',
             partners: [this.bot.getPartner()],
             theirProductMatch: () => false,
-            productNamesToOffer: () => [FLAX],
+            // Empty list declines "nothing to offer" instead of thrashing offerAll on 0 flax.
+            productNamesToOffer: () => (flaxCount() > 0 ? [FLAX] : []),
             setStatus: s => this.bot.setStatus(s),
             log: m => this.bot.log(m),
             inventoryMetric: () => flaxCount(),
@@ -563,6 +564,9 @@ class OfferTrade implements Task {
         });
         // Reset wait counter once a partner header is present.
         if (Trade.partner() !== null) {
+            this.partnerWait = 0;
+        }
+        if (!Trade.active()) {
             this.partnerWait = 0;
         }
     }
@@ -741,65 +745,80 @@ class HandleTrade implements Task {
         return Trade.active();
     }
     async execute(): Promise<void> {
-        // Stamp pending flax before accept so confirm can fall back if count lag.
+        // Stamp pending only when we are about to accept (product + room).
         if (Trade.onOfferScreen() && Trade.partner() !== null) {
             const theirFlax = flaxUnitsInOffer(Trade.theirOffer());
             if (theirFlax > 0 && canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
                 this.pending = theirFlax;
             }
         }
-        await driveActivePartnerTrade({
-            role: 'receiver',
-            partners: [this.bot.getPartner()],
-            theirProductMatch: n => (n ?? '').toLowerCase().includes(FLAX.toLowerCase()),
-            productNamesToOffer: () => [],
-            setStatus: s => this.bot.setStatus(s),
-            log: m => this.bot.log(m),
-            inventoryMetric: () => flaxCount(),
-            onMissingPartner: () => {
-                this.partnerWait++;
-                if (this.partnerWait > 8) {
-                    this.partnerWait = 0;
-                    return 'decline';
-                }
-                return 'wait';
-            },
-            receiverCanAccept: theirFlax => {
-                if (canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
-                    return true;
-                }
-                return {
-                    ok: false,
-                    reason:
-                        `cannot take ${theirFlax} flax — only ${Inventory.free()} free slot(s) `
-                        + '(random-event junk?). Declining and banking.'
-                };
-            },
-            onDecline: () => {
-                this.bot.noteTradeFailed();
-                this.pending = 0;
-            },
-            onComplete: delta => {
-                const gained = delta > 0 ? delta : this.pending;
-                if (gained > 0 || this.pending > 0) {
-                    this.bot.log(`received ${gained > 0 ? gained : this.pending} flax from runner`);
-                    this.bot.noteTradeOk();
-                } else {
+        try {
+            await driveActivePartnerTrade({
+                role: 'receiver',
+                partners: [this.bot.getPartner()],
+                theirProductMatch: n => (n ?? '').toLowerCase().includes(FLAX.toLowerCase()),
+                productNamesToOffer: () => [],
+                setStatus: s => this.bot.setStatus(s),
+                log: m => this.bot.log(m),
+                inventoryMetric: () => flaxCount(),
+                onMissingPartner: () => {
+                    this.partnerWait++;
+                    if (this.partnerWait > 8) {
+                        this.partnerWait = 0;
+                        return 'decline';
+                    }
+                    return 'wait';
+                },
+                receiverCanAccept: theirFlax => {
+                    if (canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
+                        return true;
+                    }
+                    return {
+                        ok: false,
+                        reason:
+                            `cannot take ${theirFlax} flax — only ${Inventory.free()} free slot(s) `
+                            + '(random-event junk?). Declining and banking.'
+                    };
+                },
+                onDecline: () => {
                     this.bot.noteTradeFailed();
-                    this.bot.log('trade closed without receiving flax — backing off before re-request');
+                    this.pending = 0;
+                },
+                onComplete: delta => {
+                    // Prefer live metric; pending only as lag fallback when flax is actually held.
+                    const liveGain = delta > 0 ? delta : 0;
+                    const held = flaxCount();
+                    const gained =
+                        liveGain > 0
+                            ? liveGain
+                            : held > 0 && this.pending > 0
+                                ? this.pending
+                                : 0;
+                    if (gained > 0) {
+                        this.bot.log(`received ${gained} flax from runner`);
+                        this.bot.noteTradeOk();
+                    } else {
+                        this.bot.noteTradeFailed();
+                        this.bot.log('trade closed without receiving flax — backing off before re-request');
+                    }
+                    this.pending = 0;
+                },
+                labels: {
+                    confirming: 'confirming trade',
+                    waitHeader: 'reading trade partner',
+                    waitOffer: 'waiting for runner to offer flax',
+                    accepting: 'accepting flax from runner',
+                    declining: 'declining trade'
                 }
+            });
+        } finally {
+            // Confirm timeout / external cancel never hits onDecline or onComplete.
+            if (!Trade.active()) {
                 this.pending = 0;
-            },
-            labels: {
-                confirming: 'confirming trade',
-                waitHeader: 'reading trade partner',
-                waitOffer: 'waiting for runner to offer flax',
-                accepting: 'accepting flax from runner',
-                declining: 'declining trade'
+                this.partnerWait = 0;
+            } else if (Trade.partner() !== null) {
+                this.partnerWait = 0;
             }
-        });
-        if (Trade.partner() !== null) {
-            this.partnerWait = 0;
         }
     }
 }

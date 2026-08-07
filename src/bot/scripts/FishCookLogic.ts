@@ -184,6 +184,7 @@ export function cookHumanDelayMs(rand: () => number = Math.random): number {
     return 180 + Math.floor(rand() * 520);
 }
 
+/** Same distribution as {@link bankPaceMs} in api/Banking (250–949ms). */
 export function bankHumanDelayMs(rand: () => number = Math.random): number {
     return 250 + Math.floor(rand() * 700);
 }

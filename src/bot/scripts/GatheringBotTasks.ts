@@ -28,7 +28,11 @@ import {
 } from '../api/GatherCamp.js';
 import { LOCAL_MINE_PREFER_RADIUS, shouldCooldownGatherTile } from '../api/TargetPick.js';
 import { Trade } from '../api/hud/Trade.js';
-import { DEFAULT_TRADE_RANGE, isConfiguredPartner } from '../api/mule/PartnerTrade.js';
+import {
+    DEFAULT_TRADE_RANGE,
+    countOfferMatching,
+    isConfiguredPartner
+} from '../api/mule/PartnerTrade.js';
 import { driveActivePartnerTrade } from '../api/mule/drivePartnerTrade.js';
 import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS } from '../api/MiningRocks.js';
 import { bestPickaxe } from '../api/Tools.js';
@@ -367,6 +371,8 @@ function isFletchByproductName(name: string | null | undefined): boolean {
 // ── Mule / partner trade (shared policy: api/mule/PartnerTrade) ───────────────
 
 export class HandleGatherMuleTrade implements Task {
+    private partnerWait = 0;
+
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
@@ -375,6 +381,7 @@ export class HandleGatherMuleTrade implements Task {
 
     async execute(): Promise<void> {
         const receiver = this.bot.isMuleReceiver() || this.bot.isMuleCooker();
+        const giver = !receiver;
         await driveActivePartnerTrade({
             role: receiver ? 'receiver' : 'giver',
             partners: this.bot.getMulePartners(),
@@ -385,7 +392,41 @@ export class HandleGatherMuleTrade implements Task {
             productNamesToOffer: () => this.bot.depositableProductNames(),
             setStatus: s => this.bot.setStatus(s),
             log: m => this.bot.log(m),
+            // Decline non-partners when header is known; wait (then timeout) on blank header.
+            verifyGiverPartner: giver,
+            onMissingPartner: () => {
+                this.partnerWait++;
+                if (this.partnerWait > 8) {
+                    this.partnerWait = 0;
+                    return 'decline';
+                }
+                return 'wait';
+            },
+            // Bank mule / cooker must have free slots or the transfer is a no-op thrash.
+            receiverCanAccept: receiver
+                ? () => {
+                    if (Inventory.free() > 0) {
+                        return true;
+                    }
+                    return {
+                        ok: false as const,
+                        reason: 'mule: pack full — cannot accept product (bank/cook first)'
+                    };
+                }
+                : undefined,
+            myOfferReady: giver
+                ? () =>
+                    countOfferMatching(Trade.myOffer(), n => this.bot.shouldDeposit(n)) > 0
+                : undefined,
             onComplete: delta => {
+                // Role-aware success: receiver gains slots used; giver loses product.
+                const ok = receiver ? delta > 0 : delta < 0;
+                if (!ok) {
+                    this.bot.log(
+                        `mule: trade closed without transfer (inv Δ${delta >= 0 ? '+' : ''}${delta}) — not counting`
+                    );
+                    return;
+                }
                 this.bot.noteMuleTrade();
                 this.bot.log(
                     `mule: trade complete (inv Δ${delta >= 0 ? '+' : ''}${delta}, trades=${this.bot.muleTradeCount()})`
@@ -395,6 +436,9 @@ export class HandleGatherMuleTrade implements Task {
                 accepting: this.bot.isMuleCooker() ? 'mule: accepting raw for cook' : 'mule: accepting product'
             }
         });
+        if (Trade.partner() !== null) {
+            this.partnerWait = 0;
+        }
     }
 }
 

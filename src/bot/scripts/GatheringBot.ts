@@ -909,7 +909,9 @@ export default class GatheringBot extends TaskBot {
     }
 
     markAcquireBackoff(ms = 15_000): void {
-        this.acquireBackoffUntil = Date.now() + ms;
+        // Never shorten an existing longer cooldown (inner scarcity 60s must not be
+        // clobbered by outer upgrade-fail 45s).
+        this.acquireBackoffUntil = Math.max(this.acquireBackoffUntil, Date.now() + ms);
     }
 
     acquireReady(): boolean {

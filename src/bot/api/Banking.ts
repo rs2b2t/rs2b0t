@@ -283,9 +283,13 @@ export const Banking = {
     }
 };
 
-/** Human-ish pause between bank UI actions (open→scan, withdraw, deposit). */
+/**
+ * Human-ish pause between bank UI actions (open→scan, withdraw, deposit).
+ * Matches {@link bankHumanDelayMs} in FishCookLogic (250–949ms) so waitBankReady /
+ * surplus deposit / acquire do not race client bank load after the GatheringBot split.
+ */
 export function bankPaceMs(rand: () => number = Math.random): number {
-    return 180 + Math.floor(rand() * 220);
+    return 250 + Math.floor(rand() * 700);
 }
 
 /** Pause between bank UI actions so tool checks don't flash open/close. */
