@@ -2628,11 +2628,14 @@ export class Gather implements Task {
                 return;
             }
             // Brief wait for anim/log; do not AFK the full cut — t5 will process.
-            await Execution.delayUntilTicks(() =>
-                    Inventory.used() > before ||
-                    Game.animating() ||
-                    EventSignal.pending() ||
-                    Inventory.isFull(), 3);
+            await Execution.delayUntilTicks(
+                () =>
+                    Inventory.used() > before
+                    || Game.animating()
+                    || EventSignal.pending()
+                    || Inventory.isFull(),
+                3
+            );
             if (Inventory.used() > before) {
                 this.bot.noteGatherRoll();
             }

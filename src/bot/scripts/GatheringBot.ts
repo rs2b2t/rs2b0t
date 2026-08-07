@@ -1951,10 +1951,13 @@ export default class GatheringBot extends TaskBot {
         if (!(await raw.useOn(oven))) {
             return false;
         }
-        await Execution.delayUntilTicks(() =>
-                this.cookableRawCount() < before ||
-                ChatDialog.isMakeMenu() ||
-                ChatDialog.canContinue(), 9);
+        await Execution.delayUntilTicks(
+            () =>
+                this.cookableRawCount() < before
+                || ChatDialog.isMakeMenu()
+                || ChatDialog.canContinue(),
+            9
+        );
         if (ChatDialog.isMakeMenu()) {
             const hint = raw.name ?? undefined;
             if (!(await ChatDialog.make(hint))) {
