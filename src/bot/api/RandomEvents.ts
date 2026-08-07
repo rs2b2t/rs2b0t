@@ -1,11 +1,10 @@
-import { reader } from '../adapter/ClientAdapter.js';
+import { actions, reader } from '../adapter/ClientAdapter.js';
 import { BotHost } from '../BotHost.js';
 import { EventSignal } from './EventSignal.js';
-import { Execution } from './Execution.js';
+import { Execution, type ExecutionApi } from './Execution.js';
 import { fleeCandidates } from './eventEvade.js';
 import { Game } from './Game.js';
 import { Reachability } from './Reachability.js';
-import { Traversal } from './Traversal.js';
 import { Bank } from './hud/Bank.js';
 import { ChatDialog } from './hud/ChatDialog.js';
 import { Equipment } from './hud/Equipment.js';
@@ -170,8 +169,11 @@ class RandomEventsImpl {
      * Supervisor / EventSignal still gate scripts between loops via detect + handling.
      */
     pending(): boolean {
+        // A script already in a long-running loop must yield while the
+        // always-on guardian owns the client. Handler paths use an explicit
+        // host executor and therefore do not consult this signal.
         if (this.handling) {
-            return false;
+            return true;
         }
         const t = BotHost.tickCount;
         if (t !== this.lastCheckTick) {
@@ -303,7 +305,7 @@ class RandomEventsImpl {
         return null;
     }
 
-    async handle(log: (msg: string) => void): Promise<boolean> {
+    async handle(log: (msg: string) => void, execution: ExecutionApi = Execution): Promise<boolean> {
         // Single-flight: frame guardian + Supervisor must not nest.
         if (this.handling) {
             return false;
@@ -312,7 +314,7 @@ class RandomEventsImpl {
         try {
             // detect/handle must never throw into ScriptRunner — a thrown error
             // marks the whole script crashed even when the maze/dialog later succeeds.
-            return await this.handleInner(log);
+            return await this.handleInner(log, execution);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             log(`random event: handler error (continuing): ${msg}`);
@@ -322,7 +324,7 @@ class RandomEventsImpl {
         }
     }
 
-    private async handleInner(log: (msg: string) => void): Promise<boolean> {
+    private async handleInner(log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         const event = this.detect();
         if (!event) {
             return false;
@@ -343,34 +345,34 @@ class RandomEventsImpl {
         let acted = false;
         switch (event.kind) {
             case 'dialog':
-                acted = await this.handleDialog(event.name, log);
+                acted = await this.handleDialog(event.name, log, execution);
                 break;
             case 'pick':
-                acted = await this.handlePick(event.name, log);
+                acted = await this.handlePick(event.name, log, execution);
                 break;
             case 'evade':
-                acted = await this.handleEvade(event.name, log);
+                acted = await this.handleEvade(event.name, log, execution);
                 break;
             case 'hazard':
-                acted = await this.handleHazard(event.name, log);
+                acted = await this.handleHazard(event.name, log, execution);
                 break;
             case 'mime':
-                acted = await performMimeStage(log);
+                acted = await performMimeStage(log, execution);
                 break;
             case 'maze':
-                acted = await solveMaze(log);
+                acted = await solveMaze(log, execution);
                 break;
             case 'lost-tool':
-                acted = await this.handleLostTool(log);
+                acted = await this.handleLostTool(log, execution);
                 break;
             case 'lost-gear':
-                acted = await this.handleLostGear(event.name, log);
+                acted = await this.handleLostGear(event.name, log, execution);
                 break;
             case 'box':
-                acted = await solveAllBoxes(log);
+                acted = await solveAllBoxes(log, execution);
                 break;
             case 'lamp':
-                acted = await rubLamp(this.lampSkill, log);
+                acted = await rubLamp(this.lampSkill, log, execution);
                 break;
             default:
                 break;
@@ -388,7 +390,7 @@ class RandomEventsImpl {
         return acted;
     }
 
-    private async handleDialog(name: string, log: (msg: string) => void): Promise<boolean> {
+    private async handleDialog(name: string, log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         log(`random event: ${name} — talking through it`);
         const npc = Npcs.query()
             .where(n => (n.name?.toLowerCase() ?? '') === name)
@@ -398,18 +400,18 @@ class RandomEventsImpl {
         }
 
         await npc.interact('Talk-to');
-        await Execution.delayUntil(() => ChatDialog.isOpen(), 5000);
+        await execution.delayUntil(() => ChatDialog.isOpen(), 5000);
 
         for (let i = 0; i < 25; i++) {
             if (!ChatDialog.isOpen()) {
                 break;
             }
             if (ChatDialog.options().length > 0) {
-                await ChatDialog.chooseOption();
+                await ChatDialog.chooseOption(undefined, execution);
             } else if (ChatDialog.canContinue()) {
-                await ChatDialog.continue();
+                await ChatDialog.continue(execution);
             } else {
-                await Execution.delayTicks(1);
+                await execution.delayTicks(1);
             }
             const stillThere = reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name);
             if (!stillThere && !ChatDialog.isOpen()) {
@@ -433,7 +435,7 @@ class RandomEventsImpl {
         return false;
     }
 
-    private async handlePick(name: string, log: (msg: string) => void): Promise<boolean> {
+    private async handlePick(name: string, log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         const deadline = performance.now() + PICK_WAIT_MS;
         let announced = false;
         while (performance.now() < deadline) {
@@ -445,7 +447,7 @@ class RandomEventsImpl {
             }
             if (plantStrategy(plant.actions()) === 'evade') {
                 log(`random event: ${name} turned hostile — fleeing (it poisons)`);
-                return await this.handleEvade(name, log);
+                return await this.handleEvade(name, log, execution);
             }
             if (!announced) {
                 log(`random event: ${name} — picking the fruit as soon as it ripens`);
@@ -456,7 +458,7 @@ class RandomEventsImpl {
                 const before = Inventory.count('Strange fruit');
                 const sinceText = reader.chat(1)[0]?.text ?? '';
                 await plant.interact(op);
-                await Execution.delayUntil(
+                await execution.delayUntil(
                     () => Inventory.count('Strange fruit') > before
                         || !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name)
                         || this.plantNotOurs(sinceText),
@@ -472,13 +474,13 @@ class RandomEventsImpl {
                     return true;
                 }
             }
-            await Execution.delayTicks(4);
+            await execution.delayTicks(4);
         }
         log(`random event: ${name} — fruit never ripened in this pass; will retry`);
         return true;
     }
 
-    private async handleEvade(name: string, log: (msg: string) => void): Promise<boolean> {
+    private async handleEvade(name: string, log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         const me = Game.tile();
         const threat = Npcs.query()
             .where(n => (n.name?.toLowerCase() ?? '') === name)
@@ -491,19 +493,32 @@ class RandomEventsImpl {
         const flee = fleeCandidates(me, threat.tile(), 12).find(t => Reachability.canReach(t, { maxSteps: 1500 }));
         if (!flee) {
             log('random event: nowhere reachable to evade to — waiting in place');
-            await Execution.delayTicks(10);
+            await execution.delayTicks(10);
             return false;
         }
 
-        await Traversal.walkTo(flee, { radius: 2, timeoutMs: 20_000, log });
-        const gone = await Execution.delayUntil(() => !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name), 45_000);
+        await this.walkLocal(flee, 2, execution);
+        const gone = await execution.delayUntil(() => !reader.npcs().some(n => (n.name?.toLowerCase() ?? '') === name), 45_000);
         log(gone ? `random event: ${name} despawned` : `random event: ${name} still around after evade`);
 
-        await Traversal.walkTo(me, { radius: 3, timeoutMs: 20_000, log });
+        await this.walkLocal(me, 3, execution);
         return true;
     }
 
-    private async handleHazard(name: string, log: (msg: string) => void): Promise<boolean> {
+    /** Event evades are deliberately short (4–12 tiles).  Keep this local so
+     * the always-on handler never enters the script-owned world walker. */
+    private async walkLocal(dest: { x: number; z: number; level: number }, radius: number, execution: ExecutionApi): Promise<boolean> {
+        const local = reader.toLocal(dest.x, dest.z);
+        if (!local || !actions.walkTo(local.lx, local.lz)) {
+            return false;
+        }
+        return execution.delayUntil(() => {
+            const me = reader.worldTile();
+            return me !== null && me.level === dest.level && Math.max(Math.abs(me.x - dest.x), Math.abs(me.z - dest.z)) <= radius;
+        }, 20_000);
+    }
+
+    private async handleHazard(name: string, log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         const me = Game.tile();
         if (!me) {
             return false;
@@ -511,13 +526,13 @@ class RandomEventsImpl {
         log(`random event: ${name} — stepping away`);
         const flee = fleeCandidates(me, me, 4).find(t => Reachability.canReach(t, { maxSteps: 600 }));
         if (flee) {
-            await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
+            await this.walkLocal(flee, 1, execution);
         }
-        await Execution.delayTicks(60);
+        await execution.delayTicks(60);
         return true;
     }
 
-    private async freeSlot(log: (msg: string) => void): Promise<void> {
+    private async freeSlot(log: (msg: string) => void, execution: ExecutionApi): Promise<void> {
         if (!Inventory.isFull()) {
             return;
         }
@@ -531,11 +546,11 @@ class RandomEventsImpl {
             log(`random event: dropping one ${drop} to free a slot`);
             const before = Inventory.used();
             await item.interact('Drop');
-            await Execution.delayUntil(() => Inventory.used() < before, 4000);
+            await execution.delayUntil(() => Inventory.used() < before, 4000);
         }
     }
 
-    private async handleLostTool(log: (msg: string) => void): Promise<boolean> {
+    private async handleLostTool(log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         log('random event: lost tool — recovering the head');
         const where = handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name));
         if (where === null) {
@@ -545,8 +560,8 @@ class RandomEventsImpl {
         const wasWorn = where === 'worn';
         if (wasWorn) {
             const worn = Equipment.items().find(i => /(axe|pickaxe) handle/i.test(i.name ?? ''));
-            await this.freeSlot(log);
-            if (worn?.name != null && !(await Equipment.unequip(worn.name))) {
+            await this.freeSlot(log, execution);
+            if (worn?.name != null && !(await Equipment.unequip(worn.name, execution))) {
                 log('random event: could not unequip the handle — will retry next pass');
                 return false;
             }
@@ -557,10 +572,10 @@ class RandomEventsImpl {
             .within(12)
             .nearest();
         if (head) {
-            await this.freeSlot(log);
+            await this.freeSlot(log, execution);
             const before = Inventory.used();
             await head.interact('Take');
-            await Execution.delayUntil(() => Inventory.used() > before, 6000);
+            await execution.delayUntil(() => Inventory.used() > before, 6000);
         }
 
         const headItem = Inventory.items().find(i => /(axe|pickaxe) head/i.test(i.name ?? ''));
@@ -571,7 +586,7 @@ class RandomEventsImpl {
         }
         const before = Inventory.used();
         await headItem.useOn(handleItem);
-        if (!(await Execution.delayUntil(() => Inventory.used() < before, 5000))) {
+        if (!(await execution.delayUntil(() => Inventory.used() < before, 5000))) {
             log('random event: reattach did not resolve');
             return true;
         }
@@ -579,7 +594,7 @@ class RandomEventsImpl {
         if (wasWorn) {
             const tool = Inventory.items().find(i => /(pickaxe|axe)$/i.test(i.name ?? '') && i.actions().some(o => /wield|wear/i.test(o)));
             if (tool?.name != null) {
-                const rewielded = await Equipment.equip(tool.name);
+                const rewielded = await Equipment.equip(tool.name, execution);
                 log(rewielded ? `random event: ${tool.name} reattached and re-wielded` : `random event: ${tool.name} reattached (re-wield failed — it stays in the pack)`);
                 return true;
             }
@@ -588,7 +603,7 @@ class RandomEventsImpl {
         return true;
     }
 
-    private async handleLostGear(name: string, log: (msg: string) => void): Promise<boolean> {
+    private async handleLostGear(name: string, log: (msg: string) => void, execution: ExecutionApi): Promise<boolean> {
         const drop = GroundItems.query()
             .where(g => (g.name?.toLowerCase() ?? '') === name)
             .within(10)
@@ -599,7 +614,7 @@ class RandomEventsImpl {
         log(`random event: recovering our ${name} (big fish)`);
         const before = Inventory.used();
         await drop.interact('Take');
-        const got = await Execution.delayUntil(() => Inventory.used() > before, 8000);
+        const got = await execution.delayUntil(() => Inventory.used() > before, 8000);
         log(got ? `random event: ${name} recovered` : `random event: could not pick the ${name} back up`);
         return true;
     }

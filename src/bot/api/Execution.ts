@@ -7,16 +7,24 @@ import { Scheduler } from '../runtime/Scheduler.js';
  * @see docs/API.md#execution
  * @see docs/ARCHITECTURE.md#frame-gap-insurance
  */
-export const Execution = {
-    async delay(ms: number): Promise<void> {
-        await Scheduler.enqueue({ kind: 'time', dueAt: performance.now() + ms });
-    },
+export interface ExecutionApi {
+    delay(ms: number): Promise<void>;
+    delayTicks(n: number): Promise<void>;
+    delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
+}
 
-    async delayTicks(n: number): Promise<void> {
-        await Scheduler.enqueue({ kind: 'tick', dueTick: BotHost.tickCount + n });
-    },
+type WaitSpec = { kind: 'time'; dueAt: number } | { kind: 'tick'; dueTick: number } | { kind: 'cond'; cond: () => boolean; timeoutAt: number | null };
 
-    delayUntil(cond: () => boolean, timeoutMs: number = 6000): Promise<boolean> {
-        return Scheduler.enqueue({ kind: 'cond', cond, timeoutAt: timeoutMs > 0 ? performance.now() + timeoutMs : null });
-    }
-};
+function executionFor(enqueue: (spec: WaitSpec) => Promise<boolean>): ExecutionApi {
+    return {
+        async delay(ms: number): Promise<void> { await enqueue({ kind: 'time', dueAt: performance.now() + ms }); },
+        async delayTicks(n: number): Promise<void> { await enqueue({ kind: 'tick', dueTick: BotHost.tickCount + n }); },
+        delayUntil(cond: () => boolean, timeoutMs: number = 6000): Promise<boolean> {
+            return enqueue({ kind: 'cond', cond, timeoutAt: timeoutMs > 0 ? performance.now() + timeoutMs : null });
+        }
+    };
+}
+
+export const Execution: ExecutionApi = executionFor(spec => Scheduler.enqueue(spec));
+/** Explicit queue for host-owned work. Never use an async-global mode here. */
+export const HostExecution: ExecutionApi = executionFor(spec => Scheduler.enqueueHost(spec));

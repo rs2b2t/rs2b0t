@@ -1,6 +1,6 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { chebyshev } from '../../nav/followMath.js';
-import { Execution } from '../Execution.js';
+import { Execution, type ExecutionApi } from '../Execution.js';
 import { ChatDialog } from '../hud/ChatDialog.js';
 import { Locs } from '../queries/Locs.js';
 import { MAZE_SHRINE, MAZE_SHRINE_DOOR } from './mazeGraph.js';
@@ -21,7 +21,7 @@ export const MAZE_SQUARE = { mx: 45, mz: 71 };
 const MAZE_DOOR_IDS = new Set([3628, 3629, 3630, 3631, 3632]);
 const MAZE_SHRINE_LOC = 3634; // macro_maze_complete
 
-export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
+export async function solveMaze(log: (msg: string) => void, execution: ExecutionApi = Execution): Promise<boolean> {
     const inMaze = (): boolean => {
         const me = reader.worldTile();
         return me !== null && me.level === 0 && me.x >> 6 === MAZE_SQUARE.mx && me.z >> 6 === MAZE_SQUARE.mz;
@@ -32,7 +32,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         // start_macro_maze: chatnpc briefing from Mysterious Old Man.
         for (let i = 0; i < 6 && ChatDialog.canContinue(); i++) {
             await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await execution.delayTicks(1);
         }
     };
 
@@ -57,19 +57,19 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
             }
             const local = reader.toLocal(d.x, d.z);
             if (!local) {
-                await Execution.delayTicks(1);
+                await execution.delayTicks(1);
                 continue;
             }
             const before = reader.worldTile();
             actions.walkTo(local.lx, local.lz);
-            const moved = await Execution.delayUntil(() => {
+            const moved = await execution.delayUntil(() => {
                 const t = reader.worldTile();
                 return t !== null && before !== null && chebyshev(t, before) >= 1;
             }, 1_500);
             if (!moved && inMaze()) {
                 actions.walkTo(local.lx, local.lz);
             }
-            await Execution.delayUntil(() => {
+            await execution.delayUntil(() => {
                 const t = reader.worldTile();
                 return t !== null && (reached(t) || (before !== null && chebyshev(t, before) >= 2));
             }, 4_000);
@@ -89,7 +89,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         }
         const pre = reader.worldTile();
         await door.interact('Open');
-        await Execution.delayUntil(() => {
+        await execution.delayUntil(() => {
             const t = reader.worldTile();
             return ChatDialog.canContinue() || (t !== null && pre !== null && chebyshev(t, pre) >= 2);
         }, 3_000);
@@ -150,7 +150,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
             Locs.query().name('Strange shrine').within(8).nearest();
         if (!shrine) {
             log(`random event: maze — shrine not in scene (pass ${pass})`);
-            await Execution.delayTicks(3);
+            await execution.delayTicks(3);
             continue;
         }
 
@@ -162,7 +162,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         );
 
         // Idle a tick so walk packets settle; OPLOC is rejected while delayed.
-        await Execution.delayTicks(1);
+        await execution.delayTicks(1);
         const ok = await shrine.interact(op);
         if (!ok) {
             log(`random event: maze — interact(${op}) rejected`);
@@ -170,7 +170,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         await clearMesbox();
 
         // end_macro_maze: anim + p_delay(5) + ~macro_return_teleport
-        const left = await Execution.delayUntil(() => !inMaze(), 12_000);
+        const left = await execution.delayUntil(() => !inMaze(), 12_000);
         if (left || !inMaze()) {
             break;
         }
@@ -178,7 +178,7 @@ export async function solveMaze(log: (msg: string) => void): Promise<boolean> {
         if (pass % 2 === 1) {
             await openDoorAt(MAZE_SHRINE_DOOR);
         }
-        await Execution.delayTicks(1);
+        await execution.delayTicks(1);
     }
 
     log(inMaze() ? 'random event: maze — still inside; will retry' : 'random event: maze solved — returned');

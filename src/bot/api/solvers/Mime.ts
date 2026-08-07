@@ -1,5 +1,5 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
-import { Execution } from '../Execution.js';
+import { Execution, type ExecutionApi } from '../Execution.js';
 
 export const MIME_IF = {
     root: 6543,
@@ -26,7 +26,7 @@ export function mimeAnswer(lastSeenSeq: number | null): number | null {
 
 export const MIME_SQUARE = { mx: 31, mz: 74 };
 
-export async function performMimeStage(log: (msg: string) => void): Promise<boolean> {
+export async function performMimeStage(log: (msg: string) => void, execution: ExecutionApi = Execution): Promise<boolean> {
     log('random event: mime stage — copying the performance');
     const onStage = (): boolean => {
         const me = reader.worldTile();
@@ -48,11 +48,11 @@ export async function performMimeStage(log: (msg: string) => void): Promise<bool
                 actions.ifButton(MIME_IF.buttons[answer]);
                 log(`mime: performed emote ${answer}`);
                 lastSeen = null;
-                await Execution.delayUntil(() => reader.modals().chat !== MIME_IF.root || !onStage(), 10_000);
+                await execution.delayUntil(() => reader.modals().chat !== MIME_IF.root || !onStage(), 10_000);
                 continue;
             }
         }
-        await Execution.delayTicks(1);
+        await execution.delayTicks(1);
     }
 
     log(onStage() ? 'mime: still on stage after 3min — will retry' : 'random event: mime solved — returned');

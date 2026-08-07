@@ -1,5 +1,5 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
-import { Execution } from '../Execution.js';
+import { Execution, type ExecutionApi } from '../Execution.js';
 import { Inventory } from '../hud/Inventory.js';
 
 export const CUBE_IF = {
@@ -76,7 +76,7 @@ export const LAMP_IF = {
     } as Record<string, number>
 };
 
-export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean> {
+export async function solveAllBoxes(log: (msg: string) => void, execution: ExecutionApi = Execution): Promise<boolean> {
     let solved = 0;
     for (let i = 0; i < 30 && Inventory.contains('Strange box'); i++) {
         const box = Inventory.first('Strange box');
@@ -85,7 +85,7 @@ export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean
         }
         const before = Inventory.count('Strange box');
         await box.interact('Open');
-        if (!(await Execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
+        if (!(await execution.delayUntil(() => reader.modals().main === CUBE_IF.root, 5000))) {
             log('random event: strange box interface did not open');
             return solved > 0;
         }
@@ -100,7 +100,7 @@ export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean
         }
 
         actions.ifButton(CUBE_IF.buttons[answer]);
-        if (!(await Execution.delayUntil(() => Inventory.count('Strange box') < before, 4000))) {
+        if (!(await execution.delayUntil(() => Inventory.count('Strange box') < before, 4000))) {
             log('random event: strange box answer did not consume a box');
             return solved > 0;
         }
@@ -110,23 +110,23 @@ export async function solveAllBoxes(log: (msg: string) => void): Promise<boolean
     return solved > 0;
 }
 
-export async function rubLamp(lampSkill: string, log: (msg: string) => void): Promise<boolean> {
+export async function rubLamp(lampSkill: string, log: (msg: string) => void, execution: ExecutionApi = Execution): Promise<boolean> {
     const lamp = Inventory.first('Lamp');
     if (!lamp) {
         return false;
     }
 
     await lamp.interact('Rub');
-    if (!(await Execution.delayUntil(() => reader.modals().main === LAMP_IF.root, 5000))) {
+    if (!(await execution.delayUntil(() => reader.modals().main === LAMP_IF.root, 5000))) {
         log('random event: lamp interface did not open');
         return false;
     }
 
     const skillCom = LAMP_IF.skills[lampSkill.toLowerCase()] ?? LAMP_IF.skills.strength;
     actions.ifButton(skillCom);
-    await Execution.delayTicks(1);
+    await execution.delayTicks(1);
     actions.ifButton(LAMP_IF.confirm);
-    const used = await Execution.delayUntil(() => !Inventory.contains('Lamp'), 4000);
+    const used = await execution.delayUntil(() => !Inventory.contains('Lamp'), 4000);
     log(used ? `random event: rubbed lamp (+xp ${lampSkill})` : 'random event: lamp did not consume');
     return true;
 }
