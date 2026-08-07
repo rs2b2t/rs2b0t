@@ -38,9 +38,9 @@ import { BROKEN_PICKAXE, GAS_ROCK_IDS, GAS_ROCK_TICKS } from '../api/MiningRocks
 import { bestPickaxe } from '../api/Tools.js';
 import { WHIRLPOOL_IDS, fishingRestockPlan } from '../api/FishingMethods.js';
 import {
-    bankHumanDelayMs,
+    bankPaceTicks,
     cookFilterLabel,
-    cookHumanDelayMs,
+    cookPaceTicks,
     isBurntFishName,
     isCookedFishName,
     shouldCookThenBank
@@ -82,14 +82,14 @@ const FLEE_STEP_HARD = 20;
  */
 export class EnsureShortbowRapid implements Task {
     private fails = 0;
-    private retryAt = 0;
+    private retryAtTick = 0;
     constructor(private bot: GatheringBot) {}
 
     validate(): boolean {
         if (!this.bot.tickManipProfile().shortbowRapid) {
             return false;
         }
-        if (Date.now() < this.retryAt) {
+        if (Game.tick() < this.retryAtTick) {
             return false;
         }
         const rapid = parseRangeStyle('rapid');
@@ -102,7 +102,7 @@ export class EnsureShortbowRapid implements Task {
         if (!(await this.bot.ensureShortbowEquipped())) {
             if (++this.fails >= 3) {
                 this.fails = 0;
-                this.retryAt = Date.now() + 15_000;
+                this.retryAtTick = Game.tick() + 25;
                 this.bot.log('combat: no shortbow in pack — bring one for 3t rapid');
             }
             return;
@@ -114,12 +114,12 @@ export class EnsureShortbowRapid implements Task {
         }
         this.bot.setStatus('tick: set rapid style');
         Game.setCombatMode(rapid);
-        if (await Execution.delayUntil(() => Game.combatMode() === rapid, 3000)) {
+        if (await Execution.delayUntilTicks(() => Game.combatMode() === rapid, 5)) {
             this.fails = 0;
             this.bot.log('combat: range style → rapid (3t shortbow)');
         } else if (++this.fails >= 3) {
             this.fails = 0;
-            this.retryAt = Date.now() + 15_000;
+            this.retryAtTick = Game.tick() + 25;
             this.bot.log('combat: could not set rapid style — retrying later');
         }
     }
@@ -245,7 +245,7 @@ export class WaitStickyCombat implements Task {
     async execute(): Promise<void> {
         Game.setAutoRetaliate(false);
         this.bot.setStatus('combat: waiting clear (no attacker)');
-        await Execution.delayUntil(() => !Game.inCombat() || this.hasAttacker(), 3_000);
+        await Execution.delayUntilTicks(() => !Game.inCombat() || this.hasAttacker(), 5);
     }
 }
 
@@ -326,12 +326,12 @@ export class FleeCombat implements Task {
         if (!attacker) {
             // validate should have filtered this; still avoid a blind kite.
             this.bot.setStatus('combat: waiting clear (no attacker)');
-            await Execution.delayUntil(() => !Game.inCombat() || this.attacker() !== null, 4_000);
+            await Execution.delayUntilTicks(() => !Game.inCombat() || this.attacker() !== null, 7);
             return;
         }
 
         // Hold ReturnToAnchor / gather re-entry so we don't walk back onto the pack.
-        this.bot.noteCombatFlee(12_000);
+        this.bot.noteCombatFlee(20);
 
         const dest = this.fleeTile(here, attacker, FLEE_STEP);
         const who = attacker.name ?? 'attacker';
@@ -339,7 +339,7 @@ export class FleeCombat implements Task {
         this.bot.log(`combat: under attack by ${who} — walking off to ${dest.x},${dest.z}`);
 
         await Traversal.walkTo(dest, { radius: 2, timeoutMs: 16_000 });
-        await Execution.delayUntil(() => !Game.inCombat(), 10_000);
+        await Execution.delayUntilTicks(() => !Game.inCombat(), 17);
         if (Game.inCombat()) {
             // Still stuck — longer kite away from whoever is on us.
             const still = Game.tile();
@@ -347,9 +347,9 @@ export class FleeCombat implements Task {
             if (still && againAtk) {
                 const again = this.fleeTile(still, againAtk, FLEE_STEP_HARD);
                 this.bot.log(`combat: still in combat — second kite to ${again.x},${again.z}`);
-                this.bot.noteCombatFlee(14_000);
+                this.bot.noteCombatFlee(24);
                 await Traversal.walkTo(again, { radius: 2, timeoutMs: 12_000 });
-                await Execution.delayUntil(() => !Game.inCombat(), 8_000);
+                await Execution.delayUntilTicks(() => !Game.inCombat(), 14);
             }
         }
         // If hostiles are still stacked on us after the kite, hold camp longer.
@@ -357,7 +357,7 @@ export class FleeCombat implements Task {
             Game.inCombat() ||
             hostileAttackerNearby(Npcs.query().action('Attack').within(6).results(), 6)
         ) {
-            this.bot.noteCombatFlee(10_000);
+            this.bot.noteCombatFlee(17);
         }
     }
 }
@@ -528,7 +528,7 @@ export class MuleRequestOrWait implements Task {
         }
         this.bot.setStatus(`mule: requesting trade with ${name || 'partner'}`);
         await Trade.request(name);
-        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 4000);
+        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
     }
 }
 
@@ -579,11 +579,11 @@ export class SupplierWithdrawRaw implements Task {
             }
             const before = this.bot.rawFishCount();
             await Bank.withdraw(stack.name, 'Withdraw-All');
-            await Execution.delayUntil(() => this.bot.rawFishCount() > before || Inventory.isFull(), 2500);
+            await Execution.delayUntilTicks(() => this.bot.rawFishCount() > before || Inventory.isFull(), 5);
             if (this.bot.rawFishCount() === before) {
                 // Try single withdraw if All failed.
                 await Bank.withdraw(stack.name, 'Withdraw-1');
-                await Execution.delayUntil(() => this.bot.rawFishCount() > before || Inventory.isFull(), 2000);
+                await Execution.delayUntilTicks(() => this.bot.rawFishCount() > before || Inventory.isFull(), 4);
                 if (this.bot.rawFishCount() === before) {
                     break;
                 }
@@ -616,7 +616,7 @@ export class MuleBankHaul implements Task {
         }
         await Execution.delayTicks(1);
         await Bank.depositAllMatching(name => this.bot.shouldDeposit(name));
-        await Execution.delayUntil(() => !this.bot.hasDepositable() || !Bank.isOpen(), 5000);
+        await Execution.delayUntilTicks(() => !this.bot.hasDepositable() || !Bank.isOpen(), 9);
         if (Bank.isOpen()) {
             await Bank.close();
         }
@@ -695,7 +695,7 @@ export class ClearPackJunk implements Task {
             }
             const before = Inventory.used();
             await item.interact('Drop');
-            if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+            if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
                 dropped += before - Inventory.used();
             } else {
                 break;
@@ -775,13 +775,13 @@ async function dropAll(bot: GatheringBot): Promise<void> {
                 }
                 const beforeOther = Inventory.used();
                 await other.interact('Drop');
-                await Execution.delayUntil(() => Inventory.used() < beforeOther, 3000);
+                await Execution.delayUntilTicks(() => Inventory.used() < beforeOther, 5);
                 continue;
             }
         }
         const before = Inventory.used();
         await item.interact('Drop');
-        await Execution.delayUntil(() => Inventory.used() < before, 3000);
+        await Execution.delayUntilTicks(() => Inventory.used() < before, 5);
     }
     bot.log('drop: haul cleared');
 }
@@ -799,7 +799,7 @@ async function dropExcessCooked(bot: GatheringBot, keep = 3): Promise<void> {
         }
         const before = Inventory.used();
         await item.interact('Drop');
-        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+        if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
             dropped += before - Inventory.used();
         } else {
             break;
@@ -820,7 +820,7 @@ async function dropFletchByproducts(bot: GatheringBot): Promise<void> {
         }
         const before = Inventory.used();
         await item.interact('Drop');
-        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+        if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
             dropped += before - Inventory.used();
         } else {
             break;
@@ -863,7 +863,7 @@ export class BankCatch implements Task {
                 return;
             }
 
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            await Execution.delayUntilTicks(() => Bank.loaded(), 5);
             await Execution.delayTicks(1);
             const total = this.bot.refreshBankRawTotal();
             this.bot.log(`bank: raw ${cookFilterLabel(this.bot.getCookFishFilter())} ${total}/${this.bot.getBankRawTarget()}`);
@@ -886,7 +886,7 @@ export class BankCatch implements Task {
                 return;
             }
         } else {
-            await Execution.delay(bankHumanDelayMs());
+            await Execution.delayTicks(bankPaceTicks());
             await Bank.depositAllMatching(deposit);
             await Execution.delayTicks(1);
             await refreshRaw();
@@ -931,6 +931,7 @@ export class FishCookDialog implements Task {
 
         const raw = this.bot.lastRawFish();
         const hint = raw?.name ?? undefined;
+        // This revision has no Make-X — pick the highest fixed qty button (often 1).
         if (!(await ChatDialog.make(hint))) {
             await ChatDialog.make();
         }
@@ -1044,21 +1045,74 @@ export class FishCookLoad implements Task {
             await walkToOven(approach ? 'approach→stand' : '');
         }
 
-        // useOn can "click" the oven through a wall; cooking then never starts.
-        // A real cook starts within ~2 ticks (XP / raw drop / make-X). After that,
-        // wait out the full Make-X batch — re-useOn mid-queue cancels cooking and
-        // left packs half-raw (live smokes: 18 cooked / 9 raw at timeout).
+        // This revision has no Make-X: each useOn (+ optional make-menu qty button)
+        // cooks one fish. All waits are tick-based — re-useOn mid-anim cancels the cook.
         let wallRecoveries = 0;
-        // Full pack ~28 fish × ~4 ticks ≈ 65s; allow headroom for burn/slow anim.
-        const BATCH_WAIT_MS = 100_000;
-        const STALL_MS = 4500;
-        for (let n = 0; n < 48 && this.bot.cookableRawCount() > 0; n++) {
+        // After finishing a fish in this execute(), next click skips the in-flight probe.
+        let skipInFlightProbe = false;
+        // Bound by attempts (one fish / stall each), not wall-clock.
+        for (let attempt = 0; attempt < 48 && this.bot.cookableRawCount() > 0; attempt++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
                 return;
             }
             if (EventSignal.pending() || Game.inCombat()) {
                 return;
             }
+
+            // Re-entry after make-menu: cook may already be animating — drain on ticks.
+            if (!skipInFlightProbe) {
+                const idleRaw = this.bot.cookableRawCount();
+                const idleXp = Skills.xp('cooking');
+                let sawProgress = false;
+                for (let t = 0; t < 4; t++) {
+                    if (
+                        this.bot.cookableRawCount() < idleRaw
+                        || Skills.xp('cooking') > idleXp
+                        || this.bot.cookableRawCount() === 0
+                        || ChatDialog.isMakeMenu()
+                        || ChatDialog.canContinue()
+                        || EventSignal.pending()
+                        || Game.inCombat()
+                    ) {
+                        sawProgress = true;
+                        break;
+                    }
+                    await Execution.delayTicks(1);
+                }
+                if (this.bot.cookableRawCount() === 0) {
+                    break;
+                }
+                if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
+                    return;
+                }
+                if (EventSignal.pending() || Game.inCombat()) {
+                    return;
+                }
+                if (
+                    sawProgress
+                    || this.bot.cookableRawCount() < idleRaw
+                    || Skills.xp('cooking') > idleXp
+                ) {
+                    // Finish this single fish (raw drop) if only XP moved so far.
+                    for (
+                        let t = 0;
+                        t < 10
+                        && this.bot.cookableRawCount() >= idleRaw
+                        && !ChatDialog.isMakeMenu()
+                        && !EventSignal.pending()
+                        && !Game.inCombat();
+                        t++
+                    ) {
+                        await Execution.delayTicks(1);
+                    }
+                    wallRecoveries = 0;
+                    await Execution.delayTicks(1);
+                    skipInFlightProbe = true;
+                    continue;
+                }
+            }
+            skipInFlightProbe = false;
+
             const raw = this.bot.lastRawFish();
             const oven = findRange();
             if (!raw || !oven) {
@@ -1073,21 +1127,34 @@ export class FishCookLoad implements Task {
                 await Execution.delayTicks(2);
                 return;
             }
-            this.bot.setStatus(`cook: ${raw.name}`);
+
+            this.bot.setStatus(`cook: ${raw.name} (${this.bot.cookableRawCount()} left)`);
             const beforeRaw = this.bot.cookableRawCount();
             const beforeXp = Skills.xp('cooking');
             if (!(await raw.useOn(oven))) {
                 await Execution.delayTicks(2);
                 continue;
             }
-            const cookStarted = (): boolean =>
-                this.bot.cookableRawCount() < beforeRaw
-                || Skills.xp('cooking') > beforeXp
-                || ChatDialog.isMakeMenu()
-                || ChatDialog.canContinue();
-            // ~4 game ticks — fail-fast on street-side stands; real cooks start by then.
-            const started = await Execution.delayUntil(cookStarted, 2400);
-            if (!(started || cookStarted())) {
+
+            // Fail-fast on street-side stands: real cooks react within a few ticks.
+            let reacted = false;
+            for (let t = 0; t < 4; t++) {
+                if (
+                    this.bot.cookableRawCount() < beforeRaw
+                    || Skills.xp('cooking') > beforeXp
+                    || ChatDialog.isMakeMenu()
+                    || ChatDialog.canContinue()
+                ) {
+                    reacted = true;
+                    break;
+                }
+                await Execution.delayTicks(1);
+            }
+            if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
+                // Dialog picks product; next execute() drains in-flight cook above.
+                return;
+            }
+            if (!reacted) {
                 const at = Game.tile();
                 const atStand = at !== null && rangeTile.distanceTo(at) <= 2;
                 if (atStand && wallRecoveries < 3) {
@@ -1101,50 +1168,30 @@ export class FishCookLoad implements Task {
                 await Execution.delayTicks(1);
                 continue;
             }
-            // Make-X / cook anim started. Drain the pack without re-clicking; only
-            // re-useOn after a true stall (no raw drop / cooking XP for STALL_MS).
+
+            // Direct cook (no menu) — wait this fish out on ticks, then next click.
             wallRecoveries = 0;
-            const batchDeadline = Date.now() + BATCH_WAIT_MS;
-            while (this.bot.cookableRawCount() > 0 && Date.now() < batchDeadline) {
-                if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
-                    return;
-                }
-                if (EventSignal.pending() || Game.inCombat()) {
-                    return;
-                }
-                const snapRaw = this.bot.cookableRawCount();
-                const snapXp = Skills.xp('cooking');
-                const progressed = await Execution.delayUntil(
-                    () =>
-                        this.bot.cookableRawCount() < snapRaw
-                        || Skills.xp('cooking') > snapXp
-                        || this.bot.cookableRawCount() === 0
-                        || ChatDialog.isMakeMenu()
-                        || ChatDialog.canContinue()
-                        || EventSignal.pending()
-                        || Game.inCombat(),
-                    STALL_MS
-                );
-                if (this.bot.cookableRawCount() === 0) {
-                    break;
-                }
-                if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
-                    return;
-                }
-                if (EventSignal.pending() || Game.inCombat()) {
-                    return;
-                }
-                if (progressed || this.bot.cookableRawCount() < snapRaw || Skills.xp('cooking') > snapXp) {
-                    continue;
-                }
-                // Stalled mid-batch — re-click once (do not loop-spam useOn).
-                this.bot.log(
-                    `cook: batch stalled with ${this.bot.cookableRawCount()} raw — re-useOn`
-                );
-                break;
+            for (
+                let t = 0;
+                t < 10
+                && this.bot.cookableRawCount() >= beforeRaw
+                && !ChatDialog.isMakeMenu()
+                && !ChatDialog.canContinue()
+                && !EventSignal.pending()
+                && !Game.inCombat();
+                t++
+            ) {
+                await Execution.delayTicks(1);
             }
-            if (this.bot.cookableRawCount() === 0) {
-                await Execution.delay(cookHumanDelayMs());
+            if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
+                return;
+            }
+            if (EventSignal.pending() || Game.inCombat()) {
+                return;
+            }
+            if (this.bot.cookableRawCount() < beforeRaw) {
+                await Execution.delayTicks(1);
+                skipInFlightProbe = true;
             }
         }
 
@@ -1152,6 +1199,7 @@ export class FishCookLoad implements Task {
             if (this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
                 await dropBurnt(this.bot);
             }
+            await Execution.delayTicks(1);
         }
     }
 }
@@ -1185,9 +1233,9 @@ export class FishBankCooked implements Task {
             this.bot.setStatus('bank: cooked fish');
             let deposited = false;
             if (await this.bot.openScriptBank(log)) {
-                await Execution.delay(bankHumanDelayMs());
+                await Execution.delayTicks(bankPaceTicks());
                 await Bank.depositAllMatching(deposit);
-                await Execution.delayUntil(() => Bank.loaded(), 3000);
+                await Execution.delayUntilTicks(() => Bank.loaded(), 5);
                 await Execution.delayTicks(1);
                 if (this.bot.getCookMode() === 'bank-raw-then-cook') {
                     this.bot.refreshBankRawTotal();
@@ -1269,7 +1317,7 @@ export class FishWithdrawCookBatch implements Task {
             this.bot.log('cook: could not open bank for withdraw — will retry');
             return;
         }
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
         await Execution.delayTicks(1);
 
         this.bot.refreshBankRawTotal();
@@ -1293,21 +1341,21 @@ export class FishWithdrawCookBatch implements Task {
         if (allOp) {
             this.bot.log(`cook: withdraw all ${bankName} (bank had ${this.bot.getBankRawInBank()})`);
             await Bank.withdraw(bankName, allOp);
-            await Execution.delayUntil(() => this.bot.cookableRawCount() > 0 || Bank.count(bankName) === 0, 4000);
+            await Execution.delayUntilTicks(() => this.bot.cookableRawCount() > 0 || Bank.count(bankName) === 0, 7);
         } else {
             const tenOp = withdrawOp(rawItem.ops, '10') ?? withdrawOp(rawItem.ops, 'any') ?? 'Withdraw-10';
             for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
                 const before = this.bot.cookableRawCount();
                 await Bank.withdraw(bankName, tenOp);
-                if (!(await Execution.delayUntil(() => this.bot.cookableRawCount() > before || Inventory.isFull(), 3000))) {
+                if (!(await Execution.delayUntilTicks(() => this.bot.cookableRawCount() > before || Inventory.isFull(), 5))) {
                     break;
                 }
-                await Execution.delay(cookHumanDelayMs());
+                await Execution.delayTicks(cookPaceTicks());
             }
         }
 
 
-        await Execution.delayUntil(() => Bank.loaded(), 2000);
+        await Execution.delayUntilTicks(() => Bank.loaded(), 4);
         this.bot.refreshBankRawTotal();
 
         if (this.bot.cookableRawCount() === 0) {
@@ -1342,10 +1390,10 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
         }
         const before = Inventory.used();
         await item.interact('Drop');
-        if (await Execution.delayUntil(() => Inventory.used() < before, 3000)) {
+        if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
             dropped += before - Inventory.used();
         }
-        await Execution.delay(80 + Math.floor(Math.random() * 160));
+        await Execution.delayTicks(1);
     }
     if (dropped > 0) {
         bot.log(`cook: dropped ${dropped} burnt (session ${bot.burntTotal()})`);
@@ -1410,7 +1458,7 @@ export class RepairBrokenGatherTool implements Task {
 
             await Bank.depositAllMatching(this.bot.restockDepositMatcher());
             await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            await Execution.delayUntilTicks(() => Bank.loaded(), 5);
             const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
             if (!pick) {
                 if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
@@ -1435,7 +1483,7 @@ export class RepairBrokenGatherTool implements Task {
             const item = Bank.items().find(i => (i.name ?? '').toLowerCase() === pick.toLowerCase());
             const one = item ? withdrawOp(item.ops, '1') ?? 'Withdraw-1' : 'Withdraw-1';
             await Bank.withdraw(pick, one);
-            if (!(await Execution.delayUntil(() => Inventory.first(pick) !== null, 3000))) {
+            if (!(await Execution.delayUntilTicks(() => Inventory.first(pick) !== null, 5))) {
                 if (this.bot.isPowerMode()) {
                     this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
                     return;
@@ -1459,7 +1507,7 @@ export class RepairBrokenGatherTool implements Task {
             }
             if (await this.bot.openScriptBank(log)) {
                 await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_AXE.toLowerCase());
-                await Execution.delayUntil(() => Bank.loaded(), 2000);
+                await Execution.delayUntilTicks(() => Bank.loaded(), 4);
                 if (Bank.isOpen()) {
                     await this.bot.closeScriptBank(log);
                 }
@@ -1565,15 +1613,15 @@ export class RestockFishingGear implements Task {
             await Execution.delayTicks(3);
             return;
         }
-        await Execution.delay(bankHumanDelayMs());
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayTicks(bankPaceTicks());
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
 
         // Deposit everything that is not required gear (clears haul / junk before tool withdraw).
         if (power || this.bot.awayFromGatherSpot()) {
             this.bot.log('restock: depositing non-gear first');
         }
         await Bank.depositAllMatching(this.bot.restockDepositMatcher());
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
         await Execution.delayTicks(1);
 
         const plan = fishingRestockPlan(
@@ -1613,7 +1661,7 @@ export class RestockFishingGear implements Task {
                         this.bot.log(
                             `restock: acquire on but cannot fund/shop ${still.join(' / ')} — need coins or stock`
                         );
-                        this.bot.markAcquireBackoff(30_000);
+                        this.bot.markAcquireBackoff(50);
                     }
                 }
                 if (power) {
@@ -1655,11 +1703,8 @@ export class RestockFishingGear implements Task {
                 this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntil(
-                () => Inventory.count(step.name) > before || Bank.count(step.name) === 0,
-                4000
-            );
-            await Execution.delay(bankHumanDelayMs());
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
+            await Execution.delayTicks(bankPaceTicks());
         }
 
         if (!this.bot.hasGear()) {
@@ -1753,7 +1798,14 @@ export class RestockGatherTool implements Task {
                     await this.bot.walkHomeIfNeeded(log);
                     return;
                 }
-                // Acquire failed — fall through to bank path.
+                // Path/RE fail with coins (or smith mats) still held — do not thrash the
+                // camp bank (buy-pick mid-random-event spent minutes on "no Bank booth").
+                // Stay off acquire backoff so the next Restock tick retries preBuy.
+                this.bot.log(
+                    `restock: ${preBuy.kind} failed with materials still held — retry without bank`
+                );
+                await Execution.delayTicks(3);
+                return;
             }
         }
 
@@ -1766,14 +1818,14 @@ export class RestockGatherTool implements Task {
             await Execution.delayTicks(3);
             return;
         }
-        await Execution.delay(bankHumanDelayMs());
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayTicks(bankPaceTicks());
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
 
         if (power || this.bot.awayFromGatherSpot()) {
             this.bot.log('restock: depositing non-gear first');
         }
         await Bank.depositAllMatching(this.bot.restockDepositMatcher());
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
         await Execution.delayTicks(1);
 
         const plan = this.bot.gatherToolRestockPlan();
@@ -1800,7 +1852,7 @@ export class RestockGatherTool implements Task {
                         this.bot.log(
                             `restock: acquire on but cannot fund/shop ${still.join(' / ')} — need coins or materials`
                         );
-                        this.bot.markAcquireBackoff(30_000);
+                        this.bot.markAcquireBackoff(50);
                     }
                 }
                 if (power) {
@@ -1840,11 +1892,8 @@ export class RestockGatherTool implements Task {
                 this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntil(
-                () => Inventory.count(step.name) > before || Bank.count(step.name) === 0,
-                4000
-            );
-            await Execution.delay(bankHumanDelayMs());
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
+            await Execution.delayTicks(bankPaceTicks());
         }
 
         // Same open: unequip/deposit surplus, close once, then Wield offline.
@@ -2193,7 +2242,7 @@ export class Gather implements Task {
                 }
             }
             // Do not wait for fletch product — reclick on the next game tick.
-            await Execution.delayUntil(() => Game.tick() >= this.bot.lastGatherRollTick() + 1, 1200);
+            await Execution.delayUntilTicks(() => Game.tick() >= this.bot.lastGatherRollTick() + 1, 2);
             await reclick();
             return true;
         }
@@ -2216,13 +2265,13 @@ export class Gather implements Task {
         ) {
             const due = nextGatherClickTick(this.bot.lastGatherRollTick(), cycle);
             this.bot.setStatus(`tick: wait ${cycle}t reclick`);
-            await Execution.delayUntil(
+            await Execution.delayUntilTicks(
                 () =>
                     Game.tick() >= due ||
                     Inventory.isFull() ||
                     EventSignal.pending() ||
                     combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather()),
-                cycle * 700 + 2000
+                Math.max(1, due - Game.tick() + 2)
             );
             if (
                 Inventory.isFull() ||
@@ -2280,7 +2329,7 @@ export class Gather implements Task {
             // No target. Short finishing-cast wait, waking if a spot reappears.
             if (Game.animating()) {
                 this.bot.setStatus('fish: finishing cast (no spot)');
-                await Execution.delayUntil(
+                await Execution.delayUntilTicks(
                     () =>
                         !Game.animating() ||
                         this.findFishSpot() !== null ||
@@ -2288,7 +2337,7 @@ export class Gather implements Task {
                         Inventory.isFull() ||
                         combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather()) ||
                         ChatDialog.canContinue(),
-                    2500
+                    5
                 );
                 return;
             }
@@ -2359,10 +2408,7 @@ export class Gather implements Task {
                 return;
             }
 
-            await Execution.delayUntil(
-                () => Inventory.used() > before || Game.animating() || this.fishingBroken(index, startTile),
-                12000
-            );
+            await Execution.delayUntilTicks(() => Inventory.used() > before || Game.animating() || this.fishingBroken(index, startTile), 20);
 
             const live = this.spotByIndex(index);
             if (live && WHIRLPOOL_IDS.has(live.id)) {
@@ -2400,10 +2446,7 @@ export class Gather implements Task {
                 return;
             }
             const mark = Inventory.used();
-            await Execution.delayUntil(
-                () => Inventory.used() > mark || !Game.animating() || this.fishingBroken(index, startTile),
-                8000
-            );
+            await Execution.delayUntilTicks(() => Inventory.used() > mark || !Game.animating() || this.fishingBroken(index, startTile), 14);
             if (this.fishingBroken(index, startTile)) {
                 this.activeFishIndex = null;
                 const live = this.spotByIndex(index);
@@ -2438,7 +2481,7 @@ export class Gather implements Task {
             // Keep-alive when near anchor with no matching loc — surface why we idle.
             if (Game.animating()) {
                 this.bot.setStatus(`${this.bot.actionName()}: finishing`);
-                await Execution.delayUntil(
+                await Execution.delayUntilTicks(
                     () =>
                         !Game.animating() ||
                         this.findRock() !== null ||
@@ -2446,7 +2489,7 @@ export class Gather implements Task {
                         Inventory.isFull() ||
                         combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather()) ||
                         ChatDialog.canContinue(),
-                    2500
+                    5
                 );
                 return;
             }
@@ -2485,10 +2528,7 @@ export class Gather implements Task {
                 return;
             }
 
-            await Execution.delayUntil(
-                () => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile),
-                12000
-            );
+            await Execution.delayUntilTicks(() => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile), 20);
             if (this.gasAt(tile)) {
                 await this.fleeGas(key, tile);
                 return;
@@ -2520,10 +2560,7 @@ export class Gather implements Task {
                 return;
             }
             const mark = Inventory.used();
-            await Execution.delayUntil(
-                () => Inventory.used() > mark || !Game.animating() || this.shouldYieldMine(tile),
-                8000
-            );
+            await Execution.delayUntilTicks(() => Inventory.used() > mark || !Game.animating() || this.shouldYieldMine(tile), 14);
             if (this.gasAt(tile)) {
                 await this.fleeGas(key, tile);
                 return;
@@ -2591,25 +2628,22 @@ export class Gather implements Task {
                 return;
             }
             // Brief wait for anim/log; do not AFK the full cut — t5 will process.
-            await Execution.delayUntil(
-                () =>
+            await Execution.delayUntilTicks(() =>
                     Inventory.used() > before ||
                     Game.animating() ||
                     EventSignal.pending() ||
-                    Inventory.isFull(),
-                1800
-            );
+                    Inventory.isFull(), 3);
             if (Inventory.used() > before) {
                 this.bot.noteGatherRoll();
             }
             // Advance toward t5 without blocking the whole cycle in one task beat.
-            await Execution.delayUntil(
+            await Execution.delayUntilTicks(
                 () => {
                     const s = this.bot.farmerCycleStartTick();
                     const p = farmerWillowPhase(Game.tick(), s);
                     return p === 'cut-log' || p === 'drop-log' || p === 'click-tree';
                 },
-                4500
+                8
             );
             return;
         }
@@ -2636,17 +2670,14 @@ export class Gather implements Task {
                 await Execution.delayTicks(1);
                 return;
             }
-            await Execution.delayUntil(
-                () => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || !Game.animating(),
-                1500
-            );
+            await Execution.delayUntilTicks(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || !Game.animating(), 3);
             if (ChatDialog.isMakeMenu()) {
                 await this.bot.armKnifeDelay();
             }
             // Wait into drop phase.
-            await Execution.delayUntil(
+            await Execution.delayUntilTicks(
                 () => farmerWillowPhase(Game.tick(), this.bot.farmerCycleStartTick()) === 'drop-log',
-                2000
+                4
             );
             return;
         }
@@ -2660,13 +2691,13 @@ export class Gather implements Task {
                 this.bot.log('farmer: drop-log with empty product slot');
             }
             // Next cycle starts on the following tick.
-            await Execution.delayUntil(
+            await Execution.delayUntilTicks(
                 () => {
                     const s = this.bot.farmerCycleStartTick();
                     const elapsed = Game.tick() - s;
                     return elapsed >= 6 || farmerWillowPhase(Game.tick(), s) === 'click-tree';
                 },
-                2000
+                4
             );
             // Roll cycle start forward by 6 so phase 0 lands on the next click beat.
             const s = this.bot.farmerCycleStartTick();
@@ -2678,7 +2709,7 @@ export class Gather implements Task {
 
         // wait phases (t2–t4): sleep until cut-log / drop / next click.
         this.bot.setStatus('farmer: wait');
-        await Execution.delayUntil(
+        await Execution.delayUntilTicks(
             () => {
                 if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
                     return true;
@@ -2686,7 +2717,7 @@ export class Gather implements Task {
                 const p = farmerWillowPhase(Game.tick(), this.bot.farmerCycleStartTick());
                 return p !== 'wait';
             },
-            4000
+            7
         );
     }
 }

@@ -82,7 +82,7 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
         opts.setStatus(labels.confirming ?? 'mule: confirming trade');
         const before = metric();
         await Trade.accept();
-        if (await Execution.delayUntil(() => !Trade.active(), 4000)) {
+        if (await Execution.delayUntilTicks(() => !Trade.active(), 7)) {
             const delta = metric() - before;
             if (opts.onComplete) {
                 opts.onComplete(delta);
@@ -204,16 +204,16 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
         for (const name of names) {
             await Trade.offerAll(name);
         }
-        await Execution.delayUntil(
+        await Execution.delayUntilTicks(
             () =>
                 (opts.myOfferReady?.() ?? Trade.myOffer().length > 0) ||
                 Trade.onConfirmScreen() ||
                 !Trade.active(),
-            4000
+            7
         );
         return;
     }
     opts.setStatus(labels.acceptingOffer ?? 'mule: accepting handoff');
     await Trade.accept();
-    await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
+    await Execution.delayUntilTicks(() => Trade.onConfirmScreen() || !Trade.active(), 7);
 }

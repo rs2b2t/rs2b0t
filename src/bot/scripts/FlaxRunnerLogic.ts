@@ -16,11 +16,17 @@ export const MEET_TILE = new Tile(2719, 3471, 0);
 
 export const TRADE_RANGE = 2;
 
-/** Min delay between Trade.request attempts — both roles used to spam every loop. */
-export const TRADE_REQUEST_COOLDOWN_MS = 5_000;
+/** Min delay between Trade.request attempts (game ticks). */
+export const TRADE_REQUEST_COOLDOWN_TICKS = 9;
 
 /** After a trade closes with no flax moved, back off longer before re-requesting. */
-export const TRADE_FAIL_COOLDOWN_MS = 8_000;
+export const TRADE_FAIL_COOLDOWN_TICKS = 14;
+
+/** @deprecated Prefer {@link TRADE_REQUEST_COOLDOWN_TICKS}. */
+export const TRADE_REQUEST_COOLDOWN_MS = TRADE_REQUEST_COOLDOWN_TICKS * 600;
+
+/** @deprecated Prefer {@link TRADE_FAIL_COOLDOWN_TICKS}. */
+export const TRADE_FAIL_COOLDOWN_MS = TRADE_FAIL_COOLDOWN_TICKS * 600;
 
 export const FLAX = 'Flax';
 

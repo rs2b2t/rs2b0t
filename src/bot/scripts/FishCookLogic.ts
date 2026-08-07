@@ -179,14 +179,24 @@ export function cookBatchAfterLoad(
     return afterCook === 'continue' ? 'fish-again' : 'stop';
 }
 
-export function cookHumanDelayMs(rand: () => number = Math.random): number {
-
-    return 180 + Math.floor(rand() * 520);
+/** 1 tick between single-fish cook actions (this revision has no Make-X). */
+export function cookPaceTicks(_rand: () => number = Math.random): number {
+    return 1;
 }
 
-/** Same distribution as {@link bankPaceMs} in api/Banking (250–949ms). */
+/** 1–2 ticks between bank UI steps (aligned with api/Banking bankPaceTicks). */
+export function bankPaceTicks(rand: () => number = Math.random): number {
+    return rand() < 0.35 ? 2 : 1;
+}
+
+/** @deprecated Prefer {@link cookPaceTicks}; action loops run on game ticks. */
+export function cookHumanDelayMs(rand: () => number = Math.random): number {
+    return cookPaceTicks(rand) * 600;
+}
+
+/** @deprecated Prefer {@link bankPaceTicks}; action loops run on game ticks. */
 export function bankHumanDelayMs(rand: () => number = Math.random): number {
-    return 250 + Math.floor(rand() * 700);
+    return bankPaceTicks(rand) * 600;
 }
 
 export function cookedNameFromRaw(rawName: string): string {

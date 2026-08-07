@@ -12,12 +12,12 @@ import { reader } from '../adapter/ClientAdapter.js';
 import { GameMessages } from '../events/gameMessages.js';
 import {
     CANT_LIGHT,
-    FIRE_LIGHT_MS,
-    FIRE_START_MS,
+    FIRE_LIGHT_TICKS,
+    FIRE_START_TICKS,
     TINDERBOX,
     burnLaneWant,
     findBurnLane,
-    fireReactionMs,
+    fireReactionTicks,
     inFirePlot,
     isBurnWest,
     runInDir,
@@ -168,7 +168,7 @@ class ChopBurnLoad implements Task {
                 this.bot.setBurnLaneLeft(this.bot.burnLaneLeft() - 1);
                 stalls = 0;
                 laneFails = 0;
-                await Execution.delay(fireReactionMs());
+                await Execution.delayTicks(fireReactionTicks());
                 continue;
             }
             this.bot.setBurnLaneLeft(0);
@@ -263,10 +263,20 @@ class ChopBurnLoad implements Task {
         if (!(await tinder.useOn(logs))) {
             return 'stalled';
         }
-        if (!(await Execution.delayUntil(() => this.bot.logCount() < held || blocked() || Game.animating(), FIRE_START_MS))) {
+        if (
+            !(await Execution.delayUntilTicks(
+                () => this.bot.logCount() < held || blocked() || Game.animating(),
+                FIRE_START_TICKS
+            ))
+        ) {
             return 'stalled';
         }
-        if (!(await Execution.delayUntil(() => lit() || blocked() || EventSignal.pending(), FIRE_LIGHT_MS))) {
+        if (
+            !(await Execution.delayUntilTicks(
+                () => lit() || blocked() || EventSignal.pending(),
+                FIRE_LIGHT_TICKS
+            ))
+        ) {
             return 'stalled';
         }
         return blocked() ? 'blocked' : lit() ? 'lit' : 'stalled';

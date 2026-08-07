@@ -11,6 +11,11 @@ export interface ExecutionApi {
     delay(ms: number): Promise<void>;
     delayTicks(n: number): Promise<void>;
     delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
+    /**
+     * Poll `cond` each game tick for up to `maxTicks` ticks.
+     * Prefer this over {@link delayUntil} for action loops that run on the tick.
+     */
+    delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean>;
 }
 
 type WaitSpec = { kind: 'time'; dueAt: number } | { kind: 'tick'; dueTick: number } | { kind: 'cond'; cond: () => boolean; timeoutAt: number | null };
@@ -21,6 +26,16 @@ function executionFor(enqueue: (spec: WaitSpec) => Promise<boolean>): ExecutionA
         async delayTicks(n: number): Promise<void> { await enqueue({ kind: 'tick', dueTick: BotHost.tickCount + n }); },
         delayUntil(cond: () => boolean, timeoutMs: number = 6000): Promise<boolean> {
             return enqueue({ kind: 'cond', cond, timeoutAt: timeoutMs > 0 ? performance.now() + timeoutMs : null });
+        },
+        async delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean> {
+            const n = Math.max(0, Math.floor(maxTicks));
+            for (let i = 0; i < n; i++) {
+                if (cond()) {
+                    return true;
+                }
+                await enqueue({ kind: 'tick', dueTick: BotHost.tickCount + 1 });
+            }
+            return cond();
         }
     };
 }

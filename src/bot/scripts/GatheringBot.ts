@@ -356,7 +356,8 @@ export default class GatheringBot extends TaskBot {
 
     /** Off | Buy/repair — shop/repair/smith missing gather tools. */
     private toolAcquire: ToolAcquireMode = 'off';
-    private acquireBackoffUntil = 0;
+    /** Game tick when acquire backoff ends (not wall-clock). */
+    private acquireBackoffUntilTick = 0;
     /**
      * One-shot bank trip at run start when Buy/repair is on (withdraw better banked
      * axe/pick, then optional shop upgrade). Needed for chop-then-burn which never
@@ -384,7 +385,8 @@ export default class GatheringBot extends TaskBot {
      * After FleeCombat kites off a multi-combat pack, suppress ReturnToAnchor /
      * gather re-entry until this timestamp so we don't walk straight back onto spiders.
      */
-    private combatClearUntil = 0;
+    /** Game tick when camp re-entry hold ends after combat kite. */
+    private combatClearUntilTick = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -490,9 +492,9 @@ export default class GatheringBot extends TaskBot {
         // #level-change-loc-lag). Blank ≠ absent — wait before first gather tick
         // so we don't idle on "no rocks/trees in leash" with an empty scene.
         if (this.fishing) {
-            await Execution.delayUntil(() => Npcs.query().results().length > 0, 5000);
+            await Execution.delayUntilTicks(() => Npcs.query().results().length > 0, 9);
         } else {
-            await Execution.delayUntil(() => Locs.query().results().length > 0, 5000);
+            await Execution.delayUntilTicks(() => Locs.query().results().length > 0, 9);
         }
 
         this.powerMode = locSetting.toLowerCase() === 'none';
@@ -813,9 +815,12 @@ export default class GatheringBot extends TaskBot {
         );
     }
 
-    /** Mark a recent combat kite — hold camp re-entry briefly. */
-    noteCombatFlee(holdMs = 14_000): void {
-        this.combatClearUntil = Math.max(this.combatClearUntil, Date.now() + Math.max(0, holdMs));
+    /** Mark a recent combat kite — hold camp re-entry for `holdTicks` game ticks. */
+    noteCombatFlee(holdTicks = 24): void {
+        this.combatClearUntilTick = Math.max(
+            this.combatClearUntilTick,
+            Game.tick() + Math.max(0, holdTicks)
+        );
     }
 
     /**
@@ -823,7 +828,7 @@ export default class GatheringBot extends TaskBot {
      * multi-combat (Lava Maze spiders) or while a hostile is still in our face.
      */
     shouldSuppressCampReentry(): boolean {
-        if (Date.now() < this.combatClearUntil) {
+        if (Game.tick() < this.combatClearUntilTick) {
             return true;
         }
         if (isAutoLocation(this.locationSetting) || this.tickManip.allowCombat) {
@@ -908,14 +913,20 @@ export default class GatheringBot extends TaskBot {
         );
     }
 
-    markAcquireBackoff(ms = 15_000): void {
-        // Never shorten an existing longer cooldown (inner scarcity 60s must not be
-        // clobbered by outer upgrade-fail 45s).
-        this.acquireBackoffUntil = Math.max(this.acquireBackoffUntil, Date.now() + ms);
+    /**
+     * Defer tool acquire for `ticks` game ticks.
+     * Never shortens an existing longer cooldown (inner scarcity must not be
+     * clobbered by outer upgrade-fail).
+     */
+    markAcquireBackoff(ticks = 25): void {
+        this.acquireBackoffUntilTick = Math.max(
+            this.acquireBackoffUntilTick,
+            Game.tick() + Math.max(0, ticks)
+        );
     }
 
     acquireReady(): boolean {
-        return this.toolAcquire === 'on' && Date.now() >= this.acquireBackoffUntil;
+        return this.toolAcquire === 'on' && Game.tick() >= this.acquireBackoffUntilTick;
     }
 
     /** @see walkToToolVendor in api/ToolAcquire — Nurmof surface hop included. */
@@ -1000,7 +1011,7 @@ export default class GatheringBot extends TaskBot {
                 r => r.kind === 'tiered' && r.tiers.some(t => t.name.toLowerCase() === key)
             );
         });
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         await this.bankPace();
     }
 
@@ -1041,7 +1052,7 @@ export default class GatheringBot extends TaskBot {
         const want = new Set(depositNames.map(n => n.toLowerCase()));
         log(`bank: depositing displaced (${depositNames.join(', ')})`);
         await Bank.depositAllMatching(name => want.has((name ?? '').toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         await this.bankPace();
     }
 
@@ -1089,7 +1100,7 @@ export default class GatheringBot extends TaskBot {
             }
             log(`bank: unequip surplus ${name} for deposit`);
             await Equipment.unequip(name);
-            await Execution.delayUntil(() => !Equipment.contains(name) || Inventory.first(name) !== null, 3000);
+            await Execution.delayUntilTicks(() => !Equipment.contains(name) || Inventory.first(name) !== null, 5);
             await this.bankPace();
         }
     }
@@ -1126,7 +1137,7 @@ export default class GatheringBot extends TaskBot {
         // A few tiles off the booth, not a full trip home.
         const away = new Tile(here.x + (Math.random() < 0.5 ? -3 : 3), here.z + (Math.random() < 0.5 ? -2 : 2), here.level);
         await Traversal.walkResilient(away, { radius: 1, timeoutMs: 12_000, log });
-        await Execution.delay(400 + Math.floor(Math.random() * 700));
+        await Execution.delayTicks(1);
         if (await this.openScriptBank(log)) {
             await this.waitBankReady(log);
             // Glance only — no real withdraw; just the double-take.
@@ -1157,7 +1168,7 @@ export default class GatheringBot extends TaskBot {
             depositSurplusGatherTools: (log, extra) => this.depositSurplusGatherTools(log, extra),
             withdrawCoinsFor: (need, log) => this.withdrawCoinsFor(need, log),
             equipTools: (names, log, opts) => this.equipTools(names, log, opts),
-            markAcquireBackoff: ms => this.markAcquireBackoff(ms),
+            markAcquireBackoff: ticks => this.markAcquireBackoff(ticks),
             attackLevel: () => Skills.level('attack'),
             miningLevel: () => Skills.level('mining'),
             driveDialog: (prefer, log) => driveDialog([...prefer], log)
@@ -1805,10 +1816,7 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
         // Wait briefly for the skill-multi menu (not a full fletch).
-        await Execution.delayUntil(
-            () => ChatDialog.isMakeMenu() || ChatDialog.canContinue(),
-            1200
-        );
+        await Execution.delayUntilTicks(() => ChatDialog.isMakeMenu() || ChatDialog.canContinue(), 2);
         if (ChatDialog.isMakeMenu()) {
             return this.confirmKnifeDelayMake();
         }
@@ -1863,7 +1871,7 @@ export default class GatheringBot extends TaskBot {
             }
             const before = Inventory.used();
             await item.interact('Drop');
-            if (await Execution.delayUntil(() => Inventory.used() < before, 2500)) {
+            if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
                 dropped += before - Inventory.used();
             } else {
                 break;
@@ -1943,13 +1951,10 @@ export default class GatheringBot extends TaskBot {
         if (!(await raw.useOn(oven))) {
             return false;
         }
-        await Execution.delayUntil(
-            () =>
+        await Execution.delayUntilTicks(() =>
                 this.cookableRawCount() < before ||
                 ChatDialog.isMakeMenu() ||
-                ChatDialog.canContinue(),
-            5000
-        );
+                ChatDialog.canContinue(), 9);
         if (ChatDialog.isMakeMenu()) {
             const hint = raw.name ?? undefined;
             if (!(await ChatDialog.make(hint))) {
@@ -1974,7 +1979,7 @@ export default class GatheringBot extends TaskBot {
         if (!(await food.interact('Eat'))) {
             return false;
         }
-        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+        await Execution.delayUntilTicks(() => Skills.effective('hitpoints') > before, 5);
         return true;
     }
 
@@ -1989,7 +1994,7 @@ export default class GatheringBot extends TaskBot {
         this.setStatus(`tick: drop ${item.name}`);
         const before = Inventory.used();
         await item.interact('Drop');
-        return Execution.delayUntil(() => Inventory.used() < before, 2500);
+        return Execution.delayUntilTicks(() => Inventory.used() < before, 5);
     }
 
     /** True when standing outside the gather leash (startup / after bank). */
@@ -2078,10 +2083,7 @@ export default class GatheringBot extends TaskBot {
             log(`bank: withdraw better ${step.name}`);
             const one = withdrawOp(item.ops, '1') ?? 'Withdraw-1';
             await Bank.withdraw(step.name, one);
-            await Execution.delayUntil(
-                () => this.heldCount(step.name) > before || Bank.count(step.name) === 0,
-                4000
-            );
+            await Execution.delayUntilTicks(() => this.heldCount(step.name) > before || Bank.count(step.name) === 0, 7);
             await this.bankPace();
         }
 
@@ -2134,7 +2136,7 @@ export default class GatheringBot extends TaskBot {
                 if (startup) {
                     this.clearStartupToolBankSync();
                 }
-                this.markAcquireBackoff(20_000);
+                this.markAcquireBackoff(35);
                 return true;
             }
         }
@@ -2142,7 +2144,7 @@ export default class GatheringBot extends TaskBot {
             if (startup) {
                 this.clearStartupToolBankSync();
             }
-            this.markAcquireBackoff(20_000);
+            this.markAcquireBackoff(35);
             return true;
         }
 
@@ -2181,7 +2183,7 @@ export default class GatheringBot extends TaskBot {
         });
         if (!plan || plan.kind === 'repair') {
             // Nothing better in shop — cool down so we do not re-check every bank trip.
-            this.markAcquireBackoff(120_000);
+            this.markAcquireBackoff(200);
             if (withdrewBetter) {
                 this.log('acquire: bank tool upgraded; no better shop tool right now');
             } else {
@@ -2194,11 +2196,11 @@ export default class GatheringBot extends TaskBot {
         if (plan.kind === 'buy') {
             if (!canFundPlan(plan, Inventory.count(COINS), Bank.count(COINS))) {
                 log(`acquire: not enough coins for ${plan.name} (${plan.cost}gp)`);
-                this.markAcquireBackoff(60_000);
+                this.markAcquireBackoff(100);
                 return finishEquipAndHome(withdrewBetter);
             }
             if (!(await this.withdrawCoinsFor(plan.cost, log))) {
-                this.markAcquireBackoff(30_000);
+                this.markAcquireBackoff(50);
                 return finishEquipAndHome(withdrewBetter);
             }
         }
@@ -2214,7 +2216,7 @@ export default class GatheringBot extends TaskBot {
         const ok = await this.executeToolAcquirePlan(plan, log, {
             bankPrepared: plan.kind === 'buy'
         });
-        this.markAcquireBackoff(ok ? 90_000 : 45_000);
+        this.markAcquireBackoff(ok ? 150 : 75);
         // Always head home after an upgrade attempt so BankCatch early-return is safe.
         await this.walkHomeIfNeeded(log);
         return true;
@@ -2229,7 +2231,7 @@ export default class GatheringBot extends TaskBot {
         if (!method || !Bank.isOpen()) {
             return false;
         }
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         if (!Bank.isOpen()) {
             return false;
         }
@@ -2256,10 +2258,7 @@ export default class GatheringBot extends TaskBot {
             } else {
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntil(
-                () => Inventory.count(step.name) > before || Bank.count(step.name) === 0,
-                4000
-            );
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
             await this.bankPace();
         }
 
@@ -2279,7 +2278,7 @@ export default class GatheringBot extends TaskBot {
                     bankPrepared: invFunded
                 });
                 if (!ok) {
-                    this.markAcquireBackoff(20_000);
+                    this.markAcquireBackoff(35);
                 }
                 return ok;
             }
@@ -2447,10 +2446,7 @@ export default class GatheringBot extends TaskBot {
         }
         // Make-X / shop / dialog can leave the main modal open — Wield ops fail until clear.
         if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
-            await Execution.delayUntil(
-                () => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(),
-                2500
-            );
+            await Execution.delayUntilTicks(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 5);
             await Execution.delayTicks(1);
         }
         // Backpack side-tab (3) so inv ops are live after anvil/shop main modal.
@@ -2491,7 +2487,7 @@ export default class GatheringBot extends TaskBot {
             } else {
                 log(`equipped ${name}`);
             }
-            await Execution.delay(180 + Math.floor(Math.random() * 220));
+            await Execution.delayTicks(1);
         }
 
         if (!bankDisplaced) {

@@ -285,18 +285,23 @@ export const Banking = {
 
 /**
  * Human-ish pause between bank UI actions (open→scan, withdraw, deposit).
- * Matches {@link bankHumanDelayMs} in FishCookLogic (250–949ms) so waitBankReady /
- * surplus deposit / acquire do not race client bank load after the GatheringBot split.
+ * Tick-based (1–2 ticks) so bank load is not raced by open→scan→close on the
+ * same tick after the GatheringBot split.
  */
+export function bankPaceTicks(rand: () => number = Math.random): number {
+    return rand() < 0.35 ? 2 : 1;
+}
+
+/** @deprecated Use {@link bankPaceTicks}; wall-clock ms is not used for pacing. */
 export function bankPaceMs(rand: () => number = Math.random): number {
-    return 250 + Math.floor(rand() * 700);
+    return bankPaceTicks(rand) * 600;
 }
 
 /** Pause between bank UI actions so tool checks don't flash open/close. */
 export async function bankPace(log?: (m: string) => void): Promise<void> {
-    const ms = bankPaceMs();
-    log?.(`bank: pause ${ms}ms`);
-    await Execution.delay(ms);
+    const ticks = bankPaceTicks();
+    log?.(`bank: pause ${ticks}t`);
+    await Execution.delayTicks(ticks);
 }
 
 /**
@@ -308,7 +313,8 @@ export async function waitBankReady(log?: (m: string) => void): Promise<boolean>
         return false;
     }
     await bankPace(log);
-    await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 4000);
+    // ~7 ticks for bank table load
+    await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 7);
     if (!Bank.isOpen()) {
         return false;
     }
@@ -349,10 +355,7 @@ export async function withdrawCoins(
     if (!(await Bank.withdrawX(coin, amt))) {
         return false;
     }
-    const ok = await Execution.delayUntil(
-        () => Inventory.count(coin) >= Math.min(need, opts.invCoins + amt),
-        4000
-    );
+    const ok = await Execution.delayUntilTicks(() => Inventory.count(coin) >= Math.min(need, opts.invCoins + amt), 7);
     if (ok) {
         await bankPace();
     }

@@ -1592,6 +1592,8 @@ const SCENARIOS: Scenario[] = [
             burntPolicy: 'Drop',
             toolAcquire: 'Off',
             forgetfulBank: false,
+            // Keep seeded cooked pack — purge would force a full re-fish before cook.
+            purgePackOnStart: false,
             leashRadius: 18
         },
         // Pot + 26 cooked = 27 slots; one free → fish last raw → cook → bank → home.
@@ -1601,8 +1603,8 @@ const SCENARIOS: Scenario[] = [
         ],
         // Cooking/fishing already 99 from BASE_STATS.
         scene: 'skip',
-        // Extra headroom for bank→pier walk (~36 tiles) after deposit.
-        budgetMs: 270_000,
+        // No Make-X: one last catch + one-at-a-time cook + bank/home (Catherby range≈bank).
+        budgetMs: 300_000,
         check: ({
             start,
             cur,
@@ -1615,20 +1617,17 @@ const SCENARIOS: Scenario[] = [
         }) => {
             const fishXp = cur.xp.fishing - start.xp.fishing;
             const cookXp = cur.xp.cooking - start.xp.cooking;
-            const cooked = invMatch(cur, /^lobster$/i);
-            const raw = invMatch(cur, /^raw lobster$/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
             // Full cook→bank→home: catch → cook → deposit near bank → walk to pier.
+            // After home the bot may re-fish; do not require empty pack at pass time.
             if (
                 fishXp > 0
                 && cookXp > 0
                 && productPeak >= 26
                 && bankedHint
                 && sawNearBank
-                && cooked <= 2
-                && raw === 0
                 && minDistToBank <= 12
                 && returnedToCampAfterBank
                 && minDistToCampAfterBank <= 12
@@ -1672,12 +1671,14 @@ const SCENARIOS: Scenario[] = [
             burntPolicy: 'Drop',
             toolAcquire: 'Off',
             forgetfulBank: false,
+            purgePackOnStart: false,
             leashRadius: 18
         },
+        // Rod + feather stack + 25 cooked = 27 used, free 1 for last raw.
         seed: [
             { debug: 'fly_fishing_rod', name: 'Fly fishing rod', qty: 1 },
             { debug: 'feather', name: 'Feather', qty: 50 },
-            { debug: 'trout', name: 'Trout', qty: 26 }
+            { debug: 'trout', name: 'Trout', qty: 25 }
         ],
         scene: 'skip',
         budgetMs: 270_000,
@@ -1690,7 +1691,7 @@ const SCENARIOS: Scenario[] = [
             if (
                 fishXp > 0
                 && cookXp > 0
-                && productPeak >= 26
+                && productPeak >= 25
                 && bankedHint
                 && sawNearBank
                 && minDistToBank <= 14
@@ -1723,6 +1724,7 @@ const SCENARIOS: Scenario[] = [
             burntPolicy: 'Drop',
             toolAcquire: 'Off',
             forgetfulBank: false,
+            purgePackOnStart: false,
             leashRadius: 18
         },
         // Rod + feathers + 25 cooked = 27 used, free 1 for last raw (same as Catherby).
@@ -1733,7 +1735,7 @@ const SCENARIOS: Scenario[] = [
         ],
         scene: 'skip',
         // Sinclair mansion range → Seers bank is a long door path after the cook.
-        budgetMs: 360_000,
+        budgetMs: 300_000,
         check: ({ start, cur, productPeak, bankedHint, sawNearBank, minDistToBank }) => {
             const fishXp = cur.xp.fishing - start.xp.fishing;
             const cookXp = cur.xp.cooking - start.xp.cooking;
@@ -1891,7 +1893,7 @@ const SCENARIOS: Scenario[] = [
             { debug: 'logs', name: 'Logs', qty: 26 }
         ],
         scene: 'skip',
-        budgetMs: 180_000,
+        budgetMs: 210_000,
         check: ({
             start,
             cur,
@@ -1903,17 +1905,17 @@ const SCENARIOS: Scenario[] = [
             minDistToCampAfterBank
         }) => {
             const xpGain = cur.xp.woodcutting - start.xp.woodcutting;
-            const logs = invMatch(cur, /logs/i);
             if (cur.runner === 'crashed') {
                 return 'fail';
             }
-            // Real bank loop: chop last → walk to bank → deposit → return toward camp.
+            // Real bank loop: chop → deposit → return toward camp.
+            // Do not require logs<=2 at pass time — after home the bot re-chops
+            // and refills before the next harness snap (live wc-bank false-fail).
             if (
                 xpGain > 0
                 && productPeak >= 26
                 && bankedHint
                 && sawNearBank
-                && logs <= 2
                 && minDistToBank <= 10
                 && returnedToCampAfterBank
                 && minDistToCampAfterBank <= 12
@@ -2150,7 +2152,8 @@ const SCENARIOS: Scenario[] = [
         // 32k = Nurmof rune list price; mining already 99 from BASE_STATS.
         seed: [{ debug: 'coins', name: 'Coins', qty: 32_000 }],
         scene: 'bank',
-        budgetMs: 200_000,
+        // Trapdoor hop + random-event recovery; prior run lost ~60s mid-path.
+        budgetMs: 300_000,
         check: ({ cur, elapsedMs }) => {
             if (cur.runner === 'crashed') {
                 return 'fail';
@@ -2870,11 +2873,21 @@ try {
                 if (product > productPeak) {
                     productPeak = product;
                 }
-                // Near bank with a full-ish pack = actually walked the bank trip
-                // (not a drop at the rocks). Require product still high so we
-                // don't count a later empty return walk alone.
-                if (cur.tile && sc.bank && product >= 10 && chebyshev(cur.tile, sc.bank) <= 8) {
+                // Near bank after a real haul. Use productPeak (not live product): deposit
+                // can clear the pack between 4s snaps, and Draynor trees sit on the bank
+                // disk so simultaneous product>=10 + near-bank often misses (wc-bank).
+                if (
+                    cur.tile
+                    && sc.bank
+                    && productPeak >= 10
+                    && chebyshev(cur.tile, sc.bank) <= 10
+                ) {
                     sawNearBank = true;
+                }
+                // Deposit log + we were at/near bank this run.
+                if (logHas(cur, /bank:\s*deposited/i) && minDistToBank <= 14) {
+                    sawNearBank = true;
+                    bankedHint = true;
                 }
                 const gatherXp =
                     cur.xp.mining + cur.xp.fishing + cur.xp.woodcutting

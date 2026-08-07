@@ -47,7 +47,8 @@ export interface ToolAcquireHost {
         log: (m: string) => void,
         opts?: { bankDisplaced?: boolean }
     ): Promise<boolean>;
-    markAcquireBackoff(ms?: number): void;
+    /** Defer acquire for N game ticks. */
+    markAcquireBackoff(ticks?: number): void;
     attackLevel(): number;
     miningLevel(): number;
     /** Repair dialogue (Bob / Nurmof prefer options). */
@@ -109,7 +110,7 @@ export async function executeRepairPlan(
     } else if (await host.waitBankReady(log)) {
         const keep = new Set(acquireKeepNames(plan, host.gearKeepNamesList()).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plan, host.gearKeepNamesList()));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plan, host.gearKeepNamesList()));
@@ -117,7 +118,7 @@ export async function executeRepairPlan(
         if (!(await host.withdrawCoinsFor(1000, log))) {
             if (Inventory.count(COINS) < 1) {
                 log('acquire: no repair float in pack after bank — abort (will buy if affordable)');
-                host.markAcquireBackoff(30_000);
+                host.markAcquireBackoff(50);
                 await host.closeScriptBank(log, { allowForgetful: false });
                 return false;
             }
@@ -133,26 +134,26 @@ export async function executeRepairPlan(
 
     if (host.heldCount(plan.brokenName) <= 0) {
         log(`acquire: no ${plan.brokenName} held after bank — abort repair`);
-        host.markAcquireBackoff(20_000);
+        host.markAcquireBackoff(35);
         return false;
     }
 
     if (!(await walkVendor(host, plan.vendor, log))) {
         log(`acquire: could not reach ${plan.vendor.keeper}`);
-        host.markAcquireBackoff(45_000);
+        host.markAcquireBackoff(75);
         return false;
     }
 
     const broken = Inventory.first(plan.brokenName);
     if (!broken) {
         log(`acquire: ${plan.brokenName} not in pack to use on ${plan.vendor.keeper}`);
-        host.markAcquireBackoff(20_000);
+        host.markAcquireBackoff(35);
         return false;
     }
     const vendor = Npcs.query().name(plan.vendor.keeper).within(12).nearest();
     if (!vendor) {
         log(`acquire: no '${plan.vendor.keeper}' nearby for repair`);
-        host.markAcquireBackoff(30_000);
+        host.markAcquireBackoff(50);
         return false;
     }
 
@@ -160,17 +161,17 @@ export async function executeRepairPlan(
     log(`acquire: use ${plan.brokenName} on ${plan.vendor.keeper}`);
     if (!(await broken.useOn(vendor))) {
         log(`acquire: use-on ${plan.vendor.keeper} failed — will retry / buy`);
-        host.markAcquireBackoff(15_000);
+        host.markAcquireBackoff(25);
         return false;
     }
-    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
+    if (!(await Execution.delayUntilTicks(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 14))) {
         log(`acquire: ${plan.vendor.keeper} never opened repair dialogue`);
-        host.markAcquireBackoff(30_000);
+        host.markAcquireBackoff(50);
         return false;
     }
     if (!(await host.driveDialog(plan.prefer, log))) {
         log(`acquire: repair dialogue with ${plan.vendor.keeper} failed — will retry / buy`);
-        host.markAcquireBackoff(20_000);
+        host.markAcquireBackoff(35);
         return false;
     }
     await Execution.delayTicks(2);
@@ -184,7 +185,7 @@ export async function executeRepairPlan(
         return true;
     }
     log(`acquire: ${plan.vendor.keeper} did not repair — try buy path`);
-    host.markAcquireBackoff(15_000);
+    host.markAcquireBackoff(25);
     return false;
 }
 
@@ -230,19 +231,19 @@ export async function executeBuyPlans(
         const keepExtra = [...host.gearKeepNamesList(), ...plans.map(p => p.name)];
         const keep = new Set(acquireKeepNames(plans[0]!, keepExtra).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plans[0]!, keepExtra));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plans[0]!, keepExtra));
 
         if (Inventory.count(COINS) + Bank.count(COINS) < totalCost) {
             log(`acquire: not enough coins for ${label} (${totalCost}gp)`);
-            host.markAcquireBackoff(60_000);
+            host.markAcquireBackoff(100);
             await host.closeScriptBank(log, { allowForgetful: false });
             return false;
         }
         if (!(await host.withdrawCoinsFor(totalCost, log))) {
-            host.markAcquireBackoff(30_000);
+            host.markAcquireBackoff(50);
             await host.closeScriptBank(log, { allowForgetful: false });
             return false;
         }
@@ -256,12 +257,12 @@ export async function executeBuyPlans(
 
     if (!(await walkVendor(host, vendor, log))) {
         log(`acquire: could not reach ${vendor.keeper}`);
-        host.markAcquireBackoff(45_000);
+        host.markAcquireBackoff(75);
         return false;
     }
     if (!(await Shop.open(vendor.keeper))) {
         log(`acquire: could not open ${vendor.keeper}'s shop`);
-        host.markAcquireBackoff(30_000);
+        host.markAcquireBackoff(50);
         return false;
     }
 
@@ -286,7 +287,7 @@ export async function executeBuyPlans(
     }
     // Close shop before Wield — pack ops are Sell-* while the shop main modal is open.
     await Shop.close();
-    await Execution.delayUntil(() => !Shop.isOpen(), 3000);
+    await Execution.delayUntilTicks(() => !Shop.isOpen(), 5);
     await Execution.delayTicks(1);
     await Game.openSideTab(3);
     await Execution.delayTicks(1);
@@ -295,7 +296,7 @@ export async function executeBuyPlans(
     }
 
     if (!anyBought) {
-        host.markAcquireBackoff(20_000);
+        host.markAcquireBackoff(35);
         return false;
     }
     return true;
@@ -329,7 +330,7 @@ export async function executeSmithPlan(
         }
         const keep = new Set(acquireKeepNames(plan, host.gearKeepNamesList()).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
         await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plan, host.gearKeepNamesList()));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plan, host.gearKeepNamesList()));
@@ -338,28 +339,28 @@ export async function executeSmithPlan(
             const h = Bank.items().find(i => (i.name ?? '').toLowerCase() === HAMMER.toLowerCase());
             if (!h) {
                 log('acquire: no hammer for smithing');
-                host.markAcquireBackoff(60_000);
+                host.markAcquireBackoff(100);
                 await host.closeScriptBank(log, { allowForgetful: false });
                 return false;
             }
             const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
             await host.bankPace();
             await Bank.withdraw(HAMMER, one);
-            await Execution.delayUntil(() => Inventory.count(HAMMER) > 0, 3000);
+            await Execution.delayUntilTicks(() => Inventory.count(HAMMER) > 0, 5);
             await host.bankPace();
         }
         if (Inventory.count(plan.bar) < 1) {
             const b = Bank.items().find(i => (i.name ?? '').toLowerCase() === plan.bar.toLowerCase());
             if (!b) {
                 log(`acquire: no ${plan.bar} in bank`);
-                host.markAcquireBackoff(60_000);
+                host.markAcquireBackoff(100);
                 await host.closeScriptBank(log, { allowForgetful: false });
                 return false;
             }
             const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
             await host.bankPace();
             await Bank.withdraw(plan.bar, one);
-            await Execution.delayUntil(() => Inventory.count(plan.bar) > 0, 3000);
+            await Execution.delayUntilTicks(() => Inventory.count(plan.bar) > 0, 5);
             await host.bankPace();
         }
         await host.closeScriptBank(log, { allowForgetful: false });
@@ -367,7 +368,7 @@ export async function executeSmithPlan(
 
     if (Inventory.count(HAMMER) < 1 || Inventory.count(plan.bar) < 1) {
         log(`acquire: missing hammer or ${plan.bar} before anvil walk`);
-        host.markAcquireBackoff(30_000);
+        host.markAcquireBackoff(50);
         return false;
     }
 
@@ -385,22 +386,22 @@ export async function executeSmithPlan(
     if (!(await bar.useOn(anvil))) {
         return false;
     }
-    await Execution.delayUntil(() => ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 6000);
+    await Execution.delayUntilTicks(() => ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 10);
     if (ChatDialog.isMainMakePanel()) {
         // Prefer exact product name first — bare 'Axe' matches Battleaxe via includes().
         if (!(await ChatDialog.makeFromPanelMax(plan.name))) {
             await ChatDialog.makeFromPanelMax('Axe');
         }
     }
-    await Execution.delayUntil(() => Inventory.count(plan.name) > before || !Game.animating(), 12_000);
+    await Execution.delayUntilTicks(() => Inventory.count(plan.name) > before || !Game.animating(), 20);
     if (Inventory.count(plan.name) <= before) {
         log(`acquire: smith did not produce ${plan.name}`);
-        host.markAcquireBackoff(20_000);
+        host.markAcquireBackoff(35);
         return false;
     }
     host.log(`acquire: smithed ${plan.name}`);
     if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
-        await Execution.delayUntil(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 2500);
+        await Execution.delayUntilTicks(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 5);
         await Execution.delayTicks(1);
     }
     await Game.openSideTab(3);

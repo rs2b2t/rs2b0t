@@ -73,6 +73,11 @@ export const Execution: {
      * warns.
      */
     delayUntil(cond: () => boolean, timeoutMs?: number): Promise<boolean>;
+    /**
+     * Poll cond each game tick for up to maxTicks. Prefer for tick-driven
+     * action loops over wall-clock delayUntil.
+     */
+    delayUntilTicks(cond: () => boolean, maxTicks: number): Promise<boolean>;
 };
 
 // ---- game state ----

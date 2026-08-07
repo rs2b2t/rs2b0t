@@ -21,7 +21,7 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
     FLAX_FIELD, FLAX_GATE, SPINNING_WHEEL_AREA, BANK_ENTRANCE, BANK_STAND, LADDER_TILE,
-    MEET_TILE, TRADE_RANGE, TRADE_REQUEST_COOLDOWN_MS, TRADE_FAIL_COOLDOWN_MS,
+    MEET_TILE, TRADE_RANGE, TRADE_REQUEST_COOLDOWN_TICKS, TRADE_FAIL_COOLDOWN_TICKS,
     FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
     BOOTH_NAME, LADDER_NAME, CLIMB_UP, CLIMB_DOWN, FIELD_SCOPE, FIELD_ARRIVE,
     LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
@@ -61,10 +61,10 @@ async function climbLadder(name: string, op: string, log: (m: string) => void): 
     }
     const before = Game.tile()?.level;
     await ladder.interact(op);
-    return Execution.delayUntil(() => {
+    return Execution.delayUntilTicks(() => {
         const t = Game.tile();
         return t !== null && t.level !== before;
-    }, 8000);
+    }, 14);
 }
 
 export default class FlaxRunner extends TaskBot {
@@ -85,7 +85,7 @@ export default class FlaxRunner extends TaskBot {
     private stickyFlax: Tile | null = null;
 
     /** Earliest time we may call Trade.request again (stops request thrash). */
-    private nextTradeRequestAt = 0;
+    private nextTradeRequestAtTick = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -176,20 +176,20 @@ export default class FlaxRunner extends TaskBot {
     }
 
     canRequestTrade(): boolean {
-        return Date.now() >= this.nextTradeRequestAt;
+        return Game.tick() >= this.nextTradeRequestAtTick;
     }
 
     noteTradeRequest(): void {
-        this.nextTradeRequestAt = Date.now() + TRADE_REQUEST_COOLDOWN_MS;
+        this.nextTradeRequestAtTick = Game.tick() + TRADE_REQUEST_COOLDOWN_TICKS;
     }
 
     noteTradeFailed(): void {
-        this.nextTradeRequestAt = Date.now() + TRADE_FAIL_COOLDOWN_MS;
+        this.nextTradeRequestAtTick = Game.tick() + TRADE_FAIL_COOLDOWN_TICKS;
     }
 
     noteTradeOk(): void {
         // Short quiet period after a successful handoff so both sides don't re-open.
-        this.nextTradeRequestAt = Date.now() + TRADE_REQUEST_COOLDOWN_MS;
+        this.nextTradeRequestAtTick = Game.tick() + TRADE_REQUEST_COOLDOWN_TICKS;
     }
 
     /**
@@ -443,7 +443,7 @@ export default class FlaxRunner extends TaskBot {
             if (!flax) return;
             const before = flaxCount();
             if (!(await flax.interact('Drop'))) return;
-            await Execution.delayUntil(() => flaxCount() < before, 2000);
+            await Execution.delayUntilTicks(() => flaxCount() < before, 4);
         }
     }
 
@@ -470,7 +470,7 @@ export default class FlaxRunner extends TaskBot {
                 await Execution.delayTicks(2);
                 continue;
             }
-            await Execution.delayUntil(() => !this.flaxStillAt(t), 4000);
+            await Execution.delayUntilTicks(() => !this.flaxStillAt(t), 7);
         }
     }
 
@@ -591,7 +591,7 @@ class WaitAndTrade implements Task {
         this.bot.setStatus('requesting trade with spinner');
         this.bot.noteTradeRequest();
         await Trade.request(this.bot.getPartner());
-        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 4000);
+        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
     }
 }
 
@@ -647,14 +647,14 @@ class PickFlax implements Task {
                 await Execution.delayTicks(2);
                 continue;
             }
-            await Execution.delayUntil(
+            await Execution.delayUntilTicks(
                 () =>
                     flaxCount() > before
                     || Inventory.isFull()
                     || ChatDialog.canContinue()
                     || EventSignal.pending()
                     || !this.bot.flaxStillAt(target),
-                6000,
+                10
             );
             if (!this.bot.flaxStillAt(target)) this.bot.clearStickyFlax();
         }
@@ -732,7 +732,7 @@ class RequestTrade implements Task {
         this.bot.setStatus('requesting trade from runner');
         this.bot.noteTradeRequest();
         await Trade.request(this.bot.getPartner());
-        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 4000);
+        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
     }
 }
 
@@ -824,12 +824,12 @@ class HandleTrade implements Task {
 }
 
 class SpinFlax implements Task {
-    private spinningUntil = 0;
+    private spinningUntilTick = 0;
     constructor(private bot: FlaxRunner) {}
     validate(): boolean {
         if (this.bot.getMode() !== 'Spinner') return false;
         if (Trade.active()) return false;
-        if (Date.now() < this.spinningUntil) return false;
+        if (Game.tick() < this.spinningUntilTick) return false;
         if (flaxCount() === 0) return false;
         return this.bot.onFloor(1);
     }
@@ -847,9 +847,9 @@ class SpinFlax implements Task {
             if (!wheel) { await Execution.delayTicks(2); return; }
             this.bot.setStatus('opening the spinning wheel');
             if (!(await wheel.interact(SPIN_OP))) { await Execution.delayTicks(2); return; }
-            if (!(await Execution.delayUntil(
+            if (!(await Execution.delayUntilTicks(
                 () => ChatDialog.isMakeMenu() || ChatDialog.canContinue() || Game.animating(),
-                6000,
+                10
             ))) {
                 return;
             }

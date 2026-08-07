@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-    bankHumanDelayMs,
+    bankPaceTicks,
     cookBatchAfterLoad,
     cookFilterLabel,
-    cookHumanDelayMs,
+    cookPaceTicks,
     cookedNameFromRaw,
     countMatching,
     countRawInBank,
@@ -209,13 +209,13 @@ describe('cook flow predicates', () => {
     });
 });
 
-describe('human delays', () => {
-    test('stay in a human-ish band', () => {
-        const r0 = () => 0;
-        const r1 = () => 0.999;
-        expect(cookHumanDelayMs(r0)).toBeGreaterThanOrEqual(180);
-        expect(cookHumanDelayMs(r1)).toBeLessThan(800);
-        expect(bankHumanDelayMs(r0)).toBeGreaterThanOrEqual(250);
-        expect(bankHumanDelayMs(r1)).toBeLessThan(1000);
+describe('pace ticks', () => {
+    test('cook is 1 tick; bank is 1–2 ticks', () => {
+        const low = () => 0.1; // < 0.35 → 2 ticks
+        const high = () => 0.9; // ≥ 0.35 → 1 tick
+        expect(cookPaceTicks(low)).toBe(1);
+        expect(cookPaceTicks(high)).toBe(1);
+        expect(bankPaceTicks(low)).toBe(2);
+        expect(bankPaceTicks(high)).toBe(1);
     });
 });

@@ -16,14 +16,14 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import {
     CANT_LIGHT,
-    FIRE_LIGHT_MS,
+    FIRE_LIGHT_TICKS,
     FIRE_SPOTS,
-    FIRE_START_MS,
+    FIRE_START_TICKS,
     LOG_LEVELS,
     TINDERBOX,
     burnLaneWant,
     findBurnLane,
-    fireReactionMs,
+    fireReactionTicks,
     inFirePlot,
     isBurnWest,
     runInDir,
@@ -124,7 +124,7 @@ export default class Firemaker extends LoopingBot {
         const plan = toolRestockPlan(TOOLS, this.skillLevel, this.invCount, name => Bank.count(name));
         for (const step of plan) {
             await Bank.withdraw(step.name);
-            if (!(await Execution.delayUntil(() => Inventory.count(step.name) > 0, 3000))) {
+            if (!(await Execution.delayUntilTicks(() => Inventory.count(step.name) > 0, 5))) {
                 this.log(`no ${step.name} in the bank or pack — stopping.`);
                 ScriptRunner.stop();
                 return false;
@@ -142,7 +142,7 @@ export default class Firemaker extends LoopingBot {
         }
 
         actions.closeModal();
-        await Execution.delayUntil(() => !Bank.isOpen(), 3000);
+        await Execution.delayUntilTicks(() => !Bank.isOpen(), 5);
         return this.logsLeft() > 0;
     }
 
@@ -210,10 +210,20 @@ export default class Firemaker extends LoopingBot {
         if (!(await tinder.useOn(logs))) {
             return 'stalled';
         }
-        if (!(await Execution.delayUntil(() => this.logsLeft() < held || blocked() || Game.animating(), FIRE_START_MS))) {
+        if (
+            !(await Execution.delayUntilTicks(
+                () => this.logsLeft() < held || blocked() || Game.animating(),
+                FIRE_START_TICKS
+            ))
+        ) {
             return 'stalled';
         }
-        if (!(await Execution.delayUntil(() => lit() || blocked() || EventSignal.pending(), FIRE_LIGHT_MS))) {
+        if (
+            !(await Execution.delayUntilTicks(
+                () => lit() || blocked() || EventSignal.pending(),
+                FIRE_LIGHT_TICKS
+            ))
+        ) {
             return 'stalled';
         }
         return blocked() ? 'blocked' : lit() ? 'lit' : 'stalled';
@@ -234,7 +244,7 @@ export default class Firemaker extends LoopingBot {
                 this.fires++;
                 this.lane--;
                 stalls = 0;
-                await Execution.delay(fireReactionMs());
+                await Execution.delayTicks(fireReactionTicks());
                 continue;
             }
             this.lane = 0;

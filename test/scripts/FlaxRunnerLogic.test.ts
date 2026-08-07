@@ -5,8 +5,8 @@ import {
     flaxUnitsInOffer,
     partnerNameMatches,
     spinnerNeedsClearPack,
-    TRADE_FAIL_COOLDOWN_MS,
-    TRADE_REQUEST_COOLDOWN_MS
+    TRADE_FAIL_COOLDOWN_TICKS,
+    TRADE_REQUEST_COOLDOWN_TICKS
 } from '#/bot/scripts/FlaxRunnerLogic.js';
 
 describe('partnerNameMatches', () => {
@@ -44,9 +44,9 @@ describe('flaxUnitsInOffer', () => {
 });
 
 describe('trade cooldowns', () => {
-    test('fail backoff is longer than request cooldown', () => {
-        expect(TRADE_FAIL_COOLDOWN_MS).toBeGreaterThan(TRADE_REQUEST_COOLDOWN_MS);
-        expect(TRADE_REQUEST_COOLDOWN_MS).toBeGreaterThanOrEqual(3000);
+    test('fail backoff is longer than request cooldown (ticks)', () => {
+        expect(TRADE_FAIL_COOLDOWN_TICKS).toBeGreaterThan(TRADE_REQUEST_COOLDOWN_TICKS);
+        expect(TRADE_REQUEST_COOLDOWN_TICKS).toBeGreaterThanOrEqual(5);
     });
 });
 

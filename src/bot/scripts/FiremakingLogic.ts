@@ -4,10 +4,15 @@ import Tile from '../api/Tile.js';
 export { TINDERBOX } from '../api/Tools.js';
 export const CANT_LIGHT = /can't light a fire here/i;
 
-/** How long to wait for the light attempt to start (log leaves pack / anim / blocked). */
-export const FIRE_START_MS = 8_000;
-/** How long to wait for FM XP after a light attempt has started. */
-export const FIRE_LIGHT_MS = 90_000;
+/** How long (game ticks) to wait for the light attempt to start (log leaves pack / anim / blocked). */
+export const FIRE_START_TICKS = 14;
+/** How long (game ticks) to wait for FM XP after a light attempt has started. */
+export const FIRE_LIGHT_TICKS = 150;
+
+/** @deprecated Prefer {@link FIRE_START_TICKS}. */
+export const FIRE_START_MS = FIRE_START_TICKS * 600;
+/** @deprecated Prefer {@link FIRE_LIGHT_TICKS}. */
+export const FIRE_LIGHT_MS = FIRE_LIGHT_TICKS * 600;
 
 export interface FirePlot {
     bank: Tile;
@@ -268,8 +273,14 @@ export function findBurnLane(
     return best ? { start: best.start, run: best.run, dir: best.dir } : null;
 }
 
+/** 1 tick between fire lights on a lane (tick-driven burn loop). */
+export function fireReactionTicks(): number {
+    return 1;
+}
+
+/** @deprecated Prefer {@link fireReactionTicks}. */
 export function fireReactionMs(): number {
-    return 180 + Math.random() * 420;
+    return fireReactionTicks() * 600;
 }
 
 export function shouldBurnFullLoad(mode: BurnMode, inventoryFull: boolean, logCount: number, hasTinderbox: boolean): boolean {
