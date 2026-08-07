@@ -10,7 +10,7 @@ import {
     sourcePriority,
     type RankedScriptRoute,
     type ScriptRoute
-} from '../../tools/nav/script-route-corpus.ts';
+} from '../../tools/nav/script-route-corpus.js';
 
 describe('buildScriptRoutes', () => {
     test('pulls walks, banks, bot stands, and mainland legs', () => {

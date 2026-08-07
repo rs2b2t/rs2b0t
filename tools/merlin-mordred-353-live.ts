@@ -90,7 +90,7 @@ try {
         const api = g.__rs2b0t;
         const leaveLogs: string[] = [];
         let sawBrief = false;
-        let attackAfterBrief = 0;
+        const attackAfterBrief = 0;
         const log = (m: string) => {
             leaveLogs.push(m);
             console.log(`[#353] ${m}`);

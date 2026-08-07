@@ -102,7 +102,7 @@ const restoreNpcs = stubProps(Npcs, {
         };
         return chain as never;
     },
-    all: (): TestNpc[] => npcs as never
+    all: (() => npcs) as never
 });
 afterAll(() => {
     restoreExec();

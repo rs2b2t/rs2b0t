@@ -329,7 +329,7 @@ export default class AIOTeleport extends LoopingBot {
     }
 
     private getRuneCount(runeName: string): number {
-        let count = Inventory.count(runeName);
+        const count = Inventory.count(runeName);
         
         if (this.useStaffRunes && this.equippedStaff) {
             const providedRune = CONFIG.staffs[this.equippedStaff];
@@ -483,7 +483,7 @@ export default class AIOTeleport extends LoopingBot {
             }
             
             if (Bank.isOpen()) {
-                const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+                const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
                 if (canvas) {
                     const rect = canvas.getBoundingClientRect();
                     const clickX = rect.left + rect.width / 2;
@@ -504,7 +504,7 @@ export default class AIOTeleport extends LoopingBot {
     }
 
     private async sendKeyboardInput(text: string): Promise<void> {
-        const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+        const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
         if (!canvas) {
             this.log('❌ Canvas not found!');
             return;
@@ -520,7 +520,7 @@ export default class AIOTeleport extends LoopingBot {
     }
 
     private async sendEnterKey(): Promise<void> {
-        const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+        const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
         if (!canvas) {
             this.log('❌ Canvas not found!');
             return;

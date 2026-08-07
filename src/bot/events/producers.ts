@@ -1,5 +1,4 @@
 import { reader } from '../adapter/ClientAdapter.js';
-import { ServerProt } from '#/io/ServerProt.js';
 import { bus } from './EventBus.js';
 import {
     anyDirty,
@@ -35,7 +34,7 @@ export function resetProducersForTests(): void {
  * Marks which cached tables are stale; {@link pumpProducers} does the rescan.
  */
 export function noteProducerPacket(ptype: number): void {
-    const hit = dirtyFamiliesForPacket(ptype, ServerProt as unknown as Record<string, number>);
+    const hit = dirtyFamiliesForPacket(ptype);
     if (hit === null) {
         return;
     }

@@ -6,6 +6,8 @@
  * cache of last snapshots and only re-diff a family after a relevant opcode
  * (or a login seed / safety resync).
  */
+import { ServerProt } from '#/io/ServerProt.js';
+
 export type ProducerFamily = 'skills' | 'inventory' | 'varps' | 'chat';
 
 export interface ProducerDirtyFlags {
@@ -26,8 +28,10 @@ export function anyDirty(d: ProducerDirtyFlags): boolean {
 /**
  * Map a server packet opcode to dirty families.
  * Returns null when the packet does not affect producer tables (most traffic).
+ *
+ * Uses {@link ServerProt} member access only (const enums cannot be cast to objects).
  */
-export function dirtyFamiliesForPacket(ptype: number, ServerProt: Record<string, number>): ProducerFamily[] | 'reset' | null {
+export function dirtyFamiliesForPacket(ptype: number): ProducerFamily[] | 'reset' | null {
     if (ptype === ServerProt.LOGOUT) {
         return 'reset';
     }

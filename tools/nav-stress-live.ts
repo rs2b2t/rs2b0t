@@ -82,9 +82,9 @@ type Abi = {
         pathSamples: {
             n: number;
             pathIdx: number;
-            clickIdx: number;
+            clickIdx?: number;
             hasTransport: boolean;
-            clientSegN: number;
+            clientSegN?: number;
         }[];
         paintOn: boolean;
         maxClientSeg: number;
@@ -156,7 +156,7 @@ async function seedItem(
     const inv = await page.evaluate(() =>
         (globalThis as never as Abi).__rs2b0t.Inventory.items()
             .filter(i => i.name)
-            .map(i => `${i.count}x ${i.name}`)
+            .map((i: { count?: number; name: string | null }) => `${i.count ?? 1}x ${i.name}`)
             .join(', ')
     );
     throw new Error(`could not seed ${debugName} via give/~item (want ~ ${re}); inv=${inv || 'empty'}`);
@@ -240,10 +240,10 @@ type WalkOpts = {
 async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__navStress']>> {
     const budget = opts.budget ?? BUDGET_MS;
     await page.evaluate(
-        ({ destination, budgetMs, useTeleports, distanceBeforeTeleport, allowTeleportIds, samplePath, radius }) => {
+        ({ destination, budgetMs, useTeleports, distanceBeforeTeleport: _distanceBeforeTeleport, allowTeleportIds: _allowTeleportIds, samplePath, radius }) => {
             const g = globalThis as never as Abi;
             const logs: string[] = [];
-            const pathSamples: { n: number; pathIdx: number; hasTransport: boolean }[] = [];
+            const pathSamples: { n: number; pathIdx: number; hasTransport: boolean; clickIdx?: number; clientSegN?: number }[] = [];
             g.__navStress = undefined;
             class Probe extends g.__rs2b0t.LoopingBot {
                 override async loop(): Promise<void> {
@@ -270,17 +270,12 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                             radius: radius ?? 4,
                             timeoutMs: budgetMs,
                             useTeleportCatalog: teleOn,
-                            policy: {
-                                useTeleports: teleOn,
-                                distanceBeforeTeleport: distanceBeforeTeleport ?? 0,
-                                ...(allowTeleportIds ? { allowTeleportIds } : {})
-                            },
                             log: m => {
                                 logs.push(m);
                                 this.log(m);
                             }
                         });
-                        const maxClientSeg = pathSamples.reduce((m, s) => Math.max(m, s.clientSegN), 0);
+                        const maxClientSeg = pathSamples.reduce((m, s) => Math.max(m, (s.clientSegN ?? 0)), 0);
                         g.__navStress = {
                             walkOk,
                             tile: g.__rs2b0t.reader.worldTile(),
@@ -296,7 +291,7 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                             logs: [...logs, String(e)],
                             pathSamples,
                             paintOn: false,
-                            maxClientSeg: pathSamples.reduce((m, s) => Math.max(m, s.clientSegN), 0)
+                            maxClientSeg: pathSamples.reduce((m, s) => Math.max(m, (s.clientSegN ?? 0)), 0)
                         };
                     } finally {
                         if (sampler) {
@@ -504,7 +499,7 @@ try {
             });
             const dist = r.tile ? cheb(r.tile, dest) : 9999;
             const maxTiles = r.pathSamples.reduce((m, s) => Math.max(m, s.n), 0);
-            const clientHits = r.pathSamples.filter(s => s.clientSegN >= 2).length;
+            const clientHits = r.pathSamples.filter(s => (s.clientSegN ?? 0) >= 2).length;
             const ok =
                 dist <= 8
                 && r.pathSamples.length >= 3
@@ -712,8 +707,8 @@ try {
     ): Promise<void> {
         console.log(`\n══ ${id} ══`);
         try {
-            await teleArrive(page, from);
-            const r = await runWalk(page, { dest, useTeleports: false, budget });
+            await teleArrive(page!, from);
+            const r = await runWalk(page!, { dest, useTeleports: false, budget });
             const dist = r.tile ? cheb(r.tile, dest) : 9999;
             const ok = dist <= arrive;
             const detail = `dist=${dist} walkOk=${r.walkOk}`;
@@ -750,7 +745,7 @@ try {
         );
     }
 
-    const passed = results.filter(r => r.ok).length
+    const passed = results.filter(r => r.ok).length;
     const failed = results.filter(r => !r.ok);
     console.log(`\n── summary ${passed}/${results.length} pass ──`);
     for (const r of results) {

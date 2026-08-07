@@ -12,7 +12,7 @@ const SHOPS = { adventurer: ARDOUGNE_ADVENTURER, magicGuild: MAGIC_GUILD, ogreHe
 let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
 if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
 const finder = new PathFinder(bytes);
-finder.addEdges(doorsJson as DoorEdgeData[], transportsJson, stairsJson);
+finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson);
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];

@@ -100,7 +100,7 @@ describe('Troll Stronghold journal stage parsing', () => {
             40
         ],
         [
-            "@str@I talked to Dunstan and he gave me the Law Talisman|@str@as a token of thanks!||@red@QUEST COMPLETE!",
+            '@str@I talked to Dunstan and he gave me the Law Talisman|@str@as a token of thanks!||@red@QUEST COMPLETE!',
             50
         ]
     ])('maps journal text to stage %i', (text, stage) => {

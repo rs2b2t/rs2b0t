@@ -180,7 +180,7 @@ try {
 
         const ok = await page
             .waitForFunction(
-                ([name, start]) => (globalThis as never as Api).__rs2b0t.Inventory.count(name) > (start as number),
+                ([name, start]) => (globalThis as never as Api).__rs2b0t.Inventory.count(String(name)) > (start as number),
                 [c.product, before],
                 { timeout: c.timeoutMs }
             )

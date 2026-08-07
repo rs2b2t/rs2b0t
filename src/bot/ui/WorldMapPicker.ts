@@ -78,9 +78,9 @@ async function loadFinder(): Promise<PathFinder> {
             if (!res.ok) {
                 throw new Error(`collision pack HTTP ${res.status}`);
             }
-            let bytes = new Uint8Array(await res.arrayBuffer());
+            let bytes: Uint8Array = new Uint8Array(await res.arrayBuffer());
             if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-                bytes = gunzipSync(bytes);
+                bytes = Uint8Array.from(gunzipSync(bytes));
             }
             return new PathFinder(bytes);
         })().catch(err => {
@@ -377,8 +377,9 @@ export function nearestWalkable(
                 }
             }
         }
-        if (best) {
-            return { x: best.x, z: best.z };
+        const found = best;
+        if (found !== null) {
+            return { x: found.x, z: found.z };
         }
     }
     return null;

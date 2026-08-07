@@ -22,8 +22,8 @@ import {
     essenceEntryEdges,
     wildyLeverEdges,
     agilityShortcutEdges
-} from '../../src/bot/nav/travelCatalog.ts';
-import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/teleportCatalog.ts';
+} from '../../src/bot/nav/travelCatalog.js';
+import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/teleportCatalog.js';
 
 const contentRoot =
     process.argv.find(a => a.startsWith('--content='))?.split('=')[1]
@@ -55,7 +55,7 @@ function walkRs2(dir: string, out: string[] = []): string[] {
 const PATTERNS: { family: string; re: RegExp; note: string }[] = [
     { family: 'spirit_tree', re: /spirit_tree|stronghold_ent|label,spirit_tree/i, note: 'spirit tree dialog' },
     { family: 'gnome_glider', re: /gnomeglider|glidermap|ta_quir_priw/i, note: 'gnome glider' },
-    { family: 'entrana_ferry', re: /shipmonk|set_sail\(\"Entrana|holy Entrana/i, note: 'Entrana monks' },
+    { family: 'entrana_ferry', re: /shipmonk|set_sail\("Entrana|holy Entrana/i, note: 'Entrana monks' },
     { family: 'shilo_cart', re: /shilocartdriver|brimhavencartdriver|calc_shilocart/i, note: 'Shilo/Brimhaven cart' },
     { family: 'karamja_ferry', re: /karamja_sailor|customs.?officer|Pay-fare/i, note: 'Karamja / customs ferry' },
     { family: 'charter_or_sail', re: /set_sail\(/i, note: 'set_sail journey' },
@@ -115,12 +115,12 @@ function main(): void {
             /state-aware|depends on player|runtime quest/i.test(reason)
                 ? 'state_deferred'
                 : /up\/down choice|Climb-up or Climb-down/i.test(reason)
-                  ? 'multi_choice_climb'
-                  : /non-traversable|no statically|no movement destination/i.test(reason)
-                    ? 'broken_or_no_dest'
-                    : /walkable interaction tile|no walkable/i.test(reason)
-                      ? 'pack_stand_gap'
-                      : 'other';
+                    ? 'multi_choice_climb'
+                    : /non-traversable|no statically|no movement destination/i.test(reason)
+                        ? 'broken_or_no_dest'
+                        : /walkable interaction tile|no walkable/i.test(reason)
+                            ? 'pack_stand_gap'
+                            : 'other';
         disabledReasons[key] = (disabledReasons[key] ?? 0) + 1;
     };
     for (const t of transports) {

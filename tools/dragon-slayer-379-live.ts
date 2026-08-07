@@ -25,7 +25,7 @@ const { base } = parseArgs(process.argv.slice(2), {
 
 const FALADOR_BANK = { x: 3013, z: 3355, level: 0 };
 const ORACLE_CHEST_STAND = { x: 3057, z: 9842, level: 0 };
-const ORACLE_WEST = { x: 3048, z: 9840, level: 0 };
+const _ORACLE_WEST = { x: 3048, z: 9840, level: 0 };
 const WATCH_MS = 120_000;
 
 const EARNED_QP: readonly [string, number][] = [
@@ -174,7 +174,7 @@ async function caseBankedKey(page: Page, user: string): Promise<{ ok: boolean; d
         }
         const joined = collected.join('\n').toLowerCase();
         const oziachHits = (joined.match(/oziach/g) ?? []).length;
-        const good =
+        const _good =
             /withdraw|maze key|melzar|maze/.test(joined)
             && oziachHits <= 2;
         // Strong pass: withdrew key or entered maze without thrash

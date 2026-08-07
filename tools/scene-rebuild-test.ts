@@ -62,7 +62,9 @@ try {
             }
             const arrived = snap.tile && Math.abs(snap.tile.x - stop.x) <= 2 && Math.abs(snap.tile.z - stop.z) <= 2;
             if (snap.state === 2 && arrived && snap.locs > 0) {
-                settled = { locs: snap.locs, tile: snap.tile };
+                if (snap.tile) {
+                    settled = { locs: snap.locs, tile: snap.tile };
+                }
                 break;
             }
             await new Promise(r => setTimeout(r, 100));

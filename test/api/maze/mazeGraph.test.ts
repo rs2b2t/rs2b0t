@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseJm2Locs, MAZE_ORIGIN, DOOR_DIRS } from '#/bot/api/maze/mazeGraph.js';
 import { buildMaze, edgeKey, doorPassable } from '#/bot/api/maze/mazeGraph.js';
-import { solveRoute, MAZE_SHRINE, MAZE_SPAWNS } from '#/bot/api/maze/mazeGraph.js';
+import { solveRoute, MAZE_SPAWNS } from '#/bot/api/maze/mazeGraph.js';
 
 const MAP = new URL('./fixtures/m45_71.jm2', import.meta.url).pathname;
 

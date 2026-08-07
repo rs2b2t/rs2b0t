@@ -13,7 +13,6 @@ import { Shop } from '../api/hud/Shop.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { foodCount as foodCountIn, FOOD_OPTIONS, foodForms } from '../api/combat/food.js';
 import { GroundItems } from '../api/queries/GroundItems.js';
-import { Npcs } from '../api/queries/Npcs.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
 import {

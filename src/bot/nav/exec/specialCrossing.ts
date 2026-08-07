@@ -28,8 +28,6 @@ import type { TransportInfo } from '../PathFinder.js';
 import { findTransportLoc } from './transportLoc.js';
 
 const DIALOGUE_STEPS = 24;
-/** Rope throws / forcewalks (Baxtorian rock: forcewalk + throw + swim) need many ticks. */
-const USE_ITEM_STEPS = 80;
 const SHIP_DIALOGUE_STEPS = 40;
 const GATE_REOPENS = 2;
 
@@ -490,6 +488,3 @@ async function ensureUnlockPackSpace(
     return true;
 }
 
-function isNear(a: { x: number; z: number }, b: { x: number; z: number }, r: number): boolean {
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z)) <= r;
-}

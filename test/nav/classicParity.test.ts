@@ -23,11 +23,11 @@ function loadFinder(): PathFinder | null {
     if (!fs.existsSync(packPath)) {
         return null;
     }
-    let bytes = new Uint8Array(fs.readFileSync(packPath));
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
+        bytes = new Uint8Array(gunzipSync(bytes));
     }
-    const finder = new PathFinder(bytes);
+    const finder = new PathFinder(bytes as Uint8Array);
     loadDefaultNavEdges(finder);
     return finder;
 }

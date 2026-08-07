@@ -653,7 +653,7 @@ async function freePrisoners(log: (m: string) => void): Promise<boolean> {
     return true;
 }
 
-async function leaveStronghold(log: (m: string) => void): Promise<boolean> {
+async function leaveStronghold(_log: (m: string) => void): Promise<boolean> {
     if (trollArea(Game.tile()) !== 'stronghold') {
         return true;
     }
@@ -769,14 +769,14 @@ function stageAfterDad(snap: QuestSnapshot, area: TrollArea): QuestStep {
     } };
 }
 
-function stagePrison(snap: QuestSnapshot, area: TrollArea): QuestStep {
+function stagePrison(_snap: QuestSnapshot, area: TrollArea): QuestStep {
     if (area !== 'stronghold') {
         return { kind: 'custom', name: 'return to the stronghold prison', run: enterStronghold };
     }
     return { kind: 'custom', name: 'free Godric (and Mad Eadgar) from the cells', run: freePrisoners };
 }
 
-function stageReport(snap: QuestSnapshot, area: TrollArea): QuestStep {
+function stageReport(_snap: QuestSnapshot, area: TrollArea): QuestStep {
     if (area === 'stronghold') {
         return { kind: 'custom', name: 'leave the stronghold to tell Dunstan', run: leaveStronghold };
     }

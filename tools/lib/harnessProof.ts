@@ -78,8 +78,8 @@ export function createHarnessProof(opts: CreateHarnessProofOpts): HarnessProof {
             mode === 'fixed'
                 ? paths.successScreenshot
                 : mode === 'baseline'
-                  ? paths.baselineScreenshot
-                  : paths.failureScreenshot;
+                    ? paths.baselineScreenshot
+                    : paths.failureScreenshot;
         const proofFile = mode === 'baseline' ? paths.baselineProof : paths.successProof;
         if (page) {
             await page.screenshot({ path: screenshot, fullPage: true }).catch(() => undefined);

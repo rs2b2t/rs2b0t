@@ -2,6 +2,10 @@ import Tile from './Tile.js';
 import type { FishingGearPiece, FishingMethod } from './FishingMethods.js';
 import { BROKEN_PICKAXE } from './MiningRocks.js';
 import { AXES, HAMMER, PICKAXES, type ToolReq, type ToolTier } from './Tools.js';
+import { Execution } from './Execution.js';
+import { Game } from './Game.js';
+import { Traversal } from './Traversal.js';
+import { Locs } from './queries/Locs.js';
 
 export { BROKEN_PICKAXE, HAMMER };
 
@@ -642,4 +646,50 @@ export function shopableMissingFishingGear(
     count: (name: string) => number
 ): string[] {
     return gear.filter(g => count(g.name) < g.min && fishingShopCost(g.name) != null).map(g => g.name);
+}
+
+/**
+ * Whether Nurmof (or another underground vendor) needs an explicit surface hop
+ * before the stand walk. Pure geography — used by {@link walkToToolVendor}.
+ */
+export function needsToolVendorSurfaceHop(
+    vendor: ToolVendor,
+    here: { x: number; z: number; level: number } | null
+): boolean {
+    if (!vendor.hopFrom || !vendor.hopLoc || !vendor.hopAction || !here) {
+        return false;
+    }
+    if (!(vendor.stand.z > 9000 && here.z < 9000)) {
+        return false;
+    }
+    const dx = Math.abs(here.x - vendor.stand.x);
+    const dz = Math.abs(here.z - vendor.stand.z);
+    return Math.max(dx, dz) > 20;
+}
+
+/**
+ * Walk to a tool vendor. Nurmof gets an explicit surface trapdoor hop when
+ * still above ground so pathing does not stall at the mine entrance.
+ * Lives in api/ so Miner/WC/Fisher scripts do not re-copy hop logic.
+ */
+export async function walkToToolVendor(
+    vendor: ToolVendor,
+    log: (m: string) => void = () => {}
+): Promise<boolean> {
+    const here = Game.tile();
+    if (needsToolVendorSurfaceHop(vendor, here) && vendor.hopFrom && vendor.hopLoc && vendor.hopAction) {
+        log(`acquire: hop ${vendor.hopLoc} @ ${vendor.hopFrom}`);
+        if (!(await Traversal.walkResilient(vendor.hopFrom, { radius: 2, timeoutMs: 90_000, log }))) {
+            return false;
+        }
+        const trap = Locs.query().name(vendor.hopLoc).action(vendor.hopAction).nearest();
+        if (trap) {
+            await trap.interact(vendor.hopAction);
+            await Execution.delayUntil(() => {
+                const t = Game.tile();
+                return t !== null && t.z >= 9000;
+            }, 8000);
+        }
+    }
+    return Traversal.walkResilient(vendor.stand, { radius: 4, timeoutMs: 120_000, log });
 }

@@ -274,7 +274,7 @@ export class PathFinder {
     doorEdges = 0;
     transportEdges = 0;
 
-    constructor(pack: Uint8Array) {
+    constructor(pack: Uint8Array<ArrayBufferLike>) {
         if (pack.length < 10 || pack[0] !== 0x4c || pack[1] !== 0x43 || pack[2] !== 0x4e || pack[3] !== 0x56) {
             throw new Error('not an LCNV pack');
         }
@@ -284,7 +284,12 @@ export class PathFinder {
         }
         this.members = pack[5] === 1;
 
-        const view = new DataView(pack.buffer, pack.byteOffset, pack.byteLength);
+        // Copy when buffer is SharedArrayBuffer / ArrayBufferLike so DataView is happy.
+        const ab =
+            pack.buffer instanceof ArrayBuffer
+                ? pack.buffer
+                : new Uint8Array(pack).buffer;
+        const view = new DataView(ab, pack.buffer instanceof ArrayBuffer ? pack.byteOffset : 0, pack.byteLength);
         const count = view.getUint16(8, true);
         let pos = 10;
         for (let i = 0; i < count; i++) {

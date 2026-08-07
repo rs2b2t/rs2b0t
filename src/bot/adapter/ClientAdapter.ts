@@ -542,14 +542,14 @@ export const reader = {
         }
 
         const h0 = hits[0]!;
-        let sceneX = h0.sceneX;
-        let sceneZ = h0.sceneZ;
+        const sceneX = h0.sceneX;
+        const sceneZ = h0.sceneZ;
         let halfW = h0.halfW;
         let halfL = h0.halfL;
         let topH = 128;
-        let resolvedId = h0.resolvedId ?? opts.id;
+        const resolvedId = h0.resolvedId ?? opts.id;
         const modelSrc = h0.modelSrc;
-        let usedSceneFootprint = h0.usedSceneFootprint;
+        const usedSceneFootprint = h0.usedSceneFootprint;
         const wallAngle1 = h0.wallAngle1;
 
         try {

@@ -79,7 +79,7 @@ describe('specialCrossingAt', () => {
         ).toBe('Is there anything else interesting to do around here?');
         expect(
             pickChoice(
-                ["Sorry, not interested...", 'Well, what is it, I may be able to help?'],
+                ['Sorry, not interested...', 'Well, what is it, I may be able to help?'],
                 a!.unlockQuest!.dialogue.choose
             )
         ).toBe('Well, what is it, I may be able to help?');
@@ -90,7 +90,7 @@ describe('specialCrossingAt', () => {
             )
         ).toBe("Yes, I'll go and look for him.");
         expect(
-            pickChoice(["Yes, I'm sure.", "Who is this Filliman?"], a!.unlockQuest!.dialogue.choose)
+            pickChoice(["Yes, I'm sure.", 'Who is this Filliman?'], a!.unlockQuest!.dialogue.choose)
         ).toBe("Yes, I'm sure.");
         expect(b?.unlockQuest?.quest).toBe('Nature Spirit');
     });

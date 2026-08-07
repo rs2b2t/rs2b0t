@@ -46,37 +46,37 @@ WalkExecutor.lastOutcome = 'arrived';
 const npcHandle = () =>
     sceneNpc
         ? {
-              name: sceneNpc.name,
-              tile: () => sceneNpc!.tile,
-              distance: () => 3,
-              actions: () => sceneNpc!.ops,
-              interact: async (op: string) => {
-                  npcInteractOps.push(op);
-                  if (cantReach) {
-                      GameMessages.record("I can't reach that!");
-                      return true;
-                  }
-                  dialogOpen = !continueOnly;
-                  canContinue = true;
-                  return true;
-              }
-          }
+            name: sceneNpc.name,
+            tile: () => sceneNpc!.tile,
+            distance: () => 3,
+            actions: () => sceneNpc!.ops,
+            interact: async (op: string) => {
+                npcInteractOps.push(op);
+                if (cantReach) {
+                    GameMessages.record("I can't reach that!");
+                    return true;
+                }
+                dialogOpen = !continueOnly;
+                canContinue = true;
+                return true;
+            }
+        }
         : null;
 const doorHandle = () =>
     sceneDoor
         ? {
-              name: sceneDoor.name,
-              tile: () => sceneDoor!.tile,
-              actions: () => sceneDoor!.ops,
-              distance: () => sceneDoor!.distance,
-              interact: async (op: string) => {
-                  doorInteractOps.push(op);
-                  cantReach = false;
-                  npcReachable = true;
-                  sceneDoor = null;
-                  return true;
-              }
-          }
+            name: sceneDoor.name,
+            tile: () => sceneDoor!.tile,
+            actions: () => sceneDoor!.ops,
+            distance: () => sceneDoor!.distance,
+            interact: async (op: string) => {
+                doorInteractOps.push(op);
+                cantReach = false;
+                npcReachable = true;
+                sceneDoor = null;
+                return true;
+            }
+        }
         : null;
 function doorWhere(preds: ((l: unknown) => boolean)[]): unknown {
     return {
@@ -125,8 +125,9 @@ const restoreChat = stubProps(ChatDialog, {
         continueCount++;
         canContinue = false;
         dialogOpen = false;
+        return true;
     },
-    chooseOption: async () => {}
+    chooseOption: async () => true
 });
 afterAll(() => {
     restoreReader();

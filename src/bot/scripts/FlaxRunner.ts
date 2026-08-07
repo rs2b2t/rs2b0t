@@ -27,6 +27,7 @@ import {
     LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
     partnerNameMatches, flaxUnitsInOffer, spinnerNeedsClearPack, canReceiveFlaxOffer,
 } from './FlaxRunnerLogic.js';
+import { driveActivePartnerTrade } from '../api/mule/drivePartnerTrade.js';
 
 const LEASH = 8;
 const BOOTH = { op: 'Use-quickly' };
@@ -518,12 +519,30 @@ class OfferTrade implements Task {
         return Trade.active();
     }
     async execute(): Promise<void> {
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming trade with spinner');
-            const before = flaxCount();
-            await Trade.accept();
-            if (await Execution.delayUntil(() => !Trade.active(), 4000)) {
-                const gone = before - flaxCount();
+        await driveActivePartnerTrade({
+            role: 'giver',
+            partners: [this.bot.getPartner()],
+            theirProductMatch: () => false,
+            productNamesToOffer: () => [FLAX],
+            setStatus: s => this.bot.setStatus(s),
+            log: m => this.bot.log(m),
+            inventoryMetric: () => flaxCount(),
+            verifyGiverPartner: true,
+            myOfferReady: () => flaxUnitsInOffer(Trade.myOffer()) > 0,
+            onMissingPartner: () => {
+                this.partnerWait++;
+                if (this.partnerWait > 8) {
+                    this.partnerWait = 0;
+                    return 'decline';
+                }
+                return 'wait';
+            },
+            onDecline: () => {
+                this.bot.noteTradeFailed();
+            },
+            onComplete: delta => {
+                // Giver: flax leaves pack → delta is negative when metric is flax count.
+                const gone = -delta;
                 if (gone > 0) {
                     this.bot.countDelivered(gone);
                     this.bot.countTrip();
@@ -533,48 +552,18 @@ class OfferTrade implements Task {
                     this.bot.noteTradeFailed();
                     this.bot.log('trade closed without delivering flax — backing off before re-request');
                 }
+            },
+            labels: {
+                confirming: 'confirming trade with spinner',
+                waitHeader: 'reading trade partner',
+                offering: 'offering flax to spinner',
+                acceptingOffer: 'accepting trade offer',
+                declining: 'declining trade'
             }
-            return;
-        }
-        if (Trade.onOfferScreen()) {
-            // Header can lag; blank is not "stranger" yet (NatureCrafter pattern).
-            const who = Trade.partner();
-            if (who === null) {
-                this.partnerWait++;
-                this.bot.setStatus('reading trade partner');
-                if (this.partnerWait > 8) {
-                    this.bot.log('trade partner name never appeared — declining stuck modal');
-                    await Trade.decline();
-                    this.bot.noteTradeFailed();
-                    this.partnerWait = 0;
-                } else {
-                    await Execution.delayTicks(1);
-                }
-                return;
-            }
+        });
+        // Reset wait counter once a partner header is present.
+        if (Trade.partner() !== null) {
             this.partnerWait = 0;
-            if (!this.bot.isPartner(who)) {
-                this.bot.setStatus(`declining trade from ${who}`);
-                this.bot.log(`declining a trade from '${who}' — not the configured spinner`);
-                await Trade.decline();
-                this.bot.noteTradeFailed();
-                return;
-            }
-
-            const offered = flaxUnitsInOffer(Trade.myOffer());
-            if (offered <= 0) {
-                this.bot.setStatus('offering flax to spinner');
-                await Trade.offerAll(FLAX);
-                // Wait until the offer side shows flax (or the modal dies) before accept.
-                await Execution.delayUntil(
-                    () => flaxUnitsInOffer(Trade.myOffer()) > 0 || Trade.onConfirmScreen() || !Trade.active(),
-                    4000
-                );
-                return;
-            }
-            this.bot.setStatus('accepting trade offer');
-            await Trade.accept();
-            await Execution.delayUntil(() => Trade.onConfirmScreen() || !Trade.active(), 4000);
         }
     }
 }
@@ -752,58 +741,46 @@ class HandleTrade implements Task {
         return Trade.active();
     }
     async execute(): Promise<void> {
-        if (Trade.onOfferScreen()) {
-            const who = Trade.partner();
-            if (who === null) {
-                this.partnerWait++;
-                this.bot.setStatus('reading trade partner');
-                if (this.partnerWait > 8) {
-                    this.bot.log('trade partner name never appeared — declining stuck modal');
-                    await Trade.decline();
-                    this.bot.noteTradeFailed();
-                    this.partnerWait = 0;
-                } else {
-                    await Execution.delayTicks(1);
-                }
-                return;
-            }
-            this.partnerWait = 0;
-            if (!this.bot.isPartner(who)) {
-                this.bot.setStatus(`declining trade from ${who}`);
-                this.bot.log(`declining a trade from '${who}' — not the configured runner`);
-                await Trade.decline();
-                this.bot.noteTradeFailed();
-                return;
-            }
-
-            // Spinner never places items — only accept when runner has offered flax
-            // and we have room (empty pack; one free slot receives a flax stack).
+        // Stamp pending flax before accept so confirm can fall back if count lag.
+        if (Trade.onOfferScreen() && Trade.partner() !== null) {
             const theirFlax = flaxUnitsInOffer(Trade.theirOffer());
-            if (theirFlax <= 0) {
-                this.bot.setStatus('waiting for runner to offer flax');
-                await Execution.delayTicks(1);
-                return;
+            if (theirFlax > 0 && canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
+                this.pending = theirFlax;
             }
-            if (!canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
-                this.bot.log(
-                    `cannot take ${theirFlax} flax — only ${Inventory.free()} free slot(s) `
-                    + `(random-event junk?). Declining and banking.`
-                );
-                await Trade.decline();
-                this.bot.noteTradeFailed();
-                return;
-            }
-            this.bot.setStatus('accepting flax from runner');
-            this.pending = theirFlax;
-            await Trade.accept();
-            return;
         }
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming trade');
-            const before = flaxCount();
-            await Trade.accept();
-            if (await Execution.delayUntil(() => !Trade.active(), 2500)) {
-                const gained = flaxCount() - before;
+        await driveActivePartnerTrade({
+            role: 'receiver',
+            partners: [this.bot.getPartner()],
+            theirProductMatch: n => (n ?? '').toLowerCase().includes(FLAX.toLowerCase()),
+            productNamesToOffer: () => [],
+            setStatus: s => this.bot.setStatus(s),
+            log: m => this.bot.log(m),
+            inventoryMetric: () => flaxCount(),
+            onMissingPartner: () => {
+                this.partnerWait++;
+                if (this.partnerWait > 8) {
+                    this.partnerWait = 0;
+                    return 'decline';
+                }
+                return 'wait';
+            },
+            receiverCanAccept: theirFlax => {
+                if (canReceiveFlaxOffer(Inventory.free(), theirFlax)) {
+                    return true;
+                }
+                return {
+                    ok: false,
+                    reason:
+                        `cannot take ${theirFlax} flax — only ${Inventory.free()} free slot(s) `
+                        + '(random-event junk?). Declining and banking.'
+                };
+            },
+            onDecline: () => {
+                this.bot.noteTradeFailed();
+                this.pending = 0;
+            },
+            onComplete: delta => {
+                const gained = delta > 0 ? delta : this.pending;
                 if (gained > 0 || this.pending > 0) {
                     this.bot.log(`received ${gained > 0 ? gained : this.pending} flax from runner`);
                     this.bot.noteTradeOk();
@@ -812,7 +789,17 @@ class HandleTrade implements Task {
                     this.bot.log('trade closed without receiving flax — backing off before re-request');
                 }
                 this.pending = 0;
+            },
+            labels: {
+                confirming: 'confirming trade',
+                waitHeader: 'reading trade partner',
+                waitOffer: 'waiting for runner to offer flax',
+                accepting: 'accepting flax from runner',
+                declining: 'declining trade'
             }
+        });
+        if (Trade.partner() !== null) {
+            this.partnerWait = 0;
         }
     }
 }

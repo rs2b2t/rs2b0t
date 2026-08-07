@@ -68,5 +68,5 @@ if (typeof globalThis.window !== 'undefined' && !(globalThis.window as { audioCo
         state: 'running',
         resume: async () => undefined
     };
-    (globalThis.window as { audioContext: typeof silent }).audioContext = silent;
+    (globalThis.window as unknown as { audioContext: typeof silent }).audioContext = silent;
 }

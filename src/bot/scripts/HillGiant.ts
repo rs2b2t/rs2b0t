@@ -59,6 +59,7 @@ function hpFrac(): number {
 }
 
 export default class HillGiant extends TaskBot {
+    died = false;
     private meleeStyle: MeleeCombatStyle = 'strength';
     private weapon = '';
     private foodName = 'Trout';
@@ -103,8 +104,12 @@ export default class HillGiant extends TaskBot {
                 anchor: this.spot,
                 radius: PIT_RADIUS,
                 onDeath: () => {
+                    this.died = true;
                     this.setStatus('died — recovering');
                     this.log('died! walking back and re-wielding whatever gear survived');
+                },
+                onRecovered: () => {
+                    this.died = false;
                 },
                 walkBack: () => this.travelToPit()
             }),

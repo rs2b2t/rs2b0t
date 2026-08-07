@@ -36,7 +36,7 @@ try {
     let i = 0;
     while (Date.now() < deadline) {
         const s = await page.evaluate(() => {
-            const g = globalThis as {
+            const g = globalThis as unknown as {
                 rs2b0t: {
                     reader: {
                         worldTile: () => { x: number; z: number; level: number } | null;
@@ -61,7 +61,7 @@ try {
     }
     const left = consoleLogs.some(m => /maze solved/i.test(m)) ||
         !(await page.evaluate(() => {
-            const t = (globalThis as { rs2b0t: { reader: { worldTile: () => { x: number; z: number } | null } } }).rs2b0t.reader.worldTile();
+            const t = (globalThis as unknown as { rs2b0t: { reader: { worldTile: () => { x: number; z: number } | null } } }).rs2b0t.reader.worldTile();
             return t !== null && t.x >> 6 === 45 && t.z >> 6 === 71;
         }));
     console.log('--- console dump ---');

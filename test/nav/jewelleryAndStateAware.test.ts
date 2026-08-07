@@ -39,11 +39,11 @@ describe('state-aware ladder activation', () => {
     const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
     test.skipIf(!HAS_COLLISION_PACK)('pack loads monastary edges when prayer 31 in state (v2 filter path)', () => {
-        let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
+        let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
         if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-            bytes = gunzipSync(bytes);
+            bytes = new Uint8Array(gunzipSync(bytes));
         }
-        const finder = new PathFinder(bytes);
+        const finder = new PathFinder(bytes as Uint8Array);
         finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
         // Edgeville monastery approach → upper floor tile near ladder top
         const from = { x: 3051, z: 3483, level: 0 };

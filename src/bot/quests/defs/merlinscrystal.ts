@@ -44,7 +44,7 @@ const LANCELOT: NpcStop = {
     anchor: new Tile(2755, 3511, 1),
     leash: 8,
     prefer: [
-        "Any ideas on how to get into Morgan Le Faye", // only present after spoken_gawain
+        'Any ideas on how to get into Morgan Le Faye', // only present after spoken_gawain
         'I want to get Merlin out of the crystal'
     ]
 };
@@ -227,7 +227,6 @@ async function candleMakerStageFour(log: (m: string) => void): Promise<boolean> 
         return false;
     }
     let stage4 = false;
-    let sawOptions = false;
     for (let i = 0; i < 40 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
         if (ChatDialog.canContinue()) {
             await ChatDialog.continue();
@@ -236,7 +235,6 @@ async function candleMakerStageFour(log: (m: string) => void): Promise<boolean> 
         }
         const opts = ChatDialog.options();
         if (opts.length > 0) {
-            sawOptions = true;
             if (opts.some(o => /black candles/i.test(o))) {
                 stage4 = true;
                 await ChatDialog.chooseOption('black candles');

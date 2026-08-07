@@ -116,7 +116,7 @@ try {
     }
 
     console.log('PASS walkable map picker (#443) — click select confirm → tile fields');
-    console.log(`attach: tools/attach-live-proof-to-pr.sh --pr <n> --issue 443 --slug walkable-map-picker`);
+    console.log('attach: tools/attach-live-proof-to-pr.sh --pr <n> --issue 443 --slug walkable-map-picker');
 } catch (e) {
     console.error(e);
     await proof.writeFailure(page).catch(() => undefined);

@@ -230,8 +230,8 @@ class ScriptRunnerImpl {
                 const cadence = takeover
                     ? ({ kind: 'server-tick', ticks: 1 } satisfies LoopCadence)
                     : typeof delay === 'number'
-                      ? resolveLoopCadence(delay, null)
-                      : resolveLoopCadence(bot.loopDelay, bot.loopCadence);
+                        ? resolveLoopCadence(delay, null)
+                        : resolveLoopCadence(bot.loopDelay, bot.loopCadence);
                 scheduleNextLoop(ctx, cadence);
             })
             .catch(err => this.settleFailure(ctx, err));

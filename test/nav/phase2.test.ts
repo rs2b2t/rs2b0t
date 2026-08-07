@@ -16,11 +16,11 @@ const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
 function loadFinder(): PathFinder {
-    let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
+        bytes = new Uint8Array(gunzipSync(bytes));
     }
-    const finder = new PathFinder(bytes);
+    const finder = new PathFinder(bytes as Uint8Array);
     finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
     return finder;
 }

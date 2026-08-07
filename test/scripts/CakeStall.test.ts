@@ -77,13 +77,13 @@ const restoreLocs = stubProps(Locs, {
                 pollHook();
                 return stallStocked
                     ? {
-                          tile: () => new Tile(2667, 3310, 0),
-                          interact: async (): Promise<boolean> => {
-                              clicks++;
-                              onClick();
-                              return true;
-                          }
-                      }
+                        tile: () => new Tile(2667, 3310, 0),
+                        interact: async (): Promise<boolean> => {
+                            clicks++;
+                            onClick();
+                            return true;
+                        }
+                    }
                     : null;
             }
         };
@@ -91,12 +91,12 @@ const restoreLocs = stubProps(Locs, {
     }
 });
 const restoreBus = stubProps(bus, {
-    on: (_event: string, cb: (e: { text: string }) => void): (() => void) => {
+    on: ((_event: string, cb: (e: { text: string }) => void): (() => void) => {
         chatHandler = cb;
         return () => {
             chatHandler = null;
         };
-    },
+    }) as typeof bus.on,
     emit: () => {}
 });
 afterAll(() => {

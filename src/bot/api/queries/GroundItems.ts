@@ -8,7 +8,10 @@ import EntityQuery from './Query.js';
  */
 export const GroundItems = {
     query(): EntityQuery<GroundItem> {
-        return new EntityQuery(() => reader.groundItems().map(s => new GroundItem(s)));
+        return EntityQuery.fromSnapshots(
+            () => reader.groundItems(),
+            s => new GroundItem(s)
+        );
     }
 };
 

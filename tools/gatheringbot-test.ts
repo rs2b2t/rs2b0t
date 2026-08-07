@@ -2946,6 +2946,7 @@ try {
                         returnedToCampAfterBank,
                         minDistToCampAfterBank,
                         minDistToCamp,
+                        maxDistToCamp,
                         minDistToBank,
                         startDistToCamp
                     });

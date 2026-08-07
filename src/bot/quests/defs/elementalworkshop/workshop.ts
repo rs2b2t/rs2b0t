@@ -536,7 +536,7 @@ async function pullAirLever(log: (m: string) => void): Promise<'on' | 'off' | 'n
     return 'fail';
 }
 
-async function waitOutCombat(ms: number): Promise<void> {
+async function _waitOutCombat(ms: number): Promise<void> {
     await Execution.delayUntil(() => !Game.inCombat(), ms);
 }
 

@@ -396,7 +396,7 @@ try {
                 break;
             }
             const cookXp = s.cookXp - cook0;
-            const atStand = s.distStand <= 2;
+            const _atStand = s.distStand <= 2;
             const nearOven = s.distStand <= 4;
             const sawCookLog = logHas(
                 s.logs,

@@ -1,4 +1,4 @@
-import Tile from "./Tile.js";
+import Tile from './Tile.js';
 
 /**
  * Cooking surface catalog for Fisher cook loops and CookBot.
@@ -12,7 +12,7 @@ import Tile from "./Tile.js";
  * Locs.query for Range/Fire.
  */
 
-export type CookSurfaceKind = "range" | "fire" | "fireplace";
+export type CookSurfaceKind = 'range' | 'fire' | 'fireplace';
 
 export interface CookingSurface {
     /**
@@ -140,8 +140,8 @@ export function nearestCookingRange(
     return {
         stand: rangeStandFromLoc(best.loc),
         loc: new Tile(best.loc.x, best.loc.z, best.loc.level),
-        locName: "Range",
-        kind: "range",
+        locName: 'Range',
+        kind: 'range',
         label: `Range @ ${best.loc.x},${best.loc.z}`,
         notes: `cheb ${best.d} from origin`
     };

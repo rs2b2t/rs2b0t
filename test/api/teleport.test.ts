@@ -175,7 +175,7 @@ describe('Game.castOnNpc', () => {
 
         expect(await Game.castOnNpc('Wind Strike', { index: 42 } as Npc)).toBe(true);
         expect(openedTab).toBe(false);
-        expect(cast).toEqual({ comId: 8123, npcIndex: 42 });
+        expect(cast!).toEqual({ comId: 8123, npcIndex: 42 });
     });
 
     test('fails naturally when the spell component cannot be resolved', async () => {

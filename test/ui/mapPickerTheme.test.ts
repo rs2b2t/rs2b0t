@@ -11,8 +11,6 @@ import {
 } from '#/bot/ui/mapPickerTheme.js';
 import { MAP_PICKER_SETTINGS_NS, SettingsStore } from '#/bot/runtime/Settings.js';
 
-const K = (key: string) => `rs2b0t:set:${MAP_PICKER_SETTINGS_NS}:${key}`;
-
 beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
@@ -51,8 +49,9 @@ describe('resolveMapPickerDotTheme', () => {
 
     test('custom colour and alpha', () => {
         setMapPickerShowBasemap(false);
-        sessionStorage.setItem(K('dotColor'), '#ff0000');
-        sessionStorage.setItem(K('dotAlpha'), '0.5');
+        // Always go through SettingsStore so box-scoped keys match saved().
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'dotColor', '#ff0000');
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'dotAlpha', '0.5');
         const t = resolveMapPickerDotTheme();
         expect(t.colorRaw).toBe('#ff0000');
         expect(t.alpha).toBeCloseTo(0.5, 5);
@@ -71,18 +70,18 @@ describe('resolveMapPickerDotTheme', () => {
 describe('set/get MapPicker settings stay aligned with SettingsStore', () => {
     test('setMapPickerShowBasemap writes MapPicker namespace', () => {
         setMapPickerShowBasemap(false);
-        expect(sessionStorage.getItem(K(MAP_PICKER_BASEMAP_KEY))).toBe('false');
+        expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, MAP_PICKER_BASEMAP_KEY)).toBe('false');
         expect(getMapPickerShowBasemap()).toBe(false);
     });
 
     test('SettingsStore.onChange fires for MapPicker namespace', () => {
         let seen: { name: string; key: string; value: string } | null = null;
         const unsub = SettingsStore.onChange((name, key, value) => {
-            seen = { name, key, value };
+            seen = { name, key, value: String(value) };
         });
         try {
             setMapPickerShowBasemap(false);
-            expect(seen).toEqual({ name: MAP_PICKER_SETTINGS_NS, key: MAP_PICKER_BASEMAP_KEY, value: 'false' });
+            expect(seen as { name: string; key: string; value: string } | null).toEqual({ name: MAP_PICKER_SETTINGS_NS, key: MAP_PICKER_BASEMAP_KEY, value: 'false' });
         } finally {
             unsub();
         }

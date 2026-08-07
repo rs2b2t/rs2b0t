@@ -179,7 +179,6 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
                             radius: 4,
                             timeoutMs: budgetMs,
                             useTeleportCatalog: false,
-                            policy: { useTeleports: false },
                             log: m => {
                                 logs.push(m);
                                 this.log(m);

@@ -15,7 +15,7 @@ let sceneDoor: { name: string; ops: string[]; tile: { x: number; z: number; leve
 let sceneNpc: { name: string; tile: { x: number; z: number; level: number }; interactResult: boolean } | null;
 let walkCalls: { x: number; z: number; level: number }[];
 let walkResult: boolean;
-let walkLastOutcome: string;
+let _walkLastOutcome: string;
 let canReachResult: boolean;
 let cantReach: boolean;
 let locInteractCount: number;
@@ -38,52 +38,52 @@ const restoreExec = stubProps(Execution, {
 const locHandle = () =>
     sceneLoc
         ? {
-              name: sceneLoc.name,
-              tile: () => sceneLoc!.tile,
-              actions: () => sceneLoc!.ops,
-              interact: async () => {
-                  locInteractCount++;
-                  if (cantReach) {
-                      GameMessages.record("I can't reach that!");
-                  }
-                  return sceneLoc!.interactResult;
-              }
-          }
+            name: sceneLoc.name,
+            tile: () => sceneLoc!.tile,
+            actions: () => sceneLoc!.ops,
+            interact: async () => {
+                locInteractCount++;
+                if (cantReach) {
+                    GameMessages.record("I can't reach that!");
+                }
+                return sceneLoc!.interactResult;
+            }
+        }
         : null;
 const doorHandle = () =>
     sceneDoor
         ? {
-              name: sceneDoor.name,
-              tile: () => sceneDoor!.tile,
-              actions: () => sceneDoor!.ops,
-              distance: () => sceneDoor!.distance,
-              interact: async () => {
-                  doorInteractCount++;
-                  if (!sceneDoor!.interactResult) {
-                      return false;
-                  }
-                  onDoorOpen?.();
-                  sceneDoor = null;
-                  return true;
-              }
-          }
+            name: sceneDoor.name,
+            tile: () => sceneDoor!.tile,
+            actions: () => sceneDoor!.ops,
+            distance: () => sceneDoor!.distance,
+            interact: async () => {
+                doorInteractCount++;
+                if (!sceneDoor!.interactResult) {
+                    return false;
+                }
+                onDoorOpen?.();
+                sceneDoor = null;
+                return true;
+            }
+        }
         : null;
 const npcHandle = () =>
     sceneNpc
         ? {
-              name: sceneNpc.name,
-              tile: () => sceneNpc!.tile,
-              distance: () => 1,
-              actions: () => ['Talk-to', 'Attack'],
-              interact: async () => {
-                  npcInteractCount++;
-                  onNpcInteract?.();
-                  if (cantReach) {
-                      GameMessages.record("I can't reach that!");
-                  }
-                  return sceneNpc?.interactResult ?? false;
-              }
-          }
+            name: sceneNpc.name,
+            tile: () => sceneNpc!.tile,
+            distance: () => 1,
+            actions: () => ['Talk-to', 'Attack'],
+            interact: async () => {
+                npcInteractCount++;
+                onNpcInteract?.();
+                if (cantReach) {
+                    GameMessages.record("I can't reach that!");
+                }
+                return sceneNpc?.interactResult ?? false;
+            }
+        }
         : null;
 function whereChain(preds: ((l: unknown) => boolean)[]): unknown {
     return {
@@ -153,7 +153,7 @@ beforeEach(() => {
     sceneNpc = null;
     walkCalls = [];
     walkResult = true;
-    walkLastOutcome = 'failed';
+    _walkLastOutcome = 'failed';
     WalkExecutor.lastOutcome = 'failed';
     canReachResult = true;
     cantReach = false;
@@ -274,7 +274,7 @@ describe('Reach.locOp', () => {
     });
     test('hint walk proven unreachable → unreachable', async () => {
         walkResult = false;
-        walkLastOutcome = 'unreachable';
+        _walkLastOutcome = 'unreachable';
         WalkExecutor.lastOutcome = 'unreachable';
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('unreachable');
@@ -310,7 +310,7 @@ describe('Reach.locOp', () => {
     test('loc in scene but the stand is unreachable → unreachable (op never fires)', async () => {
         sceneLoc = { name: 'Staircase', ops: ['Climb-up'], tile: { x: 8, z: 5, level: 0 }, interactResult: true };
         walkResult = false;
-        walkLastOutcome = 'unreachable';
+        _walkLastOutcome = 'unreachable';
         WalkExecutor.lastOutcome = 'unreachable';
         const r = await Reach.locOp({ name: 'Staircase', op: 'Climb-up', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('unreachable');

@@ -43,8 +43,8 @@ export function hopsFromWaypoints(waypoints: Waypoint[]): PathHop[] {
             ?? (t.kind === 'teleport' || t.teleportId
                 ? 40
                 : t.toLevel !== undefined || t.toTile
-                  ? 10
-                  : 4);
+                    ? 10
+                    : 4);
         hops.push({
             kind: kindOf(t),
             cost,

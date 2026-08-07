@@ -28,17 +28,17 @@
  * Jewellery: charged duel/glory/games neck seeded at start (and topped up each leg) so
  *   real OD paths may Rub; not a fake end-of-run allowlist test. JEWELLERY_ONLY=1 restores
  *   synthetic JEWEL-* isolation legs if needed.
- * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=25
+ * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.js --hardest=25
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, relog } from './tutorial/harness.js';
-import type { ScriptRoute } from './nav/script-route-corpus.ts';
+import type { ScriptRoute } from './nav/script-route-corpus.js';
 import {
     transportQuestJournalNames,
     transportQuestSetvarCommands
-} from '../src/bot/nav/transportQuestReqs.ts';
+} from '../src/bot/nav/transportQuestReqs.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -204,7 +204,7 @@ async function maybeRefillEnergy(page: Page, lowAt = ENERGY_REFILL_AT): Promise<
 
 /**
  * Prefer mainland + f2p-ish walk hubs + bank/camp commutes — the paths scripts
- * actually thrash. Full pack mesh stays in script-route-corpus.ts.
+ * actually thrash. Full pack mesh stays in script-route-corpus.js.
  */
 export function pickLiveRoutes(all: ScriptRoute[], limit: number): ScriptRoute[] {
     const score = (r: ScriptRoute): number => {
@@ -229,12 +229,12 @@ export function pickLiveRoutes(all: ScriptRoute[], limit: number): ScriptRoute[]
     return [...all].sort((a, b) => score(b) - score(a)).slice(0, limit);
 }
 
-/** Load precalc from `script-route-corpus.ts --hardest=N` (pack cost ranking). */
+/** Load precalc from `script-route-corpus.js --hardest=N` (pack cost ranking). */
 export function loadHardestRoutes(limit: number, file = HARDEST_JSON): ScriptRoute[] {
     if (!fs.existsSync(file)) {
         throw new Error(
             `missing ${file} — run:\n` +
-                `  bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.ts --hardest=${limit || 25}`
+                `  bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.js --hardest=${limit || 25}`
         );
     }
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { routes: ScriptRoute[] };
@@ -373,7 +373,7 @@ async function loadSeedRoutes(): Promise<ScriptRoute[]> {
         const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
         GlobalRegistrator.register();
     }
-    const { buildScriptRoutes } = await import('./nav/script-route-corpus.ts');
+    const { buildScriptRoutes } = await import('./nav/script-route-corpus.js');
     return buildScriptRoutes();
 }
 
@@ -529,7 +529,7 @@ async function seedItem(
     const inv = await page.evaluate(() =>
         (globalThis as never as Abi).__rs2b0t.Inventory.items()
             .filter(i => i.name)
-            .map(i => `${i.count}× ${i.name}`)
+            .map((i: { count?: number; name: string | null }) => `${i.count ?? 1}× ${i.name}`)
             .join(', ')
     );
     throw new Error(
@@ -687,10 +687,10 @@ function loadTransportHeavyForLive(limit: number): TransportHeavyRoute[] {
 const routes = USE_SHIP_352
     ? loadShip352Routes(LIVE_LIMIT || 2)
     : USE_TRANSPORT_HEAVY
-      ? loadTransportHeavyForLive(LIVE_LIMIT || 12)
-      : USE_HARDEST
-        ? loadHardestRoutes(LIVE_LIMIT || 25)
-        : pickLiveRoutes(all, LIVE_LIMIT);
+        ? loadTransportHeavyForLive(LIVE_LIMIT || 12)
+        : USE_HARDEST
+            ? loadHardestRoutes(LIVE_LIMIT || 25)
+            : pickLiveRoutes(all, LIVE_LIMIT);
 
 console.log(
     `nav-script-routes-live base=${base} tick=${TICK_MS}ms energy≤${ENERGY_REFILL_AT}% refill limit=${LIVE_LIMIT} hard=${USE_HARDEST} transportHeavy=${USE_TRANSPORT_HEAVY} ship352=${USE_SHIP_352} tele=${USE_TELEPORTS} pathPaint=${PATH_PAINT} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG} budget≈${Math.round(BUDGET_MS / 1000)}s`
@@ -699,10 +699,10 @@ console.log(
     USE_SHIP_352
         ? `  SHIP_352=1 → ${routes.length} Ardougne↔Brimhaven ship+plank legs (issue #352)`
         : USE_TRANSPORT_HEAVY
-          ? `  TRANSPORT_HEAVY=1 → ${routes.length} routes from ${TRANSPORT_HEAVY_JSON}`
-          : USE_HARDEST
-            ? `  HARD=1 → ${routes.length} precalc hardest from ${HARDEST_JSON}`
-            : `  selected ${routes.length} of ${all.length} script-ripped routes (hub score)`
+            ? `  TRANSPORT_HEAVY=1 → ${routes.length} routes from ${TRANSPORT_HEAVY_JSON}`
+            : USE_HARDEST
+                ? `  HARD=1 → ${routes.length} precalc hardest from ${HARDEST_JSON}`
+                : `  selected ${routes.length} of ${all.length} script-ripped routes (hub score)`
 );
 
 await proof.ensureDirs();

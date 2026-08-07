@@ -81,7 +81,7 @@ try {
         const zanaris = await getServerVarQuiet(page, 'zanaris');
         const food = await invCount(page, 'Lobster');
         const lines = await logs(page);
-        for (const m of lines.slice(-5)) {
+        for (const _m of lines.slice(-5)) {
             // quiet
         }
         if (zanaris !== null && zanaris >= 3) {

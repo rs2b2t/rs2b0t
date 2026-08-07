@@ -268,7 +268,9 @@ for (const s of SEEDS) {
         });
         const ms = performance.now() - t0;
         if (!into.ok || !out.ok) {
-            const reason = !into.ok ? `entry: ${into.reason}` : `exit: ${out.reason}`;
+            const reason = !into.ok
+                ? `entry: ${'reason' in into ? String((into as { reason?: string }).reason) : 'fail'}`
+                : `exit: ${'reason' in out ? String((out as { reason?: string }).reason) : 'fail'}`;
             rows.push({ ...s, ok: false, reason, ms });
             console.log(`FAIL ${s.id}  ${s.note}: ${reason} (${ms.toFixed(1)}ms)`);
             continue;
@@ -353,7 +355,7 @@ for (const r of rest) {
     pick.push(r);
 }
 
-console.log(`\n── quest seeds (live: setvar then relog) ──`);
+console.log('\n── quest seeds (live: setvar then relog) ──');
 for (const s of TRANSPORT_QUEST_SEEDS) {
     console.log(`  setvar ${s.varp} ${s.complete}  # ${s.journal} — ${s.usedBy.join('; ')}`);
 }
@@ -404,12 +406,12 @@ if (write) {
                 hopKinds: r.hopKinds,
                 ...(round !== undefined
                     ? {
-                          essenceRoundtrip: round,
-                          /** Mid waypoint for live: walk into mine after tele to wizard. */
-                          minePad: ESSENCE_MINE_PAD,
-                          /** Exit leg must use portal, not spell tele. */
-                          useTeleports: false
-                      }
+                        essenceRoundtrip: round,
+                        /** Mid waypoint for live: walk into mine after tele to wizard. */
+                        minePad: ESSENCE_MINE_PAD,
+                        /** Exit leg must use portal, not spell tele. */
+                        useTeleports: false
+                    }
                     : {})
             };
         })

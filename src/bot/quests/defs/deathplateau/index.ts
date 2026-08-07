@@ -23,18 +23,14 @@ import {
     DEATH_DICE_MAIN,
     DEATH_DICE_ROLL_COM,
     DEATH_ITEM,
-    DENULTH_CERT,
     DENULTH_FINISH,
     DENULTH_START,
-    DUNSTAN_CERT,
     DUNSTAN_SPIKES,
     EOHRIC_GUARD,
     EOHRIC_HAROLD_REFUSED,
     FALADOR_WEST_BANK,
     GAMBLE_BET,
-    HAROLD_DRINK,
     HAROLD_DUTY,
-    HAROLD_GAMBLE,
     PEDESTALS,
     SABA_PATH,
     TENZING_HELP,
@@ -43,10 +39,8 @@ import {
     TOSTIG_SHOP
 } from './areas.js';
 import {
-    DEATH_PLATEAU_QUEST,
     DP_FLAG,
     DP_STAGE,
-    parseDeathPlateauJournal,
     readDeathPlateauProgress
 } from './journal.js';
 
@@ -85,9 +79,6 @@ function anyBallHeld(snap: QuestSnapshot): number {
     return ALL_BALL_IDS.reduce((n, id) => n + heldId(snap, id), 0);
 }
 
-function allBallsHeld(snap: QuestSnapshot): boolean {
-    return ALL_BALL_IDS.every(id => heldId(snap, id) > 0);
-}
 
 function inSabaCave(tile: QuestSnapshot['tile']): boolean {
     return tile !== null
@@ -474,7 +465,7 @@ async function openHaroldDoor(log: (m: string) => void): Promise<boolean> {
     // Hallway outside (reachable). Never path to Harold's tile first.
     if (!(await walkTo(TILE.HAROLD_DOOR, 2, log))) {
         const t = Game.tile();
-        if (!t || t.distanceTo(TILE.HAROLD_DOOR_LOC) > 4) {
+        if (!t || Tile.from(t).distanceTo(TILE.HAROLD_DOOR_LOC) > 4) {
             return false;
         }
     }
@@ -753,8 +744,9 @@ async function gambleHaroldRound(log: (m: string) => void): Promise<boolean> {
             // Generic objbox — pause/continue or close.
             const cont = reader.mainModalButtonNearText('Click here to continue');
             if (cont > 0) {
-                actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)
-                    || actions.ifButton(cont);
+                if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
+                    actions.ifButton(cont);
+                }
             } else {
                 actions.closeModal();
             }
@@ -848,7 +840,9 @@ async function reclaimIouFromHarold(log: (m: string) => void): Promise<boolean> 
         if (reader.modals().main !== -1) {
             const cont = reader.mainModalButtonNearText('Click here to continue');
             if (cont > 0) {
-                actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont) || actions.ifButton(cont);
+                if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
+                    actions.ifButton(cont);
+                }
             } else {
                 actions.closeModal();
             }
@@ -900,7 +894,9 @@ async function readIou(log: (m: string) => void): Promise<boolean> {
             // objbox "You have found the combination!" or leftover scroll.
             const cont = reader.mainModalButtonNearText('Click here to continue');
             if (cont > 0) {
-                actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont) || actions.ifButton(cont);
+                if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
+                    actions.ifButton(cont);
+                }
             } else {
                 actions.closeModal();
             }
@@ -1094,7 +1090,9 @@ async function drainUntil(done: () => boolean, log: (m: string) => void, max = 4
         if (reader.modals().main !== -1) {
             const cont = reader.mainModalButtonNearText('Click here to continue');
             if (cont > 0) {
-                actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont) || actions.ifButton(cont);
+                if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
+                    actions.ifButton(cont);
+                }
             } else {
                 actions.closeModal();
             }

@@ -19,16 +19,8 @@ jobs:
 
       - run: bun test
 
-      # Not gates yet. tsc is at 26 errors and eslint at 82, all predating this
-      # workflow, so blocking on either would mean a permanently red main and a
-      # signal everyone learns to ignore. Reported here so the counts are visible
-      # and can only go down; promote to real gates once they reach zero.
-      - name: typecheck (informational)
-        if: always()
+      - name: typecheck
         run: bun run typecheck
-        continue-on-error: true
 
-      - name: lint (informational)
-        if: always()
+      - name: lint
         run: bun run lint
-        continue-on-error: true

@@ -126,3 +126,78 @@ export function fmtDuration(mins: number): string {
     const t = Math.max(0, Math.floor(mins * 60));
     return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
+
+/** Compact skill labels for chatbox paint rows. */
+export function paintSkillShort(skill: string): string {
+    switch (skill) {
+        case 'woodcutting':
+            return 'WC';
+        case 'firemaking':
+            return 'FM';
+        case 'fishing':
+            return 'Fish';
+        case 'cooking':
+            return 'Cook';
+        case 'mining':
+            return 'Mine';
+        default:
+            return skill;
+    }
+}
+
+export function paintSkillTitle(skill: string): string {
+    switch (skill) {
+        case 'woodcutting':
+            return 'Woodcutting';
+        case 'firemaking':
+            return 'Firemaking';
+        case 'fishing':
+            return 'Fishing';
+        case 'cooking':
+            return 'Cooking';
+        case 'mining':
+            return 'Mining';
+        default:
+            return skill;
+    }
+}
+
+/** Truncate paint text with an ellipsis (chatbox rows are tight). */
+export function paintClip(text: string, max = 52): string {
+    const s = text.trim();
+    if (s.length <= max) {
+        return s;
+    }
+    return `${s.slice(0, Math.max(0, max - 1))}…`;
+}
+
+export function fmtXpGained(n: number): string {
+    if (n <= 0) {
+        return '+0';
+    }
+    if (n >= 1000) {
+        return `+${(n / 1000).toFixed(1)}k`;
+    }
+    return `+${n}`;
+}
+
+export function fmtXpHr(gained: number, mins: number): string {
+    if (mins <= 0.5) {
+        return '—';
+    }
+    return `${(((gained / mins) * 60) / 1000).toFixed(1)}k`;
+}
+
+/** Gathering script title accent colours. */
+export function gatherPaintAccent(kind: 'fish' | 'mine' | 'wc' | 'other'): string {
+    switch (kind) {
+        case 'fish':
+            return '#7ec8e3';
+        case 'mine':
+            return '#e0c36a';
+        case 'wc':
+        case 'other':
+        default:
+            return '#9be05b';
+    }
+}

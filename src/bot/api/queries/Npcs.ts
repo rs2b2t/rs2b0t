@@ -12,7 +12,10 @@ export function talkOp(actions: string[]): string | null {
 
 export const Npcs = {
     query(): EntityQuery<Npc> {
-        return new EntityQuery(() => reader.npcs().map(s => new Npc(s)));
+        return EntityQuery.fromSnapshots(
+            () => reader.npcs(),
+            s => new Npc(s)
+        );
     },
 
     all(): Npc[] {

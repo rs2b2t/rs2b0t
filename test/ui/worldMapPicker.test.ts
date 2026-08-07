@@ -8,11 +8,11 @@ const PACK_PATH = 'out/collision.lcnav.gz';
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
 function loadPack(): PathFinder {
-    let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
+    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
+        bytes = new Uint8Array(gunzipSync(bytes));
     }
-    return new PathFinder(bytes);
+    return new PathFinder(bytes as Uint8Array);
 }
 
 describe('sampleStep', () => {

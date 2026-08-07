@@ -165,11 +165,11 @@ export function pathCorridorSignature(
         hops.length === 0
             ? 'walk'
             : hops
-                  .map(h => {
-                      const name = (h.locName ?? h.kind).toLowerCase().replace(/\s+/g, '_');
-                      return `${h.kind}:${name}`;
-                  })
-                  .join('+');
+                .map(h => {
+                    const name = (h.locName ?? h.kind).toLowerCase().replace(/\s+/g, '_');
+                    return `${h.kind}:${name}`;
+                })
+                .join('+');
 
     return [`e:${end.level}:${(end.x / grid) | 0}:${(end.z / grid) | 0}`, `h:${hopKey}`].join('|');
 }

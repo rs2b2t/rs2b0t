@@ -6,6 +6,19 @@ interface QueryableEntity extends Locatable {
     actions(): string[];
 }
 
+/**
+ * Minimal fields shared by Loc/Npc/GroundItem snapshots (and adapted players)
+ * so name / action / distance filters can run before allocating entity wrappers.
+ * Matches ClientAdapter snapshot shapes (`ops`, not `actions()`).
+ */
+export interface EntitySnapView {
+    name: string | null;
+    /** Menu ops; null/hidden slots ignored by {@link EntityQuery.action}. */
+    ops: readonly (string | null)[];
+    tile: WorldTile;
+    distance: number;
+}
+
 export function matchesEntityName(actual: string | null, configured: string): boolean {
     return actual !== null && actual.trim().toLowerCase() === configured.trim().toLowerCase();
 }
@@ -13,27 +26,54 @@ export function matchesEntityName(actual: string | null, configured: string): bo
 /**
  * Chainable filter over scene entities; a terminal evaluates it against the
  * current scene.
+ *
+ * Built via {@link EntityQuery.fromSnapshots} so name/action/within/withinOf
+ * filters run on raw snapshots and only matching rows are wrapped into Loc/Npc
+ * objects (hot gather loops used to allocate a Loc for every scenery tile).
+ *
  * @see docs/API.md#entityquery
  */
 export default class EntityQuery<E extends QueryableEntity> {
-    private filters: ((e: E) => boolean)[] = [];
+    private snapFilters: ((s: EntitySnapView) => boolean)[] = [];
+    private entityFilters: ((e: E) => boolean)[] = [];
 
-    constructor(private readonly supplier: () => E[]) {}
+    private constructor(
+        private readonly supplySnaps: () => readonly EntitySnapView[],
+        private readonly wrap: (s: EntitySnapView) => E
+    ) {}
+
+    /**
+     * Snapshot-first query: common filters run before `wrap`.
+     * `S` must expose name/actions/tile/distance (LocSnapshot etc. already do).
+     */
+    static fromSnapshots<S extends EntitySnapView, E extends QueryableEntity>(
+        supply: () => readonly S[],
+        wrap: (s: S) => E
+    ): EntityQuery<E> {
+        return new EntityQuery<E>(
+            () => supply(),
+            s => wrap(s as S)
+        );
+    }
 
     name(...names: string[]): this {
         const wanted = names.map(n => n.trim().toLowerCase());
-        this.filters.push(e => e.name !== null && wanted.includes(e.name.trim().toLowerCase()));
+        this.snapFilters.push(
+            s => s.name !== null && wanted.includes(s.name.trim().toLowerCase())
+        );
         return this;
     }
 
     action(action: string): this {
         const wanted = action.toLowerCase();
-        this.filters.push(e => e.actions().some(a => a.toLowerCase() === wanted));
+        this.snapFilters.push(s =>
+            s.ops.some(a => a != null && a !== 'hidden' && a.toLowerCase() === wanted)
+        );
         return this;
     }
 
     within(dist: number): this {
-        this.filters.push(e => e.distance() <= dist);
+        this.snapFilters.push(s => s.distance <= dist);
         return this;
     }
 
@@ -43,28 +83,41 @@ export default class EntityQuery<E extends QueryableEntity> {
      */
     withinOf(origin: WorldTile, dist: number): this {
         const r = Math.max(0, Math.floor(dist));
-        this.filters.push(e => {
-            const t = e.tile();
+        this.snapFilters.push(s => {
+            const t = s.tile;
             return Math.max(Math.abs(t.x - origin.x), Math.abs(t.z - origin.z)) <= r;
         });
         return this;
     }
 
     inside(area: { minX: number; maxX: number; minZ: number; maxZ: number }): this {
-        this.filters.push(e => {
-            const t: WorldTile = e.tile();
+        this.snapFilters.push(s => {
+            const t = s.tile;
             return t.x >= area.minX && t.x <= area.maxX && t.z >= area.minZ && t.z <= area.maxZ;
         });
         return this;
     }
 
+    /** Entity-level predicate (runs after wrap). */
     where(pred: (e: E) => boolean): this {
-        this.filters.push(pred);
+        this.entityFilters.push(pred);
         return this;
     }
 
     results(): E[] {
-        return this.supplier().filter(e => this.filters.every(f => f(e)));
+        const snaps = this.supplySnaps();
+        const out: E[] = [];
+        for (const s of snaps) {
+            if (this.snapFilters.length > 0 && !this.snapFilters.every(f => f(s))) {
+                continue;
+            }
+            const e = this.wrap(s);
+            if (this.entityFilters.length > 0 && !this.entityFilters.every(f => f(e))) {
+                continue;
+            }
+            out.push(e);
+        }
+        return out;
     }
 
     nearest(): E | null {
@@ -74,7 +127,6 @@ export default class EntityQuery<E extends QueryableEntity> {
                 best = e;
             }
         }
-
         return best;
     }
 
