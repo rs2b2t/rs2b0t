@@ -310,6 +310,13 @@ export class FleeCombat implements Task {
         // Re-assert off in case a death/relog restored the default.
         Game.setAutoRetaliate(false);
 
+        // Chop-then-burn: leave the fire load when kiting (Jail guard, spiders).
+        // Soft-lock was burningLoad=true with no lights while walking off-plot.
+        if (this.bot.burnEnabled() && this.bot.isBurningLoad()) {
+            this.bot.log('burn: combat flee — ending fire load to re-camp after clear');
+            this.bot.endBurningLoad();
+        }
+
         const here = Game.tile();
         if (!here) {
             await Execution.delayTicks(1);
@@ -844,7 +851,11 @@ export class BankCatch implements Task {
     }
 
     async execute(): Promise<void> {
-        const had = this.bot.products().length;
+        // Prefer cook-result count when banking after cook-then-bank (products() is raw-only).
+        const had = Math.max(
+            this.bot.products().length,
+            this.bot.cookedFishCount() + (this.bot.getBurntPolicy() === 'bank' ? this.bot.burntFishCount() : 0)
+        );
         const log = (m: string) => this.bot.log(`  ${m}`);
         const deposit = (name: string) => this.bot.shouldDeposit(name);
         const refreshRaw = async () => {
@@ -1035,9 +1046,13 @@ export class FishCookLoad implements Task {
 
         // useOn can "click" the oven through a wall; cooking then never starts.
         // A real cook starts within ~2 ticks (XP / raw drop / make-X). After that,
-        // assume the stand is wrong-side and re-path through doors.
+        // wait out the full Make-X batch — re-useOn mid-queue cancels cooking and
+        // left packs half-raw (live smokes: 18 cooked / 9 raw at timeout).
         let wallRecoveries = 0;
-        for (let n = 0; n < 32 && this.bot.cookableRawCount() > 0; n++) {
+        // Full pack ~28 fish × ~4 ticks ≈ 65s; allow headroom for burn/slow anim.
+        const BATCH_WAIT_MS = 100_000;
+        const STALL_MS = 4500;
+        for (let n = 0; n < 48 && this.bot.cookableRawCount() > 0; n++) {
             if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
                 return;
             }
@@ -1065,56 +1080,78 @@ export class FishCookLoad implements Task {
                 await Execution.delayTicks(2);
                 continue;
             }
-            // One cook action finishes in a few ticks. Wait that long for any progress
-            // (XP, raw drop, make-X). If still nothing while on the stand, treat as a
-            // wall-side / wrong-room useOn and re-path through doors.
             const cookStarted = (): boolean =>
                 this.bot.cookableRawCount() < beforeRaw
                 || Skills.xp('cooking') > beforeXp
                 || ChatDialog.isMakeMenu()
                 || ChatDialog.canContinue();
-            // ~4 game ticks — short enough to fail-fast on street-side stands, long
-            // enough that a real adjacent cook is not aborted mid-animation.
+            // ~4 game ticks — fail-fast on street-side stands; real cooks start by then.
             const started = await Execution.delayUntil(cookStarted, 2400);
-            if (started || cookStarted()) {
-                // Batch may still be running — wait out more of the pack cook.
-                if (
-                    await Execution.delayUntil(
-                        () =>
-                            this.bot.cookableRawCount() === 0
-                            || ChatDialog.isMakeMenu()
-                            || ChatDialog.canContinue()
-                            || EventSignal.pending()
-                            || Game.inCombat(),
-                        6000
-                    )
-                ) {
-                    if (this.bot.cookableRawCount() < beforeRaw) {
-                        await Execution.delay(cookHumanDelayMs());
-                    }
+            if (!(started || cookStarted())) {
+                const at = Game.tile();
+                const atStand = at !== null && rangeTile.distanceTo(at) <= 2;
+                if (atStand && wallRecoveries < 3) {
+                    wallRecoveries++;
+                    this.bot.log(
+                        `cook: useOn produced no cook progress at stand — re-path (try ${wallRecoveries})`
+                    );
+                    await walkToOven('useOn stall');
+                    continue;
                 }
-                wallRecoveries = 0;
+                await Execution.delayTicks(1);
                 continue;
             }
-            const at = Game.tile();
-            const atStand = at !== null && rangeTile.distanceTo(at) <= 2;
-            if (atStand && wallRecoveries < 3) {
-                wallRecoveries++;
-                this.bot.log(
-                    `cook: useOn produced no cook progress at stand — re-path (try ${wallRecoveries})`
+            // Make-X / cook anim started. Drain the pack without re-clicking; only
+            // re-useOn after a true stall (no raw drop / cooking XP for STALL_MS).
+            wallRecoveries = 0;
+            const batchDeadline = Date.now() + BATCH_WAIT_MS;
+            while (this.bot.cookableRawCount() > 0 && Date.now() < batchDeadline) {
+                if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
+                    return;
+                }
+                if (EventSignal.pending() || Game.inCombat()) {
+                    return;
+                }
+                const snapRaw = this.bot.cookableRawCount();
+                const snapXp = Skills.xp('cooking');
+                const progressed = await Execution.delayUntil(
+                    () =>
+                        this.bot.cookableRawCount() < snapRaw
+                        || Skills.xp('cooking') > snapXp
+                        || this.bot.cookableRawCount() === 0
+                        || ChatDialog.isMakeMenu()
+                        || ChatDialog.canContinue()
+                        || EventSignal.pending()
+                        || Game.inCombat(),
+                    STALL_MS
                 );
-                await walkToOven('useOn stall');
-                continue;
+                if (this.bot.cookableRawCount() === 0) {
+                    break;
+                }
+                if (ChatDialog.isMakeMenu() || ChatDialog.canContinue()) {
+                    return;
+                }
+                if (EventSignal.pending() || Game.inCombat()) {
+                    return;
+                }
+                if (progressed || this.bot.cookableRawCount() < snapRaw || Skills.xp('cooking') > snapXp) {
+                    continue;
+                }
+                // Stalled mid-batch — re-click once (do not loop-spam useOn).
+                this.bot.log(
+                    `cook: batch stalled with ${this.bot.cookableRawCount()} raw — re-useOn`
+                );
+                break;
             }
-            await Execution.delayTicks(1);
+            if (this.bot.cookableRawCount() === 0) {
+                await Execution.delay(cookHumanDelayMs());
+            }
         }
 
         if (this.bot.cookableRawCount() === 0) {
-
             if (this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
                 await dropBurnt(this.bot);
             }
-
         }
     }
 }
@@ -1146,20 +1183,47 @@ export class FishBankCooked implements Task {
 
         if (hasDeposit) {
             this.bot.setStatus('bank: cooked fish');
-            if (!(await this.bot.openScriptBank(log))) {
-                this.bot.log('bank: could not open for cooked — will retry');
+            let deposited = false;
+            if (await this.bot.openScriptBank(log)) {
+                await Execution.delay(bankHumanDelayMs());
+                await Bank.depositAllMatching(deposit);
+                await Execution.delayUntil(() => Bank.loaded(), 3000);
+                await Execution.delayTicks(1);
+                if (this.bot.getCookMode() === 'bank-raw-then-cook') {
+                    this.bot.refreshBankRawTotal();
+                }
+                deposited = true;
+                this.bot.countTrip(cooked);
+                this.bot.log(`bank: deposited ${cooked} cooked (burnt=${this.bot.getBurntPolicy()})`);
+            } else {
+                // Long cook→bank legs (Sinclair→Seers) sometimes fail openScriptBank once;
+                // fall back to nearest booth so we do not soft-lock cookingLoad forever.
+                this.bot.log('bank: script bank open failed — trying nearest');
+                const nearestOk = await Banking.bankNearest({
+                    deposit,
+                    // Match openScriptBank path: only cook-result matcher, not common junk.
+                    commonJunk: false,
+                    log,
+                    afterDeposit: async () => {
+                        if (this.bot.getCookMode() === 'bank-raw-then-cook') {
+                            this.bot.refreshBankRawTotal();
+                        }
+                    }
+                });
+                if (nearestOk) {
+                    deposited = true;
+                    this.bot.countTrip(cooked);
+                    this.bot.log(
+                        `bank: deposited ${cooked} cooked via nearest (burnt=${this.bot.getBurntPolicy()})`
+                    );
+                } else {
+                    this.bot.log('bank: could not open for cooked — will retry');
+                    return;
+                }
+            }
+            if (!deposited) {
                 return;
             }
-            await Execution.delay(bankHumanDelayMs());
-            await Bank.depositAllMatching(deposit);
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            await Execution.delayTicks(1);
-
-            if (this.bot.getCookMode() === 'bank-raw-then-cook') {
-                this.bot.refreshBankRawTotal();
-            }
-            this.bot.countTrip(cooked);
-            this.bot.log(`bank: deposited ${cooked} cooked (burnt=${this.bot.getBurntPolicy()})`);
         } else {
             this.bot.log('cook: load finished, nothing to bank');
         }

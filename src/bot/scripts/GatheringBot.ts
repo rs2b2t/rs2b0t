@@ -2541,6 +2541,26 @@ export default class GatheringBot extends TaskBot {
     }
 
     shouldDeposit(name: string): boolean {
+        if (this.gearKeep.length > 0 && !depositAllExcept(this.gearKeep)(name)) {
+            return false;
+        }
+        // cook-then-bank / finished cook load: cooked (and banked burnt) must be
+        // depositable via BankCatch as a safety net if FishBankCooked never ran
+        // (cookingLoad cleared / interrupted). Mid-cook BankCatch is blocked separately.
+        if (
+            this.cookEnabled()
+            && !this.cookingLoad
+            && !this.inCookBatch
+            && (this.cookMode === 'cook-then-bank' || this.cookMode === 'bank-raw-then-cook')
+        ) {
+            if (isCookedFishName(name) || isBurntFishName(name)) {
+                return this.shouldDepositCookResult(name);
+            }
+            // Non-cookable raw (filter leftover) still banks as-is.
+            if (isRawFishName(name) && !rawMatchesCookFilter(name, this.cookFishFilter)) {
+                return true;
+            }
+        }
         if (this.gearKeep.length > 0) {
             return depositAllExcept(this.gearKeep)(name);
         }
@@ -2557,7 +2577,19 @@ export default class GatheringBot extends TaskBot {
         return Inventory.items().filter(i => this.isProduct(i.name));
     }
     hasDepositable(): boolean {
-        return Inventory.items().some(i => this.shouldDeposit(i.name ?? ''));
+        if (Inventory.items().some(i => this.shouldDeposit(i.name ?? ''))) {
+            return true;
+        }
+        // Cooked haul after a cook load (product keywords are "raw" only).
+        if (
+            this.cookEnabled()
+            && !this.cookingLoad
+            && !this.inCookBatch
+            && Inventory.items().some(i => this.shouldDepositCookResult(i.name ?? ''))
+        ) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -2832,13 +2864,14 @@ export default class GatheringBot extends TaskBot {
             return false;
         }
         if (isRawFishName(name)) {
-
+            // Filter leftovers (e.g. Raw shrimps while cooking Lobster only).
             return !rawMatchesCookFilter(name, this.cookFishFilter);
         }
         if (isBurntFishName(name)) {
             return this.burntPolicy === 'bank';
         }
-        return isCookedFishName(name) || this.shouldDeposit(name);
+        // Cooked fish only — do not call shouldDeposit (that routes cooked back here).
+        return isCookedFishName(name);
     }
     shouldDepositRawCatch(name: string): boolean {
         if (this.gearKeep.length > 0 && !depositAllExcept(this.gearKeep)(name)) {

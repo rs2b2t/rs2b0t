@@ -122,6 +122,24 @@ class ChopBurnLoad implements Task {
 
         while (this.bot.logCount() > 0) {
             if (EventSignal.pending() || (Game.inCombat() && hostileFaceTarget())) {
+                // Yield to FleeCombat / events. If we have already walked off the
+                // burn plot (Jail guard kite), end the load so we can re-enter
+                // chop-then-burn near the plot after combat instead of soft-locking
+                // with burningLoad=true and no lights.
+                const here = Game.tile();
+                const p = this.bot.burnPlotOrNull();
+                if (
+                    here
+                    && p
+                    && !inFirePlot(here, p)
+                    && Math.max(
+                        Math.abs(here.x - Math.floor((p.x0 + p.x1) / 2)),
+                        Math.abs(here.z - Math.floor((p.z0 + p.z1) / 2))
+                    ) > 16
+                ) {
+                    this.bot.log('burn: combat kite left the plot — ending load to re-camp');
+                    this.bot.endBurningLoad();
+                }
                 return;
             }
             plot = this.bot.burnPlotOrNull() ?? plot;
