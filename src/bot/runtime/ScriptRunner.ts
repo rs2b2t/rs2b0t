@@ -32,14 +32,55 @@ function scheduleNextLoop(ctx: ScriptContext, cadence: LoopCadence): void {
 }
 
 /**
- * Logged out (or mid scene load) the adapter serves stale or empty state, so a
- * script reading it draws wrong conclusions — a stale tile, a blank inventory.
- * Scripts only ever run behind this gate. With no client attached at all
- * (unit tests) there is no game state to protect and the gate stays out of
- * the way.
+ * Why the script loop must hold (adapter serves stale/empty state).
+ * Null = safe to run. Detached (unit tests) has no client to protect.
+ *
+ * Scene state 2 is the live playable scene — mid-load (teleport, login rebuild,
+ * hop) is not "logged out" even though we pause the loop the same way.
  */
-function ingameOrDetached(): boolean {
-    return !reader.attached() || (reader.ingame() && reader.sceneState() === 2 && reader.worldTile() !== null);
+type LoopHoldReason = 'logged-out' | 'scene-load' | 'no-tile';
+
+function loopHoldReason(): LoopHoldReason | null {
+    if (!reader.attached()) {
+        return null;
+    }
+    if (!reader.ingame()) {
+        return 'logged-out';
+    }
+    if (reader.sceneState() !== 2) {
+        return 'scene-load';
+    }
+    if (reader.worldTile() === null) {
+        return 'no-tile';
+    }
+    return null;
+}
+
+function loopReadyOrDetached(): boolean {
+    return loopHoldReason() === null;
+}
+
+function holdWarnMessage(reason: LoopHoldReason): string {
+    switch (reason) {
+        case 'logged-out':
+            return 'logged out — holding the loop until back ingame';
+        case 'scene-load':
+            return `scene loading (state ${reader.sceneState()}) — holding the loop until the scene is ready`;
+        case 'no-tile':
+            return 'scene ready but no local tile yet — holding the loop';
+    }
+}
+
+function holdResumeMessage(reason: LoopHoldReason, heldMs: number): string {
+    const secs = Math.round(heldMs / 1000);
+    switch (reason) {
+        case 'logged-out':
+            return `back ingame after ${secs}s — resuming the loop`;
+        case 'scene-load':
+            return `scene ready after ${secs}s — resuming the loop`;
+        case 'no-tile':
+            return `local tile available after ${secs}s — resuming the loop`;
+    }
 }
 
 class ScriptRunnerImpl {
@@ -48,7 +89,9 @@ class ScriptRunnerImpl {
     meta: ScriptMeta | null = null;
 
     private changeListeners = new Set<() => void>();
-    private loggedOutSince = 0;
+    /** Wall-clock start of the current loop hold (logout / scene load / no tile). */
+    private holdSince = 0;
+    private holdReason: LoopHoldReason | null = null;
 
     constructor() {
         Scheduler.launchLoop = ctx => this.launchIteration(ctx);
@@ -96,13 +139,22 @@ class ScriptRunnerImpl {
         ctx.addLog('info', `${meta.name} started (input: ${ActionRouter.driver.mode})`);
         this.fireChange();
 
-        this.loggedOutSince = 0;
+        this.holdSince = 0;
+        this.holdReason = null;
         ctx.loopInFlight = true;
         (async () => {
-            if (!ingameOrDetached()) {
-                ctx.addLog('warn', 'not ingame — waiting for login before the script reads game state (auto-login kicks in if credentials are saved)');
-                await Execution.delayUntil(ingameOrDetached, 0);
-                ctx.addLog('info', 'ingame — starting');
+            if (!loopReadyOrDetached()) {
+                const reason = loopHoldReason() ?? 'logged-out';
+                if (reason === 'logged-out') {
+                    ctx.addLog(
+                        'warn',
+                        'not ingame — waiting for login before the script reads game state (auto-login kicks in if credentials are saved)'
+                    );
+                } else {
+                    ctx.addLog('warn', holdWarnMessage(reason));
+                }
+                await Execution.delayUntil(loopReadyOrDetached, 0);
+                ctx.addLog('info', reason === 'logged-out' ? 'ingame — starting' : 'scene ready — starting');
             }
             await bot.onStart?.();
         })()
@@ -188,20 +240,26 @@ class ScriptRunnerImpl {
             return;
         }
 
-        if (!ingameOrDetached()) {
-            if (this.loggedOutSince === 0) {
-                this.loggedOutSince = performance.now();
-                ctx.addLog('warn', 'logged out — holding the loop until back ingame');
+        const hold = loopHoldReason();
+        if (hold !== null) {
+            if (this.holdSince === 0 || this.holdReason !== hold) {
+                this.holdSince = performance.now();
+                this.holdReason = hold;
+                ctx.addLog('warn', holdWarnMessage(hold));
             }
             // deliberate wait, not a stall: keep StallGuard from churn-restarting
             ctx.progress();
-            // Wall-clock poll while logged out — no server ticks arrive.
+            // Wall-clock poll while paused — server ticks may not advance mid scene load.
             scheduleNextLoop(ctx, { kind: 'time', ms: 600 });
             return;
         }
-        if (this.loggedOutSince > 0) {
-            ctx.addLog('info', `back ingame after ${Math.round((performance.now() - this.loggedOutSince) / 1000)}s — resuming the loop`);
-            this.loggedOutSince = 0;
+        if (this.holdSince > 0 && this.holdReason !== null) {
+            ctx.addLog(
+                'info',
+                holdResumeMessage(this.holdReason, performance.now() - this.holdSince)
+            );
+            this.holdSince = 0;
+            this.holdReason = null;
         }
 
         const takeover = Supervisor.intercept(ctx, bot);
