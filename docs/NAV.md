@@ -607,8 +607,8 @@ numbers. What they govern:
 | `PROGRESS_WINDOW` | how far ahead `locateOnPath` scans |
 | `CORRIDOR` | how far off-path still counts as on-path |
 | `OFF_CORRIDOR_STRIKES` | consecutive off-corridor passes before re-pathing |
-| `STALL_TICKS` | ticks without movement before treating it as a stall |
-| `STUCK_ITERS` | passes without progress before the escalation ladder gives up |
+| pathFollow `stallTicks` (default 9) | server ticks without tile change before stall recovery / repath |
+| `UNREACH_CLICK_IDLE_TICKS` | idle ticks before clearing an unreachable mid-path walk click (re-pick only; not stall recovery) |
 | `MAX_REPATHS` | re-plans allowed for one walk |
 | `TRANSPORT_WAIT_MS` | how long to wait for a crossing to complete |
 | `MULTI_DOOR_CROSS_MS` | budget for a door-dense interior |

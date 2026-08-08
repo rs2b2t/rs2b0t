@@ -79,7 +79,11 @@ const PROGRESS_WINDOW = 26;
 const CORRIDOR = 3;
 const STALL_REACH_STEPS = 256;
 const TRIGGER_REACH_STEPS = 256;
-const STUCK_ITERS = 12;
+/**
+ * Idle ticks before clearing an unreachable walk-click target (re-pick only —
+ * does not run stall recovery). Keeps scene-load blips from thrashing clicks.
+ */
+const UNREACH_CLICK_IDLE_TICKS = 3;
 const MAX_REPATHS = 5;
 const PATH_REQUEST_TIMEOUT_MS = 30_000;
 const TRANSPORT_WAIT_MS = 8000;
@@ -761,7 +765,6 @@ class WalkExecutorImpl {
         let clicks = 0;
         let warnedCombat = false;
         let lastTile: WorldTile | null = null;
-        let stillIters = 0;
         /** GameMessages watermark after the last *successful* walk click. */
         let walkClickMark: number | null = null;
         /** Player tile when that walk was issued — CANT_REACH only counts if still here. */
@@ -858,17 +861,12 @@ class WalkExecutorImpl {
             this.maybeFacePathCamera(me, tiles, pathIdx);
 
             const moved = !lastTile || me.x !== lastTile.x || me.z !== lastTile.z || me.level !== lastTile.level;
-            stillIters = moved ? 0 : stillIters + 1;
             if (moved) {
                 lastMoveTick = BotHost.tickCount;
             }
             lastTile = me;
 
             const idleTicks = BotHost.tickCount - lastMoveTick;
-            const hardStuck =
-                !moved
-                && (stillIters >= STUCK_ITERS
-                    || (clickIdx !== -1 && !Reachability.canReach(tiles[clickIdx]!, { maxSteps: STALL_REACH_STEPS })));
 
             // Next hop = first transport at or after pathIdx (pathIdx can sit ON the hop
             // tile after locateOnPath; scanning from pathIdx+1 would skip it forever).
@@ -912,7 +910,26 @@ class WalkExecutorImpl {
                 }
             }
 
-            if (idleTicks >= follow.stallTicks || hardStuck) {
+            // Unreachable walk-click: re-pick only. Do NOT run stall recovery early —
+            // live smokes spammed "stall recovery (2 ticks idle)" when canReach failed
+            // on the mid-path click long before the 9-tick stickiness stall.
+            if (
+                clickIdx !== -1
+                && !moved
+                && idleTicks >= UNREACH_CLICK_IDLE_TICKS
+                && !Reachability.canReach(tiles[clickIdx]!, { maxSteps: STALL_REACH_STEPS })
+            ) {
+                log(
+                    `walk click idx ${clickIdx} unreachable after ${idleTicks} idle ticks — re-picking`
+                );
+                clickIdx = -1;
+                walkClickMark = null;
+                walkClickAt = null;
+                PathPublish.setClientSegment(null);
+            }
+
+            // Stall recovery / repath only after the stickiness idle budget (default 9).
+            if (idleTicks >= follow.stallTicks) {
                 if (stallRetries === 0) {
                     const limit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                     const recover = findForwardRecoveryIndex(tiles, me, pathIdx, clickable, {
@@ -924,7 +941,7 @@ class WalkExecutorImpl {
                         const local = reader.toLocal(tiles[recover]!.x, tiles[recover]!.z);
                         if (local) {
                             log(
-                                `stall recovery (${idleTicks} ticks idle) → path idx ${recover} (${tiles[recover]!.x},${tiles[recover]!.z})`
+                                `stall recovery (${idleTicks} ticks idle, stall=${follow.stallTicks}) → path idx ${recover} (${tiles[recover]!.x},${tiles[recover]!.z})`
                             );
                             const mark = GameMessages.mark();
                             if (ActionRouter.driver.walk(local.lx, local.lz)) {
