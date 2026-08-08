@@ -60,7 +60,9 @@ export const WOODCUTTER_SETTINGS: SettingsSchema = {
     muleMode: GATHERING_SETTINGS.muleMode,
     mulePartner: GATHERING_SETTINGS.mulePartner,
     toolAcquire: TOOL_ACQUIRE_SETTING,
-    forgetfulBank: FORGETFUL_BANK_SETTING
+    forgetfulBank: FORGETFUL_BANK_SETTING,
+    purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
+    packJunk: GATHERING_SETTINGS.packJunk
 };
 
 export default class Woodcutter extends GatheringBot {}

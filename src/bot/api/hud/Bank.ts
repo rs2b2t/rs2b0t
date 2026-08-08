@@ -215,7 +215,8 @@ export const Bank = {
 
             log?.(`booth didn't open from here — stepping near (${stand.x}, ${stand.z}, ${stand.level})`);
             // radius 1: adjacent is enough to click the booth; exact-tile pin looks robotic.
-            await Traversal.walkTo(stand, { radius: 1, timeoutMs: 15000, log });
+            // 90s — 15s was too short for long camp→bank legs (Rimmington→Fally E).
+            await Traversal.walkTo(stand, { radius: 1, timeoutMs: 90_000, log });
             await Execution.delayTicks(1);
             const adj = Locs.query().name(boothName).where(l => l.actions().length > 0 && l.distance() <= 1).nearest();
             const adjOp = adj ? pick(adj.actions()) : undefined;

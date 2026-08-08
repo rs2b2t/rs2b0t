@@ -254,7 +254,10 @@ ScriptRegistry.register({
         muleMode: GATHERING_SETTINGS.muleMode,
         mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
-        forgetfulBank: FORGETFUL_BANK_SETTING
+        forgetfulBank: FORGETFUL_BANK_SETTING,
+        // Required for harness / live control of start purge (default true).
+        purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
+        packJunk: GATHERING_SETTINGS.packJunk
     },
     create: () => new GatheringBot()
 });
@@ -412,7 +415,10 @@ ScriptRegistry.register({
         muleMode: GATHERING_SETTINGS.muleMode,
         mulePartner: GATHERING_SETTINGS.mulePartner,
         toolAcquire: TOOL_ACQUIRE_SETTING,
-        forgetfulBank: FORGETFUL_BANK_SETTING
+        forgetfulBank: FORGETFUL_BANK_SETTING,
+        // Required so harness can set purgePackOnStart=false for cook seed packs.
+        purgePackOnStart: GATHERING_SETTINGS.purgePackOnStart,
+        packJunk: GATHERING_SETTINGS.packJunk
     },
     create: () => new GatheringBot()
 });

@@ -1043,6 +1043,8 @@ export class FishCookLoad implements Task {
         const here = Game.tile();
         if (!here || rangeTile.distanceTo(here) > 1 || !findRange()) {
             await walkToOven(approach ? 'approach→stand' : '');
+            // Door hops leave the range unready for a tick or two (Sinclair).
+            await Execution.delayTicks(2);
         }
 
         // This revision has no Make-X: each useOn (+ optional make-menu qty button)
@@ -1136,9 +1138,10 @@ export class FishCookLoad implements Task {
                 continue;
             }
 
-            // Fail-fast on street-side stands: real cooks react within a few ticks.
+            // Fail-fast on street-side stands; allow a bit longer after door hops
+            // (Sinclair range) before treating useOn as a wrong-room stall.
             let reacted = false;
-            for (let t = 0; t < 4; t++) {
+            for (let t = 0; t < 8; t++) {
                 if (
                     this.bot.cookableRawCount() < beforeRaw
                     || Skills.xp('cooking') > beforeXp
@@ -1157,7 +1160,17 @@ export class FishCookLoad implements Task {
             if (!reacted) {
                 const at = Game.tile();
                 const atStand = at !== null && rangeTile.distanceTo(at) <= 2;
-                if (atStand && wallRecoveries < 3) {
+                // Soft retry at stand before a full approach→stand repath (Seers
+                // log burned ~80s thrashing doors on three re-paths).
+                if (atStand && wallRecoveries < 2) {
+                    wallRecoveries++;
+                    this.bot.log(
+                        `cook: useOn no progress at stand — soft re-click (try ${wallRecoveries})`
+                    );
+                    await Execution.delayTicks(2);
+                    continue;
+                }
+                if (atStand && wallRecoveries < 4) {
                     wallRecoveries++;
                     this.bot.log(
                         `cook: useOn produced no cook progress at stand — re-path (try ${wallRecoveries})`

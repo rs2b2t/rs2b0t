@@ -35,7 +35,8 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
         if (here && dest.distanceTo(here) <= radius) {
             return true;
         }
-        await Traversal.walkTo(dest, { radius, timeoutMs: 15000, log: m => log?.(`  ${m}`) });
+        // 90s per segment — 15s was too short for long bank legs (Rimmington→Fally).
+        await Traversal.walkTo(dest, { radius, timeoutMs: 90_000, log: m => log?.(`  ${m}`) });
         const after = Game.tile();
         if (after && dest.distanceTo(after) <= radius) {
             return true;
@@ -64,7 +65,7 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
         const cur = Game.tile();
         if (cur && dt.distanceTo(cur) > 1) {
             log?.(`walking to ${door.name} at ${dt.x},${dt.z} to open it`);
-            await Traversal.walkTo(dt, { radius: 1, timeoutMs: 15000, log: m => log?.(`  ${m}`) });
+            await Traversal.walkTo(dt, { radius: 1, timeoutMs: 45_000, log: m => log?.(`  ${m}`) });
         }
 
         const shut = Locs.query().where(l => l.tile().x === dt.x && l.tile().z === dt.z && isOpenableObstacle(l.name, l.actions(), obstacles)).nearest();
