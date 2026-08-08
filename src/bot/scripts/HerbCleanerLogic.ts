@@ -30,8 +30,8 @@ export const HERBS: readonly HerbDef[] = [
     { key: 'irit', name: 'Irit leaf', id: 259, unidId: 209, level: 40 },
     { key: 'avantoe', name: 'Avantoe', id: 261, unidId: 211, level: 48 },
     { key: 'kwuarm', name: 'Kwuarm', id: 263, unidId: 213, level: 54 },
-    { key: 'snapdragon', name: 'Snapdragon', id: 3000, unidId: 3051, level: 60 },
-    { key: 'cadantine', name: 'Cadantine', id: 265, unidId: 215, level: 66 },
+    { key: 'snapdragon', name: 'Snapdragon', id: 3000, unidId: 3051, level: 59 },
+    { key: 'cadantine', name: 'Cadantine', id: 265, unidId: 215, level: 65 },
     { key: 'lantadyme', name: 'Lantadyme', id: 2481, unidId: 2485, level: 67 },
     { key: 'dwarf weed', name: 'Dwarf weed', id: 267, unidId: 217, level: 70 },
     { key: 'torstol', name: 'Torstol', id: 269, unidId: 219, level: 75 },
@@ -69,5 +69,5 @@ export function eligibleHerbs(herbloreLevel: number, selected: readonly string[]
         .sort((a, b) => a.level - b.level);
 }
 
-/** Chat refusal from the engine when Herblore is below the herb's level. */
-export const CANNOT_IDENTIFY = /you cannot identify this herb/i;
+/** Chat refusal from the engine when Herblore is below the herb's level, or the world is non-members. */
+export const CANNOT_IDENTIFY = /you cannot identify this herb|need to be on a members['’]? world/i;

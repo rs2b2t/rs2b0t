@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **50 scripts** across 20 categories. They double as worked
+The client ships **51 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -20,7 +20,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
-- [Herblore](#herblore) — 3
+- [Herblore](#herblore) — 4
 - [Magic](#magic) — 1
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
@@ -526,6 +526,16 @@ Tags: `fletching`, `darts`, `members`, `fast`
 | `tier` | string | `"Bronze"` | Dart tier — one of: Bronze, Iron, Steel, Mithril, Adamant, Rune |
 
 ## Herblore
+
+### HerbCleaner
+
+Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) every one your Herblore level allows — lowest-level first — deposits the cleaned herbs, and repeats. Leave all herbs unchecked to clean everything you can; check specific herbs to restrict the run to a subset. Each bank cycle deposits everything from your pack, so start with nothing valuable carried
+
+Tags: `herblore`, `identify`, `clean`, `banking`, `members`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `herbs` | string[] | `[]` | Herbs to clean — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 
 ### HerbloreSecondaries
 

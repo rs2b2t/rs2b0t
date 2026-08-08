@@ -19,13 +19,15 @@ import {
     type HerbDef
 } from './HerbCleanerLogic.js';
 
+const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
+
 export const HERB_CLEANER_SETTINGS: SettingsSchema = {
     herbs: {
         type: 'string[]',
         default: [],
         options: HERB_OPTIONS,
         label: 'Herbs to clean',
-        help: 'pick the herbs to identify; leave all unchecked to clean every herb your Herblore level allows'
+        help: 'check specific herbs to restrict the run; leave all unchecked to clean every herb your Herblore level allows — the bot deposits everything from your pack into the bank each cycle, including non-herbs, so start with nothing valuable carried'
     }
 };
 
@@ -33,6 +35,8 @@ export default class HerbCleaner extends TaskBot {
     override loopDelay = 100;
 
     private eligible: HerbDef[] = [];
+    private deniedKeys = new Set<string>();
+    private plannedLevel = -1;
     private cleaned = 0;
     private trips = 0;
     private status = 'starting';
@@ -41,16 +45,15 @@ export default class HerbCleaner extends TaskBot {
     private refused = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
-
-        this.eligible = eligibleHerbs(
-            Skills.level('herblore'),
-            this.settings.list('herbs', [])
+        await Execution.delayUntil(
+            () => Game.ingame() && Game.tile() !== null && Skills.level('herblore') > 0,
+            8000
         );
+        this.refreshEligible();
 
         if (this.eligible.length === 0) {
-            this.log(`No herbs to clean — Herblore ${Skills.level('herblore')} with no selectable herb above or at level. Stopping.`);
-            ScriptRunner.stop();
+            this.log(`No herbs to clean — Herblore ${Skills.level('herblore')} with no selectable herb at or above level. Stopping.`);
+            ScriptRunner.stop('no selectable herbs at the player\'s Herblore level');
             return;
         }
 
@@ -70,6 +73,23 @@ export default class HerbCleaner extends TaskBot {
         );
     }
 
+    override async loop(): Promise<number | void> {
+        // The eligible set follows a level-up mid-run instead of being frozen at start.
+        const level = Skills.level('herblore');
+        if (level !== this.plannedLevel) {
+            this.plannedLevel = level;
+            this.refreshEligible();
+        }
+        return super.loop();
+    }
+
+    private refreshEligible(): void {
+        this.eligible = eligibleHerbs(
+            Skills.level('herblore'),
+            this.settings.list('herbs', [])
+        ).filter(h => !this.deniedKeys.has(h.key));
+    }
+
     setStatus(s: string): void {
         this.status = s;
     }
@@ -87,11 +107,12 @@ export default class HerbCleaner extends TaskBot {
         return Inventory.items().filter(i => this.eligible.some(h => h.id === i.id)).length;
     }
     deny(herb: HerbDef): void {
-        this.eligible = this.eligible.filter(h => h !== herb);
-        this.log(`Herblore ${herb.level} required for ${herb.name} — skipping it.`);
+        this.deniedKeys.add(herb.key);
+        this.eligible = this.eligible.filter(h => h.key !== herb.key);
+        this.log(`Herb ${herb.level} required for ${herb.name} — skipping it`);
         if (this.eligible.length === 0) {
             this.log('no cleanable herbs remain — stopping');
-            ScriptRunner.stop();
+            ScriptRunner.stop('no cleanable herbs remain');
         }
     }
     takeRefusal(): boolean {
@@ -153,21 +174,21 @@ class Clean implements Task {
         // gated by a single settle on the clean-id count / herblore xp.
         const beforeClean = this.bot.cleanCount();
         const beforeXp = Skills.xp('herblore');
-        let clicked = 0;
+        const clickedHerbs: HerbDef[] = [];
         for (const herb of this.bot.targets()) {
             for (const item of Inventory.items()) {
                 if (item.id === herb.unidId) {
                     await item.interact(IDENTIFY_OP);
-                    clicked++;
+                    clickedHerbs.push(herb);
                 }
             }
         }
 
-        if (clicked === 0) {
+        if (clickedHerbs.length === 0) {
             return;
         }
 
-        this.bot.setStatus(`identifying ${clicked} grimy herb${clicked === 1 ? '' : 's'}`);
+        this.bot.setStatus(`identifying ${clickedHerbs.length} grimy herb${clickedHerbs.length === 1 ? '' : 's'}`);
         const ok = await Execution.delayUntil(
             () => this.bot.cleanCount() > beforeClean || Skills.xp('herblore') > beforeXp,
             3000
@@ -175,11 +196,11 @@ class Clean implements Task {
         if (ok) {
             this.bot.countClean(this.bot.cleanCount() - beforeClean);
         } else if (this.bot.takeRefusal()) {
-            // Level gate normally prevents this — drop anything unexpected.
-            for (const herb of [...this.bot.targets()]) {
-                if (herb.level > Skills.level('herblore')) {
-                    this.bot.deny(herb);
-                }
+            // The engine refused every click we just made (level drift in the table,
+            // or the world is non-members) — drop the herbs we actually clicked, not a
+            // re-derived level guess.
+            for (const herb of clickedHerbs) {
+                this.bot.deny(herb);
             }
         }
         await Execution.delayTicks(1);
@@ -202,7 +223,7 @@ class BankTrip implements Task {
         }
 
         this.bot.setStatus(`banking at ${bank.name}`);
-        const near = here !== null && bank.tile.distanceTo(here) <= 4;
+        const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
         if (!near) {
             if (!(await Traversal.walkResilient(bank.tile, {
                 radius: 3,
@@ -215,13 +236,21 @@ class BankTrip implements Task {
             }
         }
 
-        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))
-            && !(await Bank.openNearest('Bank booth', 'Bank', m => this.bot.log(`  ${m}`)))) {
+        const access = bank.access ?? BOOTH;
+        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
+            return;
+        }
+        // isOpen() only means the modal exists — the item list fills a beat later, and
+        // after a deposit. Until it loads, every count/withdraw reads 0 and looks like an
+        // empty bank, which would stop a healthy run (see the sibling banking scripts).
+        if (!(await Execution.delayUntil(() => Bank.loaded(), 4000))) {
+            this.bot.log('bank contents never loaded — retrying');
             return;
         }
 
         const beforeDeposit = Inventory.used();
+        // Everything goes into the bank — see HERB_CLEANER_SETTINGS.herbs help.
         await Bank.depositAllMatching(() => true);
         const deposited = beforeDeposit - Inventory.used();
 
@@ -240,14 +269,17 @@ class BankTrip implements Task {
             }
         }
 
-        await Bank.close();
+        if (!(await Bank.close())) {
+            this.bot.log('bank would not close — retrying the trip');
+            return;
+        }
 
         if (withdrew > 0 || deposited > 0) {
             this.bot.countTrip();
             this.bot.log(`banked @ ${bank.name}: gave ${deposited} items, took ${withdrew} grimy herbs`);
         } else {
             this.bot.log('nothing to deposit and the bank has no eligible herbs — stopping');
-            ScriptRunner.stop();
+            ScriptRunner.stop('bank has no eligible herbs');
         }
     }
 }

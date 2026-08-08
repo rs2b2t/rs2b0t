@@ -493,9 +493,9 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'HerbCleaner',
     description:
-        'Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) every one your Herblore level allows — lowest-level first — deposits the cleaned herbs, and repeats. Uncheck herbs to clean only a subset; leave all unchecked to clean everything you can',
+        'Banks at the nearest bank, withdraws unidentified herbs, cleans (identifies) every one your Herblore level allows — lowest-level first — deposits the cleaned herbs, and repeats. Leave all herbs unchecked to clean everything you can; check specific herbs to restrict the run to a subset. Each bank cycle deposits everything from your pack, so start with nothing valuable carried',
     category: 'Herblore',
-    tags: ['herblore', 'identify', 'clean', 'banking'],
+    tags: ['herblore', 'identify', 'clean', 'banking', 'members'],
     settingsSchema: HERB_CLEANER_SETTINGS,
     create: () => new HerbCleaner()
 });
