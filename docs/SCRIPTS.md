@@ -482,6 +482,8 @@ Tags: `gathering`, `drop`, `banking`, `cooking`
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
+| `purgePackOnStart` | boolean | `true` | Bank junk on start |
+| `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## Fletching
 
@@ -594,6 +596,8 @@ Tags: `gathering`, `banking`, `drop`
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
+| `purgePackOnStart` | boolean | `true` | Bank junk on start |
+| `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## Money making
 
@@ -852,6 +856,8 @@ Tags: `gathering`, `banking`, `drop`, `firemaking`
 | `mulePartner` | string | `""` | Mule partner name(s) |
 | `toolAcquire` | string | `"Off"` | Acquire tools — one of: Off, Buy / repair |
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
+| `purgePackOnStart` | boolean | `true` | Bank junk on start |
+| `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## See also
 
