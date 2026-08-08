@@ -241,32 +241,61 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — retrying');
             return;
         }
-        // isOpen() only means the modal exists — the item list fills a beat later, and
-        // after a deposit. Until it loads, every count/withdraw reads 0 and looks like an
-        // empty bank, which would stop a healthy run (see the sibling banking scripts).
-        if (!(await Execution.delayUntil(() => Bank.loaded(), 4000))) {
-            this.bot.log('bank contents never loaded — retrying');
-            return;
-        }
 
-        const beforeDeposit = Inventory.used();
-        // Everything goes into the bank — see HERB_CLEANER_SETTINGS.herbs help.
-        await Bank.depositAllMatching(() => true);
-        const deposited = beforeDeposit - Inventory.used();
+        this.bot.log('bank opened, starting withdraw/deposit cycle');
 
+        // Fast banking: open bank → immediately start trying to withdraw.
+        // Don't wait for Bank.loaded(). If bank isn't ready, withdrawXById
+        // returns false (bankBackpackReady fails) and we retry next tick.
+        // Only deposit if pack is full and we can't withdraw.
         let withdrew = 0;
-        for (const herb of this.bot.targets()) {
+        let deposited = 0;
+        const startMs = Date.now();
+        const maxBankTime = 15_000;
+
+        while (Date.now() - startMs < maxBankTime) {
+            // Try to withdraw herbs first — this fails quickly if bank not loaded.
+            let gotAny = false;
+            for (const herb of this.bot.targets()) {
+                if (Inventory.isFull()) {
+                    this.bot.log(`pack full, need to deposit before withdrawing ${herb.name}`);
+                    break;
+                }
+                const want = Inventory.free();
+                if (want <= 0) break;
+                const before = Inventory.countById(herb.unidId);
+                this.bot.log(`trying to withdraw ${want} ${herb.name} (have ${before})`);
+                if (await Bank.withdrawXById(herb.unidId, want)) {
+                    const got = Inventory.countById(herb.unidId) - before;
+                    withdrew += got;
+                    gotAny = true;
+                    this.bot.log(`withdrew ${got} ${herb.name}`);
+                } else {
+                    this.bot.log(`withdraw ${herb.name} failed (bank not ready or empty)`);
+                }
+            }
+
+            // If we got herbs, we're done banking — no need to deposit clean herbs
+            // this cycle (they'll be deposited next trip if needed).
+            if (gotAny) {
+                this.bot.log('got herbs, closing bank');
+                break;
+            }
+
+            // No herbs withdrawn. Maybe pack is full (no room to withdraw)?
+            // Deposit to make space, then retry.
             if (Inventory.isFull()) {
-                break;
+                this.bot.log('pack full, depositing everything');
+                const beforeDeposit = Inventory.used();
+                await Bank.depositAllMatching(() => true);
+                deposited = Math.max(deposited, beforeDeposit - Inventory.used());
+                this.bot.log(`deposited ${deposited} items`);
+                // After depositing, loop will retry withdraw immediately.
+                continue;
             }
-            const want = Inventory.free();
-            if (want <= 0) {
-                break;
-            }
-            const before = Inventory.countById(herb.unidId);
-            if (await Bank.withdrawXById(herb.unidId, want)) {
-                withdrew += Inventory.countById(herb.unidId) - before;
-            }
+
+            // Bank might still be loading. Wait a tick and retry.
+            await Execution.delayTicks(1);
         }
 
         if (!(await Bank.close())) {
