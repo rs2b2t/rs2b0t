@@ -56,11 +56,16 @@ class RandomEventGuardianImpl {
         if (tick === this.lastKickTick) {
             return;
         }
+        // Stamp before detecting, not after: events only arrive on server packets,
+        // so one scan per tick is as responsive as one per frame. Stamping after a
+        // successful detect left the guard permanently disarmed for the common case
+        // (nothing found), and detectRaw() -- two NPC passes plus a full loc scan --
+        // then ran on every frame of all 27 bots.
+        this.lastKickTick = tick;
         const event = RandomEvents.detect();
         if (!event) {
             return;
         }
-        this.lastKickTick = tick;
         this.inFlight = true;
         const ctx = ScriptRunner.ctx;
         const watchdogHold = `random event: ${event.kind}: ${event.name}`;
