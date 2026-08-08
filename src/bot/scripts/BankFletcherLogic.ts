@@ -7,6 +7,16 @@ export function logNameMatches(itemName: string | null | undefined, material: st
     return itemName.trim().toLowerCase() === material.trim().toLowerCase();
 }
 
+/** Find a content item by its exact display name. */
+export function exactName<T extends { name: string | null }>(items: readonly T[], query: string): T | null {
+    const wanted = query.trim().toLowerCase();
+    if (!wanted) {
+        return null;
+    }
+    const normalized = (item: T): string | null => item.name?.trim().toLowerCase() ?? null;
+    return items.find(item => normalized(item) === wanted) ?? null;
+}
+
 export function productNeedsDifferentLog(product: string, material: string): boolean {
     return product.trim().toLowerCase() === 'arrow shafts' && material.trim().toLowerCase() !== 'logs';
 }

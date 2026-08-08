@@ -10,10 +10,11 @@ import { Skills } from '../api/hud/Skills.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
-import { attachPlanFor, LOG_OPTIONS, logNameMatches, matchProduct, productNeedsDifferentLog } from './BankFletcherLogic.js';
+import { attachPlanFor, exactName, LOG_OPTIONS, logNameMatches, matchProduct, productNeedsDifferentLog } from './BankFletcherLogic.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
+const FLETCHING_KNIFE = 'Knife';
 const BOOTH = { op: 'Use-quickly' };
 const PRODUCT_OPTIONS = [
     'Arrow shafts', 'Short bow', 'Long bow',
@@ -23,7 +24,6 @@ const PRODUCT_OPTIONS = [
 export const SETTINGS: SettingsSchema = {
     material: { type: 'string', default: 'Logs', options: LOG_OPTIONS, label: 'Log type', help: 'the exact log to withdraw and fletch — only regular Logs make Arrow shafts; every log makes a bow. Ignored for the arrow attach products' },
     product: { type: 'string', default: 'Arrow shafts', options: PRODUCT_OPTIONS, label: 'Fletch product', help: 'which product to make — knife products open the make-menu; arrow products attach item-on-item (material/knife ignored)' },
-    knife: { type: 'string', default: 'Knife', label: 'Fletching tool (contains)', help: 'the tool used on the logs; lives in the bank between cycles; ignored for the arrow attach products' },
     bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'stand adjacent to a bank booth — start the bot here' },
     bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
     leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Booth search radius (tiles)' }
@@ -40,7 +40,6 @@ export default class BankFletcher extends TaskBot {
 
     private material = 'Logs';
     private product = 'Arrow shafts';
-    private knife = 'Knife';
     private bankStand = DEFAULT_BANK_STAND;
     private boothName = 'Bank booth';
     private leash = 6;
@@ -50,7 +49,6 @@ export default class BankFletcher extends TaskBot {
 
         this.material = this.settings.str('material', 'Logs');
         this.product = this.settings.str('product', 'Arrow shafts');
-        this.knife = this.settings.str('knife', 'Knife');
         this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
         this.leash = this.settings.num('leashRadius', 6);
@@ -111,7 +109,7 @@ export default class BankFletcher extends TaskBot {
     countTrip(): void { this.trips++; }
     productName(): string { return this.product; }
     materialName(): string { return this.material; }
-    knifeName(): string { return this.knife; }
+    knifeName(): string { return FLETCHING_KNIFE; }
     bankTile(): Tile { return this.bankStand; }
     boothLocName(): string { return this.boothName; }
     leashRadius(): number { return this.leash; }
@@ -145,8 +143,7 @@ export default class BankFletcher extends TaskBot {
     }
 
     knifeItem(): InvItem | null {
-        const pat = this.knife.toLowerCase();
-        return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
+        return exactName(Inventory.items(), FLETCHING_KNIFE);
     }
 }
 
@@ -267,11 +264,11 @@ class BankTrip implements Task {
             }
             const logName = logItem.name;
 
-            const knifePat = this.bot.knifeName().toLowerCase();
-            const knifeBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(knifePat));
+            const knifeBank = exactName(Bank.items(), this.bot.knifeName());
             if (!knifeBank || knifeBank.name === null) {
-                this.bot.log(`no '${this.bot.knifeName()}' in the bank — idling`);
-                await Execution.delayTicks(5);
+                this.bot.setStatus('error: no Knife');
+                this.bot.log('No Knife in bank or inventory.');
+                ScriptRunner.stop();
                 return;
             }
             const knifeName = knifeBank.name;

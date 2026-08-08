@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { attachPlanFor, LOG_OPTIONS, logNameMatches, matchProduct, productKeywords, productNeedsDifferentLog } from '#/bot/scripts/BankFletcherLogic.js';
+import { attachPlanFor, exactName, LOG_OPTIONS, logNameMatches, matchProduct, productKeywords, productNeedsDifferentLog } from '#/bot/scripts/BankFletcherLogic.js';
 
 describe('logNameMatches — exact, never substring (the maple-shortbow bug)', () => {
     test('"Logs" matches only regular Logs, NOT Maple/Yew/Oak logs', () => {
@@ -34,6 +34,22 @@ describe('productNeedsDifferentLog — arrow shafts need regular Logs', () => {
     test('bows fletch from any log', () => {
         expect(productNeedsDifferentLog('Short bow', 'Maple logs')).toBe(false);
         expect(productNeedsDifferentLog('Long bow', 'Yew logs')).toBe(false);
+    });
+});
+
+describe('exactName', () => {
+    const knives = [{ name: 'Bronze knife' }, { name: 'Knife' }];
+
+    test('uses Knife rather than an earlier Bronze knife for the default setting', () => {
+        expect(exactName(knives, 'Knife')).toEqual({ name: 'Knife' });
+    });
+
+    test('does not substitute Bronze knife when Knife is absent', () => {
+        expect(exactName([{ name: 'Bronze knife' }], 'Knife')).toBeNull();
+    });
+
+    test('is case- and whitespace-insensitive for the required Knife name', () => {
+        expect(exactName(knives, ' knife ')).toEqual({ name: 'Knife' });
     });
 });
 

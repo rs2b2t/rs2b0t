@@ -510,7 +510,6 @@ Tags: `fletching`, `banking`, `afk`
 |---|---|---|---|
 | `material` | string | `"Logs"` | Log type — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
 | `product` | string | `"Arrow shafts"` | Fletch product — one of: Arrow shafts, Short bow, Long bow, Headless arrows, Bronze arrows, Iron arrows, Steel arrows, Mithril arrows, Adamant arrows, Rune arrows |
-| `knife` | string | `"Knife"` | Fletching tool (contains) |
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `leashRadius` | number (2–20) | `6` | Booth search radius (tiles) |
