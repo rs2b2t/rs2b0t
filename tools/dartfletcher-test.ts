@@ -37,7 +37,7 @@ type Abi = {
         runner: {
             state: string;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
 };
@@ -161,7 +161,7 @@ try {
     const xpPerDart = xp / Math.max(1, darts);
 
     await page.screenshot({ path: 'out/dart-fletcher-e2e.png', fullPage: true });
-    await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.stop('harness stop'));
 
     console.log(
         `RESULT ${darts} Rune darts / ${ticks} ticks / ${(elapsedMs / 1000).toFixed(1)}s; ` +

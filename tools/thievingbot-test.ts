@@ -62,7 +62,7 @@ type Abi = {
             state: string;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
         registry: { get(name: string): unknown };
         client: { ingame: boolean; sceneState: number };

@@ -14,15 +14,39 @@
  *   PATH_PAINT_SCENE_EXPAND=0|1   scene-BFS pack expand (default 1)
  *   PATH_PAINT_CLIENT_SEG=0|1     cyan client-walk segment after click (default 1)
  * Cases: path-paint (samples PathPublish), paint-compare (asserts clientSegment appears)
+ * Shared harness: tools/lib/navLiveHarness.ts
  */
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
+import { launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
+import {
+    applyNavPaintSettings,
+    cheb,
+    energyRefillAtFromEnv,
+    maybeRefillEnergy,
+    pathPaintFlagsFromEnv,
+    readRunEnergy,
+    seedItem,
+    seedRunes,
+    teleArrive
+} from './lib/navLiveHarness.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 120) * 1000;
-/** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
-const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
+/** Client run energy is 0–100; refill via `~energy` when at or below this. */
+const ENERGY_REFILL_AT = energyRefillAtFromEnv();
+/** Stress paint cases always enable paint; scene/client toggles from env. */
+const PATH_PAINT_SCENE_EXPAND =
+    process.env.PATH_PAINT_SCENE_EXPAND !== '0' && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
+const PATH_PAINT_CLIENT_SEG =
+    process.env.PATH_PAINT_CLIENT_SEG !== '0' && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
+const PAINT = {
+    ...pathPaintFlagsFromEnv({ teleports: true, cameraFollow: true }),
+    paint: true,
+    sceneExpand: PATH_PAINT_SCENE_EXPAND,
+    clientSeg: PATH_PAINT_CLIENT_SEG,
+    cameraFollow: true
+};
 // No issue number → out/nav-stress-proof.json (not issue0-…).
 const proof = createHarnessProof({ slug: 'nav-stress' });
 
@@ -73,7 +97,7 @@ type Abi = {
         registerScript(manifest: { name: string; create(): unknown }): unknown;
     };
     rs2b0t: {
-        runner: { state: string; start(meta: unknown): void; stop(): void };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void };
     };
     __navStress?: {
         walkOk: boolean;
@@ -91,140 +115,9 @@ type Abi = {
     };
 };
 
-/** Explore paint flags — default on for dual red/cyan paint (PATH_PAINT_*=0 to disable). */
-const PATH_PAINT_SCENE_EXPAND =
-    process.env.PATH_PAINT_SCENE_EXPAND !== '0' && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
-const PATH_PAINT_CLIENT_SEG =
-    process.env.PATH_PAINT_CLIENT_SEG !== '0' && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 10): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(400);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele to ${spot.x},${spot.z} failed`);
-}
-
-/**
- * Prefer engine `give` (no p_finduid). Content `~item` silently no-ops mid-walk.
- * See docs/TESTING.md and nav-script-routes-live jewellery seed fix.
- */
-async function seedItem(
-    page: Page,
-    debugOrCmd: string,
-    match: string | RegExp,
-    tries = 8
-): Promise<void> {
-    const re = typeof match === 'string' ? new RegExp(match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : match;
-    // Accept legacy "~item foo 1" or bare debug name "foo".
-    const m = /^(?:~item\s+)?(\S+)(?:\s+(\d+))?$/.exec(debugOrCmd.trim());
-    const debugName = m?.[1] ?? debugOrCmd;
-    const qty = m?.[2] ?? '1';
-    const cmds = [`give ${debugName} ${qty}`, `~item ${debugName} ${qty}`];
-    for (let i = 0; i < tries; i++) {
-        await cheatQuiet(page, cmds[i % cmds.length]!);
-        for (let poll = 0; poll < 4; poll++) {
-            await page.waitForTimeout(200);
-            const ok = await page.evaluate(pattern => {
-                const items = (globalThis as never as Abi).__rs2b0t.Inventory.items();
-                const rx = new RegExp(pattern, 'i');
-                return items.some(it => it.name !== null && rx.test(it.name));
-            }, re.source);
-            if (ok) {
-                return;
-            }
-        }
-    }
-    const inv = await page.evaluate(() =>
-        (globalThis as never as Abi).__rs2b0t.Inventory.items()
-            .filter(i => i.name)
-            .map((i: { count?: number; name: string | null }) => `${i.count ?? 1}x ${i.name}`)
-            .join(', ')
-    );
-    throw new Error(`could not seed ${debugName} via give/~item (want ~ ${re}); inv=${inv || 'empty'}`);
-}
-
-async function seedRunes(page: Page): Promise<void> {
-    for (const [spec, name] of [
-        ['lawrune 80', 'Law rune'],
-        ['airrune 200', 'Air rune'],
-        ['firerune 80', 'Fire rune'],
-        ['waterrune 80', 'Water rune'],
-        ['earthrune 80', 'Earth rune']
-    ] as const) {
-        await seedItem(page, spec, name);
-    }
-}
-
 async function clearInv(page: Page): Promise<void> {
     await cheatQuiet(page, '~clearinv');
     await page.waitForTimeout(400);
-}
-
-/**
- * Full energy + run on via content debugproc `[debugproc,energy]` → `~energy`.
- * Plain `energy` is not an engine cheat and is silently ignored.
- */
-async function restoreRunEnergy(page: Page): Promise<boolean> {
-    if (!(await cheatQuiet(page, '~energy', 400))) {
-        return false;
-    }
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await page.waitForTimeout(250);
-        const e = await readRunEnergy(page);
-        if (e >= 90) {
-            return true;
-        }
-        await cheatQuiet(page, '~energy', 300);
-    }
-    return (await readRunEnergy(page)) >= 90;
-}
-
-/** Client energy is 0–100 (packet g1 = server runenergy/100). Prefer Game. */
-async function readRunEnergy(page: Page): Promise<number> {
-    return page.evaluate(() => {
-        const g = globalThis as never as Abi;
-        try {
-            return g.__rs2b0t.Game.energy();
-        } catch {
-            return g.__rs2b0t.reader.energy();
-        }
-    });
-}
-
-/**
- * While a walk is in flight, poll energy each second and top up at ENERGY_REFILL_AT.
- * `~energy` only — no LC/engine changes. Retries if p_finduid fails mid-walk.
- */
-async function maybeRefillEnergy(page: Page, lowAt = ENERGY_REFILL_AT): Promise<boolean> {
-    const e = await readRunEnergy(page);
-    if (e > lowAt) {
-        return false;
-    }
-    const ok = await restoreRunEnergy(page);
-    const after = await readRunEnergy(page);
-    console.log(
-        `    energy refill: ${e}% → ${after}% (threshold ≤${lowAt}${ok ? '' : ', ~energy may have been busy/p_finduid'})`
-    );
-    return ok;
 }
 
 type WalkOpts = {
@@ -297,7 +190,7 @@ async function runWalk(page: Page, opts: WalkOpts): Promise<NonNullable<Abi['__n
                         if (sampler) {
                             clearInterval(sampler);
                         }
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }
@@ -418,23 +311,7 @@ try {
     await mainlandAccount(page, base, user);
 
     // Global toggles for path paint + explore dual-paint + engine preference.
-    const paintSettings = {
-        showNavPath: true,
-        navCameraFollow: true,
-        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
-        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
-        navPathColorClient: '#00D4FF'
-    };
-    await setSettings(page, 'Global', paintSettings);
-    await page.evaluate(flags => {
-        const g = globalThis as never as Abi;
-        g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', 'true');
-        
-        g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-        g.__rs2b0t.SettingsStore.save('Global', 'navPathSceneExpand', flags.scene ? 'true' : 'false');
-        g.__rs2b0t.SettingsStore.save('Global', 'navPathClientSegment', flags.client ? 'true' : 'false');
-        g.__rs2b0t.SettingsStore.save('Global', 'navPathColorClient', '#00D4FF');
-    }, { scene: PATH_PAINT_SCENE_EXPAND, client: PATH_PAINT_CLIENT_SEG });
+    await applyNavPaintSettings(page, PAINT);
 
     console.log(`${stamp()} seed runes + maxme`);
     await seedRunes(page);
@@ -445,7 +322,7 @@ try {
         `${stamp()} showNavPath=${paintOn} sceneExpand=${PATH_PAINT_SCENE_EXPAND} clientSeg=${PATH_PAINT_CLIENT_SEG}`
     );
     if (!paintOn) {
-        console.warn('WARNING: showNavPath still false after setSettings — paint case may soft-fail');
+        console.warn('WARNING: showNavPath still false after applyNavPaintSettings — paint case may soft-fail');
     }
 
     // ── path-paint: pure walk, sample PathPublish mid-route ─────────────

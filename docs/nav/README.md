@@ -26,6 +26,9 @@ Full write-up: [docs/NAV.md § Nav teleports](../NAV.md#nav-teleports).
 ### Live operator tools (not CI)
 
 - `tools/nav-script-routes-live.ts` — multi-OD script routes (set `LIMIT=10+`)
+- `tools/nav-script-travel-live.ts` — **every** clue / gathering / quest travel OD
+  (SEGMENT=`clues`|`quests`|`gathering-all`|`fishing`|`mining`|`woodcutting`|`firemaking`|`cooking`|`all`;
+  corpus: `tools/nav/script-travel-corpus.ts`)
 - `tools/nav-stress-live.ts` — teles, jewellery, paint cases
 - `tools/nav-tele-smoke.ts` — Lumbridge → Varrock spell tele
 - `tools/nav-path-paint-live.ts` — pack vs client segment paint

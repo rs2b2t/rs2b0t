@@ -70,7 +70,7 @@ type Abi = {
         runner: {
             state: string;
             start(m: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
         };
     };
@@ -114,7 +114,7 @@ async function seedBankedMazeKey(page: Page): Promise<void> {
                         await api.Bank.close();
                     }
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -181,7 +181,7 @@ async function caseBankedKey(page: Page, user: string): Promise<{ ok: boolean; d
         if (/withdraw.*maze key|maze key.*withdraw|melzar's maze|walk out of melzar/i.test(joined) && oziachHits <= 3) {
             await page.evaluate(() => {
                 try {
-                    (globalThis as never as Abi).rs2b0t.runner.stop();
+                    (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
                 } catch {
                     /* ignore */
                 }
@@ -191,7 +191,7 @@ async function caseBankedKey(page: Page, user: string): Promise<{ ok: boolean; d
         if (oziachHits >= 6) {
             await page.evaluate(() => {
                 try {
-                    (globalThis as never as Abi).rs2b0t.runner.stop();
+                    (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
                 } catch {
                     /* ignore */
                 }
@@ -205,7 +205,7 @@ async function caseBankedKey(page: Page, user: string): Promise<{ ok: boolean; d
     }
     await page.evaluate(() => {
         try {
-            (globalThis as never as Abi).rs2b0t.runner.stop();
+            (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
         } catch {
             /* ignore */
         }
@@ -270,7 +270,7 @@ async function caseOracleExit(page: Page): Promise<{ ok: boolean; detail: string
                     log(String(e));
                     g.__379 = { ok: false, detail: String(e), logs };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -316,7 +316,7 @@ async function caseOracleExit(page: Page): Promise<{ ok: boolean; detail: string
                             logs: g.__379?.logs ?? []
                         };
                     } finally {
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }

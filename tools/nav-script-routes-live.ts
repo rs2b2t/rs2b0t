@@ -29,10 +29,26 @@
  *   real OD paths may Rub; not a fake end-of-run allowlist test. JEWELLERY_ONLY=1 restores
  *   synthetic JEWEL-* isolation legs if needed.
  * Pack-only: bun --preload ./test/setup-dom.ts tools/nav/script-route-corpus.js --hardest=25
+ * Shared harness: tools/lib/navLiveHarness.ts
  */
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
+import { launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
+import {
+    applyNavPaintSettings,
+    cheb,
+    energyRefillAtFromEnv,
+    ensureJewellery,
+    pathPaintFlagsFromEnv,
+    restoreRunEnergy,
+    runNavWalk,
+    seedItem,
+    seedTeleKit,
+    setTickRate,
+    teleArrive,
+    useTeleportsFromEnv,
+    type NavTile
+} from './lib/navLiveHarness.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, relog } from './tutorial/harness.js';
 import type { ScriptRoute } from './nav/script-route-corpus.js';
 import {
@@ -57,20 +73,14 @@ const USE_TRANSPORT_HEAVY =
  */
 const USE_SHIP_352 = process.env.SHIP_352 === '1' || process.env.SHIP_352 === 'true';
 /** Optional: USE_TELEPORTS=0 to disable spell/jewellery tele inject for a pure-walk smoke. */
-const USE_TELEPORTS = process.env.USE_TELEPORTS !== '0' && process.env.USE_TELEPORTS !== 'false';
-/** PATH_PAINT=0 disables showNavPath; default on for operator visual checks. */
-const PATH_PAINT = process.env.PATH_PAINT !== '0' && process.env.PATH_PAINT !== 'false';
-const PATH_PAINT_SCENE_EXPAND =
-    PATH_PAINT
-    && process.env.PATH_PAINT_SCENE_EXPAND !== '0'
-    && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
-const PATH_PAINT_CLIENT_SEG =
-    PATH_PAINT
-    && process.env.PATH_PAINT_CLIENT_SEG !== '0'
-    && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
+const USE_TELEPORTS = useTeleportsFromEnv();
+const PAINT = pathPaintFlagsFromEnv({ teleports: USE_TELEPORTS, cameraFollow: true });
+const PATH_PAINT = PAINT.paint;
+const PATH_PAINT_SCENE_EXPAND = PAINT.sceneExpand;
+const PATH_PAINT_CLIENT_SEG = PAINT.clientSeg;
 const ARRIVAL = 8;
-/** Client run energy is 0–100; refill via `energy` cheat when at or below this. */
-const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
+/** Client run energy is 0–100; refill via `~energy` when at or below this. */
+const ENERGY_REFILL_AT = energyRefillAtFromEnv();
 const HARDEST_JSON = path.join(process.cwd(), 'tools/nav/script-routes.hardest.json');
 const TRANSPORT_HEAVY_JSON = path.join(process.cwd(), 'tools/nav/transport-heavy.routes.json');
 
@@ -80,127 +90,7 @@ const { base } = parseArgs(process.argv.slice(2), {
 
 const proof = createHarnessProof({ issue: 0, slug: 'nav-script-routes' });
 
-type Tile = { x: number; z: number; level: number };
-
-type Abi = {
-    __rs2b0t: {
-        reader: {
-            worldTile(): Tile | null;
-            chat(n: number): { text: string }[];
-            /** Client run energy 0–100 (packet g1). */
-            energy(): number;
-        };
-        Game: { energy(): number };
-        LoopingBot: new () => { loop(): unknown; log(m: string): void };
-        Inventory: { items(): { name: string | null }[] };
-        Traversal: {
-            walkTo(
-                dest: Tile,
-                opts: {
-                    radius?: number;
-                    timeoutMs?: number;
-                    log?: (m: string) => void;
-                    useTeleportCatalog?: boolean;
-                    policy?: { useTeleports?: boolean; distanceBeforeTeleport?: number; allowTeleportIds?: string[] };
-                }
-            ): Promise<boolean>;
-        };
-        SettingsStore: { save(name: string, key: string, raw: string): void };
-        registerScript(m: { name: string; create(): unknown }): unknown;
-    };
-    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(): void } };
-    __navScriptRoute?: { walkOk: boolean; tile: Tile | null; logs: string[] };
-};
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 12): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(300);
-                return;
-            }
-            await page.waitForTimeout(150);
-        }
-    }
-    throw new Error(`tele to ${spot.x},${spot.z} failed`);
-}
-
-async function setTickRate(page: Page, ms: number): Promise<void> {
-    if (!(await cheatQuiet(page, `speed ${ms}`))) {
-        throw new Error(`could not send speed ${ms}`);
-    }
-    const confirmed = await page.evaluate(expected => {
-        const lines = (globalThis as never as Abi).__rs2b0t.reader.chat(16);
-        return lines.some(l => l.text.includes(`World speed was changed to ${expected}ms`));
-    }, ms);
-    if (!confirmed) {
-        throw new Error(`server did not confirm speed ${ms}ms`);
-    }
-    console.log(`  tick rate → ${ms}ms`);
-}
-
-/**
- * Full energy + run on via content debugproc `[debugproc,energy]`.
- * Command must be `~energy` (NODE_DEBUGPROC_CHAR default `~`); plain `energy`
- * is not an engine cheat and is silently ignored.
- */
-async function restoreRunEnergy(page: Page): Promise<boolean> {
-    if (!(await cheatQuiet(page, '~energy', 400))) {
-        return false;
-    }
-    // Allow UPDATE_RUNENERGY to land (and a retry if p_finduid was busy).
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await page.waitForTimeout(250);
-        const e = await readRunEnergy(page);
-        if (e >= 90) {
-            return true;
-        }
-        await cheatQuiet(page, '~energy', 300);
-    }
-    return (await readRunEnergy(page)) >= 90;
-}
-
-/** Client energy is 0–100 (packet g1 = server runenergy/100). Prefer Game. */
-async function readRunEnergy(page: Page): Promise<number> {
-    return page.evaluate(() => {
-        const g = globalThis as never as Abi;
-        try {
-            return g.__rs2b0t.Game.energy();
-        } catch {
-            return g.__rs2b0t.reader.energy();
-        }
-    });
-}
-
-/**
- * While a walk is in flight, poll energy each second and top up at ENERGY_REFILL_AT.
- * `~energy` only — no LC/engine changes. Retries if p_finduid fails mid-walk.
- */
-async function maybeRefillEnergy(page: Page, lowAt = ENERGY_REFILL_AT): Promise<boolean> {
-    const e = await readRunEnergy(page);
-    if (e > lowAt) {
-        return false;
-    }
-    const ok = await restoreRunEnergy(page);
-    const after = await readRunEnergy(page);
-    console.log(
-        `    energy refill: ${e}% → ${after}% (threshold ≤${lowAt}${ok ? '' : ', ~energy may have been busy/p_finduid'})`
-    );
-    return ok;
-}
+type Tile = NavTile;
 
 /**
  * Prefer mainland + f2p-ish walk hubs + bank/camp commutes — the paths scripts
@@ -387,214 +277,16 @@ type WalkOpts = {
 
 async function runWalk(page: Page, opts: WalkOpts): Promise<{ walkOk: boolean; tile: Tile | null; logs: string[] }> {
     const teleOn = opts.useTeleports !== false && USE_TELEPORTS;
-    await page.evaluate(
-        ({ destination, budgetMs, allowTeleportIds, distanceBeforeTeleport, teleOn }) => {
-            const g = globalThis as never as Abi;
-            const logs: string[] = [];
-            g.__navScriptRoute = undefined;
-            class Probe extends g.__rs2b0t.LoopingBot {
-                override async loop(): Promise<void> {
-                    try {
-                        const walkOk = await g.__rs2b0t.Traversal.walkTo(destination, {
-                            radius: 4,
-                            timeoutMs: budgetMs,
-                            useTeleportCatalog: teleOn,
-                            policy: {
-                                useTeleports: teleOn,
-                                distanceBeforeTeleport: distanceBeforeTeleport ?? 0,
-                                ...(allowTeleportIds ? { allowTeleportIds } : {})
-                            },
-                            log: m => {
-                                logs.push(m);
-                                this.log(m);
-                            }
-                        });
-                        g.__navScriptRoute = { walkOk, tile: g.__rs2b0t.reader.worldTile(), logs };
-                    } catch (e) {
-                        g.__navScriptRoute = {
-                            walkOk: false,
-                            tile: g.__rs2b0t.reader.worldTile(),
-                            logs: [...logs, String(e)]
-                        };
-                    } finally {
-                        g.rs2b0t.runner.stop();
-                    }
-                }
-            }
-            g.rs2b0t.runner.start(
-                g.__rs2b0t.registerScript({ name: `NavScriptRoute${Date.now()}`, create: () => new Probe() })
-            );
-        },
-        {
-            destination: opts.dest,
-            budgetMs: opts.budget,
-            allowTeleportIds: opts.allowTeleportIds,
-            distanceBeforeTeleport: opts.distanceBeforeTeleport,
-            teleOn
-        }
-    );
-
-    const budget = opts.budget;
-    for (let i = 0; i < Math.ceil(budget / 1000) + 40; i++) {
-        const done = await page.evaluate(() => {
-            const g = globalThis as never as Abi;
-            return (
-                g.__navScriptRoute !== undefined
-                && (g.rs2b0t.runner.state === 'stopped' || g.rs2b0t.runner.state === 'idle')
-            );
-        });
-        if (done) {
-            break;
-        }
-        // Periodic energy watch (~1s): refill at low run so long pure-walk legs keep running.
-        await maybeRefillEnergy(page).catch(() => undefined);
-        if (i > 0 && i % 20 === 0) {
-            const mid = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            const e = await readRunEnergy(page).catch(() => -1);
-            console.log(`    …walking ${mid ? `${mid.x},${mid.z}` : '?'} energy=${e}%`);
-        }
-        await page.waitForTimeout(1000);
-    }
-    const result = await page.evaluate(() => (globalThis as never as Abi).__navScriptRoute);
-    if (!result) {
-        throw new Error('walk produced no result');
-    }
-    return result;
-}
-
-/** Explore path paint (red pack / cyan client segment). */
-async function applyNavPaintSettings(page: Page): Promise<void> {
-    await setSettings(page, 'Global', {
-        showNavPath: PATH_PAINT,
-        navCameraFollow: true,
-        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
-        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
-        navPathColorClient: '#00D4FF'
+    return runNavWalk(page, {
+        dest: opts.dest,
+        budgetMs: opts.budget,
+        useTeleports: teleOn,
+        allowTeleportIds: opts.allowTeleportIds,
+        distanceBeforeTeleport: opts.distanceBeforeTeleport,
+        energyRefillAt: ENERGY_REFILL_AT,
+        resultKey: '__navScriptRoute',
+        scriptNamePrefix: 'NavScriptRoute'
     });
-    await page.evaluate(
-        flags => {
-            const g = globalThis as never as Abi;
-            g.__rs2b0t.SettingsStore.save('Global', 'showNavPath', flags.paint ? 'true' : 'false');
-            g.__rs2b0t.SettingsStore.save('Global', 'navCameraFollow', 'true');
-            g.__rs2b0t.SettingsStore.save(
-                'Global',
-                'navPathSceneExpand',
-                flags.sceneExpand ? 'true' : 'false'
-            );
-            g.__rs2b0t.SettingsStore.save(
-                'Global',
-                'navPathClientSegment',
-                flags.clientSeg ? 'true' : 'false'
-            );
-            g.__rs2b0t.SettingsStore.save('Global', 'navPathColorClient', '#00D4FF');
-        },
-        {
-            paint: PATH_PAINT,
-            sceneExpand: PATH_PAINT_SCENE_EXPAND,
-            clientSeg: PATH_PAINT_CLIENT_SEG
-        }
-    );
-}
-
-/**
- * Seed inventory via engine `give` (no p_finduid busy-guard).
- * Content `~item` silently no-ops while the player is mid-script after long walks —
- * that regressed jewellery legs after transport-heavy (docs/TESTING.md).
- */
-async function seedItem(
-    page: Page,
-    debugName: string,
-    displayMatch: RegExp,
-    qty = 1,
-    tries = 8
-): Promise<void> {
-    const cmds = [`give ${debugName} ${qty}`, `~item ${debugName} ${qty}`];
-    for (let i = 0; i < tries; i++) {
-        const cmd = cmds[i % cmds.length]!;
-        await cheatQuiet(page, cmd);
-        // Engine invAdd applies next tick; poll a few times.
-        for (let poll = 0; poll < 4; poll++) {
-            await page.waitForTimeout(200);
-            const ok = await page.evaluate(pattern => {
-                const rx = new RegExp(pattern, 'i');
-                return (globalThis as never as Abi).__rs2b0t.Inventory.items().some(
-                    it => it.name !== null && rx.test(it.name)
-                );
-            }, displayMatch.source);
-            if (ok) {
-                return;
-            }
-        }
-    }
-    const inv = await page.evaluate(() =>
-        (globalThis as never as Abi).__rs2b0t.Inventory.items()
-            .filter(i => i.name)
-            .map((i: { count?: number; name: string | null }) => `${i.count ?? 1}× ${i.name}`)
-            .join(', ')
-    );
-    throw new Error(
-        `could not seed ${debugName} via give/~item (want ~ ${displayMatch}); inv=${inv || 'empty'}`
-    );
-}
-
-/** Charged jewellery for real OD Rub (plan scans inventory names). */
-const JEWELLERY_SEEDS: readonly { debug: string; match: RegExp; label: string }[] = [
-    { debug: 'ring_of_dueling_8', match: /Ring of dueling\(/, label: 'duel ring' },
-    { debug: 'amulet_of_glory_4', match: /Amulet of glory\(/, label: 'glory' },
-    { debug: 'necklace_of_minigames_8', match: /Games necklace\(/, label: 'games neck' }
-];
-
-const RUNE_SEEDS: readonly { debug: string; match: RegExp; qty: number }[] = [
-    { debug: 'lawrune', match: /Law rune/i, qty: 80 },
-    { debug: 'airrune', match: /Air rune/i, qty: 200 },
-    { debug: 'firerune', match: /Fire rune/i, qty: 80 },
-    { debug: 'waterrune', match: /Water rune/i, qty: 80 },
-    { debug: 'earthrune', match: /Earth rune/i, qty: 80 }
-];
-
-async function invHas(page: Page, match: RegExp): Promise<boolean> {
-    return page.evaluate(pattern => {
-        const rx = new RegExp(pattern, 'i');
-        return (globalThis as never as Abi).__rs2b0t.Inventory.items().some(
-            it => it.name !== null && rx.test(it.name)
-        );
-    }, match.source);
-}
-
-/** Seed runes + charged jewellery once at harness start (engine `give`). */
-async function seedTeleKit(page: Page, stamp: () => string): Promise<void> {
-    for (const r of RUNE_SEEDS) {
-        if (!(await invHas(page, r.match))) {
-            await seedItem(page, r.debug, r.match, r.qty);
-        }
-    }
-    if (USE_TELEPORTS) {
-        for (const j of JEWELLERY_SEEDS) {
-            if (!(await invHas(page, j.match))) {
-                await seedItem(page, j.debug, j.match, 1);
-            }
-        }
-        console.log(
-            `${stamp()} seeded tele kit: runes + ${JEWELLERY_SEEDS.map(j => j.label).join(', ')} (real OD may Rub)`
-        );
-    } else {
-        console.log(`${stamp()} seeded tele runes only (USE_TELEPORTS=0)`);
-    }
-}
-
-/**
- * Top up jewellery if charges were spent (or lost) so later HARD legs still see Rub options.
- * Does not clear inventory — keeps coins/quest junk from earlier legs.
- */
-async function ensureJewellery(page: Page): Promise<void> {
-    if (!USE_TELEPORTS) {
-        return;
-    }
-    for (const j of JEWELLERY_SEEDS) {
-        if (!(await invHas(page, j.match))) {
-            await seedItem(page, j.debug, j.match, 1);
-        }
-    }
 }
 
 /**
@@ -734,7 +426,7 @@ try {
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
 
-    await applyNavPaintSettings(page);
+    await applyNavPaintSettings(page, PAINT);
 
     await maxmeAndClearDialogs(page);
 
@@ -754,7 +446,7 @@ try {
         console.log(`${stamp()} relog so quest journal colours match setvar`);
         await relog(page, user);
         // Re-apply settings after relog
-        await applyNavPaintSettings(page);
+        await applyNavPaintSettings(page, PAINT);
         await maxmeAndClearDialogs(page);
 
         type QStatus = 'notStarted' | 'inProgress' | 'complete' | 'unknown';
@@ -787,7 +479,7 @@ try {
         console.log(`${stamp()} seeded coins for fares (ship/cart/toll)`);
     }
     console.log(`${stamp()} set tick ${TICK_MS}ms + full run energy`);
-    await setTickRate(page, TICK_MS);
+    await setTickRate(page, TICK_MS, { strict: true });
     await restoreRunEnergy(page);
 
     let jewelleryHops = 0;

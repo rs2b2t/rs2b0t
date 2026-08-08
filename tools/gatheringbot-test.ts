@@ -113,7 +113,7 @@ type Abi = {
             state: string;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
         registry: { get(name: string): unknown };
         reader: {
@@ -217,7 +217,7 @@ function logHas(s: Snap, re: RegExp): boolean {
 async function stopScript(page: Page): Promise<void> {
     await page.evaluate(() => {
         try {
-            (globalThis as never as Abi).rs2b0t.runner.stop();
+            (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
         } catch {
             /* ignore */
         }

@@ -155,7 +155,7 @@ type Abi = {
     rs2b0t: {
         runner: {
             state: string;
-            stop(): void;
+            stop(reason: string): void;
             ctx?: { log?: { time: number; level: string; msg: string }[] } | null;
         };
         registry: { get(n: string): unknown };
@@ -220,7 +220,7 @@ async function stopScript(page: Page): Promise<void> {
     try {
         await page.evaluate(() => {
             try {
-                (globalThis as never as Abi).rs2b0t.runner.stop();
+                (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
             } catch {
                 /* ignore */
             }

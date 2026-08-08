@@ -60,7 +60,7 @@ interface BrowserGlobal {
             bot: { stepDesc?: string } | null;
             ctx: { log: LogLine[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __romeoBankSeed?: { ok: boolean; banked: number; error?: string };
@@ -228,7 +228,7 @@ async function waitForComplete(page: Page, username: string, started: number): P
 }
 
 async function stopRunner(page: Page): Promise<void> {
-    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop('harness stop'));
     await page.waitForFunction(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10_000 });
 }
 
@@ -249,7 +249,7 @@ async function seedMessageInBank(page: Page): Promise<void> {
                 } catch (error) {
                     g.__romeoBankSeed = { ok: false, banked: api.Bank.countById(messageId), error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

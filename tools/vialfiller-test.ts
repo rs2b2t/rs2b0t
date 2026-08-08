@@ -15,7 +15,7 @@ interface Api {
         Inventory: { count(name: string): number };
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
-    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null }; registry: { get(name: string): unknown } };
+    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null }; registry: { get(name: string): unknown } };
 }
 
 const browser = await launchBrowser({ swiftshader: true });
@@ -74,7 +74,7 @@ try {
     const size = await page.evaluate(() => (globalThis as never as { __rs2b0t: { reader: { inventorySize(): number } } }).__rs2b0t.reader.inventorySize());
     console.log(`reader.inventorySize() = ${size}`);
 
-    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
     if (done < SEED_VIALS) fail(`only ${done}/${SEED_VIALS} vials were filled`);
     console.log(`PASS — VialFiller filled all ${done} vials at the Falador fountain`);
 } finally {

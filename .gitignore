@@ -11,6 +11,7 @@ dist/
 *.lcnav.gz
 tools/nav/script-routes.generated.json
 tools/nav/script-routes.hardest.json
+tools/nav/script-travel.generated.json
 
 # secrets & local env — never commit (keys live in ~/code/claude-workspace/.env)
 .env
@@ -56,3 +57,4 @@ src/3rdparty/SCC1_Florestan.sf2
 
 # Personal agent rules (always-read locally; never upstream)
 CLAUDE.local.md
+

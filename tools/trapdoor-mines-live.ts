@@ -29,7 +29,7 @@ type Abi = {
         };
         registerScript(m: { name: string; create(): unknown }): unknown;
     };
-    rs2b0t: { runner: { state: string; stop(): void; start(meta: unknown): void } };
+    rs2b0t: { runner: { state: string; stop(reason: string): void; start(meta: unknown): void } };
     __trap?: { walkOk: boolean; tile: Tile | null; logs: string[] };
 };
 
@@ -103,7 +103,7 @@ async function walkTo(page: Page, dest: Tile, timeoutMs: number): Promise<{ walk
                             logs: [...logs, String(e)]
                         };
                     } finally {
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }

@@ -363,7 +363,7 @@ async function seedBank(page: Page, coins: number, extras: string): Promise<void
     const res = await page.evaluate(() => (globalThis as never as { __dsSeed?: SeedResult }).__dsSeed ?? null);
     await page.evaluate(() => {
         try {
-            (globalThis as never as { rs2b0t: { runner: { stop(): void } } }).rs2b0t.runner.stop();
+            (globalThis as never as { rs2b0t: { runner: { stop(reason: string): void } } }).rs2b0t.runner.stop('harness stop');
         } catch {
             // the seed bot may already have stopped itself
         }

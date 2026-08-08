@@ -59,7 +59,7 @@ interface Api {
     };
     rs2b0t: {
         client: { ingame: boolean };
-        runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
         registry: { get(name: string): unknown };
         reader: { chat(count: number): { text: string }[] };
     };
@@ -562,7 +562,7 @@ for (const [name, tag, run] of ([
     } finally {
         await page.evaluate(() => {
             try {
-                (globalThis as never as Api).rs2b0t.runner.stop();
+                (globalThis as never as Api).rs2b0t.runner.stop('harness stop');
             } catch {
                 // already stopped
             }

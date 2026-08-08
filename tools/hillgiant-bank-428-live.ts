@@ -19,7 +19,7 @@ interface Api {
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
     rs2b0t: {
-        runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
         registry: { get(name: string): unknown };
     };
 }

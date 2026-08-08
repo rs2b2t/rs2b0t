@@ -33,7 +33,7 @@ type Abi = {
             merlinMordredBriefed(): boolean;
         };
     };
-    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(): void } };
+    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(reason: string): void } };
     __353?: {
         done: boolean;
         ok: boolean;
@@ -134,7 +134,7 @@ try {
                             attackAfterBrief,
                             detail: `briefed after ${this.ticks} fortress calls; postBriefTicks=${this.postBriefTicks}`
                         };
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                         return;
                     }
                     if (this.ticks > 80) {
@@ -146,7 +146,7 @@ try {
                             attackAfterBrief,
                             detail: `timeout ticks=${this.ticks} briefed=${sawBrief}`
                         };
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 } catch (e) {
                     log(String(e));
@@ -158,7 +158,7 @@ try {
                         attackAfterBrief,
                         detail: String(e)
                     };
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

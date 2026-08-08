@@ -80,7 +80,7 @@ interface Api {
         Equipment: { contains(name: string): boolean };
     };
     rs2b0t: {
-        runner: { start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
         registry: { get(name: string): unknown };
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
@@ -108,7 +108,7 @@ try {
         console.log(`\n=== ${c.setting} ===`);
         await page.evaluate(() => {
             try {
-                (globalThis as never as Api).rs2b0t.runner.stop();
+                (globalThis as never as Api).rs2b0t.runner.stop('harness stop');
             } catch {
                 /* */
             }
@@ -193,7 +193,7 @@ try {
         console.log(`  tile ${JSON.stringify(tile)} ${c.product}: ${before} → ${after}`);
         for (const l of log) console.log(`  ${l}`);
 
-        await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+        await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
         if (!ok) fail(`${c.setting}: never obtained ${c.product}`);
         console.log(`PASS — ${c.setting} (+${after - before})`);
     }

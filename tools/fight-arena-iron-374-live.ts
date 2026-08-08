@@ -17,7 +17,7 @@ interface Api {
         };
     };
     rs2b0t: {
-        runner: { state: string; start(m: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { state: string; start(m: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
         registry: { get(name: string): unknown };
     };
 }

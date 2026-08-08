@@ -50,7 +50,7 @@ interface Api {
     rs2b0t: {
         client: Record<string, never>;
         registry: { get(n: string): unknown };
-        runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
     };
 }
 
@@ -143,7 +143,7 @@ async function startBot(page: Page): Promise<void> {
 }
 
 async function stopBot(page: Page): Promise<void> {
-    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
     await page.waitForTimeout(1500);
 }
 

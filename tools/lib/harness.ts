@@ -109,9 +109,12 @@ export async function cheatQuiet(page: Page, command: string, waitMs = 700): Pro
     return sent;
 }
 
-// logout:try_logout — an if_button whose handler calls p_logout. Tab-rooted, so
-// the engine accepts it without the logout tab being the open one.
-const LOGOUT_BUTTON = 2458;
+/**
+ * logout:try_logout — if_button com 2458 → ClientProt.IF_BUTTON (opcode 9) → p_logout.
+ * Tab-rooted, so the engine accepts it without the logout tab open.
+ * Prefer this over socket drop / client.logout() for fast relog (~seconds, not 60s).
+ */
+export const LOGOUT_BUTTON_COM = 2458;
 
 /**
  * Log out through the game's own button rather than by dropping the socket.
@@ -122,7 +125,7 @@ export async function logout(page: Page, waitMs = 8000): Promise<boolean> {
     const sent = await page.evaluate(com => {
         const a = (globalThis as never as { rs2b0t?: { actions?: { ifButton?(c: number): boolean } } }).rs2b0t?.actions;
         return a?.ifButton?.(com) ?? false;
-    }, LOGOUT_BUTTON);
+    }, LOGOUT_BUTTON_COM);
     if (!sent) {
         return false;
     }

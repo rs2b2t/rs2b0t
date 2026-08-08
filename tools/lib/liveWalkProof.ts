@@ -36,7 +36,7 @@ type Abi = {
             ): Promise<boolean>;
         };
     };
-    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(): void } };
+    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(reason: string): void } };
     __liveWalk?: {
         done: boolean;
         ok: boolean;
@@ -101,7 +101,7 @@ export async function runLiveWalkProof(
                         };
                     } finally {
                         try {
-                            g.rs2b0t.runner.stop();
+                            g.rs2b0t.runner.stop('harness stop');
                         } catch {
                             /* ignore */
                         }
@@ -143,7 +143,7 @@ export async function runLiveWalkProof(
             if (snap.runner !== 'idle' && snap.runner !== 'stopped') {
                 await page.evaluate(() => {
                     try {
-                        (globalThis as never as Abi).rs2b0t.runner.stop();
+                        (globalThis as never as Abi).rs2b0t.runner.stop('harness stop');
                     } catch {
                         /* ignore */
                     }
@@ -179,7 +179,7 @@ export async function runLiveWalkProof(
     const last = await page.evaluate(() => {
         const g = globalThis as never as Abi;
         try {
-            g.rs2b0t.runner.stop();
+            g.rs2b0t.runner.stop('harness stop');
         } catch {
             /* ignore */
         }

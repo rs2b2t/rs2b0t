@@ -45,7 +45,7 @@ interface BrowserApi {
         runner: {
             state: string;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __waterfallDialogPrep?: { cleared: boolean; error?: string };
@@ -167,7 +167,7 @@ try {
                 } catch (error) {
                     global.__waterfallDialogPrep = { cleared: false, error: String(error) };
                 } finally {
-                    global.rs2b0t.runner.stop();
+                    global.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -232,7 +232,7 @@ try {
                 } catch (error) {
                     global.__waterfallExitResult = { ok: false, tile: api.reader.worldTile(), logs, error: String(error) };
                 } finally {
-                    global.rs2b0t.runner.stop();
+                    global.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

@@ -121,7 +121,7 @@ interface BrowserGlobal {
             state: string;
             bot: { stepDesc?: string } | null;
             ctx: { log: LogLine[] } | null;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __demonSlayerAttackProbe?: AttackProbe;
@@ -487,7 +487,7 @@ function verifyProof(initial: Snapshot, final: Snapshot, observations: RunObserv
 }
 
 async function stopRunner(page: Page): Promise<void> {
-    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop('harness stop'));
     await page.waitForFunction(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10_000 });
 }
 

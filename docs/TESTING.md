@@ -132,7 +132,16 @@ rs2b0t.actions
 | `login(page, user, pass)` | log in and wait for `ingame && sceneState === 2` |
 | `type(page, text)` | click the canvas, then type — cheats go through this |
 | `bringUpOffIsland(page, opts)` | new account, teleported off tutorial island |
+| `logout(page)` | clean **IF_BUTTON 2458** logout (`ClientProt.IF_BUTTON=9` / `logout:try_logout`) |
 | `startFromLibrary(page, category, script)` | pick and start a script from the panel |
+
+**Mainland bootstrap (fast path).** Prefer `mainlandAccount` in
+[`tools/tutorial/harness.ts`](../tools/tutorial/harness.ts): tele off-island →
+`setvar tutorial 1000` → **IF_BUTTON logout** (com 2458) → login again so side
+icons unlock. Clean logout ends the session promptly (often ~9s total after boot)
+instead of an unclean disconnect that holds “already logged in” for ~60s. Packet
+path: `actions.ifButton(2458)` → `ClientProt.IF_BUTTON` (opcode 9) with component
+id → content `logout:try_logout` → `p_logout`.
 
 **Map picker (basemap + walkable dots).** Product docs:
 [Map tile picker](MAP-PICKER.md). Bake once with `bun run gen:basemap` (writes

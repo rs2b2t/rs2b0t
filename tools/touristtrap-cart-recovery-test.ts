@@ -101,7 +101,7 @@ interface BrowserGlobal {
             bot: { stepDesc?: string } | null;
             ctx: { log: LogLine[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __touristCartEquip?: { ok: boolean; error?: string };
@@ -195,7 +195,7 @@ async function equipSlaveOutfit(page: Page): Promise<void> {
                 } catch (error) {
                     g.__touristCartEquip = { ok: false, error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -276,7 +276,7 @@ async function installFailureSeeder(page: Page): Promise<void> {
                         error: String(error)
                     };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

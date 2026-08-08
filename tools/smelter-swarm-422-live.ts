@@ -26,7 +26,7 @@ interface Api {
         runner: {
             state: string;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
             ctx: { log: { msg: string }[] } | null;
         };
         registry: { get(name: string): unknown };
@@ -134,7 +134,7 @@ try {
         fail('no smelt progress after Swarm cleared');
     }
     console.log('PASS #422 — RandomEvents handled Swarm; SmelterBot resumed smelting');
-    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
 } catch (e) {
     console.error(e);
     process.exit(1);

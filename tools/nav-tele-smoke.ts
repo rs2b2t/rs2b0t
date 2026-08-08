@@ -9,11 +9,13 @@
  * then: HEADED=1 bun tools/nav-tele-smoke.ts
  *
  * Optional: BASE=… BUDGET_S=90
+ * Shared harness: tools/lib/navLiveHarness.ts
  */
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
-import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
+import { cheb, seedItem, teleArrive } from './lib/navLiveHarness.js';
+import { mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const START = { x: 3222, z: 3218, level: 0 }; // Lumbridge
 const DEST = { x: 3213, z: 3424, level: 0 }; // Varrock tele landing
@@ -48,55 +50,16 @@ type Abi = {
         registerScript(manifest: { name: string; create(): unknown }): unknown;
     };
     rs2b0t: {
-        runner: { state: string; start(meta: unknown): void; stop(): void };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void };
     };
     __navV2Tele?: { walkOk: boolean; tile: Tile | null; logs: string[] };
 };
 
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 10): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(500);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele to ${spot.x},${spot.z} failed`);
-}
-
 async function seedRunes(page: Page): Promise<void> {
-    const held = (n: string) =>
-        page.evaluate(x => (globalThis as never as Abi).__rs2b0t.Inventory.count(x), n);
-    for (const [cmd, item] of [
-        ['~item lawrune 50', 'Law rune'],
-        ['~item airrune 150', 'Air rune'],
-        ['~item firerune 50', 'Fire rune']
-    ] as const) {
-        let ok = false;
-        for (let i = 0; i < 6 && !ok; i++) {
-            await cheatQuiet(page, cmd);
-            await page.waitForTimeout(300);
-            ok = (await held(item)) > 0;
-        }
-        if (!ok) {
-            throw new Error(`could not seed ${item}`);
-        }
-    }
+    // Varrock tele: law + air + fire (smaller qty than full kit is fine for one hop)
+    await seedItem(page, 'lawrune', /Law rune/i, 50);
+    await seedItem(page, 'airrune', /Air rune/i, 150);
+    await seedItem(page, 'firerune', /Fire rune/i, 50);
 }
 
 console.log(`nav-tele-smoke base=${base} budget≈${Math.round(BUDGET_MS / 1000)}s`);
@@ -180,7 +143,7 @@ try {
                             logs: [...logs, String(e)]
                         };
                     } finally {
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }

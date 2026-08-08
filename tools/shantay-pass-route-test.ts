@@ -78,7 +78,7 @@ interface BrowserGlobal {
         runner: {
             state: string;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __issue182CrossingTile?: Tile;
@@ -291,7 +291,7 @@ async function runTraversal(page: Page, expectUnreachable: boolean): Promise<Rou
                         };
                     } finally {
                         globalThis.clearInterval(watcher);
-                        global.rs2b0t.runner.stop();
+                        global.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }

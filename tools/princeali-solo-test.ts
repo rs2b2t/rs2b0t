@@ -256,7 +256,7 @@ async function seedBank(page: Page, coins: number): Promise<void> {
     // The seed bot keeps looping, and the runner refuses to start a second script.
     await page.evaluate(() => {
         try {
-            (globalThis as never as { rs2b0t: { runner: { stop(): void } } }).rs2b0t.runner.stop();
+            (globalThis as never as { rs2b0t: { runner: { stop(reason: string): void } } }).rs2b0t.runner.stop('harness stop');
         } catch {
             /* already stopped */
         }

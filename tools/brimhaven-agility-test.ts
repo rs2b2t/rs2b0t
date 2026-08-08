@@ -22,7 +22,7 @@ interface Api {
         };
     };
     rs2b0t: {
-        runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null };
+        runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null };
         registry: { get(name: string): unknown };
         reader: {
             worldTile(): { x: number; z: number; level: number } | null;
@@ -155,7 +155,7 @@ try {
     });
     console.log(`PASS 3/3 — tagged (tickets=${final.tickets}) at ${JSON.stringify(final.tile)}`);
 
-    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
     console.log('PASS — BrimhavenAgility entered the arena, paid, and tagged a pillar');
 } finally {
     await browser.close();

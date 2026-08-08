@@ -24,16 +24,47 @@ const BOOT_MS = Number(process.env.BOOT_MS) || 180_000;
 const LOGIN_MS = Number(process.env.LOGIN_MS) || 120_000;
 /**
  * Minimum wait after logout before the first login probe.
- * Engine-TS keeps the old session alive after unclean logout (login response 5:
- * "already logged in / try again in 60 secs"). Live probes usually succeed ~30–40s
- * after logout — a long fixed sleep + 12s failed attempt was burning ~44s every run.
+ *
+ * Prefer clean **IF_BUTTON logout** (com 2458 / `logout:try_logout` → `p_logout`,
+ * ClientProt.IF_BUTTON = 9). That ends the session promptly so probes succeed in
+ * ~a few seconds (total mainlandAccount often ~9s). Unclean `client.logout()` /
+ * socket drop leaves login response 5 ("try again in 60 secs") for much longer.
+ *
+ * Override RELOG_COOLDOWN_MS if a local engine still needs a longer hold.
  */
-const RELOG_COOLDOWN_MS = Number(process.env.RELOG_COOLDOWN_MS) || 20_000;
+const RELOG_COOLDOWN_MS = Number(process.env.RELOG_COOLDOWN_MS) || 2_000;
 /** How long each login probe waits for ingame+scene before retrying. */
-const RELOG_PROBE_MS = Number(process.env.RELOG_PROBE_MS) || 5_000;
+const RELOG_PROBE_MS = Number(process.env.RELOG_PROBE_MS) || 4_000;
 /** Gap between failed probes (engine still holding the old session). */
-const RELOG_RETRY_MS = Number(process.env.RELOG_RETRY_MS) || 3_000;
-const RELOG_BUDGET_MS = Number(process.env.RELOG_BUDGET_MS) || 120_000;
+const RELOG_RETRY_MS = Number(process.env.RELOG_RETRY_MS) || 2_000;
+const RELOG_BUDGET_MS = Number(process.env.RELOG_BUDGET_MS) || 90_000;
+
+/**
+ * Logout via the real logout UI button (if_button 2458 → ClientProt.IF_BUTTON).
+ * Falls back to client.logout() if the button packet cannot be sent.
+ * @see tools/lib/harness.ts logout() — same component id
+ */
+async function cleanLogout(page: Page): Promise<'ifbutton' | 'client'> {
+    // logout:try_logout — tab-rooted; engine accepts without the logout tab open.
+    const LOGOUT_BUTTON = 2458;
+    const via = await page.evaluate(com => {
+        const g = globalThis as never as {
+            rs2b0t?: {
+                actions?: { ifButton?(c: number): boolean };
+                client?: { logout?(): Promise<void> };
+            };
+        };
+        if (g.rs2b0t?.actions?.ifButton?.(com)) {
+            return 'ifbutton' as const;
+        }
+        void g.rs2b0t?.client?.logout?.();
+        return 'client' as const;
+    }, LOGOUT_BUTTON);
+    await page.waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, {
+        timeout: 20_000
+    });
+    return via;
+}
 
 async function waitClientBooted(page: Page, label: string): Promise<void> {
     // loopCycle only advances once title-screen assets are loaded and the game
@@ -91,14 +122,12 @@ export async function bootAndLogin(page: Page, base: string, user: string): Prom
 
 export async function relog(page: Page, user: string): Promise<void> {
     console.log(
-        `  relog: logout → probe from ${Math.round(RELOG_COOLDOWN_MS / 1000)}s ` +
+        `  relog: clean logout → probe from ${Math.round(RELOG_COOLDOWN_MS / 1000)}s ` +
             `(${Math.round(RELOG_PROBE_MS / 1000)}s probes / ${Math.round(RELOG_RETRY_MS / 1000)}s gap; ` +
             'RELOG_COOLDOWN_MS / RELOG_PROBE_MS / RELOG_RETRY_MS / RELOG_BUDGET_MS override)'
     );
-    await page.evaluate(() => (globalThis as never as Rs2b0t).rs2b0t.client.logout());
-    await page.waitForFunction(() => !(globalThis as never as Rs2b0t).rs2b0t.client.ingame, undefined, {
-        timeout: 20_000
-    });
+    const how = await cleanLogout(page);
+    console.log(`  relog: logged out via ${how === 'ifbutton' ? 'IF_BUTTON 2458 (ClientProt.IF_BUTTON=9)' : 'client.logout() fallback'}`);
 
     const attemptLogin = () =>
         page.evaluate(u => {
@@ -222,9 +251,17 @@ const OFF_ISLAND_TELE = '0,50,50,20,20';
  * island the chat/tutorial UI often eats keystrokes, which looks like the bot
  * is "doing tutorial wrong" and stalls for a long time before setvar sticks.
  *
- * Relog is still required: tutorial UI lock / side icons refresh at login.
+ * Flow:
+ *   1. boot + login (fresh account)
+ *   2. tele off-island + setvar tutorial 1000
+ *   3. clean **IF_BUTTON logout** (com 2458) so the session ends immediately
+ *   4. login again — side icons / tutorial UI lock refresh from the login payload
+ *
+ * Clean logout avoids the unclean-disconnect 60s "already logged in" hold; with
+ * RELOG_COOLDOWN_MS≈2s the whole mainland hop is typically ~9s after boot.
  */
 export async function mainlandAccount(page: Page, base: string, user: string): Promise<void> {
+    const t0 = Date.now();
     console.log(`mainlandAccount: boot+login as '${user}'`);
     await bootAndLogin(page, base, user);
 
@@ -250,13 +287,14 @@ export async function mainlandAccount(page: Page, base: string, user: string): P
     }
 
     // Side icons / tutorial UI lock only refresh from the login payload.
+    // Use clean IF_BUTTON logout (not socket drop) — see relog / cleanLogout.
     await relog(page, user);
 
     const unlocked = await page.evaluate(() => ((globalThis as never as Rs2b0t).rs2b0t.client.sideIcon[3] ?? -1) !== -1);
     if (!unlocked) {
         throw new Error('mainlandAccount: sidebar still tutorial-locked after tele + setvar tutorial=1000 + relog');
     }
-    console.log('mainlandAccount: tabs unlocked');
+    console.log(`mainlandAccount: tabs unlocked (${Math.round((Date.now() - t0) / 1000)}s since start)`);
 }
 
 export async function startScript(page: Page, name: string): Promise<void> {
@@ -525,7 +563,7 @@ async function verifyBankCounts(
 
     try {
         await page.evaluate(() => {
-            (globalThis as never as { rs2b0t: { runner: { stop(): void } } }).rs2b0t.runner.stop();
+            (globalThis as never as { rs2b0t: { runner: { stop(reason: string): void } } }).rs2b0t.runner.stop('harness stop');
         });
     } catch {
         /* already stopped */

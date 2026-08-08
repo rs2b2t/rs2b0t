@@ -79,7 +79,7 @@ type BrowserGlobal = {
             state: string;
             ctx: { log: LogLine[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __issue148Prep?: { opened: boolean; bank: number; inv: number; names: string[]; error?: string };
@@ -129,7 +129,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
 async function stop(page: Page): Promise<void> {
     await page.evaluate(() => {
         const runner = (globalThis as never as BrowserGlobal).rs2b0t.runner;
-        if (runner.state !== 'stopped') runner.stop();
+        if (runner.state !== 'stopped') runner.stop('harness stop');
     });
     await page.waitForFunction(
         () => (globalThis as never as BrowserGlobal).rs2b0t.runner.state === 'stopped',
@@ -149,7 +149,7 @@ async function showSideTab(page: Page, tab: number): Promise<void> {
                 } catch (error) {
                     g.__issue148Tab = { tab: wantedTab, opened: false, error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -249,7 +249,7 @@ async function makeExactBank(page: Page): Promise<void> {
                         error: String(error)
                     };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

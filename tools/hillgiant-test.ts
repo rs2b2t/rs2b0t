@@ -16,7 +16,7 @@ interface Api {
         Skills: { level(name: string): number };
         reader: { worldTile(): { x: number; z: number; level: number } | null };
     };
-    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(): void; ctx: { log: { msg: string }[] } | null }; registry: { get(name: string): unknown } };
+    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(reason: string): void; ctx: { log: { msg: string }[] } | null }; registry: { get(name: string): unknown } };
 }
 
 const tile = () => page.evaluate(() => (globalThis as never as Api).__rs2b0t.reader.worldTile());
@@ -105,7 +105,7 @@ try {
     console.log('screenshot: docs/e2e/issue-311-hillgiant.png');
     if (!fought) fail('never engaged a Giant in the pit');
 
-    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
     console.log('PASS 3/3 — HillGiant wielded its weapon, fetched the key, entered via the hut, and fought in the pit');
 } finally {
     await browser.close();

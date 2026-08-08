@@ -47,7 +47,7 @@ type Abi = {
         nearestBank?: (t: Tile) => { name: string; tile: Tile } | null;
         BankLocations?: { nearest(t: Tile): { name: string; tile: Tile } | null };
     };
-    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(): void } };
+    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(reason: string): void } };
     __371?: {
         bankHadPass: boolean;
         afterBankPassCount: number;
@@ -150,7 +150,7 @@ async function bankPrepShantayPass(page: Page): Promise<{ afterCount: number; lo
                         logs
                     };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -220,7 +220,7 @@ async function walkDesert(page: Page): Promise<{ ok: boolean; tile: Tile | null;
                             logs
                         };
                     } finally {
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }
@@ -291,7 +291,7 @@ try {
                         await api.Bank.close();
                     }
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

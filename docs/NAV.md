@@ -501,6 +501,19 @@ budget instead of opening the guild doors.
 3. **HARD top-N** (`rankHardest`) — score cost / expansions / hop count for the
    live sample list.
 
+**Script travel OD (clues / gathering / quests):** scrape with
+`bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --stats`
+(~1600 directed legs). Live:
+
+```sh
+HEADED=1 SEGMENT=fishing LIMIT=0 bun tools/nav-script-travel-live.ts
+HEADED=1 SEGMENT=clues LIMIT=40 OFFSET=0 bun tools/nav-script-travel-live.ts
+HEADED=1 SEGMENT=quests LIMIT=50 SEED_QUESTS=1 bun tools/nav-script-travel-live.ts
+```
+
+`mainlandAccount` uses clean IF_BUTTON logout (com 2458) after tutorial varps so
+relogin is ~seconds, not a minute-long unclean hold.
+
 **Live HARD:** `tools/nav-script-routes-live.ts` with `HARD=1` reads
 `tools/nav/script-routes.hardest.json`. Seeds runes + charged jewellery at start so
 long OD legs may Rub naturally (no fake end-of-run jewellery allowlist). Fresh

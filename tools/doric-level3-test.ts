@@ -99,7 +99,7 @@ interface BrowserGlobal {
             bot: { stepDesc?: string } | null;
             ctx: { log: LogLine[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __doricBankSeed?: { ok: boolean; counts: Record<number, number>; error?: string };
@@ -220,7 +220,7 @@ async function seedBank(page: Page, items: BankSeed[]): Promise<void> {
                 } catch (error) {
                     g.__doricBankSeed = { ok: false, counts: {}, error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -291,7 +291,7 @@ async function startAioQuester(page: Page): Promise<string> {
 }
 
 async function stopRunner(page: Page): Promise<void> {
-    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop());
+    await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop('harness stop'));
     await page.waitForFunction(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.state === 'stopped', undefined, { timeout: 10_000 });
 }
 

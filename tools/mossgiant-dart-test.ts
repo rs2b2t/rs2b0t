@@ -111,7 +111,7 @@ interface BrowserGlobal {
             bot: { status?: string } | null;
             ctx: { crashError?: Error | null; log: LogLine[]; loopCount: number; loopInFlight: boolean; waiters: unknown[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __mossGiantDartBankAudit?: BankAudit;
@@ -269,7 +269,7 @@ async function runBankProbe(page: Page, mode: 'audit' | 'seed'): Promise<BankAud
                     } catch (error) {
                         g.__mossGiantDartBankAudit = { ok: false, items: [], error: String(error) };
                     } finally {
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }

@@ -46,7 +46,7 @@ type Abi = {
             ): Promise<boolean>;
         };
     };
-    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(): void } };
+    rs2b0t: { runner: { state: string; start(m: unknown): void; stop(reason: string): void } };
     __370?: { ok: boolean; tile: Tile | null; logs: string[] };
 };
 
@@ -138,7 +138,7 @@ try {
                     log(String(e));
                     g.__370 = { ok: false, tile: api.reader.worldTile(), logs };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }

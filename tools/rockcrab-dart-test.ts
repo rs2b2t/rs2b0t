@@ -137,7 +137,7 @@ interface BrowserGlobal {
             bot: { status?: string } | null;
             ctx: { crashError?: Error | null; log: LogLine[]; loopCount: number; loopInFlight: boolean; waiters: unknown[] } | null;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
         };
     };
     __rockCrabDartBankAudit?: BankAudit;
@@ -298,7 +298,7 @@ async function auditBank(page: Page): Promise<BankAudit> {
                 } catch (error) {
                     g.__rockCrabDartBankAudit = { ok: false, items: [], error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -355,7 +355,7 @@ async function seedExactBank(page: Page): Promise<BankAudit> {
                 } catch (error) {
                     g.__rockCrabDartBankAudit = { ok: false, items: [], error: String(error) };
                 } finally {
-                    g.rs2b0t.runner.stop();
+                    g.rs2b0t.runner.stop('harness stop');
                 }
             }
         }
@@ -800,7 +800,7 @@ try {
 } finally {
     const ingame = await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t?.client.ingame ?? false).catch(() => false);
     if (ingame) {
-        await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop()).catch(() => undefined);
+        await page.evaluate(() => (globalThis as never as BrowserGlobal).rs2b0t.runner.stop('harness stop')).catch(() => undefined);
         await command(page, 'speed 600', 300).catch(() => undefined);
     }
     await page.close();

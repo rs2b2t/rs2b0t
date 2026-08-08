@@ -23,7 +23,7 @@ interface Api {
         runner: {
             state: string;
             start(meta: unknown): void;
-            stop(): void;
+            stop(reason: string): void;
             ctx: { state: string; crashError?: { message: string } | null; log: { msg: string }[] } | null;
         };
         reader: {
@@ -155,7 +155,7 @@ try {
 } finally {
     await page.evaluate(() => {
         try {
-            (globalThis as never as Api).rs2b0t.runner.stop();
+            (globalThis as never as Api).rs2b0t.runner.stop('harness stop');
         } catch {
             /* ignore */
         }

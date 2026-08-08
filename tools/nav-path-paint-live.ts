@@ -10,18 +10,37 @@
  *
  * Watches PathPublish during each leg and reports maxTiles + maxClientSeg.
  * Visual: red = pack path, cyan = last walk-click scene BFS segment.
+ * Shared harness: tools/lib/navLiveHarness.ts
  */
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs, setSettings } from './lib/harness.js';
+import { launchBrowser, parseArgs } from './lib/harness.js';
 import { createHarnessProof } from './lib/harnessProof.js';
+import {
+    applyNavPaintSettings,
+    cheb,
+    energyRefillAtFromEnv,
+    maybeRefillEnergy,
+    pathPaintFlagsFromEnv,
+    restoreRunEnergy,
+    teleArrive
+} from './lib/navLiveHarness.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const BUDGET_MS = (Number(process.env.BUDGET_S) || 150) * 1000;
-const ENERGY_REFILL_AT = Number(process.env.ENERGY_REFILL_AT ?? 25);
+const ENERGY_REFILL_AT = energyRefillAtFromEnv();
+/** This harness always paints; only scene-expand / client-seg toggles come from env. */
 const PATH_PAINT_SCENE_EXPAND =
     process.env.PATH_PAINT_SCENE_EXPAND !== '0' && process.env.PATH_PAINT_SCENE_EXPAND !== 'false';
 const PATH_PAINT_CLIENT_SEG =
     process.env.PATH_PAINT_CLIENT_SEG !== '0' && process.env.PATH_PAINT_CLIENT_SEG !== 'false';
+const PAINT = {
+    ...pathPaintFlagsFromEnv({ teleports: false, cameraFollow: true }),
+    paint: true,
+    sceneExpand: PATH_PAINT_SCENE_EXPAND,
+    clientSeg: PATH_PAINT_CLIENT_SEG,
+    teleports: false,
+    cameraFollow: true
+};
 
 const proof = createHarnessProof({ slug: 'nav-path-paint' });
 const { base } = parseArgs(process.argv.slice(2), {
@@ -65,7 +84,7 @@ type Abi = {
         SettingsStore: { save(name: string, key: string, raw: string): void };
         registerScript(m: { name: string; create(): unknown }): unknown;
     };
-    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(): void } };
+    rs2b0t: { runner: { state: string; start(meta: unknown): void; stop(reason: string): void } };
     __navPaint?: {
         walkOk: boolean;
         tile: Tile | null;
@@ -122,37 +141,6 @@ function pickCases(): CaseDef[] {
     return list;
 }
 
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= 12) {
-                await page.waitForTimeout(300);
-                return;
-            }
-            await page.waitForTimeout(150);
-        }
-    }
-    throw new Error(`tele to ${spot.x},${spot.z} failed`);
-}
-
-async function restoreRunEnergy(page: Page): Promise<void> {
-    await cheatQuiet(page, '~energy', 400);
-    await page.waitForTimeout(300);
-}
-
 async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPaint']>> {
     await page.evaluate(
         ({ destination, budgetMs }) => {
@@ -207,7 +195,7 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
                         if (sampler) {
                             clearInterval(sampler);
                         }
-                        g.rs2b0t.runner.stop();
+                        g.rs2b0t.runner.stop('harness stop');
                     }
                 }
             }
@@ -229,17 +217,7 @@ async function runWalk(page: Page, dest: Tile): Promise<NonNullable<Abi['__navPa
         if (done) {
             break;
         }
-        // energy watch
-        const e = await page.evaluate(() => {
-            try {
-                return (globalThis as never as Abi).__rs2b0t.Game.energy();
-            } catch {
-                return 100;
-            }
-        });
-        if (e <= ENERGY_REFILL_AT) {
-            await cheatQuiet(page, '~energy', 300);
-        }
+        await maybeRefillEnergy(page, ENERGY_REFILL_AT).catch(() => undefined);
         if (i > 0 && i % 15 === 0) {
             const mid = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
             console.log(`    …walking ${mid ? `${mid.x},${mid.z}` : '?'}`);
@@ -288,24 +266,7 @@ try {
     console.log(`${stamp()} boot '${user}'`);
     await mainlandAccount(page, base, user);
 
-    await setSettings(page, 'Global', {
-        showNavPath: true,
-        navCameraFollow: true,
-        navPathSceneExpand: PATH_PAINT_SCENE_EXPAND,
-        navPathClientSegment: PATH_PAINT_CLIENT_SEG,
-        navPathColorClient: '#00D4FF',
-        navPathColorPath: '#FF0000'
-    });
-    await page.evaluate(flags => {
-        const g = globalThis as never as Abi;
-        const s = g.__rs2b0t.SettingsStore;
-        s.save('Global', 'showNavPath', 'true');
-        s.save('Global', 'navCameraFollow', 'true');
-        s.save('Global', 'navPathSceneExpand', flags.scene ? 'true' : 'false');
-        s.save('Global', 'navPathClientSegment', flags.client ? 'true' : 'false');
-        s.save('Global', 'navPathColorClient', '#00D4FF');
-        s.save('Global', 'navPathColorPath', '#FF0000');
-    }, { scene: PATH_PAINT_SCENE_EXPAND, client: PATH_PAINT_CLIENT_SEG });
+    await applyNavPaintSettings(page, { ...PAINT, paint: true, teleports: false, cameraFollow: true });
 
     await maxmeAndClearDialogs(page);
     await cheatQuiet(page, 'speed 300');
