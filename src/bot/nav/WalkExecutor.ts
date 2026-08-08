@@ -9,7 +9,7 @@ import { Inventory } from '../api/hud/Inventory.js';
 import { Bank } from '../api/hud/Bank.js';
 import { Banking } from '../api/Banking.js';
 import { nearestBank } from '../api/BankLocations.js';
-import { SPECIAL_CROSSINGS, specialCrossingForTransport, meetsRequirement, meetsSkill } from './data/specialCrossings.js';
+import { SPECIAL_CROSSINGS, specialCrossingForTransport, meetsRequirement, meetsSkill, pickChoice } from './data/specialCrossings.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Reachability } from '../api/Reachability.js';
 import { ActionRouter } from '../input/ActionRouter.js';
@@ -63,6 +63,10 @@ import {
     openShutTrapdoor
 } from './exec/transportLoc.js';
 import { chatShowsQuestLock, dismissQuestLockDialogue } from './exec/questLock.js';
+import { postQuestTalkFor, type PostQuestTalk } from './data/postQuestTalks.js';
+import { Quests } from '../api/hud/Quests.js';
+import { ChatDialog } from '../api/hud/ChatDialog.js';
+import { Npcs } from '../api/queries/Npcs.js';
 
 // Re-export for existing tests
 export {
@@ -94,6 +98,10 @@ const TRANSPORT_WAIT_MS = 8000;
 const SCENE_STEP_MS = 8000;
 /** Walking the last tiles onto a hop's planned approach after a server can't-reach. */
 const APPROACH_STEP_MS = 4000;
+/** Continues/choices to drive on a post-quest unlock conversation. */
+const POST_QUEST_TALK_STEPS = 60;
+/** How long a talked-to NPC has to put its dialogue on screen. */
+const TALK_OPEN_MS = 4000;
 const REACH_CHECK_STEPS = 1200;
 
 export interface WalkOptions {
@@ -184,6 +192,9 @@ class WalkExecutorImpl {
 
     /** Session blacklist for quest-locked doors. */
     private sessionBlacklistDoors = new Set<string>();
+
+    /** Post-quest unlock talks already spent this run (see data/postQuestTalks.ts). */
+    private sessionPostQuestTalks = new Set<string>();
 
     /** Teleport ids rejected this walk (server fail / no land) — not re-planned (#339). */
     private sessionSuppressedTeleports = new Set<string>();
@@ -1316,7 +1327,86 @@ class WalkExecutorImpl {
             }
             log(`${transport.action} ${transport.locName} did not resolve, retrying`);
         }
+
+        if (await this.runPostQuestTalk(transport, approach, log)) {
+            // The conversation is the whole unlock; one more attempt settles it.
+            const loc = findTransportLoc(transport);
+            if (loc && (await loc.interact(transport.action))) {
+                const toLevel = transport.toLevel;
+                const before = reader.worldTile();
+                const done = (): boolean =>
+                    toLevel !== undefined
+                        ? reader.worldTile()?.level === toLevel
+                        : matchesTransportLanding(transport, step.level, before, reader.worldTile());
+                if (await Execution.delayUntil(done, TRANSPORT_WAIT_MS)) {
+                    log(`${transport.action} ${transport.locName} ok after the unlock talk`);
+                    RouteState.noteTransport(approach, step);
+                    return true;
+                }
+            }
+        }
         return false;
+    }
+
+    /**
+     * Some crossings open only after a conversation the journal cannot show —
+     * the Salve barrier wants `%priestperil` one stage past complete. There is
+     * nothing to test beforehand, so this runs only once the crossing has already
+     * refused, and only once per placement per run.
+     */
+    private async runPostQuestTalk(
+        transport: TransportInfo,
+        approach: PathStep,
+        log: (msg: string) => void
+    ): Promise<boolean> {
+        const talk: PostQuestTalk | null = postQuestTalkFor(transport.locX, transport.locZ, approach.level);
+        if (!talk) {
+            return false;
+        }
+        const key = `${talk.locX}|${talk.locZ}|${talk.level}`;
+        if (this.sessionPostQuestTalks.has(key)) {
+            return false;
+        }
+        if (Quests.status(talk.requireComplete) !== 'complete') {
+            log(`${talk.label}: ${talk.requireComplete} is not complete — nothing to unlock`);
+            return false;
+        }
+        this.sessionPostQuestTalks.add(key);
+
+        log(`${talk.label}: crossing refused — talking to ${talk.npc} to unlock it`);
+        if (!(await this.walkTo(talk.stand, { radius: 4, timeoutMs: 180_000, log: m => log(`  ${m}`) }))) {
+            log(`${talk.label}: could not reach ${talk.npc} at (${talk.stand.x},${talk.stand.z})`);
+            return false;
+        }
+        for (let round = 0; round < (talk.talks ?? 1); round++) {
+            const npc = Npcs.query().name(talk.npc).nearest();
+            if (!npc || !(await npc.interact('Talk-to'))) {
+                log(`${talk.label}: '${talk.npc}' not talkable at the stand`);
+                return false;
+            }
+            // The dialogue takes a tick to arrive. Breaking on the first closed
+            // frame reads as "he said nothing" and the unlock silently no-ops.
+            const dialogueUp = (): Promise<boolean> =>
+                Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), TALK_OPEN_MS);
+            if (!(await dialogueUp())) {
+                log(`${talk.label}: ${talk.npc} said nothing`);
+                return false;
+            }
+            for (let i = 0; i < POST_QUEST_TALK_STEPS; i++) {
+                const pick = talk.choose ? pickChoice(ChatDialog.options(), talk.choose) : null;
+                if (pick) {
+                    await ChatDialog.chooseOption(pick);
+                } else if (ChatDialog.canContinue()) {
+                    await ChatDialog.continue();
+                } else if (!ChatDialog.isOpen() && !(await dialogueUp())) {
+                    break;
+                } else {
+                    await Execution.delayTicks(1);
+                }
+            }
+        }
+        log(`${talk.label}: talked — returning to the crossing`);
+        return this.walkTo(approach, { radius: 2, timeoutMs: 180_000, log: m => log(`  ${m}`) });
     }
 
     /**

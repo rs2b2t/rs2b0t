@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import type { Page } from 'playwright-core';
 
 import { launchBrowser, parseArgs } from '../lib/harness.js';
-import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, teleTo } from '../tutorial/harness.js';
+import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs, relog, teleTo } from '../tutorial/harness.js';
 
 type Tile = { x: number; z: number; level: number };
 
@@ -25,6 +25,16 @@ interface Route {
 }
 
 const ROUTES: Route[] = [
+    // Door / stair dense — the cases the stall ladder exists for. Endpoints from
+    // tools/nav/script-routes.hardest.json (hop-ranked).
+    { name: 'varrock-bank-L1→camelot-tower-L2', from: { x: 3250, z: 3419, level: 1 }, to: { x: 2749, z: 3495, level: 2 }, radius: 4, budgetMs: 300_000 },
+    { name: 'varrock-bank-L1→draynor-manor-L2', from: { x: 3250, z: 3419, level: 1 }, to: { x: 3106, z: 3368, level: 2 }, radius: 4, budgetMs: 240_000 },
+    { name: 'fishing-guild-L1→grand-tree-bank-L1', from: { x: 2574, z: 3325, level: 1 }, to: { x: 2449, z: 3482, level: 1 }, radius: 4, budgetMs: 300_000 },
+    { name: 'falador-house-L1→rimmington-house-L1', from: { x: 3036, z: 3347, level: 1 }, to: { x: 2970, z: 3215, level: 1 }, radius: 4, budgetMs: 300_000 },
+    { name: 'draynor-bank→fishing-guild-shop', from: { x: 3092, z: 3243, level: 0 }, to: { x: 2596, z: 3399, level: 0 }, radius: 4, budgetMs: 300_000 },
+    { name: 'varrock-bank-L1→fishing-guild-L1', from: { x: 3250, z: 3419, level: 1 }, to: { x: 2574, z: 3325, level: 1 }, radius: 4, budgetMs: 300_000 },
+    { name: 'falador-house-L1→portsarim-house-L1', from: { x: 3040, z: 3364, level: 1 }, to: { x: 3015, z: 3205, level: 1 }, radius: 4, budgetMs: 300_000 },
+    { name: 'duel-arena-bank→shantay-bank', from: { x: 3382, z: 3269, level: 0 }, to: { x: 3309, z: 3120, level: 0 }, radius: 4, budgetMs: 240_000 },
     { name: 'edgeville-bank→varrock-west-bank', from: { x: 3094, z: 3491, level: 0 }, to: { x: 3185, z: 3436, level: 0 } },
     { name: 'edgeville→varrock-castle-L2', from: { x: 3094, z: 3491, level: 0 }, to: { x: 3213, z: 3474, level: 2 } },
     { name: 'edgeville→draynor-manor-L1', from: { x: 3094, z: 3491, level: 0 }, to: { x: 3108, z: 3364, level: 1 } },
@@ -36,7 +46,11 @@ const ROUTES: Route[] = [
     { name: 'falador→taverley(gate)', from: { x: 2946, z: 3368, level: 0 }, to: { x: 2885, z: 3449, level: 0 } },
     { name: 'varrock→seers-bank', from: { x: 3185, z: 3436, level: 0 }, to: { x: 2725, z: 3491, level: 0 }, budgetMs: 400_000 },
     { name: 'portsarim→karamja(ship)', from: { x: 3027, z: 3222, level: 0 }, to: { x: 2925, z: 3176, level: 0 }, budgetMs: 240_000 },
-    { name: 'varrock→barb-village-basement', from: { x: 3185, z: 3436, level: 0 }, to: { x: 3081, z: 9955, level: 0 } }
+    { name: 'varrock→barb-village-basement', from: { x: 3185, z: 3436, level: 0 }, to: { x: 3081, z: 9955, level: 0 } },
+    // Quest-gated: every route into Morytania crosses the Paterdomus tunnel and the
+    // Salve barrier. Without Priest in Peril this must fail fast; with it (CHEATS=~cq,
+    // which also takes barrier access) it must walk through.
+    { name: 'varrock→canifis(priest-in-peril)', from: { x: 3253, z: 3420, level: 0 }, to: { x: 3499, z: 3506, level: 0 }, radius: 6, budgetMs: 420_000 }
 ];
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
@@ -44,6 +58,8 @@ const OUT = process.argv.includes('--out') ? process.argv[process.argv.indexOf('
 const ONLY = process.env.ROUTES ? new Set(process.env.ROUTES.split(',').map(Number)) : null;
 const SPEED = process.env.SPEED ? Number(process.env.SPEED) : null;
 const DEFAULT_BUDGET_MS = Number(process.env.BUDGET_MS ?? 180_000);
+/** Extra cheats to send after login, comma separated — e.g. CHEATS=~cq for every quest. */
+const CHEATS = (process.env.CHEATS ?? '').split(',').map(c => c.trim()).filter(Boolean);
 
 type Abi = {
     __rs2b0t: {
@@ -153,6 +169,16 @@ try {
     await cheatQuiet(page, '~maxme');
     await maxmeAndClearDialogs(page);
     await cheatQuiet(page, 'give coins 5000');
+    if (CHEATS.length > 0) {
+        for (const c of CHEATS) {
+            console.log(`cheat: ${c}`);
+            await cheatQuiet(page, c, 2000);
+        }
+        // The quest tab only recolours from the login payload, so a setvar seed is
+        // invisible to Quests.status (and therefore to WorldState) until a relog.
+        await relog(page, user);
+        await maxmeAndClearDialogs(page);
+    }
     if (SPEED !== null) {
         await cheatQuiet(page, `speed ${SPEED}`);
     }

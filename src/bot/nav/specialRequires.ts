@@ -73,6 +73,49 @@ const TRANSPORT_SKILL_GATES: readonly {
 ];
 
 /**
+ * Crossings whose content handler checks a quest varp, keyed by the edge origin
+ * (doors by loc tile, transports by `from` — the two ways `specialRequiresAt` is
+ * called). Without these A\* plans a route the player can never walk, and the
+ * walker only finds out standing at the barrier: seven Morytania clue
+ * destinations spent their whole eight-minute budget at the Paterdomus gate
+ * before this existed.
+ *
+ * The journal is the only quest state on the wire, so a stage check maps to
+ * `started` or `complete` — never finer. A crossing that needs a *post*-quest
+ * step (the Salve barrier wants stage 61, one Drezel conversation past
+ * complete) is gated on complete here and unlocked at execute time.
+ *
+ * Offline probes carry no WorldState, so these fail **open** and pack-tool
+ * parity is unchanged.
+ */
+const CROSSING_QUEST_GATES: readonly {
+    x: number;
+    z: number;
+    level: number;
+    quest: string;
+    minStatus: 'started' | 'complete';
+    /** Worn item the same handler demands (gas mask, …). */
+    worn?: { name: string; count: number }[];
+    /** Content script and the stage it tests. */
+    note: string;
+}[] = [
+    // area_mausoleum/gates.rs2 — check_priest_peril_gate(^priestperil_find_drezel_key = 5)
+    { x: 3405, z: 9895, level: 0, quest: 'Priest in Peril', minStatus: 'started', note: 'pip_underground_door1 needs %priestperil >= 5' },
+    // check_priest_peril_gate(^priestperil_meet_in_mausoleum = 8)
+    { x: 3431, z: 9897, level: 0, quest: 'Priest in Peril', minStatus: 'started', note: 'pip_underground_door2 needs %priestperil >= 8' },
+    // area_mausoleum/holy_barrier.rs2 — %priestperil = ^priestperil_access_holy_barrier (61),
+    // which is one Drezel conversation past ^priestperil_complete (60).
+    { x: 3440, z: 9887, level: 0, quest: 'Priest in Peril', minStatus: 'complete', note: 'pip_underground_wall_side_withportal needs %priestperil = 61' },
+    // quest_elena/sewerpipe.rs2 — %elenaquest >= ^quest_elena_opened_pipe AND the
+    // gas mask *worn* (the pack only asked for one in the pack).
+    {
+        x: 2530, z: 9703, level: 0, quest: 'Plague City', minStatus: 'started',
+        worn: [{ name: 'Gas mask', count: 1 }],
+        note: 'plaguesewerpipe needs the mask worn, not carried'
+    }
+];
+
+/**
  * Plan-time requires for an edge origin tile.
  * specialCrossings: prefer exact level, else same x/z (ships often key SC at
  * deck L1 while transports.json stand is pier L0).
@@ -81,12 +124,17 @@ const TRANSPORT_SKILL_GATES: readonly {
  * Nature Spirit) — never attach to plan requires or full packs fail the gate forever.
  */
 export function specialRequiresAt(x: number, z: number, level: number): TransportRequires | undefined {
+    // A tile can carry more than one gate — the sewer pipe wants Plague City
+    // *and* the gas mask worn — so collect rather than return on the first hit.
+    const requires: TransportRequires = {};
+    let gated = false;
+
     const atXz = SPECIAL_CROSSINGS.filter(s => s.x === x && s.z === z);
     const sc = atXz.find(s => s.level === level) ?? atXz[0];
     if (sc) {
-        const requires: TransportRequires = {};
         if (sc.requires) {
             requires.items = [{ name: sc.requires.item, count: sc.requires.count, consumed: true }];
+            gated = true;
             // also currency form for tolls / ship fares
             if (sc.requires.item === 'Coins') {
                 requires.currency = { name: 'Coins', amount: sc.requires.count };
@@ -94,27 +142,35 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
         }
         if (sc.requiresSkill) {
             requires.skills = [{ name: sc.requiresSkill.name, level: sc.requiresSkill.level }];
+            gated = true;
         }
-        if (!requires.items && !requires.skills && !requires.currency) {
-            // unlockQuest-only rows (Mort Myre) → no plan-time freeSlots
-            return undefined;
-        }
-        return requires;
+        // unlockQuest-only rows (Mort Myre) contribute nothing at plan time — never
+        // attach their freeSlots, or a full pack fails the gate forever.
     }
 
     const door = DOOR_SKILL_GATES.find(d => d.x === x && d.z === z && d.level === level);
     if (door) {
-        const requires: TransportRequires = {
-            skills: [{ name: door.skill, level: door.levelReq }]
-        };
+        requires.skills = [{ name: door.skill, level: door.levelReq }];
+        gated = true;
         if (door.worn && door.worn.length > 0) {
             requires.worn = door.worn.map(w => ({ name: w.name, count: w.count }));
         }
-        return requires;
     }
+
     const tr = TRANSPORT_SKILL_GATES.find(d => d.x === x && d.z === z && d.level === level);
     if (tr) {
-        return { skills: [{ name: tr.skill, level: tr.levelReq }] };
+        requires.skills = [{ name: tr.skill, level: tr.levelReq }];
+        gated = true;
     }
-    return undefined;
+
+    const quest = CROSSING_QUEST_GATES.find(q => q.x === x && q.z === z && q.level === level);
+    if (quest) {
+        requires.quests = [{ quest: quest.quest, minStatus: quest.minStatus }];
+        gated = true;
+        if (quest.worn && quest.worn.length > 0) {
+            requires.worn = [...(requires.worn ?? []), ...quest.worn.map(w => ({ name: w.name, count: w.count }))];
+        }
+    }
+
+    return gated ? requires : undefined;
 }

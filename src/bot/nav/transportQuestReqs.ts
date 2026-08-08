@@ -59,6 +59,18 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         usedBy: ['shilo_cart (Brimhaven→Shilo Hajedy)']
     },
     {
+        journal: 'Priest in Peril',
+        varp: 'priestperil',
+        // ^priestperil_complete = 60. The Salve barrier wants 61
+        // (^priestperil_access_holy_barrier) — one Drezel talk past complete,
+        // which the quest bot now takes and the walker unlocks on refusal.
+        complete: 60,
+        usedBy: [
+            'paterdomus tunnel gates (pip_underground_door1/2)',
+            'salve holy barrier → Morytania'
+        ]
+    },
+    {
         journal: 'Plague City',
         varp: 'elenaquest',
         // ^elena_complete = 29; spell also requires ^elena_complete_read_scroll = 30
