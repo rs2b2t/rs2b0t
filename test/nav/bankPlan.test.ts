@@ -80,6 +80,31 @@ describe('itemsRequiredByWaypoints / missing', () => {
         const need = itemsRequiredByWaypoints(path);
         expect(need['Coins']).toBe(10);
     });
+
+    // Real geometry from the baked pack: the crossing is keyed at the approach
+    // stand (3304,3118) while the loc sits at (3302,3116). Keying the lookup on
+    // the loc alone found nothing, so no pass was ever withdrawn and the desert
+    // read as unreachable.
+    test('Shantay pass toll is found when the loc tile differs from the crossing key', () => {
+        const path: Waypoint[] = [
+            wp(3304, 3118),
+            wp(3304, 3114, {
+                locName: 'Shantay pass',
+                action: 'Go-through',
+                locX: 3302,
+                locZ: 3116,
+                kind: 'door'
+            })
+        ];
+        expect(itemsRequiredByWaypoints(path)['Shantay pass']).toBe(1);
+
+        const broke = emptyWorldStateData();
+        expect(missingItemsForPath(path, broke)).toEqual([{ name: 'Shantay pass', count: 1 }]);
+
+        const holding = emptyWorldStateData();
+        holding.items = { 'Shantay pass': 1 };
+        expect(missingItemsForPath(path, holding)).toEqual([]);
+    });
 });
 
 describe('planBankLeg', () => {

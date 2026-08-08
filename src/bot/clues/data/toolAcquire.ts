@@ -80,3 +80,21 @@ export function extraItemShop(name: string): ShopSource | null {
     const key = Object.keys(EXTRA_ITEM_SHOPS).find(k => k.toLowerCase() === name.trim().toLowerCase());
     return key ? EXTRA_ITEM_SHOPS[key]! : null;
 }
+
+/**
+ * Counters that sell a crossing toll, for the case where the bank had none.
+ *
+ * The Kharidian desert has exactly one baked entrance and it eats a Shantay pass,
+ * so a bot without one does not get a detour — the whole desert leaves the graph
+ * and the leg reports `unreachable`. Shantay stocks the pass himself
+ * (`shantaypass.inv` stock16, 5gp), and his counter is north of his own gate, so
+ * the trip is always payable from the side the bot is stuck on.
+ */
+export const GATE_ITEM_SHOPS: Record<string, ShopSource> = {
+    'Shantay pass': { npc: 'Shantay', stand: new Tile(3304, 3122, 0), cost: 5 }
+};
+
+export function gateItemShop(name: string): ShopSource | null {
+    const key = Object.keys(GATE_ITEM_SHOPS).find(k => k.toLowerCase() === name.trim().toLowerCase());
+    return key ? GATE_ITEM_SHOPS[key]! : null;
+}

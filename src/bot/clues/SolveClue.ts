@@ -10,16 +10,18 @@ import { Locs } from '#/bot/api/queries/Locs.js';
 import { Bank } from '#/bot/api/hud/Bank.js';
 import { Equipment } from '#/bot/api/hud/Equipment.js';
 import { Inventory } from '#/bot/api/hud/Inventory.js';
+import { Skills } from '#/bot/api/hud/Skills.js';
 import { ClueExecutor } from '#/bot/clues/ClueExecutor.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { ensureCoordTools, hasAllTrio, hasCoordClueHeld } from '#/bot/clues/AcquireTools.js';
 import { SPADE_NAME, trailKit } from '#/bot/clues/data/toolAcquire.js';
 import { COORD_TOOL_SLOTS, trailFoodTarget, weaponNeeded } from '#/bot/clues/packPlan.js';
-import { isTeleportItem, teleportRunes } from '#/bot/clues/teleportKit.js';
+import { isTeleportItem, teleportKitFor, type TeleportKit } from '#/bot/clues/teleportKit.js';
 import {
     ENTRANA_RESTRICTED_GEAR_RE,
     namesHaveEntranaRestrictedGear
 } from '#/bot/nav/exec/specialCrossing.js';
+import { snapshotWorldState } from '#/bot/nav/worldStateLive.js';
 
 const BANK_NAME = 'Bank booth';
 const BANK_OP = 'Use-quickly';
@@ -236,6 +238,9 @@ export class SolveClue implements Task {
         const coordItems = new Set(['sextant', 'watch', 'chart']);
         const rowItems = scrollId !== null ? (CLUE_DB[scrollId]?.items ?? []) : [];
         const rowItemNames = new Set(rowItems.map(n => n.toLowerCase()));
+        // One snapshot for the whole bank stop: which teleports this account can
+        // actually reach. A spell it cannot cast must not reserve a pack slot.
+        const kit = teleportKitFor(snapshotWorldState());
         const keepTeleports = this.host.useTeleports?.() ?? true;
         // Southbound Shantay Pass is baked but consumes a pass (#371). Keep/withdraw
         // one so desert digs (3552/3554) can plan the requires-gated edge.
@@ -252,7 +257,7 @@ export class SolveClue implements Task {
                 || n === SPADE_NAME.toLowerCase() || n === 'coins' || n === SHANTAY_PASS.toLowerCase()
                 || coordItems.has(n) || rowItemNames.has(n)
                 || (!entranaStrip && weapon !== '' && n === weapon)
-                || (keepTeleports && isTeleportItem(name));
+                || (keepTeleports && isTeleportItem(name, kit));
         };
         await Bank.depositAllMatching(name => !isKeep(name), m => this.host.log(`[clue] deposit: ${m}`));
 
@@ -304,7 +309,7 @@ export class SolveClue implements Task {
 
         // Runes before food: both loops stop on a full pack, and food is the
         // bulky item, so it must be last or the trail leaves with no teleports.
-        await this.stockTeleports();
+        await this.stockTeleports(kit);
 
         const food = this.host.foodName();
         if (food !== '') {
@@ -329,7 +334,7 @@ export class SolveClue implements Task {
                 this.host.log(`[clue] WARNING: no '${food}' came back out of the bank — running the trail without food`);
             }
         }
-        this.host.log(`[clue] trail pack: ${Inventory.count(food)} ${food}, ${teleportRunes().filter(r => Inventory.count(r.name) > 0).length}/${teleportRunes().length} teleport runes, ${Inventory.free()} slots free`);
+        this.host.log(`[clue] trail pack: ${Inventory.count(food)} ${food}, ${this.describeTeleports(kit)}, ${Inventory.free()} slots free`);
 
         if (fetchingCoordTools) {
             this.host.setStatus('clue — acquiring coordinate tools');
@@ -341,16 +346,30 @@ export class SolveClue implements Task {
         return true;
     }
 
+    /** What the trail can actually teleport with, for the pack log. */
+    private describeTeleports(kit: TeleportKit): string {
+        if (!(this.host.useTeleports?.() ?? true)) {
+            return 'teleports off';
+        }
+        if (kit.usable.length === 0) {
+            return `no castable teleport (magic ${Skills.level('magic')})`;
+        }
+        const stocked = kit.runes.filter(r => Inventory.count(r.name) > 0).length;
+        return `${stocked}/${kit.runes.length} runes for ${kit.usable.join('/')}`;
+    }
+
     /**
-     * Top the teleport runes up from the bank. Jewellery is kept if the account
-     * already carries it but never fetched — charges make the names inexact.
-     * A missing rune is not fatal: the router simply walks instead.
+     * Top the teleport runes up from the bank. Only the spells this account can
+     * cast are stocked — runes for a spell it has not learned are dead weight on a
+     * pack that needs six free slots for a hard casket. Jewellery is kept if the
+     * account already carries it but never fetched — charges make the names
+     * inexact. A missing rune is not fatal: the router simply walks instead.
      */
-    private async stockTeleports(): Promise<void> {
+    private async stockTeleports(kit: TeleportKit): Promise<void> {
         if (!(this.host.useTeleports?.() ?? true)) {
             return;
         }
-        for (const { name, perCast } of teleportRunes()) {
+        for (const { name, perCast } of kit.runes) {
             const want = perCast * TELEPORT_CASTS;
             for (let guard = 0; guard < 6 && Inventory.count(name) < want && !Inventory.isFull(); guard++) {
                 const short = want - Inventory.count(name);

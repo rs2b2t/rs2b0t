@@ -17,7 +17,7 @@ import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
 import { challengeAnswer } from '#/bot/clues/data/challengeAnswers.js';
 import { clueGate } from '#/bot/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
-import { ensureSpade, ensureCoordTools, ensureExtraItems } from '#/bot/clues/AcquireTools.js';
+import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from '#/bot/clues/AcquireTools.js';
 import { SPADE_NAME } from '#/bot/clues/data/toolAcquire.js';
 import { fightGuardian } from '#/bot/clues/Guardian.js';
 import { PuzzleBox } from '#/bot/clues/PuzzleBox.js';
@@ -26,6 +26,7 @@ import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
 import type { NavPoint } from '#/bot/nav/PathFinder.js';
 import { talkThrough } from '#/bot/quests/exec/primitives.js';
 import { Reach } from '#/bot/api/Reach.js';
+import { WalkExecutor } from '#/bot/nav/WalkExecutor.js';
 
 const COORD_ITEMS = ['Sextant', 'Watch', 'Chart'];
 
@@ -104,6 +105,32 @@ function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<
             ? { useTeleportCatalog: true, policy: { useTeleports: true, distanceBeforeTeleport: TELEPORT_MIN_SPAN } }
             : { useTeleportCatalog: false, policy: { useTeleports: false } })
     };
+}
+
+/** Tolls already bought this trail, so a stuck leg cannot shop in a loop. */
+const gateItemsTried = new Set<string>();
+
+/**
+ * Walk a clue leg, and treat an unpayable toll as a shopping trip rather than a
+ * dead end. The navigator names what the route was short of — the Kharidian
+ * desert has one entrance and it eats a Shantay pass — so a leg that fails for
+ * want of a 5gp ticket buys one and walks again instead of abandoning the trail.
+ */
+async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
+    if (await Traversal.walkResilient(dest, walkOpts(log, radius))) {
+        return true;
+    }
+    const short = WalkExecutor.lastMissingGateItems.filter(m => !gateItemsTried.has(m.name));
+    if (short.length === 0) {
+        return false;
+    }
+    for (const m of short) {
+        gateItemsTried.add(m.name);
+    }
+    if (!(await ensureGateItems(short, log))) {
+        return false;
+    }
+    return Traversal.walkResilient(dest, walkOpts(log, radius));
 }
 
 const trace = new ClueTrace({
@@ -264,7 +291,7 @@ async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: N
     if (haveKey()) {
         return true;
     }
-    await Traversal.walkResilient(huntTile, walkOpts(log, KEY_WALK_RADIUS));
+    await walkLeg(huntTile, log, KEY_WALK_RADIUS);
     let target = Npcs.query().name(kf.npc).action('Attack').nearest();
     if (!target) {
         log(`kill-for-key: no '${kf.npc}' near (${huntTile.x},${huntTile.z}) — abandoning riddle`);
@@ -301,7 +328,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
                     return;
                 }
             }
-            if (!(await Traversal.walkResilient(step.coord, walkOpts(log)))) {
+            if (!(await walkLeg(step.coord, log))) {
                 return;
             }
             const pick = pickSearchLoc(step.coord);
@@ -318,7 +345,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
             }
             const coord = step.coord;
             const standOnIt = (): Promise<boolean> =>
-                Traversal.walkResilient(coord, walkOpts(log));
+                walkLeg(coord, log);
             const dig = async (): Promise<void> => {
                 const spade = Inventory.first(SPADE_NAME);
                 if (spade) {
@@ -477,6 +504,7 @@ export const ClueExecutor = {
             sessionActive = false;
             sessionLegs = 0;
             acquireTries = 0;
+            gateItemsTried.clear();
             ClueExecutor.current = null;
             return outcome;
         };
@@ -503,6 +531,7 @@ export const ClueExecutor = {
                 sessionActive = true;
                 sessionLegs = 0;
                 acquireTries = 0;
+                gateItemsTried.clear();
             }
             const target = stepTarget(step);
             const sameLeg = ClueExecutor.current?.clueId === clueId;

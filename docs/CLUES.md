@@ -130,6 +130,27 @@ four-NPC chain, driven by [`data/toolAcquire.ts`](../src/bot/clues/data/toolAcqu
 `hasAllTrio()` and `hasCoordClueHeld()` gate it, and the whole chain is deadlined
 (`CHAIN_DEADLINE_MS`) so a broken link cannot hang a bot indefinitely.
 
+### Crossing tolls
+
+A toll the bot cannot pay does not read as "too poor" — A* prunes the crossing, so
+the region behind it leaves the graph and the leg reports a bare `unreachable`.
+The Kharidian desert is the sharp case: it has exactly one baked entrance and it
+eats a Shantay pass, so a bot without one is told the desert does not exist.
+
+[`gateItems.ts`](../src/bot/nav/gateItems.ts) tells the two apart. On an
+`unreachable` verdict the walker re-probes the same route with every crossing item
+virtualized; if the route appears, the blocker is a shopping list and
+`WalkExecutor.lastMissingGateItems` names it. `walkLeg` in the executor then buys
+the toll (`GATE_ITEM_SHOPS` — Shantay stocks his own pass for 5gp, north of his
+own gate) and walks again, once per item per trail. A route that stays unreachable
+with the full kit is a genuine nav-data gap and is reported as one.
+
+The same lookup bug hid this from the bank planner: crossings are keyed at the
+approach stand, but `itemsRequiredByWaypoints` matched on the loc tile alone. The
+Shantay stand is (3304,3118) while its loc is (3302,3116), so the toll was
+invisible and no pass was ever withdrawn. It now resolves through
+`specialCrossingForTransport`, the same way the executor does.
+
 ## Challenges and keys
 
 Some clues do not resolve to a location:
@@ -162,6 +183,12 @@ inside one step attempt, so a level-108 fight does not consume the retry budget.
 The solver does **not** withdraw combat gear; it assumes the account arrives
 equipped and only takes food from the bank. A guardian the server refuses ("It's
 not after you...") belongs to another player, so the fight skips it.
+
+The fight waits on the tick through `sustainUntil`, which pumps `Sustain` on every
+pass. This is load-bearing: the loop used to park in a single `delayUntil` for the
+whole fight, so upkeep never ran and the bot traded blows with a level-108 mage
+without ever eating — dying with a full pack of food. Any wait inside a fight has
+to pump, not park.
 
 ## Puzzle boxes
 
@@ -213,6 +240,15 @@ catalog rather than restating them, so a new destination cannot leave its runes
 being banked. Jewellery is kept if the account carries it but never withdrawn —
 charges make the names inexact ("Amulet of glory(4)").
 
+The kit is gated on what the account can actually reach: `teleportKitFor(state)`
+keeps a destination only when everything in its `requires` except the runes
+themselves is satisfied — magic level, members, quest unlocks. So a magic-1 bot
+carries no runes at all instead of five dead slots, and the per-cast counts
+narrow with the spellbook (Camelot's 5 air runes do not size the load until
+Camelot is castable). The router already refused those spells; the bank stop was
+provisioning for them anyway. Unusable runes are no longer kit, so the deposit
+sweeps them, and the pack log names the destinations it can really cast.
+
 Missing runes are not an error: the router simply walks instead. Turn the whole
 thing off with the `useTeleports` setting.
 
@@ -241,7 +277,8 @@ The recurring causes are worth knowing, because they affect more than clues:
   `WALL_STRAIGHT` doors, so paired gates — the Varrock sewer gates, the West
   Ardougne wall — leave whole regions islanded.
 - **Item-gated crossings.** Entering the Kharidian desert southbound consumes a
-  Shantay pass (edge is baked; `SolveClue.bankFirst` keeps/withdraws one — #371).
+  Shantay pass (edge is baked; `SolveClue.bankFirst` keeps/withdraws one — #371,
+  and a leg that still comes up short buys one — see [Crossing tolls](#crossing-tolls)).
   Offline pack audit still treats desert as closed without virtual WorldState.
 
 ## Tracing a failure

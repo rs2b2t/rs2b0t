@@ -9,7 +9,7 @@ import type { Waypoint } from './PathFinder.js';
 import type { WorldStateData } from './worldStateData.js';
 import { worldStateFromData } from './worldStateData.js';
 import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS } from './teleportCatalog.js';
-import { specialCrossingAt } from './data/specialCrossings.js';
+import { specialCrossingForTransport } from './data/specialCrossings.js';
 import { isSlashWebTransport, WEB_SLASH_KNIFE_NAME } from './slashTool.js';
 
 import { BANK_WITHDRAW_COST } from './edgeCosts.js';
@@ -51,7 +51,8 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
         need[name] = Math.max(need[name] ?? 0, count);
     };
 
-    for (const wp of waypoints) {
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i]!;
         const t = wp.transport;
         if (!t) {
             continue;
@@ -72,8 +73,17 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
             // bankItemCounts and PathFinder is given a virtualized state.
             continue;
         }
-        // Door / special crossing tolls keyed at approach tile.
-        const sc = specialCrossingAt(t.locX, t.locZ, wp.level);
+        // Door / special crossing tolls. Crossings are keyed at the approach stand,
+        // which is often not the loc tile — the Shantay pass stand is (3304,3118)
+        // while its loc is (3302,3116). Resolve the same way the executor does, or
+        // the toll is invisible to the planner and the region behind it reads as
+        // unreachable rather than unpaid.
+        const prev = waypoints[i - 1] ?? wp;
+        const sc = specialCrossingForTransport(
+            t,
+            { x: prev.x, z: prev.z, level: prev.level },
+            { x: wp.x, z: wp.z, level: wp.level }
+        );
         if (sc?.requires) {
             bump(sc.requires.item, sc.requires.count);
         }

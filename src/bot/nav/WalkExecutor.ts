@@ -33,7 +33,8 @@ import type { PathPolicy } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
 import { formatHops } from './hops.js';
 import { executeTeleportHop } from './teleportExecute.js';
-import { missingItemsForPath, pathHasTeleport, planBankLeg } from './bankPlan.js';
+import { missingItemsForPath, pathHasTeleport, planBankLeg, type MissingItem } from './bankPlan.js';
+import { explainUnreachable } from './gateItems.js';
 import { virtualizeWithItems } from './virtualState.js';
 import { findForwardRecoveryIndex, stallPhase } from './routeRecovery.js';
 import { RouteState } from './routeState.js';
@@ -178,6 +179,13 @@ class WalkExecutorImpl {
 
     lastOutcome: 'arrived' | 'closest' | 'blocked' | 'budget' | 'interrupted' | 'failed' | 'unreachable' | null = null;
 
+    /**
+     * Items that would have opened the last failed route. Non-empty means the
+     * destination is behind a toll the player cannot pay, not off the graph —
+     * a caller that can shop may buy them and walk again.
+     */
+    lastMissingGateItems: MissingItem[] = [];
+
     private avoidDoors: { x: number; z: number }[] = [];
 
     private doorStrikes = new Map<string, number>();
@@ -251,6 +259,9 @@ class WalkExecutorImpl {
         const walkStartedAt = performance.now();
         const deadline = walkStartedAt + timeoutMs;
         this.lastOutcome = null;
+        // Stale from the previous walk would send a caller shopping for a toll
+        // this route never needed.
+        this.lastMissingGateItems = [];
         this.resetAvoids();
         RouteState.reset();
         if (outer) {
@@ -273,7 +284,11 @@ class WalkExecutorImpl {
 
                 const path = await this.requestPath(me, dest, maxExpansions);
                 if (!path.ok) {
-                    log(`no path to (${dest.x},${dest.z},${dest.level}): ${path.reason}`);
+                    const short = await this.explainUnreachablePath(me, dest, path.reason, maxExpansions);
+                    const why = short.length > 0
+                        ? `${path.reason} without ${short.map(m => `${m.count}x ${m.name}`).join(', ')}`
+                        : path.reason;
+                    log(`no path to (${dest.x},${dest.z},${dest.level}): ${why}`);
                     this.lastOutcome = classifyReason(path.reason);
                     return false;
                 }
@@ -460,6 +475,34 @@ class WalkExecutorImpl {
      * route, walk bank once, withdraw only path-scoped missing items, return true
      * so walkTo repaths.
      */
+    /**
+     * Turn a bare `unreachable` into the shopping list that would fix it. One extra
+     * path request, only on failure, and only for the verdict A* gives when a gated
+     * crossing was pruned — a budget or off-graph failure is not a shopping problem.
+     */
+    private async explainUnreachablePath(
+        from: WorldTile,
+        dest: WorldTile,
+        reason: string,
+        maxExpansions: number | undefined
+    ): Promise<MissingItem[]> {
+        this.lastMissingGateItems = [];
+        if (!/unreachable/i.test(reason)) {
+            return [];
+        }
+        let state: WorldStateData | undefined;
+        try {
+            state = snapshotWorldStateData();
+        } catch {
+            return [];
+        }
+        this.lastMissingGateItems = await explainUnreachable(
+            probeState => this.requestPath(from, dest, maxExpansions, probeState),
+            state
+        );
+        return this.lastMissingGateItems;
+    }
+
     private async maybeBankForRoute(
         from: WorldTile,
         dest: WorldTile,

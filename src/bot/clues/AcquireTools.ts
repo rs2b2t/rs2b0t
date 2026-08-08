@@ -11,7 +11,7 @@ import { Shop } from '#/bot/api/hud/Shop.js';
 import { COINS } from '#/bot/api/ToolAcquire.js';
 import {
     KOJO, KOJO_EXIT, MURPHY, PROFESSOR, SPADE_NAME, SPADE_SPAWNS, TRIO,
-    extraItemShop, nextCoordTool, type HeldTrio
+    extraItemShop, gateItemShop, nextCoordTool, type HeldTrio
 } from '#/bot/clues/data/toolAcquire.js';
 
 const SPADE_OBJ_ID = 952;
@@ -117,6 +117,61 @@ export async function ensureExtraItems(names: readonly string[], log: (m: string
             bought = true;
         } else {
             log(`${shop.npc} had no '${name}' in stock`);
+        }
+    }
+    return bought;
+}
+
+/**
+ * Buy the crossing tolls the navigator says a route is short of.
+ *
+ * `missing` comes from the walker's own diagnosis, so this only ever fires for a
+ * crossing the bot actually planned to use — no speculative shopping trips.
+ * Coins are skipped: no counter sells them, and a broke bot has a different
+ * problem than an unstocked one.
+ */
+export async function ensureGateItems(
+    missing: readonly { name: string; count: number }[],
+    log: (m: string) => void
+): Promise<boolean> {
+    let bought = false;
+    for (const want of missing) {
+        if (EventSignal.pending()) {
+            return bought;
+        }
+        if (want.name.toLowerCase() === COINS.toLowerCase()) {
+            log(`route needs ${want.count} more ${COINS} — no shop sells those`);
+            continue;
+        }
+        const shop = gateItemShop(want.name);
+        if (!shop) {
+            log(`route is short ${want.count}x '${want.name}' and no counter is known for it`);
+            continue;
+        }
+        const price = shop.cost * want.count;
+        if (Inventory.count(COINS) < price) {
+            log(`need ~${price} coins for ${want.count}x '${want.name}' and hold ${Inventory.count(COINS)}`);
+            continue;
+        }
+        log(`route is short ${want.count}x '${want.name}' — buying from ${shop.npc} at (${shop.stand.x},${shop.stand.z})`);
+        await Traversal.walkResilient(shop.stand, {
+            radius: HOP_ARRIVE_RADIUS,
+            attempts: WALK_ATTEMPTS,
+            timeoutMs: WALK_TIMEOUT_MS,
+            log: m => log(`  ${m}`)
+        });
+        if (!(await Shop.open(shop.npc))) {
+            log(`${shop.npc}'s shop did not open — leaving '${want.name}' unacquired`);
+            continue;
+        }
+        const before = Inventory.count(want.name);
+        const got = await Shop.buy(want.name, want.count);
+        await Shop.close();
+        if (got > 0 && (await Execution.delayUntil(() => Inventory.count(want.name) > before, TOOL_WAIT_MS))) {
+            log(`bought ${Inventory.count(want.name) - before}x ${want.name}`);
+            bought = true;
+        } else {
+            log(`${shop.npc} had no '${want.name}' in stock`);
         }
     }
     return bought;
