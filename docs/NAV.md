@@ -607,9 +607,10 @@ numbers. What they govern:
 | `PROGRESS_WINDOW` | how far ahead `locateOnPath` scans |
 | `CORRIDOR` | how far off-path still counts as on-path |
 | `OFF_CORRIDOR_STRIKES` | consecutive off-corridor passes before re-pathing |
-| pathFollow `stallTicks` (default 9) | server ticks without tile change before stall recovery / repath |
+| pathFollow `stallTicks` (default 9) | server ticks without **tile change** before stall recovery / repath (not reset on walk clicks) |
 | `UNREACH_CLICK_IDLE_TICKS` | idle ticks before clearing an unreachable mid-path walk click (re-pick only; not stall recovery) |
 | `MAX_REPATHS` | re-plans allowed for one walk |
+| walk `timeoutMs` | wall-clock budget for the whole `walkTo` (shared across repaths); `walk timed out` when exhausted |
 | `TRANSPORT_WAIT_MS` | how long to wait for a crossing to complete |
 | `MULTI_DOOR_CROSS_MS` | budget for a door-dense interior |
 | `OPEN_WAIT_MS` | how long to wait for a leaf to open |
