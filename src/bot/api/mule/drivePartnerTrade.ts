@@ -71,6 +71,17 @@ export interface DrivePartnerTradeOpts {
 }
 
 /**
+ * Wall-clock waits for multiplayer trade UI.
+ *
+ * Do not use {@link Execution.delayUntilTicks} here: partner accepts and offer
+ * sync are not tied to this client's tick rate (live harness often uses 300ms
+ * ticks → 7 ticks ≈ 2.1s, which is too short for mutual Trade / confirm).
+ * Pre-refactor Flax/Nature waits were 3–4s wall-clock.
+ */
+const TRADE_OFFER_WAIT_MS = 5_000;
+const TRADE_CONFIRM_WAIT_MS = 8_000;
+
+/**
  * One beat of an active trade. Call while {@link Trade.active} from a Task
  * that owns the loop (movement cancels the modal).
  */
@@ -82,13 +93,17 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
         opts.setStatus(labels.confirming ?? 'mule: confirming trade');
         const before = metric();
         await Trade.accept();
-        if (await Execution.delayUntilTicks(() => !Trade.active(), 7)) {
+        // Both players must confirm; wait wall-clock for the modal to close.
+        await Execution.delayUntil(() => !Trade.active(), TRADE_CONFIRM_WAIT_MS);
+        if (!Trade.active()) {
             const delta = metric() - before;
             if (opts.onComplete) {
                 opts.onComplete(delta);
             } else {
                 opts.log(`mule: trade complete (inv Δ${delta >= 0 ? '+' : ''}${delta})`);
             }
+        } else {
+            opts.log('mule: confirm still open after wait — partner may not have accepted');
         }
         return;
     }
@@ -155,6 +170,11 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
 
         opts.setStatus(labels.accepting ?? 'mule: accepting product');
         await Trade.accept();
+        // Wait for confirm screen or modal close so the next beat sees confirm.
+        await Execution.delayUntil(
+            () => Trade.onConfirmScreen() || !Trade.active(),
+            TRADE_OFFER_WAIT_MS
+        );
         return;
     }
 
@@ -201,19 +221,34 @@ export async function driveActivePartnerTrade(opts: DrivePartnerTradeOpts): Prom
             return;
         }
         opts.setStatus(labels.offering ?? `mule: offering ${names.join(', ')}`);
+        let anyOffered = false;
         for (const name of names) {
-            await Trade.offerAll(name);
+            if (await Trade.offerAll(name)) {
+                anyOffered = true;
+            } else {
+                opts.log(`mule: offerAll failed for ${name}`);
+            }
         }
-        await Execution.delayUntilTicks(
+        if (!anyOffered) {
+            opts.log('mule: could not offer any product — declining');
+            await Trade.decline();
+            opts.onDecline?.('offerAll failed');
+            return;
+        }
+        // Wait until the offer side shows product (or modal dies) before accept beat.
+        await Execution.delayUntil(
             () =>
-                (opts.myOfferReady?.() ?? Trade.myOffer().length > 0) ||
-                Trade.onConfirmScreen() ||
-                !Trade.active(),
-            7
+                (opts.myOfferReady?.() ?? Trade.myOffer().length > 0)
+                || Trade.onConfirmScreen()
+                || !Trade.active(),
+            TRADE_OFFER_WAIT_MS
         );
         return;
     }
     opts.setStatus(labels.acceptingOffer ?? 'mule: accepting handoff');
     await Trade.accept();
-    await Execution.delayUntilTicks(() => Trade.onConfirmScreen() || !Trade.active(), 7);
+    await Execution.delayUntil(
+        () => Trade.onConfirmScreen() || !Trade.active(),
+        TRADE_OFFER_WAIT_MS
+    );
 }

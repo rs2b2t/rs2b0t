@@ -528,7 +528,8 @@ export class MuleRequestOrWait implements Task {
         }
         this.bot.setStatus(`mule: requesting trade with ${name || 'partner'}`);
         await Trade.request(name);
-        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
+        // Wall-clock: multiplayer Trade-with is not tied to this client's tick rate.
+        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 5_000);
     }
 }
 

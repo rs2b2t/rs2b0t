@@ -21,7 +21,7 @@ import type { SettingsSchema } from '../runtime/Settings.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import {
     FLAX_FIELD, FLAX_GATE, SPINNING_WHEEL_AREA, BANK_ENTRANCE, BANK_STAND, LADDER_TILE,
-    MEET_TILE, TRADE_RANGE, TRADE_REQUEST_COOLDOWN_TICKS, TRADE_FAIL_COOLDOWN_TICKS,
+    MEET_TILE, TRADE_RANGE, TRADE_REQUEST_COOLDOWN_MS, TRADE_FAIL_COOLDOWN_MS,
     FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
     BOOTH_NAME, LADDER_NAME, CLIMB_UP, CLIMB_DOWN, FIELD_SCOPE, FIELD_ARRIVE,
     LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
@@ -84,8 +84,8 @@ export default class FlaxRunner extends TaskBot {
     /** Last flax tile we committed to picking — prefer it while it still exists. */
     private stickyFlax: Tile | null = null;
 
-    /** Earliest time we may call Trade.request again (stops request thrash). */
-    private nextTradeRequestAtTick = 0;
+    /** Earliest wall-clock time we may call Trade.request again (stops request thrash). */
+    private nextTradeRequestAtMs = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -176,20 +176,22 @@ export default class FlaxRunner extends TaskBot {
     }
 
     canRequestTrade(): boolean {
-        return Game.tick() >= this.nextTradeRequestAtTick;
+        // Wall-clock: mutual Trade-with thrash is independent of client tick rate
+        // (live harness often uses 300ms ticks, which halved tick-based cooldowns).
+        return Date.now() >= this.nextTradeRequestAtMs;
     }
 
     noteTradeRequest(): void {
-        this.nextTradeRequestAtTick = Game.tick() + TRADE_REQUEST_COOLDOWN_TICKS;
+        this.nextTradeRequestAtMs = Date.now() + TRADE_REQUEST_COOLDOWN_MS;
     }
 
     noteTradeFailed(): void {
-        this.nextTradeRequestAtTick = Game.tick() + TRADE_FAIL_COOLDOWN_TICKS;
+        this.nextTradeRequestAtMs = Date.now() + TRADE_FAIL_COOLDOWN_MS;
     }
 
     noteTradeOk(): void {
         // Short quiet period after a successful handoff so both sides don't re-open.
-        this.nextTradeRequestAtTick = Game.tick() + TRADE_REQUEST_COOLDOWN_TICKS;
+        this.nextTradeRequestAtMs = Date.now() + TRADE_REQUEST_COOLDOWN_MS;
     }
 
     /**
@@ -591,7 +593,8 @@ class WaitAndTrade implements Task {
         this.bot.setStatus('requesting trade with spinner');
         this.bot.noteTradeRequest();
         await Trade.request(this.bot.getPartner());
-        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
+        // Wall-clock: mutual Trade-with needs both players; tick waits shrink under speed 300.
+        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 5_000);
     }
 }
 
@@ -732,7 +735,8 @@ class RequestTrade implements Task {
         this.bot.setStatus('requesting trade from runner');
         this.bot.noteTradeRequest();
         await Trade.request(this.bot.getPartner());
-        await Execution.delayUntilTicks(() => Trade.active() || EventSignal.pending(), 7);
+        // Wall-clock: mutual Trade-with needs both players; tick waits shrink under speed 300.
+        await Execution.delayUntil(() => Trade.active() || EventSignal.pending(), 5_000);
     }
 }
 
