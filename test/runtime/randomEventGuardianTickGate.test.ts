@@ -19,6 +19,7 @@ describe('RandomEventGuardian tick gate', () => {
     let detectCalls: number;
     let origDetect: typeof RandomEvents.detect;
     let origReady: typeof Game.sceneReady;
+    let origTickCount: PropertyDescriptor | undefined;
     let tick: number;
 
     const kickFrame = async (): Promise<void> => {
@@ -37,6 +38,7 @@ describe('RandomEventGuardian tick gate', () => {
         origDetect = RandomEvents.detect;
         origReady = Game.sceneReady;
         Game.sceneReady = (): boolean => true;
+        origTickCount = Object.getOwnPropertyDescriptor(BotHost, 'tickCount');
         Object.defineProperty(BotHost, 'tickCount', { get: () => tick, configurable: true });
         RandomEventGuardian.enable();
     });
@@ -44,6 +46,9 @@ describe('RandomEventGuardian tick gate', () => {
     afterEach(() => {
         RandomEvents.detect = origDetect;
         Game.sceneReady = origReady;
+        if (origTickCount) {
+            Object.defineProperty(BotHost, 'tickCount', origTickCount);
+        }
     });
 
     test('scans at most once per server tick while nothing is found', async () => {

@@ -25,6 +25,7 @@ describe('RandomEventGuardian with a parked script loop', () => {
     let origDetect: typeof RandomEvents.detect;
     let origHandle: typeof RandomEvents.handle;
     let origReady: typeof Game.sceneReady;
+    let origTickCount: PropertyDescriptor | undefined;
     let tick: number;
 
     const pumpFrames = async (n: number): Promise<void> => {
@@ -41,6 +42,7 @@ describe('RandomEventGuardian with a parked script loop', () => {
         origHandle = RandomEvents.handle;
         origReady = Game.sceneReady;
         Game.sceneReady = (): boolean => true;
+        origTickCount = Object.getOwnPropertyDescriptor(BotHost, 'tickCount');
         Object.defineProperty(BotHost, 'tickCount', { get: () => tick, configurable: true });
         RandomEventGuardian.enable();
     });
@@ -49,6 +51,9 @@ describe('RandomEventGuardian with a parked script loop', () => {
         RandomEvents.detect = origDetect;
         RandomEvents.handle = origHandle;
         Game.sceneReady = origReady;
+        if (origTickCount) {
+            Object.defineProperty(BotHost, 'tickCount', origTickCount);
+        }
         Scheduler.active = null;
         ScriptRunner.ctx = null;
     });
