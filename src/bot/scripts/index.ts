@@ -54,6 +54,7 @@ import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
+import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
 import CoalTrucks from './CoalTrucks.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
@@ -532,6 +533,16 @@ ScriptRegistry.register({
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,
     create: () => new FlaxSpinner()
+});
+
+ScriptRegistry.register({
+    name: 'GemCutter',
+    description:
+        'Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem your Crafting level allows — lowest-level first — deposits the cut gems (and crushed gems), and repeats. Leave all gems unchecked to cut everything you can; check specific gems to restrict the run to a subset. Each bank cycle deposits everything from your pack, so start with nothing valuable carried',
+    category: 'Crafting',
+    tags: ['crafting', 'gems', 'banking', 'members'],
+    settingsSchema: GEM_CUTTER_SETTINGS,
+    create: () => new GemCutter()
 });
 
 ScriptRegistry.register({
