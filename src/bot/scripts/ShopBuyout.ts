@@ -254,7 +254,24 @@ class BuyoutPass implements Task {
             bot.toPhase('bank');
             return;
         }
+        // If we bought items, check if inventory is now full before continuing
         if (boughtUnits > 0) {
+            if (bot.rec) {
+                const plan = this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
+                for (const want of plan) {
+                    if (this.needSpaceFor(want)) {
+                        bot.log(`[buyout] inventory full after buying — banking before next`);
+                        bot.toPhase('bank');
+                        return;
+                    }
+                }
+            }
+            // Fallback: if inventory is full and we have no coins or can't plan, bank anyway
+            if (Inventory.isFull()) {
+                bot.log('[buyout] inventory full after buying — banking to make space');
+                bot.toPhase('bank');
+                return;
+            }
             return;
         }
         // Before waiting for restock, check if inventory is full and we need space for next purchase
@@ -267,6 +284,12 @@ class BuyoutPass implements Task {
                     return;
                 }
             }
+        }
+        // If we bought nothing and inventory is full (e.g., full of unstackables, 0 coins), bank to make space
+        if (Inventory.isFull()) {
+            bot.log('[buyout] inventory full and nothing bought — banking to make space');
+            bot.toPhase('bank');
+            return;
         }
         bot.setStatus(`waiting for restock (${Math.round(bot.recheckMs / 1000)}s)`);
         await Execution.delayUntil(() => EventSignal.pending(), bot.recheckMs);
