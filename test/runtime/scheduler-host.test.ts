@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { Execution, HostExecution } from '#/bot/api/Execution.js';
+import { Execution } from '#/bot/api/Execution.js';
 import { BotHost } from '#/bot/BotHost.js';
 import { Scheduler } from '#/bot/runtime/Scheduler.js';
 import { ScriptContext } from '#/bot/runtime/ScriptContext.js';
 
 /**
  * RandomEventGuardian must settle Execution waits even when a script context
- * exists (paused / mid-loop). hostWaiters + HostExecution are that path.
+ * exists (paused / mid-loop). hostWaiters + runHost are that path.
  */
-describe('Scheduler host execution', () => {
+describe('Scheduler host scope', () => {
     afterEach(() => {
         Scheduler.active = null;
     });
@@ -33,7 +33,7 @@ describe('Scheduler host execution', () => {
         expect(ctx.log.some(line => line.msg.startsWith('watchdog:'))).toBe(true);
     });
 
-    test('HostExecution settles waits while a paused script is active', async () => {
+    test('runHost settles waits while a paused script is active', async () => {
         const ctx = new ScriptContext();
         ctx.pause();
         Scheduler.active = ctx;
@@ -41,10 +41,10 @@ describe('Scheduler host execution', () => {
         // Without host scope, waits land on the frozen script queue and never
         // resolve while state !== 'running'.
         let hostDone = false;
-        const hostPromise = (async () => {
-            await HostExecution.delay(1);
+        const hostPromise = Scheduler.runHost(async () => {
+            await Execution.delay(1);
             hostDone = true;
-        })();
+        });
 
         // Pump a few client frames (Scheduler listens on BotHost frames).
         for (let i = 0; i < 5; i++) {
@@ -61,7 +61,7 @@ describe('Scheduler host execution', () => {
         expect(ctx.waiters).toHaveLength(0);
     });
 
-    test('ordinary Execution remains frozen on a paused script', async () => {
+    test('without runHost, waits on a paused script do not settle', async () => {
         const ctx = new ScriptContext();
         ctx.pause();
         Scheduler.active = ctx;

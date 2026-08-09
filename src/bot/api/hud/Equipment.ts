@@ -1,6 +1,6 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
-import { Execution, type ExecutionApi } from '../Execution.js';
+import { Execution } from '../Execution.js';
 import { Bank } from './Bank.js';
 import { Inventory, InvItem } from './Inventory.js';
 
@@ -18,7 +18,7 @@ export const Equipment = {
         return reader.equipment().some(i => i.name?.toLowerCase() === wanted);
     },
 
-    async equip(name: string, execution: ExecutionApi = Execution): Promise<boolean> {
+    async equip(name: string): Promise<boolean> {
         if (Equipment.contains(name)) {
             return true;
         }
@@ -43,10 +43,10 @@ export const Equipment = {
         if (!(await item.interact(op))) {
             return false;
         }
-        return execution.delayUntil(() => Equipment.contains(name), 3000);
+        return Execution.delayUntil(() => Equipment.contains(name), 3000);
     },
 
-    async unequip(name: string, execution: ExecutionApi = Execution): Promise<boolean> {
+    async unequip(name: string): Promise<boolean> {
         const wanted = name.toLowerCase();
         const worn = reader.equipment().find(i => i.name?.toLowerCase() === wanted);
         if (!worn) {
@@ -59,6 +59,6 @@ export const Equipment = {
         }
 
         await ActionRouter.driver.invButton(worn.id, worn.slot, worn.comId, opIndex + 1);
-        return execution.delayUntil(() => !Equipment.contains(name), 3000);
+        return Execution.delayUntil(() => !Equipment.contains(name), 3000);
     }
 };

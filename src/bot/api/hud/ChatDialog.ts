@@ -1,6 +1,6 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
-import { Execution, type ExecutionApi } from '../Execution.js';
+import { Execution } from '../Execution.js';
 
 /**
  * Chat modals: dialogue pages, option lists, and make-x menus. Server-driven
@@ -179,16 +179,16 @@ export const ChatDialog = {
         return Execution.delayUntil(() => reader.modals().main !== before, 5000);
     },
 
-    async continue(execution: ExecutionApi = Execution): Promise<boolean> {
+    async continue(): Promise<boolean> {
         const before = reader.modals().chat;
         if (!(await ActionRouter.driver.continueDialog())) {
             return false;
         }
 
-        return execution.delayUntil(() => reader.modals().chat !== before || reader.chatContinueComId() !== -1, 3000);
+        return Execution.delayUntil(() => reader.modals().chat !== before || reader.chatContinueComId() !== -1, 3000);
     },
 
-    async chooseOption(match?: string, execution: ExecutionApi = Execution): Promise<boolean> {
+    async chooseOption(match?: string): Promise<boolean> {
         const opts = reader.chatOptions();
         if (opts.length === 0) {
             return false;
@@ -205,6 +205,6 @@ export const ChatDialog = {
             return false;
         }
 
-        return execution.delayUntil(() => reader.modals().chat !== before || reader.chatContinueComId() !== -1, 3000);
+        return Execution.delayUntil(() => reader.modals().chat !== before || reader.chatContinueComId() !== -1, 3000);
     }
 };

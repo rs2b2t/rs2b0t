@@ -16,17 +16,40 @@ class SchedulerImpl {
     private lastPumpAt = 0;
 
     /**
-     * Waiters from explicit host-owned execution. Settled every frame
+     * Waiters from {@link Execution} when no script is active, or when
+     * {@link runHost} is nested (RandomEventGuardian). Settled every frame
      * regardless of ScriptRunner state — including paused scripts.
      */
     private hostWaiters: Waiter[] = [];
+
+    /**
+     * Nesting depth for host-scoped Execution. When > 0, every enqueue lands on
+     * {@link hostWaiters} even if a script is active (paused, mid-loop, etc.).
+     */
+    private hostScopeDepth = 0;
 
     constructor() {
         BotHost.addFrameListener(() => this.pump());
     }
 
+    /**
+     * Run `fn` with Execution waits forced onto hostWaiters.
+     * Used by RandomEventGuardian so always-on event solving is not bound to
+     * the script waiter queue (which is frozen while paused / not running).
+     */
+    async runHost<T>(fn: () => Promise<T>): Promise<T> {
+        this.hostScopeDepth++;
+        try {
+            return await fn();
+        } finally {
+            this.hostScopeDepth--;
+        }
+    }
+
     enqueue(spec: WaiterSpec): Promise<boolean> {
-        if (!this.active) {
+        // Host scope wins even with an active script (guardian mid-handle while
+        // a bot is paused or mid long walk).
+        if (this.hostScopeDepth > 0 || !this.active) {
             return this.enqueueHost(spec);
         }
 
@@ -41,8 +64,7 @@ class SchedulerImpl {
         });
     }
 
-    /** Explicit host queue. Do not infer this from an async-global flag. */
-    enqueueHost(spec: WaiterSpec): Promise<boolean> {
+    private enqueueHost(spec: WaiterSpec): Promise<boolean> {
         return new Promise<boolean>((resolve, reject) => {
             this.hostWaiters.push({ ...spec, resolve, reject });
         });

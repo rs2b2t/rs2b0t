@@ -1,7 +1,7 @@
 import { Game } from '../api/Game.js';
-import { HostExecution } from '../api/Execution.js';
 import { RandomEvents } from '../api/RandomEvents.js';
 import { BotHost } from '../BotHost.js';
+import { Scheduler } from './Scheduler.js';
 import { ScriptRunner } from './ScriptRunner.js';
 
 /**
@@ -11,8 +11,8 @@ import { ScriptRunner } from './ScriptRunner.js';
  * Scripted bots still yield via Supervisor / EventSignal; this covers AFK players,
  * paused scripts, and the gap between script loops.
  *
- * Its waits use an explicit host executor, so they settle even while a script
- * context is paused or otherwise not pumping its own queue.
+ * Waits go through {@link Scheduler.runHost} so they settle on hostWaiters even
+ * when a script context is active (script waiters freeze while paused / not running).
  * Work is tick-gated and single-flight with Supervisor.
  */
 class RandomEventGuardianImpl {
@@ -73,20 +73,8 @@ class RandomEventGuardianImpl {
             ctx.watchdogHold = watchdogHold;
         }
         try {
-            // Do not overlap the handler with an already-running script loop.
-            // EventSignal is true while handling, so cooperative walks/actions
-            // yield promptly; a paused loop is quiescent even when its old
-            // loopInFlight flag remains set on a frozen waiter.
-            if (ctx?.state === 'running' && ctx.loopInFlight) {
-                const yielded = await HostExecution.delayUntil(
-                    () => ctx.state !== 'running' || !ctx.loopInFlight,
-                    5_000
-                );
-                if (!yielded) {
-                    return;
-                }
-            }
-            await RandomEvents.handle(msg => this.log(msg), HostExecution);
+            // Host scope: never park guardian delays on a (possibly paused) script queue.
+            await Scheduler.runHost(() => RandomEvents.handle(msg => this.log(msg)));
         } catch (err) {
             console.error('[rs2b0t] RandomEventGuardian error', err);
         } finally {
