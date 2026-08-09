@@ -12,6 +12,7 @@ export interface ShopPreset {
 }
 
 export const SHOP_PRESETS: ShopPreset[] = [
+    { label: "Aemad's vials — East Ardougne (Ardougne East bank)", keeper: 'Aemad', shopStand: new Tile(2613, 3294, 0), bankStand: new Tile(2655, 3283, 0), boothName: 'Bank booth', boothOp: 'Use-quickly' },
     { label: 'Mage Arena runes — Lundail (Gundai bank)', keeper: 'Lundail', shopStand: new Tile(2535, 4719, 0), bankStand: new Tile(2533, 4714, 0), banker: 'Gundai' },
     { label: "Betty's runes — Port Sarim (Falador West bank)", keeper: 'Betty', shopStand: new Tile(3012, 3258, 0), bankStand: new Tile(2946, 3369, 0) },
     { label: "Aubury's runes — Varrock (Varrock East bank)", keeper: 'Aubury', shopStand: new Tile(3253, 3401, 0), bankStand: new Tile(3251, 3420, 0) },
