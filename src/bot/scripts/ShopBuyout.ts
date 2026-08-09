@@ -260,7 +260,7 @@ class BuyoutPass implements Task {
                 const plan = this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
                 for (const want of plan) {
                     if (this.needSpaceFor(want)) {
-                        bot.log(`[buyout] inventory full after buying — banking before next`);
+                        bot.log('[buyout] inventory full after buying — banking before next');
                         bot.toPhase('bank');
                         return;
                     }
