@@ -188,6 +188,17 @@ class BuyoutPass implements Task {
             bot.log('[buyout] walk to the shop failed — will retry');
             return;
         }
+
+        // Check if we have space for ANY planned purchase before opening shop
+        if (bot.rec) {
+            this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
+            if (Inventory.isFull()) {
+                bot.log('[buyout] inventory full — banking before opening shop');
+                bot.toPhase('bank');
+                return;
+            }
+        }
+
         if (!(await Shop.open(bot.keeper))) {
             bot.log(`[buyout] could not open ${bot.keeper}'s shop — will retry`);
             return;
@@ -204,6 +215,15 @@ class BuyoutPass implements Task {
                 bot.sessionSpent += spent;
                 boughtUnits += bought;
                 bot.log(`[buyout] buy ${want.obj} n=${bought} spent=${spent} (session ${bot.sessionSpent}/${bot.budgetGp}gp)`);
+                // If we bought an unstackable item and pack is now full, bank before next
+                if (bot.rec) {
+                    const itemDef = bot.rec.items.find(i => i.obj === want.obj);
+                    if (itemDef && !itemDef.stackable && Inventory.isFull()) {
+                        bot.log(`[buyout] inventory full after unstackable ${want.obj} — banking first`);
+                        bot.toPhase('bank');
+                        return;
+                    }
+                }
             } else {
                 bot.log(`[buyout] buy ${want.obj} n=0 of ${want.units} — stock gone or coins short`);
             }
@@ -236,10 +256,16 @@ class BuyoutPass implements Task {
                     stockByObj[obj] = row.count;
                 }
             }
-            const anyChosen = bot.rec.items.some(i => bot.chosen.has(i.name.toLowerCase()) && (stockByObj[i.obj] ?? 0) > 0);
-            const chosen = anyChosen ? bot.chosen : new Set(bot.rec.items.map(i => i.name.toLowerCase()));
-            if (!anyChosen && stock.length > 0) {
-                bot.log('[buyout] buyItems selection matches nothing here — buying all stock');
+            // User made a selection: stick to it even when out of stock (wait for restock).
+            // Only fall back to "buy all" if user made NO selection at all.
+            const chosen = bot.chosen.size > 0
+                ? bot.chosen
+                : new Set(bot.rec.items.map(i => i.name.toLowerCase()));
+            if (bot.chosen.size > 0) {
+                const available = bot.rec.items.some(i => bot.chosen.has(i.name.toLowerCase()) && (stockByObj[i.obj] ?? 0) > 0);
+                if (!available && stock.length > 0) {
+                    bot.log('[buyout] selected items out of stock — waiting for restock');
+                }
             }
             return buyoutPlan(bot.rec, stockByObj, coins, chosen);
         }
