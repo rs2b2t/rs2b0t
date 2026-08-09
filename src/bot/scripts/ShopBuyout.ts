@@ -177,6 +177,19 @@ class BankTrip implements Task {
 class BuyoutPass implements Task {
     constructor(private bot: ShopBuyout) {}
 
+    private needSpaceFor(want: { obj: string; name: string; units: number }): boolean {
+        if (!this.bot.rec) return false;
+        const itemDef = this.bot.rec.items.find(i => i.obj === want.obj);
+        if (!itemDef) return false;
+        if (itemDef.stackable) {
+            // Stackable: need space only if we don't already have a stack
+            return Inventory.count(itemDef.name) === 0 && Inventory.isFull();
+        } else {
+            // Unstackable: need a free slot
+            return Inventory.isFull();
+        }
+    }
+
     validate(): boolean {
         return this.bot.inPhase('buy');
     }
@@ -191,11 +204,13 @@ class BuyoutPass implements Task {
 
         // Check if we have space for ANY planned purchase before opening shop
         if (bot.rec) {
-            this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
-            if (Inventory.isFull()) {
-                bot.log('[buyout] inventory full — banking before opening shop');
-                bot.toPhase('bank');
-                return;
+            const plan = this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
+            for (const want of plan) {
+                if (this.needSpaceFor(want)) {
+                    bot.log('[buyout] inventory full — banking before opening shop');
+                    bot.toPhase('bank');
+                    return;
+                }
             }
         }
 
@@ -215,13 +230,15 @@ class BuyoutPass implements Task {
                 bot.sessionSpent += spent;
                 boughtUnits += bought;
                 bot.log(`[buyout] buy ${want.obj} n=${bought} spent=${spent} (session ${bot.sessionSpent}/${bot.budgetGp}gp)`);
-                // If we bought an unstackable item and pack is now full, bank before next
+                // If pack is now full and next item needs space, bank before next
                 if (bot.rec) {
-                    const itemDef = bot.rec.items.find(i => i.obj === want.obj);
-                    if (itemDef && !itemDef.stackable && Inventory.isFull()) {
-                        bot.log(`[buyout] inventory full after unstackable ${want.obj} — banking first`);
-                        bot.toPhase('bank');
-                        return;
+                    const plan = this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
+                    for (const nextWant of plan) {
+                        if (this.needSpaceFor(nextWant)) {
+                            bot.log(`[buyout] inventory full after ${want.obj} — banking before next`);
+                            bot.toPhase('bank');
+                            return;
+                        }
                     }
                 }
             } else {
