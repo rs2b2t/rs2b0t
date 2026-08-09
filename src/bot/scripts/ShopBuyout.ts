@@ -257,6 +257,17 @@ class BuyoutPass implements Task {
         if (boughtUnits > 0) {
             return;
         }
+        // Before waiting for restock, check if inventory is full and we need space for next purchase
+        if (bot.rec) {
+            const plan = this.plan(Math.min(Inventory.count('Coins'), bot.budgetLeft()));
+            for (const want of plan) {
+                if (this.needSpaceFor(want)) {
+                    bot.log('[buyout] inventory full — banking before waiting for restock');
+                    bot.toPhase('bank');
+                    return;
+                }
+            }
+        }
         bot.setStatus(`waiting for restock (${Math.round(bot.recheckMs / 1000)}s)`);
         await Execution.delayUntil(() => EventSignal.pending(), bot.recheckMs);
     }
