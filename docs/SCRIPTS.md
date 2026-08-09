@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **50 scripts** across 20 categories. They double as worked
+The client ships **51 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -16,7 +16,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Agility](#agility) — 4
 - [Combat](#combat) — 11
 - [Cooking](#cooking) — 1
-- [Crafting](#crafting) — 5
+- [Crafting](#crafting) — 6
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
@@ -431,6 +431,16 @@ Tags: `seers`, `crafting`, `banking`, `afk`
 | `spinOp` | string | `"Spin"` | Spinning wheel op |
 | `obstacle` | string | `"door"` | Openable obstacles (contains) |
 | `leashRadius` | number (2–20) | `8` | Wheel/ladder search radius (tiles) |
+
+### GemCutter
+
+Banks at the nearest bank, withdraws uncut gems and a chisel, cuts every gem your Crafting level allows — lowest-level first — deposits the cut gems (and crushed gems), and repeats. Leave all gems unchecked to cut everything you can; check specific gems to restrict the run to a subset. Each bank cycle deposits everything from your pack, so start with nothing valuable carried
+
+Tags: `crafting`, `gems`, `banking`, `members`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `gems` | string[] | `[]` | Gems to cut — one of: Sapphire, Emerald, Ruby, Diamond, Dragonstone, Opal, Jade, Red topaz |
 
 ### LeatherCrafter
 
