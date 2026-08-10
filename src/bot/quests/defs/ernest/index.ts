@@ -1,7 +1,7 @@
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { EC_ID, EC_STAGE, EC_TILE, ODDENSTEIN, VERONICA } from './areas.js';
-import { fetchOilCan } from './basement.js';
+import { basementRegion, fetchOilCan, inAlcove, leaveManorBasement } from './basement.js';
 import { fetchPressureGauge, fetchRubberTube, inCloset, leaveCloset } from './items.js';
 import { readErnestProgress } from './journal.js';
 import { heldId, kit } from './supplies.js';
@@ -37,10 +37,16 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
     }
-    // Before the bank trip: the closet is sealed, so a leg that starts in there
-    // spends its whole budget proving the world unreachable.
+    // Three sealed pockets, each reachable only by a scripted teleport, and a leg
+    // that starts in one spends its whole budget proving the world unreachable.
+    // Ahead of the bank trip, which is itself a walk.
     if (inCloset(snap.tile)) {
         return { kind: 'custom', name: 'leave the closet', run: leaveCloset };
+    }
+    // Only once the can is held: before that the basement is where `fetchOilCan`
+    // is supposed to be, and escaping would fight it for the pocket.
+    if (heldId(snap, EC_ID.OIL_CAN) > 0 && (inAlcove(snap.tile) || basementRegion(snap.tile) !== 'outside')) {
+        return { kind: 'custom', name: 'leave the manor basement', run: leaveManorBasement };
     }
     const supplies = kit(snap);
     if (supplies) {

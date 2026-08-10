@@ -98,6 +98,37 @@ describe('Ernest the Chicken decide()', () => {
         expect(customName(bare)).toBe('leave the closet');
     });
 
+    test('escapes the basement once the can is held, ahead of the gauge leg', () => {
+        // Observed live: the climb-out failed, and every later leg then spent its
+        // whole budget planning a route out of a sealed pocket.
+        const inBasement = step({
+            stage: EC_STAGE.SPOKEN_ODDENSTEIN,
+            invIds: [[EC_ID.RUBBER_TUBE, 1], [EC_ID.OIL_CAN, 1]],
+            tile: { x: 3117, z: 9755, level: 0 }
+        });
+        expect(customName(inBasement)).toBe('leave the manor basement');
+    });
+
+    test('escapes the ladder alcove once the can is held', () => {
+        const inAlcoveTile = step({
+            stage: EC_STAGE.SPOKEN_ODDENSTEIN,
+            invIds: [[EC_ID.RUBBER_TUBE, 1], [EC_ID.OIL_CAN, 1]],
+            tile: { x: 3094, z: 3362, level: 0 }
+        });
+        expect(customName(inAlcoveTile)).toBe('leave the manor basement');
+    });
+
+    test('does not fight fetchOilCan for the pocket before the can is held', () => {
+        // Without the can, being in the basement is exactly where the leg belongs;
+        // escaping would bounce the two against each other forever.
+        const goingIn = step({
+            stage: EC_STAGE.SPOKEN_ODDENSTEIN,
+            invIds: [[EC_ID.RUBBER_TUBE, 1]],
+            tile: { x: 3117, z: 9755, level: 0 }
+        });
+        expect(customName(goingIn)).toBe('fetch the oil can');
+    });
+
     test('a tile just outside the closet is not treated as inside it', () => {
         const outside = step({ stage: EC_STAGE.SPOKEN_ODDENSTEIN, tile: { x: 3107, z: 3367, level: 0 } });
         expect(customName(outside)).toBe('fetch the rubber tube');

@@ -28,6 +28,19 @@ export const REGION_BOX = {
     r9: { minX: 3090, maxX: 3099, minZ: 9753, maxZ: 9757 }
 } as const;
 
+/**
+ * The 36-tile pocket the bookcase teleports into, holding the puzzle ladder.
+ * Its only exit is the lever, which teleports back through the same wall.
+ */
+const ALCOVE_BOX = { minX: 3091, maxX: 3096, minZ: 3354, maxZ: 3363 };
+
+/** Pure, so `decide()` can branch on the snapshot tile without a client. */
+export function inAlcove(tile: { x: number; z: number; level: number } | null | undefined): boolean {
+    return Boolean(tile) && tile!.level === 0
+        && tile!.x >= ALCOVE_BOX.minX && tile!.x <= ALCOVE_BOX.maxX
+        && tile!.z >= ALCOVE_BOX.minZ && tile!.z <= ALCOVE_BOX.maxZ;
+}
+
 export function basementRegion(tile: { x: number; z: number; level: number } | null | undefined): BasementRegion {
     if (!tile || tile.level !== 0) {
         return 'outside';
@@ -270,6 +283,49 @@ async function leaveBasement(log: (m: string) => void): Promise<boolean> {
     return status === 'done' && basementRegion(here()) === 'outside';
 }
 
+/**
+ * Pull the alcove lever back into the manor.
+ *
+ * The nav crossing exists, but the executor gets one look at the scene and the
+ * arrival here is a scripted teleport — every loc query is empty for about a tick
+ * after one, so a single miss blacklists the edge and strands the bot in a pocket
+ * with no other way out. Reach retries, which is the whole difference.
+ */
+export async function leaveAlcove(log: (m: string) => void): Promise<boolean> {
+    if (!inAlcove(here())) {
+        return true;
+    }
+    await Sustain.run();
+    if (!(await Traversal.walkResilient(EC_TILE.ALCOVE_LEVER, { radius: 1, attempts: 4, timeoutMs: 90_000, log }))) {
+        log('could not reach the alcove lever');
+        return false;
+    }
+    await settleScene();
+    const status = await Reach.locOp({
+        name: 'Lever',
+        op: 'Pull',
+        near: EC_TILE.ALCOVE_LEVER,
+        expect: () => !inAlcove(here()),
+        expectMs: 8000,
+        log
+    });
+    await settleScene();
+    if (status === 'done' && !inAlcove(here())) {
+        log('pulled the alcove lever back into the manor');
+        return true;
+    }
+    log('the alcove lever did not open the bookcase');
+    return false;
+}
+
+/** Out of the basement and out of the alcove — two pockets, one exit each. */
+export async function leaveManorBasement(log: (m: string) => void): Promise<boolean> {
+    if (!(await leaveBasement(log))) {
+        return false;
+    }
+    return leaveAlcove(log);
+}
+
 async function takeOilCan(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(EC_TILE.OIL_CAN_SPAWN, { radius: 1, attempts: 4, timeoutMs: 60_000, log }))) {
         return false;
@@ -292,7 +348,7 @@ async function takeOilCan(log: (m: string) => void): Promise<boolean> {
  */
 export async function fetchOilCan(log: (m: string) => void): Promise<boolean> {
     if (held(EC_ID.OIL_CAN) > 0) {
-        return leaveBasement(log);
+        return leaveManorBasement(log);
     }
     for (let pass = 0; pass < 3; pass++) {
         await Sustain.run();
@@ -318,7 +374,7 @@ export async function fetchOilCan(log: (m: string) => void): Promise<boolean> {
             await unwind(log);
             continue;
         }
-        return leaveBasement(log);
+        return leaveManorBasement(log);
     }
     log('three passes of the lever chain and still no oil can');
     return false;
