@@ -65,7 +65,7 @@ export const SETTINGS: SettingsSchema = {
     ammo: {
         type: 'string',
         default: 'Iron arrow',
-        options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow'],
+        options: ['Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Bolts'],
         label: 'Bow ammo',
         group: 'Combat',
         showIf: SHOW_RANGE,
@@ -88,6 +88,7 @@ export const SETTINGS: SettingsSchema = {
 
     loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the moss giant drop table; ticked drops get grabbed. Everything picked up is banked — the bank keeps only food/runes/ammo/weapon.' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
+    lootAmmo: { type: 'boolean', default: false, label: 'Loot my ammo off the ground', group: 'Banking & loot', showIf: SHOW_RANGE, help: 'pick up your arrows/bolts/darts dropped around the field' },
     buryBones: { type: 'boolean', default: false, label: 'Bury big bones', group: 'Banking & loot', help: 'bury Big bones for Prayer xp instead of banking them (always looted when on)' },
     safespotTile: { type: 'tile', default: DEFAULT_SAFESPOT, label: 'Safespot / field tile', group: 'Location' },
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Ardougne N)', group: 'Location' }
@@ -107,6 +108,7 @@ let AMMO_WITHDRAW = 500;
 let FOOD_WITHDRAW = 20;
 let LOOT_SET = new Set<string>();
 let BANK_COMMON = true;
+let LOOT_AMMO = false;
 let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let BANK_TILE = DEFAULT_BANK;
@@ -209,7 +211,8 @@ function findLoot() {
     return GroundItems.query()
         .where(g => {
             const name = (g.name ?? '').toLowerCase();
-            return LOOT_SET.has(name) || (BANK_COMMON && matchesCommonBankLoot(g.name ?? '', g.id));
+            return LOOT_SET.has(name) || (BANK_COMMON && matchesCommonBankLoot(g.name ?? '', g.id)) ||
+            (LOOT_AMMO && STYLE === 'range' && !Game.inCombat() && (g.name ?? '').toLowerCase() === rangeProjectile().toLowerCase());
         })
         .within(FIELD_RADIUS)
         .nearest();
@@ -669,6 +672,7 @@ export default class MossGiant extends TaskBot {
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
+        LOOT_AMMO = this.settings.bool('lootAmmo', false);
         BURY_BONES = this.settings.bool('buryBones', false);
         if (BURY_BONES) {
             LOOT_SET.add('big bones');
