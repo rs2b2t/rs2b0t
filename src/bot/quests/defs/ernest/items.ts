@@ -192,5 +192,8 @@ export async function fetchPressureGauge(log: (m: string) => void): Promise<bool
     for (let attempt = 0; attempt < 3 && held(EC_ID.PRESSURE_GAUGE) === 0; attempt++) {
         await searchFountain(log);
     }
+    // The gauge can land a tick after the op returns, so read it on a wait
+    // rather than instantaneously — otherwise a leg that worked reports failure.
+    await Execution.delayUntil(() => held(EC_ID.PRESSURE_GAUGE) > 0, 5000);
     return held(EC_ID.PRESSURE_GAUGE) > 0;
 }

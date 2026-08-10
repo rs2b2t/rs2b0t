@@ -45,6 +45,7 @@ interface Args {
     tickMs: number;
     food: string;
     stats: number;
+    poisoned: boolean;
     deploy: boolean;
 }
 
@@ -58,11 +59,13 @@ function parse(argv: string[]): Args {
         tickMs: 300,
         food: 'Lobster',
         stats: 70,
+        poisoned: false,
         deploy: true
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
         if (flag === '--no-deploy') { out.deploy = false; continue; }
+        if (flag === '--poisoned') { out.poisoned = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -202,6 +205,18 @@ try {
 
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Draynor bank`);
     await seedItemsToBank(page, BANK_SEED, DRAYNOR_BANK);
+
+    // The one piece of quest state a fresh account cannot reach: a fountain
+    // poisoned on an earlier run. Exercises the Search-first branch, which is
+    // otherwise only hit on a resume.
+    if (args.poisoned) {
+        await cheatQuiet(page, 'setvar haunted_manor_fountain_poisoned 1');
+        const set = await getServerVarQuiet(page, 'haunted_manor_fountain_poisoned');
+        console.log(`haunted_manor_fountain_poisoned=${set}`);
+        if (set !== 1) {
+            fail('setvar haunted_manor_fountain_poisoned 1 did not take');
+        }
+    }
 
     if (args.stage > 0) {
         await cheatQuiet(page, `setvar haunted ${args.stage}`);
