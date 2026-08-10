@@ -48,6 +48,7 @@ import {
     wantsAutoFighterLoot
 } from './AutoFighterData.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { Reach } from '../api/Reach.js';
 import { RANDOM_EVENT_CASKET_ID } from '../api/Banking.js';
@@ -312,10 +313,15 @@ export default class AutoFighter extends TaskBot {
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xp = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0) - this.xpAtStart;
         const xph = mins > 0.5 ? `${((xp / mins) * 60 / 1000).toFixed(1)}k` : '—';
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
-        p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}` : STYLE === 'range' ? `Ammo: ${totalAmmo()}` : `Style: ${MELEE_STYLE}`, `Food: ${foodCount()}`, this.deaths ? `Deaths: ${this.deaths}` : `Trips: ${this.trips}`);
-        p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`, `Bones: ${this.buried}`);
-        p.bar('HP', Skills.hpFraction());
+        if (p.tabs('afg', ['Overview', 'Clue']) === 'Clue') {
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, 'watching the pack for clues');
+        } else {
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.kills}`, `XP/hr: ${xph}`);
+            p.row(STYLE === 'mage' ? `Casts: ${castsLeft()}` : STYLE === 'range' ? `Ammo: ${totalAmmo()}` : `Style: ${MELEE_STYLE}`, `Food: ${foodCount()}`, this.deaths ? `Deaths: ${this.deaths}` : `Trips: ${this.trips}`);
+            p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`, `Bones: ${this.buried}`);
+            p.bar('HP', Skills.hpFraction());
+        }
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();

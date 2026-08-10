@@ -35,6 +35,18 @@ export function installPaintInput(canvas: HTMLElement): void {
         true
     );
 
+    canvas.addEventListener(
+        'wheel',
+        e => {
+            const { x, y } = point(e as unknown as MouseEvent);
+            // One notch per event; trackpads send small deltas, so sign only.
+            if (paintState.wheel(x, y, Math.sign((e as WheelEvent).deltaY))) {
+                swallow(e);
+            }
+        },
+        true
+    );
+
     for (const type of ['mouseup', 'pointerup', 'click', 'dblclick', 'contextmenu', 'wheel'] as const) {
         canvas.addEventListener(
             type,

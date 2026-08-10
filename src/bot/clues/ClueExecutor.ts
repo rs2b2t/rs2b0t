@@ -10,7 +10,8 @@ import { Inventory } from '#/bot/api/hud/Inventory.js';
 import { GroundItems } from '#/bot/api/queries/GroundItems.js';
 import { Locs } from '#/bot/api/queries/Locs.js';
 import { Npcs } from '#/bot/api/queries/Npcs.js';
-import type { Loc } from '#/bot/api/entities/index.js';
+import type { GroundItem, Loc, Npc } from '#/bot/api/entities/index.js';
+import { GameMessages } from '#/bot/events/gameMessages.js';
 import { identifyStep } from '#/bot/clues/ClueLogic.js';
 import { ClueTrace, pushTraceRing } from '#/bot/clues/ClueTrace.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/clues/data/cluedb.js';
@@ -19,7 +20,7 @@ import { clueGate } from '#/bot/clues/data/clueGates.js';
 import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
 import { ensureSpade, ensureCoordTools, ensureExtraItems, ensureGateItems } from '#/bot/clues/AcquireTools.js';
 import { SPADE_NAME } from '#/bot/clues/data/toolAcquire.js';
-import { fightGuardian } from '#/bot/clues/Guardian.js';
+import { fightGuardian, sustainUntil } from '#/bot/clues/Guardian.js';
 import { PuzzleBox } from '#/bot/clues/PuzzleBox.js';
 import { casketRewardSlots } from '#/bot/clues/packPlan.js';
 import type { ClueRow, ClueStep } from '#/bot/clues/types.js';
@@ -48,8 +49,16 @@ const REWARD_CLOSE_TRIES = 5;
 const CHALLENGE_REPLY_MS = 3000;
 
 const KEY_WALK_RADIUS = 5;
-const KILL_WAIT_MS = 20_000;
+const KEY_HUNT_MS = 120_000;
+const KEY_ENGAGE_MS = 3000;
+// black_heather respawns in 100 ticks; the rest of the riddle keepers are quicker.
+const KEY_RESPAWN_MS = 70_000;
 const LOOT_WAIT_MS = 3000;
+// player_combat.rs2 refuses op2 outright in single-way combat: while we are still
+// flagged from another fight, while another player has hit the target inside the
+// last 8 ticks, or when the target is someone else's random event. Each refusal
+// is a chat line and a dropped op, so the attack has to be re-sent, not waited out.
+const ATTACK_REFUSED = /already under attack|someone else is fighting|not after you/i;
 
 import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
 
@@ -148,11 +157,29 @@ function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
 }
 
-function heldSignature(): string {
-    return Inventory.items()
-        .map(i => `${i.id}x${i.count}`)
-        .sort()
-        .join(',');
+/**
+ * Did anything enter the pack since `before`?
+ *
+ * A step also counts as progressed when it picks up something it needed — a
+ * riddle key, a tool — but only gains count. Comparing the whole pack instead
+ * made every bite of food read as progress, so a leg that did nothing at all
+ * still reported `step done` and burned a leg off the trail budget.
+ */
+function heldCounts(): Map<number, number> {
+    const counts = new Map<number, number>();
+    for (const i of Inventory.items()) {
+        counts.set(i.id, (counts.get(i.id) ?? 0) + i.count);
+    }
+    return counts;
+}
+
+function gainedSince(before: Map<number, number>): boolean {
+    for (const [id, count] of heldCounts()) {
+        if (count > (before.get(id) ?? 0)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function trackedId(step: ClueStep): number {
@@ -199,6 +226,17 @@ async function drainChat(): Promise<void> {
     }
 }
 
+/** Free one slot the only way a trail pack safely can. */
+async function eatOneForRoom(): Promise<boolean> {
+    const edible = Inventory.items().find(i => i.actions().some(a => a.toLowerCase() === 'eat'));
+    if (!edible) {
+        return false;
+    }
+    const before = Inventory.used();
+    await edible.interact('Eat');
+    return Execution.delayUntil(() => Inventory.used() < before, 3000);
+}
+
 /**
  * A casket rolls its reward into a side inv and then moves it in one slot at a
  * time — anything that does not fit lands on the floor. Eat food to clear the
@@ -211,13 +249,7 @@ async function makeRoomForReward(casketObj: string, log: (m: string) => void): P
     }
     log(`casket needs ${want} free slots, pack has ${Inventory.free()} — eating to make room`);
     for (let guard = 0; guard < 28 && Inventory.free() < want; guard++) {
-        const edible = Inventory.items().find(i => i.actions().some(a => a.toLowerCase() === 'eat'));
-        if (!edible) {
-            break;
-        }
-        const before = Inventory.used();
-        await edible.interact('Eat');
-        if (!(await Execution.delayUntil(() => Inventory.used() < before, 3000))) {
+        if (!(await eatOneForRoom())) {
             break;
         }
     }
@@ -246,17 +278,9 @@ async function collectSpilledReward(log: (m: string) => void): Promise<void> {
         if (!spill) {
             return;
         }
-        if (Inventory.isFull()) {
-            const edible = Inventory.items().find(i => i.actions().some(a => a.toLowerCase() === 'eat'));
-            if (!edible) {
-                log(`WARNING: '${spill.name}' spilled from the casket and the pack is full with nothing to eat — leaving it on the ground`);
-                return;
-            }
-            const used = Inventory.used();
-            await edible.interact('Eat');
-            if (!(await Execution.delayUntil(() => Inventory.used() < used, 3000))) {
-                return;
-            }
+        if (Inventory.isFull() && !(await eatOneForRoom())) {
+            log(`WARNING: '${spill.name}' spilled from the casket and the pack is full with nothing to eat — leaving it on the ground`);
+            return;
         }
         const before = Inventory.used();
         await spill.interact('Take');
@@ -286,31 +310,106 @@ async function answerChallengeIfOpen(step: ClueStep, log: (m: string) => void): 
     return true;
 }
 
+/**
+ * Kill the keeper of a riddle key and pick the key up.
+ *
+ * Shaped like {@link fightGuardian} rather than a single op: `Attack` is refused
+ * outright whenever the server thinks the fight belongs to somebody else, and
+ * riddle001's keeper stands in the Bandit Camp, where aggressive bandits keep us
+ * combat-flagged for most of the approach. One fire-and-forget op therefore left
+ * the bot standing next to an untouched target for the whole wait, so the attack
+ * is re-sent until it takes — on the tick, with upkeep pumped the whole way.
+ */
 async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: NavPoint, log: (m: string) => void): Promise<boolean> {
     const haveKey = (): boolean => Inventory.items().some(i => i.id === kf.keyId);
     if (haveKey()) {
         return true;
     }
-    await walkLeg(huntTile, log, KEY_WALK_RADIUS);
-    let target = Npcs.query().name(kf.npc).action('Attack').nearest();
-    if (!target) {
-        log(`kill-for-key: no '${kf.npc}' near (${huntTile.x},${huntTile.z}) — abandoning riddle`);
-        return false;
-    }
-    if (target.distance() > 1) {
-        await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 2, timeoutMs: WALK_TIMEOUT_MS, log });
-        target = Npcs.query().name(kf.npc).action('Attack').nearest() ?? target;
-    }
-    await target.interact('Attack');
-    const keyOnGround = () => GroundItems.query().where(g => g.id === kf.keyId).nearest();
-    await Execution.delayUntil(() => haveKey() || keyOnGround() !== null || (!target.valid() && !Game.inCombat()), KILL_WAIT_MS);
-    const key = keyOnGround();
-    if (key) {
+    const keyOnGround = (): GroundItem | null => GroundItems.query().where(g => g.id === kf.keyId).nearest();
+    // Prefer the one already facing us; one another player is fighting is refused.
+    const findTarget = (): Npc | null => {
+        const up = Npcs.query().name(kf.npc).action('Attack').where(n => !n.targetsAnotherPlayer()).results();
+        return up.find(n => n.targetsMe()) ?? up[0] ?? null;
+    };
+    const takeKey = async (): Promise<boolean> => {
+        const key = keyOnGround();
+        if (!key) {
+            return false;
+        }
+        if (Inventory.isFull() && !(await eatOneForRoom())) {
+            log(`kill-for-key: the '${kf.npc}' key is on the ground but the pack is full with nothing to eat`);
+            return false;
+        }
         if (key.distance() > 1) {
             await Traversal.walkResilient(key.tile(), { radius: 1, attempts: 2, timeoutMs: WALK_TIMEOUT_MS, log });
         }
         await key.interact('Take');
-        await Execution.delayUntil(haveKey, LOOT_WAIT_MS);
+        return Execution.delayUntil(haveKey, LOOT_WAIT_MS);
+    };
+
+    if (!(await walkLeg(huntTile, log, KEY_WALK_RADIUS))) {
+        log(`kill-for-key: could not reach the '${kf.npc}' spawn at (${huntTile.x},${huntTile.z}) — abandoning riddle`);
+        return false;
+    }
+
+    const deadline = Date.now() + KEY_HUNT_MS;
+    let refused = 0;
+    while (Date.now() < deadline) {
+        if (EventSignal.pending()) {
+            return false;
+        }
+        await Sustain.run();
+        if (await takeKey()) {
+            return true;
+        }
+
+        let target = findTarget();
+        if (!target) {
+            log(`kill-for-key: no '${kf.npc}' up at (${huntTile.x},${huntTile.z}) — waiting out the respawn`);
+            const waited = await sustainUntil(
+                () => findTarget() !== null || keyOnGround() !== null,
+                Math.min(KEY_RESPAWN_MS, deadline - Date.now())
+            );
+            if (!waited) {
+                log(`kill-for-key: '${kf.npc}' never respawned — abandoning riddle`);
+                return false;
+            }
+            continue;
+        }
+        if (target.distance() > 1 && !Game.inCombat()) {
+            await Traversal.walkResilient(target.tile(), { radius: 1, attempts: 2, timeoutMs: WALK_TIMEOUT_MS, log });
+            target = findTarget() ?? target;
+        }
+
+        const mark = GameMessages.mark();
+        await target.interact('Attack');
+        await sustainUntil(
+            () => Game.inCombat() || keyOnGround() !== null || GameMessages.sawSince(mark, ATTACK_REFUSED),
+            KEY_ENGAGE_MS
+        );
+        if (GameMessages.sawSince(mark, ATTACK_REFUSED)) {
+            refused++;
+            if (refused === 1) {
+                log(`kill-for-key: the server refused the attack on '${kf.npc}' — re-sending until the flag clears`);
+            }
+            await Execution.delayTicks(2);
+            continue;
+        }
+
+        // Ride the fight out on the tick so food keeps going in. Falling straight
+        // through when we never engaged is the point: the loop re-sends instead
+        // of parking on an op the server quietly dropped.
+        await sustainUntil(
+            () => haveKey() || keyOnGround() !== null || !Game.inCombat(),
+            Math.max(0, deadline - Date.now())
+        );
+    }
+
+    if (await takeKey()) {
+        return true;
+    }
+    if (!haveKey()) {
+        log(`kill-for-key: gave up on '${kf.npc}' after ${Math.round(KEY_HUNT_MS / 1000)}s${refused > 0 ? ` (${refused} refused attacks)` : ''}`);
     }
     return haveKey();
 }
@@ -453,8 +552,8 @@ async function tryAcquire(step: ClueStep, log: (m: string) => void): Promise<boo
 
 async function solveStep(step: ClueStep, log: (m: string) => void, onAttempt: (n: number) => void): Promise<boolean> {
     const tracked = trackedId(step);
-    const sigBefore = heldSignature();
-    const progressed = (): boolean => !heldIds().includes(tracked) || heldSignature() !== sigBefore;
+    const before = heldCounts();
+    const progressed = (): boolean => !heldIds().includes(tracked) || gainedSince(before);
 
     for (let attempt = 0; attempt < STEP_ATTEMPTS; attempt++) {
         if (progressed()) {

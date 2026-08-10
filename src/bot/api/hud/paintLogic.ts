@@ -10,7 +10,7 @@ export interface Rect {
 
 export interface Region extends Rect {
     id: string;
-    kind: 'panel' | 'widget';
+    kind: 'panel' | 'widget' | 'scroll';
 }
 
 export type Dock = 'chatbox' | 'topleft' | Rect;
@@ -59,7 +59,7 @@ export function hitRegion(regions: readonly Region[], x: number, y: number): Reg
         if (!inRect(region, x, y)) {
             continue;
         }
-        if (!hit || (hit.kind === 'panel' && region.kind === 'widget')) {
+        if (!hit || (hit.kind !== 'widget' && region.kind === 'widget') || (hit.kind === 'panel' && region.kind === 'scroll')) {
             hit = region;
         }
     }
@@ -71,6 +71,8 @@ export class PaintState {
     private clicks = new Set<string>();
     private hover: { x: number; y: number } | null = null;
     private store = new Map<string, string>();
+    /** Wheel notches accumulated per scrollable region since the last paint. */
+    private wheels = new Map<string, number>();
 
     publishRegions(regions: Region[]): void {
         this.regions = regions;
@@ -98,6 +100,27 @@ export class PaintState {
 
     consumeClick(id: string): boolean {
         return this.clicks.delete(id);
+    }
+
+    /**
+     * Route a wheel notch to whatever scrollable region is under the cursor.
+     * Returns true when it landed on one, so the canvas can swallow the event
+     * instead of letting the game zoom.
+     */
+    wheel(x: number, y: number, delta: number): boolean {
+        const hit = hitRegion(this.regions, x, y);
+        if (!hit || hit.kind !== 'scroll') {
+            return false;
+        }
+        this.wheels.set(hit.id, (this.wheels.get(hit.id) ?? 0) + delta);
+        return true;
+    }
+
+    /** Take the pending notches for a region; a paint applies them once. */
+    consumeWheel(id: string): number {
+        const n = this.wheels.get(id) ?? 0;
+        this.wheels.delete(id);
+        return n;
     }
 
     isHovered(rect: Rect): boolean {

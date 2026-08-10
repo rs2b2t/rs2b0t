@@ -225,7 +225,7 @@ export const LEVER_TELEPORTS: readonly TeleportDestination[] = [
         teleportId: 'lever_ardougne_to_wild',
         family: 'lever',
         label: 'Ardougne wilderness lever (in)',
-        to: { x: 3154, z: 3924, level: 0 },
+        to: { x: 3154, z: 3928, level: 0 },
         source: 'wilderness_lever.rs2 wildinlever',
         notes: 'Walk to lever loc; warning dialog. Deep wild landing.'
     },

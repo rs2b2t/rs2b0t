@@ -7317,6 +7317,52 @@
   },
   {
     "from": {
+      "x": 3158,
+      "z": 3950,
+      "level": 0
+    },
+    "to": {
+      "x": 3158,
+      "z": 3952,
+      "level": 0
+    },
+    "locName": "Web",
+    "action": "Slash",
+    "kind": "door",
+    "locId": 733,
+    "locX": 3158,
+    "locZ": 3951,
+    "debugName": "bigweb_slashable",
+    "options": [
+      "Slash"
+    ],
+    "curated": true
+  },
+  {
+    "from": {
+      "x": 3158,
+      "z": 3952,
+      "level": 0
+    },
+    "to": {
+      "x": 3158,
+      "z": 3950,
+      "level": 0
+    },
+    "locName": "Web",
+    "action": "Slash",
+    "kind": "door",
+    "locId": 733,
+    "locX": 3158,
+    "locZ": 3951,
+    "debugName": "bigweb_slashable",
+    "options": [
+      "Slash"
+    ],
+    "curated": true
+  },
+  {
+    "from": {
       "x": 3098,
       "z": 3358,
       "level": 0

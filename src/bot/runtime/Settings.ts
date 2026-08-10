@@ -159,6 +159,18 @@ export const GLOBAL_SETTINGS_CORE: SettingsSchema = {
         default: true,
         label: 'Bank gems/fruit/beer/kebabs/caskets (default)'
     },
+    useMageBank: {
+        type: 'boolean',
+        default: false,
+        label: 'Allow the Mage Arena bank',
+        help:
+            'Off (default): never bank at Gundai, so nothing routes through the '
+            + 'Wilderness to reach it. Getting there means slashing two webs at '
+            + 'level ~55 Wilderness and climbing down, so it needs a wielded slash '
+            + 'weapon and a script that only meant to stay around Ardougne must not '
+            + 'pick it up for being a few tiles nearer. Turn on for bots already '
+            + 'working up there.'
+    },
     runAuto: {
         type: 'boolean',
         default: true,

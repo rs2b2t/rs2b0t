@@ -1,6 +1,7 @@
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
+import { buryOneInFight } from '../api/combat/fightUpkeep.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { ContinueDialog } from '../api/tasks/ContinueDialog.js';
@@ -1029,6 +1030,14 @@ class Fight implements Task {
                     this.engagedAt = performance.now();
                 }
                 if (performance.now() - this.engagedAt < RE_ENGAGE_MS) {
+                    // Inline, not the sibling task: this loop owns the bot for the
+                    // whole fight, so BuryBones above it only ran in whatever gaps
+                    // the loop happened to leave. This hold is the idle stretch
+                    // while the giant is being worn down — the tick is free here.
+                    if (BURY_BONES && (await buryOneInFight('Big bones'))) {
+                        this.bot.countBurial();
+                        continue;
+                    }
                     await Execution.delayTicks(1);
                     continue;
                 }

@@ -1,11 +1,12 @@
 import type { InvItemSnapshot, WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { ActionRouter } from '../../input/ActionRouter.js';
-import type { BankObjectAccess } from '../BankLocations.js';
+import type { BankNpcAccess, BankObjectAccess } from '../BankLocations.js';
 import { Execution } from '../Execution.js';
 import { Reachability } from '../Reachability.js';
 import { Traversal } from '../Traversal.js';
 import { Locs } from '../queries/Locs.js';
+import { Npcs } from '../queries/Npcs.js';
 import { ChatDialog } from './ChatDialog.js';
 import { backpackCapacity, backpackSnapshots } from './Inventory.js';
 
@@ -226,6 +227,43 @@ export const Bank = {
                     if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
                 }
             }
+        }
+        return Bank.isOpen();
+    },
+
+    /**
+     * Open a bank that lives behind a conversation rather than a booth. Gundai
+     * chats, offers two options, and only runs `@openbank` once the right one is
+     * picked — so this drives the dialogue rather than waiting on a single op.
+     */
+    async openNpcAccess(access: BankNpcAccess, log?: (msg: string) => void): Promise<boolean> {
+        for (let attempt = 0; attempt < 3 && !Bank.isOpen(); attempt++) {
+            if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
+                const banker = Npcs.query().name(access.name).action(access.op).nearest();
+                if (!banker) {
+                    log?.(`no '${access.name}' in the scene to bank with`);
+                    await Execution.delayTicks(1);
+                    continue;
+                }
+                await banker.interact(access.op);
+                if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue() || Bank.isOpen(), 6000))) {
+                    log?.(`'${access.name}' never opened a dialogue`);
+                    continue;
+                }
+            }
+            for (let guard = 0; guard < 12 && !Bank.isOpen(); guard++) {
+                if (ChatDialog.options().some(o => o.toLowerCase().includes(access.choose.toLowerCase()))) {
+                    await ChatDialog.chooseOption(access.choose);
+                } else if (ChatDialog.canContinue()) {
+                    await ChatDialog.continue();
+                } else {
+                    break;
+                }
+            }
+            await Execution.delayUntil(() => Bank.isOpen(), 3000);
+        }
+        if (!Bank.isOpen()) {
+            log?.(`could not get ${access.name} to open the bank`);
         }
         return Bank.isOpen();
     },

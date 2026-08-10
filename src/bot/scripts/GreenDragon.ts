@@ -1,3 +1,5 @@
+import { reader } from '../adapter/ClientAdapter.js';
+import { BotHost } from '../BotHost.js';
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
@@ -11,12 +13,17 @@ import { Equipment } from '../api/hud/Equipment.js';
 import { Inventory } from '../api/hud/Inventory.js';
 import { Skills } from '../api/hud/Skills.js';
 import { Paint } from '../api/hud/Paint.js';
+import { fmtDuration, fmtXpHr, paintSkillShort } from '../api/hud/paintLogic.js';
+import { etaHours, levelProgress } from '../api/hud/levelProgress.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle, type MeleeCombatStyle } from '../api/CombatStyle.js';
 import { Autocast } from '../api/combat/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../api/combat/data/spelldb.js';
 import { DROP_DB } from '../api/combat/data/dropdb.js';
 import { MELEE_WEAPONS, STAFFS } from '../api/combat/equipment.js';
+import { SA_MAX_ENERGY, Special } from '../api/combat/Special.js';
+import { AttackClock, URGENT_HP_FRACTION, shouldHoldEat } from '../api/combat/eatTiming.js';
+import { buryOneInFight } from '../api/combat/fightUpkeep.js';
 import { FOOD_OPTIONS, foodForms, isFoodItem, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../api/combat/food.js';
 import { combatKeepNames } from '../api/combat/keepList.js';
 import { depositAllExcept } from '../api/Banking.js';
@@ -24,6 +31,7 @@ import { GroundItems } from '../api/queries/GroundItems.js';
 import { Npcs, type Npc } from '../api/queries/Npcs.js';
 import { Traversal } from '../api/Traversal.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { AT_BANK_RADIUS, RETURN_HOLD_MS, escapeNeeded, gearCandidates, gearToKeep, isGrindForeign, packForcesBank, slotFreeingAction, underPlayerAttack, wantsGroundItem, type SlotAction } from './GreenDragonLogic.js';
 import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../runtime/Settings.js';
@@ -51,6 +59,7 @@ const BONE_NAME = 'Dragon bones';
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'melee', options: ['melee', 'mage'], label: 'Combat style', help: 'range is unavailable — a bow blocks the anti-dragon shield slot' },
     meleeStyle: { type: 'string', default: 'strength', options: COMBAT_STYLE_OPTIONS, label: 'Melee style', group: 'Combat', showIf: SHOW_MELEE },
+    useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_MELEE, help: 'arms the spec bar whenever energy allows and the wielded weapon has one (dragon dagger, dragon longsword, …); does nothing with a weapon that has no special' },
     weapon: { type: 'string', default: 'Rune scimitar', options: MELEE_WEAPONS, label: 'Weapon', group: 'Combat', showIf: SHOW_MELEE, help: '1-handed (keeps the shield slot free), withdrawn from bank when missing' },
     staff: { type: 'string', default: 'Staff of fire', options: STAFFS, label: 'Staff', group: 'Combat', showIf: SHOW_MAGE },
     spell: { type: 'string', default: 'Fire Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
@@ -76,6 +85,18 @@ export const SETTINGS: SettingsSchema = {
 
 let STYLE: 'melee' | 'mage' = 'melee';
 let MELEE_STYLE: MeleeCombatStyle = 'strength';
+let USE_SPECIAL = true;
+
+/**
+ * Skills a dragon grind moves, split across two tabs.
+ *
+ * Each one costs a bar plus a rate row (~32px) and the panel only has ~112px
+ * under the title and tabs, so three per tab is the honest budget — cramming all
+ * seven into one tab silently pushed prayer off the bottom.
+ */
+const MELEE_SKILLS = ['attack', 'strength', 'defence'];
+const SUPPORT_SKILLS = ['hitpoints', 'ranged', 'magic', 'prayer'];
+const GRIND_SKILLS = [...MELEE_SKILLS, ...SUPPORT_SKILLS];
 let WEAPON = '';
 let SHIELD = 'Dragonfire shield';
 let SPELL = 'Fire Strike';
@@ -85,6 +106,8 @@ let PANIC_HP = 0.3;
 let RUNES_WITHDRAW = 150;
 let FOOD_WITHDRAW = 20;
 let LOOT_SET = new Set<string>();
+/** DROP_DB names it plainly 'Dragonhide' — the headline drop for the rate line. */
+const HIDE_NAME = 'Dragonhide';
 let BANK_COMMON = true;
 let TELE_ESCAPE = false;
 let ANCHOR = DEFAULT_ANCHOR;
@@ -215,6 +238,9 @@ function keepNames(): string[] {
     return combatKeepNames({ food: FOOD_NAME, style: STYLE, spell: SPELL, extra });
 }
 
+/** Shared by the Eat task and slot-freeing so both respect the swing. */
+const attackClock = new AttackClock();
+
 async function eatOnce(bot: GreenDragon): Promise<boolean> {
     const food = Inventory.items().find(i => foodForms(FOOD_NAME).includes((i.name ?? '').toLowerCase()));
     if (!food) {
@@ -272,7 +298,7 @@ async function lootOnce(bot: GreenDragon): Promise<boolean> {
     const before = Inventory.used();
     await drop.interact('Take');
     if (await Execution.delayUntil(() => Inventory.used() > before, 4000)) {
-        bot.countLoot();
+        bot.countLoot(drop.name ?? undefined);
         bot.log(`looted ${drop.name}`);
         return true;
     }
@@ -295,7 +321,22 @@ class Eat implements Task {
     validate(): boolean {
         return needEat();
     }
+
+    /**
+     * Eating spends the tick it lands on, so landing it on the swing costs an
+     * attack. Hold that one tick and take the meal in the cooldown instead —
+     * unless health is low enough that waiting is the greater risk.
+     */
     async execute(): Promise<void> {
+        attackClock.observe(reader.selfAnim(), BotHost.tickCount);
+        const hold = Game.inCombat() && shouldHoldEat({
+            attackedThisTick: attackClock.attackedThisTick(BotHost.tickCount),
+            hpFraction: hpFrac(),
+            urgentAt: URGENT_HP_FRACTION
+        });
+        if (hold) {
+            await Execution.delayTicks(1);
+        }
         await eatOnce(this.bot);
     }
 }
@@ -720,7 +761,24 @@ class Fight implements Task {
                     continue;
                 }
             }
+            // Inline, not a sibling task: this cycle owns the bot for the whole
+            // kill, so a SpecialAttack task above Fight was never evaluated while
+            // in combat and never fired at all — energy just sat at full.
+            if (USE_SPECIAL && !Special.armed() && Special.ready(WEAPON) && Equipment.contains(WEAPON)) {
+                if (await Special.arm()) {
+                    this.bot.countSpecial();
+                    this.bot.vlog(`special armed (${Special.energy()}/${SA_MAX_ENERGY} energy left)`);
+                }
+            }
             if (Game.inCombat()) {
+                // Burying costs a tick, exactly like eating, so spend it in the
+                // swing cooldown rather than on the swing. As a sibling task this
+                // only ran when Fight yielded, which is why it looked like the bot
+                // buried at random moments instead of steadily.
+                if (BURY_BONES && (await buryOneInFight(BONE_NAME))) {
+                    this.bot.countBurial();
+                    this.bot.vlog(`buried ${BONE_NAME} (${this.bot.burials()} total)`);
+                }
                 await Execution.delayTicks(2);
                 continue;
             }
@@ -747,7 +805,16 @@ export default class GreenDragon extends TaskBot {
     private bankEmpty = false;
     private cluesSolved = 0;
     private slotsFreed = 0;
+
+    private specials = 0;
     private buried = 0;
+
+    private readonly startedAt = Date.now();
+
+    private xpAtStart = new Map<string, number>();
+
+    /** What has actually been picked up, for the scrollable loot tab. */
+    private readonly lootCounts = new Map<string, number>();
     private lastTask = '';
     private readonly lastVlog = new Map<string, string>();
     private holdReturnUntil = 0;
@@ -763,6 +830,8 @@ export default class GreenDragon extends TaskBot {
         SPELL = this.settings.str('spell', 'Fire Strike');
         WEAPON = STYLE === 'mage' ? this.settings.str('staff', 'Staff of fire') : this.settings.str('weapon', 'Rune scimitar');
         SHIELD = this.settings.str('shield', 'Dragonfire shield');
+        USE_SPECIAL = this.settings.bool('useSpecial', true);
+        this.xpAtStart = new Map(GRIND_SKILLS.map(sk => [sk, Skills.xp(sk)]));
         FOOD_NAME = this.settings.str('food', 'Lobster');
 
         PANIC_HP = this.settings.num('panicHp', 30) / 100;
@@ -885,8 +954,14 @@ export default class GreenDragon extends TaskBot {
     kills(): number {
         return this.killsTotal;
     }
-    countLoot(): void {
+    countSpecial(): void {
+        this.specials++;
+    }
+    countLoot(name?: string): void {
         this.looted++;
+        if (name) {
+            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
+        }
     }
     countBankTrip(): void {
         this.bankTrips++;
@@ -907,15 +982,51 @@ export default class GreenDragon extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#6fbf73' });
         p.title(`GreenDragon — ${this.status}`);
-        p.row(`Style: ${STYLE}`, `HP: ${Math.round(hpFrac() * 100)}%`);
-        p.row(`Kills: ${this.killsTotal}`, `Looted: ${this.looted}`);
-        p.row(`Shield: ${Equipment.contains(SHIELD) ? 'on' : 'OFF!'}`, `Bank trips: ${this.bankTrips}`);
-        p.row(`Food: ${foodCount()} (keep ${FOOD_RESERVE})`, `Slots freed: ${this.slotsFreed}`);
-        if (BURY_BONES) {
-            p.row(`Buried: ${this.buried}`, `Prayer: ${Skills.level('prayer')}`);
-        }
+
+        // Clues get their own tab rather than one summary row: a trail can walk
+        // most of the map, and the leg/travel detail is the only way to see it is
+        // making progress. Same block ClueSolver paints.
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const names = ['Grind', 'Melee', 'Support', 'Loot'];
         if (SOLVE_CLUES) {
-            p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            names.push('Clue');
+        }
+        const tab = p.tabs('gd', names);
+
+        if (tab === 'Grind') {
+            const kph = mins > 0.5 ? Math.round((this.killsTotal / mins) * 60) : 0;
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.killsTotal}`, `Kills/hr: ${mins > 0.5 ? kph : '—'}`);
+            p.row(`Style: ${STYLE}`, `Food: ${foodCount()}`, `Trips: ${this.bankTrips}`);
+            p.row(`Shield: ${Equipment.contains(SHIELD) ? 'on' : 'OFF!'}`, `Spec: ${USE_SPECIAL ? `${Math.round(Special.energy() / 10)}% (${this.specials})` : 'off'}`, `Freed: ${this.slotsFreed}`);
+            p.bar('HP', hpFrac());
+        } else if (tab === 'Melee' || tab === 'Support') {
+            // Prayer is always shown on Support even at zero gain: seeing it sit
+            // still is the point when bone burying is meant to be running.
+            const always = new Set(['hitpoints', 'prayer']);
+            const shown = (tab === 'Melee' ? MELEE_SKILLS : SUPPORT_SKILLS).filter(
+                sk => always.has(sk) || Skills.xp(sk) - (this.xpAtStart.get(sk) ?? Skills.xp(sk)) > 0
+            );
+            if (shown.length === 0) {
+                p.text('no experience yet', '#8a919a');
+            }
+            for (const sk of shown) {
+                const gained = Skills.xp(sk) - (this.xpAtStart.get(sk) ?? Skills.xp(sk));
+                const prog = levelProgress(Skills.level(sk), Skills.xp(sk));
+                const rate = mins > 0.5 ? (gained / mins) * 60 : 0;
+                const eta = etaHours(prog.remaining, rate);
+                p.bar(`${paintSkillShort(sk)} ${prog.level}`, prog.fraction);
+                p.row(`${fmtXpHr(gained, mins)}/hr`, `${prog.remaining.toLocaleString()} to go`, eta === null ? 'eta —' : `eta ${fmtDuration(eta * 60)}`);
+            }
+        } else if (tab === 'Loot') {
+            const hides = this.lootCounts.get(HIDE_NAME) ?? 0;
+            p.row(`Looted: ${this.looted}`, `Hides: ${hides}`, `Hides/hr: ${mins > 0.5 ? Math.round((hides / mins) * 60) : '—'}`);
+            const rows = [...this.lootCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, n]) => `${String(n).padStart(4)}  ${name}`);
+            p.list('gdloot', rows, 6);
+        } else {
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, 'no clue in progress — grinding');
         }
         p.gap();
         ScriptRunner.paintControls(p);

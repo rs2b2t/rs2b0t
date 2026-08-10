@@ -5,7 +5,9 @@ import { nearestAltar } from '#/bot/api/Altars.js';
 import { nearestBank } from '#/bot/api/BankLocations.js';
 import type { Task } from '#/bot/api/Bot.js';
 import { Prayer } from '#/bot/api/Prayer.js';
+import { Sustain } from '#/bot/api/Sustain.js';
 import { Traversal } from '#/bot/api/Traversal.js';
+import { foodHealAmount, shouldEatToUseFood } from '#/bot/api/combat/food.js';
 import { Locs } from '#/bot/api/queries/Locs.js';
 import { Bank } from '#/bot/api/hud/Bank.js';
 import { Equipment } from '#/bot/api/hud/Equipment.js';
@@ -30,6 +32,7 @@ const ALTAR_OP = 'Pray-at';
 const ALTAR_RADIUS = 2;
 const ALTAR_WALK_MS = 180_000;
 const ALTAR_RESTORE_MS = 6000;
+const EAT_CONFIRM_TICKS = 2;
 // Enough runes for a few hops per trail without crowding the pack.
 const TELEPORT_CASTS = 4;
 
@@ -76,6 +79,9 @@ export interface SolveClueHost {
 export class SolveClue implements Task {
     private bankedThisSolve = false;
 
+    /** One restock trip per dry spell — cleared as soon as food is held again. */
+    private triedFoodRestock = false;
+
     private abandonedClueId: number | null = null;
 
     /** What the Entrana monk search made us bank, so the trail can give it back. */
@@ -104,8 +110,84 @@ export class SolveClue implements Task {
         return id !== null && id !== this.abandonedClueId;
     }
 
+    /**
+     * Eat one bite when the pack can afford it. Trail upkeep is owned here, not
+     * left to the host: a whole trail runs inside this one task call, so a host's
+     * own Eat task never gets a turn between legs, and every `Sustain.run()` the
+     * executor pumps is a no-op unless a hook is installed. GreenDragon never
+     * installed one, so it fought hard-clue guardians — level-65 mages that keep
+     * hitting through Protect from Magic — on a full pack of lobsters without
+     * touching a single one.
+     */
+    private async eatIfHurt(): Promise<void> {
+        const held = (): { name: string | null; interact(a: string): boolean | Promise<boolean> }[] =>
+            Inventory.items().filter(i => this.host.isFood(i.name ?? ''));
+        const food = held();
+        const maxHp = Skills.level('hitpoints');
+        const hp = Skills.effective('hitpoints');
+        if (!shouldEatToUseFood({ hp, maxHp, heal: foodHealAmount(this.host.foodName()), foodCount: food.length })) {
+            return;
+        }
+        this.host.log(`[clue] eating ${food[0].name} (${hp}/${maxHp} hp)`);
+        await food[0].interact('Eat');
+        // Confirm on the bite leaving the pack, not on hp rising. A guardian's hit
+        // lands in the same tick as the heal, so hp routinely ends up *below* where
+        // it started and an hp-only check waits out its whole budget — and because
+        // Sustain.running is set for the duration, that is a total eating blackout
+        // exactly while damage is heaviest. Measured: 3s of no bites at 8/70 hp
+        // with seven lobsters in the pack.
+        // Two ticks, not five. A bite that lands confirms on the next tick; one
+        // the server dropped must be re-sent, and every tick spent waiting is a
+        // tick `Sustain.running` blanks every other pump. At three seconds that
+        // was a four-tick blackout measured taking a guardian from 45 hp to 2.
+        const landed = await Execution.delayUntilTicks(
+            () => held().length < food.length || Skills.effective('hitpoints') > hp,
+            EAT_CONFIRM_TICKS
+        );
+        if (!landed) {
+            this.host.log(`[clue] the bite never left the pack (${held().length} left) — re-sending`);
+        }
+    }
+
     async execute(): Promise<void> {
-        if (heldClueScrollId() !== null && !this.bankedThisSolve) {
+        const hostUpkeep = Sustain.hook;
+        Sustain.set(() => this.eatIfHurt());
+        try {
+            await this.runTrail();
+        } finally {
+            Sustain.set(hostUpkeep);
+        }
+    }
+
+    /**
+     * A trail banks once at the start and never again, so a long one runs dry and
+     * then walks the rest of the way — often through the Wilderness — with nothing
+     * to eat. Upkeep was never the problem: `Sustain` is pumped on every walk pass
+     * and the hook is installed for the whole trail, but an empty pack has no bite
+     * to take. Go back for more instead.
+     *
+     * Bounded: one restock trip per dry spell, so an empty bank cannot put the bot
+     * in a bank-walk loop.
+     */
+    private needsFood(): boolean {
+        if ((this.host.foodName() ?? '') === '') {
+            return false;
+        }
+        const held = Inventory.items().some(i => this.host.isFood(i.name ?? ''));
+        if (held) {
+            this.triedFoodRestock = false;
+            return false;
+        }
+        return !this.triedFoodRestock;
+    }
+
+    private async runTrail(): Promise<void> {
+        const restock = this.bankedThisSolve && this.needsFood();
+        if (heldClueScrollId() !== null && (!this.bankedThisSolve || restock)) {
+            if (restock) {
+                this.triedFoodRestock = true;
+                this.host.log(`[clue] out of ${this.host.foodName()} mid-trail — banking to restock`);
+            }
             if (!(await this.bankFirst())) {
                 return;
             }

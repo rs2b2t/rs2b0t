@@ -264,7 +264,8 @@ Tags: `wilderness`, `dragons`, `hides`
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
-| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword |
+| `useSpecial` | boolean | `true` | Use special attacks |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |

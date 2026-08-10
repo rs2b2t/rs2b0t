@@ -6,8 +6,8 @@ import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../api/Banking.js';
-import { ClueExecutor } from '../clues/ClueExecutor.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { Bank } from '../api/hud/Bank.js';
 import { ChatDialog } from '../api/hud/ChatDialog.js';
 import { Equipment } from '../api/hud/Equipment.js';
@@ -289,14 +289,8 @@ export default class RockCrab extends TaskBot {
                 p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
             }
         } else {
-            const cur = ClueExecutor.current;
-            p.row(`Solved: ${this.solveClue?.clueStatus() === 'idle' ? '' : ''}${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
-            if (cur) {
-                p.text(`${cur.name} — leg ${cur.leg}${cur.attempt > 1 ? ` (try ${cur.attempt})` : ''}`);
-                p.text(cur.step, '#8a919a');
-            } else {
-                p.text(SOLVE_CLUES ? 'watching the pack for clues' : 'clue solving disabled', '#8a919a');
-            }
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, SOLVE_CLUES ? 'watching the pack for clues' : 'clue solving disabled');
         }
 
         p.gap();

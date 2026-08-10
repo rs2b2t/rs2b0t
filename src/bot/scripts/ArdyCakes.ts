@@ -21,6 +21,7 @@ import { HOSTILE_NAMES, isHostileAttacker } from './ArdyThieverLogic.js';
 import { CAKE_ITEMS, FLEE_TILE, LOCKOUT_TICKS, STAND } from './CakeStallLogic.js';
 import { carriedCakes, stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
@@ -148,11 +149,16 @@ export default class ArdyCakes extends TaskBot {
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
         const sph = mins > 0.5 ? `${Math.round((this.steals / mins) * 60)}` : '—';
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Steals: ${this.steals}`, `Steals/hr: ${sph}`);
-        p.row(`XP/hr: ${xph}`, `Carried: ${carriedCakes()}`, `Banked: ${this.banked}`);
-        p.row(`Resets: ${this.resets}`, RESPONSE === 'Fight' ? `Fought: ${this.kills}` : `Fled: ${this.flees}`, `Trips: ${this.trips}`);
-        p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
-        p.bar('HP', Skills.hpFraction());
+        if (p.tabs('ac', ['Overview', 'Clue']) === 'Clue') {
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, 'watching the pack for clues');
+        } else {
+            p.row(`Runtime: ${fmtDuration(mins)}`, `Steals: ${this.steals}`, `Steals/hr: ${sph}`);
+            p.row(`XP/hr: ${xph}`, `Carried: ${carriedCakes()}`, `Banked: ${this.banked}`);
+            p.row(`Resets: ${this.resets}`, RESPONSE === 'Fight' ? `Fought: ${this.kills}` : `Fled: ${this.flees}`, `Trips: ${this.trips}`);
+            p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            p.bar('HP', Skills.hpFraction());
+        }
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();

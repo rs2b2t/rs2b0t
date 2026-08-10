@@ -3,6 +3,7 @@ import {
     bankDistance,
     nearestBank,
     type BankLocation,
+    type BankNpcAccess,
     type BankObjectAccess
 } from './BankLocations.js';
 import { Execution } from './Execution.js';
@@ -40,6 +41,20 @@ export interface BankDestination {
     name: string;
     tile: WorldTile;
     access?: BankObjectAccess;
+    /** Set when the bank is a person (Gundai) rather than a booth. */
+    npcAccess?: BankNpcAccess;
+}
+
+/** A bank behind a conversation opens differently from one behind a booth. */
+function openAccess(
+    dest: { access?: BankObjectAccess; npcAccess?: BankNpcAccess } | null,
+    fallback: BankObjectAccess,
+    log?: (m: string) => void
+): boolean | Promise<boolean> {
+    if (dest?.npcAccess) {
+        return Bank.openNpcAccess(dest.npcAccess, log);
+    }
+    return Bank.openNearestAccess(dest?.access ?? fallback, log);
 }
 
 /**
@@ -223,8 +238,7 @@ export const Banking = {
         if (route === 'local-bank' && nearest) {
             log(`bank: local ${nearest.name} bank — using it instead of distant preset`);
             await Traversal.walkResilient(asTile(nearest.tile), { radius: 4, timeoutMs: 120_000, log });
-            const access = nearest.access ?? { name: boothName, op: boothOp };
-            return Bank.openNearestAccess(access, log);
+            return openAccess(nearest, { name: boothName, op: boothOp }, log);
         }
 
         if (route === 'preset-stand' && opts.stand) {
@@ -240,15 +254,14 @@ export const Banking = {
         // nearest-fallback (no stand): scene booth anywhere, else web-walk nearestBank
         let destination: BankDestination | null = null;
         if (!realBooth(boothName)) {
-            destination = opts.destination ?? (nearest ? { name: nearest.name, tile: nearest.tile, access: nearest.access } : null);
+            destination = opts.destination ?? (nearest ? { name: nearest.name, tile: nearest.tile, access: nearest.access, npcAccess: nearest.npcAccess } : null);
             if (destination) {
                 log(`no booth in scene — web-walking to the ${destination.name} bank at ${destination.tile}`);
                 await Traversal.walkResilient(asTile(destination.tile), { radius: 4, timeoutMs: 120_000, log });
             }
         }
 
-        const access = destination?.access ?? { name: boothName, op: boothOp };
-        return Bank.openNearestAccess(access, log);
+        return openAccess(destination, { name: boothName, op: boothOp }, log);
     },
 
     async bankNearest(opts: {

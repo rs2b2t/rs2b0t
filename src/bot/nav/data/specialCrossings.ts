@@ -693,9 +693,34 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         dialogue: {
             choose: ["Yes I'm brave.", "Yes please, don't show this message again."]
         },
+        // ^ardougne_to_wilderness_coord, but the pull is observed landing on
+        // 3928. Keep the constant (the edge landing must match it or
+        // specialCrossingForTransport drops this crossing outright) and widen
+        // the arrival radius to cover both tiles.
         toTile: { x: 3154, z: 3924, level: 0 },
-        arrivalRadius: 3,
+        arrivalRadius: 6,
         label: 'Ardougne → deep wilderness lever'
+    },
+    {
+        // prayer_guild.rs2 [oploc1,monasteryladder]: the climb needs %prayer_guild,
+        // and the only way to set it is to climb within 5 tiles of Abbot Langley
+        // (3059,3484) and ask to join. The first climb only opens that conversation,
+        // so the hop is re-attempted. The west ladder (3046,3483) is 13 tiles from
+        // him and never offers it.
+        //
+        // No requiresSkill here on purpose: STATE_AWARE_ACTIVATIONS already prunes
+        // this edge below Prayer 31, and duplicating the gate would claim a
+        // skill-gated crossing whose edge is not in the graph until that state is met.
+        x: 3057,
+        z: 3484,
+        level: 0,
+        locName: 'Ladder',
+        action: 'Climb-up',
+        dialogue: { choose: ['Well can I join your order?'] },
+        reopenAfterDialogue: true,
+        toTile: { x: 3057, z: 3484, level: 1 },
+        arrivalRadius: 2,
+        label: 'Edgeville monastery ladder (Abbot Langley, Prayer 31)'
     },
     {
         x: 3153,

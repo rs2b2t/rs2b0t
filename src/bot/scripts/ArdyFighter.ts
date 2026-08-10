@@ -24,6 +24,7 @@ import { countMatching, matchesAny, shouldBank, shouldEat, shouldPanic, shouldRe
 import { foodHealAmount } from '../api/combat/food.js';
 import { stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 
@@ -214,7 +215,7 @@ export default class ArdyFighter extends TaskBot {
         p.title(`ArdyFighter — ${this.status}`);
 
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const tab = p.tabs('af', ['Overview', 'Loot']);
+        const tab = p.tabs('af', ['Overview', 'Loot', 'Clue']);
         if (tab === 'Overview') {
             const xpGained = COMBAT_SKILLS.reduce((n, s) => n + Skills.xp(s), 0) - this.xpAtStart;
             const xph = mins > 0.5 ? `${((xpGained / mins) * 60 / 1000).toFixed(1)}k` : '—';
@@ -222,9 +223,12 @@ export default class ArdyFighter extends TaskBot {
             p.row(`Food: ${foodCount()}`, `Steals: ${this.steals}`, this.deaths ? `Deaths: ${this.deaths}` : `Ate: ${this.eats}`);
             p.row(`Clues: ${this.cluesSolved}`, `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}`);
             p.bar('HP', Skills.hpFraction());
-        } else {
+        } else if (tab === 'Loot') {
             p.row(`Looted: ${this.looted}`, `Loot slots: ${lootSlots()}`);
             p.row(`Bank trips: ${this.trips}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
+        } else {
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, 'watching the pack for clues');
         }
 
         p.gap();

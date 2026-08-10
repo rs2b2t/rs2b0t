@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { BANK_LOCATIONS, bankDistance, nearestBank, nearestBanks, nearestUsableBank } from '#/bot/api/BankLocations.js';
+import { BANK_LOCATIONS, approachOf, bankDistance, nearestBank, nearestBanks, nearestUsableBank } from '#/bot/api/BankLocations.js';
 import type { BankLocation } from '#/bot/api/BankLocations.js';
 
 test('bank names are unique', () => {
@@ -15,7 +15,20 @@ test('every bank centre is a plausible world tile', () => {
         expect(b.tile.x, b.name).toBeGreaterThan(2300);
         expect(b.tile.x, b.name).toBeLessThan(3600);
         expect(b.tile.z, b.name).toBeGreaterThan(2900);
-        expect(b.tile.z, b.name).toBeLessThan(3600);
+        // The Mage Arena chamber is its own region high above the surface map
+        // (^mage_arena_finish_coord z=4716), so the surface band is asserted on
+        // the tile the bot actually walks to instead.
+        expect(b.tile.z, b.name).toBeLessThan(4800);
+    }
+});
+
+test('every bank is approached from somewhere on the surface map', () => {
+    for (const b of BANK_LOCATIONS) {
+        const a = approachOf(b);
+        expect(a.x, b.name).toBeGreaterThan(2300);
+        expect(a.x, b.name).toBeLessThan(3600);
+        expect(a.z, b.name).toBeGreaterThan(2900);
+        expect(a.z, b.name).toBeLessThan(4000);
     }
 });
 
@@ -114,7 +127,7 @@ describe('bank entry gates', () => {
 
     test('every other bank is ungated', () => {
         const gated = BANK_LOCATIONS.filter(b => b.requires !== undefined).map(b => b.name).sort();
-        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Shilo Village']);
+        expect(gated).toEqual(['Canifis', 'Fishing Guild', 'Mage Arena', 'Shilo Village']);
     });
 });
 

@@ -268,7 +268,7 @@ class BankTrip implements Task {
             if (!knifeBank || knifeBank.name === null) {
                 this.bot.setStatus('error: no Knife');
                 this.bot.log('No Knife in bank or inventory.');
-                ScriptRunner.stop();
+                ScriptRunner.stop('BankFletcher: no Knife in bank or inventory');
                 return;
             }
             const knifeName = knifeBank.name;

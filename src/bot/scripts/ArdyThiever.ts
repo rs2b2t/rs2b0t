@@ -27,6 +27,7 @@ import { foodHealAmount } from '../api/combat/food.js';
 import { CAKE_ITEMS } from './CakeStallLogic.js';
 import { stealCakes } from './CakeStall.js';
 import { SolveClue } from '../clues/SolveClue.js';
+import { paintClueProgress } from '../clues/cluePaint.js';
 import { Sustain } from '../api/Sustain.js';
 import { fmtDuration } from '../api/hud/paintLogic.js';
 import { STUN_COMBAT_TICKS, withdrawTo } from './ThievingBotLogic.js';
@@ -216,7 +217,7 @@ export default class ArdyThiever extends TaskBot {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#9be05b' });
         p.title(`ArdyThiever — ${this.status}`);
 
-        const tab = p.tabs('at', ['Overview', 'Loot', 'Combat']);
+        const tab = p.tabs('at', ['Overview', 'Loot', 'Combat', 'Clue']);
         const mins = (Date.now() - this.startedAt) / 60_000;
         if (tab === 'Overview') {
             const xph = mins > 0.5 ? `${(((Skills.xp('thieving') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
@@ -234,9 +235,12 @@ export default class ArdyThiever extends TaskBot {
             for (let i = 0; i < top.length; i += 2) {
                 p.row(...top.slice(i, i + 2).map(([name, n]) => `${name} × ${n}`));
             }
-        } else {
+        } else if (tab === 'Combat') {
             p.row(`Response: ${RESPONSE}`, `Fled: ${this.flees}`, `Fought: ${this.kills}`);
             p.row(`Ate: ${this.eats}`, `Stunned: ${this.inThievingStun() ? 'yes' : 'no'}`, `In combat: ${this.inRealCombat() ? 'yes' : 'no'}`);
+        } else {
+            p.row(`Solved: ${this.cluesSolved}`, `Status: ${this.solveClue?.clueStatus() ?? 'idle'}`);
+            paintClueProgress(p, 'watching the pack for clues');
         }
 
         p.gap();

@@ -132,6 +132,57 @@ export class PaintFrame {
         this.cursorY += LINE;
     }
 
+    /**
+     * A scrollable list of lines.
+     *
+     * Immediate mode has no retained scroll position, so the offset lives in
+     * paintState under the list id and the wheel notches are applied here. The
+     * whole window registers a 'scroll' region so the canvas swallows the wheel
+     * rather than letting the game zoom behind the panel.
+     *
+     * Returns the offset actually shown, already clamped.
+     */
+    list(id: string, lines: string[], rows: number, color?: string): number {
+        if (this.collapsed) {
+            return 0;
+        }
+        const key = `list:${id}`;
+        const maxOffset = Math.max(0, lines.length - rows);
+        const stored = Number(paintState.get(key, '0'));
+        const offset = Math.min(maxOffset, Math.max(0, (Number.isFinite(stored) ? stored : 0) + paintState.consumeWheel(key)));
+        paintState.set(key, String(offset));
+
+        const top = this.cursorY;
+        const h = rows * LINE;
+        this.regions.push({ id: key, x: this.panel.x, y: top, w: this.panel.w, h, kind: 'scroll' });
+
+        if (lines.length === 0) {
+            this.text('nothing yet', FG_DIM);
+            return 0;
+        }
+
+        for (const line of lines.slice(offset, offset + rows)) {
+            this.ctx.fillStyle = color ?? FG;
+            this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.cursorY += LINE;
+        }
+
+        if (maxOffset > 0) {
+            // Thumb on the right edge, so it is obvious there is more.
+            const trackH = h;
+            const thumbH = Math.max(6, (rows / lines.length) * trackH);
+            const thumbY = top + (offset / maxOffset) * (trackH - thumbH);
+            this.ctx.fillStyle = BG_WIDGET;
+            this.ctx.fillRect(this.panel.x + this.panel.w - 5, top, 3, trackH);
+            this.ctx.fillStyle = this.accent;
+            this.ctx.fillRect(this.panel.x + this.panel.w - 5, thumbY, 3, thumbH);
+            this.ctx.fillStyle = FG_DIM;
+            this.ctx.fillText(`${offset + 1}–${Math.min(lines.length, offset + rows)} of ${lines.length}`, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.cursorY += LINE;
+        }
+        return offset;
+    }
+
     bar(label: string, fraction: number, color?: string): void {
         if (this.collapsed) {
             return;

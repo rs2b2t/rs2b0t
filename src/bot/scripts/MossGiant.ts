@@ -1,6 +1,7 @@
 import { TaskBot, type Task } from '../api/Bot.js';
 import { EventSignal } from '../api/EventSignal.js';
 import { Execution } from '../api/Execution.js';
+import { buryOneInFight } from '../api/combat/fightUpkeep.js';
 import { Game } from '../api/Game.js';
 import Tile from '../api/Tile.js';
 import { DeathRecovery } from '../api/tasks/DeathRecovery.js';
@@ -609,6 +610,12 @@ class Fight implements Task {
                 continue;
             }
 
+            // Inline, not the sibling task: this loop owns the bot for the whole
+            // fight, so BuryBones above it only ran in whatever gaps the loop
+            // happened to leave. Skips the swing tick so it costs no attack.
+            if (BURY_BONES && (await buryOneInFight('Big bones'))) {
+                this.bot.countBurial();
+            }
             if (Game.inCombat()) {
                 await Execution.delayTicks(2);
                 continue;
