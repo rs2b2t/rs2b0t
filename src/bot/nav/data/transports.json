@@ -1139,50 +1139,6 @@
   },
   {
     "from": {
-      "x": 2461,
-      "z": 3382,
-      "level": 0
-    },
-    "to": {
-      "x": 2461,
-      "z": 3385,
-      "level": 0
-    },
-    "locName": "Gate",
-    "action": "Open",
-    "kind": "gate",
-    "locId": 190,
-    "locX": 2459,
-    "locZ": 3383,
-    "debugName": "gnome_areagate",
-    "options": [
-      "Open"
-    ]
-  },
-  {
-    "from": {
-      "x": 2461,
-      "z": 3385,
-      "level": 0
-    },
-    "to": {
-      "x": 2461,
-      "z": 3382,
-      "level": 0
-    },
-    "locName": "Gate",
-    "action": "Open",
-    "kind": "gate",
-    "locId": 190,
-    "locX": 2459,
-    "locZ": 3383,
-    "debugName": "gnome_areagate",
-    "options": [
-      "Open"
-    ]
-  },
-  {
-    "from": {
       "x": 3405,
       "z": 3506,
       "level": 0
