@@ -207,12 +207,12 @@ function fieldGiants(): Npc[] {
         .results();
 }
 
-function findLoot() {
+function findLoot(allowAmmoNow = true) {
     return GroundItems.query()
         .where(g => {
             const name = (g.name ?? '').toLowerCase();
             return LOOT_SET.has(name) || (BANK_COMMON && matchesCommonBankLoot(g.name ?? '', g.id)) ||
-            (LOOT_AMMO && STYLE === 'range' && !Game.inCombat() && (g.name ?? '').toLowerCase() === rangeProjectile().toLowerCase());
+            (allowAmmoNow && LOOT_AMMO && STYLE === 'range' && (g.name ?? '').toLowerCase() === rangeProjectile().toLowerCase());
         })
         .within(FIELD_RADIUS)
         .nearest();
@@ -296,7 +296,8 @@ class GearEquip implements Task {
             return false;
         }
         const projectile = rangeProjectile();
-        return Inventory.count(projectile) > 0 && equippedProjectileCount() === 0;
+        // re-equip looted/withdrawn stacks so they merge into the equipped ammo slot
+        return Inventory.count(projectile) > 0;
     }
     validate(): boolean {
         return STYLE !== 'melee' && this.fails < 5 && (this.needWeapon() || this.needQuiver());
@@ -601,7 +602,7 @@ class Fight implements Task {
                 this.targetIdx = null;
             }
 
-            if (!Inventory.isFull() && findLoot() !== null) {
+            if (!Inventory.isFull() && findLoot(false) !== null) {
                 await lootOnce(this.bot);
                 continue;
             }
