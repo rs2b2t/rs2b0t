@@ -5,6 +5,7 @@ import type Tile from '../../../api/Tile.js';
 import { Traversal } from '../../../api/Traversal.js';
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
+import { GameMessages } from '../../../events/gameMessages.js';
 import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
@@ -127,13 +128,21 @@ export async function fetchRubberTube(log: (m: string) => void): Promise<boolean
  * continued twice. Waiting on the item without driving the box never sees it.
  */
 async function searchFountain(log: (m: string) => void): Promise<boolean> {
-    return promptLoc({
+    const mark = GameMessages.mark();
+    const got = await promptLoc({
         name: 'Fountain',
         op: 'Search',
         near: EC_TILE.FOUNTAIN_STAND,
         expect: () => held(EC_ID.PRESSURE_GAUGE) > 0,
         expectMs: 12_000
     }, log);
+    if (!got) {
+        // Which of the two refusals it was decides the next move, and neither is
+        // visible any other way — the latch behind them is not readable.
+        const said = GameMessages.since(mark).map(m => m.text).join(' | ');
+        log(`fountain gave no gauge — said: [${said}]`);
+    }
+    return got;
 }
 
 async function poisonFountain(log: (m: string) => void): Promise<boolean> {

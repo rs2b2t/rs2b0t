@@ -206,18 +206,6 @@ try {
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Draynor bank`);
     await seedItemsToBank(page, BANK_SEED, DRAYNOR_BANK);
 
-    // The one piece of quest state a fresh account cannot reach: a fountain
-    // poisoned on an earlier run. Exercises the Search-first branch, which is
-    // otherwise only hit on a resume.
-    if (args.poisoned) {
-        await cheatQuiet(page, 'setvar haunted_manor_fountain_poisoned 1');
-        const set = await getServerVarQuiet(page, 'haunted_manor_fountain_poisoned');
-        console.log(`haunted_manor_fountain_poisoned=${set}`);
-        if (set !== 1) {
-            fail('setvar haunted_manor_fountain_poisoned 1 did not take');
-        }
-    }
-
     if (args.stage > 0) {
         await cheatQuiet(page, `setvar haunted ${args.stage}`);
         const set = await getServerVarQuiet(page, 'haunted');
@@ -227,6 +215,20 @@ try {
         }
         await relog(page, args.user);
         await clearChatDialogs(page, 'post-relog dialog(s)');
+    }
+
+    // After the relog, not before: the stage setvar relogs, and a cheat-set perm
+    // varp does not reliably survive that round trip.
+    //
+    // The one piece of quest state a fresh account cannot reach — a fountain
+    // poisoned on an earlier run. Exercises the Search-first branch.
+    if (args.poisoned) {
+        await cheatQuiet(page, 'setvar haunted_manor_fountain_poisoned 1');
+        const set = await getServerVarQuiet(page, 'haunted_manor_fountain_poisoned');
+        console.log(`haunted_manor_fountain_poisoned=${set}`);
+        if (set !== 1) {
+            fail('setvar haunted_manor_fountain_poisoned 1 did not take');
+        }
     }
 
     const start = STAGE_START[args.stage] ?? DRAYNOR_BANK;
