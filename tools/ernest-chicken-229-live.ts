@@ -146,7 +146,17 @@ async function snapshot(page: Page): Promise<Snapshot> {
     }, QUEST);
 }
 
-/** A live run loads the deployed bundle, never the working tree. */
+/**
+ * A live run loads the deployed bundles, never the working tree.
+ *
+ * `navworker.js` is copied as well as `botclient.js`: the transport graph — and
+ * with it the bookcase crossing this quest needs to reach the ladder alcove — is
+ * compiled into the nav worker, which is a separate entrypoint. Deploying only
+ * the client leaves the navigator on the old edges, and the symptom is a flat
+ * "no path to (3092,3363,0): unreachable" for a route the offline probe likes.
+ */
+const DEPLOYED = ['botclient.js', 'botclient.js.map', 'navworker.js', 'navworker.js.map'];
+
 function deployBundle(): void {
     const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
     const botDir = `${engine}/public/bot`;
@@ -157,11 +167,12 @@ function deployBundle(): void {
     if (build.exitCode !== 0) {
         fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
     }
-    const copy = Bun.spawnSync(['sh', '-c', `cp out/botclient.js out/botclient.js.map "${botDir}/"`]);
+    const files = DEPLOYED.map(f => `out/${f}`).join(' ');
+    const copy = Bun.spawnSync(['sh', '-c', `cp ${files} "${botDir}/"`]);
     if (copy.exitCode !== 0) {
-        fail(`deploy: could not copy the bundle into ${botDir}`);
+        fail(`deploy: could not copy the bundles into ${botDir}`);
     }
-    console.log(`deploy: fresh botclient.js -> ${botDir}`);
+    console.log(`deploy: fresh ${DEPLOYED.join(', ')} -> ${botDir}`);
 }
 
 if (args.deploy) {

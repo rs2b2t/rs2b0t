@@ -15,6 +15,7 @@ function snap(options: {
     journal?: QuestSnapshot['journal'];
     stage?: number;
     invIds?: [number, number][];
+    tile?: QuestSnapshot['tile'];
 } = {}): QuestSnapshot {
     const stage = options.stage ?? EC_STAGE.NOT_STARTED;
     return {
@@ -30,7 +31,7 @@ function snap(options: {
         bank: new Map(),
         bankIds: new Map(),
         bankKnown: true,
-        tile: { x: 3093, z: 3243, level: 0 },
+        tile: options.tile ?? { x: 3093, z: 3243, level: 0 },
         freeSlots: 20
     };
 }
@@ -80,6 +81,26 @@ describe('Ernest the Chicken decide()', () => {
 
     test('hands everything to Oddenstein once all three parts are held', () => {
         expect(talkTo(step({ stage: EC_STAGE.SPOKEN_ODDENSTEIN, invIds: ALL_PARTS }))).toBe('Professor Oddenstein');
+    });
+
+    test('keys its way out of the closet before doing anything else', () => {
+        // The closet is a sealed ten-tile room; a bank trip from inside it spends
+        // the whole step budget proving the world unreachable.
+        const stuck = step({ stage: EC_STAGE.SPOKEN_ODDENSTEIN, tile: { x: 3111, z: 3367, level: 0 } });
+        expect(customName(stuck)).toBe('leave the closet');
+    });
+
+    test('the closet escape outranks even the supply trip', () => {
+        const bare = decide({
+            ...snap({ stage: EC_STAGE.SPOKEN_ODDENSTEIN, tile: { x: 3111, z: 3367, level: 0 } }),
+            invIds: new Map()
+        });
+        expect(customName(bare)).toBe('leave the closet');
+    });
+
+    test('a tile just outside the closet is not treated as inside it', () => {
+        const outside = step({ stage: EC_STAGE.SPOKEN_ODDENSTEIN, tile: { x: 3107, z: 3367, level: 0 } });
+        expect(customName(outside)).toBe('fetch the rubber tube');
     });
 
     test('fetches a spade before anything that needs one', () => {

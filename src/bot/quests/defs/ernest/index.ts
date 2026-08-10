@@ -2,7 +2,7 @@ import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { EC_ID, EC_STAGE, EC_TILE, ODDENSTEIN, VERONICA } from './areas.js';
 import { fetchOilCan } from './basement.js';
-import { fetchPressureGauge, fetchRubberTube } from './items.js';
+import { fetchPressureGauge, fetchRubberTube, inCloset, leaveCloset } from './items.js';
 import { readErnestProgress } from './journal.js';
 import { heldId, kit } from './supplies.js';
 
@@ -36,6 +36,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
         return { kind: 'wait', reason: 'quest stage not readable' };
+    }
+    // Before the bank trip: the closet is sealed, so a leg that starts in there
+    // spends its whole budget proving the world unreachable.
+    if (inCloset(snap.tile)) {
+        return { kind: 'custom', name: 'leave the closet', run: leaveCloset };
     }
     const supplies = kit(snap);
     if (supplies) {

@@ -49,27 +49,52 @@ async function digClosetKey(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-/** The key teleports the player through; landing east of the door is the tell. */
-async function unlockCloset(log: (m: string) => void): Promise<boolean> {
-    const inside = (): boolean => {
-        const t = Game.tile();
-        return t !== null && t.level === 0 && t.x >= EC_TILE.CLOSET_INSIDE.x && t.z === EC_TILE.CLOSET_INSIDE.z;
-    };
-    if (inside()) {
+/** The ten walkable tiles behind the closet door, from a flood of the pack. */
+const CLOSET_BOX = { minX: 3108, maxX: 3112, minZ: 3366, maxZ: 3368 };
+
+/** Pure, so `decide()` can branch on the snapshot tile without a client. */
+export function inCloset(tile: { x: number; z: number; level: number } | null | undefined): boolean {
+    return Boolean(tile) && tile!.level === 0
+        && tile!.x >= CLOSET_BOX.minX && tile!.x <= CLOSET_BOX.maxX
+        && tile!.z >= CLOSET_BOX.minZ && tile!.z <= CLOSET_BOX.maxZ;
+}
+
+/**
+ * The closet is a sealed ten-tile room. `open_and_close_door2` shuts the door
+ * behind whoever crosses it and `op1=Open` answers "The door is locked", so the
+ * key is the only way in *and* the only way back out. It is never consumed.
+ */
+async function crossClosetDoor(want: 'in' | 'out', log: (m: string) => void): Promise<boolean> {
+    const done = (): boolean => inCloset(Game.tile()) === (want === 'in');
+    if (done()) {
         return true;
+    }
+    if (held(EC_ID.CLOSET_KEY) === 0) {
+        log(`no key in the pack — cannot get ${want} of the closet`);
+        return false;
     }
     return useOnLoc(
         EC_ID.CLOSET_KEY,
-        { name: 'Door', near: EC_TILE.CLOSET_STAND, within: 4 },
+        { name: 'Door', near: want === 'in' ? EC_TILE.CLOSET_STAND : EC_TILE.CLOSET_INSIDE, within: 4 },
         [],
-        inside,
+        done,
         log
     );
 }
 
+/**
+ * Nothing routes out of the closet, so any leg that starts in there has to key
+ * its way out before it walks anywhere. `decide()` calls this ahead of everything
+ * else, including the bank trip.
+ */
+export async function leaveCloset(log: (m: string) => void): Promise<boolean> {
+    await Sustain.run();
+    return crossClosetDoor('out', log);
+}
+
 export async function fetchRubberTube(log: (m: string) => void): Promise<boolean> {
     if (held(EC_ID.RUBBER_TUBE) > 0) {
-        return true;
+        return crossClosetDoor('out', log);
     }
     await Sustain.run();
     if (held(EC_ID.SPADE) === 0) {
@@ -81,12 +106,18 @@ export async function fetchRubberTube(log: (m: string) => void): Promise<boolean
         return false;
     }
     await Sustain.run();
-    if (!(await unlockCloset(log))) {
+    if (!(await crossClosetDoor('in', log))) {
         log('the closet door did not open to the key');
         return false;
     }
     await settleScene();
-    return takeSpawn(EC_ID.RUBBER_TUBE, EC_NAME.RUBBER_TUBE, EC_TILE.RUBBER_TUBE_SPAWN, log);
+    if (!(await takeSpawn(EC_ID.RUBBER_TUBE, EC_NAME.RUBBER_TUBE, EC_TILE.RUBBER_TUBE_SPAWN, log))) {
+        // Leaving matters more than the tube: stranded in here, every later leg
+        // spends its whole budget proving the world unreachable.
+        await crossClosetDoor('out', log);
+        return false;
+    }
+    return crossClosetDoor('out', log);
 }
 
 /** Search the fountain. `false` means the piranhas are still alive. */
