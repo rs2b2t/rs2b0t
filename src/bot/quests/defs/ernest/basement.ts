@@ -374,7 +374,11 @@ export async function fetchOilCan(log: (m: string) => void): Promise<boolean> {
             await unwind(log);
             continue;
         }
-        return leaveManorBasement(log);
+        // The can is this step's deliverable. Try to walk out, but report on the
+        // can: a false here re-enters the maze for a leg that already succeeded,
+        // and `decide()`'s escape branch retries the way out anyway.
+        await leaveManorBasement(log);
+        return held(EC_ID.OIL_CAN) > 0;
     }
     log('three passes of the lever chain and still no oil can');
     return false;

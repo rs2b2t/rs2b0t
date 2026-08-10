@@ -183,8 +183,14 @@ export async function fetchPressureGauge(log: (m: string) => void): Promise<bool
     }
     log('piranhas are still alive — poisoning the fountain');
     if (!(await poisonFountain(log))) {
-        return false;
+        return held(EC_ID.PRESSURE_GAUGE) > 0;
     }
-    await Execution.delayTicks(4);
-    return searchFountain(log);
+    // The pour runs a five-tick message chain before the varp flips, and the
+    // search that races it comes back bitten. Report on the gauge, not on the
+    // op: a false with the gauge in the pack sends the bot round again.
+    await Execution.delayTicks(6);
+    for (let attempt = 0; attempt < 3 && held(EC_ID.PRESSURE_GAUGE) === 0; attempt++) {
+        await searchFountain(log);
+    }
+    return held(EC_ID.PRESSURE_GAUGE) > 0;
 }
