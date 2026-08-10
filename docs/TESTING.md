@@ -318,13 +318,22 @@ the whole quest from a clean account, or one stage of it. `--stage N` sets
 HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 0 --until 3 --minutes 90   # end to end
 HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 2 --until 3 --minutes 60   # the three parts
 HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 1 --until 2 --minutes 20   # Oddenstein, on L2
+HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 2 --until 3 --poisoned     # Search-first branch
 ```
 
 The bank is seeded with coins and food and nothing else. The spade, poison, fish
 food and closet key all have sources in the world, and seeding one hides whether
 the bot can find it.
 
-Two things worth knowing:
+Measured end to end at the default `--tick 300`: **11 minutes** from a clean
+account, no parks.
+
+Three things worth knowing:
+
+- **`--poisoned` sets `haunted_manor_fountain_poisoned`.** The gauge leg Searches
+  the fountain first and only fetches poison and fish food if the piranhas bite,
+  because the latch is not readable. A fresh account always takes the bitten
+  branch, so the other half is only reachable on a resume — or with this flag.
 
 - **Stats are set to 70, not `~maxme`.** A maxed account hides reach and damage
   problems, and nothing in Draynor Manor is aggressive anyway — the only

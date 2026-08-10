@@ -1,12 +1,11 @@
 import { Execution } from '../../../api/Execution.js';
 import { Game } from '../../../api/Game.js';
-import { Reach } from '../../../api/Reach.js';
 import { Sustain } from '../../../api/Sustain.js';
 import type Tile from '../../../api/Tile.js';
 import { Traversal } from '../../../api/Traversal.js';
 import { Inventory } from '../../../api/hud/Inventory.js';
 import { GroundItems } from '../../../api/queries/GroundItems.js';
-import { settleScene, useOnLoc } from '../../exec/prompts.js';
+import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
 const held = (id: number): number => Inventory.countById(id);
@@ -120,17 +119,21 @@ export async function fetchRubberTube(log: (m: string) => void): Promise<boolean
     return crossClosetDoor('out', log);
 }
 
-/** Search the fountain. `false` means the piranhas are still alive. */
+/**
+ * Search the fountain. `false` means the piranhas are still alive.
+ *
+ * `promptLoc`, not a bare op: `[oploc1,hauntedfountain]` runs two `~chatplayer`
+ * lines before the `inv_add`, so the gauge only lands once the dialogue has been
+ * continued twice. Waiting on the item without driving the box never sees it.
+ */
 async function searchFountain(log: (m: string) => void): Promise<boolean> {
-    const status = await Reach.locOp({
+    return promptLoc({
         name: 'Fountain',
         op: 'Search',
         near: EC_TILE.FOUNTAIN_STAND,
         expect: () => held(EC_ID.PRESSURE_GAUGE) > 0,
-        expectMs: 8000,
-        log
-    });
-    return status === 'done' && held(EC_ID.PRESSURE_GAUGE) > 0;
+        expectMs: 12_000
+    }, log);
 }
 
 async function poisonFountain(log: (m: string) => void): Promise<boolean> {
