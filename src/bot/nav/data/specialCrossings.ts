@@ -706,6 +706,42 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         toTile: { x: 2562, z: 3311, level: 0 },
         arrivalRadius: 3,
         label: 'Deep wilderness → Ardougne lever'
+    },
+
+    // Ernest the Chicken (#229) — Draynor Manor's secret door. The bookcase
+    // refuses anyone west of it (coordx < loc coordx) and teleports the searcher
+    // one tile west; the lever inside teleports back east through the same wall
+    // and reverts after four ticks, so it is re-pullable. Without these the two
+    // puzzle_ladder transport edges are orphaned — nothing can reach the alcove.
+    {
+        x: 3098,
+        z: 3358,
+        level: 0,
+        locName: 'Bookcase',
+        action: 'Search',
+        toTile: { x: 3096, z: 3358, level: 0 },
+        arrivalRadius: 2,
+        label: 'Draynor Manor bookcase → ladder alcove (#229)'
+    },
+    {
+        x: 3098,
+        z: 3359,
+        level: 0,
+        locName: 'Bookcase',
+        action: 'Search',
+        toTile: { x: 3096, z: 3359, level: 0 },
+        arrivalRadius: 2,
+        label: 'Draynor Manor bookcase → ladder alcove (#229)'
+    },
+    {
+        x: 3096,
+        z: 3357,
+        level: 0,
+        locName: 'Lever',
+        action: 'Pull',
+        toTile: { x: 3098, z: 3358, level: 0 },
+        arrivalRadius: 2,
+        label: 'Draynor Manor alcove lever → manor (#229)'
     }
 ];
 

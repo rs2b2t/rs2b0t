@@ -7314,5 +7314,93 @@
         }
       ]
     }
+  },
+  {
+    "from": {
+      "x": 3098,
+      "z": 3358,
+      "level": 0
+    },
+    "to": {
+      "x": 3096,
+      "z": 3358,
+      "level": 0
+    },
+    "locName": "Bookcase",
+    "action": "Search",
+    "kind": "door",
+    "locId": 155,
+    "locX": 3097,
+    "locZ": 3358,
+    "debugName": "hauntedbookcasel_#229",
+    "options": [
+      "Search"
+    ]
+  },
+  {
+    "from": {
+      "x": 3098,
+      "z": 3359,
+      "level": 0
+    },
+    "to": {
+      "x": 3096,
+      "z": 3359,
+      "level": 0
+    },
+    "locName": "Bookcase",
+    "action": "Search",
+    "kind": "door",
+    "locId": 156,
+    "locX": 3097,
+    "locZ": 3359,
+    "debugName": "hauntedbookcaser_#229",
+    "options": [
+      "Search"
+    ]
+  },
+  {
+    "from": {
+      "x": 3096,
+      "z": 3357,
+      "level": 0
+    },
+    "to": {
+      "x": 3098,
+      "z": 3358,
+      "level": 0
+    },
+    "locName": "Lever",
+    "action": "Pull",
+    "kind": "door",
+    "locId": 160,
+    "locX": 3096,
+    "locZ": 3357,
+    "debugName": "hauntedleverup_#229",
+    "options": [
+      "Pull"
+    ]
+  },
+  {
+    "from": {
+      "x": 3096,
+      "z": 3358,
+      "level": 0
+    },
+    "to": {
+      "x": 3098,
+      "z": 3358,
+      "level": 0
+    },
+    "locName": "Lever",
+    "action": "Pull",
+    "kind": "door",
+    "locId": 160,
+    "locX": 3096,
+    "locZ": 3357,
+    "debugName": "hauntedleverup_#229",
+    "options": [
+      "Pull"
+    ]
   }
 ]
