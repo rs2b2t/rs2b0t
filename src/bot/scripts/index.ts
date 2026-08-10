@@ -63,6 +63,7 @@ import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter.js'
 import RoguesPurse from './RoguesPurse.js';
 import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries.js';
 import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner.js';
+import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker.js';
 import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
@@ -500,6 +501,16 @@ ScriptRegistry.register({
     tags: ['herblore', 'identify', 'clean', 'banking', 'members'],
     settingsSchema: HERB_CLEANER_SETTINGS,
     create: () => new HerbCleaner()
+});
+
+ScriptRegistry.register({
+    name: 'PotionMaker',
+    description:
+        'Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-makes 14 unfinished potions, then withdraws a chosen secondary to finish them and deposits the potions, repeating the cycle. Each leg picks an herb and a secondary from the dropdowns, or types one via Custom',
+    category: 'Herblore',
+    tags: ['herblore', 'potion', 'banking', 'members', 'afk'],
+    settingsSchema: POTION_MAKER_SETTINGS,
+    create: () => new PotionMaker()
 });
 
 ScriptRegistry.register({

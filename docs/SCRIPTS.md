@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **52 scripts** across 20 categories. They double as worked
+The client ships **53 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -20,7 +20,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
-- [Herblore](#herblore) — 4
+- [Herblore](#herblore) — 5
 - [Magic](#magic) — 1
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
@@ -558,6 +558,19 @@ Tags: `herblore`, `secondaries`, `banking`, `shopping`, `loot`
 | `secondary` | string | `"Red spiders' eggs"` | Secondary — one of: Red spiders' eggs, Snape grass, Eye of newt, Chocolate dust, White berries, Toad's legs |
 | `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `foodWithdraw` | number (0–27) | `10` | Food to withdraw |
+
+### PotionMaker
+
+Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-makes 14 unfinished potions, then withdraws a chosen secondary to finish them and deposits the potions, repeating the cycle. Each leg picks an herb and a secondary from the dropdowns, or types one via Custom
+
+Tags: `herblore`, `potion`, `banking`, `members`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `herb` | string | `"Custom"` | Herb — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Custom |
+| `herbCustom` | string | `"Guam leaf"` | Custom herb |
+| `secondary` | string | `"Custom"` | Secondary — one of: Eye of newt, Red spiders' eggs, Limpwurt root, Snape grass, Unicorn horn dust, White berries, Dragon scale dust, Wine of zamorak, Jangerberries, Custom |
+| `secondaryCustom` | string | `"Eye of newt"` | Custom secondary |
 
 ### RoguesPurse
 
