@@ -127,22 +127,37 @@ export async function fetchRubberTube(log: (m: string) => void): Promise<boolean
  * lines before the `inv_add`, so the gauge only lands once the dialogue has been
  * continued twice. Waiting on the item without driving the box never sees it.
  */
-async function searchFountain(log: (m: string) => void): Promise<boolean> {
-    const mark = GameMessages.mark();
-    const got = await promptLoc({
-        name: 'Fountain',
-        op: 'Search',
-        near: EC_TILE.FOUNTAIN_STAND,
-        expect: () => held(EC_ID.PRESSURE_GAUGE) > 0,
-        expectMs: 12_000
-    }, log);
-    if (!got) {
-        // Which of the two refusals it was decides the next move, and neither is
-        // visible any other way — the latch behind them is not readable.
-        const said = GameMessages.since(mark).map(m => m.text).join(' | ');
-        log(`fountain gave no gauge — said: [${said}]`);
+const BITTEN = /something in the water bites you/i;
+
+/**
+ * `bitten` is the only proof the piranhas are alive. A search that never landed
+ * looks identical to one that did and hurt, and reading the first as the second
+ * is how a reach refusal quietly became "poison the fountain again".
+ */
+async function searchFountain(log: (m: string) => void): Promise<'gauge' | 'bitten' | 'unknown'> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (!(await Traversal.walkResilient(EC_TILE.FOUNTAIN_STAND, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
+            log('could not reach the fountain stand');
+            return 'unknown';
+        }
+        await settleScene();
+        const mark = GameMessages.mark();
+        const got = await promptLoc({
+            name: 'Fountain',
+            op: 'Search',
+            near: EC_TILE.FOUNTAIN_STAND,
+            expect: () => held(EC_ID.PRESSURE_GAUGE) > 0,
+            expectMs: 12_000
+        }, log);
+        if (got) {
+            return 'gauge';
+        }
+        if (GameMessages.sawSince(mark, BITTEN)) {
+            return 'bitten';
+        }
+        log(`fountain search landed nothing — said: [${GameMessages.since(mark).map(m => m.text).join(' | ')}]`);
     }
-    return got;
+    return 'unknown';
 }
 
 async function poisonFountain(log: (m: string) => void): Promise<boolean> {
@@ -189,11 +204,14 @@ export async function fetchPressureGauge(log: (m: string) => void): Promise<bool
         return true;
     }
     await Sustain.run();
-    if (await searchFountain(log)) {
+    const first = await searchFountain(log);
+    if (first === 'gauge') {
         log('the fountain was already poisoned');
         return true;
     }
-    log('piranhas are still alive — poisoning the fountain');
+    log(first === 'bitten'
+        ? 'piranhas are still alive — poisoning the fountain'
+        : 'the fountain would not answer — poisoning it anyway');
     if (!(await poisonFountain(log))) {
         return held(EC_ID.PRESSURE_GAUGE) > 0;
     }
