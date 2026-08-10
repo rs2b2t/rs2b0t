@@ -308,6 +308,33 @@ in the game stocks cooked bass or shrimp, and the Ardougne gem merchant restocks
 a single ruby every 60k ticks. Everything else (moulds, antipoison, blast runes,
 a pickaxe) is bought live.
 
+**Ernest the Chicken — stage-scoped harness**
+
+[`tools/ernest-chicken-229-live.ts`](../tools/ernest-chicken-229-live.ts) drives
+the whole quest from a clean account, or one stage of it. `--stage N` sets
+`%haunted` and relogs; the module reads the quest tab, not the varp.
+
+```sh
+HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 0 --until 3 --minutes 90   # end to end
+HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 2 --until 3 --minutes 60   # the three parts
+HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 1 --until 2 --minutes 20   # Oddenstein, on L2
+```
+
+The bank is seeded with coins and food and nothing else. The spade, poison, fish
+food and closet key all have sources in the world, and seeding one hides whether
+the bot can find it.
+
+Two things worth knowing:
+
+- **Stats are set to 70, not `~maxme`.** A maxed account hides reach and damage
+  problems, and nothing in Draynor Manor is aggressive anyway — the only
+  guaranteed damage in the quest is the 1 hp piranha bite from searching the
+  fountain before it has been poisoned.
+- **It runs on :8890 even though Ernest is free-to-play.** The quest needs
+  nothing members-only, but *bank seeding* does: the :8888 sim answers neither
+  `givebank` nor `~bankitem`, so a run there starts with an empty bank and parks
+  on the food float.
+
 **Horror from the Deep — stage-scoped harness**
 
 [`tools/horror-deep-216-live.ts`](../tools/horror-deep-216-live.ts), same shape,
