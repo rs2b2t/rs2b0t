@@ -156,9 +156,9 @@ export default class Superheater extends TaskBot {
     recipe(): Recipe {
         return this.bar;
     }
-    /** Whether the pack holds enough of every ingredient for at least one bar. */
+    /** Whether the pack holds enough of every ingredient for at least one bar, and a nature rune to fund the cast. */
     canSmeltOne(): boolean {
-        return this.bar.ingredients.every(i => Inventory.count(i.ore) >= i.perBar);
+        return this.bar.ingredients.every(i => Inventory.count(i.ore) >= i.perBar) && Inventory.count(NATURE_RUNE) > 0;
     }
     natureTarget(): number {
         return this.natures;
@@ -341,8 +341,7 @@ class Smelt implements Task {
         if (Bank.isOpen()) {
             return false;
         }
-        const recipe = this.bot.recipe();
-        return recipe.ingredients.every(i => Inventory.count(i.ore) >= i.perBar);
+        return this.bot.canSmeltOne();
     }
 
     async execute(): Promise<void> {
@@ -356,18 +355,18 @@ class Smelt implements Task {
         const recipe = this.bot.recipe();
 
         // Casting on a partial recipe smelts the wrong bar (iron without coal
-        // makes an iron bar), so every cast requires the full set of ingredients.
-        // Pace each cast on the bar forming: the ore count drops a tick or two
-        // after the cast lands, so we wait for that before clicking again. This
-        // keeps every click on a fresh ore — never spam-clicking a half-depleted
-        // stack, which can leave the targeting cursor armed and swallow the next
-        // booth click.
-        const fullRecipe = (): boolean => recipe.ingredients.every(i => Inventory.count(i.ore) >= i.perBar);
+        // makes an iron bar), so every cast requires the full set of ingredients
+        // plus a nature rune — exactly what canSmeltOne() checks. Pace each cast
+        // on the bar forming: the ore count drops a tick or two after the cast
+        // lands, so we wait for that before clicking again. This keeps every
+        // click on a fresh ore — never spam-clicking a half-depleted stack,
+        // which can leave the targeting cursor armed and swallow the next booth
+        // click.
         const start = barsSmeltable(recipe, ore => Inventory.count(ore));
 
-        while (fullRecipe()) {
+        while (this.bot.canSmeltOne()) {
             const left = barsSmeltable(recipe, ore => Inventory.count(ore));
-            this.bot.log(`casting on ${primaryOre(recipe)} (${left} more bars' worth of ore left)`);
+            this.bot.log(`casting on ${primaryOre(recipe)} (${left} more bars' worth of ore left, ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s)`);
             const ore = Inventory.first(primaryOre(recipe));
             if (!ore) {
                 break;
@@ -383,7 +382,12 @@ class Smelt implements Task {
         this.bot.recordSmelt(start - barsSmeltable(recipe, ore => Inventory.count(ore)));
 
         if (Inventory.count(primaryOre(recipe)) > 0) {
-            this.bot.log(`WARNING: stopped early — ${barsSmeltable(recipe, ore => Inventory.count(ore))} more bars' worth of ore left, but the loop bailed. No partial-recipe casts were sent.`);
+            const left = barsSmeltable(recipe, ore => Inventory.count(ore));
+            if (Inventory.count(NATURE_RUNE) === 0) {
+                this.bot.log(`out of ${NATURE_RUNE}s with ${left} bars' worth of ore left — banking to restock`);
+            } else {
+                this.bot.log(`WARNING: stopped early — ${left} more bars' worth of ore left, but the loop bailed. No partial-recipe casts were sent.`);
+            }
         }
     }
 }
