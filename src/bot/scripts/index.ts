@@ -49,6 +49,7 @@ import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter.js';
 import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
 import Superheater, { SUPERHEATER_SETTINGS } from './Superheater.js';
+import Alcher, { ALCHER_SETTINGS } from './Alcher.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
@@ -539,6 +540,15 @@ ScriptRegistry.register({
     tags: ['magic', 'smithing', 'superheat', 'banking', 'afk'],
     settingsSchema: SUPERHEATER_SETTINGS,
     create: () => new Superheater()
+});
+
+ScriptRegistry.register({
+    name: 'Alcher',
+    description: 'Bank-standing magic — equip a staff of fire, then cast High Level Alchemy on notes of a chosen item (withdrawn in note mode, one cast per ~5 ticks), repeat. Withdraws a chosen number of notes + nature runes per bank trip',
+    category: 'Magic',
+    tags: ['magic', 'alchemy', 'banking', 'afk'],
+    settingsSchema: ALCHER_SETTINGS,
+    create: () => new Alcher()
 });
 
 ScriptRegistry.register({

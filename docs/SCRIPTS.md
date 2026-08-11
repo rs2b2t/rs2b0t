@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **53 scripts** across 20 categories. They double as worked
+The client ships **54 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -21,7 +21,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
-- [Magic](#magic) — 1
+- [Magic](#magic) — 2
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 1
@@ -607,6 +607,17 @@ Tags: `teleport`, `magic`, `banking`, `aio`
 | `lawBatchSize` | number (10–10000) | `1000` | Law Rune Batch Size |
 | `minLawRunes` | number (10–1000) | `100` | Minimum Law Runes |
 | `useStaffRunes` | boolean | `true` | Use Staff Runes |
+
+### Alcher
+
+Bank-standing magic — equip a staff of fire, then cast High Level Alchemy on notes of a chosen item (withdrawn in note mode, one cast per ~5 ticks), repeat. Withdraws a chosen number of notes + nature runes per bank trip
+
+Tags: `magic`, `alchemy`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `item` | string | `"Rune platebody"` | Item to alch |
+| `alchs` | number (1–1000) | `27` | Alchs per trip |
 
 ## Mining
 
