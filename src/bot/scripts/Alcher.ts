@@ -140,10 +140,6 @@ export default class Alcher extends TaskBot {
     canAlchOne(): boolean {
         return Inventory.count(this.item) > 0 && Inventory.count(NATURE_RUNE) > 0;
     }
-    /** Whether the pack holds a full trip's worth of notes and runes. */
-    canAlchTrip(): boolean {
-        return Inventory.count(this.item) >= this.alchs && Inventory.count(NATURE_RUNE) >= this.alchs;
-    }
     /** Alchs still left in the bank (refreshed on every restock). */
     bankAlchs(): number {
         return this.alchsInBank;
@@ -232,7 +228,10 @@ class Restock implements Task {
     constructor(private bot: Alcher) {}
 
     validate(): boolean {
-        return !this.bot.canAlchTrip();
+        // Fire whenever the pack can't do even one cast — a bank short of the
+        // desired trip amount still yields a partial load that gets alched, so
+        // we never loop restocking a shortfall we can't reach.
+        return !this.bot.canAlchOne();
     }
 
     async execute(): Promise<void> {
