@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-The client ships **53 scripts** across 20 categories. They double as worked
+The client ships **54 scripts** across 20 categories. They double as worked
 examples of the [scripting API](API.md) — the source for each is under
 [`src/bot/scripts/`](../src/bot/scripts/).
 
@@ -28,7 +28,7 @@ Settings listed here are the parameters the panel exposes before you start a scr
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
 - [Runecrafting](#runecrafting) — 3
-- [Smithing](#smithing) — 2
+- [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
 - [Tutorial](#tutorial) — 1
@@ -806,6 +806,17 @@ Tags: `smithing`, `anvil`, `banking`, `afk`
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `leashRadius` | number (2–20) | `6` | Anvil search radius (tiles) |
+
+### Superheater
+
+Bank-standing magic/smithing — cast Superheat Item on ores to smelt bars without a furnace (keeps a staff of fire + nature runes), bank the bars, repeat
+
+Tags: `magic`, `smithing`, `superheat`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `bar` | string | `"Bronze"` | Bar to smelt — one of: Bronze, Iron, Silver, Steel, Gold, Mithril, Adamant, Rune, Blurite |
+| `natures` | number (28–1000) | `50` | Nature runes to keep in the pack |
 
 ## Thieving
 

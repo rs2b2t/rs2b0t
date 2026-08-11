@@ -49,6 +49,7 @@ import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller.js';
 import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter.js';
 import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
+import Superheater, { SUPERHEATER_SETTINGS } from './Superheater.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
@@ -538,6 +539,15 @@ ScriptRegistry.register({
     tags: ['smithing', 'anvil', 'banking', 'afk'],
     settingsSchema: SMITHING_SETTINGS,
     create: () => new SmithingBot()
+});
+
+ScriptRegistry.register({
+    name: 'Superheater',
+    description: 'Bank-standing magic/smithing — cast Superheat Item on ores to smelt bars without a furnace (keeps a staff of fire + nature runes), bank the bars, repeat',
+    category: 'Smithing',
+    tags: ['magic', 'smithing', 'superheat', 'banking', 'afk'],
+    settingsSchema: SUPERHEATER_SETTINGS,
+    create: () => new Superheater()
 });
 
 ScriptRegistry.register({

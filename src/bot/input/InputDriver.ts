@@ -11,6 +11,7 @@ export interface InputDriver {
     useItemOnNpc(useObjId: number, useSlot: number, useComId: number, index: number): boolean;
     useItemOnItem(useObjId: number, useSlot: number, useComId: number, targetObjId: number, targetSlot: number, targetComId: number): boolean;
     castOnNpc(spellComId: number, index: number): boolean;
+    castOnItem(spellComId: number, useObjId: number, useSlot: number, useComId: number): boolean;
     walk(lx: number, lz: number): boolean;
     continueDialog(): boolean;
 }

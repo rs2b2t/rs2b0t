@@ -57,6 +57,10 @@ export default class DirectInputDriver implements InputDriver {
         return actions.menuAction(MiniMenuAction.TGT_BUTTON, 0, 0, spellComId) && actions.menuAction(MiniMenuAction.TGT_NPC, index, 0, 0);
     }
 
+    castOnItem(spellComId: number, useObjId: number, useSlot: number, useComId: number): boolean {
+        return actions.menuAction(MiniMenuAction.TGT_BUTTON, 0, 0, spellComId) && actions.menuAction(MiniMenuAction.TGT_HELD, useObjId, useSlot, useComId);
+    }
+
     walk(lx: number, lz: number): boolean {
         return actions.walkTo(lx, lz);
     }
