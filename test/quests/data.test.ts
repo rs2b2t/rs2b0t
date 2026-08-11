@@ -48,8 +48,11 @@ test('blurite is a quest rock, and never a GatheringBot option', () => {
     expect(ROCK_OPTIONS).not.toContain('Blurite');
 });
 
-test("the knight's sword items are acquirable, not mustHave", () => {
+test("the knight's sword requires Mining and Cooking 10 and acquires its items", () => {
     const squire = loadQuestRecords().find(q => q.id === 'squire')!;
     expect(squire.items.every(i => i.kind === 'acquirable')).toBe(true);
-    expect(squire.requirements.skills).toEqual([{ skill: 'mining', level: 10 }]);
+    expect(squire.requirements.skills).toEqual([
+        { skill: 'mining', level: 10 },
+        { skill: 'cooking', level: 10 }
+    ]);
 });
