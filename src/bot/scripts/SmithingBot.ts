@@ -24,6 +24,15 @@ const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 
+/** Bars each product consumes — OSRS smithing bar costs per item. */
+const BAR_COST: Record<string, number> = {
+    Dagger: 1, Sword: 1, Scimitar: 2, Longsword: 2, '2h sword': 3,
+    Axe: 1, Mace: 1, Warhammer: 3, Battleaxe: 3, Chainbody: 3,
+    Platelegs: 3, Plateskirt: 3, Platebody: 5, 'Med helm': 1,
+    'Full helm': 2, 'Sq shield': 2, Kiteshield: 3, Nails: 1,
+    'Dart tip': 1, Arrowtips: 1, Knife: 1, Wire: 1, Claws: 2
+};
+
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: BAR_OPTIONS, label: 'Bar tier' },
     product: { type: 'string', default: 'Dagger', options: PRODUCT_OPTIONS, label: 'Item to smith', help: 'matched against the anvil panel by keyword (the panel names are tier-specific, e.g. "Bronze dagger")' },
@@ -86,6 +95,8 @@ export default class SmithingBot extends TaskBot {
     productName(): string { return this.product; }
     hammerName(): string { return HAMMER; }
     barItemName(): string { return `${this.bar} bar`; }
+    /** Bars a full product needs — the pack must hold at least this to smith one. */
+    barsForProduct(): number { return BAR_COST[this.product] ?? 1; }
     anvilLocName(): string { return ANVIL; }
     anvilTile(): Tile { return this.anvilStand; }
     bankTile(): Tile { return this.bankStand; }
@@ -117,7 +128,7 @@ export default class SmithingBot extends TaskBot {
 
 class SmithPanel implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return ChatDialog.isMainMakePanel(); }
+    validate(): boolean { return ChatDialog.isMainMakePanel() && this.bot.barCount() >= this.bot.barsForProduct(); }
     async execute(): Promise<void> {
         this.bot.setStatus('choosing item');
         const start = this.bot.barCount();
@@ -146,7 +157,9 @@ class SmithPanel implements Task {
 
 class BankTrip implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() === 0; }
+    // Also fires on a partial leftover stack (e.g. 2 bars when a platebody needs
+    // 5) so a short pack never leaves the bot stuck at the anvil panel.
+    validate(): boolean { return this.bot.barCount() < this.bot.barsForProduct(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
@@ -155,7 +168,14 @@ class BankTrip implements Task {
             return;
         }
         const hammerPat = this.bot.hammerName().toLowerCase();
-        await Bank.depositAllMatching(name => !name.toLowerCase().includes(hammerPat));
+        const barPat = this.bot.barItemName().toLowerCase();
+        // Keep the hammer AND any carried bars — a partial leftover stack joins
+        // the freshly-withdrawn bars instead of being wasted, so e.g. 2 bars
+        // kept + 4 withdrawn still smelts a 5-bar item.
+        await Bank.depositAllMatching(name => {
+            const n = name.toLowerCase();
+            return !n.includes(hammerPat) && !n.includes(barPat);
+        });
         await Execution.delayTicks(1);
         this.bot.countTrip();
 
@@ -173,13 +193,23 @@ class BankTrip implements Task {
             await Execution.delayUntil(() => this.bot.hammerItem() !== null, 3000);
         }
 
-        const barBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(this.bot.barItemName().toLowerCase()));
-        if (!barBank || barBank.name === null) {
-            this.bot.log(`no '${this.bot.barItemName()}' in the bank — idling`);
-            await Execution.delayTicks(5);
+        let barBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(barPat)) ?? null;
+        if (!barBank && !Bank.loaded()) {
+            this.bot.log(`no '${this.bot.barItemName()}' visible yet — waiting for the bank list`);
+            await Execution.delayUntil(() => Bank.loaded(), 4000);
+            barBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(barPat)) ?? null;
+        }
+        if (!barBank) {
+            this.bot.log(`no '${this.bot.barItemName()}' in the bank — stopping`);
+            ScriptRunner.stop(`no ${this.bot.barItemName()} in the bank`);
             return;
         }
         const barName = barBank.name;
+        if (barName === null) {
+            this.bot.log(`no '${this.bot.barItemName()}' in the bank — stopping`);
+            ScriptRunner.stop(`no ${this.bot.barItemName()} in the bank`);
+            return;
+        }
         const allOp = withdrawOp(barBank.ops, 'all');
         if (allOp) {
             this.bot.log(`withdrawing all ${barName} ('${allOp}')`);
@@ -193,12 +223,20 @@ class BankTrip implements Task {
                 if (!(await Execution.delayUntil(() => this.bot.barCount() > before || Inventory.isFull(), 3000))) { break; }
             }
         }
+
+        // After draining the bank the pack must cover one product — otherwise the
+        // bank is genuinely short and there's nothing left to withdraw.
+        const need = this.bot.barsForProduct();
+        if (this.bot.barCount() < need && Bank.count(barName) === 0) {
+            this.bot.log(`only ${this.bot.barCount()} ${barName} left — need ${need} per ${this.bot.productName()} — stopping`);
+            ScriptRunner.stop(`the bank ran out of ${barName} (need ${need} for one ${this.bot.productName()})`);
+        }
     }
 }
 
 class Smith implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
+    validate(): boolean { return this.bot.barCount() >= this.bot.barsForProduct() && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
     async execute(): Promise<void> {
         const anvil = () =>
             Locs.query().name(this.bot.anvilLocName()).withinOf(this.bot.anvilTile(), this.bot.leashRadius()).nearest();
