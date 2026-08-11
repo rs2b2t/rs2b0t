@@ -122,6 +122,10 @@ export class QuestEngine implements Task {
     }
 
     async execute(): Promise<void> {
+        // Death participates in EventSignal, so consume it before checking that signal.
+        if (await this.recoverDeathIfPending()) {
+            return;
+        }
         // Apply Skip before random-event yield so a mid-walk interrupt lands on
         // the next quest instead of spinning on EventSignal.pending().
         const skipEarly = this.host.skipPending();
@@ -170,31 +174,6 @@ export class QuestEngine implements Task {
         const skip = this.host.consumeSkip();
         if (skip && this.runningId !== null) {
             this.applyUserSkip(this.runningId, elig);
-        }
-
-        if (this.host.consumeDeath() && this.runningId !== null) {
-            const deadId = this.runningId;
-            const dead = this.nameOf(deadId, elig);
-            this.host.log(`died during ${dead} — re-provisioning and resuming`);
-            const chat = GameMessages.recent(10);
-            if (chat.length > 0) {
-                this.host.log(`  chat: ${chat.map(m => m.text).join(' | ')}`);
-            }
-            const deadModule = defById(deadId);
-            if (deadModule?.observe) {
-                const progress = await deadModule.readProgress?.();
-                const stage = progress ? progress.stage : await deadModule.readStage?.();
-                const deathSnap = this.buildSnapshot(deadModule, stage, progress);
-                for (const line of deadModule.observe(deathSnap, { kind: 'wait', reason: 'death' })) {
-                    this.host.log(`  ${line}`);
-                }
-            }
-            this.provisioned.delete(deadId);
-            this.deposited.delete(deadId);
-            this.resetWatchdog();
-            this.waitKey = '';
-            this.waitCount = 0;
-            return;
         }
 
         if (this.runningId === null) {
@@ -392,6 +371,11 @@ export class QuestEngine implements Task {
         });
         const took = Date.now() - startedAt;
 
+        // A cooperative step may have returned specifically because death interrupted it.
+        if (await this.recoverDeathIfPending()) {
+            return;
+        }
+
         if (announce || !ok) {
             const after = this.buildSnapshot(module, stage, progress);
             this.host.log(`  → ${ok ? 'ok' : 'FAILED'} in ${formatDuration(took)} · ${invDelta(snap.inv, after.inv)}`);
@@ -433,6 +417,45 @@ export class QuestEngine implements Task {
 
         this.refreshBankCounts();
         await Execution.delayTicks(1);
+    }
+
+    private async recoverDeathIfPending(): Promise<boolean> {
+        if (!this.host.consumeDeath()) {
+            return false;
+        }
+        if (this.runningId === null) {
+            this.host.log('died before a quest step was active — restarting quest selection');
+            this.resetWatchdog();
+            this.stepSubLog.clear();
+            this.lastStepLogged = '';
+            this.waitKey = '';
+            this.waitCount = 0;
+            return true;
+        }
+
+        const deadId = this.runningId;
+        const deadModule = defById(deadId);
+        this.host.log(`died during ${deadModule?.record.name ?? deadId} — re-provisioning and resuming`);
+        const chat = GameMessages.recent(10);
+        if (chat.length > 0) {
+            this.host.log(`  chat: ${chat.map(m => m.text).join(' | ')}`);
+        }
+        if (deadModule?.observe) {
+            const progress = await deadModule.readProgress?.();
+            const stage = progress ? progress.stage : await deadModule.readStage?.();
+            const deathSnap = this.buildSnapshot(deadModule, stage, progress);
+            for (const line of deadModule.observe(deathSnap, { kind: 'wait', reason: 'death' })) {
+                this.host.log(`  ${line}`);
+            }
+        }
+        this.provisioned.delete(deadId);
+        this.deposited.delete(deadId);
+        this.resetWatchdog();
+        this.stepSubLog.clear();
+        this.lastStepLogged = '';
+        this.waitKey = '';
+        this.waitCount = 0;
+        return true;
     }
 
     /**

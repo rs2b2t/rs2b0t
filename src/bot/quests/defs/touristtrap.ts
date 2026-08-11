@@ -2,6 +2,7 @@ import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../api/EventSignal.js';
 import { Execution } from '../../api/Execution.js';
 import { Game } from '../../api/Game.js';
+import { foodForms } from '../../api/combat/food.js';
 import Tile from '../../api/Tile.js';
 import { ChatDialog } from '../../api/hud/ChatDialog.js';
 import { Equipment } from '../../api/hud/Equipment.js';
@@ -12,9 +13,13 @@ import { GroundItems } from '../../api/queries/GroundItems.js';
 import { Locs } from '../../api/queries/Locs.js';
 import { Npcs } from '../../api/queries/Npcs.js';
 import { Reachability } from '../../api/Reachability.js';
+import { Sustain } from '../../api/Sustain.js';
 import { Traversal } from '../../api/Traversal.js';
+import { GameMessages } from '../../events/gameMessages.js';
 import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
+import { earnQuestCoinsStep } from '../exec/fundCoins.js';
+import { QuestFood } from '../food.js';
 
 /**
  * The client-visible Tourist Trap oracle.  The journal deliberately collapses the hidden
@@ -188,6 +193,10 @@ const DEEP_CART = new Tile(3318, 9430, 0);
 const ROWDY_SLAVE = new Tile(3288, 9446, 0);
 const ANA_TILE = new Tile(3302, 9466, 0);
 const LIFT_BUCKET = new Tile(3292, 9423, 0);
+const CAVE_OUTER_LANDING = new Tile(3278, 9415, 0);
+const CAVE_INNER_LANDING = new Tile(3286, 9415, 0);
+const MINE_EXIT_DOOR = new Tile(3278, 9426, 0);
+const MINE_EXIT_INSIDE_STAND = new Tile(3278, 9427, 0);
 // The two-tile winch loc starts at (3279,3017); that origin is occupied collision. Approach it
 // from the source-map's open south-east tile instead of asking the walker to enter the loc.
 const SURFACE_WINCH_APPROACH = new Tile(3280, 3018, 0);
@@ -271,6 +280,14 @@ const DESERT_OUTFIT = [ITEM.DESERT_SHIRT, ITEM.DESERT_ROBE, ITEM.DESERT_BOOTS] a
 const SLAVE_OUTFIT = [ITEM.SLAVE_SHIRT, ITEM.SLAVE_ROBE, ITEM.SLAVE_BOOTS] as const;
 const SLAVE_OUTFIT_DROP_IDS = [1844, 1845, 1846] as const;
 const WATERSKINS = ['Waterskin(4)', 'Waterskin(3)', 'Waterskin(2)', 'Waterskin(1)', 'Waterskin(0)'] as const;
+const FOOD_ENTRY_TARGET = 16;
+const FOOD_ENTRY_FLOOR = 12;
+const FOOD_RESTOCK_FLOOR = 4;
+const WATER_ENTRY_DOSES = 16;
+const WATER_ENTRY_FLOOR = 12;
+const WATER_RESTOCK_FLOOR = 8;
+const RESCUE_COIN_FLOOR = 100;
+const RESCUE_COIN_TARGET = 200;
 
 const IRENA_START = [
     "What's the matter?",
@@ -338,8 +355,10 @@ async function driveStrictDialog(
     log: (m: string) => void,
     until?: () => boolean
 ): Promise<boolean> {
+    let reachedUntil = false;
     for (let i = 0; i < 140; i++) {
         if (EventSignal.pending()) return false;
+        if (until?.()) reachedUntil = true;
         if (ChatDialog.canContinue()) {
             if (!(await ChatDialog.continue())) return false;
             await Execution.delayTicks(1);
@@ -357,7 +376,7 @@ async function driveStrictDialog(
             continue;
         }
         if (!ChatDialog.isOpen()) {
-            if (!until || until()) return true;
+            if (!until || reachedUntil) return true;
             // Some source-authored conversations deliberately close the modal for several ticks
             // before continuing. An item/stage predicate distinguishes that gap from completion.
             await Execution.delayTicks(1);
@@ -369,13 +388,25 @@ async function driveStrictDialog(
     return false;
 }
 
-async function drainInteractionDialog(prefer: readonly string[], log: (m: string) => void): Promise<boolean> {
-    const opened = await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), prefer.length > 0 ? 8000 : 1500);
-    if (!opened) {
+async function drainInteractionDialog(
+    prefer: readonly string[],
+    log: (m: string) => void,
+    until?: () => boolean
+): Promise<boolean> {
+    const started = await Execution.delayUntil(
+        () => ChatDialog.isOpen() || ChatDialog.canContinue() || until?.() === true,
+        prefer.length > 0 || until ? 8000 : 1500
+    );
+    if (!started) {
         await Execution.delayTicks(2);
-        return prefer.length === 0;
+        return until ? until() : prefer.length === 0;
     }
-    return driveStrictDialog(prefer, log);
+    if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) return until?.() === true;
+    return driveStrictDialog(prefer, log, until);
+}
+
+function dialogMatches(pattern: RegExp): boolean {
+    return ChatDialog.texts().some(text => pattern.test(text));
 }
 
 function talkAction(actionsList: string[]): string | null {
@@ -426,16 +457,20 @@ async function interactLoc(
     op: string,
     anchor: Tile,
     log: (m: string) => void,
-    prefer: readonly string[] = []
+    prefer: readonly string[] = [],
+    until?: () => boolean
 ): Promise<boolean> {
     if (!(await walk(anchor, 3, log))) return false;
+    // World-walk may execute a transport edge while approaching the loc. Honor the exact
+    // postcondition before looking for an object that is now in the previous scene.
+    if (until?.()) return true;
     const loc = locAt(ids, op, anchor, 10);
     if (!loc) {
         log(`no Tourist Trap loc [${ids.join(',')}] offering '${op}' near (${anchor.x},${anchor.z})`);
         return false;
     }
     if (!(await loc.interact(op))) return false;
-    return drainInteractionDialog(prefer, log);
+    return drainInteractionDialog(prefer, log, until);
 }
 
 async function useItemOnLoc(
@@ -443,7 +478,8 @@ async function useItemOnLoc(
     ids: readonly number[],
     anchor: Tile,
     log: (m: string) => void,
-    prefer: readonly string[] = []
+    prefer: readonly string[] = [],
+    until?: () => boolean
 ): Promise<boolean> {
     if (!(await walk(anchor, 3, log))) return false;
     const item = Inventory.first(itemName);
@@ -453,7 +489,7 @@ async function useItemOnLoc(
         return false;
     }
     if (!(await item.useOn(loc))) return false;
-    return drainInteractionDialog(prefer, log);
+    return drainInteractionDialog(prefer, log, until);
 }
 
 async function useItemOnNpc(
@@ -461,14 +497,15 @@ async function useItemOnNpc(
     npcId: number,
     anchor: Tile,
     log: (m: string) => void,
-    prefer: readonly string[] = []
+    prefer: readonly string[] = [],
+    until?: () => boolean
 ): Promise<boolean> {
     if (!(await walk(anchor, 4, log))) return false;
     const item = Inventory.first(itemName);
     const npc = Npcs.query().where(candidate => candidate.id === npcId).within(10).nearest();
     if (!item || !npc) return false;
     if (!(await item.useOn(npc))) return false;
-    return drainInteractionDialog(prefer, log);
+    return drainInteractionDialog(prefer, log, until);
 }
 
 const lower = (name: string): string => name.toLowerCase();
@@ -478,12 +515,33 @@ const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(lower
 const ownedNow = (snap: QuestSnapshot, name: string): number => heldCount(snap, name) + (worn(snap, name) ? 1 : 0);
 const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(lower(name)) ?? 0;
 
-function chargedWaterskins(snap: QuestSnapshot): number {
-    return WATERSKINS.slice(0, 4).reduce((sum, name) => sum + heldCount(snap, name), 0);
+function waterskinContainers(snap: QuestSnapshot): number {
+    return WATERSKINS.reduce((sum, name) => sum + heldCount(snap, name), 0);
 }
 
-function bankedChargedWaterskins(snap: QuestSnapshot): number {
-    return WATERSKINS.slice(0, 4).reduce((sum, name) => sum + banked(snap, name), 0);
+export function waterskinDoses(snap: QuestSnapshot): number {
+    return WATERSKINS.slice(0, 4).reduce(
+        (sum, name, index) => sum + heldCount(snap, name) * (4 - index),
+        0
+    );
+}
+
+function configuredFoodName(): string | null {
+    const name = QuestFood.name?.trim();
+    return name ? name : null;
+}
+
+function configuredFoodForms(): string[] {
+    const name = configuredFoodName();
+    return name ? foodForms(name) : [];
+}
+
+function configuredFoodCount(snap: QuestSnapshot): number {
+    return configuredFoodForms().reduce((sum, name) => sum + heldCount(snap, name), 0);
+}
+
+function bankedConfiguredFoodCount(snap: QuestSnapshot): number {
+    return configuredFoodForms().reduce((sum, name) => sum + banked(snap, name), 0);
 }
 
 function hasOutfit(snap: QuestSnapshot, outfit: readonly string[]): boolean {
@@ -495,45 +553,77 @@ function outfitCopies(snap: QuestSnapshot, outfit: readonly string[]): number {
 }
 
 function bankStep(items: { name: string; qty: number }[]): QuestStep {
-    return { kind: 'withdraw', items, bank: DRAYNOR_BANK };
+    // Nearest bank — mid-desert recovery must not walk to Draynor from Al Kharid.
+    return { kind: 'withdraw', items };
 }
 
 function scanBank(): QuestStep {
-    return { kind: 'scanBank', bank: DRAYNOR_BANK };
+    return { kind: 'scanBank' };
 }
 
-const PREPARATION_KEEP = [
-    ITEM.COINS,
-    ITEM.PICKAXE,
-    ITEM.KEBAB,
-    ...DESERT_OUTFIT,
-    ...SLAVE_OUTFIT,
-    ...WATERSKINS,
-    ITEM.BAR,
-    ITEM.FEATHER,
-    ITEM.HAMMER,
-    ITEM.PASS,
-    ITEM.DISCLAIMER,
-    ITEM.METAL_KEY,
-    ITEM.BEDABIN_KEY,
-    ITEM.PLANS,
-    ITEM.DART_TIP,
-    ITEM.DART,
-    ITEM.PINEAPPLE,
-    ITEM.BARREL,
-    ITEM.ANA_BARREL
-].map(lower);
+function preparationKeep(): string[] {
+    return [
+        ITEM.COINS,
+        ITEM.PICKAXE,
+        ITEM.KEBAB,
+        ...configuredFoodForms(),
+        ...DESERT_OUTFIT,
+        ...SLAVE_OUTFIT,
+        ...WATERSKINS,
+        ITEM.BAR,
+        ITEM.FEATHER,
+        ITEM.HAMMER,
+        ITEM.PASS,
+        ITEM.DISCLAIMER,
+        ITEM.METAL_KEY,
+        ITEM.BEDABIN_KEY,
+        ITEM.PLANS,
+        ITEM.DART_TIP,
+        ITEM.DART,
+        ITEM.PINEAPPLE,
+        ITEM.BARREL,
+        ITEM.ANA_BARREL
+    ].map(lower);
+}
+
+function rescueKeep(): string[] {
+    return [
+        ITEM.COINS,
+        ITEM.PICKAXE,
+        ITEM.KEBAB,
+        ...configuredFoodForms(),
+        ...DESERT_OUTFIT,
+        ...SLAVE_OUTFIT,
+        ...WATERSKINS,
+        ITEM.PASS,
+        ITEM.DISCLAIMER,
+        ITEM.METAL_KEY,
+        ITEM.PINEAPPLE,
+        ITEM.BARREL,
+        ITEM.ANA_BARREL
+    ].map(lower);
+}
 
 function hasPreparationSpillover(snap: QuestSnapshot): boolean {
-    return [...snap.inv.keys()].some(name => !PREPARATION_KEEP.includes(name));
+    const keep = preparationKeep();
+    return [...snap.inv.keys()].some(name => !keep.includes(name));
 }
 
 function makePreparationSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
     if (snap.freeSlots === undefined || snap.freeSlots >= slots) return null;
     if (hasPreparationSpillover(snap)) {
-        return { kind: 'deposit', keep: PREPARATION_KEEP, bank: DRAYNOR_BANK, exactKeep: true };
+        return { kind: 'deposit', keep: preparationKeep(), exactKeep: true };
     }
     return { kind: 'wait', reason: `need ${slots} free inventory slot${slots === 1 ? '' : 's'} for the Tourist Trap loadout` };
+}
+
+function makeRescueSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
+    if (snap.freeSlots === undefined || snap.freeSlots >= slots) return null;
+    const keep = rescueKeep();
+    if ([...snap.inv.keys()].some(name => !keep.includes(name))) {
+        return { kind: 'deposit', keep, exactKeep: true };
+    }
+    return { kind: 'wait', reason: `need ${slots} free inventory slot${slots === 1 ? '' : 's'} for Tourist Trap survival supplies` };
 }
 
 interface PrepTarget {
@@ -544,15 +634,19 @@ interface PrepTarget {
 }
 
 const SHANTAY_TARGETS: readonly PrepTarget[] = [
-    { name: ITEM.DESERT_SHIRT, qty: 2, shop: SHANTAY_SHOP, estGp: 45 },
-    { name: ITEM.DESERT_ROBE, qty: 2, shop: SHANTAY_SHOP, estGp: 45 },
-    { name: ITEM.DESERT_BOOTS, qty: 2, shop: SHANTAY_SHOP, estGp: 25 },
+    { name: ITEM.DESERT_SHIRT, qty: 1, shop: SHANTAY_SHOP, estGp: 45 },
+    { name: ITEM.DESERT_ROBE, qty: 1, shop: SHANTAY_SHOP, estGp: 45 },
+    { name: ITEM.DESERT_BOOTS, qty: 1, shop: SHANTAY_SHOP, estGp: 25 },
     { name: ITEM.WATERSKIN, qty: 4, shop: SHANTAY_SHOP, estGp: 35 },
-    { name: ITEM.BAR, qty: 3, shop: SHANTAY_SHOP, estGp: 10 },
-    { name: ITEM.FEATHER, qty: 50, shop: SHANTAY_SHOP, estGp: 3 },
-    { name: ITEM.HAMMER, qty: 1, shop: SHANTAY_SHOP, estGp: 2 },
-    { name: ITEM.PASS, qty: 1, shop: SHANTAY_SHOP, estGp: 6 }
+    { name: ITEM.PASS, qty: 1, shop: SHANTAY_SHOP, estGp: 6 },
+    { name: ITEM.BAR, qty: 3, shop: SHANTAY_SHOP, estGp: 8 },
+    { name: ITEM.FEATHER, qty: 10, shop: SHANTAY_SHOP, estGp: 2 },
+    { name: ITEM.HAMMER, qty: 1, shop: SHANTAY_SHOP, estGp: 13 }
 ];
+
+const INITIAL_SHANTAY_TARGETS = SHANTAY_TARGETS.filter(target =>
+    target.name !== ITEM.BAR && target.name !== ITEM.FEATHER && target.name !== ITEM.HAMMER
+);
 
 function withdrawBankedShortage(snap: QuestSnapshot, name: string, target: number): QuestStep | null {
     const missing = target - ownedNow(snap, name);
@@ -564,9 +658,11 @@ function withdrawBankedShortage(snap: QuestSnapshot, name: string, target: numbe
     return makePreparationSpace(snap, slots) ?? bankStep([{ name, qty }]);
 }
 
-async function buyKebabs(log: (m: string) => void): Promise<boolean> {
+async function buyKebabs(target: number, log: (m: string) => void): Promise<boolean> {
+    if (EventSignal.pending()) return false;
     if (!(await walk(KEBAB_SELLER, 2, log))) return false;
-    while (Inventory.count(ITEM.KEBAB) < 8) {
+    while (Inventory.count(ITEM.KEBAB) < target) {
+        if (EventSignal.pending()) return false;
         if (Inventory.count(ITEM.COINS) < 1 || Inventory.isFull()) return false;
         const before = Inventory.count(ITEM.KEBAB);
         // Kebab seller has no shop interface; this strict path is the canonical purchase.
@@ -576,28 +672,57 @@ async function buyKebabs(log: (m: string) => void): Promise<boolean> {
         if (!op || !(await seller.interact(op))) return false;
         if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) return false;
         if (!(await driveStrictDialog(['Yes please.'], log))) return false;
+        if (EventSignal.pending()) return false;
         if (!(await Execution.delayUntil(() => Inventory.count(ITEM.KEBAB) > before, 5000))) return false;
     }
     return true;
 }
 
+function configuredFoodWithdrawal(
+    snap: QuestSnapshot,
+    minimum: number,
+    target: number,
+    space: (snap: QuestSnapshot, slots: number) => QuestStep | null
+): QuestStep | null {
+    const name = configuredFoodName();
+    if (!name) return null;
+    const carried = configuredFoodCount(snap);
+    if (carried >= minimum) return null;
+    if (!snap.bankKnown) return scanBank();
+
+    const bankedFood = bankedConfiguredFoodCount(snap);
+    if (carried + bankedFood < target) {
+        return {
+            kind: 'wait',
+            reason: `configured Tourist Trap food '${name}' unavailable: need ${target}, carried ${carried}, banked ${bankedFood}`
+        };
+    }
+
+    let missing = target - carried;
+    const items: { name: string; qty: number }[] = [];
+    for (const form of configuredFoodForms()) {
+        const qty = Math.min(missing, banked(snap, form));
+        if (qty <= 0) continue;
+        items.push({ name: form === name.toLowerCase() ? name : form, qty });
+        missing -= qty;
+        if (missing === 0) break;
+    }
+    return space(snap, target - carried) ?? bankStep(items);
+}
+
 function preparationAcquisitionStep(snap: QuestSnapshot): QuestStep | null {
     if (!snap.bankKnown) return scanBank();
     if (hasPreparationSpillover(snap)) {
-        return { kind: 'deposit', keep: PREPARATION_KEEP, bank: DRAYNOR_BANK, exactKeep: true };
+        return { kind: 'deposit', keep: preparationKeep(), exactKeep: true };
     }
 
     const alreadySouth = ['irena', 'desert', 'bedabin'].includes(touristTrapArea(snap.tile));
 
-    // Keep enough for Bob, Shantay, the eight kebabs, and the driver's exact 100 gp bribe.
-    // Do not turn around after crossing: the Al Kharid toll naturally leaves 990 coins, which is
-    // still comfortably above the quest's minimum once every supply has already been acquired.
+    // This single explicit funding step covers every known purchase and the driver's bribe.
     if (!alreadySouth && heldCount(snap, ITEM.COINS) < 1000) {
         const coins = withdrawBankedShortage(snap, ITEM.COINS, 1000);
         if (coins) return coins;
-    }
-    if (heldCount(snap, ITEM.COINS) < 600) {
-        return { kind: 'wait', reason: 'need at least 600 Coins for Tourist Trap supplies and rescue bribe' };
+        return earnQuestCoinsStep(1000, 'Tourist Trap');
     }
 
     if (ownedNow(snap, ITEM.PICKAXE) < 1) {
@@ -607,38 +732,30 @@ function preparationAcquisitionStep(snap: QuestSnapshot): QuestStep | null {
         return space ?? { kind: 'buy', item: ITEM.PICKAXE, qty: 1, shop: BOB_AXES, estGp: 2 };
     }
 
-    if (heldCount(snap, ITEM.KEBAB) < 8) {
-        const bankFood = withdrawBankedShortage(snap, ITEM.KEBAB, 8);
-        if (bankFood) return bankFood;
-        const missing = 8 - heldCount(snap, ITEM.KEBAB);
-        const space = makePreparationSpace(snap, missing);
-        return space ?? { kind: 'custom', name: `buy ${missing} Kebabs`, run: buyKebabs };
+    const selectedFood = configuredFoodName();
+    if (selectedFood) {
+        const food = configuredFoodWithdrawal(
+            snap,
+            FOOD_ENTRY_TARGET,
+            FOOD_ENTRY_TARGET,
+            makePreparationSpace
+        );
+        if (food) return food;
+    } else {
+        const ration = sourceKebabs(snap, FOOD_ENTRY_TARGET);
+        if (ration) return ration;
     }
 
-    for (const target of SHANTAY_TARGETS) {
+    for (const target of INITIAL_SHANTAY_TARGETS) {
         // Crossing south consumes the pass. Once the player is already in the desert, buying a
         // replacement would route straight back north and prevent the quest from ever starting.
         if (target.name === ITEM.PASS && alreadySouth) {
             continue;
         }
         if (target.name === ITEM.WATERSKIN) {
-            const missing = 4 - chargedWaterskins(snap);
-            if (missing <= 0) continue;
-            if (bankedChargedWaterskins(snap) > 0) {
-                const available = WATERSKINS.slice(0, 4).find(name => banked(snap, name) > 0)!;
-                const qty = Math.min(missing, banked(snap, available));
-                const space = makePreparationSpace(snap, qty);
-                return space ?? bankStep([{ name: available, qty }]);
-            }
-            const space = makePreparationSpace(snap, missing);
-            if (space) return space;
-            return {
-                kind: 'buy',
-                item: ITEM.WATERSKIN,
-                qty: missing,
-                shop: SHANTAY_SHOP,
-                estGp: target.estGp! * missing
-            };
+            const water = sourceWaterDoses(snap, WATER_ENTRY_DOSES, WATER_ENTRY_DOSES, makePreparationSpace);
+            if (water) return water;
+            continue;
         }
         const bankItem = withdrawBankedShortage(snap, target.name, target.qty);
         if (bankItem) return bankItem;
@@ -687,6 +804,10 @@ async function wearDesertLoadout(log: (m: string) => void): Promise<boolean> {
     return ensureEquipment([...DESERT_OUTFIT, ITEM.PICKAXE], [...DESERT_OUTFIT, ITEM.PICKAXE], log);
 }
 
+async function wearDesertOutfitForSpace(log: (m: string) => void): Promise<boolean> {
+    return ensureEquipment(DESERT_OUTFIT, [...DESERT_OUTFIT, ITEM.PICKAXE], log);
+}
+
 async function wearSlaveLoadout(log: (m: string) => void): Promise<boolean> {
     // A pickaxe is the one weapon category explicitly allowed by the camp equipment search.
     return ensureEquipment([...SLAVE_OUTFIT, ITEM.PICKAXE], [...SLAVE_OUTFIT, ITEM.PICKAXE], log);
@@ -696,18 +817,11 @@ async function wearSlaveDisguiseOnly(log: (m: string) => void): Promise<boolean>
     return ensureEquipment(SLAVE_OUTFIT, [...SLAVE_OUTFIT, ITEM.PICKAXE], log);
 }
 
-async function eatKebab(): Promise<boolean> {
-    const food = Inventory.first(ITEM.KEBAB);
-    if (!food) return false;
-    const before = Inventory.count(ITEM.KEBAB);
-    if (!(await food.interact('Eat'))) return false;
-    return Execution.delayUntil(() => Inventory.count(ITEM.KEBAB) < before, 3000);
-}
-
 async function waitOutCombat(timeoutMs: number): Promise<boolean> {
     const deadline = performance.now() + timeoutMs;
     while (Game.inCombat() && performance.now() < deadline) {
-        if (Skills.hpFraction() < 0.65 && Inventory.contains(ITEM.KEBAB)) await eatKebab();
+        await Sustain.run();
+        if (EventSignal.pending()) return false;
         await Execution.delayTicks(1);
     }
     return !Game.inCombat();
@@ -778,7 +892,14 @@ async function leaveCamp(log: (m: string) => void): Promise<boolean> {
         ? await ensureEquipment(DESERT_OUTFIT, [...DESERT_OUTFIT, ITEM.PICKAXE], log)
         : await ensureEquipment([], [...DESERT_OUTFIT, ITEM.PICKAXE], log);
     if (!safelyDressed) return false;
-    if (!(await interactLoc(LOC.CAMP_GATE, 'Open', CAMP_GATE, log))) return false;
+    if (!(await interactLoc(
+        LOC.CAMP_GATE,
+        'Open',
+        CAMP_GATE,
+        log,
+        [],
+        () => touristTrapArea(Game.tile()) === 'desert'
+    ))) return false;
     return Execution.delayUntil(() => touristTrapArea(Game.tile()) === 'desert', 10_000);
 }
 
@@ -797,7 +918,18 @@ async function leaveMine(log: (m: string) => void): Promise<boolean> {
     if (!(await wearSlaveDisguiseOnly(log))) return false;
     if (touristTrapArea(Game.tile()) === 'mineLower' && !(await crossMineCave(false, log))) return false;
     if (touristTrapArea(Game.tile()) !== 'mineEntrance') return false;
-    if (!(await interactLoc(LOC.UNDERGROUND_MINE_DOOR, 'Open', new Tile(3278, 9426, 0), log))) return false;
+    // The loc origin is across the closed door. Targeting it makes world-walk execute the door
+    // transport and then chase a stale underground destination after arriving on the surface.
+    if (!(await walk(MINE_EXIT_INSIDE_STAND, 0, log))) {
+        log('could not reach the inside stand for the underground mine exit');
+        return false;
+    }
+    const door = locAt(LOC.UNDERGROUND_MINE_DOOR, 'Open', MINE_EXIT_DOOR, 4);
+    if (!door) {
+        log('underground mine exit did not expose its Open action from the inside stand');
+        return false;
+    }
+    if (!(await door.interact('Open')) || !(await drainInteractionDialog([], log))) return false;
     return Execution.delayUntil(() => touristTrapArea(Game.tile()) === 'campSurface', 12_000);
 }
 
@@ -819,6 +951,38 @@ async function slaveUnlockAndTrade(log: (m: string) => void): Promise<boolean> {
         log,
         10
     );
+}
+
+async function replaceLostSlaveOutfit(log: (m: string) => void): Promise<boolean> {
+    if (liveHasSlaveOutfit()) return true;
+    if (!(await wearDesertLoadout(log))) return false;
+    if (!(await walk(SLAVE, 3, log))) return false;
+
+    const slave = Npcs.query()
+        .where(candidate => (candidate.id === NPC.SLAVE || candidate.id === NPC.ESCAPED_SLAVE)
+            && talkAction(candidate.actions()) !== null)
+        .withinOf(SLAVE, 6)
+        .nearest();
+    if (!slave) {
+        log(`slave-outfit recovery: no male slave 825/826 near (${SLAVE.x},${SLAVE.z})`);
+        return false;
+    }
+    const tile = slave.tile();
+    log(`slave-outfit recovery: talking to npc=${slave.id} at (${tile.x},${tile.z}); `
+        + `missing=${SLAVE_OUTFIT.filter(item => !Inventory.contains(item) && !Equipment.contains(item)).join('|')}`);
+    if (!(await slave.interact(talkAction(slave.actions())!))) return false;
+    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 8000))) {
+        log('slave-outfit recovery: male-slave dialogue did not open');
+        return false;
+    }
+    if (!(await driveStrictDialog(['Yes, I\'ll trade.'], log))) return false;
+    if (await Execution.delayUntil(liveHasSlaveOutfit, 5000)) {
+        log('slave-outfit recovery: received the complete shirt, robe, and boots');
+        return true;
+    }
+    log('slave-outfit recovery: dialogue ended without a complete outfit; '
+        + `missing=${SLAVE_OUTFIT.filter(item => !Inventory.contains(item) && !Equipment.contains(item)).join('|')}`);
+    return false;
 }
 
 async function askCaveGuard(log: (m: string) => void): Promise<boolean> {
@@ -849,10 +1013,26 @@ async function givePineapple(log: (m: string) => void): Promise<boolean> {
 async function crossMineCave(toInnerMine: boolean, log: (m: string) => void): Promise<boolean> {
     // Approach the directional cave pair from its source-authored landing tile. The cave loc
     // tiles themselves are wall-separated collision slivers and are not valid walk targets.
-    const anchor = toInnerMine ? new Tile(3278, 9415, 0) : new Tile(3286, 9415, 0);
-    if (!(await interactLoc(LOC.MINE_CAVE, 'Walk through', anchor, log))) return false;
-    const expected = toInnerMine ? 'mineLower' : 'mineEntrance';
-    return Execution.delayUntil(() => touristTrapArea(Game.tile()) === expected, 10_000);
+    const anchor = toInnerMine ? CAVE_OUTER_LANDING : CAVE_INNER_LANDING;
+    const landing = toInnerMine ? CAVE_INNER_LANDING : CAVE_OUTER_LANDING;
+    const atLanding = (): boolean => {
+        const tile = Game.tile();
+        return tile !== null && tile.level === landing.level && landing.distanceTo(tile) <= 1;
+    };
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        if (EventSignal.pending()) return false;
+        if (await interactLoc(LOC.MINE_CAVE, 'Walk through', anchor, log, [], atLanding)
+            && await Execution.delayUntil(atLanding, 10_000)) return true;
+        if (attempt < 3) {
+            log(`mine cave transit attempt ${attempt}/3 was interrupted before the exact landing; retrying`);
+            await Sustain.run();
+            await Execution.delayTicks(1);
+        }
+    }
+    // The broad mine regions overlap approach tiles, so only the source-authored landing proves
+    // that the delayed cave transport completed.
+    log(`mine cave transit did not reach (${landing.x},${landing.z}) after 3 attempts`);
+    return false;
 }
 
 async function escapeSurfaceJail(log: (m: string) => void): Promise<boolean> {
@@ -1121,6 +1301,10 @@ async function exitPrototypeTent(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => touristTrapArea(Game.tile()) === 'bedabin', 8000);
 }
 
+export function forgeBarWastedSince(mark: number): boolean {
+    return GameMessages.sawSince(mark, /waste the bronze bar|unlucky accident/i);
+}
+
 async function forgePrototypeTip(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(ITEM.DART_TIP)) return true;
     if (touristTrapArea(Game.tile()) !== 'bedabinTent') {
@@ -1129,14 +1313,28 @@ async function forgePrototypeTip(log: (m: string) => void): Promise<boolean> {
     if (!(await walk(EXPERIMENTAL_ANVIL, 3, log))) return false;
     const bar = Inventory.first(ITEM.BAR);
     const anvil = Locs.query().where(loc => loc.id === LOC.ANVIL).within(8).nearest();
-    if (!bar || !anvil || !(await bar.useOn(anvil))) return false;
+    if (!bar || !anvil) return false;
+    // A prior unlucky attempt remains in the chatbox; only a message emitted after this bar
+    // was submitted can terminate this attempt as wasted.
+    const forgeMark = GameMessages.mark();
+    if (!(await bar.useOn(anvil))) return false;
     if (!(await Execution.delayUntil(
         () => ChatDialog.isOpen() || ChatDialog.canContinue() || Inventory.contains(ITEM.DART_TIP),
         8000
     ))) return false;
     // The source consumes the bar well before its final success roll and item award. Keep
-    // pumping the exact anvil dialogue until the tip exists; a lower bar count is not success.
-    return driveStrictDialog(ANVIL_DIALOG, log, () => Inventory.contains(ITEM.DART_TIP));
+    // pumping the exact anvil dialogue until the tip exists, or the unlucky-waste line fires.
+    const forged = await driveStrictDialog(
+        ANVIL_DIALOG,
+        log,
+        () => Inventory.contains(ITEM.DART_TIP) || forgeBarWastedSince(forgeMark)
+    );
+    if (Inventory.contains(ITEM.DART_TIP)) return true;
+    if (forgeBarWastedSince(forgeMark)) {
+        log('forge failed: bronze bar wasted without a dart tip');
+        return false;
+    }
+    return forged;
 }
 
 async function fletchPrototypeDart(log: (m: string) => void): Promise<boolean> {
@@ -1220,20 +1418,25 @@ function safeRecoveryRoute(area: TouristTrapArea): QuestStep | null {
     return null;
 }
 
-const CRITICAL_SLOT_KEEP = [
-    ITEM.COINS,
-    ITEM.PICKAXE,
-    ...DESERT_OUTFIT,
-    ...SLAVE_OUTFIT,
-    ITEM.METAL_KEY,
-    ITEM.BEDABIN_KEY,
-    ITEM.PLANS,
-    ITEM.DART_TIP,
-    ITEM.DART,
-    ITEM.PINEAPPLE,
-    ITEM.BARREL,
-    ITEM.ANA_BARREL
-].map(lower);
+function criticalSlotKeep(): string[] {
+    return [
+        ITEM.COINS,
+        ITEM.PICKAXE,
+        ITEM.KEBAB,
+        ...configuredFoodForms(),
+        ...WATERSKINS,
+        ...DESERT_OUTFIT,
+        ...SLAVE_OUTFIT,
+        ITEM.METAL_KEY,
+        ITEM.BEDABIN_KEY,
+        ITEM.PLANS,
+        ITEM.DART_TIP,
+        ITEM.DART,
+        ITEM.PINEAPPLE,
+        ITEM.BARREL,
+        ITEM.ANA_BARREL
+    ].map(lower);
+}
 
 function makeCriticalItemSpace(snap: QuestSnapshot, slots = 1): QuestStep | null {
     if (snap.freeSlots === undefined || snap.freeSlots >= slots) return null;
@@ -1241,16 +1444,17 @@ function makeCriticalItemSpace(snap: QuestSnapshot, slots = 1): QuestStep | null
     if (route) return route;
     const north = routeNorth(snap);
     if (north) return north;
-    if (![...snap.inv.keys()].some(name => !CRITICAL_SLOT_KEEP.includes(name))) {
+    const keep = criticalSlotKeep();
+    if (![...snap.inv.keys()].some(name => !keep.includes(name))) {
         return { kind: 'wait', reason: `need ${slots} safe inventory slot${slots === 1 ? '' : 's'} for a Tourist Trap quest item` };
     }
-    return { kind: 'deposit', keep: CRITICAL_SLOT_KEEP, bank: DRAYNOR_BANK, exactKeep: true };
+    return { kind: 'deposit', keep, exactKeep: true };
 }
 
 function recoverCritical(
     snap: QuestSnapshot,
     name: string,
-    fallback: QuestStep
+    reacquire: QuestStep
 ): QuestStep | null {
     if (held(snap, name)) return null;
     const route = safeRecoveryRoute(touristTrapArea(snap.tile));
@@ -1266,7 +1470,7 @@ function recoverCritical(
         const space = makePreparationSpace(snap, 1);
         return space ?? bankStep([{ name, qty: 1 }]);
     }
-    return fallback;
+    return reacquire;
 }
 
 function sourceConsumable(snap: QuestSnapshot, name: string, target: number): QuestStep | null {
@@ -1288,6 +1492,9 @@ function sourceConsumable(snap: QuestSnapshot, name: string, target: number): Qu
     if (withdrawal) return withdrawal;
     const shopTarget = SHANTAY_TARGETS.find(item => item.name === name);
     if (!shopTarget) return { kind: 'wait', reason: `cannot naturally replace '${name}'` };
+    const purchaseCost = shopTarget.estGp! * missing;
+    const coins = sourceCoins(snap, purchaseCost, `replace ${name}`);
+    if (coins) return coins;
     const slots = stackable && heldCount(snap, name) === 0 ? 1 : stackable ? 0 : missing;
     const space = makePreparationSpace(snap, slots);
     return space ?? {
@@ -1295,7 +1502,7 @@ function sourceConsumable(snap: QuestSnapshot, name: string, target: number): Qu
         item: name,
         qty: missing,
         shop: SHANTAY_SHOP,
-        estGp: shopTarget.estGp! * missing
+        estGp: purchaseCost
     };
 }
 
@@ -1303,7 +1510,7 @@ async function freeOneRescueSlot(log: (m: string) => void): Promise<boolean> {
     if (Inventory.free() >= 1) return true;
     // At stage 17+ the prototype is complete. These are expendable surplus only; never drop a
     // key, disguise, rescue barrel, coins, or the pickaxe needed by punishment recovery.
-    for (const name of [ITEM.KEBAB, 'Waterskin(0)', ITEM.HAMMER, ITEM.BAR, ITEM.FEATHER, ITEM.PASS]) {
+    for (const name of ['Waterskin(0)', ITEM.HAMMER, ITEM.BAR, ITEM.FEATHER, ITEM.PASS, ITEM.KEBAB]) {
         const item = Inventory.first(name);
         if (!item) continue;
         const before = Inventory.free();
@@ -1322,13 +1529,53 @@ async function searchLowerBarrel(
         if (!(await freeOneRescueSlot(log))) return false;
     }
     const preference = takeOrdinary ? ['Yeah, cool!'] : ['No thanks.'];
-    if (!(await interactLoc([LOC.EMPTY_BARREL], 'Search', LOWER_BARREL, log, preference))) return false;
-    return takeOrdinary
+    const mark = GameMessages.mark();
+    const completed = (): boolean => takeOrdinary
         ? Inventory.contains(ITEM.BARREL) || Inventory.contains(ITEM.ANA_BARREL)
-        : true;
+        : Inventory.contains(ITEM.ANA_BARREL)
+            || GameMessages.sawSince(mark, /decide not to take the barrel/i);
+    if (!(await interactLoc([LOC.EMPTY_BARREL], 'Search', LOWER_BARREL, log, preference, completed)) || !completed()) {
+        const observed = GameMessages.since(mark).map(message => message.text).join(' | ');
+        log(`lower barrel interaction ended without its authoritative result; observed=[${observed}]`);
+        return false;
+    }
+    return true;
+}
+
+async function searchSurfaceBarrel(log: (m: string) => void): Promise<boolean> {
+    if (!(await walk(SURFACE_BARREL_APPROACH, 3, log))) return false;
+    const barrel = locAt([LOC.FULL_BARREL], 'Search', SURFACE_BARREL_APPROACH, 10);
+    if (!barrel) {
+        log('lift checkpoint: exact top barrel did not expose its Search action');
+        return false;
+    }
+    if (!(await barrel.interact('Search'))) {
+        log('lift checkpoint: exact top barrel Search action was not dispatched');
+        return false;
+    }
+    const anaResponse = await Execution.delayUntil(
+        () => Inventory.contains(ITEM.ANA_BARREL) || ChatDialog.isOpen() || ChatDialog.canContinue(),
+        8000
+    );
+    if (!anaResponse) {
+        // The source intentionally sends no message when this exact barrel has no Ana bit.
+        log('lift checkpoint: top barrel contained no Ana response');
+        return false;
+    }
+    if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+        if (!(await driveStrictDialog([], log, () => Inventory.contains(ITEM.ANA_BARREL)))) {
+            log('lift checkpoint: top barrel Ana dialogue did not reach the inventory award');
+            return false;
+        }
+    }
+    const recovered = await Execution.delayUntil(() => Inventory.contains(ITEM.ANA_BARREL), 3000);
+    if (!recovered) log('lift checkpoint: top barrel dialogue ended without returning Ana');
+    return recovered;
 }
 
 async function rideMineCart(anchor: Tile, log: (m: string) => void): Promise<boolean> {
+    await Sustain.run();
+    if (EventSignal.pending()) return false;
     const fromLower = anchor.distanceTo(LOWER_CART) <= 1;
     const origin = fromLower ? 'lower mine' : 'deep mine';
     const destination = fromLower ? 'deep mine' : 'lower mine';
@@ -1348,7 +1595,8 @@ async function rideMineCart(anchor: Tile, log: (m: string) => void): Promise<boo
 
     const area = touristTrapArea(Game.tile());
     if (area === (fromLower ? 'mineLower' : 'mineDeep')) {
-        log(`mine-cart Agility roll failed at the ${origin}; retrying in place`);
+        await Sustain.run();
+        log(`mine-cart Agility roll failed at the ${origin}; upkeep applied before retry`);
     } else {
         log(`mine-cart transit unresolved; current area=${area}`);
     }
@@ -1357,8 +1605,17 @@ async function rideMineCart(anchor: Tile, log: (m: string) => void): Promise<boo
 
 async function catchAnaInBarrel(log: (m: string) => void): Promise<boolean> {
     if (Inventory.contains(ITEM.ANA_BARREL)) return true;
-    if (!(await useItemOnNpc(ITEM.BARREL, NPC.ANA, ANA_TILE, log))) return false;
-    return Execution.delayUntil(() => Inventory.contains(ITEM.ANA_BARREL), 8000);
+    // Re-catching Ana with stale transport bits inserts two delayed messages before the catch.
+    // Her final complaint is the source-authored acknowledgement that every gap was driven.
+    const completed = await useItemOnNpc(
+        ITEM.BARREL,
+        NPC.ANA,
+        ANA_TILE,
+        log,
+        [],
+        () => dialogMatches(/manage to squeeze Ana into the barrel|I djont fit in dis bawwel/i)
+    );
+    return completed && Inventory.contains(ITEM.ANA_BARREL);
 }
 
 async function reachAndCatchAna(log: (m: string) => void): Promise<boolean> {
@@ -1378,6 +1635,10 @@ async function reachAndCatchAna(log: (m: string) => void): Promise<boolean> {
     }
     if (area === 'mineLower') {
         if (!Inventory.contains(ITEM.BARREL) && !(await searchLowerBarrel(true, log))) return false;
+        if (Inventory.contains(ITEM.ANA_BARREL)) {
+            log('deep-mine recapture: recovered Ana directly from the lower transport barrel');
+            return true;
+        }
         if (!(await rideMineCart(LOWER_CART, log))) return false;
         area = touristTrapArea(Game.tile());
     }
@@ -1406,7 +1667,14 @@ async function retrieveFromSurfaceLift(log: (m: string) => void): Promise<boolea
     if (touristTrapArea(Game.tile()) === 'mineLower') {
         if (Inventory.contains(ITEM.ANA_BARREL)) {
             log('lift checkpoint: placing Ana on the underground lift');
-            if (!(await useItemOnLoc(ITEM.ANA_BARREL, [LOC.LIFT_BUCKET], LIFT_BUCKET, log, LIFT_GUARD_DIALOG))) {
+            if (!(await useItemOnLoc(
+                ITEM.ANA_BARREL,
+                [LOC.LIFT_BUCKET],
+                LIFT_BUCKET,
+                log,
+                LIFT_GUARD_DIALOG,
+                () => !Inventory.contains(ITEM.ANA_BARREL)
+            ))) {
                 log('lift checkpoint: underground lift interaction did not complete');
                 return false;
             }
@@ -1426,19 +1694,34 @@ async function retrieveFromSurfaceLift(log: (m: string) => void): Promise<boolea
         return false;
     }
     log('lift checkpoint: probing the surface winch and top barrel');
-    if (!(await interactLoc([LOC.SURFACE_WINCH], 'Use', SURFACE_WINCH_APPROACH, log))) {
-        log('lift checkpoint: surface winch interaction did not complete');
+    const emptyWinchFollowup = /heavy barrel filled with stone comes to the surface/i;
+    const anaWinchFollowup = /barrel coming to the surface|get me out of here/i;
+    const winchMark = GameMessages.mark();
+    if (!(await interactLoc(
+        [LOC.SURFACE_WINCH],
+        'Use',
+        SURFACE_WINCH_APPROACH,
+        log
+    ))) {
+        log('lift checkpoint: surface winch interaction could not be dispatched');
         return false;
     }
-    // The source flips the lift/barrel bits only after p_delay(3), after its first message has
-    // already closed. Do not let a fast client probe the old barrel state in that quiet gap.
-    await Execution.delayTicks(3);
+    // Empty and Ana-bearing lift results use different protocols after the same server delay:
+    // the former is a game message, while the latter is a multi-page modal dialogue.
+    const followedUp = await Execution.delayUntil(
+        () => GameMessages.sawSince(winchMark, emptyWinchFollowup) || dialogMatches(anaWinchFollowup),
+        8000
+    );
+    if (!followedUp) {
+        const observed = GameMessages.since(winchMark).map(message => message.text).join(' | ');
+        log(`lift checkpoint: surface winch follow-up timed out; messages=[${observed}] modal=[${ChatDialog.texts().join(' | ')}]`);
+        return false;
+    }
+    if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
+        if (!(await driveStrictDialog([], log, () => dialogMatches(anaWinchFollowup)))) return false;
+    }
     if (Inventory.free() < 1 && !(await freeOneRescueSlot(log))) return false;
-    if (!(await interactLoc([LOC.FULL_BARREL], 'Search', SURFACE_BARREL_APPROACH, log))) {
-        log('lift checkpoint: top barrel search did not complete');
-        return false;
-    }
-    const recovered = Inventory.contains(ITEM.ANA_BARREL);
+    const recovered = await searchSurfaceBarrel(log);
     log(recovered ? 'lift checkpoint: recovered Ana from the top barrel' : 'lift checkpoint: top barrel did not contain Ana');
     return recovered;
 }
@@ -1459,8 +1742,13 @@ async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> 
     // A reload may occur after the driver was paid but before boarding. Search first: when the
     // ready bit is set this is the authoritative, coin-free completion action.
     if (await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."])) {
-        const area = touristTrapArea(Game.tile());
-        if (area === 'desert' && Inventory.contains(ITEM.ANA_BARREL)) {
+        // Boarding closes its choice modal for p_delay(1) before teleporting and returning Ana.
+        // Wait for that exact result so a driver interaction cannot cancel an authorized ride.
+        const escaped = await Execution.delayUntil(
+            () => touristTrapArea(Game.tile()) === 'desert' && Inventory.contains(ITEM.ANA_BARREL),
+            8000
+        );
+        if (escaped) {
             log('surface cart: ready-state boarding reached the desert with Ana');
             return true;
         }
@@ -1470,12 +1758,18 @@ async function bribeDriverAndEscape(log: (m: string) => void): Promise<boolean> 
     // On a restart with the quest's coins banked, use the source-authored prison-riot appeal.
     // The clean run still takes the exact 100-Coin bribe path.
     const coinsSufficient = Inventory.count(ITEM.COINS) >= 100;
+    const coinsBefore = Inventory.count(ITEM.COINS);
     const dialog = coinsSufficient ? DRIVER_DIALOG : DRIVER_NO_COIN_DIALOG;
     log(`surface cart: starting driver dialogue; coins>=100=${coinsSufficient ? 'yes' : 'no'}`);
     if (!(await talkStrict(NPC.MINE_CART_DRIVER, SURFACE_CART_APPROACH, dialog, log, 8))) {
         log('surface cart: driver dialogue did not complete');
         return false;
     }
+    if (coinsSufficient && Inventory.count(ITEM.COINS) !== coinsBefore - 100) {
+        log(`surface cart: driver dialogue ended without the 100-Coin bribe (${coinsBefore}→${Inventory.count(ITEM.COINS)})`);
+        return false;
+    }
+    await Execution.delayTicks(1);
     if (!(await interactLoc([LOC.SURFACE_CART], 'Search', SURFACE_CART_APPROACH, log, ["Yes, I'll get on."]))) {
         log('surface cart: boarding interaction did not complete');
         return false;
@@ -1509,6 +1803,7 @@ export interface SurfaceRescueOperations {
     escapeByCart(log: (m: string) => void): Promise<boolean>;
     recaptureAna(log: (m: string) => void): Promise<boolean>;
     currentArea(): TouristTrapArea;
+    maintainSurvival(): Promise<void>;
     waitBetweenAttempts(): Promise<void>;
 }
 
@@ -1516,17 +1811,28 @@ export async function runSurfaceRescueCheckpoint(
     operations: SurfaceRescueOperations,
     log: (m: string) => void
 ): Promise<boolean> {
+    await operations.maintainSurvival();
+    if (EventSignal.pending()) return false;
     if (!operations.hasAnaBarrel()) {
         // Safe at hidden stages 22, 23, and 25: repeated winch use is harmless, and the exact
         // top barrel only yields Ana when its transport bit is set.
         if (await operations.retrieveLift(log)) return true;
+        await operations.maintainSurvival();
+        if (EventSignal.pending()) return false;
     }
     // Hidden stage 25 has Ana on this cart. Retry the full strict driver sequence before
     // concluding that every transport bit is clear.
     for (let attempt = 1; attempt <= 3; attempt++) {
+        await operations.maintainSurvival();
+        if (EventSignal.pending()) return false;
         log(`surface cart attempt ${attempt}/3`);
         if (await operations.escapeByCart(log)) return true;
-        if (attempt < 3) await operations.waitBetweenAttempts();
+        await operations.maintainSurvival();
+        if (EventSignal.pending()) return false;
+        if (attempt < 3) {
+            await operations.waitBetweenAttempts();
+            if (EventSignal.pending()) return false;
+        }
     }
     // A transient cart/driver failure must not send the player back underground while Ana is
     // still safely held. Leave the state intact and retry this surface checkpoint next pass.
@@ -1536,7 +1842,9 @@ export async function runSurfaceRescueCheckpoint(
     }
     // Cleared-bits/lost-barrel recovery: take the canonical lower barrel, catch original Ana
     // (which clears all transport bits server-side), then resume from that visible checkpoint.
-    log('surface lift/cart probes unresolved; falling back to deep-mine recapture');
+    await operations.maintainSurvival();
+    if (EventSignal.pending()) return false;
+    log('surface lift/cart state is clear; starting the canonical deep-mine replay');
     const recaptured = await operations.recaptureAna(log);
     if (!recaptured) log(`deep-mine recapture did not complete; current area=${operations.currentArea()}`);
     return recaptured;
@@ -1555,6 +1863,7 @@ async function surfaceRescueCheckpoint(log: (m: string) => void): Promise<boolea
         escapeByCart: bribeDriverAndEscape,
         recaptureAna: reachAndCatchAna,
         currentArea: () => touristTrapArea(Game.tile()),
+        maintainSurvival: () => Sustain.run(),
         waitBetweenAttempts: () => Execution.delayTicks(1)
     }, log);
 }
@@ -1582,12 +1891,115 @@ function routeNorth(snap: QuestSnapshot): QuestStep | null {
     return custom('cross the Shantay Pass north for supplies', crossShantayPassNorth);
 }
 
+function sourceWaterDoses(
+    snap: QuestSnapshot,
+    minimum: number,
+    target: number,
+    makeSpace: (snap: QuestSnapshot, slots: number) => QuestStep | null
+): QuestStep | null {
+    const doses = waterskinDoses(snap);
+    if (doses >= minimum) return null;
+    const route = safeRecoveryRoute(touristTrapArea(snap.tile));
+    if (route) return route;
+    const north = routeNorth(snap);
+    if (north) return north;
+    if (!snap.bankKnown) return scanBank();
+
+    const partialNames = WATERSKINS.slice(1).map(lower);
+    if ([...snap.inv.keys()].some(name => partialNames.includes(name))) {
+        const keep = rescueKeep().filter(name => !partialNames.includes(name));
+        return { kind: 'deposit', keep, exactKeep: true };
+    }
+
+    const missingContainers = Math.ceil((target - doses) / 4);
+    const bankedFull = banked(snap, ITEM.WATERSKIN);
+    if (bankedFull > 0) {
+        const qty = Math.min(missingContainers, bankedFull);
+        return makeSpace(snap, qty) ?? bankStep([{ name: ITEM.WATERSKIN, qty }]);
+    }
+    const purchaseCost = 35 * missingContainers;
+    const coins = sourceCoins(snap, purchaseCost, 'replace Tourist Trap waterskins');
+    if (coins) return coins;
+    const space = makeSpace(snap, missingContainers);
+    if (space) return space;
+    return {
+        kind: 'buy',
+        item: ITEM.WATERSKIN,
+        qty: missingContainers,
+        shop: SHANTAY_SHOP,
+        estGp: purchaseCost
+    };
+}
+
+function sourceConfiguredSurvivalFood(snap: QuestSnapshot): QuestStep | null {
+    const area = touristTrapArea(snap.tile);
+    const minimum = area === 'mainland' || area === 'shantayNorth'
+        ? FOOD_ENTRY_FLOOR
+        : FOOD_RESTOCK_FLOOR;
+    const route = safeRecoveryRoute(touristTrapArea(snap.tile));
+    if (configuredFoodCount(snap) < minimum && route) return route;
+    const north = routeNorth(snap);
+    if (configuredFoodCount(snap) < minimum && north) return north;
+    return configuredFoodWithdrawal(
+        snap,
+        minimum,
+        FOOD_ENTRY_TARGET,
+        makeRescueSpace
+    );
+}
+
+function sourceCoins(snap: QuestSnapshot, target: number, purpose: string): QuestStep | null {
+    if (heldCount(snap, ITEM.COINS) >= target) return null;
+    const route = safeRecoveryRoute(touristTrapArea(snap.tile));
+    if (route) return route;
+    const north = routeNorth(snap);
+    if (north) return north;
+    if (!snap.bankKnown) return scanBank();
+    const missing = target - heldCount(snap, ITEM.COINS);
+    const available = banked(snap, ITEM.COINS);
+    if (available > 0) {
+        return bankStep([{ name: ITEM.COINS, qty: Math.min(missing, available, 40) }]);
+    }
+    return earnQuestCoinsStep(target, purpose);
+}
+
+function sourceRescueCoins(snap: QuestSnapshot): QuestStep | null {
+    if (heldCount(snap, ITEM.COINS) >= RESCUE_COIN_FLOOR) return null;
+    return sourceCoins(snap, RESCUE_COIN_TARGET, 'Tourist Trap rescue');
+}
+
+function survivalStep(snap: QuestSnapshot): QuestStep | null {
+    if (held(snap, ITEM.ANA_BARREL)) return null;
+    if (configuredFoodName()) {
+        const food = sourceConfiguredSurvivalFood(snap);
+        if (food) return food;
+    } else {
+        const area = touristTrapArea(snap.tile);
+        const minimum = area === 'mainland' || area === 'shantayNorth'
+            ? FOOD_ENTRY_FLOOR
+            : FOOD_RESTOCK_FLOOR;
+        const ration = heldCount(snap, ITEM.KEBAB) < minimum
+            ? sourceKebabs(snap, FOOD_ENTRY_TARGET)
+            : null;
+        if (ration) return ration;
+    }
+    const area = touristTrapArea(snap.tile);
+    const minimum = area === 'mainland' || area === 'shantayNorth'
+        ? WATER_ENTRY_FLOOR
+        : WATER_RESTOCK_FLOOR;
+    return sourceWaterDoses(snap, minimum, WATER_ENTRY_DOSES, makeRescueSpace);
+}
+
 function routeSouth(snap: QuestSnapshot): QuestStep | null {
     const area = touristTrapArea(snap.tile);
     if (area !== 'mainland' && area !== 'shantayNorth') return null;
+    const skins = sourceWaterDoses(snap, WATER_ENTRY_FLOOR, WATER_ENTRY_DOSES, makeRescueSpace);
+    if (skins) return skins;
     if (!held(snap, ITEM.PASS)) {
         if (!snap.bankKnown) return scanBank();
         if (banked(snap, ITEM.PASS) > 0) return bankStep([{ name: ITEM.PASS, qty: 1 }]);
+        const coins = sourceCoins(snap, 6, 'replace a Shantay pass');
+        if (coins) return coins;
         return { kind: 'buy', item: ITEM.PASS, qty: 1, shop: SHANTAY_SHOP, estGp: 6 };
     }
     return custom('cross the Shantay Pass', crossShantayPass);
@@ -1604,18 +2016,29 @@ function sourceDesertOutfitCopies(snap: QuestSnapshot, target: number): QuestSte
     for (const name of DESERT_OUTFIT) {
         const missing = target - ownedNow(snap, name);
         if (missing <= 0) continue;
-        if ((snap.freeSlots ?? missing) < missing) {
-            const space = makeCriticalItemSpace(snap, missing);
+        const availableSlots = snap.freeSlots ?? missing;
+        if (availableSlots === 0) {
+            const canWearFirstCopy = target > 1
+                && outfitCopies(snap, DESERT_OUTFIT) >= 1
+                && !DESERT_OUTFIT.every(item => worn(snap, item));
+            if (canWearFirstCopy) {
+                return custom('wear the first desert outfit to free recovery slots', wearDesertOutfitForSpace);
+            }
+            const space = makeCriticalItemSpace(snap, 1);
             if (space) return space;
         }
+        const qty = Math.min(missing, Math.max(1, availableSlots));
         if (banked(snap, name) > 0) {
-            const qty = Math.min(missing, banked(snap, name));
-            const space = makePreparationSpace(snap, qty);
-            return space ?? bankStep([{ name, qty }]);
+            const withdrawQty = Math.min(qty, banked(snap, name));
+            const space = makePreparationSpace(snap, withdrawQty);
+            return space ?? bankStep([{ name, qty: withdrawQty }]);
         }
         const price = SHANTAY_TARGETS.find(item => item.name === name)!.estGp!;
-        const space = makePreparationSpace(snap, missing);
-        return space ?? { kind: 'buy', item: name, qty: missing, shop: SHANTAY_SHOP, estGp: price * missing };
+        const purchaseCost = price * qty;
+        const coins = sourceCoins(snap, purchaseCost, `replace ${name}`);
+        if (coins) return coins;
+        const space = makePreparationSpace(snap, qty);
+        return space ?? { kind: 'buy', item: name, qty, shop: SHANTAY_SHOP, estGp: purchaseCost };
     }
     return null;
 }
@@ -1635,6 +2058,8 @@ function sourcePickaxe(snap: QuestSnapshot): QuestStep | null {
         const space = makePreparationSpace(snap, 1);
         return space ?? bankStep([{ name: ITEM.PICKAXE, qty: 1 }]);
     }
+    const coins = sourceCoins(snap, 2, 'replace the Tourist Trap pickaxe');
+    if (coins) return coins;
     const space = makePreparationSpace(snap, 1);
     return space ?? { kind: 'buy', item: ITEM.PICKAXE, qty: 1, shop: BOB_AXES, estGp: 2 };
 }
@@ -1650,6 +2075,23 @@ function ensureDesertExteriorLoadout(snap: QuestSnapshot): QuestStep | null {
         return custom('wear the camp-safe desert loadout', wearDesertLoadout);
     }
     return null;
+}
+
+/** Blank configured food opts into Kebabs as the quest's explicit survival ration. */
+function sourceKebabs(snap: QuestSnapshot, target = 8): QuestStep | null {
+    if (heldCount(snap, ITEM.KEBAB) >= target) return null;
+    const route = safeRecoveryRoute(touristTrapArea(snap.tile));
+    if (route) return route;
+    const north = routeNorth(snap);
+    if (north) return north;
+    if (!snap.bankKnown) return scanBank();
+    const bankFood = withdrawBankedShortage(snap, ITEM.KEBAB, target);
+    if (bankFood) return bankFood;
+    const missing = target - heldCount(snap, ITEM.KEBAB);
+    const coins = sourceCoins(snap, missing, 'buy Tourist Trap quest rations');
+    if (coins) return coins;
+    const space = makePreparationSpace(snap, missing);
+    return space ?? { kind: 'custom', name: `buy ${missing} Kebabs`, run: log => buyKebabs(target, log) };
 }
 
 function ensureCampSurface(snap: QuestSnapshot): QuestStep | null {
@@ -1690,14 +2132,15 @@ function ensureMineEntrance(snap: QuestSnapshot): QuestStep | null {
     const pickaxe = sourcePickaxe(snap);
     if (pickaxe) return pickaxe;
     if (!hasOutfit(snap, SLAVE_OUTFIT)) {
-        // Trade an inventory copy so the worn desert set survives for the outer-gate exit.
-        const desert = sourceDesertOutfitCopies(snap, 2);
+        // The late-stage re-trade atomically replaces worn desert pieces, so one complete set is
+        // sufficient and leaves room for the rescue supplies that keep this recovery alive.
+        const desert = sourceDesertOutfitCopies(snap, 1);
         if (desert) return desert;
     }
     const camp = ensureCampSurface(snap);
     if (camp) return camp;
     if (!hasOutfit(snap, SLAVE_OUTFIT)) {
-        return custom('replace the slave disguise', slaveUnlockAndTrade);
+        return custom('replace the slave disguise', replaceLostSlaveOutfit);
     }
     if (!SLAVE_OUTFIT.every(item => worn(snap, item)) || !worn(snap, ITEM.PICKAXE)) {
         return custom('wear the slave disguise', wearSlaveLoadout);
@@ -1820,12 +2263,15 @@ function stepLabel(step: QuestStep): string {
 export function observeTouristTrap(snap: QuestSnapshot, step: QuestStep): readonly string[] {
     const area = touristTrapArea(snap.tile);
     const tile = snap.tile ? `(${snap.tile.x},${snap.tile.z}${snap.tile.level ? `,L${snap.tile.level}` : ''})` : '(no tile)';
-    const skins = chargedWaterskins(snap);
+    const water = waterskinDoses(snap);
+    const containers = waterskinContainers(snap);
+    const food = configuredFoodName();
     const desertWorn = DESERT_OUTFIT.filter(n => worn(snap, n)).length;
     const slaveOwned = SLAVE_OUTFIT.filter(n => ownedNow(snap, n) > 0).length;
     const lines = [
         `tt: stage=${snap.stage ?? '?'} journal=${snap.journal} area=${area} tile=${tile} free=${snap.freeSlots ?? '?'} bankKnown=${snap.bankKnown === true}`,
-        `tt: skins=${skins}/4 pass=${heldCount(snap, ITEM.PASS)} coins=${heldCount(snap, ITEM.COINS)} `
+        `tt: water=${water} doses across ${containers} skins food=${food ?? '(disabled)'}:${configuredFoodCount(snap)} `
+            + `pass=${heldCount(snap, ITEM.PASS)} coins=${heldCount(snap, ITEM.COINS)} `
             + `pick=${ownedNow(snap, ITEM.PICKAXE)} metalKey=${heldCount(snap, ITEM.METAL_KEY)} `
             + `bedabinKey=${heldCount(snap, ITEM.BEDABIN_KEY)} pineapple=${heldCount(snap, ITEM.PINEAPPLE)} `
             + `anaBarrel=${heldCount(snap, ITEM.ANA_BARREL)} barrel=${heldCount(snap, ITEM.BARREL)}`,
@@ -1834,8 +2280,8 @@ export function observeTouristTrap(snap: QuestSnapshot, step: QuestStep): readon
             + `dartTip=${heldCount(snap, ITEM.DART_TIP)} dart=${heldCount(snap, ITEM.DART)}`,
         `tt: decide→ ${stepLabel(step)}`
     ];
-    if ((area === 'desert' || area === 'irena' || area === 'bedabin') && skins === 0) {
-        lines.push('tt: WARN 0 charged waterskins in the desert — thirst death risk');
+    if ((area === 'desert' || area === 'irena' || area === 'bedabin') && water < WATER_RESTOCK_FLOOR) {
+        lines.push(`tt: WARN only ${water} waterskin doses in the desert — below ${WATER_RESTOCK_FLOOR}-dose safety floor`);
     }
     if (step.kind === 'wait' && step.reason === 'death') {
         lines.push('tt: death dump — next loop re-provisions (ownsInventory) then re-decides from journal');
@@ -1857,6 +2303,20 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // in one of these cells at any journal stage. Location therefore takes precedence.
     if (area === 'surfaceJail') return custom('escape the surface jail through the rocks', escapeSurfaceJail);
     if (area === 'undergroundJail') return custom('mine 15 punishment rocks and escape', escapeUndergroundJail);
+    if (stage >= TOURIST_TRAP_STAGE.TRADED_CLOTHES
+        && (area === 'mineEntrance' || area === 'mineLower' || area === 'mineDeep')
+        && !hasOutfit(snap, SLAVE_OUTFIT)) {
+        // The ordinary supply route cannot leave this component without the disguise it is
+        // trying to replace. Recover the outfit locally before any mainland restock decision.
+        return custom('return to the punishment mine to recover the slave disguise', returnToPunishmentMineForOutfit);
+    }
+    if (stage >= TOURIST_TRAP_STAGE.STARTED
+        && stage <= TOURIST_TRAP_STAGE.REWARD
+        && (stage < TOURIST_TRAP_STAGE.REWARD
+            || (stage === TOURIST_TRAP_STAGE.REWARD && (area === 'mainland' || area === 'shantayNorth')))) {
+        const survival = survivalStep(snap);
+        if (survival) return survival;
+    }
     if (stage >= TOURIST_TRAP_STAGE.ENTERED_CAMP
         && (stage !== TOURIST_TRAP_STAGE.RESCUE
             || (!held(snap, ITEM.ANA_BARREL) && !hasOutfit(snap, SLAVE_OUTFIT)))
@@ -1870,12 +2330,6 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         return custom("recover the mining-camp keys from Captain Siad's desk", recoverMiningCampKeys);
     }
-    if (stage >= TOURIST_TRAP_STAGE.TRADED_CLOTHES
-        && (area === 'mineEntrance' || area === 'mineLower' || area === 'mineDeep')
-        && !hasOutfit(snap, SLAVE_OUTFIT)) {
-        return custom('return to the punishment mine to recover the slave disguise', returnToPunishmentMineForOutfit);
-    }
-
     if (stage === TOURIST_TRAP_STAGE.NOT_STARTED) {
         const prep = preparationStep(snap);
         if (prep) return prep;
@@ -2036,6 +2490,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
             const recovery = ensureMineEntrance(snap);
             if (recovery) return recovery;
         }
+        if (!held(snap, ITEM.ANA_BARREL)
+            && area !== 'mineDeep'
+            && area !== 'mineLower'
+            && area !== 'mineEntrance') {
+            const coins = sourceRescueCoins(snap);
+            if (coins) return coins;
+        }
         if (area === 'mineDeep') {
             if (held(snap, ITEM.BARREL)) {
                 // This source-authored operation clears every stale rescue transport bit before
@@ -2080,6 +2541,7 @@ export const touristtrap: QuestModule = {
     grind: ['Mercenary Captain'],
     tools: ['bronze pickaxe'],
     ownsInventory: true,
+    sustain: { foods: [ITEM.KEBAB], eatBelowHp: 0.5 },
     readStage: readTouristTrapStage,
     observe: observeTouristTrap,
     decide

@@ -1,16 +1,21 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import {
     decide,
+    forgeBarWastedSince,
     observeTouristTrap,
     parseTouristTrapJournal,
     runSurfaceRescueCheckpoint,
     strictTouristTrapChoice,
     TOURIST_TRAP_STAGE,
     touristTrapArea,
+    waterskinDoses,
     type SurfaceRescueOperations
 } from '#/bot/quests/defs/touristtrap.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/quests/engine/types.js';
+import { QuestFood } from '#/bot/quests/food.js';
+import { EventSignal } from '#/bot/api/EventSignal.js';
+import { GameMessages } from '#/bot/events/gameMessages.js';
 
 const tile = (x: number, z: number, level = 0): WorldTile => ({ x, z, level });
 
@@ -42,6 +47,14 @@ interface SnapshotOptions {
     bankKnown?: boolean;
     tile?: WorldTile | null;
     freeSlots?: number;
+    /** Charged waterskins. Default 4 so desert decide fixtures model survival; set 0 for thirst paths. */
+    skins?: number;
+    /** Combat food. Default 8 kebabs so captain-fight fixtures model survival; set 0 for restock paths. */
+    kebabs?: number;
+    /** Configured Trout. Default 16 so non-survival fixtures exercise their intended decision. */
+    food?: number;
+    /** Rescue float. Default 200 so non-funding fixtures exercise their intended decision. */
+    coins?: number;
 }
 
 function countMap(entries: readonly CountEntry[] = []): Map<string, number> {
@@ -49,9 +62,28 @@ function countMap(entries: readonly CountEntry[] = []): Map<string, number> {
 }
 
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
+    const inv = countMap(options.inv);
+    const hasChargedSkin = ['waterskin(4)', 'waterskin(3)', 'waterskin(2)', 'waterskin(1)']
+        .some(name => (inv.get(name) ?? 0) > 0);
+    const skins = options.skins ?? 4;
+    if (!hasChargedSkin && skins > 0) {
+        inv.set('waterskin(4)', skins);
+    }
+    const kebabs = options.kebabs ?? 8;
+    if ((inv.get('kebab') ?? 0) === 0 && kebabs > 0) {
+        inv.set('kebab', kebabs);
+    }
+    const food = options.food ?? 16;
+    if ((inv.get('trout') ?? 0) === 0 && food > 0) {
+        inv.set('trout', food);
+    }
+    const coins = options.coins ?? 200;
+    if ((inv.get('coins') ?? 0) === 0 && coins > 0) {
+        inv.set('coins', coins);
+    }
     return {
         journal: options.journal ?? 'inProgress',
-        inv: countMap(options.inv),
+        inv,
         worn: new Set((options.worn ?? []).map(name => name.toLowerCase())),
         noProgress: 0,
         bankCoins: 0,
@@ -62,6 +94,12 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         freeSlots: options.freeSlots ?? 8
     };
 }
+
+afterEach(() => {
+    QuestFood.name = 'Trout';
+    EventSignal.setInterrupt(null);
+    GameMessages.reset();
+});
 
 function customName(step: QuestStep): string | null {
     return step.kind === 'custom' ? step.name : null;
@@ -160,6 +198,7 @@ describe('Tourist Trap area classification', () => {
         [tile(3296, 9437), 'mineDeep'],
         [tile(3288, 9429), 'undergroundJail'],
         [tile(3288, 9444), 'undergroundJail'],
+        [tile(3269, 9447), 'mineEntrance'], // live recovery tile in the entrance-side collision component
         [tile(3274, 3011), 'campSurface'],
         [tile(3306, 3043), 'campSurface'],
         [tile(3274, 3011, 1), 'campUpper'],
@@ -743,35 +782,24 @@ describe('Tourist Trap disguise and rescue restart matrix', () => {
         expect(customName(alreadySurface)).toBe('resolve the surface winch/cart checkpoint');
     });
 
-    test('surface rescue sources a missing trade outfit before re-entering camp', () => {
-        const leave = decide(snap({
+    test('surface rescue re-trades the worn desert outfit without sourcing a redundant copy', () => {
+        const trade = decide(snap({
             stage: 19,
             tile: CAMP_SURFACE,
             inv: [['Metal key', 1]],
             worn: DESERT_WORN,
             freeSlots: 8
         }));
-        expect(customName(leave)).toBe('leave the camp safely for item recovery');
+        expect(customName(trade)).toBe('replace the slave disguise');
 
-        const north = decide(snap({
+        const enter = decide(snap({
             stage: 19,
             tile: CAPTAIN,
             inv: [['Metal key', 1]],
             worn: DESERT_WORN,
-            bank: DESERT_OUTFIT.map(name => [name, 1] as const),
             freeSlots: 8
         }));
-        expect(customName(north)).toBe('cross the Shantay Pass north for supplies');
-
-        const withdraw = decide(snap({
-            stage: 19,
-            tile: MAINLAND,
-            inv: [['Metal key', 1]],
-            worn: DESERT_WORN,
-            bank: DESERT_OUTFIT.map(name => [name, 1] as const),
-            freeSlots: 8
-        }));
-        expect(withdraw.kind === 'withdraw' && withdraw.items).toEqual([{ name: 'Desert shirt', qty: 1 }]);
+        expect(customName(enter)).toBe('unlock the desert mining camp');
     });
 
     test('the mine-entry composite re-sanitizes forbidden extra equipment before moving', () => {
@@ -791,11 +819,13 @@ describe('Tourist Trap surface rescue orchestration', () => {
         lift?: boolean;
         cart?: readonly boolean[];
         recapture?: boolean;
+        interruptAfterCart?: number;
     }
 
     function harness(options: HarnessOptions = {}) {
         let ana = options.ana ?? false;
         let cartIndex = 0;
+        let upkeep = 0;
         const calls: string[] = [];
         const logs: string[] = [];
         const operations: SurfaceRescueOperations = {
@@ -807,18 +837,23 @@ describe('Tourist Trap surface rescue orchestration', () => {
             },
             escapeByCart: async () => {
                 calls.push('cart');
-                return options.cart?.[cartIndex++] ?? false;
+                const result = options.cart?.[cartIndex++] ?? false;
+                if (cartIndex === options.interruptAfterCart) EventSignal.setInterrupt(() => true);
+                return result;
             },
             recaptureAna: async () => {
                 calls.push('recapture');
                 return options.recapture ?? false;
             },
             currentArea: () => 'campSurface',
+            maintainSurvival: async () => {
+                upkeep++;
+            },
             waitBetweenAttempts: async () => {
                 calls.push('wait');
             }
         };
-        return { operations, calls, logs, log: (message: string) => logs.push(message) };
+        return { operations, calls, logs, upkeep: () => upkeep, log: (message: string) => logs.push(message) };
     }
 
     test('lift recovery short-circuits cart and recapture probes', async () => {
@@ -841,11 +876,11 @@ describe('Tourist Trap surface rescue orchestration', () => {
         expect(run.logs).toContain('surface cart attempt 2/3');
     });
 
-    test('falls back to one deep-mine recapture only after all surface probes fail', async () => {
+    test('starts one canonical deep-mine replay only after all surface probes fail', async () => {
         const run = harness({ cart: [false, false, false], recapture: true });
         expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
         expect(run.calls).toEqual(['lift', 'cart', 'wait', 'cart', 'wait', 'cart', 'recapture']);
-        expect(run.logs).toContain('surface lift/cart probes unresolved; falling back to deep-mine recapture');
+        expect(run.logs).toContain('surface lift/cart state is clear; starting the canonical deep-mine replay');
     });
 
     test('does not take Ana back underground after a transient surface-cart failure', async () => {
@@ -859,6 +894,18 @@ describe('Tourist Trap surface rescue orchestration', () => {
         const run = harness({ cart: [false, false, false], recapture: false });
         expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(false);
         expect(run.logs).toContain('deep-mine recapture did not complete; current area=campSurface');
+    });
+
+    test('runs survival upkeep around retries', async () => {
+        const run = harness({ cart: [false, true] });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(true);
+        expect(run.upkeep()).toBe(5);
+    });
+
+    test('an interrupt after a failed cart stops every later attempt and recapture', async () => {
+        const run = harness({ cart: [false, true], recapture: true, interruptAfterCart: 1 });
+        expect(await runSurfaceRescueCheckpoint(run.operations, run.log)).toBe(false);
+        expect(run.calls).toEqual(['lift', 'cart']);
     });
 });
 
@@ -878,7 +925,7 @@ describe('Tourist Trap observe (logging pilot)', () => {
         const lines = observeTouristTrap(s, step);
         expect(lines.some(l => l.includes('stage=1'))).toBe(true);
         expect(lines.some(l => l.includes('area=desert') || l.includes('area='))).toBe(true);
-        expect(lines.some(l => l.includes('skins=2/4'))).toBe(true);
+        expect(lines.some(l => l.includes('water=8 doses across 2 skins'))).toBe(true);
         expect(lines.some(l => l.startsWith('tt: decide→'))).toBe(true);
         expect(lines.some(l => l.includes('WARN') && l.includes('waterskin'))).toBe(false);
     });
@@ -888,10 +935,286 @@ describe('Tourist Trap observe (logging pilot)', () => {
             stage: TOURIST_TRAP_STAGE.STARTED,
             tile: CAPTAIN,
             inv: [['Coins', 100]],
-            worn: [...DESERT_WORN]
+            worn: [...DESERT_WORN],
+            skins: 0
         });
         const lines = observeTouristTrap(s, { kind: 'wait', reason: 'death' });
-        expect(lines.some(l => l.includes('WARN') && l.includes('0 charged waterskins'))).toBe(true);
+        expect(lines.some(l => l.includes('WARN') && l.includes('0 waterskin doses'))).toBe(true);
         expect(lines.some(l => l.includes('death dump'))).toBe(true);
+    });
+
+    test('refuses to re-enter the desert without charged waterskins after death recovery', () => {
+        const s = snap({
+            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+            tile: MAINLAND,
+            inv: [['Coins', 200]],
+            skins: 0
+        });
+        const step = decide(s);
+        expect(step.kind).toBe('buy');
+        if (step.kind === 'buy') {
+            expect(step.item).toBe('Waterskin(4)');
+            expect(step.qty).toBe(4);
+        }
+    });
+
+    test('already south with zero skins routes north for restock before pineapple recovery', () => {
+        const s = snap({
+            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+            tile: IRENA,
+            inv: [['Coins', 50]],
+            skins: 0
+        });
+        expect(customName(decide(s))).toBe('cross the Shantay Pass north for supplies');
+    });
+
+    test('configured food permits captain recovery without kebabs', () => {
+        expect(customName(decide(snap({
+            stage: TOURIST_TRAP_STAGE.KILLED_CAPTAIN,
+            tile: CAPTAIN,
+            inv: [['Coins', 50], ['Bronze pickaxe', 1], ['Trout', 16]],
+            worn: [...DESERT_WORN],
+            kebabs: 0,
+            food: 0
+        })))).toBe('provoke and defeat the respawned Mercenary Captain');
+    });
+});
+
+describe('Tourist Trap survival accounting', () => {
+    test('counts doses rather than charged containers', () => {
+        expect(waterskinDoses(snap({ inv: [['Waterskin(1)', 4]], skins: 0 }))).toBe(4);
+        expect(waterskinDoses(snap({
+            inv: [['Waterskin(4)', 1], ['Waterskin(3)', 1], ['Waterskin(2)', 1], ['Waterskin(1)', 1]],
+            skins: 0
+        }))).toBe(10);
+    });
+
+    test('withdraws only the configured food', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.STARTED,
+            tile: MAINLAND,
+            bank: [['Trout', 16], ['Kebab', 50]],
+            food: 0,
+            kebabs: 0,
+            freeSlots: 20
+        }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 16 }]);
+    });
+
+    test('tops up a partial configured loadout while already on the mainland', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: MAINLAND,
+            bank: [['Trout', 8]],
+            food: 8,
+            kebabs: 0,
+            freeSlots: 20
+        }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Trout', qty: 8 }]);
+    });
+
+    test('fails explicitly when the configured food target is unavailable', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.STARTED,
+            tile: MAINLAND,
+            bank: [['Trout', 15], ['Kebab', 50]],
+            food: 0,
+            kebabs: 0,
+            freeSlots: 20
+        }));
+        expect(step).toEqual({
+            kind: 'wait',
+            reason: "configured Tourist Trap food 'Trout' unavailable: need 16, carried 0, banked 15"
+        });
+    });
+
+    test('recognizes every configured Cake form', () => {
+        QuestFood.name = 'Cake';
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.STARTED,
+            tile: CAPTAIN,
+            inv: [['Cake', 1], ['2/3 cake', 2], ['Slice of cake', 1], ['Bronze pickaxe', 1]],
+            worn: [...DESERT_WORN],
+            food: 0,
+            kebabs: 0
+        }));
+        expect(customName(step)).toBe('provoke the Mercenary Captain');
+    });
+
+    test('quest-ration mode tops up to sixteen on the mainland but accepts eight in the desert', () => {
+        QuestFood.name = null;
+        expect(customName(decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: MAINLAND,
+            kebabs: 8,
+            food: 0
+        })))).toBe('buy 8 Kebabs');
+
+        expect(customName(decide(snap({
+            stage: TOURIST_TRAP_STAGE.KILLED_CAPTAIN,
+            tile: CAPTAIN,
+            inv: [['Bronze pickaxe', 1]],
+            worn: [...DESERT_WORN],
+            kebabs: 8,
+            food: 0
+        })))).toBe('provoke and defeat the respawned Mercenary Captain');
+    });
+
+    test('entry hysteresis does not detour for one consumed food or water dose', () => {
+        QuestFood.name = null;
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: tile(3302, 3118),
+            inv: [
+                ...SLAVE_OUTFIT.map(name => [name, 1] as const),
+                ['Waterskin(4)', 3],
+                ['Waterskin(3)', 1],
+                ['Metal key', 1]
+            ],
+            worn: DESERT_WORN,
+            kebabs: 15,
+            food: 0,
+            skins: 0,
+            coins: 200,
+            freeSlots: 4
+        }));
+        expect(step).toMatchObject({ kind: 'buy', item: 'Shantay pass', qty: 1 });
+    });
+
+    test('does not refill the rescue float after buying a pass while at the 100-coin cart floor', () => {
+        QuestFood.name = null;
+        const rescuePack: CountEntry[] = [
+            ...SLAVE_OUTFIT.map(name => [name, 1] as const),
+            ['Waterskin(4)', 3],
+            ['Waterskin(3)', 1],
+            ['Metal key', 1],
+            ['Shantay pass', 1]
+        ];
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: tile(3308, 3120),
+            inv: rescuePack,
+            worn: DESERT_WORN,
+            kebabs: 16,
+            food: 0,
+            skins: 0,
+            coins: 195,
+            freeSlots: 0
+        }));
+        expect(customName(step)).toBe('cross the Shantay Pass');
+    });
+
+    test('refills to the rescue target below the 100-coin cart floor', () => {
+        QuestFood.name = null;
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: MAINLAND,
+            inv: SLAVE_OUTFIT.map(name => [name, 1] as const),
+            worn: DESERT_WORN,
+            bank: [['Coins', 500]],
+            kebabs: 16,
+            food: 0,
+            coins: 99,
+            freeSlots: 8
+        }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Coins', qty: 40 }]);
+    });
+
+    test('rebuilds a two-copy desert outfit through a one-slot recovery pack', () => {
+        QuestFood.name = null;
+        const sharedInventory: CountEntry[] = [
+            ['Desert shirt', 2],
+            ['Desert robe', 2],
+            ["Slaves' shirt", 1],
+            ['Bronze pickaxe', 1]
+        ];
+        const firstBoot = decide(snap({
+            stage: TOURIST_TRAP_STAGE.ENTERED_CAMP,
+            tile: MAINLAND,
+            inv: sharedInventory,
+            kebabs: 16,
+            food: 0,
+            coins: 160,
+            freeSlots: 1
+        }));
+        expect(firstBoot).toMatchObject({ kind: 'buy', item: 'Desert boots', qty: 1, estGp: 25 });
+
+        const makeSpace = decide(snap({
+            stage: TOURIST_TRAP_STAGE.ENTERED_CAMP,
+            tile: MAINLAND,
+            inv: [...sharedInventory, ['Desert boots', 1]],
+            kebabs: 16,
+            food: 0,
+            coins: 135,
+            freeSlots: 0
+        }));
+        expect(customName(makeSpace)).toBe('wear the first desert outfit to free recovery slots');
+    });
+
+    test('normalizes partial skins before adding full containers', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+            tile: MAINLAND,
+            inv: [['Waterskin(1)', 4], ['Tenti pineapple', 1]],
+            bank: [['Waterskin(4)', 4]],
+            skins: 0
+        }));
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') {
+            expect(step.keep).not.toContain('waterskin(1)');
+            expect(step.keep).toContain('waterskin(4)');
+        }
+    });
+
+    test('withdraws only the full skins needed to reach the entry-dose target', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.LEARNED_DARTS,
+            tile: MAINLAND,
+            inv: [['Waterskin(4)', 1], ['Tenti pineapple', 1]],
+            bank: [['Waterskin(4)', 3]],
+            skins: 0
+        }));
+        expect(step.kind === 'withdraw' && step.items).toEqual([{ name: 'Waterskin(4)', qty: 3 }]);
+    });
+
+    test('recovers a missing slave garment locally before trying to restock', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RESCUE,
+            tile: MINE_ENTRANCE,
+            inv: [["Slaves' shirt", 1]],
+            food: 0,
+            skins: 0,
+            coins: 0
+        }));
+        expect(customName(step)).toBe('return to the punishment mine to recover the slave disguise');
+    });
+
+    test('funds only the exact cost of a missing trade outfit purchase', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.ENTERED_CAMP,
+            tile: MAINLAND,
+            coins: 0
+        }));
+        expect(customName(step)).toBe('earn 90 gp (Al Kharid Man + Kebabs)');
+    });
+
+    test('funds only the exact cost of a missing crafting consumable', () => {
+        const step = decide(snap({
+            stage: TOURIST_TRAP_STAGE.RETRIEVED_PLANS,
+            tile: MAINLAND,
+            inv: [['Technical plans', 1]],
+            coins: 0
+        }));
+        expect(customName(step)).toBe('earn 8 gp (Al Kharid Man + Kebabs)');
+    });
+});
+
+describe('Tourist Trap prototype forge attempts', () => {
+    test('ignores an old wasted-bar message and recognizes only the current attempt', () => {
+        GameMessages.record('You have an unlucky accident and waste the bronze bar.');
+        const currentAttempt = GameMessages.mark();
+        expect(forgeBarWastedSince(currentAttempt)).toBe(false);
+        GameMessages.record('You have an unlucky accident and waste the bronze bar.');
+        expect(forgeBarWastedSince(currentAttempt)).toBe(true);
     });
 });

@@ -103,7 +103,12 @@ describe('Withdraw-X while the bank modal hides the inventory tab', () => {
         });
 
         test(`${mode} accepts partial bank stock after all advertised items arrive`, async () => {
-            const bank = [item(LOBSTER, 'Lobster', 3, 0, true)];
+            // Keep this fixture on the Withdraw-X protocol it is intended to exercise; named
+            // withdrawal decomposition through fixed ops has its own exact-operation tests.
+            const bank = [{
+                ...item(LOBSTER, 'Lobster', 3, 0, true),
+                ops: [null, null, null, null, 'Withdraw-X']
+            }];
             expect(await run(mode, (_requested, side, currentBank) => {
                 side.push(item(LOBSTER, 'Lobster', 3, 0));
                 currentBank.splice(0);

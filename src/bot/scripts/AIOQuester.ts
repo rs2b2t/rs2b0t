@@ -101,8 +101,8 @@ export default class AIOQuester extends TaskBot {
         QuestFood.name = this.foodItem();
         QuestGear.meleeWeapon = this.meleeWeapon();
         Sustain.set(async () => { if (this.shouldEat()) { await this.eatOnce(); } });
-        // Yield long walks/dialog loops as soon as Skip is clicked (#432).
-        EventSignal.setInterrupt(() => this.skipRequested);
+        // A death must release the active quest operation before the engine can recover it.
+        EventSignal.setInterrupt(() => this.skipRequested || this.died);
 
         const queueNames = [...this.picked].map(id => defById(id)?.record.name ?? id);
         this.log(`AIOQuester — queue: ${queueNames.join(', ') || '(none)'}`);

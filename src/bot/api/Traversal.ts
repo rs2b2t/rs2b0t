@@ -128,7 +128,7 @@ export const Traversal = {
         for (let iter = 0; iter < 100_000; iter++) {
             await Sustain.run();
             if (EventSignal.pending()) {
-                log('walk interrupted by a random event — yielding to the runtime');
+                log('walk interrupted by a runtime event — yielding to the runtime');
                 WalkExecutor.lastOutcome = 'interrupted';
                 return false;
             }
@@ -141,7 +141,7 @@ export const Traversal = {
                 return true;
             }
             if (action.kind === 'interrupted') {
-                log('walk interrupted by a random event — yielding to the runtime');
+                log('walk interrupted by a runtime event — yielding to the runtime');
                 WalkExecutor.lastOutcome = 'interrupted';
                 return false;
             }

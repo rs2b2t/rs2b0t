@@ -46,6 +46,17 @@ function item(id: number, count: number, slot: number): InvItemSnapshot {
     };
 }
 
+function namedItem(count: number): InvItemSnapshot {
+    return {
+        id: 379,
+        name: 'Lobster',
+        count,
+        slot: 0,
+        comId: 5382,
+        ops: ['Withdraw-1', 'Withdraw-5', 'Withdraw-10', null, 'Withdraw-X']
+    };
+}
+
 describe('Bank exact-ID helpers', () => {
     test('counts and clicks only the requested ID when names collide', async () => {
         const bankItems = [item(293, 2, 0), item(298, 3, 1), item(293, 4, 2)];
@@ -93,5 +104,81 @@ describe('Bank exact-ID helpers', () => {
         expect(inventory[0]?.id).toBe(298);
         expect(inventory[0]?.count).toBe(2);
         expect(Bank.countById(293)).toBe(1);
+    });
+});
+
+describe('Bank named Withdraw-X', () => {
+    function readyBank(inventory: () => InvItemSnapshot[]): void {
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankSideItems = inventory;
+        (reader as any).inventory = inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+    }
+
+    test('uses fixed 1/5/10 operations without opening a count dialog', async () => {
+        for (const [quantity, operation] of [[1, 1], [5, 2], [10, 3]] as const) {
+            let inventory: InvItemSnapshot[] = [];
+            (reader as any).bankItems = () => [namedItem(20)];
+            readyBank(() => inventory);
+            let clickedOperation = 0;
+            (ActionRouter.driver as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
+                clickedOperation = op;
+                inventory = [{ ...namedItem(quantity), comId: 3214 }];
+                return true;
+            };
+            (actions as any).answerCountDialog = () => {
+                throw new Error('fixed withdrawal must not use the count dialog');
+            };
+
+            expect(await Bank.withdrawX('Lobster', quantity)).toBe(true);
+            expect(clickedOperation).toBe(operation);
+        }
+    });
+
+    test('decomposes a small arbitrary quantity into reliable fixed operations', async () => {
+        let bankCount = 100;
+        let inventory: InvItemSnapshot[] = [];
+        const clickedOperations: number[] = [];
+        (reader as any).bankItems = () => [namedItem(bankCount)];
+        readyBank(() => inventory);
+        (ActionRouter.driver as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
+            clickedOperations.push(op);
+            const quantity = op === 3 ? 10 : op === 2 ? 5 : 1;
+            const carried = inventory[0]?.count ?? 0;
+            inventory = [{ ...namedItem(carried + quantity), comId: 3214 }];
+            bankCount -= quantity;
+            return true;
+        };
+        (actions as any).answerCountDialog = () => {
+            throw new Error('a decomposed withdrawal must not use the count dialog');
+        };
+
+        expect(await Bank.withdrawX('Lobster', 40)).toBe(true);
+        expect(clickedOperations).toEqual([3, 3, 3, 3]);
+        expect(inventory[0]?.count).toBe(40);
+    });
+
+    test('Withdraw-X answers with available stock rather than the larger request', async () => {
+        let inventory: InvItemSnapshot[] = [];
+        const xOnlyItem = (): InvItemSnapshot => ({
+            ...namedItem(3),
+            ops: [null, null, null, null, 'Withdraw-X']
+        });
+        (reader as any).bankItems = () => [xOnlyItem()];
+        readyBank(() => inventory);
+        let answered = 0;
+        (ActionRouter.driver as any).invButton = () => true;
+        (actions as any).answerCountDialog = (quantity: number) => {
+            answered = quantity;
+            inventory = [{ ...namedItem(quantity), comId: 3214 }];
+            return true;
+        };
+
+        expect(await Bank.withdrawX('Lobster', 10)).toBe(true);
+        expect(answered).toBe(3);
     });
 });

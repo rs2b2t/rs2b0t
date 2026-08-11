@@ -1,5 +1,5 @@
 let provider: (() => boolean) | null = null;
-/** Extra OR-clause for script-local interrupts (e.g. AIOQuester Skip quest). */
+/** Extra OR-clause for script-local interrupts (e.g. AIOQuester Skip or death). */
 let interrupt: (() => boolean) | null = null;
 
 /**
@@ -14,7 +14,7 @@ export const EventSignal = {
 
     /**
      * Optional second signal (OR'd with the main provider). Used so a UI action
-     * like "Skip quest" can abort a walk without stopping the whole script.
+     * like "Skip quest" or death can abort a walk without stopping the whole script.
      * Pass `null` to clear.
      */
     setInterrupt(p: (() => boolean) | null): void {
