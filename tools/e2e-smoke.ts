@@ -97,7 +97,7 @@ try {
     if (removedStatusRows.length > 0) fail(`removed status rows are still present: ${removedStatusRows.join(', ')}`);
 
     const { state, player, tile, modals } = panel.rows;
-    if (state !== "ready (scene 2)") fail(`state row: '${state}'`);
+    if (state !== 'ready (scene 2)') fail(`state row: '${state}'`);
     if (!/^\d+, \d+, \d+$/.test(tile)) fail(`tile row: '${tile}'`);
     if (!/^main -?\d+ \/ side -?\d+ \/ chat -?\d+$/.test(modals)) fail(`modals row: '${modals}'`);
     console.log(`panel: player='${player}' tile=(${tile}) modals='${modals}'`);
