@@ -48,7 +48,7 @@ export const IMP_SPAWNS: readonly Tile[] = [
 
 const FIELD_LEVEL = 0;
 
-// Why: the nine spawns lie in a 14x41 strip, so this one tile sits within 21 of every one of them and inside `SEARCH_RADIUS` of the lot — the bot camps respawns rather than walking a circuit.
+// Why: the nine spawns lie in a 14x41 strip, so this one tile sits within 21 of every one of them and inside `SEARCH_RADIUS` of the lot, so it is where the bot returns to and where its sweeps radiate from.
 
 /** Where the bot stands to watch every spawn on the strip. */
 export const IMP_STAND = new Tile(2632, 3222, 0);
@@ -78,14 +78,18 @@ const ENGAGE_RADIUS = 6;
 const LOST_RADIUS = 12;
 /** Scene-BFS budget: enough open ground to answer for anything inside `SEARCH_RADIUS`. */
 const REACH_STEPS = 20_000;
-// Why: an imp respawns 100 ticks after it dies at a spawn the stand already watches, so waiting beats walking off to look for another.
+// Why: an imp wanders and teleports far enough that standing still watches empty ground, so an idle bot sweeps the strip rather than waiting out a respawn on one tile.
 
-/** How long to wait on a respawn where imps have been before walking on. */
-const RESPAWN_HOLD_MS = 40_000;
+/** How long an empty scene is given to fill before the bot sweeps. */
+const SEARCH_IDLE_MS = 6000;
+const SEARCH_STEP_MIN = 8;
+const SEARCH_STEP_MAX = 20;
 const KILL_MS = 30_000;
 const TAKE_MS = 6000;
 /** The walk between the strip and the tower is cost 625 across two ship hops. */
 const FAR_WALK_MS = 420_000;
+/** A sweep is a short hop inside the strip, so it must not sit on a 7-minute budget. */
+const SWEEP_WALK_MS = 45_000;
 
 function heldCount(snap: QuestSnapshot, bead: ImpBead): number {
     if (snap.invIds !== undefined && snap.invIds.size > 0) {
@@ -109,6 +113,34 @@ function inField(tile: { x: number; z: number; level: number }): boolean {
     return tile.level === FIELD_LEVEL
         && tile.x >= IMP_FIELD.minX && tile.x <= IMP_FIELD.maxX
         && tile.z >= IMP_FIELD.minZ && tile.z <= IMP_FIELD.maxZ;
+}
+
+function clamp(value: number, low: number, high: number): number {
+    return Math.min(high, Math.max(low, value));
+}
+
+// Why: a random point in the box would send the bot back and forth across the strip; a random heading from where it stands sweeps ground it has not already looked at.
+
+/** A tile to sweep towards: a random heading from `here`, held inside the field. */
+export function searchTarget(here: { x: number; z: number; level: number } | null | undefined, random: () => number): Tile {
+    if (!here || !inField(here)) {
+        return IMP_STAND;
+    }
+    const heading = random() * 2 * Math.PI;
+    const stride = SEARCH_STEP_MIN + random() * (SEARCH_STEP_MAX - SEARCH_STEP_MIN);
+    return new Tile(
+        clamp(Math.round(here.x + Math.cos(heading) * stride), IMP_FIELD.minX, IMP_FIELD.maxX),
+        clamp(Math.round(here.z + Math.sin(heading) * stride), IMP_FIELD.minZ, IMP_FIELD.maxZ),
+        FIELD_LEVEL
+    );
+}
+
+// Why: this result is returned as the step's own success, so a condition that holds without work being available loops the step at ~20ms and parks the quest on eight identical snapshots.
+// Why: being in combat is such a condition — an imp that `pickImp` refuses can hold the flag indefinitely — so it is deliberately not part of this.
+
+/** Whether the idle wait found something for the next tick to act on. */
+export function idleProgress(target: unknown | null, eventPending: boolean): boolean {
+    return target !== null && !eventPending;
 }
 
 function wantedBeadIds(): Set<number> {
@@ -268,7 +300,7 @@ async function killImp(imp: Npc, log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: walking the ring is the respawn wait — the volcano blocks the middle, so standing still watches one arc of it and the far spawns are never seen.
-async function holdForRespawn(census: ImpCensus, log: (m: string) => void): Promise<boolean> {
+async function searchForImps(census: ImpCensus, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     const neighbours = census.scene === 0
         ? ` · scene holds ${tallyNames(Npcs.query().within(SEARCH_RADIUS).results().map(npc => npc.name))}`
@@ -281,16 +313,18 @@ async function holdForRespawn(census: ImpCensus, log: (m: string) => void): Prom
         log(`${seen} — walking to the south-Ardougne strip at (${IMP_STAND.x},${IMP_STAND.z})`);
         return Traversal.walkResilient(IMP_STAND, { radius: 2, attempts: 3, timeoutMs: FAR_WALK_MS, log });
     }
-    log(`${seen} — holding ${RESPAWN_HOLD_MS / 1000}s for a respawn`);
-    const appeared = await Execution.delayUntil(
+
+    // Why: one short wait catches an imp that is about to respawn or wander in, which is cheaper than a walk.
+    await Execution.delayUntil(
         () => pickImp(impCandidates(), sceneReachable) !== null || EventSignal.pending(),
-        RESPAWN_HOLD_MS
+        SEARCH_IDLE_MS
     );
-    if (appeared && !EventSignal.pending()) {
+    if (idleProgress(pickImp(impCandidates(), sceneReachable), EventSignal.pending())) {
         return true;
     }
-    // Why: a hold that timed out has to move, or the watchdog sees eight identical snapshots and parks a farm that is only waiting.
-    return Traversal.walkResilient(IMP_STAND, { radius: 2, attempts: 2, timeoutMs: FAR_WALK_MS, log });
+    const target = searchTarget(here, Math.random);
+    log(`${seen} — sweeping to (${target.x},${target.z})`);
+    return Traversal.walkResilient(target, { radius: 2, attempts: 2, timeoutMs: SWEEP_WALK_MS, log });
 }
 
 /** One unit of bead farming: take a drop, kill an imp, or close on the field. */
@@ -308,7 +342,7 @@ async function farmBeads(log: (m: string) => void): Promise<boolean> {
     if (imp) {
         return killImp(imp.item, log);
     }
-    return holdForRespawn(impCensus(candidates, sceneReachable), log);
+    return searchForImps(impCensus(candidates, sceneReachable), log);
 }
 
 function onKaramja(tile: QuestSnapshot['tile']): boolean {

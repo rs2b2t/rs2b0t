@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { defById } from '#/bot/api/ai/quests/defs/index.js';
-import { IMP_BEADS, IMP_FIELD, IMP_SPAWNS, IMP_STAND, MIZGOG, decide, gatherBead, impCensus, tallyNames, impcatcher, nearestReachable, pickImp, type ImpCandidate } from '#/bot/api/ai/quests/defs/impcatcher.js';
+import { IMP_BEADS, IMP_FIELD, IMP_SPAWNS, IMP_STAND, MIZGOG, decide, gatherBead, idleProgress, impCensus, searchTarget, tallyNames, impcatcher, nearestReachable, pickImp, type ImpCandidate } from '#/bot/api/ai/quests/defs/impcatcher.js';
 import { pickPreferred } from '#/bot/api/ai/quests/exec/primitives.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
@@ -243,7 +243,72 @@ describe('impcatcher nearestReachable', () => {
     });
 });
 
-// Why: every spawn sits within 21 tiles of one stand, so the bot camps respawns instead of walking a circuit.
+// Why: the idle wait reports its result as the step's success, so anything in it that is true without work being available loops the step at ~20ms and the watchdog parks the quest after eight identical snapshots.
+describe('impcatcher idleProgress', () => {
+    const target = { index: 1, tile: { x: 2633, z: 3222, level: 0 }, distance: 4, contested: false };
+
+    test('a fightable imp is progress', () => {
+        expect(idleProgress(target, false)).toBe(true);
+    });
+
+    test('no imp is not progress, whatever else is happening', () => {
+        expect(idleProgress(null, false)).toBe(false);
+    });
+
+    test('a pending random event hands the tick back rather than claiming progress', () => {
+        expect(idleProgress(target, true)).toBe(false);
+    });
+});
+
+// Why: imps roam far enough that standing still watches empty ground, so an idle bot sweeps the strip instead.
+describe('impcatcher searchTarget', () => {
+    const middle = { x: IMP_STAND.x, z: IMP_STAND.z, level: 0 };
+    /** Feeds `searchTarget` a fixed sequence so a case is deterministic. */
+    const rolls = (...values: number[]): (() => number) => {
+        let i = 0;
+        return () => values[i++ % values.length];
+    };
+
+    test('the sweep stays inside the field from every corner of it', () => {
+        const corners = [
+            { x: IMP_FIELD.minX, z: IMP_FIELD.minZ, level: 0 },
+            { x: IMP_FIELD.maxX, z: IMP_FIELD.minZ, level: 0 },
+            { x: IMP_FIELD.minX, z: IMP_FIELD.maxZ, level: 0 },
+            { x: IMP_FIELD.maxX, z: IMP_FIELD.maxZ, level: 0 }
+        ];
+        for (const corner of corners) {
+            for (let roll = 0; roll < 16; roll++) {
+                const target = searchTarget(corner, rolls(roll / 16, (roll * 7) % 16 / 16));
+                expect(target.x >= IMP_FIELD.minX && target.x <= IMP_FIELD.maxX, `${target.x}`).toBe(true);
+                expect(target.z >= IMP_FIELD.minZ && target.z <= IMP_FIELD.maxZ, `${target.z}`).toBe(true);
+                expect(target.level).toBe(0);
+            }
+        }
+    });
+
+    test('a sweep from the middle is a move worth walking', () => {
+        for (let roll = 0; roll < 16; roll++) {
+            const target = searchTarget(middle, rolls(roll / 16, 0.5));
+            expect(target.distanceTo(middle), `roll ${roll}`).toBeGreaterThan(4);
+        }
+    });
+
+    test('different directions go to different places', () => {
+        const north = searchTarget(middle, rolls(0.25, 0.5));
+        const south = searchTarget(middle, rolls(0.75, 0.5));
+        expect(`${north.x},${north.z}`).not.toBe(`${south.x},${south.z}`);
+    });
+
+    test('from off the strip the sweep heads back to the stand', () => {
+        expect(searchTarget({ x: 3093, z: 3243, level: 0 }, rolls(0.5, 0.5))).toBe(IMP_STAND);
+    });
+
+    test('no known position heads to the stand', () => {
+        expect(searchTarget(null, rolls(0.5, 0.5))).toBe(IMP_STAND);
+    });
+});
+
+// Why: the stand is where the bot returns from off-strip, and the sweep radiates from it.
 describe('impcatcher IMP_STAND', () => {
     test('one stand covers every spawn inside the search radius', () => {
         for (const spawn of IMP_SPAWNS) {
