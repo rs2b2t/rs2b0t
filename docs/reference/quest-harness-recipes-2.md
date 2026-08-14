@@ -72,45 +72,60 @@ HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 0 --minutes 120  # en
 ```
 
 The bank holds coins, food and the seeded beads. Every unseeded bead has an imp
-to be killed for it, and seeding one hides whether the farm works.
+to be killed for it, and seeding one hides whether the farm works. The harness
+also gives and equips a Rune scimitar and an Amulet of glory; both are kill
+speed, since an imp is level 2 with 8 hitpoints and a -42 attack bonus.
 
-Measured at the default `--tick 300`:
+Measured at the default `--tick 300`, on the `--stage 1 --beads 3` recipe:
 
-| Recipe | Wall clock | Imps killed |
+| Build | Kills/min | One bead |
 |---|---|---|
-| `--stage 1 --beads 4` | 2 min | 0 |
-| `--stage 0 --beads 4` | 2 min | 0 |
-| `--stage 1 --beads 3` | 7 min, 14 min | 22, 52 |
-| `--stage 0 --beads 0` | 16 min | 54 |
+| 40-tile search, ring walk only | 1.0 | not reached in 12 min |
+| 50-tile search, 40s respawn hold | 2.65 | 20 min, 43 kills |
 
-The one-bead recipe ran twice and its two kill counts are 22 and 52, against an
-expectation of 26 — that spread is the drop rate, not a regression. Neither run
-parked; the end-to-end run held for a respawn 33 times and lost four imps to a
-mid-fight teleport.
+The passing run took no parks, held for a respawn 41 times against 5 ring walks,
+and skipped 4 imps its reachability probe refused.
 
-Four facts govern this harness:
+Six facts govern this harness:
 
 - **Each bead is 5/128 per imp kill.** All four is a coupon-collector draw over
   four independent 5/128 rolls, so the expectation is ~53 kills with a long tail.
   Read a slow run as variance until the kill counter stops moving.
-- **The Falador south gate has three imp spawns**, at (3009,3307), (3011,3314)
-  and (3015,3314), on a `respawnrate=100` timer. The farm is respawn-bound, so
-  `--tick` moves the wall clock almost linearly.
+- **The farm is the Karamja volcano, and its eight spawns ring the crater.** They
+  sit at (2832,3170), (2832,3177), (2837,3184), (2841,3163), (2849,3186),
+  (2850,3165), (2857,3179) and (2859,3177), on a `respawnrate=100` timer. The
+  volcano fills the middle, so no one tile stands within reach of all eight and
+  the module walks the ring rather than holding a stand.
+- **Two of those eight supply nearly every kill.** A live run logged 9 kills from
+  two npc indices, and the census reports `0 in scene` at most ring stops,
+  so the imps sit far from most of their spawn tiles. Walking on costs more than
+  waiting, which is why the module holds 40 seconds for a respawn before it moves,
+  and why the search radius is 50 rather than 40 — the pair together took the farm
+  from 1.0 to 2.65 kills a minute.
+- **The field stops at x 2810 because Brimhaven starts there.** A run that ranged
+  west logged Cap'n Izzy No-Beard and Pirate Jackie the Fruit in the scene.
+  Brimhaven is members-only and this quest is free-to-play, so the box must not
+  grow westward however far the imps drift.
+- **Reaching them crosses the Port Sarim ship, 30 coins each way.** The hop is a
+  `specialCrossing` gated on holding the fare. The engine restores its coin float
+  on every provisioning tick, so paying that fare made it sail the bot home for
+  the 30 coins and repeat, killing nothing; the module sets `ownsInventory` and
+  fetches a 200-coin reserve itself, only while standing on the mainland.
 - **An imp teleports out of a fight.** `ai_queue2,imp` rolls a 1-in-10 teleport on
   every hit it survives, and `ai_timer,imp` moves it up to 20 tiles every 50–200
   ticks regardless. A fight that ends with the target 20 tiles away is the normal
   case; the module drops the target and re-acquires rather than chasing. Some of
-  those landings are inside the Falador wall, where every walk answers
-  "unreachable" and costs the step 18 seconds, so the module filters candidates
+  those landings are on the volcano itself, where every walk answers
+  "unreachable" and costs the step its budget, so the module filters candidates
   through a scene reachability probe before it picks one.
 - **Mizgog's third quest-start option ends with his first option verbatim.** The
   sarcastic line ends with the string "Give me a quest!" and `pickPreferred`
   matches by substring, so the polite line has to come first in the `prefer` list
   or the bot takes the branch that never sets `%imp`.
 
-Combat is not worth a floor probe: an imp is level 2 with 8 hitpoints and a -42
-attack bonus, so an unarmed account kills one in two hits and takes no damage
-worth eating for.
+Karamja needs no food at 70 stats: the volcano's other residents are seven
+scorpions, four snakes and four monkeys, none of which is aggressive to an
+account that far above them.
 
 ## See also
 

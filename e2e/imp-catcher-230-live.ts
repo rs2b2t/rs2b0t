@@ -98,6 +98,28 @@ const BANK_SEED: BankSeedItem[] = [
     ...BEADS.slice(0, args.beads).map(bead => ({ debugName: bead.debugName, displayName: bead.displayName, qty: 1 }))
 ];
 
+/** Worn for the farm: an imp has 8 hitpoints, so this is kill speed, never survival. */
+const GEAR = [
+    { debugName: 'rune_scimitar', displayName: 'Rune scimitar' },
+    { debugName: 'amulet_of_glory', displayName: 'Amulet of glory' }
+];
+
+async function equipGear(page: Page): Promise<void> {
+    for (const item of GEAR) {
+        await cheatQuiet(page, `give ${item.debugName} 1`);
+    }
+    for (const item of GEAR) {
+        const worn = await page.evaluate(async name => {
+            const api = (globalThis as never as { __rs2b0t: { Equipment: { contains(n: string): boolean; equip(n: string): Promise<boolean> } } }).__rs2b0t;
+            return api.Equipment.contains(name) || (await api.Equipment.equip(name));
+        }, item.displayName);
+        if (!worn) {
+            fail(`could not equip ${item.displayName} — check the obj debug name '${item.debugName}'`);
+        }
+        console.log(`  equipped ${item.displayName}`);
+    }
+}
+
 const STATS = [
     'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
     'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
@@ -192,6 +214,8 @@ try {
 
     await setStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
+
+    await equipGear(page);
 
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Draynor bank`);
     await seedItemsToBank(page, BANK_SEED, DRAYNOR_BANK);
