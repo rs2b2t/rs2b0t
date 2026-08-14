@@ -25,8 +25,6 @@ export const IMP_BEADS: readonly ImpBead[] = [
     { name: 'White bead', id: 1476 }
 ];
 
-const DRAYNOR_BANK = new Tile(3093, 3243, 0);
-
 // Why: the polite line is preferred first because Mizgog's third option ends with the string "Give me a quest!", and a substring match would hand that sarcastic branch the quest-start click.
 export const MIZGOG: NpcStop = {
     npc: 'Wizard Mizgog',
@@ -35,35 +33,30 @@ export const MIZGOG: NpcStop = {
     prefer: ['Give me a quest please.', 'Give me a quest!']
 };
 
-/** The eight Karamja volcano imp spawns, from the map squares, in ring order. */
+/** The nine imp spawns on the scrub south of Ardougne, from the map squares. */
 export const IMP_SPAWNS: readonly Tile[] = [
-    new Tile(2832, 3170, 0),
-    new Tile(2832, 3177, 0),
-    new Tile(2837, 3184, 0),
-    new Tile(2849, 3186, 0),
-    new Tile(2857, 3179, 0),
-    new Tile(2859, 3177, 0),
-    new Tile(2850, 3165, 0),
-    new Tile(2841, 3163, 0)
+    new Tile(2632, 3202, 0),
+    new Tile(2625, 3203, 0),
+    new Tile(2639, 3206, 0),
+    new Tile(2630, 3210, 0),
+    new Tile(2625, 3217, 0),
+    new Tile(2633, 3222, 0),
+    new Tile(2639, 3230, 0),
+    new Tile(2629, 3233, 0),
+    new Tile(2633, 3243, 0)
 ];
 
 const FIELD_LEVEL = 0;
 
-/** Close enough to a spawn to count as standing on it and move round the ring. */
-const PATROL_ARRIVED = 4;
+// Why: the nine spawns lie in a 14x41 strip, so this one tile sits within 21 of every one of them and inside `SEARCH_RADIUS` of the lot — the bot camps respawns rather than walking a circuit.
 
-// Why: two spawns sit two tiles apart, and walking between them is a no-op the arrival radius already satisfies, so the ring keeps only stops worth a walk.
+/** Where the bot stands to watch every spawn on the strip. */
+export const IMP_STAND = new Tile(2632, 3222, 0);
 
-/** The spawns walked between, one per cluster. */
-export const PATROL_RING: readonly Tile[] = IMP_SPAWNS.reduce<Tile[]>(
-    (kept, spawn) => (kept.every(stop => stop.distanceTo(spawn) > PATROL_ARRIVED) ? [...kept, spawn] : kept),
-    []
-);
+// Why: the route between the Ardougne strip and the Wizards' Tower crosses Karamja, which has no bank, so a coin top-up there would walk the bot off the route it is in the middle of.
 
-// Why: the bank is a sea crossing away, so anything the bot has to fetch must be fetched before it boards.
-
-/** Karamja and the water around it: the ground with no bank on it. */
-export const KARAMJA = { minX: 2740, maxX: 2970, minZ: 3020, maxZ: 3230 };
+/** Karamja and the water around it: the transit leg with no bank on it. */
+const KARAMJA = { minX: 2740, maxX: 2970, minZ: 3020, maxZ: 3230 };
 
 const SHIP_FARE = 30;
 /** Withdrawn in one go, so a fare paid mid-quest never triggers another bank trip. */
@@ -71,9 +64,10 @@ const COIN_RESERVE = 200;
 const COIN_FLOOR = SHIP_FARE * 2;
 
 // Why: `wanderrange=27` plus a `map_findsquare(npc_coord, 0, 20)` teleport puts an imp anywhere in this box, and one outside it belongs to a different spawn cluster.
+// Why: the floor at z 3180 keeps the next cluster south, which tops out at z 3134, from pulling the bot 70 tiles off this one.
 
 /** The ground an imp from these spawns can be standing on. */
-export const IMP_FIELD = { minX: 2810, maxX: 2885, minZ: 3140, maxZ: 3210 };
+export const IMP_FIELD = { minX: 2600, maxX: 2665, minZ: 3180, maxZ: 3265 };
 
 const IMP = 'Imp';
 /** The client streams a 104-tile scene, so this is most of what it can see. */
@@ -84,14 +78,14 @@ const ENGAGE_RADIUS = 6;
 const LOST_RADIUS = 12;
 /** Scene-BFS budget: enough open ground to answer for anything inside `SEARCH_RADIUS`. */
 const REACH_STEPS = 20_000;
-// Why: only two of the eight mapped spawns put an imp inside the ring, and each respawns 100 ticks after it dies, so leaving the spot costs more than waiting on it.
+// Why: an imp respawns 100 ticks after it dies at a spawn the stand already watches, so waiting beats walking off to look for another.
 
 /** How long to wait on a respawn where imps have been before walking on. */
 const RESPAWN_HOLD_MS = 40_000;
 const KILL_MS = 30_000;
 const TAKE_MS = 6000;
-/** A walk onto Karamja crosses the Port Sarim ship, so it needs far longer than a mainland leg. */
-const BOAT_WALK_MS = 300_000;
+/** The walk between the strip and the tower is cost 625 across two ship hops. */
+const FAR_WALK_MS = 420_000;
 
 function heldCount(snap: QuestSnapshot, bead: ImpBead): number {
     if (snap.invIds !== undefined && snap.invIds.size > 0) {
@@ -117,31 +111,6 @@ function inField(tile: { x: number; z: number; level: number }): boolean {
         && tile.z >= IMP_FIELD.minZ && tile.z <= IMP_FIELD.maxZ;
 }
 
-// Why: two of the eight spawns sit two tiles apart, and a walk whose arrival radius already covers the target returns at once without moving, so an advance that lands on one of those never leaves the other and the watchdog parks the quest.
-
-/** The next spawn to stand at: the nearest from off the ring, the next one worth walking to from on it. */
-export function nextPatrolTarget(here: { x: number; z: number; level: number } | null | undefined): Tile {
-    if (!here) {
-        return PATROL_RING[0];
-    }
-    let nearest = 0;
-    for (let i = 1; i < PATROL_RING.length; i++) {
-        if (PATROL_RING[i].distanceTo(here) < PATROL_RING[nearest].distanceTo(here)) {
-            nearest = i;
-        }
-    }
-    if (PATROL_RING[nearest].distanceTo(here) > PATROL_ARRIVED || here.level !== FIELD_LEVEL) {
-        return PATROL_RING[nearest];
-    }
-    for (let step = 1; step <= PATROL_RING.length; step++) {
-        const candidate = PATROL_RING[(nearest + step) % PATROL_RING.length];
-        if (candidate.distanceTo(here) > PATROL_ARRIVED) {
-            return candidate;
-        }
-    }
-    return PATROL_RING[nearest];
-}
-
 function wantedBeadIds(): Set<number> {
     return new Set(IMP_BEADS.filter(bead => Inventory.countById(bead.id) === 0).map(bead => bead.id));
 }
@@ -158,7 +127,7 @@ export interface ImpCandidate extends FieldTarget {
 
 type Reachable = (tile: { x: number; z: number; level: number }) => boolean;
 
-// Why: an imp teleports up to 20 tiles on its own timer, which lands some of them and their drops on the volcano, where every walk answers "unreachable" and costs the step its budget.
+// Why: an imp teleports up to 20 tiles on its own timer, which lands some of them and their drops behind scenery, where every walk answers "unreachable" and costs the step its budget.
 
 /** The closest candidate the scene can path to, skipping the nearer ones it cannot. */
 export function nearestReachable<T extends FieldTarget>(candidates: readonly T[], reachable: Reachable): T | null {
@@ -175,11 +144,11 @@ interface ImpCensus {
     inField: number;
     free: number;
     reachable: number;
+    /** Distance to the closest candidate the scene probe refused, or null when it refused none. */
+    nearestRefused: number | null;
 }
 
-// Why: "no imp in the scene" cannot tell an empty scene from a filter eating every candidate, and those have different fixes.
-
-// Why: zero imps in the scene reads the same whether the spawns are dead or the zone never streamed, and the neighbours tell those apart.
+// Why: zero imps reads the same whether a filter ate every candidate, the spawns are dead, or the zone never streamed, and the three have different fixes.
 
 /** NPC names in the scene, counted, most numerous first. */
 export function tallyNames(names: readonly (string | null)[]): string {
@@ -201,11 +170,13 @@ export function tallyNames(names: readonly (string | null)[]): string {
 export function impCensus(candidates: readonly ImpCandidate[], reachable: Reachable): ImpCensus {
     const inside = candidates.filter(imp => inField(imp.tile));
     const free = inside.filter(imp => !imp.contested);
+    const refused = free.filter(imp => !reachable(imp.tile)).map(imp => imp.distance);
     return {
         scene: candidates.length,
         inField: inside.length,
         free: free.length,
-        reachable: free.filter(imp => reachable(imp.tile)).length
+        reachable: free.length - refused.length,
+        nearestRefused: refused.length === 0 ? null : Math.min(...refused)
     };
 }
 
@@ -297,27 +268,29 @@ async function killImp(imp: Npc, log: (m: string) => void): Promise<boolean> {
 }
 
 // Why: walking the ring is the respawn wait — the volcano blocks the middle, so standing still watches one arc of it and the far spawns are never seen.
-async function patrolRing(census: ImpCensus, log: (m: string) => void): Promise<boolean> {
+async function holdForRespawn(census: ImpCensus, log: (m: string) => void): Promise<boolean> {
     const here = Game.tile();
     const neighbours = census.scene === 0
         ? ` · scene holds ${tallyNames(Npcs.query().within(SEARCH_RADIUS).results().map(npc => npc.name))}`
         : '';
     const seen = `no imp to fight within ${SEARCH_RADIUS} tiles`
-        + ` (${census.scene} in scene, ${census.inField} in the field, ${census.free} free, ${census.reachable} reachable)${neighbours}`;
+        + ` (${census.scene} in scene, ${census.inField} in the field, ${census.free} free, ${census.reachable} reachable`
+        + `${census.nearestRefused === null ? '' : `, closest refused ${census.nearestRefused} tiles off`})${neighbours}`;
 
-    if (here && inField(here)) {
-        log(`${seen} — holding ${RESPAWN_HOLD_MS / 1000}s for a respawn`);
-        const appeared = await Execution.delayUntil(
-            () => pickImp(impCandidates(), sceneReachable) !== null || EventSignal.pending(),
-            RESPAWN_HOLD_MS
-        );
-        if (appeared && !EventSignal.pending()) {
-            return true;
-        }
+    if (!here || !inField(here)) {
+        log(`${seen} — walking to the south-Ardougne strip at (${IMP_STAND.x},${IMP_STAND.z})`);
+        return Traversal.walkResilient(IMP_STAND, { radius: 2, attempts: 3, timeoutMs: FAR_WALK_MS, log });
     }
-    const target = nextPatrolTarget(here);
-    log(`${seen} — walking the volcano ring to (${target.x},${target.z})`);
-    return Traversal.walkResilient(target, { radius: 2, attempts: 3, timeoutMs: BOAT_WALK_MS, log });
+    log(`${seen} — holding ${RESPAWN_HOLD_MS / 1000}s for a respawn`);
+    const appeared = await Execution.delayUntil(
+        () => pickImp(impCandidates(), sceneReachable) !== null || EventSignal.pending(),
+        RESPAWN_HOLD_MS
+    );
+    if (appeared && !EventSignal.pending()) {
+        return true;
+    }
+    // Why: a hold that timed out has to move, or the watchdog sees eight identical snapshots and parks a farm that is only waiting.
+    return Traversal.walkResilient(IMP_STAND, { radius: 2, attempts: 2, timeoutMs: FAR_WALK_MS, log });
 }
 
 /** One unit of bead farming: take a drop, kill an imp, or close on the field. */
@@ -335,7 +308,7 @@ async function farmBeads(log: (m: string) => void): Promise<boolean> {
     if (imp) {
         return killImp(imp.item, log);
     }
-    return patrolRing(impCensus(candidates, sceneReachable), log);
+    return holdForRespawn(impCensus(candidates, sceneReachable), log);
 }
 
 function onKaramja(tile: QuestSnapshot['tile']): boolean {
@@ -353,17 +326,16 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
     }
     // Why: an unread bank is not an empty bank, and a bead banked by an earlier run is 50 imp kills cheaper than another farm.
     if (!snap.bankKnown) {
-        return { kind: 'scanBank', bank: DRAYNOR_BANK };
+        return { kind: 'scanBank' };
     }
     if (snap.freeSlots !== undefined && snap.freeSlots < missing.length) {
-        return { kind: 'deposit', keep: ['coins'], keepIds: BEAD_IDS, bank: DRAYNOR_BANK, exactKeep: true };
+        return { kind: 'deposit', keep: ['coins'], keepIds: BEAD_IDS, exactKeep: true };
     }
     const banked = missing.filter(bead => bankedCount(snap, bead) > 0);
     if (banked.length > 0) {
         return {
             kind: 'withdraw',
-            items: banked.map(bead => ({ name: bead.name, id: bead.id, qty: 1 })),
-            bank: DRAYNOR_BANK
+            items: banked.map(bead => ({ name: bead.name, id: bead.id, qty: 1 }))
         };
     }
     // Why: the fare is fetched before boarding and never from the island, as a top-up on Karamja sails home for the coins it has spent and never kills an imp.
@@ -371,8 +343,7 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
     if (coins < COIN_FLOOR && !onKaramja(snap.tile) && snap.bankCoins > 0) {
         return {
             kind: 'withdraw',
-            items: [{ name: 'Coins', qty: Math.min(COIN_RESERVE - coins, snap.bankCoins) }],
-            bank: DRAYNOR_BANK
+            items: [{ name: 'Coins', qty: Math.min(COIN_RESERVE - coins, snap.bankCoins) }]
         };
     }
     return {
@@ -389,9 +360,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
         return { kind: 'wait', reason: 'quest journal not loaded' };
     }
-    if (snap.journal === 'notStarted') {
-        return { kind: 'talk', stop: MIZGOG };
-    }
+    // Why: the imp drop table is unconditional, so beads can be farmed before Mizgog is ever spoken to.
+    // Why: the strip is 625 of walking and two ship fares away from him, and gathering first spends that once rather than on the way out and again on the way back.
     if (missingBeads(snap).length > 0) {
         return gatherBead(snap);
     }
@@ -400,7 +370,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const impcatcher: QuestModule = {
     record: QUESTS.find(record => record.id === 'imp')!,
-    bank: DRAYNOR_BANK,
+    // Why: the strip is south of Ardougne and the hand-in is at the Wizards' Tower, so the useful bank depends on which leg the bot is on.
+    bank: 'nearest',
     // Why: the engine restores its coin float on every provisioning tick, which turns the ship's 30-coin fare into a round trip across the sea and never kills an imp.
     ownsInventory: true,
     grind: [IMP],

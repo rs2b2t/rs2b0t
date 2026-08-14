@@ -1,8 +1,8 @@
 /** Live Imp Catcher harness (#230): --stage N --until N --beads N --minutes N, base :8890.
  *  Why: `--stage` relogs since update_questlist only recolours the journal at login; `--beads` seeds part of the bead set so the withdraw and hand-in legs are testable without the ~53-kill farm; stats are 70 rather than `~maxme` so reach and damage problems stay visible; the :8888 sim answers neither `givebank` nor `~bankitem`. */
 
-//   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 1 --beads 4 --minutes 15
-//   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 0 --minutes 90
+//   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 1 --beads 3 --start ardougne --minutes 30
+//   HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 0 --minutes 120
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
@@ -31,6 +31,7 @@ interface Args {
     tickMs: number;
     food: string;
     stats: number;
+    start: string;
     deploy: boolean;
 }
 
@@ -45,6 +46,7 @@ function parse(argv: string[]): Args {
         tickMs: 300,
         food: 'Lobster',
         stats: 70,
+        start: 'draynor',
         deploy: true
     };
     for (let i = 0; i < argv.length; i++) {
@@ -61,6 +63,7 @@ function parse(argv: string[]): Args {
         else if (flag === '--tick') { out.tickMs = Number(value); }
         else if (flag === '--food') { out.food = value; }
         else if (flag === '--stats') { out.stats = Number(value); }
+        else if (flag === '--start') { out.start = value; }
     }
     return out;
 }
@@ -74,6 +77,11 @@ function fail(msg: string): never {
 
 const QUEST = 'Imp Catcher';
 const DRAYNOR_BANK = { x: 3093, z: 3243, level: 0 };
+/** `--start ardougne` drops the bot beside the imps; `draynor` walks the full 512 first. */
+const START_TILES: Record<string, { x: number; z: number; level: number }> = {
+    draynor: DRAYNOR_BANK,
+    ardougne: { x: 2655, z: 3283, level: 0 }
+};
 const AMULET_OF_ACCURACY = 1478;
 
 /** Engine debug name, display name and object id, in the order `--beads N` seeds them. */
@@ -231,13 +239,17 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, DRAYNOR_BANK, 10, 25_000))) {
+    const start = START_TILES[args.start];
+    if (!start) {
+        fail(`--start ${args.start} is not one of ${Object.keys(START_TILES).join(', ')}`);
+    }
+    if (!(await teleTo(page, start, 10, 25_000))) {
         await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, DRAYNOR_BANK, 10, 25_000))) {
-            fail(`tele to ${DRAYNOR_BANK.x},${DRAYNOR_BANK.z} did not arrive`);
+        if (!(await teleTo(page, start, 10, 25_000))) {
+            fail(`tele to ${start.x},${start.z} did not arrive`);
         }
     }
-    console.log(`start tile → ${DRAYNOR_BANK.x},${DRAYNOR_BANK.z},${DRAYNOR_BANK.level}`);
+    console.log(`start tile → ${args.start} (${start.x},${start.z},${start.level})`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'imp'));
     await page.evaluate(f => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', f), args.food);

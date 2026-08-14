@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { defById } from '#/bot/api/ai/quests/defs/index.js';
-import { IMP_BEADS, IMP_FIELD, IMP_SPAWNS, MIZGOG, PATROL_RING, decide, gatherBead, impCensus, tallyNames, impcatcher, nearestReachable, nextPatrolTarget, pickImp, type ImpCandidate } from '#/bot/api/ai/quests/defs/impcatcher.js';
+import { IMP_BEADS, IMP_FIELD, IMP_SPAWNS, IMP_STAND, MIZGOG, decide, gatherBead, impCensus, tallyNames, impcatcher, nearestReachable, pickImp, type ImpCandidate } from '#/bot/api/ai/quests/defs/impcatcher.js';
 import { pickPreferred } from '#/bot/api/ai/quests/exec/primitives.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
-import type Tile from '#/bot/geometry/Tile.js';
 
 const MAINLAND = { x: 3093, z: 3243, level: 0 };
+/** Mid-transit between Draynor and Ardougne: the leg with no bank on it. */
 const KARAMJA = { x: 2845, z: 3175, level: 0 };
 
 interface SnapOpts {
@@ -50,8 +50,13 @@ describe('impcatcher decide', () => {
         expect(step.kind).toBe('wait');
     });
 
-    test('notStarted -> talk to Wizard Mizgog', () => {
-        const step = decide(snap('notStarted'));
+    // Why: the imp drop table is unconditional, and the strip is 625 of walking and two ship fares from Mizgog, so gathering first spends that once instead of twice.
+    test('notStarted with no beads -> farm first, so the tower is one trip', () => {
+        expect(decide(snap('notStarted')).kind).toBe('custom');
+    });
+
+    test('notStarted holding every bead -> talk to Wizard Mizgog', () => {
+        const step = decide(snap('notStarted', { inv: allBeads() }));
         expect(step.kind === 'talk' && step.stop.npc).toBe('Wizard Mizgog');
     });
 
@@ -145,33 +150,33 @@ describe('impcatcher pickImp', () => {
     const anywhere = (): boolean => true;
 
     test('the nearest in-field imp wins', () => {
-        const far = imp(1, 2832, 3170, 20);
-        const near = imp(2, 2857, 3179, 4);
+        const far = imp(1, 2625, 3203, 20);
+        const near = imp(2, 2633, 3222, 4);
         expect(pickImp([far, near], anywhere)?.index).toBe(2);
     });
 
     test('an imp outside the field belongs to another spawn cluster', () => {
-        expect(pickImp([imp(1, 3011, 3314, 2)], anywhere)).toBeNull();
+        expect(pickImp([imp(1, 2845, 3175, 2)], anywhere)).toBeNull();
     });
 
     test('an imp on another level is never in the field', () => {
-        expect(pickImp([{ index: 1, tile: { x: 2832, z: 3170, level: 1 }, distance: 2, contested: false }], anywhere)).toBeNull();
+        expect(pickImp([{ index: 1, tile: { x: 2633, z: 3222, level: 1 }, distance: 2, contested: false }], anywhere)).toBeNull();
     });
 
     test('an imp another player is fighting is left alone', () => {
-        expect(pickImp([imp(1, 2832, 3170, 2, true)], anywhere)).toBeNull();
+        expect(pickImp([imp(1, 2633, 3222, 2, true)], anywhere)).toBeNull();
     });
 
-    // Why: an imp teleports up to 20 tiles, which lands some of them on the volcano where every walk answers "unreachable".
+    // Why: an imp teleports up to 20 tiles, which lands some of them behind scenery where every walk answers "unreachable".
     test('a nearer imp on an unreachable tile loses to a reachable one', () => {
-        const onVolcano = imp(1, 2850, 3175, 3);
-        const open = imp(2, 2832, 3170, 18);
-        const reachable = (tile: { x: number; z: number }): boolean => tile.x !== 2850;
-        expect(pickImp([onVolcano, open], reachable)?.index).toBe(2);
+        const walled = imp(1, 2629, 3233, 3);
+        const open = imp(2, 2633, 3222, 18);
+        const reachable = (tile: { x: number; z: number; z2?: number }): boolean => tile.z !== 3233;
+        expect(pickImp([walled, open], reachable)?.index).toBe(2);
     });
 
     test('no reachable imp gives no target rather than a doomed walk', () => {
-        expect(pickImp([imp(1, 2850, 3175, 3)], () => false)).toBeNull();
+        expect(pickImp([imp(1, 2633, 3222, 3)], () => false)).toBeNull();
     });
 });
 
@@ -182,14 +187,26 @@ describe('impcatcher impCensus', () => {
 
     test('each filter is counted separately', () => {
         const census = impCensus(
-            [imp(2832, 3170), imp(2857, 3179, true), imp(3011, 3314), imp(2850, 3175)],
-            tile => tile.x !== 2850
+            [imp(2625, 3203), imp(2633, 3222, true), imp(3011, 3314), imp(2639, 3230)],
+            tile => tile.x !== 2639
         );
-        expect(census).toEqual({ scene: 4, inField: 3, free: 2, reachable: 1 });
+        expect(census).toEqual({ scene: 4, inField: 3, free: 2, reachable: 1, nearestRefused: 5 });
     });
 
     test('an empty scene reads as zero everywhere', () => {
-        expect(impCensus([], () => true)).toEqual({ scene: 0, inField: 0, free: 0, reachable: 0 });
+        expect(impCensus([], () => true)).toEqual({ scene: 0, inField: 0, free: 0, reachable: 0, nearestRefused: null });
+    });
+
+    // Why: a refusal 45 tiles off is the scene probe running out of BFS budget; one at 5 tiles is an obstacle in the scene, and the two need different fixes.
+    test('the closest refused candidate reports its distance', () => {
+        const far: ImpCandidate = { index: 1, tile: { x: 2625, z: 3203, level: 0 }, distance: 45, contested: false };
+        const near: ImpCandidate = { index: 2, tile: { x: 2633, z: 3222, level: 0 }, distance: 6, contested: false };
+        expect(impCensus([far, near], () => false).nearestRefused).toBe(6);
+    });
+
+    test('nothing refused reports no distance', () => {
+        const ok: ImpCandidate = { index: 1, tile: { x: 2633, z: 3222, level: 0 }, distance: 6, contested: false };
+        expect(impCensus([ok], () => true).nearestRefused).toBeNull();
     });
 });
 
@@ -209,68 +226,34 @@ describe('impcatcher tallyNames', () => {
 });
 
 describe('impcatcher nearestReachable', () => {
-    const drop = (id: number, x: number, distance: number) => ({ id, tile: { x, z: 3175, level: 0 }, distance });
+    const drop = (id: number, x: number, distance: number) => ({ id, tile: { x, z: 3222, level: 0 }, distance });
 
     test('the nearest drop wins', () => {
-        expect(nearestReachable([drop(1470, 2832, 9), drop(1472, 2840, 2)], () => true)?.id).toBe(1472);
+        expect(nearestReachable([drop(1470, 2625, 9), drop(1472, 2633, 2)], () => true)?.id).toBe(1472);
     });
 
-    // Why: another player's kill can leave a bead on the volcano, and walking at it burns the step's budget.
+    // Why: another player's kill can leave a bead behind scenery, and walking at it burns the step's budget.
     test('a nearer drop on an unreachable tile loses to a reachable one', () => {
-        const reachable = (tile: { x: number }): boolean => tile.x !== 2850;
-        expect(nearestReachable([drop(1470, 2850, 1), drop(1472, 2832, 20)], reachable)?.id).toBe(1472);
+        const reachable = (tile: { x: number }): boolean => tile.x !== 2650;
+        expect(nearestReachable([drop(1470, 2650, 1), drop(1472, 2633, 20)], reachable)?.id).toBe(1472);
     });
 
     test('nothing reachable gives nothing', () => {
-        expect(nearestReachable([drop(1470, 2850, 1)], () => false)).toBeNull();
+        expect(nearestReachable([drop(1470, 2650, 1)], () => false)).toBeNull();
     });
 });
 
-// Why: the volcano fills the middle of the ring, so no one tile stands within reach of all eight spawns.
-describe('impcatcher nextPatrolTarget', () => {
-    const at = (tile: Tile) => ({ x: tile.x, z: tile.z, level: tile.level });
-
-    test('no known position starts the ring at its first spawn', () => {
-        expect(nextPatrolTarget(null)).toBe(IMP_SPAWNS[0]);
-    });
-
-    test('standing on a spawn advances to the next one round the volcano', () => {
-        expect(nextPatrolTarget(at(IMP_SPAWNS[0]))).toBe(IMP_SPAWNS[1]);
-        expect(nextPatrolTarget(at(IMP_SPAWNS[3]))).toBe(IMP_SPAWNS[4]);
-    });
-
-    test('the ring wraps, so every spawn is visited rather than two ping-ponging', () => {
-        expect(nextPatrolTarget(at(IMP_SPAWNS[IMP_SPAWNS.length - 1]))).toBe(IMP_SPAWNS[0]);
-    });
-
-    test('off the ring, head for the nearest spawn rather than the next in order', () => {
-        const fromTheMusaDock = nextPatrolTarget({ x: 2956, z: 3146, level: 0 });
-        expect([fromTheMusaDock.x, fromTheMusaDock.z]).toEqual([2857, 3179]);
-    });
-
-    // Why: (2857,3179) and (2859,3177) are two tiles apart, and a walk whose radius already covers the target returns "arrived" without moving, so the ring never advances and the watchdog parks the quest.
-    test('the next target is always far enough away to be a move', () => {
+// Why: every spawn sits within 21 tiles of one stand, so the bot camps respawns instead of walking a circuit.
+describe('impcatcher IMP_STAND', () => {
+    test('one stand covers every spawn inside the search radius', () => {
         for (const spawn of IMP_SPAWNS) {
-            const target = nextPatrolTarget(at(spawn));
-            expect(target.distanceTo(at(spawn)), `${spawn.x},${spawn.z} -> ${target.x},${target.z}`).toBeGreaterThan(4);
+            expect(IMP_STAND.distanceTo({ x: spawn.x, z: spawn.z, level: spawn.level }), `${spawn.x},${spawn.z}`).toBeLessThanOrEqual(25);
         }
     });
 
-    test('walking the ring in order reaches every stop on it', () => {
-        const visited = new Set<string>();
-        let target = nextPatrolTarget(null);
-        for (let step = 0; step < PATROL_RING.length; step++) {
-            visited.add(`${target.x},${target.z}`);
-            target = nextPatrolTarget(at(target));
-        }
-        expect(visited.size).toBe(PATROL_RING.length);
-    });
-
-    test('every spawn is on the ring or within sight of a stop on it', () => {
-        for (const spawn of IMP_SPAWNS) {
-            const nearest = Math.min(...PATROL_RING.map(stop => stop.distanceTo(at(spawn))));
-            expect(nearest, `${spawn.x},${spawn.z}`).toBeLessThanOrEqual(4);
-        }
+    test('the stand is inside the field it searches', () => {
+        expect(IMP_STAND.x >= IMP_FIELD.minX && IMP_STAND.x <= IMP_FIELD.maxX).toBe(true);
+        expect(IMP_STAND.z >= IMP_FIELD.minZ && IMP_STAND.z <= IMP_FIELD.maxZ).toBe(true);
     });
 });
 
@@ -308,9 +291,9 @@ describe('impcatcher module wiring', () => {
         expect([MIZGOG.anchor.x, MIZGOG.anchor.z]).toEqual([3103, 3163]);
     });
 
-    test('every Karamja volcano imp spawn lies inside the searched field', () => {
+    test('every south-Ardougne imp spawn lies inside the searched field', () => {
         expect([...IMP_SPAWNS].map(tile => [tile.x, tile.z]).sort()).toEqual(
-            [[2832, 3170], [2832, 3177], [2837, 3184], [2841, 3163], [2849, 3186], [2850, 3165], [2857, 3179], [2859, 3177]].sort()
+            [[2625, 3203], [2625, 3217], [2629, 3233], [2630, 3210], [2632, 3202], [2633, 3222], [2633, 3243], [2639, 3206], [2639, 3230]].sort()
         );
         for (const tile of IMP_SPAWNS) {
             expect(tile.x >= IMP_FIELD.minX && tile.x <= IMP_FIELD.maxX, `${tile.x}`).toBe(true);
