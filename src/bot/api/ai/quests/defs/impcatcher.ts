@@ -84,6 +84,8 @@ const REACH_STEPS = 20_000;
 const SEARCH_IDLE_MS = 6000;
 const SEARCH_STEP_MIN = 8;
 const SEARCH_STEP_MAX = 20;
+/** Headings tried before giving up and returning to the stand. */
+const SEARCH_ROLLS = 6;
 const KILL_MS = 30_000;
 const TAKE_MS = 6000;
 /** The walk between the strip and the tower is cost 625 across two ship hops. */
@@ -121,18 +123,30 @@ function clamp(value: number, low: number, high: number): number {
 
 // Why: a random point in the box would send the bot back and forth across the strip; a random heading from where it stands sweeps ground it has not already looked at.
 
-/** A tile to sweep towards: a random heading from `here`, held inside the field. */
-export function searchTarget(here: { x: number; z: number; level: number } | null | undefined, random: () => number): Tile {
+// Why: the field is a rectangle with no terrain in it, so a heading can aim at a tile the walker cannot reach, and one live sweep in six spent 42 seconds proving that.
+
+/** A tile to sweep towards: a random heading from `here`, held inside the field and probed for reach. */
+export function searchTarget(
+    here: { x: number; z: number; level: number } | null | undefined,
+    random: () => number,
+    reachable?: Reachable
+): Tile {
     if (!here || !inField(here)) {
         return IMP_STAND;
     }
-    const heading = random() * 2 * Math.PI;
-    const stride = SEARCH_STEP_MIN + random() * (SEARCH_STEP_MAX - SEARCH_STEP_MIN);
-    return new Tile(
-        clamp(Math.round(here.x + Math.cos(heading) * stride), IMP_FIELD.minX, IMP_FIELD.maxX),
-        clamp(Math.round(here.z + Math.sin(heading) * stride), IMP_FIELD.minZ, IMP_FIELD.maxZ),
-        FIELD_LEVEL
-    );
+    for (let roll = 0; roll < SEARCH_ROLLS; roll++) {
+        const heading = random() * 2 * Math.PI;
+        const stride = SEARCH_STEP_MIN + random() * (SEARCH_STEP_MAX - SEARCH_STEP_MIN);
+        const target = new Tile(
+            clamp(Math.round(here.x + Math.cos(heading) * stride), IMP_FIELD.minX, IMP_FIELD.maxX),
+            clamp(Math.round(here.z + Math.sin(heading) * stride), IMP_FIELD.minZ, IMP_FIELD.maxZ),
+            FIELD_LEVEL
+        );
+        if (!reachable || reachable(target)) {
+            return target;
+        }
+    }
+    return IMP_STAND;
 }
 
 // Why: this result is returned as the step's own success, so a condition that holds without work being available loops the step at ~20ms and parks the quest on eight identical snapshots.
@@ -159,16 +173,33 @@ export interface ImpCandidate extends FieldTarget {
 
 type Reachable = (tile: { x: number; z: number; level: number }) => boolean;
 
-// Why: an imp teleports up to 20 tiles on its own timer, which lands some of them and their drops behind scenery, where every walk answers "unreachable" and costs the step its budget.
+// Why: an imp teleports up to 20 tiles on its own timer, so it dies and drops its bead behind scenery often enough that a walk at the closest drop answers "unreachable" and costs the step its budget.
 
-/** The closest candidate the scene can path to, skipping the nearer ones it cannot. */
+/** The closest drop the scene can path to, skipping the nearer ones it cannot. */
 export function nearestReachable<T extends FieldTarget>(candidates: readonly T[], reachable: Reachable): T | null {
     return [...candidates].sort((a, b) => a.distance - b.distance).find(item => reachable(item.tile)) ?? null;
 }
 
-/** The nearest imp in the field that nobody else is fighting and the scene can path to. */
-export function pickImp<T extends ImpCandidate>(candidates: readonly T[], reachable: Reachable): T | null {
-    return nearestReachable(candidates.filter(imp => inField(imp.tile) && !imp.contested), reachable);
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+    const out = [...items];
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
+
+// Why: twenty bots that each take the nearest imp queue on the same one, so the target is drawn at random instead.
+// Why: the draw is the first reachable of a shuffled list rather than a filter-then-choose, which is the same uniform pick over the reachable ones but usually costs one scene BFS instead of one per candidate.
+
+/** A random imp in the field that nobody else is fighting and the scene can path to. */
+export function pickImp<T extends ImpCandidate>(
+    candidates: readonly T[],
+    reachable: Reachable,
+    random: () => number = Math.random
+): T | null {
+    const free = candidates.filter(imp => inField(imp.tile) && !imp.contested);
+    return shuffled(free, random).find(imp => reachable(imp.tile)) ?? null;
 }
 
 interface ImpCensus {
@@ -322,7 +353,7 @@ async function searchForImps(census: ImpCensus, log: (m: string) => void): Promi
     if (idleProgress(pickImp(impCandidates(), sceneReachable), EventSignal.pending())) {
         return true;
     }
-    const target = searchTarget(here, Math.random);
+    const target = searchTarget(here, Math.random, sceneReachable);
     log(`${seen} — sweeping to (${target.x},${target.z})`);
     return Traversal.walkResilient(target, { radius: 2, attempts: 2, timeoutMs: SWEEP_WALK_MS, log });
 }

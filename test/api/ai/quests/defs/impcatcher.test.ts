@@ -149,10 +149,21 @@ describe('impcatcher pickImp', () => {
         ({ index, tile: { x, z, level: 0 }, distance, contested });
     const anywhere = (): boolean => true;
 
-    test('the nearest in-field imp wins', () => {
-        const far = imp(1, 2625, 3203, 20);
-        const near = imp(2, 2633, 3222, 4);
-        expect(pickImp([far, near], anywhere)?.index).toBe(2);
+    // Why: twenty bots that all pick the nearest imp queue on the same one; a random pick spreads them over the strip.
+    test('every valid imp gets picked over many rolls, not only the nearest', () => {
+        const field = [imp(1, 2625, 3203, 20), imp(2, 2633, 3222, 4), imp(3, 2639, 3230, 12)];
+        const chosen = new Set<number>();
+        for (let roll = 0; roll < 60; roll++) {
+            const pick = pickImp(field, anywhere, () => (roll * 37 % 101) / 101);
+            if (pick) { chosen.add(pick.index); }
+        }
+        expect([...chosen].sort()).toEqual([1, 2, 3]);
+    });
+
+    test('a single valid imp is picked whatever the roll', () => {
+        const only = imp(7, 2633, 3222, 4);
+        expect(pickImp([only], anywhere, () => 0.9)?.index).toBe(7);
+        expect(pickImp([only], anywhere, () => 0.1)?.index).toBe(7);
     });
 
     test('an imp outside the field belongs to another spawn cluster', () => {
@@ -297,6 +308,21 @@ describe('impcatcher searchTarget', () => {
         const north = searchTarget(middle, rolls(0.25, 0.5));
         const south = searchTarget(middle, rolls(0.75, 0.5));
         expect(`${north.x},${north.z}`).not.toBe(`${south.x},${south.z}`);
+    });
+
+    // Why: the field is a rectangle with no terrain in it, so a heading can aim at a tile the walker cannot reach and burn its budget finding out.
+    test('an unreachable heading is re-rolled rather than walked at', () => {
+        const target = searchTarget(middle, rolls(0.1, 0.5, 0.6, 0.5), tile => tile.z !== 3230);
+        expect(target.z).not.toBe(3230);
+    });
+
+    test('when nothing nearby is reachable the sweep falls back to the stand', () => {
+        expect(searchTarget(middle, rolls(0.1, 0.5), () => false)).toBe(IMP_STAND);
+    });
+
+    test('with no reachability probe every heading is taken as given', () => {
+        const target = searchTarget(middle, rolls(0.25, 0.5));
+        expect(target.distanceTo(middle)).toBeGreaterThan(4);
     });
 
     test('from off the strip the sweep heads back to the stand', () => {
