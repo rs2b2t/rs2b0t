@@ -104,7 +104,20 @@ Three details govern this harness:
   `givebank` nor `~bankitem`, so a run there starts with an empty bank and parks
   on the food float.
 
+Next lower probe (update `EW_PROVEN_COMBAT_FLOOR` only if green):
+
+```sh
+HEADED=1 bun e2e/aio-quest-test.ts http://localhost:8890 ewprobe elemental_workshop 25 \
+  'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:25,bank:steel_scimitar:1,bank:coins:50000' \
+  'mining:20,smithing:20,crafting:20,attack:45,strength:45,defence:30,hitpoints:45' \
+  Lobster 'speed 300' '2725,3491'
+```
+
+Expect `check the bank` / `withdraw` after book/key. After journal **ENTERED**,
+death recovery re-enters with **Push** (no key) and re-withdraws bank tools.
+
 ## See also
 
 - [Quest harness recipes (G–Z)](quest-harness-recipes-2.md)
+- [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

@@ -57,45 +57,63 @@ written against what the client receives, not against the `.rs2`.
 module names against a flood from the mainland, and lists the sealed pockets
 deliberately so a map change fails loudly instead of quietly.
 
-Next lower probe (update `EW_PROVEN_COMBAT_FLOOR` only if green):
+## Imp Catcher — stage-scoped harness
+
+[`e2e/imp-catcher-230-live.ts`](../../e2e/imp-catcher-230-live.ts) drives the
+quest from a clean account, or one leg of it. `--stage N` sets `%imp` and relogs;
+`--beads N` seeds the first N of black, red, white, yellow into the bank so the
+withdraw and hand-in legs are reachable without the farm.
 
 ```sh
-HEADED=1 bun e2e/aio-quest-test.ts http://localhost:8890 ewprobe elemental_workshop 25 \
-  'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:25,bank:steel_scimitar:1,bank:coins:50000' \
-  'mining:20,smithing:20,crafting:20,attack:45,strength:45,defence:30,hitpoints:45' \
-  Lobster 'speed 300' '2725,3491'
+HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 1 --beads 4 --minutes 15   # hand-in only
+HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 4 --minutes 15   # start + hand-in
+HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 1 --beads 3 --minutes 30   # one bead, farmed
+HEADED=1 bun e2e/imp-catcher-230-live.ts --stage 0 --beads 0 --minutes 120  # end to end
 ```
 
-Expect `check the bank` / `withdraw` after book/key. After journal **ENTERED**,
-death recovery re-enters with **Push** (no key) and re-withdraws bank tools.
+The bank holds coins, food and the seeded beads. Every unseeded bead has an imp
+to be killed for it, and seeding one hides whether the farm works.
 
-**Recipe for future quest harnesses:**
+Measured at the default `--tick 300`:
 
-1. Prefer `bank:obj:qty` / `givebank` / `~bankitem` over give→deposit loops for unstackable food.
-2. Ideal smoke → realistic bank-seed → **lower non-required stats until red**;
-   keep proven floor + failed floor + next probe in the module; `warnReadiness`.
-3. Leave the pack empty after bank seed so provisioning runs.
-4. Drain dialogs before `~bankitem`; prefer `givebank` mid-setup.
-5. Assert journal complete + clean stop.
-6. Later: power-level tactics (safespot vs melee) from the same skill snapshot.
+| Recipe | Wall clock | Imps killed |
+|---|---|---|
+| `--stage 1 --beads 4` | 2 min | 0 |
+| `--stage 0 --beads 4` | 2 min | 0 |
+| `--stage 1 --beads 3` | 7 min, 14 min | 22, 52 |
+| `--stage 0 --beads 0` | 16 min | 54 |
 
-- **`::death` is a clean kill** (`~damage_self(999)`): respawn is Lumbridge `(3221,3218)`,
-  and `move_priciest_item_on_hero_to_death` keeps *one* of each of the three priciest items
-  — so a coin stack comes back as a single coin. Use it to drive death recovery through a death
-  rather than seeding a post-death pose.
-- **A stage test seeds only what that stage produces, never its tools.** See
-  [Quests](../how-to/add-a-quest.md) — every Watch Tower stage-10 test handed the bot
-  a pickaxe, so all of them passed while the quest could not mine.
-  [`e2e/shilo-solo-test.ts`](../../e2e/shilo-solo-test.ts) is the current worked
-  example: `--stage`/`--bits` jump the quest varps, `--tele` drops the account beside
-  the leg under test, and `--speed 300` runs the engine at 2× ticks.
-- **Measure throughput per tick, never per hour.** A dev world does not tick at 600ms
-  and `--speed` changes it again, so an actions/hour figure read off a sim is fiction.
-  [`e2e/roguespurse-test.ts`](../../e2e/roguespurse-test.ts) reports herbs/**tick**
-  from the `host.tickCount` delta, which is comparable to the engine's own limits
-  (5 user events per tick) and to a 600ms world.
+The one-bead recipe ran twice and its two kill counts are 22 and 52, against an
+expectation of 26 — that spread is the drop rate, not a regression. Neither run
+parked; the end-to-end run held for a respawn 33 times and lost four imps to a
+mid-fight teleport.
+
+Four facts govern this harness:
+
+- **Each bead is 5/128 per imp kill.** All four is a coupon-collector draw over
+  four independent 5/128 rolls, so the expectation is ~53 kills with a long tail.
+  Read a slow run as variance until the kill counter stops moving.
+- **The Falador south gate has three imp spawns**, at (3009,3307), (3011,3314)
+  and (3015,3314), on a `respawnrate=100` timer. The farm is respawn-bound, so
+  `--tick` moves the wall clock almost linearly.
+- **An imp teleports out of a fight.** `ai_queue2,imp` rolls a 1-in-10 teleport on
+  every hit it survives, and `ai_timer,imp` moves it up to 20 tiles every 50–200
+  ticks regardless. A fight that ends with the target 20 tiles away is the normal
+  case; the module drops the target and re-acquires rather than chasing. Some of
+  those landings are inside the Falador wall, where every walk answers
+  "unreachable" and costs the step 18 seconds, so the module filters candidates
+  through a scene reachability probe before it picks one.
+- **Mizgog's third quest-start option ends with his first option verbatim.** The
+  sarcastic line ends with the string "Give me a quest!" and `pickPreferred`
+  matches by substring, so the polite line has to come first in the `prefer` list
+  or the bot takes the branch that never sets `%imp`.
+
+Combat is not worth a floor probe: an imp is level 2 with 8 hitpoints and a -42
+attack bonus, so an unarmed account kills one in two hits and takes no damage
+worth eating for.
 
 ## See also
 
 - [Quest harness recipes (A–F)](quest-harness-recipes.md)
+- [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

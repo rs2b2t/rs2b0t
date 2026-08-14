@@ -232,6 +232,14 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/how-to/maintainer-infra.md'
     },
     {
+        id: 'imp-catcher-230-live',
+        harness: 'imp-catcher-230-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'documented',
+        budgetMin: 90,
+        documentedIn: 'docs/reference/quest-harness-recipes-2.md'
+    },
+    {
         id: 'knights-sword-228-live',
         harness: 'knights-sword-228-live.ts',
         covers: { scripts: ['AIOQuester'] },

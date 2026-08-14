@@ -18,3 +18,4 @@
 | [Write a harness](how-to/harness-shape.md) | the shape, and the end-to-end smoke |
 | [Seeding test accounts](reference/seeding-test-accounts.md) | inventory vs bank cheats and their traps |
 | Quest harness recipes [A–F](reference/quest-harness-recipes.md), [G–Z](reference/quest-harness-recipes-2.md) | per-quest seed and stage commands |
+| [Quest harness method](reference/quest-harness-method.md) | what every quest harness does, whichever quest it drives |
