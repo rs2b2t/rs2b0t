@@ -81,7 +81,7 @@ withdrawOp(ops, amount: 'all' | '10' | '1' | 'any'): string | null
 - `isOpen` only means the bank component exists. After open (and after every
   deposit) wait for `Bank.loaded()` before trusting `count()` / `items()` —
   until then counts read as 0.
-- `withdraw`/`deposit`/`count` match names **exactly** (case-insensitive).
+- `withdraw`/`deposit`/`count` match names in full (case-insensitive).
   `op` is the context-menu label; use `withdrawOp(item.ops, 'all')` rather than
   hard-coding `'Withdraw-All'`.
 - Prefer `countById` / `withdrawById` / `withdrawXById` when two objects share a display name.

@@ -1,6 +1,6 @@
 import type { GroundItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
-import { Input } from '../input/Input.js';
+import { Input } from '../../input/Input.js';
 import Tile from '../../geometry/Tile.js';
 import { opIndex, presentOps, type Interactable, type Locatable } from './Interactable.js';
 

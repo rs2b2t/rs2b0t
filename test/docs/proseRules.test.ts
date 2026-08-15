@@ -92,7 +92,7 @@ test('lint:prose covers every source area and excludes the vendored client', () 
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> };
     const script = pkg.scripts['lint:prose'];
     expect(script).toBeDefined();
-    for (const path of ['docs', 'README.md', 'templates', 'src/bot', 'tools', 'test', 'bundle.ts', 'bot.bundle.ts', 'eslint.config.ts', 'identifier.js']) {
+    for (const path of ['docs', 'README.md', 'src/bot', 'tools', 'test', 'bundle.ts', 'bot.bundle.ts', 'eslint.config.ts', 'identifier.js']) {
         expect(script).toContain(path);
     }
     expect(script).not.toContain('src/client');

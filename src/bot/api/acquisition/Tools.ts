@@ -3,7 +3,7 @@ export interface ToolTier {
     name: string;
     /** Skill level required to *use* the tool (mining / woodcutting). */
     level: number;
-    // Why: classic metal tiers are bronze/iron 1, steel 5, mithril 20, adamant 30, rune 40.
+    // Why: mining gates on the metal tier — bronze/iron 1, steel 6, mithril 21, adamant 31, rune 41.
     // Why: tools may still be used from the backpack without meeting this.
 
     /** Attack level required to wield the tool. */
@@ -41,11 +41,12 @@ export const PICKAXES: readonly ToolTier[] = [
     { name: 'Bronze pickaxe', level: 1, attackLevel: 1 }
 ];
 
+// Why: this era puts no woodcutting requirement on axes — Attack alone gates wielding them.
 export const AXES: readonly ToolTier[] = [
-    { name: 'Rune axe', level: 41, attackLevel: 40 },
-    { name: 'Adamant axe', level: 31, attackLevel: 30 },
-    { name: 'Mithril axe', level: 21, attackLevel: 20 },
-    { name: 'Steel axe', level: 6, attackLevel: 5 },
+    { name: 'Rune axe', level: 1, attackLevel: 40 },
+    { name: 'Adamant axe', level: 1, attackLevel: 30 },
+    { name: 'Mithril axe', level: 1, attackLevel: 20 },
+    { name: 'Steel axe', level: 1, attackLevel: 5 },
     { name: 'Iron axe', level: 1, attackLevel: 1 },
     { name: 'Bronze axe', level: 1, attackLevel: 1 }
 ];

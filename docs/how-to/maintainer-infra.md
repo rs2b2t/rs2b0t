@@ -71,8 +71,8 @@ Note: `botclient.js?v=…` is still a **content hash** of the file (cache-bust),
 not the git SHA — use `version.json` or the Build row for the commit.
 
 Verify locally without touching prod: run `pack-rs2b0t.sh` with the **local** modulus
-against the local engine, then `bun tools/hosted-proof-test.ts` (single client) and
-`bun tools/hosted-wall-test.ts` (the wall — two accounts ingame, slot iframes resolving
+against the local engine, then `bun e2e/hosted-proof-test.ts` (single client) and
+`bun e2e/hosted-wall-test.ts` (the wall — two accounts ingame, slot iframes resolving
 under `/rs2b0t/`, resource card honest). Neither uses a proxy. The `/rs2b0t/wall` rewrite
 itself is not reproducible locally — there is no Caddy — so it is a post-deploy check.
 

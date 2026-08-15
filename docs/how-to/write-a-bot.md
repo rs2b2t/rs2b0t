@@ -2,7 +2,7 @@
 
 # Write a bot
 
-Copy [`templates/script-template/`](../../templates/script-template/) or author
+Copy [`docs/script-template/`](../script-template/) or author
 in-tree under `src/bot/scripts/`. A script's entry module default-exports
 `defineBot({...})`:
 
@@ -30,7 +30,7 @@ scripts from `src/bot/scripts/index.ts`.
 
 ## Full example
 
-The out-of-tree template ([`templates/script-template/src/ExampleBot.ts`](../../templates/script-template/src/ExampleBot.ts)):
+The out-of-tree template ([`docs/script-template/src/ExampleBot.ts`](../script-template/src/ExampleBot.ts)):
 loots and buries bones, tracks prayer xp via events, and draws a HUD.
 
 ```ts

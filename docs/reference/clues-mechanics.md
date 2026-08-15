@@ -5,11 +5,11 @@
 ## Tool acquisition
 
 A dig clue without a spade used to abandon the trail. It now **goes and gets one** —
-[`AcquireTools.ts`](../../src/bot/clues/AcquireTools.ts) walks to the nearer known spawn
+[`AcquireTools.ts`](../../src/bot/api/ai/clues/AcquireTools.ts) walks to the nearer known spawn
 and takes it, trying the next spawn if it is not there.
 
 Coordinate clues need the full trio — sextant, watch, and chart — obtained through a
-four-NPC chain, driven by [`data/toolAcquire.ts`](../../src/bot/clues/data/toolAcquire.ts).
+four-NPC chain, driven by [`data/toolAcquire.ts`](../../src/bot/api/ai/clues/data/toolAcquire.ts).
 `hasAllTrio()` and `hasCoordClueHeld()` gate it, and the chain is deadlined
 (`CHAIN_DEADLINE_MS`) so a broken link cannot hang a bot indefinitely.
 
@@ -17,10 +17,10 @@ four-NPC chain, driven by [`data/toolAcquire.ts`](../../src/bot/clues/data/toolA
 
 A toll the bot cannot pay does not read as "too poor" — A* prunes the crossing, so
 the region behind it leaves the graph and the leg reports a bare `unreachable`.
-The Kharidian desert is the sharp case: it has exactly one baked entrance and it
+The Kharidian desert is the sharp case: it has one baked entrance and it
 eats a Shantay pass, so a bot without one is told the desert does not exist.
 
-[`gateItems.ts`](../../src/bot/nav/gateItems.ts) tells the two apart. On an
+[`gateItems.ts`](../../src/bot/event/webwalk/gateItems.ts) tells the two apart. On an
 `unreachable` verdict the walker re-probes the same route with every crossing item
 virtualized; if the route appears, the blocker is a shopping list and
 `WalkExecutor.lastMissingGateItems` names it. `walkLeg` in the executor then buys
@@ -39,10 +39,10 @@ invisible and no pass was ever withdrawn. It now resolves through
 Some clues do not resolve to a location:
 
 - **Challenge scrolls** ask a question. Answers live in
-  [`data/challengeAnswers.ts`](../../src/bot/clues/data/challengeAnswers.ts), and numeric
+  [`data/challengeAnswers.ts`](../../src/bot/api/ai/clues/data/challengeAnswers.ts), and numeric
   ones are submitted through the count dialog.
-- **Key-from-kill** clues (`keyFrom`) require killing a specific NPC for a key; the anchors are in [`data/killAnchors.ts`](../../src/bot/clues/data/killAnchors.ts).
-- **Talk anchors** in [`data/talkAnchors.ts`](../../src/bot/clues/data/talkAnchors.ts)
+- **Key-from-kill** clues (`keyFrom`) require killing a specific NPC for a key; the anchors are in [`data/killAnchors.ts`](../../src/bot/api/ai/clues/data/killAnchors.ts).
+- **Talk anchors** in [`data/talkAnchors.ts`](../../src/bot/api/ai/clues/data/talkAnchors.ts)
   give a starting point for NPCs that move.
 
 ## Dig guardians
@@ -58,7 +58,7 @@ a coord does not yield the casket — it spawns a wizard beside you, and only a 
 
 The flag the server sets on the kill (`%trail_status` bit 4) is **not transmitted**,
 so the bot cannot ask whether it already killed one. It observes instead:
-[`Guardian.ts`](../../src/bot/clues/Guardian.ts) digs, waits out the spawn window, and
+[`Guardian.ts`](../../src/bot/api/ai/clues/Guardian.ts) digs, waits out the spawn window, and
 if a wizard appears it turns on Protect from Magic, fights, then digs again — all
 inside one step attempt, so a level-108 fight does not consume the retry budget.
 
@@ -77,9 +77,9 @@ to pump, not park.
 Nine hard talk clues hand over a 5×5 sliding puzzle instead of the next scroll. The
 board is the interactable inv component inside the `trail_puzzle` main modal; its 24
 pieces are all named "Sliding piece", so they are identified by obj id through the
-generated [`data/puzzlePieces.ts`](../../src/bot/clues/data/puzzlePieces.ts).
+generated [`data/puzzlePieces.ts`](../../src/bot/api/ai/clues/data/puzzlePieces.ts).
 
-[`puzzleLogic.ts`](../../src/bot/clues/puzzleLogic.ts) is pure and does the thinking.
+[`puzzleLogic.ts`](../../src/bot/api/ai/clues/puzzleLogic.ts) is pure and does the thinking.
 It solves in batches — row 0, column 0, row 1, column 1, then the final 3×3 —
 running a small breadth-first search per batch over the positions of only that
 batch's pieces plus the gap. Batching the awkward cases (a row's last two) lets the
@@ -89,7 +89,7 @@ sequence, and every batch's state space stays in the thousands.
 The engine shuffles by 101 legal moves from the solved state, so every board handed
 to the bot is solvable; the solver is proven against 10,000 such shuffles.
 
-[`PuzzleBox.ts`](../../src/bot/clues/PuzzleBox.ts) drives it, and it re-reads and
+[`PuzzleBox.ts`](../../src/bot/api/ai/clues/PuzzleBox.ts) drives it, and it re-reads and
 re-plans after **every single move**. That is not caution for its own sake: the
 engine silently drops a click whose slot no longer holds that obj, and a batched
 plan wedges the moment one is dropped — the board visibly advanced from a 44-move
@@ -117,7 +117,7 @@ admitted once the route is longer than `TELEPORT_MIN_SPAN`, so a walk across a t
 stays a walk.
 
 The bank stop keeps the kit out of the deposit and tops the runes up.
-[`teleportKit.ts`](../../src/bot/clues/teleportKit.ts) derives both lists from the
+[`teleportKit.ts`](../../src/bot/api/ai/clues/teleportKit.ts) derives both lists from the
 catalog rather than restating them, so a new destination cannot leave its runes
 being banked. Jewellery is kept if the account carries it but never withdrawn —
 charges make the names inexact ("Amulet of glory(4)").

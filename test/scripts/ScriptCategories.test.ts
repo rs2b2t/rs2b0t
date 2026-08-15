@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
-import ScriptLibrary from '#/bot/ui/ScriptLibrary.js';
+import ScriptLibrary from '#/bot/panel/ScriptLibrary.js';
 import '#/bot/scripts/index.js';
 
 test('Firemaker appears in the Firemaking category', () => {

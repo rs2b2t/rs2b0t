@@ -14,7 +14,7 @@ import { Bank } from './Bank.js';
 import { Inventory } from '../inventory/Inventory.js';
 import { Locs } from '../locs/Locs.js';
 import { depositAllExcept, depositMatcher } from './bankRules.js';
-import { walkOpening } from '../../nav/walkOpening.js';
+import { walkOpening } from '../../event/webwalk/walkOpening.js';
 
 /**
  * Snap radius for "I'm already at a bank" — booth underfoot or local stand.

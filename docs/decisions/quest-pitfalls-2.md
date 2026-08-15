@@ -12,12 +12,12 @@ quest facts:
   `ownsInventory: true`, which is the switch that skips both the spillover deposit and
   the provisioning block. The cost is that the engine then withdraws neither the coin
   float nor the food, so the module owns both.
-- **A coin float has to be a threshold, not a target.** `buy` withdraws exactly
+- **A coin float has to be a threshold, not a target.** `buy` withdraws
   `estGp` whenever the pack holds less, so a module that tops up to an exact balance
   walks back to a booth after every single purchase — the top-up and the purchase take
   turns undoing each other. Withdraw a large float when the pack drops under a low-water
   mark, and keep each `estGp` far below it.
-- **`mineRock` ignores its `qty`.** It mines exactly one ore per invocation and
+- **`mineRock` ignores its `qty`.** It mines one ore per invocation and
   `decide()` is asked again, so a module that wants a batch has to count it. "Smelt as
   soon as any ore is held" walked the 130 tiles between the Rimmington rocks and the
   Falador furnace eight times for one batch of bars.
@@ -60,7 +60,7 @@ Horror from the Deep added six, and the first two are not quest facts at all:
   runs a single op per tick and drops the rest, so a loop that eats, prays and casts in
   the same pass loses two of the three — and the one it loses is the food. The Dagannoth
   mother killed the bot twice at a full pack of sharks before the loop was rewritten to
-  advance on `Game.tick()` and issue exactly one action, priority eat → pray → cast. With
+  advance on `Game.tick()` and issue one action, priority eat → pray → cast. With
   the budget honoured she landed ten damage in the fight.
 - **`navworker.js` is a second bundle, and the transport graph is inside it.** A harness
   that deploys only `botclient.js` leaves the navigator on the old edges, and the symptom
@@ -70,7 +70,7 @@ Horror from the Deep added six, and the first two are not quest facts at all:
   AI switches from melee to ranged when melee is prayed against and back when missiles
   are, and a switch costs her the turn — so alternating the two every tick means she
   never attacks at all. A bot cannot promise every tick: taking damage makes the loop
-  eat, eating spends the tick's one action, and the prayer stops flipping exactly when
+  eat, eating spends the tick's one action, and the prayer stops flipping when
   it matters — half the time on the wrong one, which is 99 hitpoints to dead inside a
   single form. **Holding** Protect from Missiles instead forces her onto melee, whose
   max hit is single figures, needs no timing at all, and leaves the action budget
@@ -124,19 +124,19 @@ Horror from the Deep added six, and the first two are not quest facts at all:
   deposit belongs in the one-shot kit, drawn after them.
 - **A prerequisite with its own name belongs outside the quest that found it.** Alfred
   Grimhand's Barcrawl is what opens the Barbarian Outpost gate, and Horror needs it only
-  because Gunnjorn is behind that gate. It lives in [`src/bot/quests/barcrawl/`](../../src/bot/quests/barcrawl/)
+  because Gunnjorn is behind that gate. It lives in [`src/bot/api/ai/quests/barcrawl/`](../../src/bot/api/ai/quests/barcrawl/)
   — `BarcrawlLogic.ts` for the ten bars and the card parse, `RunBarcrawl.ts` for the
   driver — with a `Barcrawl` script that runs the tour on its own and a quest branch that
   calls the same `ensureBarcrawl`. The quest keeps only the coin `QuestStep`, because that
   is the one part the engine has to bank for.
-- **The oracle can stop answering exactly when it succeeds.** The barcrawl card renders
+- **The oracle can stop answering when it succeeds.** The barcrawl card renders
   one green/red line per bar — until all ten are green, at which point `opheld1` swaps
   the scroll for "You are too drunk to be able to read the barcrawl card". Reading that
   as a failed read leaves the tour looping on the tenth bar forever; it is the finished
   state, and the refusal message is what says so.
 - **A quest area can be two maps.** During Horror the lighthouse interior is a broken
   copy in mapsquare 38_71; repairing the lamp teleports the player by (+64,-960) into the
-  real one in 39_56, whose staircases route back into the copy, and the basement and the
+  one in 39_56, whose staircases route back into the copy, and the basement and the
   cavern are two more pockets in 39_72. Nothing walks between any of them, so every
   branch starts by asking which pocket it is standing in — a death mid-stage drops the
   character on the mainland and the walk back in is the doorway, not the ladder.
@@ -144,4 +144,7 @@ Horror from the Deep added six, and the first two are not quest facts at all:
 ## See also
 
 - [Quest pitfalls](quest-pitfalls.md)
+- [Later quests](quest-pitfalls-3.md)
+- [Fight Arena](quest-pitfalls-4.md)
+- [Clock Tower](quest-pitfalls-5.md)
 - [Add a quest](../how-to/add-a-quest.md)

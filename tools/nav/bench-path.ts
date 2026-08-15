@@ -2,8 +2,8 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import { PathFinder, type NavPoint, type Waypoint } from '#/bot/nav/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
+import { PathFinder, type NavPoint, type Waypoint } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 
 const args = process.argv.slice(2);
 let packPath = 'out/collision.lcnav.gz';

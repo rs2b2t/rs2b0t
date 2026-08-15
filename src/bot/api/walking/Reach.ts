@@ -1,14 +1,14 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../execution/Execution.js';
-import { ChatDialog } from '../dialogue/ChatDialog.js';
+import { ChatDialog } from '../ui/dialogue/ChatDialog.js';
 import { Locs } from '../locs/Locs.js';
 import { Npcs, talkOp } from '../npcs/Npcs.js';
-import { Reachability } from '../../nav/geometry/Reachability.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from './Traversal.js';
-import { WalkExecutor, isOpenableBarrier } from '../../nav/WalkExecutor.js';
-import { openOp, towardDest } from '../../nav/walkOpening.js';
-import { chebyshev } from '../../nav/geometry/followMath.js';
+import { WalkExecutor, isOpenableBarrier } from '../../event/webwalk/WalkExecutor.js';
+import { openOp, towardDest } from '../../event/webwalk/walkOpening.js';
+import { chebyshev } from '../../event/webwalk/geometry/followMath.js';
 import { CANT_REACH, GameMessages } from '../chatbox/gameMessages.js';
 import type { Interactable } from '../model/Interactable.js';
 
@@ -19,6 +19,10 @@ interface ReachLocOpts {
     op: string;
     near: WorldTile;
     within?: number;
+    // Why: display names collide — four ordinary crates answer "Search" within six tiles of Wydin's grocery crate, and the nearest is rarely the one the quest means.
+
+    /** Exact loc id, when the display name is shared with something else in range. */
+    id?: number;
     expect: () => boolean;
     expectMs?: number;
     log?: (m: string) => void;
@@ -176,7 +180,12 @@ export const Reach = {
 
     async locOp(opts: ReachLocOpts): Promise<ReachStatus> {
         const log = opts.log ?? ((): void => {});
-        const find = () => Locs.query().name(opts.name).action(opts.op).within(opts.within ?? 10).nearest();
+        const find = () => Locs.query()
+            .name(opts.name)
+            .action(opts.op)
+            .within(opts.within ?? 10)
+            .where(l => opts.id === undefined || l.id === opts.id)
+            .nearest();
         if (!find()) {
             return closeIn(opts.near, 2, log);
         }

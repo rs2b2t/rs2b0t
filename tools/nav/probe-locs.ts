@@ -1,4 +1,4 @@
-import { LocShape, locShapeLayer } from '#/bot/nav/rsmod/flags.js';
+import { LocShape, locShapeLayer } from '#/bot/event/webwalk/rsmod/flags.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 

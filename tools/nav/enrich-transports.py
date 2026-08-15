@@ -318,8 +318,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--content", type=Path, required=True)
     parser.add_argument("--rs2b0t", type=Path, default=Path("."))
-    parser.add_argument("--transports-output", type=Path, default=Path("src/bot/nav/data/transports.json"))
-    parser.add_argument("--stairs-output", type=Path, default=Path("src/bot/nav/data/stairEdges.json"))
+    parser.add_argument("--transports-output", type=Path, default=Path("src/bot/event/webwalk/data/transports.json"))
+    parser.add_argument("--stairs-output", type=Path, default=Path("src/bot/event/webwalk/data/stairEdges.json"))
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 

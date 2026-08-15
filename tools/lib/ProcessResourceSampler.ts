@@ -52,7 +52,7 @@ export interface AvailableProcessResourceSample {
     logicalCpuCount: number | null;
     cpuStatus: 'available' | 'warming-up' | 'unavailable';
     cpuCores: number | null;
-    /** Whole-machine normalization: cpuCores / logicalCpuCount * 100. */
+    /** Machine-wide normalization: cpuCores / logicalCpuCount * 100. */
     cpuPercent: number | null;
     cpuUnavailableReason?: string;
     memoryBytes: number | null;
@@ -430,7 +430,7 @@ export class LinuxProcCollector implements ProcessCollector {
     private async resolveMemory(rootPid: number, process: CollectedProcess): Promise<ResolvedLinuxProcess> {
         const pss = await this.readPss(process.pid);
         // Always verify the stable identity after reading PSS. A successful PSS
-        // read can race with PID reuse just as a failed read can.
+        // read can race with PID reuse as a failed read can.
         const current = await this.readStatResult(process.pid);
         const disappeared = current.status === 'missing';
         const reused = current.status === 'available' && current.process.startTicks !== process.identity;

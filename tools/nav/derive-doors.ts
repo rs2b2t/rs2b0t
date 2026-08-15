@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { LocLayer, LocShape, locShapeLayer } from '#/bot/nav/rsmod/flags.js';
+import { LocLayer, LocShape, locShapeLayer } from '#/bot/event/webwalk/rsmod/flags.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 
@@ -19,7 +19,7 @@ const ANGLE_DIR: ('W' | 'N' | 'E' | 'S')[] = ['W', 'N', 'E', 'S'];
 function parseArgs(): { engine: string; out: string } {
     const args = process.argv.slice(2);
     let engine = '/Users/elliotninjaone/code/lostcity-dev/engine';
-    let out = 'src/bot/nav/data/doors.json';
+    let out = 'src/bot/event/webwalk/data/doors.json';
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--engine') {
             engine = args[++i];
@@ -67,7 +67,18 @@ function main(): void {
             // Family Crest's perfect-gold mine — each answers "This door is locked" unless its own combination of the three levers is set.
             // Why: the combination that opens one shuts another, so the quest drives the chain itself (defs/familycrest/mine.ts).
             'famcrest_doorh2', 'famcrest_doorh2i2', 'famcrest_doorg2h1',
-            'famcrest_doori2h1', 'famcrest_doorh2g1'
+            'famcrest_doori2h1', 'famcrest_doorh2g1',
+            // Fight Arena's cell doors never open, and door1 teleports the player into the arena at stages 9-11 rather than opening.
+            // Why: baked as edges the pathfinder routes into a cell it cannot leave, or walks a bot mid-errand into a boss fight.
+            'arena_prisondoor', 'arena_jeremydoor', 'fightarena_door1',
+            // Clock Tower's rat-cage gate: jail_doors.rs2 answers "This door doesn't seem to open from here..." to anyone outside it, and ctlevera is the way in.
+            // Why: its only map placement is the cage at 2595,9657 — Fight Arena's copies are loc_add, which no map derivation sees.
+            'ctratgatea',
+            // West Ardougne's plague house: loc_2534 answers "This door is locked." to everyone, and loc_2535 opens only for a warrant holder with a mourner in earshot, mid-conversation.
+            // Why: baked as edges the pathfinder alternates between the two and crosses neither.
+            'loc_2534', 'loc_2535',
+            // Shield of Arrav's three hideout doors. Why: the weapon store answers Open with "The door is securely locked" and yields only to an oplocu with the key, while the other two refuse until you have joined and then p_teleport you through — none is an edge the walker can step.
+            'phoenixdoor', 'phoenixdoor2', 'blackarmdoor'
         ]);
         const label = `${type.name ?? ''} ${type.debugname ?? ''}`.toLowerCase();
         if (label.includes('locked') || (type.debugname ?? '').startsWith('macro_') || SCRIPT_REFUSED.has(type.debugname ?? '')) {

@@ -7,8 +7,8 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
+import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 
 function parseTile(s: string): NavPoint {
     const [x, z, level] = s.split(',').map(Number);

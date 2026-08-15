@@ -1,6 +1,7 @@
 import type { InvItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { reader } from '../../adapter/ClientAdapter.js';
-import { Input } from '../input/Input.js';
+import { Input } from '../../input/Input.js';
+import { GroundItem } from '../model/GroundItem.js';
 import { Loc } from '../model/Loc.js';
 import { Npc } from '../model/Npc.js';
 
@@ -55,7 +56,7 @@ export class InvItem {
         return false;
     }
 
-    useOn(target: InvItem | Loc | Npc): boolean | Promise<boolean> {
+    useOn(target: InvItem | Loc | Npc | GroundItem): boolean | Promise<boolean> {
         // The bank side backpack exposes Deposit-* component buttons, not held
         // item actions, so it cannot start or receive a Use operation.
         if (this.componentOps || (target instanceof InvItem && target.componentOps)) {
@@ -71,6 +72,10 @@ export class InvItem {
         const local = reader.toLocal(target.snap.tile.x, target.snap.tile.z);
         if (!local) {
             return false;
+        }
+        // Why: an obj lying on the floor answers `opobju`, which no loc or npc use-on reaches — Clock Tower's red-hot cog is cooled this way and nothing else.
+        if (target instanceof GroundItem) {
+            return driver.useItemOnObj(this.snap.id, this.snap.slot, this.snap.comId, target.snap.id, local.lx, local.lz);
         }
         return driver.useItemOnLoc(this.snap.id, this.snap.slot, this.snap.comId, local.lx, local.lz, target.snap.typecode);
     }

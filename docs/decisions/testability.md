@@ -14,7 +14,7 @@ That, plus the [DOM fence](../reference/import-fences.md), is why subsystem modu
 be imported directly in a test without a browser.
 
 The deeper reason the logic is testable at all is that the pure parts are
-deliberately separated from the driving parts — [`followMath.ts`](../../src/bot/nav/geometry/followMath.ts)
+deliberately separated from the driving parts — [`followMath.ts`](../../src/bot/event/webwalk/geometry/followMath.ts)
 from `WalkExecutor`, a quest's [`decide()`](../reference/quest-engine.md#quest-state) from the engine
 that executes it. Those pure functions are the specification, and their tests are the
 place to encode a bug you have fixed.
@@ -28,7 +28,7 @@ This caused every one of the suite's long-standing failures. Two distinct shapes
   Only modules with more than one *runtime* export can do this — `Npcs`, `Locs`,
   `GroundItems`, `Inventory`. Fix: `import * as Real from …` and spread it.
 - **Overridden behaviour.** Even a complete mock replaces the singleton, so a test that
-  needs the *real* implementation gets the stub. Spreading does not help here.
+  needs the unstubbed implementation gets the stub. Spreading does not help here.
   Fix: **mutate the singleton instead of replacing the module**, scoped to the file:
 
   ```ts
@@ -41,7 +41,7 @@ This caused every one of the suite's long-standing failures. Two distinct shapes
 
   Mutation without the `afterAll` restore is the same leak in a new coat.
 
-**Global singletons leak the same way.** `test/ui/bot-panel.test.ts` registered a fixture
+**Global singletons leak the same way.** `test/panel/bot-panel.test.ts` registered a fixture
 script and never removed it, so `docs/SCRIPTS.md` read as stale against a registry holding
 a script that does not exist. `ScriptRegistry.unregister(name)` exists for this.
 

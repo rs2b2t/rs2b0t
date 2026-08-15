@@ -83,7 +83,7 @@ Family Crest added four more, and the first two generalise past this quest:
 - **A lever's model is not its state.** `loc_change(loc, 500)` reverts the lever to its
   down model after five minutes and leaves the varp bit set, so a lever that *looks* down
   may well be up. Reading the loc is reading a lie; the "The lever is now up." line is
-  emitted exactly when the bit changes. Set levers by pulling until the message confirms
+  emitted when the bit changes. Set levers by pulling until the message confirms
   the state you want, rather than reading and deciding.
 - **An unread bank is not an empty bank.** `snap.bankIds` is empty until something opens
   a booth, so "is the pickaxe banked?" answers *no* on the first decide tick and the
@@ -132,6 +132,13 @@ Family Crest added four more, and the first two generalise past this quest:
 - **Bank the coin float before the wilderness.** Nothing past the last shop needs coin,
   and a death there drops it. The top-up has to be conditional on something still being
   unbought, or it and the deposit take turns undoing each other.
+
+- **The engine serves one bundle to every session.** `public/bot` is shared and `bot.html`
+  hard-codes `./bot/botclient.js`, so a concurrent session's deploy landing inside the fifteen
+  seconds a harness spends booting hands the run somebody else's branch — and the symptom is a
+  quest queue full of quests you did not write. Assert your own build loaded, from something the
+  bundle itself prints (the AIOQuester queue line naming the quest), and fail in the first minute
+  rather than spending the budget.
 
 ## See also
 

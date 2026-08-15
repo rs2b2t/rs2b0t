@@ -9,14 +9,14 @@ const CLIENT_INTERNALS = {
     message: 'Only src/bot/adapter/ may touch client internals.'
 };
 
-/** main.ts pulls in ui/ and the whole runtime — a leaf layer reaching it is a cycle. */
+/** main.ts pulls in panel/ and the runtime — a leaf layer reaching it is a cycle. */
 const APP_ENTRYPOINT = {
     group: ['**/main.js'],
     message: 'main.ts is the app entrypoint — a leaf layer must not import it.'
 };
 
 export default defineConfig([
-    globalIgnores(['src/client/3rdparty/', 'out/', 'desktop/', 'packages/', 'templates/', 'public-bot/', '.claude/', 'identifier.js']),
+    globalIgnores(['src/client/3rdparty/', 'out/', 'desktop/', 'packages/', 'docs/script-template/', 'public-bot/', '.claude/', 'identifier.js']),
     { files: ['**/*.{js,mjs,cjs,ts,mts,cts}'], plugins: { js }, extends: ['js/recommended'], languageOptions: { globals: globals.browser } },
     tseslint.configs.recommended,
     {
@@ -66,17 +66,17 @@ export default defineConfig([
             ]
         }
     },
-    // Only ui/ and the entrypoints may touch the DOM (keeps headless viable).
+    // Only panel/ and the entrypoints may touch the DOM (keeps headless viable).
     // Why: MultiBox is a second DOM entrypoint, so main.ts, DomSlotOps.ts and ProfileChooser.ts are exempted while the rest of src/bot/multibox/ stays fenced.
     {
         files: ['src/bot/**/*.ts'],
-        ignores: ['src/bot/ui/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/TabBar.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts', 'src/bot/runtime/WorkerClock.ts'],
+        ignores: ['src/bot/panel/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/TabBar.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts', 'src/bot/runtime/WorkerClock.ts'],
         rules: {
-            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/ui/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }, { name: 'window', message: 'DOM only in src/bot/ui/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }]
+            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }, { name: 'window', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }]
         }
     },
 
-    // api/ sits above adapter/, nav/ and data/, and on the host substrate (Settings, BotHost, Scheduler).
+    // api/ sits above adapter/, event/ and data/, and on the host substrate (Settings, BotHost, Scheduler).
     // Why: it must not reach up into script lifecycle or the layers that consume it.
     {
         files: ['src/bot/api/**/*.ts'],
@@ -90,9 +90,7 @@ export default defineConfig([
                         {
                             group: [
                                 '**/scripts/**',
-                                '**/quests/**',
-                                '**/clues/**',
-                                '**/ui/**',
+                                '**/panel/**',
                                 '**/multibox/**',
                                 '**/runtime/**',
                                 '!**/runtime/Settings.js',
@@ -118,7 +116,7 @@ export default defineConfig([
                         CLIENT_INTERNALS,
                         APP_ENTRYPOINT,
                         {
-                            group: ['**/api/**', '**/nav/**', '**/scripts/**', '**/quests/**', '**/clues/**', '**/ui/**', '**/runtime/**', '**/multibox/**', '**/adapter/**'],
+                            group: ['**/api/**', '**/event/**', '**/input/**', '**/paint/**', '**/scripts/**', '**/panel/**', '**/runtime/**', '**/multibox/**', '**/adapter/**'],
                             allowTypeImports: true,
                             message: 'data/ is inert — value imports only from geometry/. Type-only imports are fine.'
                         }
@@ -143,8 +141,8 @@ export default defineConfig([
                             message: 'abi.ts may name only runtime/{Settings,defineBot,buildInfo} — never script lifecycle.'
                         },
                         {
-                            group: ['**/scripts/**', '**/clues/**', '**/ui/**', '**/multibox/**', '**/quests/**'],
-                            message: 'abi.ts publishes from api/, data/, geometry/, nav/ and the adapter only.'
+                            group: ['**/scripts/**', '**/panel/**', '**/multibox/**'],
+                            message: 'abi.ts publishes from api/, data/, geometry/, event/ and the adapter only.'
                         }
                     ]
                 }
@@ -163,7 +161,7 @@ export default defineConfig([
                         CLIENT_INTERNALS,
                         APP_ENTRYPOINT,
                         {
-                            group: ['**/api/**', '**/nav/**', '**/data/**', '**/scripts/**', '**/quests/**', '**/clues/**', '**/ui/**', '**/runtime/**', '**/multibox/**', '**/adapter/**'],
+                            group: ['**/api/**', '**/event/**', '**/input/**', '**/paint/**', '**/data/**', '**/scripts/**', '**/panel/**', '**/runtime/**', '**/multibox/**', '**/adapter/**'],
                             allowTypeImports: true,
                             message: 'geometry/ is a leaf — no value imports outside it. Type-only imports are fine.'
                         }

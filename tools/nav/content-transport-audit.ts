@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 
-import transportsJson from '../../src/bot/nav/data/transports.json';
-import stairsJson from '../../src/bot/nav/data/stairEdges.json';
+import transportsJson from '../../src/bot/event/webwalk/data/transports.json';
+import stairsJson from '../../src/bot/event/webwalk/data/stairEdges.json';
 import {
     TRAVEL_FAMILIES,
     curatedTravelEdges,
@@ -19,8 +19,8 @@ import {
     essenceEntryEdges,
     wildyLeverEdges,
     agilityShortcutEdges
-} from '../../src/bot/nav/travelCatalog.js';
-import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/nav/teleportCatalog.js';
+} from '../../src/bot/event/webwalk/travelCatalog.js';
+import { SPELL_TELEPORTS, JEWELLERY_TELEPORTS, LEVER_TELEPORTS } from '../../src/bot/event/webwalk/teleportCatalog.js';
 
 const contentRoot =
     process.argv.find(a => a.startsWith('--content='))?.split('=')[1]

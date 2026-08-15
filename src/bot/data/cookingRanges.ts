@@ -282,7 +282,7 @@ type FishCampRangePathCase = {
 
 /**
  * Expand {@link FISH_CAMP_COOK_PLANS} into pier (+ distinct bank) path cases.
- * Used by `tools/gatheringbot-range-path-test.ts`.
+ * Used by `e2e/gatheringbot-range-path-test.ts`.
  */
 export function listFishCampRangePathCases(): FishCampRangePathCase[] {
     const out: FishCampRangePathCase[] = [];

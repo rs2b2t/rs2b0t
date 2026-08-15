@@ -3,7 +3,7 @@
 # The collision pack
 
 The client only knows collision for the scene it has loaded. World-scale pathfinding
-needs the whole map, so collision is **baked ahead of time** from an engine's data by
+needs the map, so collision is **baked ahead of time** from an engine's data by
 [`tools/nav/build-collision.ts`](../../tools/nav/build-collision.ts) into
 `out/collision.lcnav.gz`.
 
@@ -18,12 +18,12 @@ collision cannot express:
 
 | Data | Source | What it adds |
 |---|---|---|
-| [`doors.json`](../../src/bot/nav/data/doors.json) | [`tools/nav/derive-doors.ts`](../../tools/nav/derive-doors.ts) | openable barriers, and which tiles they join |
-| [`stairEdges.json`](../../src/bot/nav/data/stairEdges.json) | [`tools/nav/derive-stairs.ts`](../../tools/nav/derive-stairs.ts) | stairs and ladders, so paths can change level |
-| [`transports.json`](../../src/bot/nav/data/transports.json) | curated | edges the derivations cannot infer |
-| [`travelCatalog.ts`](../../src/bot/nav/travelCatalog.ts) | content constants | 2004 travel (spirit/glider/Entrana/cart/essence/levers/agi) merged at graph load |
-| [`specialRequires.ts`](../../src/bot/nav/specialRequires.ts) | content scripts | plan-time skill/coin gates on doors and transport from-tiles |
-| [`teleportCatalog.ts`](../../src/bot/nav/teleportCatalog.ts) | content / kit | spell + jewellery tele edges injected into A* by default |
+| [`doors.json`](../../src/bot/event/webwalk/data/doors.json) | [`tools/nav/derive-doors.ts`](../../tools/nav/derive-doors.ts) | openable barriers, and which tiles they join |
+| [`stairEdges.json`](../../src/bot/event/webwalk/data/stairEdges.json) | [`tools/nav/derive-stairs.ts`](../../tools/nav/derive-stairs.ts) | stairs and ladders, so paths can change level |
+| [`transports.json`](../../src/bot/event/webwalk/data/transports.json) | curated | edges the derivations cannot infer |
+| [`travelCatalog.ts`](../../src/bot/event/webwalk/travelCatalog.ts) | content constants | 2004 travel (spirit/glider/Entrana/cart/essence/levers/agi) merged at graph load |
+| [`specialRequires.ts`](../../src/bot/event/webwalk/specialRequires.ts) | content scripts | plan-time skill/coin gates on doors and transport from-tiles |
+| [`teleportCatalog.ts`](../../src/bot/event/webwalk/teleportCatalog.ts) | content / kit | spell + jewellery tele edges injected into A* by default |
 
 There is a **single** door/transport/travelCatalog graph and a **single** executor
 (`WalkExecutor` + `exec/`). Live walks snapshot WorldState so skill/quest/coin gates

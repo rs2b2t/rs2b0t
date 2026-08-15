@@ -13,11 +13,12 @@ human click would have produced.
 ## Layers
 
 ```
-src/bot/scripts/     the bots themselves                        ─┐
-src/bot/quests|clues subsystems                                  │
+src/bot/scripts/     one directory per contribution             ─┐
+src/bot/panel/       the bot's own control UI                     │
 src/bot/runtime/     script lifecycle, ABI, settings, solvers    │  bot code
-src/bot/api/         one directory per game-facing noun          │
-src/bot/nav/         pathfinder and walker internals             │
+src/bot/api/         game-facing nouns, plus ai/ and ui/          │
+src/bot/event/       long-running events — webwalk                │
+src/bot/input|paint/ the input driver, canvas overlays            │
 src/bot/data/        inert catalogs                              │
 src/bot/geometry/    Tile, Area, distance                       ─┘
 src/bot/adapter/     ClientAdapter — the ONLY place that names client internals
@@ -26,10 +27,8 @@ src/client/shell/    Client, GameShell, and the rest of the former src/client/*.
 src/client/dash3d|io|config|graphics|mapview|sound|util|datastruct|wordfilter|3rdparty
 ```
 
-A module belongs in `api/` iff it is a facade over one game interface, one
-entity collection, or one reusable script behaviour. One directory per noun,
-sized to what that noun needs; single-file directories are expected. Not
-catalogs, not solvers, not engines, not sole-consumer helpers.
+The split follows OSBot's `org.osbot.rs07`. What belongs in each directory, and
+where this departs from OSBot, is in [namespaces](../reference/namespaces.md).
 
 [`src/bot/adapter/ClientAdapter.ts`](../../src/bot/adapter/ClientAdapter.ts) is the
 boundary, and it has two halves:
@@ -48,7 +47,7 @@ A script calls `npc.interact('Attack')`. What happens:
 
 1. The entity wrapper resolves `'Attack'` to an **op number** by reading the client's
    own op list for that entity — the same strings the right-click menu shows.
-2. It calls [`Input`](../../src/bot/api/input/Input.ts).
+2. It calls [`Input`](../../src/bot/input/Input.ts).
 3. `Input` maps `(entity kind, op)` to a `MiniMenuAction` constant — for an NPC,
    op 2 becomes `OP_NPC2` — and calls `actions.menuAction(action, a, b, c)`.
 4. The adapter writes those four values into the client's **own** `menuAction`,
@@ -87,7 +86,7 @@ externally-compiled bundles are linked against. Bun's own minifier shortens loca
 never renames properties, so a production build stays compatible.
 
 See [the scripting API](../API.md) for the surface itself, and
-[`templates/script-template/`](../../templates/script-template/) for a working
+[`docs/script-template/`](../script-template/) for a working
 out-of-tree bot.
 
 ## Per-instance storage

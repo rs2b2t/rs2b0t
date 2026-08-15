@@ -1,110 +1,74 @@
 [Manual](../README.md) › [Testing](../TESTING.md) › Quest harness recipes
 
-# Quest harness recipes (A–F)
+# Quest harness recipes (A–D)
 
 Per-quest seed and stage commands, with what each recipe has proven.
 
-## Elemental Workshop — harness recipes and combat floor search
+## Clock Tower — stage-scoped harness
 
-Polish goal (all quests with non-required combat): find the **bare minimum**
-stats that still clear, record fails, then later branch tactics by power level
-([Quests — proven floors](../reference/quest-eligibility.md#bot-proven-floors-polish-goal)).
+[`e2e/clock-tower-236-live.ts`](../../e2e/clock-tower-236-live.ts) drives the
+quest from a clean account, or one leg of it. `--stage N` counts **cogs already
+placed**, 0 to 4, and writes `%cogquest` and `%cog_bits` together before
+relogging.
+
+```sh
+HEADED=1 bun e2e/clock-tower-236-live.ts --stage 0 --until 5 --minutes 60 --tick 200   # end to end
+HEADED=1 bun e2e/clock-tower-236-live.ts --stage 0 --until 1 --minutes 20 --tick 200   # black: bucket, water, cool
+HEADED=1 bun e2e/clock-tower-236-live.ts --stage 2 --until 3 --minutes 20 --tick 200   # blue: the secret wall
+HEADED=1 bun e2e/clock-tower-236-live.ts --stage 3 --until 4 --minutes 25 --tick 200   # white: lever, poison, gate
+```
+
+The bank holds coins and food alone. The bucket, its water and the rat poison
+all have sources in the world, and seeding one hides whether the bot finds it.
+
+Measured end to end at `--tick 200`: **6 minutes** from a clean account.
+
+Four details govern this harness:
+
+- **The two varps have to move together.** `%cogquest` bits 0-3 carry the step
+  and `%cog_bits` carries which spindles are filled, so setting one alone leaves
+  the journal and the world disagreeing. `--stage` writes both, in the module's
+  own fetch order — black, red, blue, white — and sets the cooled bit whenever
+  black is already placed, or the bot pours a second bucket over a cold cog.
+- **Stats are maxed rather than 70.** Ogres stand over the red cog and stay
+  passive only above 106 combat; at 70 they chew on the bot for the length of
+  the leg.
+- **`--until 5` waits for the quest list to go green**, not for the varp: the
+  recolour and the quest point land a tick behind `%cogquest`.
+- **It fails in the first minute if the loaded bundle has no Clock Tower in its
+  queue.** The engine serves one `public/bot`, and a concurrent session that
+  deploys while this harness boots hands the run their branch instead.
+
+## Dwarf Cannon — stage-scoped harness
+
+Dwarf Cannon needs no items and no prerequisite quests: the Commander issues the railings
+and the tool kit, Nulodion issues the notes and the mould, and every one has a re-issue
+branch. The bank seed is coins, food and a melee kit only — seeding anything the quest
+hands out would hide a dialogue that never fired.
+
+[`e2e/dwarf-cannon-254-live.ts`](../../e2e/dwarf-cannon-254-live.ts) takes `--stage N`
+(`%mcannon`) and `--multi N` (`%mcannonmulti`: bits 5-10 are the six railings, bits 0-3
+the four cannon components), then relogs, since `update_questlist` only recolours the
+journal at login. Useful `--multi` values are `2016` for all six railings, `15` for all
+four components and `2031` for both.
 
 | Recipe | What it proves | Status |
 |---|---|---|
-| Inv seed + `statsCsv=max` | Mid-quest loop | **PASS** |
-| Bank seed + skills 20 + combat 40/40/25/40 | Low combat | **FAIL** (Water elemental death) |
-| Bank seed + skills 20 + combat 50/50/40/50 | Bare-min combat (so far) | **PASS** (~270s, `givebank` seed) |
-| Bank seed + combat 45/45/30/45 | Next lower probe | not run yet |
-| Official skills only (20/20/20) | Server eligibility | required; combat not gated |
-
-Constants:
-[`EW_PROVEN_COMBAT_FLOOR`](../../src/bot/quests/defs/elementalworkshop/supplies.ts)
-(50/50/40/50), `EW_FAILED_COMBAT` (40/40/25/40), `EW_PROBE_COMBAT` (45/…),
-`EW_OFFICIAL_SKILLS`. `warnReadiness` logs if the account is below the proven floor.
-
-The ideal smoke run is this:
-
-```sh
-HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ew1 elemental_workshop 15 \
-  'knife:1,hammer:1,bronze_pickaxe:1,thread:1,leather:1,needle:1,coal:4,lobster:15,steel_scimitar:1' \
-  max Lobster 'speed 300' '2716,3481'
-```
-
-Realistic bank-seed at **proven floor** (safe default for writers):
-
-```sh
-HEADED=1 bun tools/aio-quest-test.ts http://localhost:8890 ewreal elemental_workshop 25 \
-  'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:20,bank:steel_scimitar:1,bank:coins:50000' \
-  'mining:20,smithing:20,crafting:20,attack:50,strength:50,defence:40,hitpoints:50' \
-  Lobster 'speed 300' '2725,3491'
-```
-
-## Family Crest — stage-scoped harness
-
-Family Crest is eleven server stages across four kingdoms, so it has its own
-harness rather than a `tools/aio-quest-test.ts` invocation:
-[`tools/family-crest-210-live.ts`](../../tools/family-crest-210-live.ts). It seeds a
-fixed bank, jumps `%crestquest`, and passes when the journal reaches `--until`.
-
-```sh
-HEADED=1 bun tools/family-crest-210-live.ts --stage 7 --until 8 --minutes 28   # the gold mine
-HEADED=1 bun tools/family-crest-210-live.ts --stage 0 --minutes 120            # end to end
-```
-
-Two things that harness has to do and a plain `setvar` does not:
-
-- **Relog after the stage jump.** `update_questlist` recolours the journal entry
-  at login only, and every module reads the tab rather than the varp — so a
-  `setvar crestquest 7` without a relog leaves the quest reading *not started*.
-- **Clear `crest_spells_levers_gauntlets` too.** The lever bits and the
-  four-blasts-cast bits share that varp, so a stage jump that leaves it set
-  starts Chronozon already weakened and the fight proves nothing.
-
-It is **members-only** (`map_members`), so it needs the :8890 world, not :8888.
-
-Caleb's five cooked fish and the two rubies are bank seeds by design — no shop
-in the game stocks cooked bass or shrimp, and the Ardougne gem merchant restocks
-a single ruby every 60k ticks. Everything else (moulds, antipoison, blast runes,
-a pickaxe) is bought live.
-
-## Ernest the Chicken — stage-scoped harness
-
-[`tools/ernest-chicken-229-live.ts`](../../tools/ernest-chicken-229-live.ts) drives
-the whole quest from a clean account, or one stage of it. `--stage N` sets
-`%haunted` and relogs; the module reads the quest tab, not the varp.
-
-```sh
-HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 0 --until 3 --minutes 90   # end to end
-HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 2 --until 3 --minutes 60   # the three parts
-HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 1 --until 2 --minutes 20   # Oddenstein, on L2
-HEADED=1 bun tools/ernest-chicken-229-live.ts --stage 2 --until 3 --poisoned     # Search-first branch
-```
-
-The bank is seeded with coins and food and nothing else. The spade, poison, fish
-food and closet key all have sources in the world, and seeding one hides whether
-the bot can find it.
-
-Measured end to end at the default `--tick 300`: **11 minutes** from a clean
-account, no parks.
-
-Three details govern this harness:
-
-- **`--poisoned` sets `haunted_manor_fountain_poisoned`.** The gauge leg Searches
-  the fountain first and only fetches poison and fish food if the piranhas bite,
-  because the latch is not readable. A fresh account always takes the bitten
-  branch, so the other half is only reachable on a resume — or with this flag.
-
-- **Stats are set to 70, not `~maxme`.** A maxed account hides reach and damage
-  problems, and nothing in Draynor Manor is aggressive anyway — the only
-  guaranteed damage in the quest is the 1 hp piranha bite from searching the
-  fountain before it has been poisoned.
-- **It runs on :8890 even though Ernest is free-to-play.** The quest needs
-  nothing members-only, but *bank seeding* does: the :8888 sim answers neither
-  `givebank` nor `~bankitem`, so a run there starts with an empty bank and parks
-  on the food float.
+| `--stage 1 --multi 0 --until 2` | Six railings, and the Commander accepting them | **PASS** (3min) |
+| `--stage 2 --multi 2016 --until 3` | The watchtower climb, the remains, the descent | **PASS** (4min) |
+| `--stage 3 --multi 2016 --until 5` | The goblin cave, the crate, the mud-pile exit | **PASS** (3min) |
+| `--stage 5 --multi 2016 --until 9` | The tool kit, the shed door, the repair menu | **PASS** (7min) |
+| `--stage 9 --multi 2031 --until 11` | Nulodion, and the hand-back | **PASS** (4min) |
+| `--stage 4 --multi 2016 --at 2620,9797,0` | Resuming from inside the cave | **PASS** (12min, QP 0→1) |
+| `--stage 0` | Start to finish | **PASS** (17min, QP 0→1) |
 
 ## See also
 
-- [Quest harness recipes (G–Z)](quest-harness-recipes-2.md)
+- [Quest harness recipes (E)](quest-harness-recipes-4.md)
+- [Quest harness recipes (F–H)](quest-harness-recipes-2.md)
+- [Quest harness recipes (I–L)](quest-harness-recipes-3.md)
+- [Quest harness recipes (M–O)](quest-harness-recipes-6.md)
+- [Quest harness recipes (P–R)](quest-harness-recipes-5.md)
+- [Quest harness recipes (S–Z)](quest-harness-recipes-7.md)
+- [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

@@ -2,7 +2,7 @@
 
 # Why the solver yields
 
-[`ClueExecutor`](../../src/bot/clues/ClueExecutor.ts) usually runs *inside* another bot —
+[`ClueExecutor`](../../src/bot/api/ai/clues/ClueExecutor.ts) usually runs *inside* another bot —
 a fighter that solves clues it drops. It must therefore not monopolise the loop:
 
 ```ts

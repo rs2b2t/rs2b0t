@@ -22,7 +22,7 @@ export function shouldHoldEat(input: EatTimingInput): boolean {
 
 /**
  * Tracks the tick our attack animation started on, keyed on animation changes.
- * Why: a swing animation spans several ticks, so treating its whole span as the attack tick would hold eating almost permanently.
+ * Why: a swing animation spans several ticks, so treating its span as the attack tick would hold eating almost permanently.
  */
 export class AttackClock {
     private lastAnim = -1;

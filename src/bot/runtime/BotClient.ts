@@ -3,7 +3,7 @@ import { WorkerClock } from '#/bot/runtime/WorkerClock.js';
 
 import { BotHost } from './BotHost.js';
 import { BotDiag } from './diag/BotDiag.js';
-import { paintNavPathInGame } from '../nav/pathScenePaint.js';
+import { paintNavPathInGame } from '../event/webwalk/pathScenePaint.js';
 import { RenderGate } from './RenderGate.js';
 
 // Why: the era client runs its logic loop at 50/sec for smooth animation and instant input, but the server ticks every 600ms and a bot reads state rather than pixels, so 20/sec is still 12 logic ticks per server tick.

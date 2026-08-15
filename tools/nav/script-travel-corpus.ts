@@ -13,12 +13,12 @@ import { FISHING_LOCATIONS } from '#/bot/data/fishingLocations.js';
 import { MINING_LOCATIONS } from '#/bot/data/miningLocations.js';
 import { WOODCUTTING_LOCATIONS } from '#/bot/data/woodcuttingLocations.js';
 import { FISH_CAMP_COOK_PLANS, COOKING_RANGE_LOCS } from '#/bot/data/cookingRanges.js';
-import { FIRE_SPOTS } from '#/bot/scripts/FiremakingLogic.js';
-import { CLUE_DB } from '#/bot/clues/data/cluedb.js';
-import { NAV_TARGETS } from '#/bot/nav/data/navTargets.js';
-import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
-import { TALK_ANCHORS } from '#/bot/clues/data/talkAnchors.js';
-import { KILL_ANCHORS } from '#/bot/clues/data/killAnchors.js';
+import { FIRE_SPOTS } from '#/bot/api/firemaking/Firemaking.js';
+import { CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
+import { NAV_TARGETS } from '#/bot/event/webwalk/data/navTargets.js';
+import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
+import { KILL_ANCHORS } from '#/bot/api/ai/clues/data/killAnchors.js';
 
 export type TravelSegment =
     | 'all'
@@ -282,7 +282,7 @@ export function buildTravelRoutes(): TravelRoute[] {
     }
 
     // ── Quests: scrape areas.ts for Tile literals, ordered pairs within file ─
-    const questDir = path.join(process.cwd(), 'src/bot/quests/defs');
+    const questDir = path.join(process.cwd(), 'src/bot/api/ai/quests/defs');
     const areaFiles = listAreaFiles(questDir);
     for (const file of areaFiles) {
         const tiles = scrapeTilesFromFile(file);
@@ -500,7 +500,7 @@ if (import.meta.main) {
                     description:
                         'Travel legs scraped from clues, gathering catalogs, cooking/firemaking, and quest areas. '
                         + 'Regenerate: bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --write. '
-                        + 'Live: SEGMENT=… bun tools/nav-script-travel-live.ts',
+                        + 'Live: SEGMENT=… bun e2e/nav-script-travel-live.ts',
                     generatedAt: new Date().toISOString(),
                     stats,
                     routes

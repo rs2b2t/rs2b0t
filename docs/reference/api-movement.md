@@ -52,7 +52,7 @@ Traversal.preload(): void      // warm the nav worker before the first walk
 Traversal.remaining(): number  // path tiles left in the active walk
 ```
 
-`Traversal.walkTo` web-walks the whole world (A\* over the collision pack + door/
+`Traversal.walkTo` web-walks the world (A\* over the collision pack + door/
 transport graph, opens doors, recovers from stuck). Resolves `false` on
 timeout/no-path; unwalkable destinations snap to the nearest reachable tile.
 There is **one** walker: live **WorldState** (skills, quests, inventory, members)

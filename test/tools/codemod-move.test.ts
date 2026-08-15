@@ -6,8 +6,8 @@ const abs = (p: string) => `${ROOT}/${p}`;
 const KNOWN = new Set([
     abs('src/bot/api/core/Game.ts'),
     abs('src/bot/api/entities/index.ts'),
-    abs('src/bot/nav/data/doors.json'),
-    abs('src/bot/ui/WorldMapPicker.ts')
+    abs('src/bot/event/webwalk/data/doors.json'),
+    abs('src/bot/panel/WorldMapPicker.ts')
 ]);
 const exists = (p: string) => KNOWN.has(p);
 
@@ -21,7 +21,7 @@ describe('resolveSpec', () => {
     });
 
     test('resolves an extensionless specifier', () => {
-        expect(resolveSpec(abs('src/bot/ui/Overlay.ts'), './WorldMapPicker', exists)).toBe(abs('src/bot/ui/WorldMapPicker.ts'));
+        expect(resolveSpec(abs('src/bot/panel/Overlay.ts'), './WorldMapPicker', exists)).toBe(abs('src/bot/panel/WorldMapPicker.ts'));
     });
 
     test('resolves a directory specifier to its index.ts', () => {
@@ -29,7 +29,7 @@ describe('resolveSpec', () => {
     });
 
     test('passes .json through unchanged', () => {
-        expect(resolveSpec(abs('src/bot/nav/Navigator.ts'), './data/doors.json', exists)).toBe(abs('src/bot/nav/data/doors.json'));
+        expect(resolveSpec(abs('src/bot/event/webwalk/Navigator.ts'), './data/doors.json', exists)).toBe(abs('src/bot/event/webwalk/data/doors.json'));
     });
 
     test('returns null for bare and 3rdparty specifiers', () => {
@@ -56,11 +56,11 @@ describe('renderSpec', () => {
     });
 
     test('preserves an extensionless original', () => {
-        expect(renderSpec(abs('src/bot/ui/Overlay.ts'), abs('src/bot/ui/WorldMapPicker.ts'), './WorldMapPicker')).toBe('./WorldMapPicker');
+        expect(renderSpec(abs('src/bot/panel/Overlay.ts'), abs('src/bot/panel/WorldMapPicker.ts'), './WorldMapPicker')).toBe('./WorldMapPicker');
     });
 
     test('keeps the .json extension', () => {
-        expect(renderSpec(abs('src/bot/nav/Navigator.ts'), abs('src/bot/nav/data/doors.json'), './data/doors.json')).toBe('./data/doors.json');
+        expect(renderSpec(abs('src/bot/event/webwalk/Navigator.ts'), abs('src/bot/event/webwalk/data/doors.json'), './data/doors.json')).toBe('./data/doors.json');
     });
 });
 

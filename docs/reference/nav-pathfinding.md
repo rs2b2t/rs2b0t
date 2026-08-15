@@ -2,9 +2,9 @@
 
 # Pathfinding
 
-[`PathFinder`](../../src/bot/nav/PathFinder.ts) is A\* over the pack, running inside a
-worker ([`NavWorker.ts`](../../src/bot/nav/NavWorker.ts)) so a long search never stalls
-the game loop. [`Navigator`](../../src/bot/nav/Navigator.ts) is the front end:
+[`PathFinder`](../../src/bot/event/webwalk/PathFinder.ts) is A\* over the pack, running inside a
+worker ([`NavWorker.ts`](../../src/bot/event/webwalk/NavWorker.ts)) so a long search never stalls
+the game loop. [`Navigator`](../../src/bot/event/webwalk/Navigator.ts) is the front end:
 
 ```ts
 const path = await Navigator.findPath(from, to, { avoidDoors, timeoutMs, maxExpansions });
@@ -14,7 +14,7 @@ const path = await Navigator.findPath(from, to, { avoidDoors, timeoutMs, maxExpa
 
 Scripts can ban axis-aligned map rects from A\* so low-level accounts do not walk
 wolf packs (idea **@lolwut**). Known ids live in
-[`dangerZones.ts`](../../src/bot/nav/data/dangerZones.ts); pass them on any walk
+[`dangerZones.ts`](../../src/bot/event/webwalk/data/dangerZones.ts); pass them on any walk
 (`walkTo` or `walkResilient` — resilient forwards them on every baked repath):
 
 ```ts
@@ -46,7 +46,7 @@ interaction tether. Background configuration/map references:
 White Wolf Mountain (~cost 239, dozens of zone tiles). With
 `avoidZones: ['white-wolf-mountain']` the same OD stays outside the zone
 (~cost 710+, longer coastal/ship detour, zero zone tiles). Unit tests live in
-`test/nav/dangerZones.test.ts`.
+`test/event/webwalk/dangerZones.test.ts`.
 
 The outcome is explicit about failure:
 
@@ -60,12 +60,12 @@ A `Waypoint` may carry a `TransportInfo`, which is how a door, stair, or ship
 crossing is represented mid-path. `avoidDoors` lets a caller re-path around a barrier
 that has refused to open.
 
-[`DirectNavigator`](../../src/bot/nav/DirectNavigator.ts) is the script-facing wrapper —
+[`DirectNavigator`](../../src/bot/event/webwalk/DirectNavigator.ts) is the script-facing wrapper —
 see [Movement](../reference/api-movement.md).
 
 ## Following a path
 
-[`WalkExecutor`](../../src/bot/nav/WalkExecutor.ts) turns waypoints into clicks. Each
+[`WalkExecutor`](../../src/bot/event/webwalk/WalkExecutor.ts) turns waypoints into clicks. Each
 pass it:
 
 1. locates the player on the path ([corridor snap](../decisions/corridor-snap.md));
@@ -73,8 +73,8 @@ pass it:
 3. watches for arrival, deviation, a shut barrier, or a stall;
 4. re-paths when the world disagrees with the plan.
 
-The pure geometry is split into [`followMath.ts`](../../src/bot/nav/geometry/followMath.ts) so it
-can be unit-tested without a client — [`test/nav/followMath.test.ts`](../../test/nav/followMath.test.ts)
+The pure geometry is split into [`followMath.ts`](../../src/bot/event/webwalk/geometry/followMath.ts) so it
+can be unit-tested without a client — [`test/event/webwalk/followMath.test.ts`](../../test/event/webwalk/followMath.test.ts)
 is the executable specification of the rules below.
 
 ## See also

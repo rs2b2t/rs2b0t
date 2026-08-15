@@ -6,7 +6,7 @@ import fs from 'node:fs';
 
 import { gunzipSync } from 'fflate';
 
-import { PathFinder } from '#/bot/nav/PathFinder.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
 let packPath = 'out/collision.lcnav.gz';
 const args = process.argv.slice(2);

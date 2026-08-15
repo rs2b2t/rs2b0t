@@ -152,7 +152,7 @@ describe('ProfileVault', () => {
     });
 });
 
-// Encrypt an arbitrary payload exactly as ProfileVault does, so migration and
+// Encrypt an arbitrary payload as ProfileVault does, so migration and
 // corruption paths can be exercised against blobs the current code never writes.
 async function writeBlob(pass: string, payload: unknown): Promise<void> {
     const enc = new TextEncoder();

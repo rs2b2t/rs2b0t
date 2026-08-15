@@ -1,4 +1,4 @@
-/** Whole-map connectivity census: every region the walker cannot reach from the mainland, and the loc most likely to be the missing edge. Default islands >= 40 tiles; --min 200 --top 30 --json out/islands.json.
+/** Map-wide connectivity census: every region the walker cannot reach from the mainland, and the loc most likely to be the missing edge. Default islands >= 40 tiles; --min 200 --top 30 --json out/islands.json.
  *  Why: flooding uses the pack's exit masks plus the baked door / transport / stair edges, i.e. what A* can traverse — plain walkability over-connects and lies. */
 
 // Why: a clue, quest step or bot that "can't get there" is usually not a walker bug — it is a region the baked graph never joined up.
@@ -12,10 +12,10 @@ import { join } from 'node:path';
 
 import { gunzipSync } from 'fflate';
 
-import doorsJson from '#/bot/nav/data/doors.json';
-import transportsJson from '#/bot/nav/data/transports.json';
-import stairsJson from '#/bot/nav/data/stairEdges.json';
-import { PathFinder, type DoorEdgeData, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
+import doorsJson from '#/bot/event/webwalk/data/doors.json';
+import transportsJson from '#/bot/event/webwalk/data/transports.json';
+import stairsJson from '#/bot/event/webwalk/data/stairEdges.json';
+import { PathFinder, type DoorEdgeData, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 

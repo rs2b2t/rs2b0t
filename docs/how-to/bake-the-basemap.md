@@ -28,7 +28,7 @@ Everyday Key layers are a Settings toggle and are instant.
 1. Run:
 
    ```sh
-   HEADED=0 bun tools/map-picker-basemap-live.ts [http://localhost:8890]
+   HEADED=0 bun e2e/map-picker-basemap-live.ts [http://localhost:8890]
    ```
 
 ## See also

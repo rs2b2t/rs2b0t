@@ -45,7 +45,7 @@ describe('extractLinks', () => {
 
 describe('extractRepoPaths', () => {
     test('finds backticked repo paths', () => {
-        expect(extractRepoPaths('see `src/bot/nav/PathFinder.ts` now').map(p => p.path)).toEqual(['src/bot/nav/PathFinder.ts']);
+        expect(extractRepoPaths('see `src/bot/event/webwalk/PathFinder.ts` now').map(p => p.path)).toEqual(['src/bot/event/webwalk/PathFinder.ts']);
     });
     test('tolerates a trailing slash on directories', () => {
         expect(extractRepoPaths('`src/bot/scripts/`').map(p => p.path)).toEqual(['src/bot/scripts']);
@@ -69,7 +69,7 @@ describe('extractPointers', () => {
 
 describe('resolveRelative', () => {
     test('resolves against the referring doc directory', () => {
-        expect(resolveRelative('docs/NAV.md', '../src/bot/nav/PathFinder.ts')).toBe('src/bot/nav/PathFinder.ts');
+        expect(resolveRelative('docs/NAV.md', '../src/bot/event/webwalk/PathFinder.ts')).toBe('src/bot/event/webwalk/PathFinder.ts');
     });
     test('a bare anchor refers to the referring doc itself', () => {
         expect(resolveRelative('docs/API.md', '#bank')).toBe('docs/API.md');

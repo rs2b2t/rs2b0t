@@ -1,4 +1,4 @@
-import { AGILITY_SETTINGS } from './AgilityBot.js';
+import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
 import { FISHING_METHOD_OPTIONS } from '../data/fishingMethods.js';
 import { MINING_LOCATION_OPTION_LABELS, MINING_LOCATION_OPTIONS } from '../data/miningLocations.js';
@@ -7,79 +7,70 @@ import {
     BURNT_POLICY_OPTIONS,
     COOK_FISH_OPTIONS,
     COOK_MODE_OPTIONS
-} from './FishCookLogic.js';
+} from './GatheringBot/FishCookLogic.js';
 import {
     FISH_TICK_MANIP_OPTIONS,
     MINE_TICK_MANIP_OPTIONS,
     TICK_MANIP_UNSHIPPED_HELP,
     tickManipUiOptions
-} from './TickManipLogic.js';
+} from './GatheringBot/TickManipLogic.js';
 import { ROCK_OPTIONS } from '../data/miningRocks.js';
-import { MINER_FOOD_SETTINGS } from './MinerLogic.js';
-import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars.js';
+import { MINER_FOOD_SETTINGS } from './GatheringBot/MinerLogic.js';
+import EdgevilleMonkeyBars, { EDGEVILLE_MONKEYBARS_SETTINGS } from './EdgevilleMonkeyBars/EdgevilleMonkeyBars.js';
 import { ScriptRegistry } from '../runtime/ScriptRegistry.js';
-import AgilityBot from './AgilityBot.js';
-import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter.js';
-import AutoFighter, { SETTINGS as AUTOFIGHTER_SETTINGS } from './AutoFighter.js';
-import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever.js';
-import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes.js';
-import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller.js';
-import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller.js';
-import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './CowKiller.js';
-import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver.js';
-import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot.js';
-import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot.js';
-import Woodcutter, { WOODCUTTER_SETTINGS } from './Woodcutter.js';
+import AgilityBot from './AgilityBot/AgilityBot.js';
+import ArdyFighter, { SETTINGS as ARDY_SETTINGS } from './ArdyFighter/ArdyFighter.js';
+import AutoFighter, { SETTINGS as AUTOFIGHTER_SETTINGS } from './AutoFighter/AutoFighter.js';
+import ArdyThiever, { SETTINGS as ARDYTHIEVER_SETTINGS } from './ArdyThiever/ArdyThiever.js';
+import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes/ArdyCakes.js';
+import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller/ChaosDruidKiller.js';
+import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/ChickenKiller.js';
+import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
+import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
+import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
+import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
+import Woodcutter, { WOODCUTTER_SETTINGS } from './GatheringBot/Woodcutter.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/acquisition/ToolAcquire.js';
-import AIOQuester, { AIO_SETTINGS } from './AIOQuester.js';
-import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant.js';
-import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon.js';
-import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant.js';
-import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab.js';
-import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot.js';
-import TutorialBot from './TutorialBot.js';
-import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot.js';
-import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility.js';
-import BrimhavenAgility, { BRIMHAVEN_AGILITY_SETTINGS } from './BrimhavenAgility.js';
-import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot.js';
-import HillGiant, { HILL_GIANT_SETTINGS } from './HillGiant.js';
-import TannerBot, { TANNER_SETTINGS } from './TannerBot.js';
-import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller.js';
-import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter.js';
-import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker.js';
-import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot.js';
-import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher.js';
-import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher.js';
-import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier.js';
-import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker.js';
-import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner.js';
-import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter.js';
-import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner.js';
-import CoalTrucks from './CoalTrucks.js';
-import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter.js';
-import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter.js';
-import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter.js';
-import RoguesPurse from './RoguesPurse.js';
-import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries.js';
-import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner.js';
-import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker.js';
-import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout.js';
-import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner.js';
-import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner.js';
-import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport.js';
-import Barcrawl from './Barcrawl.js';
-import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena.js';
+import AIOQuester, { AIO_SETTINGS } from './AIOQuester/AIOQuester.js';
+import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant.js';
+import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
+import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
+import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
+import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
+import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
+import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility/WildyAgility.js';
+import BrimhavenAgility, { BRIMHAVEN_AGILITY_SETTINGS } from './BrimhavenAgility/BrimhavenAgility.js';
+import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot/SmelterBot.js';
+import HillGiant, { HILL_GIANT_SETTINGS } from './HillGiant/HillGiant.js';
+import TannerBot, { TANNER_SETTINGS } from './TannerBot/TannerBot.js';
+import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller/VialFiller.js';
+import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter/LeatherCrafter.js';
+import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker/Firemaker.js';
+import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot/SmithingBot.js';
+import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher/BankFletcher.js';
+import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletcher.js';
+import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
+import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
+import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner/FlaxSpinner.js';
+import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
+import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
+import CoalTrucks from './CoalTrucks/CoalTrucks.js';
+import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
+import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter/NatureCrafter.js';
+import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
+import RoguesPurse from './RoguesPurse/RoguesPurse.js';
+import HerbloreSecondaries, { HERBLORE_SECONDARIES_SETTINGS } from './HerbloreSecondaries/HerbloreSecondaries.js';
+import HerbCleaner, { HERB_CLEANER_SETTINGS } from './HerbCleaner/HerbCleaner.js';
+import PotionMaker, { POTION_MAKER_SETTINGS } from './PotionMaker/PotionMaker.js';
+import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout/ShopBuyout.js';
+import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner/FlaxRunner.js';
+import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner/ShopRunner.js';
+import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport/AIOTeleport.js';
+import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
+import Barcrawl from './Barcrawl/Barcrawl.js';
+import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
 
 // First register = panel default when no script is remembered (BotPanel → list()[0]).
-// Keep TutorialBot first so new accounts land on onboarding, not AIO Teleport.
-ScriptRegistry.register({
-    name: 'TutorialBot',
-    description: 'Completes Tutorial Island unassisted (no cheats)',
-    category: 'Tutorial',
-    tags: ['tutorial', 'onboarding'],
-    create: () => new TutorialBot()
-});
-
 ScriptRegistry.register({
     name: 'AIO Teleport',
     description: 'Automated teleportation with intelligent banking and safety features',
@@ -96,6 +87,15 @@ ScriptRegistry.register({
     tags: ['quest', 'queue', 'aio'],
     settingsSchema: AIO_SETTINGS,
     create: () => new AIOQuester()
+});
+
+ScriptRegistry.register({
+    name: 'ArravSupplier',
+    description: 'Shield of Arrav certificate faucet — joins both gangs from one account, farms both shield halves and banks certificates for other bots; never redeems, so the chest and the curator keep working',
+    category: 'Quest',
+    tags: ['quest', 'shield of arrav', 'certificate', 'supplier'],
+    settingsSchema: ARRAV_SUPPLIER_SETTINGS,
+    create: () => new ArravSupplier()
 });
 
 ScriptRegistry.register({
@@ -643,7 +643,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'TannerBot',
-    description: 'Al Kharid tanning loop — banks hides, tans the whole load in one click at the Tanner, and every Nth trip keeps a slot free to buy out Dommik\'s thread',
+    description: 'Al Kharid tanning loop — banks hides, tans the full load in one click at the Tanner, and every Nth trip keeps a slot free to buy out Dommik\'s thread',
     category: 'Crafting',
     tags: ['alkharid', 'leather', 'dragonhide', 'banking', 'afk'],
     settingsSchema: TANNER_SETTINGS,

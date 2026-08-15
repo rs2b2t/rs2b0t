@@ -4,7 +4,7 @@
 
 ## The clue database
 
-[`data/cluedb.ts`](../../src/bot/clues/data/cluedb.ts) is **generated** from the content
+[`data/cluedb.ts`](../../src/bot/api/ai/clues/data/cluedb.ts) is **generated** from the content
 pack by [`tools/clues/gen-cluedb.ts`](../../tools/clues/gen-cluedb.ts) — do not edit it
 by hand:
 

@@ -6,13 +6,13 @@
 ladder and immediately ask for nearby locs, and you get nothing. The scene has not been
 rebuilt yet, so the query returns an empty list while the locs are still there.
 
-This is the single most expensive gotcha in this subsystem: blank looks exactly like
+This is the single most expensive gotcha in this subsystem: blank looks like
 absent, so code concludes an object is missing and starts a recovery it never needed.
 It caused a false "the crystal broke" wander loop at the Camelot tower, and phantom
 ladder detours in the walker.
 
 The executor settles after any level-changing transport before trusting the scene
-([`WalkExecutor.ts`](../../src/bot/nav/WalkExecutor.ts)):
+([`WalkExecutor.ts`](../../src/bot/event/webwalk/WalkExecutor.ts)):
 
 ```ts
 if (crossed) {

@@ -17,7 +17,7 @@ One `PathFinder` / `WalkExecutor` / transport graph. No classic/v2 dual stack.
 
 ## Arrival
 
-[`arrival.ts`](../../src/bot/nav/geometry/arrival.ts) answers "are we there?" honestly, and the
+[`arrival.ts`](../../src/bot/event/webwalk/geometry/arrival.ts) answers "are we there?" honestly, and the
 subtlety is that many destinations are **not standable** — a bank booth, a furnace,
 a tree are all solid.
 
@@ -64,13 +64,13 @@ expansions run out at about eleven tiles of open ground, so past that "too far t
 search" is indistinguishable from "walled off" — and a patrolling target would have
 the bot opening doors it never needed.
 
-`Reach.npcDialog` searches the whole scene and lets the server walk the player to the
+`Reach.npcDialog` searches the scene and lets the server walk the player to the
 target, so it follows an NPC that wanders. A leash-limited approach loop cannot — a
 patrolling NPC walks out of range and the interaction is abandoned.
 
 ## When it gets stuck
 
-[`walkLadder.ts`](../../src/bot/nav/walkLadder.ts) is an escalation ladder rather than a
+[`walkLadder.ts`](../../src/bot/event/webwalk/walkLadder.ts) is an escalation ladder rather than a
 retry count. It tracks progress, backs off, and after `UNREACHABLE_PASSES` concludes
 the destination is unreachable — reporting `'arrived' | 'closest' |
 'budget' | 'failed' | 'interrupted'` rather than silently spinning.
@@ -80,7 +80,7 @@ slow route from an impossible one.
 
 ## Tuning constants
 
-The top of [`WalkExecutor.ts`](../../src/bot/nav/WalkExecutor.ts) is a block of bare
+The top of [`WalkExecutor.ts`](../../src/bot/event/webwalk/WalkExecutor.ts) is a block of bare
 numbers. What they govern:
 
 | Constant | Meaning |
@@ -93,7 +93,7 @@ numbers. What they govern:
 | pathFollow `stallTicks` (default 9) | server ticks without **tile change** before stall recovery / repath (not reset on walk clicks) |
 | `UNREACH_CLICK_IDLE_TICKS` | idle ticks before clearing an unreachable mid-path walk click (re-pick only; not stall recovery) |
 | `MAX_REPATHS` | re-plans allowed for one walk |
-| walk `timeoutMs` | wall-clock budget for the whole `walkTo` (shared across repaths); `walk timed out` when exhausted |
+| walk `timeoutMs` | wall-clock budget for the `walkTo` (shared across repaths); `walk timed out` when exhausted |
 | `TRANSPORT_WAIT_MS` | how long to wait for a crossing to complete |
 | `MULTI_DOOR_CROSS_MS` | budget for a door-dense interior |
 | `OPEN_WAIT_MS` | how long to wait for a leaf to open |
@@ -107,8 +107,8 @@ Optional orbit-camera path facing so operators can see the route being walked
 |---|---|---|
 | Global `navCameraFollow` | `false` | `?Global.navCameraFollow=true` |
 
-When on, [`WalkExecutor`](../../src/bot/nav/WalkExecutor.ts) samples a path-facing yaw
-each follow tick and [`PathCameraFollow`](../../src/bot/nav/cameraFollow.ts) eases the
+When on, [`WalkExecutor`](../../src/bot/event/webwalk/WalkExecutor.ts) samples a path-facing yaw
+each follow tick and [`PathCameraFollow`](../../src/bot/event/webwalk/cameraFollow.ts) eases the
 orbit yaw on the **client frame loop** (not once per walk tick), so turns feel like
 a human holding left/right rather than stepping.
 

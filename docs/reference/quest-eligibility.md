@@ -2,10 +2,10 @@
 
 # Quest eligibility
 
-[`EligibilityEvaluator`](../../src/bot/quests/EligibilityEvaluator.ts) reports each quest
+[`EligibilityEvaluator`](../../src/bot/api/ai/quests/EligibilityEvaluator.ts) reports each quest
 as `DONE`, `READY`, or `BLOCKED` **with reasons**, combining
-[`RequirementChecker`](../../src/bot/quests/RequirementChecker.ts) (quest points, skill
-levels, prerequisite quests) and [`ItemChecker`](../../src/bot/quests/ItemChecker.ts)
+[`RequirementChecker`](../../src/bot/api/ai/quests/RequirementChecker.ts) (quest points, skill
+levels, prerequisite quests) and [`ItemChecker`](../../src/bot/api/ai/quests/ItemChecker.ts)
 (inventory and bank).
 
 Items are `mustHave` or `acquirable` — the difference between "you cannot start this"
@@ -31,7 +31,7 @@ active runner. Soft advisory if the account is below a proven floor (or if no
 low floor is proven yet) — not a queue block.
 
 Elemental Workshop reference constants
-([`supplies.ts`](../../src/bot/quests/defs/elementalworkshop/supplies.ts)):
+([`supplies.ts`](../../src/bot/api/ai/quests/defs/elementalworkshop/supplies.ts)):
 
 | Constant | Role |
 |---|---|

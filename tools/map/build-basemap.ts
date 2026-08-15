@@ -14,7 +14,7 @@ import {
     BASEMAP_SCHEMA,
     type BasemapManifest,
     type WorldmapKeyIndex
-} from '#/bot/ui/worldMapBasemap.js';
+} from '#/bot/panel/worldMapBasemap.js';
 import { encodePngRgba, pix2dToRgba } from './encodePng.js';
 
 const SCHEMA_TAG = `basemap-schema-${BASEMAP_SCHEMA}`;

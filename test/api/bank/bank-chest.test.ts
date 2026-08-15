@@ -9,7 +9,7 @@ import { Game } from '#/bot/api/game/Game.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
-import { Input } from '#/bot/api/input/Input.js';
+import { Input } from '#/bot/input/Input.js';
 
 const originals = {
     bankIsOpen: Bank.isOpen,

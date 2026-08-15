@@ -20,20 +20,23 @@ Exit code is 1 when anything is failing, so it drives a cron or a CI job directl
 
 ## Levels
 
+Every level draws from [`e2e/manifest.ts`](../reference/e2e-manifest.md). Nothing globs the directory.
+
 | Level | Contains | Rough cost |
 |---|---|---|
-| `quick` | offline gates plus the 33 non-quest `-test.ts` harnesses | ~20 min |
+| `quick` | offline gates plus every `vetted` case | grows as cases are confirmed |
 | `smart` | offline gates plus whatever the working diff can affect | varies |
-| `full` | all 77 harnesses, including the 10 stage-driven quest runs | overnight |
+| `full` | offline gates plus `vetted`, `documented` and `unvetted` | overnight |
 
-`smart` selects a harness when one of its filename tokens appears in a changed path, and
-adds the nav harnesses when anything under `src/bot/nav/` changed. A change to shared
-code — `adapter/`, `runtime/`, `api/` or `package.json` — can reach anything, so it
-selects everything rather than pretending to be clever. The report states which rule
-fired.
+`quick` runs nothing until a case is promoted to `vetted`, which needs a green run recorded in `provenAt`.
 
-Quest harnesses are identified by taking `--stage`, so a new one lands in the right level
-without editing a list.
+`smart` reads each case's `covers`: a change under `src/bot/scripts/<X>/` selects the cases covering `<X>`, and a change under `src/bot/event/webwalk/` selects the cases covering `nav`. A change to shared code — `adapter/`, `runtime/`, `api/` or `package.json` — can reach anything, so it selects everything rather than pretending to be clever. The report states which rule fired.
+
+`broken` and `manual` cases are in no level. Reach one with `--only`.
+
+```bash
+bun run e2e -- --list      # what each level would run; no engine needed
+```
 
 ## Watching it run
 
@@ -43,11 +46,11 @@ without editing a list.
 | Piped or cron | the same line, printed every 30 seconds, so a log records progress without carriage returns |
 | `--verbose` / `-v` | every line the child emits, prefixed |
 
-Full child output always reaches `out/e2e/logs/<harness>.log` regardless of mode.
+Full child output always reaches `out/e2e/logs/<case-id>.log` regardless of mode.
 
 ## The report
 
-`out/e2e/report.md`, with per-harness logs in `out/e2e/logs/`.
+`out/e2e/report.md`, with per-case logs in `out/e2e/logs/`.
 
 It leads with **newly broken since the baseline**, then newly fixed, then still broken.
 A suite where twelve things always fail tells you nothing; the diff against

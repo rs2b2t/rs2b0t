@@ -4,9 +4,9 @@
 
 | Directory | Job |
 |---|---|
-| [`src/bot/quests/engine/`](../../src/bot/quests/engine/) | runs quests: queue, snapshot, provisioning, watchdog |
-| [`src/bot/quests/defs/`](../../src/bot/quests/defs/) | one module per quest — the decisions |
-| [`src/bot/quests/exec/`](../../src/bot/quests/exec/) | the primitives a step is built from |
+| [`src/bot/api/ai/quests/engine/`](../../src/bot/api/ai/quests/engine/) | runs quests: queue, snapshot, provisioning, watchdog |
+| [`src/bot/api/ai/quests/defs/`](../../src/bot/api/ai/quests/defs/) | one module per quest — the decisions |
+| [`src/bot/api/ai/quests/exec/`](../../src/bot/api/ai/quests/exec/) | the primitives a step is built from |
 
 A module declares what it needs and how to decide:
 
@@ -34,8 +34,8 @@ export interface QuestModule {
 
 `decide()` returns one of a closed set of steps — `talk`, `grabGround`, `pickLoc`,
 `interactLoc`, `useOn`, `equip`, `withdraw`, `deposit`, `mineRock`, `buy`, `custom`,
-`wait`, `done` (see [`engine/types.ts`](../../src/bot/quests/engine/types.ts)) — and
-[`executeStep`](../../src/bot/quests/exec/steps.ts) knows how to perform each kind.
+`wait`, `done` (see [`engine/types.ts`](../../src/bot/api/ai/quests/engine/types.ts)) — and
+[`executeStep`](../../src/bot/api/ai/quests/exec/steps.ts) knows how to perform each kind.
 
 Because `decide()` is a pure function of the snapshot, a quest is restartable from
 any point. Kill the bot mid-quest, start it again, and it re-derives where it is.

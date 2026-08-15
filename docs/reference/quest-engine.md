@@ -80,8 +80,8 @@ are satisfied, which words have been learned, how many monsters remain — a mod
 implements `readProgress()` instead of `readStage()` and returns named flags
 alongside the stage. They arrive on the snapshot as `snap.progress`, so
 `decide()` stays a pure function; `hasFlag` and `flagValue` in
-[`engine/types.ts`](../../src/bot/quests/engine/types.ts) read them.
-[`defs/watchtower/journal.ts`](../../src/bot/quests/defs/watchtower/journal.ts) is
+[`engine/types.ts`](../../src/bot/api/ai/quests/engine/types.ts) read them.
+[`defs/watchtower/journal.ts`](../../src/bot/api/ai/quests/defs/watchtower/journal.ts) is
 the worked example. Opening the journal every decide tick is correct but
 expensive; cache or re-read only when inventory / coarse status / a confirmed
 message changes if you need fewer flashes.
@@ -107,7 +107,7 @@ holding must be *undone* — bank it — not retried.
 
 ## Provisioning
 
-[`engine/provisioning.ts`](../../src/bot/quests/engine/provisioning.ts) assembles what a
+[`engine/provisioning.ts`](../../src/bot/api/ai/quests/engine/provisioning.ts) assembles what a
 quest needs **before** it starts, bank-first:
 
 | Function | Job |
@@ -125,14 +125,14 @@ Two rules that are easy to get wrong:
   *requires*; things consumed along the way are the module's own business.
 
 The engine carries a coin float (`COIN_FLOAT`) and provisions from a fixed bank
-(`PROVISION_BANK`) — both in [`QuestEngine.ts`](../../src/bot/quests/engine/QuestEngine.ts).
+(`PROVISION_BANK`) — both in [`QuestEngine.ts`](../../src/bot/api/ai/quests/engine/QuestEngine.ts).
 
 ## The queue and the watchdog
 
-[`QuestEngine`](../../src/bot/quests/engine/QuestEngine.ts) runs quests in order,
+[`QuestEngine`](../../src/bot/api/ai/quests/engine/QuestEngine.ts) runs quests in order,
 tracking `parked`, `parkCounts`, and `parkedReasons`. A quest that stops making
 progress is **parked with a reason** and the queue moves on, rather than looping on a
-step that cannot advance. `ProgressWatchdog` ([`engine/watchdog.ts`](../../src/bot/quests/engine/watchdog.ts))
+step that cannot advance. `ProgressWatchdog` ([`engine/watchdog.ts`](../../src/bot/api/ai/quests/engine/watchdog.ts))
 is what notices.
 
 A step that keeps failing must eventually park. A failing step that never parks is

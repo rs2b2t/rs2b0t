@@ -2,7 +2,7 @@
 
 # The live-harness ABI
 
-`tools/*-test.ts` drive a real browser against a real engine with Playwright. They
+`e2e/*-test.ts` and `e2e/*-live.ts` drive a live browser against a live engine with Playwright. They
 attach to the client through the harness ABI the client installs at
 `globalThis.rs2b0t`:
 
@@ -16,10 +16,10 @@ rs2b0t.actions
 ```
 
 Read arguments through `parseArgs` or `positionalArgs`, never `process.argv[N]` directly.
-Why: `tools/e2e.ts` appends `--no-deploy` to every harness, so raw indexing reads a flag as
+Why: `e2e/runner.ts` appends `--no-deploy` to every harness, so raw indexing reads a flag as
 the engine base and the harness dies before it reaches the engine.
 
-[`tools/lib/harness.ts`](../../tools/lib/harness.ts) holds the shared parts:
+[`e2e/lib/harness.ts`](../../e2e/lib/harness.ts) holds the shared parts:
 
 | Helper | Job |
 |---|---|
@@ -35,7 +35,7 @@ the engine base and the harness dies before it reaches the engine.
 | `startFromLibrary(page, category, script)` | pick and start a script from the panel |
 
 **Mainland bootstrap (fast path).** Prefer `mainlandAccount` in
-[`tools/tutorial/harness.ts`](../../tools/tutorial/harness.ts): tele off-island →
+[`e2e/tutorial/harness.ts`](../../e2e/tutorial/harness.ts): tele off-island →
 `setvar tutorial 1000` → **IF_BUTTON logout** (com 2458) → login again so side
 icons unlock. Clean logout ends the session promptly (often ~9s total after boot)
 instead of an unclean disconnect that holds “already logged in” for ~60s. Packet
@@ -50,11 +50,11 @@ Smoke:
 
 | Command | Proves |
 |---|---|
-| `bun run verify:map-picker -- <base>` | UI pick → Confirm → tile fields (`tools/map-picker-basemap-live.ts`); asserts `data-basemap` settled |
-| `bun run verify:map-picker-e2e -- <base>` | login + pick + WalkTo arrives (`tools/map-picker-walkto-e2e-live.ts`; needs a loggable world / cheats for short hops) |
+| `bun run verify:map-picker -- <base>` | UI pick → Confirm → tile fields (`e2e/map-picker-basemap-live.ts`); asserts `data-basemap` settled |
+| `bun run verify:map-picker-e2e -- <base>` | login + pick + WalkTo arrives (`e2e/map-picker-walkto-e2e-live.ts`; needs a loggable world / cheats for short hops) |
 
-Unit: `test/ui/worldMapBasemap.test.ts`, `test/ui/mapPickerTheme.test.ts`,
-`test/ui/worldMapPicker.test.ts` (collision pack for snap tests).
+Unit: `test/panel/worldMapBasemap.test.ts`, `test/panel/mapPickerTheme.test.ts`,
+`test/panel/worldMapPicker.test.ts` (collision pack for snap tests).
 
 **Viewport (local preference).** Headed Chrome should use the **smaller** client scale
 used by GatheringBot / `verify-gather-locs` / plain `browser.newPage()` — Playwright’s
@@ -87,7 +87,7 @@ These details are not obvious from the code:
 - **Prove the bot worked, don't assume it.** Assert on game state — XP gained, items
   held, tiles reached — not on log lines.
 - Software rendering (SwiftShader) is unreliable for some harnesses; several need a
-  real GPU. Parallel browsers also perturb door timing, so validate a door fix solo.
+  a physical GPU. Parallel browsers also perturb door timing, so validate a door fix solo.
 - **`~maxme` grants stats and never gear.** A quest with a fight in it needs
   the harness to give and equip a kit, or the "max stats" account is punching a
   level-93 boss. `Equipment.equip()` awaits `Execution.delayUntil`, which needs a

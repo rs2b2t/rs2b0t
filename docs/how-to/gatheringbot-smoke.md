@@ -11,15 +11,15 @@ bun run verify:gatheringbot -- mining       # mine-bank + mine-power + buy-pick 
 bun run verify:gatheringbot -- fish-cook-bank
 bun run verify:gatheringbot -- fish-bank-raw-cook
 BUDGET_S=180 bun run verify:gatheringbot -- mine-bank
-HEADED=1 bun tools/gatheringbot-test.ts acquire
-HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts   # headed full suite
+HEADED=1 bun e2e/gatheringbot-test.ts acquire
+HEADED=1 BUDGET_S=180 bun e2e/gatheringbot-test.ts   # headed full suite
 # Two-account mule handoff (Gatherer + Mule at SE Varrock iron):
-HEADED=1 BUDGET_S=180 bun tools/gatheringbot-mule-pair-test.ts
+HEADED=1 BUDGET_S=180 bun e2e/gatheringbot-mule-pair-test.ts
 # Two-account Fisher: Gatherer raw → Cooker cook+bank at Catherby:
-HEADED=1 BUDGET_S=240 bun tools/gatheringbot-cooker-pair-test.ts
+HEADED=1 BUDGET_S=240 bun e2e/gatheringbot-cooker-pair-test.ts
 # Path to every curated cook surface (pier + distinct bank ranges):
-HEADED=1 BUDGET_S=120 bun tools/gatheringbot-range-path-test.ts
-CAMPS=Seers,Catherby bun tools/gatheringbot-range-path-test.ts
+HEADED=1 BUDGET_S=120 bun e2e/gatheringbot-range-path-test.ts
+CAMPS=Seers,Catherby bun e2e/gatheringbot-range-path-test.ts
 ```
 
 Scenarios (filter by id or tag: `mining` / `fishing` / `wc` / `acquire` / `path` /

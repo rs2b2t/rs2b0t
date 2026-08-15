@@ -280,7 +280,7 @@ export class MultiBoxController {
     }
 
     private applyModes(): void {
-        // focus lives in the active tab: exactly one focused slot whenever the
+        // focus lives in the active tab: one focused slot whenever the
         // active tab has any; an empty active tab leaves the main pane blank.
         const visible = this.visibleSlots();
         if (!visible.some(s => s.id === this.focusedId)) {

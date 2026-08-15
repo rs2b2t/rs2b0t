@@ -1,6 +1,6 @@
 import { actions, reader, type WorldTile } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../../runtime/BotHost.js';
-import { Input } from '../input/Input.js';
+import { Input } from '../../input/Input.js';
 import { Execution } from '../execution/Execution.js';
 import { CombatStyleController, type CombatModeLabel, type CombatStyleResolution, type MeleeCombatStyle } from '../combat/CombatStyle.js';
 import { resolveTeleport, resolveTeleportComponent } from '../map/Teleport.js';

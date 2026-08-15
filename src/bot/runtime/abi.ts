@@ -1,15 +1,15 @@
 // docs/decisions/architecture.md#the-abi-boundary
 import { BUILD_INFO } from './buildInfo.js';
 import { reader } from '../adapter/ClientAdapter.js';
-import { PathPublish } from '../nav/pathPublish.js';
-import { isNavPathPaintEnabled } from '../nav/pathOverlay.js';
+import { PathPublish } from '../event/webwalk/pathPublish.js';
+import { isNavPathPaintEnabled } from '../event/webwalk/pathOverlay.js';
 import {
     KNOWN_DANGER_ZONES,
     knownDangerZone,
     knownDangerZoneIds,
     resolveDangerZones,
     tileInDangerZones
-} from '../nav/data/dangerZones.js';
+} from '../event/webwalk/data/dangerZones.js';
 import { SettingsStore } from './Settings.js';
 import { Area } from '../geometry/Area.js';
 import {
@@ -186,10 +186,10 @@ import { Loc } from '../api/model/Loc.js';
 import { Npc } from '../api/model/Npc.js';
 import { Player } from '../api/model/Player.js';
 import { Bank, withdrawOp } from '../api/bank/Bank.js';
-import { ChatDialog } from '../api/dialogue/ChatDialog.js';
+import { ChatDialog } from '../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../api/equipment/Equipment.js';
 import { InvItem, Inventory } from '../api/inventory/Inventory.js';
-import { Quests } from '../api/questlog/Quests.js';
+import { Quests } from '../api/ui/questlog/Quests.js';
 import { Shop } from '../api/shop/Shop.js';
 import { Skills } from '../api/skills/Skills.js';
 import { Trade } from '../api/trade/Trade.js';
@@ -199,17 +199,15 @@ import { Npcs } from '../api/npcs/Npcs.js';
 import { Players } from '../api/players/Players.js';
 import EntityQuery from '../api/query/Query.js';
 import { bus, type EventMap } from '../api/events/EventBus.js';
-import { DirectNavigator } from '../nav/DirectNavigator.js';
-import { EssenceSession } from '../nav/essenceSession.js';
+import { DirectNavigator } from '../event/webwalk/DirectNavigator.js';
+import { EssenceSession } from '../event/webwalk/essenceSession.js';
 // Harness-only hooks, absent from packages/rs2b0t-api/index.d.ts and consumed
-// solely by tools/merlin-mordred-353-live.ts. The disable is line-scoped, so a
-// new quest import here still errors.
-// eslint-disable-next-line no-restricted-imports
+// solely by e2e/merlin-mordred-353-live.ts.
 import {
     liveFortressStep,
     liveMordredBriefed,
     liveResetMordredBrief
-} from '../quests/defs/merlinscrystal.js';
+} from '../api/ai/quests/defs/merlinscrystal.js';
 import { defineBot, registerScript } from './defineBot.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
 

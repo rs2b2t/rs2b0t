@@ -1,5 +1,5 @@
 import { reader } from '../../adapter/ClientAdapter.js';
-import { Input } from '../input/Input.js';
+import { Input } from '../../input/Input.js';
 import { Execution } from '../execution/Execution.js';
 import { Bank } from '../bank/Bank.js';
 import { Inventory, InvItem } from '../inventory/Inventory.js';
@@ -23,7 +23,7 @@ export const Equipment = {
             return true;
         }
 
-        // Bank side-view swaps backpack ops to Deposit-* — close first so Wield is real.
+        // Bank side-view swaps backpack ops to Deposit-* — close first so Wield is present.
         if (Bank.isOpen()) {
             if (!(await Bank.close())) {
                 return false;

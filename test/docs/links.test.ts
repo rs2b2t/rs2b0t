@@ -22,7 +22,7 @@ function isGitIgnored(path: string): boolean {
 // Untracked working notes can sit under docs/ on disk; the manual is what git tracks.
 const manualPages = (): string[] => [...new Glob('docs/**/*.md').scanSync('.')].filter(p => !isGitIgnored(p)).sort();
 
-const DOCS = ['README.md', 'desktop/README.md', 'templates/script-template/README.md', ...manualPages()].filter(existsSync).sort();
+const DOCS = ['README.md', 'desktop/README.md', ...manualPages()].filter(existsSync).sort();
 const SOURCES = [...new Glob('{src,tools,test,packages}/**/*.{ts,sh}').scanSync('.')].filter(f => !f.startsWith('src/3rdparty/') && !FIXTURES.has(f)).sort();
 
 const anchorCache = new Map<string, string[]>();

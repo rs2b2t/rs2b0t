@@ -13,10 +13,10 @@ local engine is up:
 bun run verify:gather-locs                 # all skills
 bun run verify:gather-locs -- fishing      # one skill
 HEADED=1 bun run verify:gather-locs -- fishing   # visible Chrome window
-HEADED=1 SLOWMO=400 bun tools/verify-gathering-locations.ts mining
+HEADED=1 SLOWMO=400 bun e2e/verify-gathering-locations.ts mining
 ```
 
-`HEADED=1` is read by `tools/lib/harness.ts` (`launchBrowser`) and opens a real
+`HEADED=1` is read by `e2e/lib/harness.ts` (`launchBrowser`) and opens a live
 Chrome window (default `SLOWMO=200`). Headless is the default. Prefer the **small**
 Playwright viewport (**1280×720** / omit `setViewportSize`) so the game stage
 matches GatheringBot harnesses — not a forced 1500×1000 window (see

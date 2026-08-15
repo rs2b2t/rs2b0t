@@ -19,7 +19,7 @@ Server debug cheats are fair game.
 | Stats | `advancestat mining 20` (then clear level-up dialogs) or `statsCsv=max` |
 | Tick rate | `speed 300` (2×) in cheats |
 
-**Bank seed path** (`seedItemsToBank` in [`tools/tutorial/harness.ts`](../../tools/tutorial/harness.ts)):
+**Bank seed path** (`seedItemsToBank` in [`e2e/tutorial/harness.ts`](../../e2e/tutorial/harness.ts)):
 
 1. `givebank <obj> <qty>` for each item (engine `ClientCheatHandler` — no busy-guard).
 2. If verify fails, retry with `~bankitem` (content debugproc; needs `p_finduid`).
@@ -28,7 +28,7 @@ Server debug cheats are fair game.
 Do **not** invent give→deposit loops for food/coal: backpack unstackables fill the
 pack and the seed stalls. Direct bank cheats skip that entirely.
 
-[`tools/aio-quest-test.ts`](../../tools/aio-quest-test.ts) exposes bank seeds as a
+[`e2e/aio-quest-test.ts`](../../e2e/aio-quest-test.ts) exposes bank seeds as a
 **`bank:`** prefix on `giveCsv`:
 
 ```text

@@ -1,5 +1,5 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
-import { Input } from '../input/Input.js';
+import { Input } from '../../input/Input.js';
 import { Execution } from '../execution/Execution.js';
 import { Npcs } from '../npcs/Npcs.js';
 import { Inventory } from '../inventory/Inventory.js';
@@ -70,7 +70,7 @@ export const Shop = {
                 await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
             }
             await Execution.delayUntil(() => countHeld(name) !== before, 3000);
-            // the whole batch lands in one server tick — settle so the recount sees all of it
+            // the batch lands in one server tick — settle so the recount sees all of it
             await Execution.delayTicks(1);
             const got = countHeld(name) - before;
             if (got <= 0) {

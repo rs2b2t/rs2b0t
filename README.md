@@ -38,7 +38,7 @@ tab is throttled by the browser, which starves every bot in it.
 
 | If you want to | Read |
 |---|---|
-| Write a bot | [Scripting API](docs/API.md), then [`templates/script-template/`](templates/script-template/) |
+| Write a bot | [Scripting API](docs/API.md), then [`docs/script-template/`](docs/script-template/) |
 | See what already exists | [Bundled scripts](docs/SCRIPTS.md) — 52 bots, generated from the registry |
 | Run it locally | [Running locally](docs/RUNNING.md) |
 | Change the client itself | [Architecture](docs/ARCHITECTURE.md), then [Testing](docs/TESTING.md) |
@@ -76,9 +76,9 @@ class MyBot extends LoopingBot {
 export default defineBot({ name: 'MyBot', description: '…', create: () => new MyBot() });
 ```
 
-Copy [`templates/script-template/`](templates/script-template/) to start an out-of-tree
+Copy [`docs/script-template/`](docs/script-template/) to start an out-of-tree
 bot. The same example ships in-tree as
-[`src/bot/scripts/BoneBurier.ts`](src/bot/scripts/BoneBurier.ts).
+[`src/bot/scripts/BoneBurier/BoneBurier.ts`](src/bot/scripts/BoneBurier/BoneBurier.ts).
 
 ## How it connects
 

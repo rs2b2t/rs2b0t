@@ -1,0 +1,445 @@
+import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import { Execution } from '../../api/execution/Execution.js';
+import { EventSignal } from '../../api/execution/EventSignal.js';
+import { Game } from '../../api/game/Game.js';
+import Tile from '../../geometry/Tile.js';
+import { depositAllExcept, purgePackAtBank } from '../../api/bank/Banking.js';
+import { Bank } from '../../api/bank/Bank.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
+import { Equipment } from '../../api/equipment/Equipment.js';
+import { Inventory } from '../../api/inventory/Inventory.js';
+import { Paint } from '../../paint/Paint.js';
+import { Shop } from '../../api/shop/Shop.js';
+import { Quests } from '../../api/ui/questlog/Quests.js';
+import { Skills } from '../../api/skills/Skills.js';
+import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
+import { Locs } from '../../api/locs/Locs.js';
+import { Npcs } from '../../api/npcs/Npcs.js';
+import { Traversal } from '../../api/walking/Traversal.js';
+import { ScriptRunner } from '../../runtime/ScriptRunner.js';
+import { SettingsStore } from '../../runtime/Settings.js';
+import type { SettingsSchema } from '../../runtime/Settings.js';
+import { COINS, NURMOF_VENDOR, PICKAXE_SHOP_COSTS } from '../../api/acquisition/ToolAcquire.js';
+import { BEST_AVAILABLE, ESS_ITEM, PICK_OPTIONS, desiredPickaxe, heldPickaxeToKeep, needsPickaxeCheck, requiredMiningLevel, resolvePick, withdrawOneOp } from './EssMinerLogic.js';
+import { inEssMine } from '../../api/map/regions.js';
+import { fmtDuration } from '../../paint/paintLogic.js';
+
+const BANK_STAND = new Tile(3251, 3420, 0);
+const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
+const AUBURY_TILE = new Tile(3253, 3402, 0);
+const AUBURY = 'Aubury';
+const TELEPORT_OP = 'Teleport';
+const ESS_LOC = 'Rune Essence';
+const MINE_OP = 'Mine';
+const PORTAL_LOC = 'Portal';
+const PORTAL_OP = 'Use';
+const AUBURY_LEASH = 8;
+const STALL_MS = 20_000;
+const MAX_TELEPORT_FAILS = 3;
+const MAX_BANK_FAILS = 6;
+const RUNE_MYSTERIES = 'Rune Mysteries Quest';
+
+export const SETTINGS: SettingsSchema = {
+    pickaxe: {
+        type: 'string',
+        default: BEST_AVAILABLE,
+        options: PICK_OPTIONS,
+        label: 'Pickaxe',
+        help: "Best available walks Rune→Bronze against your Mining level (worn → inventory → bank withdraw); a specific tier stops if you can't use or don't own it"
+    },
+    purgePackOnStart: {
+        type: 'boolean',
+        default: true,
+        label: 'Bank junk on start',
+        help: 'If the pack holds anything other than a usable pickaxe, bank it at Varrock East before mining (start from anywhere).'
+    }
+};
+
+let PICK_CHOICE: string = BEST_AVAILABLE;
+
+function essCount(): number {
+    return Inventory.count(ESS_ITEM);
+}
+function heldNames(): string[] {
+    return [...Equipment.items(), ...Inventory.items()].map(i => i.name ?? '').filter(n => n.length > 0);
+}
+function inMine(): boolean {
+    const t = Game.tile();
+    return t !== null && inEssMine(t.x, t.z);
+}
+function bankDeposit(): (name: string) => boolean {
+    const keep = heldPickaxeToKeep(PICK_CHOICE, Skills.level('mining'), heldNames());
+    return depositAllExcept(keep ? [keep] : []);
+}
+
+export default class EssMiner extends TaskBot {
+    override loopDelay = 600;
+
+    private trips = 0;
+    private banked = 0;
+    private mined = 0;
+    private bankFails = 0;
+    private status = 'starting';
+    private startedAt = Date.now();
+    private xpAtStart = 0;
+    private checkedPickaxe: string | null = null;
+    questRefused = false;
+
+    override async onStart(): Promise<void> {
+        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+
+        PICK_CHOICE = this.settings.str('pickaxe', BEST_AVAILABLE);
+        this.startedAt = Date.now();
+        this.xpAtStart = Skills.xp('mining');
+
+        this.log(`EssMiner starting — pickaxe '${PICK_CHOICE}', bank ${BANK_STAND}, Aubury ${AUBURY_TILE}`);
+
+        // Purge before hard quest gate so a junk pack can be cleaned even when RM is incomplete.
+        if (this.settings.bool('purgePackOnStart', true)) {
+            const keepName = heldPickaxeToKeep(PICK_CHOICE, Skills.level('mining'), heldNames());
+            await purgePackAtBank({
+                keep: keepName ? [keepName] : [],
+                stand: BANK_STAND,
+                boothName: BOOTH.name,
+                boothOp: BOOTH.op,
+                log: m => this.log(m)
+            });
+        }
+
+        if (Quests.status(RUNE_MYSTERIES) !== 'complete') {
+            this.log('EssMiner needs Rune Mysteries completed for Aubury\'s teleport — complete it with the AIOQuester bot first.');
+            throw new Error('EssMiner: Rune Mysteries required');
+        }
+        const gate = requiredMiningLevel(PICK_CHOICE);
+        if (gate !== null && Skills.level('mining') < gate) {
+            this.log(`EssMiner: Mining ${gate} required for the ${PICK_CHOICE} pickaxe (have ${Skills.level('mining')}) — stopping.`);
+            throw new Error('EssMiner: unusable pickaxe selection');
+        }
+
+        this.on('chat.message', e => {
+            if (/need to have completed the rune mysteries/i.test(e.text)) {
+                this.questRefused = true;
+            }
+        });
+
+        this.add(
+            new ContinueDialog(),
+            new MineEss(this),
+            new UsePortal(this),
+            new BankEss(this),
+            new AcquireBestPick(this),
+            new GetPick(this),
+            new TeleportIn(this)
+        );
+    }
+
+    override onPaint(ctx: CanvasRenderingContext2D): void {
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#8be9fd' });
+        p.title(`EssMiner — ${this.status}`);
+
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const xph = mins > 0.5 ? `${(((Skills.xp('mining') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k` : '—';
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Mining lvl: ${Skills.level('mining')}`, `XP/hr: ${xph}`);
+        p.row(`Trips: ${this.trips}`, `Banked: ${this.banked}`, `Pack: ${essCount()}`);
+        p.text(`Essence mined this run: ${this.mined}`, '#8a919a');
+
+        p.gap();
+        const picked = p.select('pick', 'pickaxe', PICK_OPTIONS, PICK_CHOICE);
+        if (picked && picked !== PICK_CHOICE) {
+            this.switchPickaxe(picked);
+        }
+        ScriptRunner.paintControls(p);
+        p.end();
+    }
+
+    private switchPickaxe(pick: string): void {
+        const gate = requiredMiningLevel(pick);
+        if (gate !== null && Skills.level('mining') < gate) {
+            this.log(`can't switch to the ${pick} pickaxe: needs Mining ${gate} (have ${Skills.level('mining')})`);
+            return;
+        }
+        PICK_CHOICE = pick;
+        this.checkedPickaxe = null;
+        SettingsStore.save('EssMiner', 'pickaxe', pick);
+        this.log(`pickaxe switched to ${pick} (from the paint)`);
+    }
+
+    setStatus(s: string): void { this.status = s; }
+    countMined(delta: number): void { this.mined += delta; }
+    countTrip(deposited: number): void { this.trips++; this.banked += deposited; }
+    tripsTotal(): number { return this.trips; }
+    countBankFail(): number { return ++this.bankFails; }
+    resetBankFail(): void { this.bankFails = 0; }
+    needsBestPickCheck(): boolean {
+        return needsPickaxeCheck(this.checkedPickaxe, PICK_CHOICE, Skills.level('mining'));
+    }
+    finishBestPickCheck(item: string | null): void { this.checkedPickaxe = item; }
+
+    async walkTo(dest: Tile, radius = 2): Promise<void> {
+        const here = Game.tile();
+        if (here && dest.distanceTo(here) <= radius) { return; }
+        await Traversal.walkResilient(dest, { radius, attempts: 6, timeoutMs: 240_000, log: m => this.log(`  ${m}`) });
+    }
+}
+
+class AcquireBestPick implements Task {
+    constructor(private bot: EssMiner) {}
+
+    validate(): boolean {
+        return !inMine() && essCount() === 0 && this.bot.needsBestPickCheck();
+    }
+
+    async execute(): Promise<void> {
+        const target = desiredPickaxe(PICK_CHOICE, Skills.level('mining'));
+        if (!target) {
+            this.bot.finishBestPickCheck(null);
+            return;
+        }
+        if (heldNames().some(name => name.toLowerCase() === target.item.toLowerCase())) {
+            this.bot.finishBestPickCheck(target.item);
+            return;
+        }
+
+        this.bot.setStatus(`checking bank for ${target.item}`);
+        await this.bot.walkTo(BANK_STAND);
+        if (!Bank.isOpen() && !(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
+                ScriptRunner.stop('EssMiner: could not reach the Varrock East bank to check for the best pickaxe');
+            }
+            return;
+        }
+        this.bot.resetBankFail();
+        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 4000);
+        if (!Bank.isOpen()) {
+            return;
+        }
+
+        const bankItem = Bank.items().find(i => i.name?.toLowerCase() === target.item.toLowerCase());
+        if (bankItem) {
+            if (Inventory.isFull()) {
+                await Bank.depositAllMatching(bankDeposit());
+                await Execution.delayTicks(1);
+            }
+            const op = withdrawOneOp(bankItem.ops);
+            const before = Inventory.count(target.item);
+            if (op && await Bank.withdraw(target.item, op)) {
+                await Execution.delayUntil(() => Inventory.count(target.item) > before, 4000);
+            }
+            if (Inventory.count(target.item) > before) {
+                this.bot.log(`withdrew best usable ${target.item}`);
+                this.bot.finishBestPickCheck(target.item);
+            }
+            await Bank.close();
+            return;
+        }
+
+        const cost = PICKAXE_SHOP_COSTS[target.item];
+        const heldCoins = Inventory.count(COINS);
+        const bankCoins = Bank.count(COINS);
+        if (cost == null || heldCoins + bankCoins < cost) {
+            this.bot.log(`best usable ${target.item} costs ${cost ?? '?'}gp; bank + pack has ${heldCoins + bankCoins}gp — using the best pickaxe already owned`);
+            this.bot.finishBestPickCheck(target.item);
+            await Bank.close();
+            return;
+        }
+
+        const need = Math.max(0, cost - heldCoins);
+        if (need > 0) {
+            this.bot.log(`withdrawing ${need}gp for ${target.item}`);
+            if (!(await Bank.withdrawX(COINS, need))) {
+                this.bot.log('could not withdraw pickaxe coins — will retry');
+                await Bank.close();
+                return;
+            }
+            await Execution.delayUntil(() => Inventory.count(COINS) >= cost, 4000);
+        }
+        await Bank.close();
+        if (Inventory.count(COINS) < cost) {
+            return;
+        }
+
+        this.bot.setStatus(`buying ${target.item} from Nurmof`);
+        const hopFrom = NURMOF_VENDOR.hopFrom;
+        const hopLoc = NURMOF_VENDOR.hopLoc;
+        const hopAction = NURMOF_VENDOR.hopAction;
+        const here = Game.tile();
+        if (hopFrom && hopLoc && hopAction && here && here.z < 9000) {
+            this.bot.log(`heading to the Dwarven Mine for ${target.item}`);
+            if (!(await Traversal.walkResilient(hopFrom, { radius: 2, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) }))) {
+                return;
+            }
+            const trapdoor = Locs.query().name(hopLoc).action(hopAction).nearest();
+            if (!trapdoor || !(await trapdoor.interact(hopAction))) {
+                this.bot.log('could not enter the Dwarven Mine — will retry');
+                return;
+            }
+            if (!(await Execution.delayUntil(() => (Game.tile()?.z ?? 0) >= 9000, 10_000))) {
+                return;
+            }
+        }
+        if (!(await Traversal.walkResilient(NURMOF_VENDOR.stand, { radius: 4, timeoutMs: 120_000, log: m => this.bot.log(`  ${m}`) }))) {
+            return;
+        }
+        if (!(await Shop.open(NURMOF_VENDOR.keeper))) {
+            this.bot.log("could not open Nurmof's shop — will retry");
+            return;
+        }
+        const before = Inventory.count(target.item);
+        const bought = await Shop.buy(target.item, 1);
+        await Shop.close();
+        if (bought > 0 || Inventory.count(target.item) > before) {
+            this.bot.log(`bought best usable ${target.item} from Nurmof for ${cost}gp`);
+        } else {
+            this.bot.log(`${target.item} was out of stock at Nurmof — using the best pickaxe already owned`);
+        }
+        this.bot.finishBestPickCheck(target.item);
+    }
+}
+
+class MineEss implements Task {
+    constructor(private bot: EssMiner) {}
+    validate(): boolean { return inMine() && !Inventory.isFull(); }
+    async execute(): Promise<void> {
+        const rock = Locs.query().name(ESS_LOC).action(MINE_OP).nearest();
+        if (!rock) { await Execution.delayTicks(2); return; }
+        this.bot.setStatus('mining rune essence');
+        if (!(await rock.interact(MINE_OP))) { await Execution.delayTicks(2); return; }
+        this.bot.log('mining rune essence');
+        let count = essCount();
+        let lastGain = performance.now();
+        while (!Inventory.isFull()) {
+            if (EventSignal.pending() || ChatDialog.canContinue() || !inMine()) { return; }
+            const now = essCount();
+            if (now > count) {
+                this.bot.countMined(now - count);
+                count = now;
+                lastGain = performance.now();
+            }
+            if (performance.now() - lastGain > STALL_MS) { return; }
+            await Execution.delayTicks(2);
+        }
+        this.bot.log(`pack full (${essCount()} rune essence)`);
+    }
+}
+
+class UsePortal implements Task {
+    constructor(private bot: EssMiner) {}
+    validate(): boolean { return inMine() && Inventory.isFull(); }
+    async execute(): Promise<void> {
+        const portal = Locs.query().name(PORTAL_LOC).action(PORTAL_OP).nearest();
+        if (!portal) { await Execution.delayTicks(2); return; }
+        this.bot.setStatus('taking the portal back');
+        this.bot.log('taking the portal back');
+        if (!(await portal.interact(PORTAL_OP))) { await Execution.delayTicks(2); return; }
+        await Execution.delayUntil(() => !inMine(), 15_000);
+    }
+}
+
+class BankEss implements Task {
+    constructor(private bot: EssMiner) {}
+    validate(): boolean { return !inMine() && essCount() > 0; }
+    async execute(): Promise<void> {
+        this.bot.setStatus('banking the essence');
+        await this.bot.walkTo(BANK_STAND);
+        if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
+                this.bot.setStatus('cannot reach the bank — stopped');
+                ScriptRunner.stop('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
+                return;
+            }
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
+        this.bot.resetBankFail();
+        const n = essCount();
+        await Bank.depositAllMatching(bankDeposit());
+        await Execution.delayTicks(1);
+        this.bot.countTrip(n);
+        this.bot.log(`banked ${n} rune essence (trip ${this.bot.tripsTotal()})`);
+    }
+}
+
+class GetPick implements Task {
+    constructor(private bot: EssMiner) {}
+    validate(): boolean {
+        return !inMine() && resolvePick(PICK_CHOICE, Skills.level('mining'), heldNames(), []).kind !== 'held';
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('getting a pickaxe from the bank');
+        await this.bot.walkTo(BANK_STAND);
+        if (!(await Bank.openBooth(BANK_STAND, BOOTH.name, BOOTH.op, m => this.bot.log(`  ${m}`)))) {
+            if (this.bot.countBankFail() >= MAX_BANK_FAILS) {
+                this.bot.setStatus('cannot reach the bank — stopped');
+                ScriptRunner.stop('EssMiner: couldn\'t reach the Varrock East bank — start with a pickaxe equipped or in your inventory, or start nearer Varrock');
+                return;
+            }
+            this.bot.log('could not open the bank — will retry');
+            return;
+        }
+        this.bot.resetBankFail();
+        if (Inventory.isFull()) {
+            await Bank.depositAllMatching(bankDeposit());
+            await Execution.delayTicks(1);
+        }
+        const bankNames = Bank.items().map(i => i.name ?? '').filter(n => n.length > 0);
+        const res = resolvePick(PICK_CHOICE, Skills.level('mining'), heldNames(), bankNames);
+        if (res.kind === 'stop') {
+            this.bot.setStatus('no usable pickaxe — stopped');
+            ScriptRunner.stop(`EssMiner: ${res.reason}`);
+            return;
+        }
+        if (res.kind === 'withdraw') {
+            const item = Bank.items().find(i => i.name?.toLowerCase() === res.item.toLowerCase());
+            const withdrawOp = item ? withdrawOneOp(item.ops) : null;
+            if (!withdrawOp) {
+                this.bot.log(`no withdraw op on ${res.item} — will retry`);
+                return;
+            }
+            const before = Inventory.used();
+            if (!(await Bank.withdraw(res.item, withdrawOp))) {
+                this.bot.log(`could not withdraw ${res.item} — will retry`);
+                return;
+            }
+            await Execution.delayUntil(() => Inventory.used() > before, 3000);
+            this.bot.log(`withdrew ${res.item}`);
+        }
+    }
+}
+
+class TeleportIn implements Task {
+    private fails = 0;
+    constructor(private bot: EssMiner) {}
+    private find() {
+        return Npcs.query().name(AUBURY).action(TELEPORT_OP).where(n => n.distance() <= AUBURY_LEASH).nearest();
+    }
+    validate(): boolean {
+        return !inMine() && essCount() === 0 && !Inventory.isFull()
+            && resolvePick(PICK_CHOICE, Skills.level('mining'), heldNames(), []).kind === 'held';
+    }
+    async execute(): Promise<void> {
+        let aubury = this.find();
+        if (!aubury) {
+            this.bot.setStatus('heading to Aubury');
+            await this.bot.walkTo(AUBURY_TILE);
+            aubury = this.find();
+        }
+        if (!aubury) { await Execution.delayTicks(3); return; }
+        this.bot.setStatus('teleporting to the essence mine');
+        this.bot.log('teleporting to the essence mine');
+        if (!(await aubury.interact(TELEPORT_OP))) { await Execution.delayTicks(2); return; }
+        const arrived = await Execution.delayUntil(() => inMine(), 15_000);
+        if (arrived) {
+            this.fails = 0;
+            return;
+        }
+        this.fails++;
+        if (this.bot.questRefused || this.fails >= MAX_TELEPORT_FAILS) {
+            this.bot.setStatus('teleport failed — stopped');
+            ScriptRunner.stop(this.bot.questRefused
+                ? 'Aubury refused the teleport — Rune Mysteries is not complete on the server'
+                : `teleport did not land after ${this.fails} attempts`);
+            return;
+        }
+        this.bot.log('teleport did not land — retrying');
+    }
+}

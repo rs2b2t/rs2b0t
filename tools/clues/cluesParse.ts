@@ -1,9 +1,9 @@
-import type { NavPoint } from '#/bot/nav/PathFinder.js';
-import type { ClueRow, ClueType } from '#/bot/clues/types.js';
+import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import type { ClueRow, ClueType } from '#/bot/api/ai/clues/types.js';
 
 import { decodeCoord } from '../nav/stairsParse.js';
 
-export type { ClueRow, ClueType } from '#/bot/clues/types.js';
+export type { ClueRow, ClueType } from '#/bot/api/ai/clues/types.js';
 
 export interface ParsedClueObj {
     coord?: string;

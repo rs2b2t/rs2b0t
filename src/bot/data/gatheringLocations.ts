@@ -4,7 +4,7 @@ import Tile from '../geometry/Tile.js';
 
 /**
  * Shared gather camp: home pin + bank stand for Fisher / Miner / Woodcutter. Membership (ReturnToAnchor / soft wander bound) uses {@link campRadius}, while fishing hop chase inside camp uses {@link chaseRadius} measured from the player.
- * `verified` marks camps confirmed via live pathability and resource checks (`bun tools/verify-gathering-locations.ts` plus visual stand polish).
+ * `verified` marks camps confirmed via live pathability and resource checks (`bun e2e/verify-gathering-locations.ts` plus visual stand polish).
  */
 export interface GatheringLocation {
     name: string;

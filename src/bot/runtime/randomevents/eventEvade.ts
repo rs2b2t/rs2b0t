@@ -19,7 +19,7 @@ const MIN_FLEE_DIST = 4;
 const RING_STEP = 2;
 
 // Why: sweeps inward from `dist` rather than offering a single ring, because indoors the eight tiles at one radius nearly all land inside rock.
-// Why: measured from the Waterfall Dungeon safespot, only 2 of 8 at distance 12 are walkable against 6-7 of 8 a few tiles nearer, so a single ring leaves the bot standing there being hit while a good tile sits just inside it.
+// Why: measured from the Waterfall Dungeon safespot, only 2 of 8 at distance 12 are walkable against 6-7 of 8 a few tiles nearer, so a single ring leaves the bot standing there being hit while a good tile sits inside it.
 // @see docs/reference/api-events.md
 
 /** Tiles to run to when a random event has to be escaped, farthest from the threat first. */

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { BANK_LOCATIONS, USE_MAGE_BANK, bankUnlocked, nearestBank } from '#/bot/api/bank/BankLocations.js';
-import TRANSPORTS from '#/bot/nav/data/transports.json';
+import TRANSPORTS from '#/bot/event/webwalk/data/transports.json';
 
 const MAGE = BANK_LOCATIONS.find(b => b.name === 'Mage Arena')!;
 const KEY = `rs2b0t:set:Global:${USE_MAGE_BANK}`;

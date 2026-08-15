@@ -83,7 +83,7 @@ describe('DiagSampler', () => {
         h.tick(perTick);
 
         const snap = h.sampler.snapshot() as { bots: Record<string, { cold: Record<string, number[]> }> };
-        // summed field carries the whole window, not one sample of it
+        // summed field carries the window, not one sample of it
         expect(snap.bots.a.cold.logicMs.at(-1)).toBe(10 * perTick);
         // max field carries the worst, not the sum
         expect(snap.bots.a.cold.logicMaxMs.at(-1)).toBe(10);
@@ -154,7 +154,7 @@ describe('DiagSampler', () => {
 
     test('attaches blame to freeze events in the dump', () => {
         // the span must already be sampled before the stall is recorded, which is
-        // the real order: the frame reports it, then the wall notices the stall
+        // the live order: the frame reports it, then the wall notices the stall
         const h = harness(() => [frame('guilty', { slowSpans: [{ phase: 'logic', start: 1_000_100, end: 1_001_000 }] })]);
         h.tick(1);
         h.freeze.record(900);

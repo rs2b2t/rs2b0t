@@ -4,7 +4,7 @@
 //   bun tools/nav/chronozon-safespot.ts
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
-import { PathFinder } from '#/bot/nav/PathFinder.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
 let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
 if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);

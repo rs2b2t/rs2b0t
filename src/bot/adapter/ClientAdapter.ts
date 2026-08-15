@@ -1316,7 +1316,7 @@ export const reader = {
 
     /**
      * Raw item icon pixels for the loadout picker. Null whenever the cache is not loaded or the id has no sprite.
-     * Why: DOM belongs to src/bot/ui/, so canvas and data-URL conversion lives there rather than here.
+     * Why: DOM belongs to src/bot/panel/, so canvas and data-URL conversion lives there rather than here.
      */
     itemIconPixels(id: number): { width: number; height: number; data: Int32Array } | null {
         try {

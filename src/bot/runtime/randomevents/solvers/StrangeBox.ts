@@ -1,7 +1,7 @@
 import { actions, reader } from '../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../api/execution/Execution.js';
 import { Inventory } from '../../../api/inventory/Inventory.js';
-import { Modals } from '../../../api/widgets/Modals.js';
+import { Modals } from '../../../api/ui/widgets/Modals.js';
 
 const CUBE_IF = {
     root: 6554,

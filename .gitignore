@@ -37,9 +37,6 @@ __pycache__/
 # local Claude tooling scratch (agents, worktrees, session state)
 .claude/
 
-# design specs and implementation plans — working notes, never committed
-docs/superpowers/
-
 # recovered farm logins — plaintext, never commit
 multibox-accounts.recovered.json
 

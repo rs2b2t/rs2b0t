@@ -1,4 +1,4 @@
-import type { NavPoint } from '#/bot/nav/PathFinder.js';
+import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 
 export function decodeCoord(s: string): NavPoint {
     const [level, mx, mz, lx, lz] = s.split('_').map(Number);

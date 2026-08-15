@@ -4,7 +4,7 @@
 
 ## Gated clues
 
-[`data/clueGates.ts`](../../src/bot/clues/data/clueGates.ts) lists clues behind a quest
+[`data/clueGates.ts`](../../src/bot/api/ai/clues/data/clueGates.ts) lists clues behind a quest
 or region the bot has no route through. The solver reports the reason and abandons
 immediately rather than walking until the navigator gives up. Only permanent locks
 belong here; a clue that is merely awkward to walk to does not.

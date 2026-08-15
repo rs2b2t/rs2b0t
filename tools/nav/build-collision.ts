@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import CollisionEngine from '#/bot/nav/rsmod/CollisionEngine.js';
-import { changeLandCollision, changeLocCollision, changeRoofCollision } from '#/bot/nav/rsmod/collision.js';
-import { CollisionFlag, CollisionType } from '#/bot/nav/rsmod/flags.js';
-import { canTravel } from '#/bot/nav/rsmod/StepValidator.js';
+import CollisionEngine from '#/bot/event/webwalk/rsmod/CollisionEngine.js';
+import { changeLandCollision, changeLocCollision, changeRoofCollision } from '#/bot/event/webwalk/rsmod/collision.js';
+import { CollisionFlag, CollisionType } from '#/bot/event/webwalk/rsmod/flags.js';
+import { canTravel } from '#/bot/event/webwalk/rsmod/StepValidator.js';
 
 import { BLOCK_MAP_SQUARE, LEVELS, MAP_X, MAP_Z, OPEN, REMOVE_ROOFS, Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, packCoord, parseLands, zoneIndex, type LocDef } from './lib.js';
 

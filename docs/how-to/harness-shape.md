@@ -32,7 +32,7 @@ bun run smoke                                     # against localhost:8890
 bun run smoke http://localhost:8888 user pass     # another engine, named account
 ```
 
-[`tools/e2e-smoke.ts`](../../tools/e2e-smoke.ts) is the single harness that stands in
+[`e2e/e2e-smoke.ts`](../../e2e/e2e-smoke.ts) is the single harness that stands in
 for the client. It boots `bot.html`, logs in, asserts the adapter banner is
 empty and the tick counter is advancing, then starts a looping bundled script
 (`AIO Teleport`) from the library and drives it through pause, resume and stop —
@@ -44,13 +44,13 @@ It does **not** deploy. Deploy first (`bun run b0t`, or
 
 The other harnesses are per-subsystem and are run individually — a quest chain,
 FireGiant, GatheringBot (`bun run verify:gatheringbot`), the hosted wall, relogin,
-external script loading, a nature-runner soak. Several want a real GPU or a special
+external script loading, a nature-runner soak. Several want a physical GPU or a special
 environment rather than a plain local engine.
 
 ```sh
 bun run verify:gatheringbot                 # Miner/Fisher/Woodcutter live paths
 bun run verify:gatheringbot -- mining acquire
-HEADED=1 BUDGET_S=180 bun tools/gatheringbot-test.ts fish-cook-bank fish-bank-raw-cook restock-fly-barb
+HEADED=1 BUDGET_S=180 bun e2e/gatheringbot-test.ts fish-cook-bank fish-bank-raw-cook restock-fly-barb
 ```
 
 GatheringBot scenarios cover bank/power gather, Catherby cook-then-bank (seed cooked
@@ -61,7 +61,7 @@ outside preset 64×64 map squares, and smith. Named camps floor leash to 64; onl
 Location Auto respects a tight `leashRadius` (and skips mob flee). See
 [DEV.md](../how-to/gatheringbot-smoke.md) for the full id table and redeploy
 notes. Mainland setup always relogs after tutorial unlock (`RELOG_*` env overrides
-in `tools/tutorial/harness.ts`).
+in `e2e/tutorial/harness.ts`).
 
 ## See also
 

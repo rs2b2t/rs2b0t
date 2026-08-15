@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
 
-import { PathFinder } from '#/bot/nav/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
-import { curatedTravelEdges } from '#/bot/nav/travelCatalog.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { curatedTravelEdges } from '#/bot/event/webwalk/travelCatalog.js';
 
 const packPath =
     process.argv.find(a => a.startsWith('--pack='))?.split('=')[1]

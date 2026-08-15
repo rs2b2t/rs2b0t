@@ -2,7 +2,7 @@
 
 # Corridor snap
 
-The player is rarely exactly on a path tile: the server walks its own route, so the
+The player seldom lands squarely on a path tile: the server walks its own route, so the
 bot drifts a tile or two off the plan. `locateOnPath` therefore matches the
 **furthest** path index within `CORRIDOR` tiles of the player, scanning only a window
 ahead of the last known index:

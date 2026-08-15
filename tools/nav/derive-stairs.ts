@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 
 import { gunzipSync } from 'fflate';
 
-import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/nav/PathFinder.js';
+import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 
 import { Reader, bridgedLevel, forEachLoc, loadLocTypes, loadMapsquares, parseLands } from './lib.js';
 import { parseSwitchStairs } from './stairsParse.js';
@@ -19,7 +19,7 @@ function argVal(name: string): string | undefined {
 
 const engine = argVal('--engine') ?? process.env.ENGINE_DIR ?? path.join(homedir(), 'code', 'rs2b2t-engine');
 const content = argVal('--content') ?? process.env.CONTENT_DIR ?? path.join(homedir(), 'code', 'rs2b2t-content');
-const out = argVal('--out') ?? 'src/bot/nav/data/stairEdges.json';
+const out = argVal('--out') ?? 'src/bot/event/webwalk/data/stairEdges.json';
 const packPath = argVal('--pack') ?? 'out/collision.lcnav.gz';
 
 const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
@@ -82,7 +82,7 @@ function edgeKind(e: TransportEdgeData): TransportEdgeData['kind'] {
 }
 
 // Walkable is not reachable: build-collision leaves sealed tiles behind — a lone square with no exits at all, or a one-tile-wide strip whose only exits run along itself.
-// Why: snapping a ladder onto one lands the walker somewhere it can never leave, and the local component size tells them apart without a whole-map flood.
+// Why: snapping a ladder onto one lands the walker somewhere it can never leave, and the local component size tells them apart without a-map flood.
 const LOCAL_FLOOD_CAP = 192;
 const DX8 = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ8 = [1, 0, -1, 0, 1, -1, -1, 1];

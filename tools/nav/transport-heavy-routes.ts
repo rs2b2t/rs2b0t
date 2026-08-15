@@ -8,11 +8,11 @@ import path from 'node:path';
 
 import { gunzipSync } from 'fflate';
 
-import { PathFinder, type NavPoint } from '#/bot/nav/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/nav/loadTransportGraph.js';
-import { formatHops } from '#/bot/nav/hops.js';
-import type { PathPolicy } from '#/bot/nav/types.js';
-import type { WorldStateData } from '#/bot/nav/worldStateData.js';
+import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { formatHops } from '#/bot/event/webwalk/hops.js';
+import type { PathPolicy } from '#/bot/event/webwalk/types.js';
+import type { WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import {
     SPIRIT_TREE,
     GLIDER_PAD,
@@ -23,12 +23,12 @@ import {
     ESSENCE_MINE_PAD,
     WILDY_LEVER,
     TRAVEL_STANDS
-} from '#/bot/nav/travelCatalog.js';
-import type { EssenceReturnId } from '#/bot/nav/essenceExit.js';
+} from '#/bot/event/webwalk/travelCatalog.js';
+import type { EssenceReturnId } from '#/bot/event/webwalk/essenceExit.js';
 import {
     richTransportQuestMap,
     TRANSPORT_QUEST_SEEDS
-} from '#/bot/nav/transportQuestReqs.js';
+} from '#/bot/event/webwalk/transportQuestReqs.js';
 
 const packPath =
     process.argv.find(a => a.startsWith('--pack='))?.split('=')[1]
@@ -112,7 +112,7 @@ const SEEDS: Seed[] = [
         from: TRAVEL_STANDS.brimhavenCart,
         to: CART_SHILO
     },
-    // Real multiloc product path: enter via wizard (sets session) → exit portal.
+    // Multiloc product path: enter via wizard (sets session) → exit portal.
     // Live harness must NOT setvar exit_essence_mine_coord — that only tests cheats.
     {
         id: 'TH-ess-round-aubury',

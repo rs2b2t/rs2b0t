@@ -60,7 +60,7 @@ const entrypoints: [entry: string, output: string][] = [
     ['src/bot/main.ts', 'botclient.js'],
     ['src/bot/multibox/main.ts', 'multibox.js'],
     ['src/client/io/OnDemandWorker.ts', 'ondemandworker.js'],
-    ['src/bot/nav/NavWorker.ts', 'navworker.js']
+    ['src/bot/event/webwalk/NavWorker.ts', 'navworker.js']
 ];
 
 for (const [entry, output] of entrypoints) {

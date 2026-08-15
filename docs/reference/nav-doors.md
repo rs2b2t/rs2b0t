@@ -33,7 +33,7 @@ Forester from outside, so the only way through the fence is the Loose Railing on
 
 Some barriers need more than an `Open`: a toll, a fare, a dialogue, or a quest state.
 Those are curated in
-[`specialCrossings.ts`](../../src/bot/nav/data/specialCrossings.ts):
+[`specialCrossings.ts`](../../src/bot/event/webwalk/data/specialCrossings.ts):
 
 ```ts
 { x: 3268, z: 3227, level: 0, locName: 'Gate', action: 'Open',
@@ -90,7 +90,7 @@ falls back to nearby-name lookup when ids are absent. Special crossings resolve 
 
 Ladders with a single tele still wrapped in quest/skill/inv guards stay in the JSON as
 `disabledReason` audit rows (not active graph edges), unless a curated activation in
-`src/bot/nav/stateAwareRequires.ts` re-enables them with `requires` (merged at graph
+`src/bot/event/webwalk/stateAwareRequires.ts` re-enables them with `requires` (merged at graph
 load). Without a WorldState snapshot, requires-gated **graph** edges
 **fail open** (pack-tool parity); live walks snapshot state and fail closed.
 

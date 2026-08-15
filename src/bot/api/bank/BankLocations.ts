@@ -1,7 +1,7 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { bankDistance } from '../../geometry/distance.js';
 import { SettingsStore } from '../../runtime/Settings.js';
-import { Quests } from '../questlog/Quests.js';
+import { Quests } from '../ui/questlog/Quests.js';
 import { Skills } from '../skills/Skills.js';
 import Tile from '../../geometry/Tile.js';
 

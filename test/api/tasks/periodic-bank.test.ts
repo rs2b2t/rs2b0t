@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Game/Banking singletons are
-   monkey-patched per test; typed shims would re-state the whole surface for no safety. */
+   monkey-patched per test; typed shims would re-state the surface for no safety. */
 import { expect, test } from 'bun:test';
 import { PeriodicBank } from '#/bot/api/tasks/PeriodicBank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';

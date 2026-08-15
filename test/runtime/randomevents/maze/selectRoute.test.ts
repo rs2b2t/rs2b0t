@@ -40,14 +40,14 @@ describe('selectRoute', () => {
     test('a non-corner spawn gets a shorter route than the corner it was misrouted to', () => {
         const corner = selectRoute({ x: 2891, z: 4555 })!;
         for (const spawn of REAL_STUCK_SPAWNS) {
-            // both sit well inside the maze, so the real route must beat the corner's
+            // both sit well inside the maze, so the live route must beat the corner's
             expect(selectRoute(spawn)!.doors.length).toBeLessThan(corner.doors.length);
         }
     });
 
     test('returns null rather than someone else\'s route when nothing is solvable', () => {
         // far outside the maze map square: no route exists, and inventing one is
-        // exactly the failure this replaced
+        // the failure this replaced
         expect(selectRoute({ x: 3200, z: 3200 })).toBeNull();
     });
 });

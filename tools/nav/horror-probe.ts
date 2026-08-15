@@ -2,12 +2,12 @@
  *  Why: the broken lighthouse copy, the basement and the cavern are linked by scripted teleport alone, so they are expected to be components of their own and are listed as such. */
 import fs from 'node:fs';
 import { gunzipSync } from 'fflate';
-import doorsJson from '../../src/bot/nav/data/doors.json';
-import transportsJson from '../../src/bot/nav/data/transports.json';
-import stairsJson from '../../src/bot/nav/data/stairEdges.json';
-import { PathFinder, type DoorEdgeData, type NavPoint } from '../../src/bot/nav/PathFinder.js';
-import { BARS } from '../../src/bot/quests/barcrawl/BarcrawlLogic.js';
-import { HD_TILE } from '../../src/bot/quests/defs/horror/areas.js';
+import doorsJson from '../../src/bot/event/webwalk/data/doors.json';
+import transportsJson from '../../src/bot/event/webwalk/data/transports.json';
+import stairsJson from '../../src/bot/event/webwalk/data/stairEdges.json';
+import { PathFinder, type DoorEdgeData, type NavPoint } from '../../src/bot/event/webwalk/PathFinder.js';
+import { BARS } from '../../src/bot/api/ai/quests/barcrawl/BarcrawlLogic.js';
+import { HD_TILE } from '../../src/bot/api/ai/quests/defs/horror/areas.js';
 
 let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
 if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
@@ -88,7 +88,7 @@ for (const [name, p] of stands) {
 console.log(bad === 0 ? '\nall stands accounted for' : `\n${bad} stand(s) unaccounted for`);
 
 // For anything the flood could not reach, name the nearest tile it could — an
-// anchor one tile inside a wall reads exactly like a sealed room.
+// anchor one tile inside a wall reads like a sealed room.
 const NEAR: [string, NavPoint][] = stands.filter(([n, p]) =>
     !SEALED.has(n.replace(/\[\d+\]$/, '')) && !inMain(p));
 if (NEAR.length > 0) {

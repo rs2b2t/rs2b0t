@@ -37,7 +37,7 @@ export interface AvailableCgroupResourceSample {
     logicalCpuCount: number | null;
     cpuStatus: 'available' | 'warming-up' | 'unavailable';
     cpuCores: number | null;
-    /** Whole-machine normalization: cpuCores / logicalCpuCount * 100. */
+    /** Machine-wide normalization: cpuCores / logicalCpuCount * 100. */
     cpuPercent: number | null;
     cpuUnavailableReason?: string;
     memoryBytes: number | null;

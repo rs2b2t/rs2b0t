@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseArgs, positionalArgs } from '../../tools/lib/harness.js';
+import { parseArgs, positionalArgs } from '../../e2e/lib/harness.js';
 
 describe('parseArgs', () => {
     test('url-first: base URL then minutes', () => {

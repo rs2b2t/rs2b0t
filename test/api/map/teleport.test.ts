@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Game } from '#/bot/api/game/Game.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
-import { Input } from '#/bot/api/input/Input.js';
+import { Input } from '#/bot/input/Input.js';
 import {
     resolveTeleport,
     resolveTeleportComponent,

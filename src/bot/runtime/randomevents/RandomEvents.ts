@@ -4,10 +4,10 @@ import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { fleeCandidates } from './eventEvade.js';
 import { Game } from '../../api/game/Game.js';
-import { Reachability } from '../../nav/geometry/Reachability.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { ChatDialog } from '../../api/dialogue/ChatDialog.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Shop } from '../../api/shop/Shop.js';
@@ -337,7 +337,7 @@ class RandomEventsImpl {
         this.handling = true;
         try {
             // detect/handle must never throw into ScriptRunner — a thrown error
-            // marks the whole script crashed even when the maze/dialog later succeeds.
+            // marks the script crashed even when the maze/dialog later succeeds.
             return await this.handleInner(log);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

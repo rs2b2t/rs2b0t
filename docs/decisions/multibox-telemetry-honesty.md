@@ -8,7 +8,7 @@ from host capacity, or a zero standing in for missing data.
 
 | Reading | Means |
 |---|---|
-| `measuring…` | a real second sample is still pending |
+| `measuring…` | a second sample is still pending |
 | `unavailable` | this metric's source cannot currently be measured |
 | `offline` | the resource endpoint cannot be reached |
 | `monitor error` | the endpoint answered with an invalid response |

@@ -36,16 +36,16 @@ empty.
 
 ```bash
 # Focused paint compare (classic pure-walk, dual paint on)
-HEADED=1 bun tools/nav-path-paint-live.ts
-HEADED=1 CASES=lumb-dray,varrock-edge bun tools/nav-path-paint-live.ts
-HEADED=1 LIMIT=1 PATH_PAINT_SCENE_EXPAND=0 bun tools/nav-path-paint-live.ts
+HEADED=1 bun e2e/nav-path-paint-live.ts
+HEADED=1 CASES=lumb-dray,varrock-edge bun e2e/nav-path-paint-live.ts
+HEADED=1 LIMIT=1 PATH_PAINT_SCENE_EXPAND=0 bun e2e/nav-path-paint-live.ts
 
 # Stress suite, paint cases only
-HEADED=1 CASES=path-paint,paint-compare bun tools/nav-stress-live.ts
+HEADED=1 CASES=path-paint,paint-compare bun e2e/nav-stress-live.ts
 
 # Script routes with paint (PATH_PAINT=1 by default)
-HEADED=1 LIMIT=10 USE_TELEPORTS=0 bun tools/nav-script-routes-live.ts
-HEADED=1 LIMIT=2 PATH_PAINT=0 bun tools/nav-script-routes-live.ts
+HEADED=1 LIMIT=10 USE_TELEPORTS=0 bun e2e/nav-script-routes-live.ts
+HEADED=1 LIMIT=2 PATH_PAINT=0 bun e2e/nav-script-routes-live.ts
 ```
 
 All three harnesses take `PATH_PAINT_SCENE_EXPAND=0|1` and `PATH_PAINT_CLIENT_SEG=0|1`.
@@ -63,14 +63,14 @@ All three harnesses take `PATH_PAINT_SCENE_EXPAND=0|1` and `PATH_PAINT_CLIENT_SE
 
 | Concern | File |
 |---|---|
-| Scene/Chebyshev expand | `src/bot/nav/geometry/pathExpand.ts` |
-| Publish and client segment | `src/bot/nav/pathPublish.ts` |
-| Walk expand and segment publish | `src/bot/nav/WalkExecutor.ts` |
-| Scene paint and path line | `src/bot/nav/pathScenePaint.ts` |
+| Scene/Chebyshev expand | `src/bot/event/webwalk/geometry/pathExpand.ts` |
+| Publish and client segment | `src/bot/event/webwalk/pathPublish.ts` |
+| Walk expand and segment publish | `src/bot/event/webwalk/WalkExecutor.ts` |
+| Scene paint and path line | `src/bot/event/webwalk/pathScenePaint.ts` |
 | Settings | `src/bot/runtime/Settings.ts` |
 | Client walk and path capture | `src/client/shell/Client.ts` |
 | Adapter world path | `src/bot/adapter/ClientAdapter.ts` |
-| Step flags, fallback BFS | `src/bot/nav/geometry/localReach.ts` |
+| Step flags, fallback BFS | `src/bot/event/webwalk/geometry/localReach.ts` |
 
 ## See also
 
