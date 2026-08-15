@@ -35,7 +35,7 @@
 
 ### BrimhavenAgility
 
-Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags
+Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker's stall and coins from guards.
 
 - Tags: `brimhaven`, `arena`, `tickets`, `banking`, `food`
 
@@ -44,6 +44,7 @@ Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhav
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `25` | Food per trip |
 | `bankAtTickets` | number (1–5000) | `1000` | Bank at X tickets |
+| `stealRestock` | boolean | `false` | Steal cakes / GP when out |
 
 ### EdgevilleMonkeyBars
 

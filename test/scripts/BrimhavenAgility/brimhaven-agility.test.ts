@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Game } from '#/bot/api/game/Game.js';
-import BrimhavenAgility from '#/bot/scripts/BrimhavenAgility/BrimhavenAgility.js';
+import BrimhavenAgility, { BRIMHAVEN_AGILITY_SETTINGS } from '#/bot/scripts/BrimhavenAgility/BrimhavenAgility.js';
 import {
     ARENA_EDGES,
     ARENA_ENTRANCE,
@@ -31,6 +31,9 @@ import {
     restockShortfall,
     shouldBank,
     shouldEat,
+    needsCakeSteal,
+    STEAL_THIEVING_MIN,
+    GUARD_THIEVING_MIN,
     ticketInventoryGain,
     usableEdges,
     waitPlatform,
@@ -257,6 +260,18 @@ describe('BrimhavenAgility banking & combat decisions', () => {
         expect(shouldBank(0, 0, 1000)).toBe(true);
         expect(shouldBank(1000, 5, 1000)).toBe(true);
         expect(shouldBank(999, 5, 1000)).toBe(false);
+        expect(shouldBank(0, 0, 1000, true)).toBe(false);
+        expect(shouldBank(1000, 0, 1000, true)).toBe(true);
+    });
+
+    test('steal restock wants cakes when the pack is empty or a guard run needs a buffer', () => {
+        expect(STEAL_THIEVING_MIN).toBe(20);
+        expect(GUARD_THIEVING_MIN).toBe(40);
+        expect(needsCakeSteal(0, 0, true, false)).toBe(true);
+        expect(needsCakeSteal(3, 0, true, false)).toBe(false);
+        expect(needsCakeSteal(0, 8, true, false)).toBe(false);
+        expect(needsCakeSteal(0, 2, true, true)).toBe(true);
+        expect(needsCakeSteal(0, 0, false, true)).toBe(false);
     });
 
     test('eats only below 5 HP with food in pack', () => {
@@ -390,6 +405,7 @@ describe('BrimhavenAgility settings defaults', () => {
     test('defaults match the issue: 25 food, bank at 1000 tickets', () => {
         expect(DEFAULT_FOOD_PER_TRIP).toBe(25);
         expect(DEFAULT_BANK_TICKETS).toBe(1000);
+        expect(BRIMHAVEN_AGILITY_SETTINGS.stealRestock?.default).toBe(false);
     });
 });
 

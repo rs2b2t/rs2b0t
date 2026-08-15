@@ -589,7 +589,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'BrimhavenAgility',
     description:
-        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags',
+        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
     category: 'Agility',
     tags: ['brimhaven', 'arena', 'tickets', 'banking', 'food'],
     settingsSchema: BRIMHAVEN_AGILITY_SETTINGS,

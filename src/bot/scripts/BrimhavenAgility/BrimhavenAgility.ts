@@ -37,6 +37,10 @@ import {
     hasPaid,
     inArena,
     inArenaPit,
+    CAKE_STEAL_FILL,
+    GUARD_THIEVING_MIN,
+    STEAL_THIEVING_MIN,
+    needsCakeSteal,
     needsCoinsRestock,
     nextHop,
     obstacleOutcome,
@@ -56,6 +60,11 @@ import {
 } from './BrimhavenAgilityLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { CAKE_ITEMS, FLEE_TILE } from '../../api/thieving/cakeStallData.js';
+import { carriedCakes, stealCakes } from '../../api/thieving/CakeStall.js';
+import { matchesAny } from '../../api/inventory/packRules.js';
+import { STUN_COMBAT_TICKS } from '../../api/thieving/stealRules.js';
+import { targetSpot } from '../../api/thieving/targets.js';
 
 export const BRIMHAVEN_AGILITY_SETTINGS: SettingsSchema = {
     loadout: LOADOUT_SETTING,
@@ -74,6 +83,12 @@ export const BRIMHAVEN_AGILITY_SETTINGS: SettingsSchema = {
         max: 5000,
         label: 'Bank at X tickets',
         help: 'also banks when out of food'
+    },
+    stealRestock: {
+        type: 'boolean',
+        default: false,
+        label: 'Steal cakes / GP when out',
+        help: 'Thieving 20: Baker\'s stall cakes when the selected food is gone. Thieving 40: pickpocket Ardougne guards for boat/entrance coins, eating cakes after stuns'
     }
 };
 
@@ -85,6 +100,8 @@ export default class BrimhavenAgility extends TaskBot {
     private foodName = 'Lobster';
     private foodPerTrip = DEFAULT_FOOD_PER_TRIP;
     private bankAtTickets = DEFAULT_BANK_TICKETS;
+    private stealRestock = false;
+    private stunnedUntilTick = 0;
 
     private ticketsCollected = 0;
     private tags = 0;
@@ -99,6 +116,17 @@ export default class BrimhavenAgility extends TaskBot {
         this.foodName = scriptFood(this.settings, 'Lobster');
         this.foodPerTrip = this.settings.num('foodWithdraw', DEFAULT_FOOD_PER_TRIP);
         this.bankAtTickets = this.settings.num('bankAtTickets', DEFAULT_BANK_TICKETS);
+        this.stealRestock = this.settings.bool('stealRestock', false);
+        if (this.stealRestock && Skills.level('thieving') < STEAL_THIEVING_MIN) {
+            const msg = `steal restock needs Thieving ${STEAL_THIEVING_MIN} (have ${Skills.level('thieving')})`;
+            this.log(msg);
+            throw new Error(`BrimhavenAgility: ${msg}`);
+        }
+        this.on('chat.message', e => {
+            if (/been stunned|fail to pick/i.test(e.text)) {
+                this.stunnedUntilTick = Game.tick() + STUN_COMBAT_TICKS;
+            }
+        });
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('agility');
         this.ticketsCollected = 0;
@@ -110,13 +138,16 @@ export default class BrimhavenAgility extends TaskBot {
         });
 
         this.log(
-            `BrimhavenAgility — food '${this.foodName}' x${this.foodPerTrip}, bank@${this.bankAtTickets} tickets, eat@${EAT_AT_HP}hp`
+            `BrimhavenAgility — food '${this.foodName}' x${this.foodPerTrip}, bank@${this.bankAtTickets} tickets, eat@${EAT_AT_HP}hp${this.stealRestock ? ', steal restock on' : ''}`
         );
 
         this.add(
             new ContinueDialog(),
             new Eat(this),
             new ClimbOutOfPit(this),
+            new LeaveForSteal(this),
+            new StealFood(this),
+            new StealCoins(this),
             new BankTrip(this),
             new TravelToArena(this),
             new EnterArena(this),
@@ -134,12 +165,40 @@ export default class BrimhavenAgility extends TaskBot {
         return {
             food: this.foodName,
             foodPerTrip: this.foodPerTrip,
-            bankAtTickets: this.bankAtTickets
+            bankAtTickets: this.bankAtTickets,
+            stealRestock: this.stealRestock
         };
     }
 
     foodInPack(): number {
         return foodCountIn(Inventory.items(), this.foodName);
+    }
+
+    cakesInPack(): number {
+        return carriedCakes();
+    }
+
+    edibleInPack(): number {
+        const selected = this.foodInPack();
+        const cakes = this.cakesInPack();
+        if (foodForms(this.foodName).some(f => f.includes('cake'))) {
+            return Math.max(selected, cakes);
+        }
+        return selected + cakes;
+    }
+
+    needsCoinsNow(): boolean {
+        const here = this.here();
+        const atBrim = here !== null && onBrimhavenSurface(here.x, here.z, here.level);
+        return needsCoinsRestock(this.coinCount(), this.paid(), atBrim || this.inArenaNow());
+    }
+
+    needsCakesNow(): boolean {
+        return needsCakeSteal(this.foodInPack(), this.cakesInPack(), this.stealRestock, this.needsCoinsNow());
+    }
+
+    stunned(): boolean {
+        return Game.tick() <= this.stunnedUntilTick;
     }
 
     ticketCount(): number {
@@ -236,14 +295,127 @@ export default class BrimhavenAgility extends TaskBot {
     }
 }
 
+function findEdible(food: string) {
+    const selected = Inventory.items().find(i => foodForms(food).includes((i.name ?? '').toLowerCase()));
+    if (selected) {
+        return selected;
+    }
+    return Inventory.items().find(i => matchesAny(i.name, CAKE_ITEMS)) ?? null;
+}
+
+class LeaveForSteal implements Task {
+    constructor(private bot: BrimhavenAgility) {}
+    validate(): boolean {
+        if (!this.bot.cfg().stealRestock || !this.bot.inArenaNow()) {
+            return false;
+        }
+        return this.bot.needsCakesNow() || this.bot.needsCoinsNow();
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('leaving arena to steal restock');
+        await leaveArena(this.bot);
+    }
+}
+
+class StealFood implements Task {
+    constructor(private bot: BrimhavenAgility) {}
+    validate(): boolean {
+        return this.bot.needsCakesNow() && !this.bot.inArenaNow();
+    }
+    async execute(): Promise<void> {
+        if (Game.inCombat()) {
+            this.bot.setStatus('kiting the stall guard');
+            await Traversal.walkResilient(FLEE_TILE, { radius: 2, attempts: 2, timeoutMs: 20_000, log: m => this.bot.log(`  ${m}`) });
+            await Execution.delayUntil(() => !Game.inCombat(), 15_000);
+            return;
+        }
+        this.bot.setStatus('stealing cakes at the Baker\'s stall');
+        const result = await stealCakes({
+            fillTo: CAKE_STEAL_FILL,
+            abort: () => !this.bot.needsCakesNow(),
+            shouldEat: () => shouldEat(this.bot.hp(), this.bot.edibleInPack()),
+            setStatus: s => this.bot.setStatus(s),
+            log: m => this.bot.log(`  ${m}`)
+        });
+        if (result === 'combat') {
+            this.bot.setStatus('caught at the stall — kiting');
+            await Traversal.walkResilient(FLEE_TILE, { radius: 2, attempts: 2, timeoutMs: 20_000, log: m => this.bot.log(`  ${m}`) });
+        }
+    }
+}
+
+class StealCoins implements Task {
+    constructor(private bot: BrimhavenAgility) {}
+    validate(): boolean {
+        return this.bot.cfg().stealRestock && this.bot.needsCoinsNow() && !this.bot.inArenaNow() && !this.bot.needsCakesNow();
+    }
+    async execute(): Promise<void> {
+        const thieving = Skills.level('thieving');
+        if (thieving < GUARD_THIEVING_MIN) {
+            const msg = `stealing coins from guards needs Thieving ${GUARD_THIEVING_MIN} (have ${thieving})`;
+            this.bot.log(msg);
+            ScriptRunner.stop(msg);
+            return;
+        }
+        if (shouldEat(this.bot.hp(), this.bot.edibleInPack())) {
+            return;
+        }
+        if (this.bot.stunned()) {
+            this.bot.setStatus('stunned — waiting');
+            await Execution.delayUntil(() => !this.bot.stunned() || shouldEat(this.bot.hp(), this.bot.edibleInPack()), 9000);
+            return;
+        }
+        if (Game.inCombat()) {
+            this.bot.setStatus('kiting the guard');
+            await Traversal.walkResilient(FLEE_TILE, { radius: 2, attempts: 2, timeoutMs: 20_000, log: m => this.bot.log(`  ${m}`) });
+            await Execution.delayUntil(() => !Game.inCombat(), 15_000);
+            return;
+        }
+        const spot = targetSpot('Guard');
+        const here = Game.tile();
+        if (here && spot.anchor.distanceTo(here) > spot.leash) {
+            this.bot.setStatus('walking to Ardougne guards');
+            await Traversal.walkResilient(spot.anchor, { radius: 4, attempts: 3, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
+            return;
+        }
+        const guard = Npcs.query()
+            .name('Guard')
+            .action('Pickpocket')
+            .where(n => n.tile().distanceTo(spot.anchor) <= spot.leash)
+            .nearest();
+        if (!guard) {
+            this.bot.setStatus('no guard in range — waiting');
+            await Execution.delayTicks(2);
+            return;
+        }
+        if (!Reachability.canReach(guard.tile(), { adjacentOk: true })) {
+            await Traversal.walkResilient(guard.tile(), { radius: 1, attempts: 2, timeoutMs: 20_000, log: m => this.bot.log(`  ${m}`) });
+            return;
+        }
+        this.bot.setStatus('pickpocketing a guard');
+        const coinsBefore = this.bot.coinCount();
+        const xpBefore = Skills.xp('thieving');
+        await guard.interact('Pickpocket');
+        await Execution.delayUntil(
+            () => this.bot.coinCount() > coinsBefore || Skills.xp('thieving') > xpBefore || this.bot.stunned() || ChatDialog.canContinue(),
+            2500
+        );
+        if (this.bot.coinCount() > coinsBefore) {
+            this.bot.log(`pickpocketed a guard (${this.bot.coinCount()} coins)`);
+        }
+        if (this.bot.stunned()) {
+            await Execution.delayUntil(() => !this.bot.stunned() || shouldEat(this.bot.hp(), this.bot.edibleInPack()), 9000);
+        }
+    }
+}
+
 class Eat implements Task {
     constructor(private bot: BrimhavenAgility) {}
     validate(): boolean {
-        return shouldEat(this.bot.hp(), this.bot.foodInPack());
+        return shouldEat(this.bot.hp(), this.bot.edibleInPack());
     }
     async execute(): Promise<void> {
-        const { food } = this.bot.cfg();
-        const item = Inventory.items().find(i => foodForms(food).includes((i.name ?? '').toLowerCase()));
+        const item = findEdible(this.bot.cfg().food);
         if (!item) {
             return;
         }
@@ -257,9 +429,15 @@ class Eat implements Task {
 class BankTrip implements Task {
     constructor(private bot: BrimhavenAgility) {}
     validate(): boolean {
+        const steal = this.bot.cfg().stealRestock;
         if (this.bot.inArenaNow()) {
-            // leave the arena first when banking is needed
-            return shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets);
+            return shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets, steal);
+        }
+        if (shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets, steal)) {
+            return true;
+        }
+        if (steal) {
+            return false;
         }
         const here = this.bot.here();
         const atBrim = here !== null && onBrimhavenSurface(here.x, here.z, here.level);
@@ -268,11 +446,7 @@ class BankTrip implements Task {
         const needFood =
             this.bot.foodInPack() <= 0 ||
             (!atBrim && this.bot.foodInPack() < this.bot.cfg().foodPerTrip);
-        return (
-            shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets) ||
-            needFood ||
-            needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), atBrim)
-        );
+        return needFood || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), atBrim);
     }
     async execute(): Promise<void> {
         const { food, foodPerTrip, bankAtTickets } = this.bot.cfg();
@@ -293,7 +467,7 @@ class BankTrip implements Task {
             return;
         }
 
-        const keep = new Set(['coins', ...foodForms(food)]);
+        const keep = new Set(['coins', ...foodForms(food), ...(this.bot.cfg().stealRestock ? CAKE_ITEMS : [])]);
         await Bank.depositAllMatching(name => !keep.has(name.toLowerCase()));
 
         // Always fund a full mainland→Brimhaven round-trip when stocking.
@@ -316,9 +490,13 @@ class BankTrip implements Task {
         });
         await Bank.close();
         if (shortfall !== null) {
-            this.bot.setStatus(`stopped — ${shortfall}`);
-            ScriptRunner.stop(shortfall);
-            return;
+            if (this.bot.cfg().stealRestock) {
+                this.bot.log(`bank shortfall (${shortfall}) — steal restock will cover food/coins`);
+            } else {
+                this.bot.setStatus(`stopped — ${shortfall}`);
+                ScriptRunner.stop(shortfall);
+                return;
+            }
         }
         this.bot.log(`restocked: ${this.bot.foodInPack()} ${food}, ${this.bot.coinCount()} coins, ${this.bot.ticketCount()} tickets banked (threshold ${bankAtTickets})`);
     }
@@ -330,7 +508,10 @@ class TravelToArena implements Task {
         if (this.bot.inArenaNow()) {
             return false;
         }
-        if (shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets)) {
+        if (shouldBank(this.bot.ticketCount(), this.bot.foodInPack(), this.bot.cfg().bankAtTickets, this.bot.cfg().stealRestock)) {
+            return false;
+        }
+        if (this.bot.needsCakesNow() || (this.bot.cfg().stealRestock && this.bot.needsCoinsNow())) {
             return false;
         }
         const here = this.bot.here();
@@ -339,7 +520,7 @@ class TravelToArena implements Task {
         }
         const atBrim = onBrimhavenSurface(here.x, here.z, here.level);
         // still need food + coins for remaining legs (not full trip if already on Brimhaven)
-        if (this.bot.foodInPack() < 1 || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), atBrim)) {
+        if (this.bot.edibleInPack() < 1 || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), atBrim)) {
             return false;
         }
         const nearEntrance = Math.max(Math.abs(here.x - ARENA_ENTRANCE.x), Math.abs(here.z - ARENA_ENTRANCE.z)) <= 8 && here.level === 0;
@@ -360,8 +541,11 @@ class EnterArena implements Task {
         if (this.bot.inArenaNow()) {
             return false;
         }
+        if (this.bot.needsCakesNow() || (this.bot.cfg().stealRestock && this.bot.needsCoinsNow())) {
+            return false;
+        }
         // On Brimhaven the outbound boat is already paid — only need return + entrance.
-        if (this.bot.foodInPack() < 1 || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), true)) {
+        if (this.bot.edibleInPack() < 1 || needsCoinsRestock(this.bot.coinCount(), this.bot.paid(), true)) {
             return false;
         }
         const here = this.bot.here();

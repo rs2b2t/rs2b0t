@@ -277,8 +277,37 @@ export function coinsToWithdraw(alreadyPaid: boolean, coinsInPack: number): numb
     return Math.max(0, need - coinsInPack);
 }
 
-export function shouldBank(tickets: number, foodCount: number, bankAtTickets: number): boolean {
-    return foodCount <= 0 || tickets >= bankAtTickets;
+export const STEAL_THIEVING_MIN = 20;
+export const GUARD_THIEVING_MIN = 40;
+/** Cakes to steal when the selected food is gone — enough to eat through a guard restock. */
+export const CAKE_STEAL_FILL = 12;
+/** Minimum cakes to keep before pickpocketing guards. */
+export const CAKE_GUARD_BUFFER = 4;
+
+export function shouldBank(tickets: number, foodCount: number, bankAtTickets: number, stealRestock = false): boolean {
+    if (tickets >= bankAtTickets) {
+        return true;
+    }
+    if (stealRestock) {
+        return false;
+    }
+    return foodCount <= 0;
+}
+
+/** Steal cakes when the pack has no selected food and no stall food, or when a guard restock needs a HP buffer. */
+export function needsCakeSteal(
+    selectedFood: number,
+    cakes: number,
+    stealRestock: boolean,
+    needCoins: boolean
+): boolean {
+    if (!stealRestock) {
+        return false;
+    }
+    if (selectedFood <= 0 && cakes <= 0) {
+        return true;
+    }
+    return needCoins && cakes < CAKE_GUARD_BUFFER;
 }
 
 /** Inventory fields used to distinguish a live stack gain from a removal. */
