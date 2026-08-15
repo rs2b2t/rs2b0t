@@ -200,6 +200,11 @@ export default class BrimhavenAgility extends TaskBot {
         return t !== null && inArena(t.x, t.z);
     }
 
+    // Why: Swarm despawns only after you leave the tile; 5x5 platforms cannot do that, so evade loops forever (#597).
+    override ignoredRandoms(): string[] {
+        return this.inArenaNow() ? ['swarm'] : [];
+    }
+
     countTag(): void {
         this.tags++;
     }

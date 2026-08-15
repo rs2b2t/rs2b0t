@@ -862,6 +862,11 @@ export abstract class AbstractBot {
      * treats them as hostile random events. Override in combat scripts.
      */
     grindTargets(): string[];
+    /**
+     * Random-event names this bot will not pause for. Re-read each detect so
+     * a script can ignore Swarm only while it is on a 5x5 arena platform.
+     */
+    ignoredRandoms(): string[];
     log(msg: string): void;
     /**
      * Subscribe to a game event for this run (auto-removed on stop/crash).

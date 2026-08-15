@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { GearLossTracker, handleLocation, isHostileEventNpc, pickSacrificial } from '#/bot/runtime/randomevents/RandomEvents.js';
+import { GearLossTracker, handleLocation, isHostileEventNpc, pickSacrificial, RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 
 describe('handleLocation', () => {
     test('worn handle wins (the wielded-pick case the old scan missed)', () => {
@@ -95,5 +95,25 @@ describe('isHostileEventNpc', () => {
 
     test('non-hostile id is never an event', () => {
         expect(isHostileEventNpc(riverTroll({ id: 1, distance: 1, inCombat: true }), 3, true)).toBe(false);
+    });
+});
+
+describe('ignored randoms (#597)', () => {
+    test('setIgnoredRandoms matches names case-insensitively', () => {
+        RandomEvents.setIgnoredRandoms(['Swarm']);
+        expect(RandomEvents.isIgnored('swarm')).toBe(true);
+        expect(RandomEvents.isIgnored('SWARM')).toBe(true);
+        expect(RandomEvents.isIgnored('genie')).toBe(false);
+        RandomEvents.setIgnoredRandoms([]);
+        expect(RandomEvents.isIgnored('swarm')).toBe(false);
+    });
+
+    test('a live provider is re-read so arena entry can start ignoring Swarm', () => {
+        let inArena = false;
+        RandomEvents.setIgnoredRandoms(() => (inArena ? ['swarm'] : []));
+        expect(RandomEvents.isIgnored('swarm')).toBe(false);
+        inArena = true;
+        expect(RandomEvents.isIgnored('swarm')).toBe(true);
+        RandomEvents.setIgnoredRandoms([]);
     });
 });

@@ -158,6 +158,8 @@ class RandomEventsImpl {
 
     lampSkill = 'strength';
 
+    private ignoredProvider: () => readonly string[] = () => [];
+
     private readonly gearLoss = new GearLossTracker();
 
     private attempts = new Map<string, number>();
@@ -193,6 +195,15 @@ class RandomEventsImpl {
         this.grindTargets = names.map(n => n.toLowerCase());
     }
 
+    setIgnoredRandoms(names: readonly string[] | (() => readonly string[])): void {
+        this.ignoredProvider = typeof names === 'function' ? names : () => names;
+    }
+
+    isIgnored(name: string): boolean {
+        const want = name.toLowerCase();
+        return this.ignoredProvider().some(n => n.toLowerCase() === want);
+    }
+
     setLampSkill(skill: string): void {
         this.lampSkill = skill;
     }
@@ -210,7 +221,14 @@ class RandomEventsImpl {
     detect(): DetectedEvent | null {
         try {
             const event = this.detectRaw();
-            if (event && this.cooledDown(`${event.kind}:${event.name}`)) {
+            if (!event) {
+                return null;
+            }
+            // Why: Brimhaven platforms are 5x5, so evading Swarm never despawns it (#597).
+            if (this.isIgnored(event.name)) {
+                return null;
+            }
+            if (this.cooledDown(`${event.kind}:${event.name}`)) {
                 return null;
             }
             return event;
