@@ -2,7 +2,7 @@
  *  Spawn Swarm on a 5x5 platform, start the script, and assert no evade intercept plus hop progress. */
 
 //   ENGINE_DIR=.../engine sh tools/deploy-local.sh
-//   bun tools/brimhaven-swarm-597-live.ts [http://localhost:8888]
+//   bun e2e/brimhaven-swarm-597-live.ts [http://localhost:8888]
 import { boot, bringUpOffIsland, cheatQuiet, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8888');

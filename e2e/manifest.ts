@@ -29,6 +29,12 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'brimhaven-swarm-597-live',
+        harness: 'brimhaven-swarm-597-live.ts',
+        covers: { scripts: ['BrimhavenAgility'] },
+        status: 'unvetted'
+    },
+    {
         id: 'clue-guardian-eat-live',
         harness: 'clue-guardian-eat-live.ts',
         covers: { scripts: ['ClueSolver'] },

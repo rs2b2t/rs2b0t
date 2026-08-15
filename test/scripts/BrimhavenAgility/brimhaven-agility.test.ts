@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Game } from '#/bot/api/game/Game.js';
-import BrimhavenAgility from '#/bot/scripts/BrimhavenAgility.js';
+import BrimhavenAgility from '#/bot/scripts/BrimhavenAgility/BrimhavenAgility.js';
 import {
     ARENA_EDGES,
     ARENA_ENTRANCE,
