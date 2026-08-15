@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { Game } from '#/bot/api/game/Game.js';
+import BrimhavenAgility from '#/bot/scripts/BrimhavenAgility/BrimhavenAgility.js';
 import {
     ARENA_EDGES,
     ARENA_ENTRANCE,
@@ -326,6 +328,19 @@ describe('BrimhavenAgility location helpers', () => {
         expect(inArena(2815, 9600)).toBe(false);
         expect(inArena(3218, 9618)).toBe(false);
         expect(onArenaPlatform(3) && inArena(3200, 3200)).toBe(false);
+    });
+
+    test('ignores Swarm only while standing in the arena (#597)', () => {
+        const origTile = Game.tile;
+        const bot = new BrimhavenAgility();
+        try {
+            Game.tile = () => ({ x: ARENA_ENTRANCE.x, z: ARENA_ENTRANCE.z, level: 0 });
+            expect(bot.ignoredRandoms()).toEqual([]);
+            Game.tile = () => ({ x: PILLARS[12].x, z: PILLARS[12].z, level: 3 });
+            expect(bot.ignoredRandoms()).toEqual(['swarm']);
+        } finally {
+            Game.tile = origTile;
+        }
     });
 
     test('failed obstacles land in the pit (plane 0) under the same x,z as pillars', () => {

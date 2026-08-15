@@ -65,6 +65,14 @@ export abstract class AbstractBot {
         return [];
     }
 
+    /**
+     * Random-event names this bot will not pause for. Re-read each detect so
+     * a script can ignore Swarm only while it is on a 5x5 arena platform (#597).
+     */
+    ignoredRandoms(): string[] {
+        return [];
+    }
+
     log(msg: string): void {
         if (this.logSink) {
             this.logSink(msg);

@@ -212,6 +212,7 @@ class ScriptRunnerImpl {
                 }
 
                 RandomEvents.setGrindTargets(bot.grindTargets());
+                RandomEvents.setIgnoredRandoms(() => bot.ignoredRandoms());
                 RandomEvents.setLampSkill(SettingsStore.globalBag().str('lampSkill', 'strength'));
                 Supervisor.resetProgress();
                 if (RecoveryHints.pendingRecovery) {
@@ -385,6 +386,8 @@ class ScriptRunnerImpl {
         } catch (err) {
             ctx.addLog('warn', `onStop threw: ${err}`);
         }
+
+        RandomEvents.setIgnoredRandoms([]);
 
         Sustain.set(null);
 

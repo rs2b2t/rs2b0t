@@ -3,6 +3,7 @@ import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Scheduler } from '#/bot/runtime/Scheduler.js';
+import { RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 import { loopReadyOrDetached, ScriptRunner, stopReasonOf } from '#/bot/runtime/ScriptRunner.js';
 import type { ScriptMeta } from '#/bot/runtime/ScriptRegistry.js';
 
@@ -29,6 +30,14 @@ class StartProbeBot extends LoopingBot {
 
     override onStart(): void {
         this.starts++;
+    }
+
+    override loop(): void {}
+}
+
+class IgnoreSwarmBot extends LoopingBot {
+    override ignoredRandoms(): string[] {
+        return ['swarm'];
     }
 
     override loop(): void {}
@@ -107,6 +116,19 @@ test('a script can restart after stopping itself during onStart', async () => {
     expect(ScriptRunner.ctx?.log.map(line => line.msg)).toContain(
         "previous run of 'Self-stopping test bot' ended (stopped) — test: self-stopping bot"
     );
+});
+
+test('runner applies ignoredRandoms after onStart and clears them on stop (#597)', async () => {
+    ScriptRunner.start({
+        name: 'Ignore swarm probe',
+        description: 'runner ignoredRandoms wiring',
+        create: () => new IgnoreSwarmBot()
+    });
+    await settle();
+    expect(RandomEvents.isIgnored('swarm')).toBe(true);
+    ScriptRunner.stop('test: clear ignored randoms');
+    await settle();
+    expect(RandomEvents.isIgnored('swarm')).toBe(false);
 });
 
 test('a stop with a blank reason still says so instead of reading as no reason', async () => {
