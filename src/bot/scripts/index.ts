@@ -44,6 +44,7 @@ import WildyAgility, { WILDY_AGILITY_SETTINGS } from './WildyAgility/WildyAgilit
 import BrimhavenAgility, { BRIMHAVEN_AGILITY_SETTINGS } from './BrimhavenAgility/BrimhavenAgility.js';
 import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot/SmelterBot.js';
 import Superheater, { SUPERHEATER_SETTINGS } from './Superheater/Superheater.js';
+import Alcher, { ALCHER_SETTINGS } from './Alcher/Alcher.js';
 import HillGiant, { HILL_GIANT_SETTINGS } from './HillGiant/HillGiant.js';
 import TannerBot, { TANNER_SETTINGS } from './TannerBot/TannerBot.js';
 import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller/VialFiller.js';
@@ -552,6 +553,15 @@ ScriptRegistry.register({
     tags: ['smithing', 'magic', 'superheat', 'banking'],
     settingsSchema: SUPERHEATER_SETTINGS,
     create: () => new Superheater()
+});
+
+ScriptRegistry.register({
+    name: 'Alcher',
+    description: 'High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat',
+    category: 'Magic',
+    tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
+    settingsSchema: ALCHER_SETTINGS,
+    create: () => new Alcher()
 });
 
 ScriptRegistry.register({
