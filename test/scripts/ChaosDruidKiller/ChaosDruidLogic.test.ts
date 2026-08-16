@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { SETTINGS } from '#/bot/scripts/ChaosDruidKiller/ChaosDruidKiller.js';
+import { Game } from '#/bot/api/game/Game.js';
+import ChaosDruidKiller, { SETTINGS } from '#/bot/scripts/ChaosDruidKiller/ChaosDruidKiller.js';
 import {
     CHAOS_DRUID_FIELD,
     CHAOS_DRUID_FIELD_RADIUS,
@@ -13,7 +14,11 @@ import {
     chaosDruidRespawned,
     DRUID_SPOTS,
     inChaosDruidField,
+    inChaosDruidTower,
     inEdgevilleDungeon,
+    shouldExitTowerForSwarm,
+    swarmNpcNearby,
+    TOWER_SWARM_FLEE,
     isChaosDruidLoot,
     yanilleZone
 } from '#/bot/scripts/ChaosDruidKiller/ChaosDruidLogic.js';
@@ -200,6 +205,27 @@ describe('alternate druid locations', () => {
         }
         expect(spot.npc).toBe('Chaos druid');
         expect(inChaosDruidField({ x: 2561, z: 9855, level: 0 }, spot)).toBe(false);
+        expect(inChaosDruidTower({ x: 2562, z: 3356, level: 0 })).toBe(true);
+        expect(inChaosDruidTower({ x: 2565, z: 3356, level: 0 })).toBe(false);
+    });
+
+    test('Swarm in the tower must be walked out, not evaded in place (#497)', () => {
+        expect(shouldExitTowerForSwarm(true, true)).toBe(true);
+        expect(shouldExitTowerForSwarm(true, false)).toBe(false);
+        expect(shouldExitTowerForSwarm(false, true)).toBe(false);
+        expect(swarmNpcNearby([{ name: 'Swarm', id: 411, distance: 2 }])).toBe(true);
+        expect(swarmNpcNearby([{ name: 'Chaos druid', id: 1, distance: 1 }])).toBe(false);
+        expect(inChaosDruidTower(TOWER_SWARM_FLEE)).toBe(false);
+        const orig = Game.tile;
+        const bot = new ChaosDruidKiller();
+        try {
+            Game.tile = () => ({ x: 2616, z: 3332, level: 0 });
+            expect(bot.ignoredRandoms()).toEqual([]);
+            Game.tile = () => ({ x: 2562, z: 3356, level: 0 });
+            expect(bot.ignoredRandoms()).toEqual(['swarm']);
+        } finally {
+            Game.tile = orig;
+        }
     });
 
     test('the Yanille camp covers the dense western Chaos-druid-warrior cluster', () => {

@@ -30,7 +30,10 @@ import {
     DRUID_LOCATION_NAMES,
     DRUID_SPOTS,
     inChaosDruidField,
+    inChaosDruidTower,
     inEdgevilleDungeon,
+    shouldExitTowerForSwarm,
+    swarmNpcNearby,
     isChaosDruidLoot,
     yanilleZone,
     type ChaosDruidBankReason,
@@ -90,7 +93,6 @@ const BANK_BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const INTERMEDIATE_GATE = new Tile(3103, 9909, 0);
 const WILDERNESS_GATE = new Tile(3130, 9914, 0);
 const TOWER_DOOR = { name: 'Door', op: 'Pick Lock', stand: new Tile(2565, 3356, 0) };
-const TOWER_BOUNDS = { minX: 2560, maxX: 2564, minZ: 3352, maxZ: 3360 };
 const LEDGE = { name: 'Balancing ledge', op: 'Walk-across' };
 const LEDGE_NORTH_STAND = new Tile(2580, 9520, 0);
 const LEDGE_SOUTH_STAND = new Tile(2580, 9512, 0);
@@ -224,6 +226,7 @@ export default class ChaosDruidKiller extends TaskBot {
             new Parked(this),
             new LocationGuard(this),
             new Eat(this),
+            new EvadeTowerSwarm(this),
             // Before the walk, so a style index this weapon does not have parks the
             // bot at once instead of after a trip out to the field.
             new SetCombatStyle(this),
@@ -250,6 +253,18 @@ export default class ChaosDruidKiller extends TaskBot {
 
     inField(): boolean {
         return inChaosDruidField(Game.tile(), this.spot);
+    }
+
+    // Why: Supervisor evade walks inside the 5×9 room and never despawns Swarm (#497).
+    // Why: we ignore it only while inside so this script can Open the door first; once outside, the normal evade runs.
+    override ignoredRandoms(): string[] {
+        return inChaosDruidTower(Game.tile()) ? ['swarm'] : [];
+    }
+
+    swarmNearby(): boolean {
+        return swarmNpcNearby(
+            Npcs.all().map(n => ({ name: n.name, id: n.id, distance: n.distance() }))
+        );
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -478,10 +493,7 @@ export default class ChaosDruidKiller extends TaskBot {
     }
 
     insideTower(): boolean {
-        const here = Game.tile();
-        return here !== null && here.level === 0
-            && here.x >= TOWER_BOUNDS.minX && here.x <= TOWER_BOUNDS.maxX
-            && here.z >= TOWER_BOUNDS.minZ && here.z <= TOWER_BOUNDS.maxZ;
+        return inChaosDruidTower(Game.tile());
     }
 
     private async eatIfLow(): Promise<void> {
@@ -786,6 +798,34 @@ class Eat implements Task {
     }
     async execute(): Promise<void> {
         await eatOnce(this.bot);
+    }
+}
+
+class EvadeTowerSwarm implements Task {
+    constructor(private bot: ChaosDruidKiller) {}
+    validate(): boolean {
+        return shouldExitTowerForSwarm(this.bot.insideTower(), this.bot.swarmNearby());
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('leaving the tower to lose Swarm');
+        this.bot.log('Swarm in the tower — opening the door so we can run it off outside');
+        if (!(await this.bot.walkOpening(TOWER_DOOR.stand, 1))) {
+            const door = Locs.query()
+                .name('Door')
+                .within(4)
+                .where(loc => loc.actions().some(action => /^open$/i.test(action)))
+                .nearest();
+            if (door) {
+                const open = door.actions().find(action => /^open$/i.test(action));
+                if (open) {
+                    await door.interact(open);
+                }
+            }
+            await Execution.delayUntil(() => !this.bot.insideTower(), 8000);
+        }
+        if (this.bot.insideTower()) {
+            this.bot.log('still inside the tower after the Swarm exit — will retry');
+        }
     }
 }
 
