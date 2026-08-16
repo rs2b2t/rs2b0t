@@ -1,7 +1,7 @@
-import { BOWS, DARTS } from './equipment.js';
+import { BOWS, CROSSBOWS, DARTS } from './equipment.js';
 
-/** Bows + darts, shared by RockCrab, MossGiant, and any ranged fighter. */
-export const RANGED_WEAPONS = [...BOWS, ...DARTS];
+/** Bows, crossbows and darts, shared by RockCrab, MossGiant, and any ranged fighter. */
+export const RANGED_WEAPONS = [...BOWS, ...CROSSBOWS, ...DARTS];
 /** @deprecated use RANGED_WEAPONS */
 export const ROCK_CRAB_RANGED_WEAPONS = RANGED_WEAPONS;
 

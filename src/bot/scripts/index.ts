@@ -33,6 +33,7 @@ import Woodcutter, { WOODCUTTER_SETTINGS } from './GatheringBot/Woodcutter.js';
 import { FORGETFUL_BANK_SETTING, TOOL_ACQUIRE_SETTING } from '../api/acquisition/ToolAcquire.js';
 import AIOQuester, { AIO_SETTINGS } from './AIOQuester/AIOQuester.js';
 import MossGiant, { SETTINGS as MOSSGIANT_SETTINGS } from './MossGiant/MossGiant.js';
+import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from './BrimhavenMossGiants/BrimhavenMossGiants.js';
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
@@ -161,6 +162,15 @@ ScriptRegistry.register({
     tags: ['ardougne', 'safespot', 'afk'],
     settingsSchema: MOSSGIANT_SETTINGS,
     create: () => new MossGiant()
+});
+
+ScriptRegistry.register({
+    name: 'BrimhavenMossGiants',
+    description: 'Brimhaven moss giant island: range/mage/melee walk-and-fight (multicombat, safespot disabled), banks all loot at Ardougne S and sails back via the boat',
+    category: 'Combat',
+    tags: ['brimhaven', 'moss giant', 'boat', 'members', 'banking', 'afk'],
+    settingsSchema: BRIMHAVEN_MOSS_GIANTS_SETTINGS,
+    create: () => new BrimhavenMossGiants()
 });
 
 ScriptRegistry.register({
