@@ -12,7 +12,7 @@
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 11
+- [Combat](#combat) — 12
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 6
 - [Firemaking](#firemaking) — 1
@@ -146,6 +146,34 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
 | `bankEveryMinutes` | number (0–120) | `0` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Bank common junk too |
+
+### BrimhavenMossGiants
+
+Brimhaven moss giant island: range/mage/melee walk-and-fight (multicombat, safespot disabled), banks all loot at Ardougne S and sails back via the boat
+
+- Tags: `brimhaven`, `moss giant`, `boat`, `members`, `banking`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
+| `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Crossbow, Bronze crossbow, Iron crossbow, Steel crossbow, Black crossbow, Mithril crossbow, Adamant crossbow, Rune crossbow, Dorgeshuun crossbow, Karil's crossbow |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Iron arrow"` | Ammo (arrows / bolts) — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow, Bronze bolts, Iron bolts, Steel bolts, Black bolts, Mithril bolts, Adamant bolts, Rune bolts, Broad bolts, Bone bolts |
+| `ammoWithdraw` | number (1–5000) | `500` | Projectiles per bank trip |
+| `lootAmmo` | boolean | `true` | Loot & re-equip ammo |
+| `food` | string | `"Lobster"` | Food — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `lootCake` | boolean | `false` | Loot & eat slice of cake |
+| `panicHp` | number (1–98) | `25` | Panic-to-bank below HP% |
+| `loot` | string[] | `["Air rune","Big bones","Black sq shield","Blood rune","Chaos rune","Chaos talisman","Coins","Cosmic rune","Death rune","Dragon spear","Earth rune","Half of a key","Herb","Law rune","Magic staff","Mithril spear","Mithril sword","Nature rune","Nature talisman","Rune javelin","Rune spear","Shield left half","Steel bar","Steel kiteshield","Steel med helm","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Air rune, Big bones, Black sq shield, Blood rune, Chaos rune, Chaos talisman, Coal, Coins, Cosmic rune, Death rune, Dragon spear, Earth rune, Half of a key, Herb, Iron arrow, Law rune, Magic staff, Mithril spear, Mithril sword, Nature rune, Nature talisman, Rune javelin, Rune spear, Shield left half, Spinach roll, Steel arrow, Steel bar, Steel kiteshield, Steel med helm, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `buryBones` | boolean | `false` | Bury big bones |
+| `fieldTile` | tile | `{"x":2698,"z":3206,"level":0}` | Field / fight tile (Brimhaven island) |
+| `bankTile` | tile | `{"x":2655,"z":3283,"level":0}` | Bank stand tile (Ardougne S, by the pier) |
 
 ### ChaosDruidKiller
 

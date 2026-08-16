@@ -1,7 +1,7 @@
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS } from '../../api/combat/CombatStyle.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { DROP_DB } from '../../data/dropdb.js';
-import { STAFFS, ARROWS, BOLTS } from '../../api/combat/equipment.js';
+import { STAFFS, ARROWS, BOLTS, CROSSBOWS } from '../../api/combat/equipment.js';
 import { RANGED_WEAPONS } from '../../api/combat/ranged.js';
 import { FOOD_OPTIONS } from '../../api/combat/food.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
@@ -23,7 +23,7 @@ export const SETTINGS: SettingsSchema = {
     bow: {
         type: 'string',
         default: 'Maple shortbow',
-        options: RANGED_WEAPONS,
+        options: [...RANGED_WEAPONS, ...CROSSBOWS],
         label: 'Ranged weapon',
         group: 'Combat',
         showIf: SHOW_RANGE,
