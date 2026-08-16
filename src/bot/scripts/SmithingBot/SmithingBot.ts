@@ -24,6 +24,14 @@ const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 
+// Why: a product needs this many bars to forge even one, so smithing only starts when the pack holds at least that many — otherwise the make panel opens and forges nothing (then loops).
+const BARS_PER_PRODUCT: Readonly<Record<string, number>> = {
+    Dagger: 1, Sword: 1, Scimitar: 2, Longsword: 2, '2h sword': 3, Axe: 1, Mace: 1,
+    Warhammer: 3, Battleaxe: 3, Chainbody: 2, Platelegs: 3, Plateskirt: 3, Platebody: 5,
+    'Med helm': 1, 'Full helm': 2, 'Sq shield': 2, Kiteshield: 3, Nails: 1, 'Dart tip': 1,
+    Arrowtips: 1, Knife: 1, Wire: 1, Claws: 2
+};
+
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: BAR_OPTIONS, label: 'Bar tier' },
     product: { type: 'string', default: 'Dagger', options: PRODUCT_OPTIONS, label: 'Item to smith', help: 'matched against the anvil panel by keyword (the panel names are tier-specific, e.g. "Bronze dagger")' },
@@ -92,6 +100,7 @@ export default class SmithingBot extends TaskBot {
     boothLocName(): string { return this.boothName; }
     obstacleList(): string[] { return OPENABLE_OBSTACLES; }
     leashRadius(): number { return this.leash; }
+    barsNeededForProduct(): number { return BARS_PER_PRODUCT[this.product] ?? 1; }
 
     barCount(): number {
         const pat = this.barItemName().toLowerCase();
@@ -146,7 +155,7 @@ class SmithPanel implements Task {
 
 class BankTrip implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() === 0; }
+    validate(): boolean { return this.bot.barCount() < this.bot.barsNeededForProduct(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
@@ -189,7 +198,7 @@ class BankTrip implements Task {
 
 class Smith implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
+    validate(): boolean { return this.bot.barCount() >= this.bot.barsNeededForProduct() && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
     async execute(): Promise<void> {
         const anvil = () =>
             Locs.query().name(this.bot.anvilLocName()).withinOf(this.bot.anvilTile(), this.bot.leashRadius()).nearest();
