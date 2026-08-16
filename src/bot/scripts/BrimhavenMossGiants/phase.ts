@@ -20,12 +20,7 @@ export function setPhase(p: Phase): void {
     phase = p;
 }
 
-/**
- * The single bank trigger (per design):
- *   (A) panic — out of food AND below the HP panic threshold, or
- *   (B) full haul — pack is full AND no food left to eat.
- * If the bank is known empty we don't keep re-banking on the panic path.
- */
+// Single bank trigger: panic (no food + low HP) or full-haul (full pack + no food).
 export function shouldBank(bot: BrimhavenMossGiants): boolean {
     const panic = !hasFood() && hpFrac() < cfg.panicHp && !bot.bankKnownEmpty();
     const fullHaul = Inventory.isFull() && !hasFood();

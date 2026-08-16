@@ -18,11 +18,7 @@ export const ASSERT_RETRY_MS = 60_000;
 
 export type CombatStyle = 'melee' | 'mage' | 'range';
 
-/**
- * Mutable runtime configuration, shared across every module.
- * Why: a single exported object keeps the per-concern files decoupled without
- * threading the config through every function call.
- */
+// Mutable runtime config shared across modules so per-concern files stay decoupled.
 export interface RuntimeConfig {
     style: CombatStyle;
     meleeStyle: MeleeCombatStyle;
