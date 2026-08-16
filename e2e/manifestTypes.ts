@@ -8,8 +8,8 @@ export const SCRIPT_NAMES = [
     'FlaxSpinner', 'GatheringBot', 'GemCutter', 'GreenDragon', 'HerbCleaner',
     'HerbloreSecondaries', 'HillGiant', 'LeatherCrafter', 'MossGiant',
     'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RockCrab', 'RoguesPurse',
-    'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot',
-    'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WildyAgility'
+    'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
+    'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WildyAgility', 'Alcher'
 ] as const;
 
 export type ScriptName = typeof SCRIPT_NAMES[number];
