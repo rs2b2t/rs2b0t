@@ -1,19 +1,7 @@
 import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Inventory, type InvItem } from '../../../../inventory/Inventory.js';
-import type { QuestSnapshot } from '../../engine/types.js';
 import { SOA_ID } from './areas.js';
 import type { ArravGang } from './config.js';
-
-// Why: Broken shield, Key, Scroll and Certificate each name more than one object, so a name lookup silently accepts the wrong one.
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-// Why: an unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw.
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
-}
 
 /** The half this gang can take for itself. */
 export function ownHalf(gang: ArravGang): number {

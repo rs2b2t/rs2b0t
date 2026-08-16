@@ -14,6 +14,7 @@ import {
     essenceEntryEdges,
     wildyLeverEdges,
     mageArenaBarrierEdges,
+    handelmortDoorEdges,
     agilityShortcutEdges,
     elkoyMazeEdges,
     curatedTravelEdges
@@ -107,6 +108,7 @@ describe('ferries / cart', () => {
             + essenceExitEdges().length
             + wildyLeverEdges().length
             + mageArenaBarrierEdges().length
+            + handelmortDoorEdges().length
             + agilityShortcutEdges().length
             + elkoyMazeEdges().length
         );
@@ -121,6 +123,16 @@ describe('ferries / cart', () => {
         expect(names.has('magearena_scan_in')).toBe(true);
         expect(names.has('magearena_scan_out')).toBe(true);
         expect(names.has('agi_castle_crumbling_wall')).toBe(true);
+        expect(names.has('handelmort_inner_door_out')).toBe(true);
+    });
+
+    test('Handelmort mansion door is one directed edge, northward side only', () => {
+        const edges = handelmortDoorEdges();
+
+        expect(edges).toHaveLength(1);
+        expect(edges[0].from).toEqual({ x: 2635, z: 3322, level: 0 });
+        expect(edges[0].to).toEqual({ x: 2635, z: 3321, level: 0 });
+        expect(edges[0].locId).toBe(2706);
     });
 });
 

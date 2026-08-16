@@ -28,7 +28,8 @@ const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 // Why: the rejected auto-reverses stay in stairEdges.json as documentation, but PathFinder must not route through them.
 const DISABLED_AUTO_REVERSES = new Map<string, string>([
     ['2370,3134,2>2370,3134,1', 'Castle Wars Zamorak spawn trapdoor (loc 4472) only offers Open; revision 274 has no Climb-down loc or handler.'],
-    ['2429,3075,2>2429,3075,1', 'Castle Wars Saradomin spawn trapdoor (loc 4471) only offers Open; revision 274 has no Climb-down loc or handler.']
+    ['2429,3075,2>2429,3075,1', 'Castle Wars Saradomin spawn trapdoor (loc 4471) only offers Open; revision 274 has no Climb-down loc or handler.'],
+    ['2631,3325,0>2631,3321,1', 'Handelmort Mansion stairs are trapped: quest_totem.rs2 drops anyone who has not Investigated them into the Ardougne sewers for a fifth of their hitpoints. defs/tribaltotem.ts disarms and climbs them itself.']
 ]);
 
 function edge(from: NavPoint, to: NavPoint, locName: string, action: string): TransportEdgeData {

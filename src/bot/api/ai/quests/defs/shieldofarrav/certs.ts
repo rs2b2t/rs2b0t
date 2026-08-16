@@ -1,10 +1,10 @@
 import { Inventory } from '../../../../inventory/Inventory.js';
-import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { bankedId, heldId, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CURATOR, ROALD, SOA_ID } from './areas.js';
 import { ArravConfig, type ArravGang } from './config.js';
 import { talkUntil } from './hideout.js';
 import { ArravHandoffState } from './partner.js';
-import { bankedId, heldId, otherHalf, ownHalf } from './state.js';
+import { otherHalf, ownHalf } from './state.js';
 
 // Why: both conversations run through `~mesbox` / `~objbox`, which build a main modal no chat driver can see.
 

@@ -71,9 +71,11 @@ free-to-play wherever it is farmed.
 
 - [Quest harness recipes (A–D)](quest-harness-recipes.md)
 - [Quest harness recipes (E)](quest-harness-recipes-4.md)
-- [Quest harness recipes (F–H)](quest-harness-recipes-2.md)
+- [Quest harness recipes (F)](quest-harness-recipes-2.md)
+- [Quest harness recipes (H)](quest-harness-recipes-8.md)
 - [Quest harness recipes (M–O)](quest-harness-recipes-6.md)
 - [Quest harness recipes (P–R)](quest-harness-recipes-5.md)
-- [Quest harness recipes (S–Z)](quest-harness-recipes-7.md)
+- [Quest harness recipes (S)](quest-harness-recipes-7.md)
+- [Quest harness recipes (T)](quest-harness-recipes-9.md)
 - [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

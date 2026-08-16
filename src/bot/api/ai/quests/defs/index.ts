@@ -33,18 +33,29 @@ import { deathplateau } from './deathplateau/index.js';
 import { trollstronghold } from './trollstronghold/index.js';
 import { dragonslayer } from './dragonslayer/index.js';
 import { plaguecity } from './plaguecity/index.js';
+import { hazeelcult } from './hazeelcult.js';
 import { familycrest } from './familycrest/index.js';
 import { horror } from './horror/index.js';
 import { fightarena } from './fightarena/index.js';
 import { clocktower } from './clocktower.js';
+import { monksfriend } from './monksfriend.js';
 import { seaslug } from './seaslug/index.js';
 import { murder } from './murder/index.js';
+import { tribaltotem } from './tribaltotem.js';
+import { fishingcontest } from './fishingcontest/index.js';
+import { tbwt } from './tbwt/index.js';
+import { biohazard } from './biohazard/index.js';
 
 // Why: Dragon Slayer is last, as it is gated at 32 quest points and the queue has to earn them on the way past everything else before it becomes runnable.
 // Why: Death Plateau comes before Troll Stronghold, which requires it complete.
 // Why: Plague City comes before Family Crest, whose Ardougne legs ride the teleport it unlocks.
+// Why: Biohazard follows Plague City, which it requires complete.
 // Why: Shield of Arrav sits late among the free quests — it is the one quest that stalls without a partner or a banked certificate, so the queue should bank the others first.
-export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, knightssword, sheepshearer, restlessghost, cooksassistant, impcatcher, ernest, hetty, romeojuliet, princeali, piratestreasure, shieldofarrav, waterfall, goblindiplomacy, demonslayer, witchshouse, dwarfcannon, clocktower, merlinscrystal, priestperil, druidspirit, blackknight, druidicritual, lostcity, touristtrap, watchtower, vampireslayer, junglepotion, shilo, elementalworkshop, deathplateau, trollstronghold, plaguecity, familycrest, horror, fightarena, seaslug, murder, dragonslayer];
+// Why: Tribal Totem sits with the other Ardougne quests — no quest requires it, and its 21 Thieving gate is eligibility's job rather than the order's.
+// Why: Hazeel Cult follows Plague City for the same reason Family Crest does — every leg of it is in Ardougne, so the teleport Plague City unlocks pays for all of them.
+// Why: Fishing Contest follows Vampire Slayer, which is the other quest that empties Morgan's cupboard, so the two Draynor legs run back to back.
+// Why: Tai Bwo Wannai Trio follows Jungle Potion, which it requires complete.
+export const QUEST_DEFS: QuestModule[] = [runemysteries, doric, knightssword, sheepshearer, restlessghost, cooksassistant, impcatcher, ernest, hetty, romeojuliet, princeali, piratestreasure, shieldofarrav, waterfall, goblindiplomacy, demonslayer, witchshouse, dwarfcannon, clocktower, monksfriend, merlinscrystal, priestperil, druidspirit, blackknight, druidicritual, lostcity, touristtrap, watchtower, vampireslayer, fishingcontest, junglepotion, tbwt, shilo, elementalworkshop, deathplateau, trollstronghold, plaguecity, biohazard, hazeelcult, tribaltotem, familycrest, horror, fightarena, seaslug, murder, dragonslayer];
 
 export function defById(id: string): QuestModule | undefined {
     return QUEST_DEFS.find(d => d.record.id === id);

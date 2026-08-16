@@ -9,12 +9,12 @@ import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import type Tile from '../../../../../geometry/Tile.js';
-import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { bankedId, heldId, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { KATRINE_HANDIN, KATRINE_JOIN, SOA_ID, SOA_LOC, SOA_TILE, TRAMP, inStoreGround, inWeaponStore } from './areas.js';
 import { climb, enterBlackArmUpper, leaveBlackArmUpper, leaveWeaponStore, openContainer, walkAndTalk } from './hideout.js';
 import { SOA_STAGE } from './journal.js';
-import { bankedId, heldId, modalSaid } from './state.js';
+import { modalSaid } from './state.js';
 
 const WEAPONSMASTER_NPC = 643;
 const KILL_MS = 90_000;
