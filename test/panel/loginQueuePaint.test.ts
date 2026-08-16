@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { LOGIN_QUEUE_PAINT_RECT, paintLoginQueue } from '#/bot/panel/LoginQueuePaint.js';
+import { LOGIN_QUEUE_PAINT_RECT, paintLoginQueue, queueAheadLabel } from '#/bot/panel/LoginQueuePaint.js';
 import { resolveDock, type Rect } from '#/bot/paint/paintLogic.js';
 
 function overlaps(a: Rect, b: Rect): boolean {
@@ -25,8 +25,10 @@ describe('auto-login queue paint', () => {
 
         expect(text.map(line => line.value)).toEqual([
             'AUTO-LOGIN QUEUE',
-            'Position 27 of 103'
+            '26 bots in front'
         ]);
+        expect(queueAheadLabel(1)).toBe('0 bots in front');
+        expect(queueAheadLabel(2)).toBe('1 bot in front');
         expect(fills[0]).toEqual([
             LOGIN_QUEUE_PAINT_RECT.x,
             LOGIN_QUEUE_PAINT_RECT.y,

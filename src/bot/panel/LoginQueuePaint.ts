@@ -20,5 +20,15 @@ export function paintLoginQueue(ctx: CanvasRenderingContext2D, status: LoginQueu
 
     ctx.fillStyle = '#cdd3da';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`Position ${status.position} of ${status.total}`, x + 16, y + 38);
+    ctx.fillText(queueAheadLabel(status.position), x + 16, y + 38);
+}
+
+/** How many logins sit ahead of this slot. Position 1 means the head. */
+export function botsInFront(position: number): number {
+    return Math.max(0, position - 1);
+}
+
+export function queueAheadLabel(position: number): string {
+    const n = botsInFront(position);
+    return `${n} bot${n === 1 ? '' : 's'} in front`;
 }

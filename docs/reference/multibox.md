@@ -62,7 +62,7 @@ const LOGIN_BATCH_COOLDOWN_MS = 16000;
 ```
 
 A denied but due request keeps its FIFO place across polls, giving the canvas a live
-`position of total`. Granting or removing a slot compacts the queue immediately.
+`N bots in front`. Granting or removing a slot compacts the queue immediately.
 
 ## Resource telemetry
 
