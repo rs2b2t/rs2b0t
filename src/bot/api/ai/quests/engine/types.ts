@@ -48,6 +48,20 @@ export interface QuestSnapshot {
     freeSlots?: number;
 }
 
+// Why: display names collide — "Broken shield", "Certificate", "Fishing spot" and "Gate" each name more than one thing — so a name lookup silently accepts the wrong object.
+
+/** How many of an exact object id the pack holds. */
+export function heldId(snap: QuestSnapshot, id: number): number {
+    return snap.invIds?.get(id) ?? 0;
+}
+
+// Why: an unread bank is not an empty bank, and a bare count sends the bot to a booth for something it never saw.
+
+/** How many of an exact object id the last bank read saw; 0 until one lands. */
+export function bankedId(snap: QuestSnapshot, id: number): number {
+    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
+}
+
 export type QuestStep =
     | { kind: 'talk'; stop: NpcStop }
     | { kind: 'grabGround'; item: string; anchor: Tile; waitIfMissing?: boolean }

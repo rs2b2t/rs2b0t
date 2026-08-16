@@ -1,6 +1,6 @@
 import { Game } from '../../../../game/Game.js';
 import { QUESTS } from '../../data/quests.js';
-import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { SOA_HOPS, SOA_ID } from './areas.js';
 import { blackarmStep } from './blackarm.js';
 import { certStep, certsBanked, certsHeld, curatorStep } from './certs.js';
@@ -8,7 +8,7 @@ import { ArravConfig, resolveGang, type ArravGang } from './config.js';
 import { readShieldOfArravProgress, SOA_STAGE } from './journal.js';
 import { ArravHandoffState, decideHandoff, handoffStep } from './partner.js';
 import { phoenixStep } from './phoenix.js';
-import { heldId, otherHalf, ownHalf } from './state.js';
+import { otherHalf, ownHalf } from './state.js';
 
 let cachedGang: ArravGang | null = null;
 let cachedFor = '';

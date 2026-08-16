@@ -11,6 +11,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
+import { GARLIC, MORGAN_STAIRS_TOP, takeGarlic } from '../exec/garlic.js';
 import { QuestFood } from '../food.js';
 
 export const VAMPIRE_SLAYER_STAGE = {
@@ -53,7 +54,7 @@ async function readVampireSlayerStage(): Promise<number | undefined> {
 
 const ITEM = {
     BEER: 'Beer',
-    GARLIC: 'Garlic',
+    GARLIC,
     HAMMER: 'Hammer',
     STAKE: 'Stake',
     SWORD: 'Black sword',
@@ -61,8 +62,6 @@ const ITEM = {
 } as const;
 
 const COUNT_DRAYNOR_ID = 757;
-const GARLIC_CUPBOARD_CLOSED_ID = 2612;
-const GARLIC_CUPBOARD_OPEN_ID = 2613;
 const COFFIN_CLOSED_ID = 2614;
 
 const FOOD_TARGET = 20;
@@ -70,9 +69,6 @@ const COIN_FLOAT = 5000;
 const COIN_RESERVE = 2000;
 
 const DRAYNOR_BANK = new Tile(3093, 3243, 0);
-const MORGAN_STAIRS_BOTTOM = new Tile(3099, 3266, 0);
-const MORGAN_STAIRS_TOP = new Tile(3100, 3266, 1);
-const GARLIC_CUPBOARD = new Tile(3096, 3268, 1);
 const JOLLY_BOAR = new Tile(3277, 3490, 0);
 const VARROCK_GENERAL = { npc: 'Shop keeper', anchor: new Tile(3218, 3415, 0) };
 const VARROCK_SWORDS = { npc: 'Shop keeper', anchor: new Tile(3203, 3397, 0) };
@@ -217,41 +213,6 @@ function wornWeapon(snap: QuestSnapshot): boolean {
 
 function bankWeapon(snap: QuestSnapshot): string | null {
     return SAFE_WEAPONS.find(name => banked(snap, name) > 0) ?? null;
-}
-
-async function climbMorganStairs(log: (message: string) => void): Promise<boolean> {
-    if (!(await Traversal.walkResilient(MORGAN_STAIRS_BOTTOM, { radius: 2, attempts: 3, timeoutMs: 90_000, log }))) {
-        return false;
-    }
-    const stairs = Locs.query().name('Staircase').action('Climb-up').within(6).nearest();
-    if (!stairs || !(await stairs.interact('Climb-up'))) {
-        log("Morgan's Staircase did not offer Climb-up");
-        return false;
-    }
-    await Execution.delayUntil(() => Game.tile()?.level === 1, 8000);
-    return false;
-}
-
-async function takeGarlic(log: (message: string) => void): Promise<boolean> {
-    if (Inventory.contains(ITEM.GARLIC)) return true;
-    if (Game.tile()?.level !== 1) return climbMorganStairs(log);
-    if (!(await Traversal.walkResilient(GARLIC_CUPBOARD, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
-        return false;
-    }
-    const shut = Locs.query().where(loc => loc.id === GARLIC_CUPBOARD_CLOSED_ID).action('Open').within(6).nearest();
-    if (shut) {
-        await shut.interact('Open');
-        await Execution.delayTicks(2);
-        return false;
-    }
-    const open = Locs.query().where(loc => loc.id === GARLIC_CUPBOARD_OPEN_ID).action('Search').within(6).nearest();
-    if (!open) {
-        log("Morgan's garlic Cupboard is neither open nor searchable");
-        return false;
-    }
-    const before = Inventory.count(ITEM.GARLIC);
-    if (!(await open.interact('Search'))) return false;
-    return Execution.delayUntil(() => Inventory.count(ITEM.GARLIC) > before, 8000);
 }
 
 async function leaveMorganUpper(log: (message: string) => void): Promise<boolean> {

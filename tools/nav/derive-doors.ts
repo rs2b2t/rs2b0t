@@ -77,6 +77,8 @@ function main(): void {
             // West Ardougne's plague house: loc_2534 answers "This door is locked." to everyone, and loc_2535 opens only for a warrant holder with a mourner in earshot, mid-conversation.
             // Why: baked as edges the pathfinder alternates between the two and crosses neither.
             'loc_2534', 'loc_2535',
+            // Why: the mourner headquarters' two doors are locked until the stew is poisoned and then open only to a worn doctor's gown behind an "In you go doc." the walker cannot answer, and baked as edges the route to the cauldron runs through the building — which is the one thing the stage needing the cauldron cannot do. The fence at 2541,3331 is the way in.
+            'mournerstewdoor',
             // Shield of Arrav's three hideout doors. Why: the weapon store answers Open with "The door is securely locked" and yields only to an oplocu with the key, while the other two refuse until you have joined and then p_teleport you through — none is an edge the walker can step.
             'phoenixdoor', 'phoenixdoor2', 'blackarmdoor'
         ]);
@@ -90,6 +92,9 @@ function main(): void {
 
     const ONE_WAY_EXCLUDED = new Set([
         '3108,3353,0', '3109,3353,0',
+        // Handelmort Mansion's inner door: quest_totem.rs2 opens it only for a player north of it, and everything the mansion holds is reached by Cromperty's block instead.
+        // Why: baked both ways the pathfinder treats the mansion as a shortcut and the walker loops on "This door is securely locked"; the outward half is curated in travelCatalog.ts.
+        '2635,3321,0',
         // Gu'Tanoth's east gate: the ogre guard demands a bar of gold and teleports you down the hill otherwise, and nothing in the game needs that crossing.
         // Why: its north-west twin is left in — that guard refuses only until the relic is shown, after which the gate behaves as an ordinary door and everything west of it depends on the edge.
         '2549,3028,0', '2550,3028,0'

@@ -2154,6 +2154,51 @@
   },
   {
     "from": {
+      "x": 2541,
+      "z": 3331,
+      "level": 0
+    },
+    "to": {
+      "x": 2542,
+      "z": 3331,
+      "level": 0
+    },
+    "locName": "Fence",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2068,
+    "locX": 2541,
+    "locZ": 3331,
+    "debugName": "mournerstewfence",
+    "options": [
+      "Climb-over"
+    ],
+    "note": "the only way into the mourner HQ yard that is not the gown-locked building (Biohazard)"
+  },
+  {
+    "from": {
+      "x": 2542,
+      "z": 3331,
+      "level": 0
+    },
+    "to": {
+      "x": 2541,
+      "z": 3331,
+      "level": 0
+    },
+    "locName": "Fence",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2068,
+    "locX": 2541,
+    "locZ": 3331,
+    "debugName": "mournerstewfence",
+    "options": [
+      "Climb-over"
+    ]
+  },
+  {
+    "from": {
       "x": 2836,
       "z": 9599,
       "level": 0

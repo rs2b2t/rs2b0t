@@ -4,6 +4,44 @@
 
 Per-quest seed and stage commands, with what each recipe has proven.
 
+## Monk's Friend — stage-scoped harness
+
+[`e2e/monks-friend-240-live.ts`](../../e2e/monks-friend-240-live.ts), members-only, so
+`:8890`. `--stage N` is the raw `%drunkmonkquest` value and relogs after seeding it;
+`--until N` is the value to reach, and `80` waits for the list to go green instead.
+
+```sh
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 0 --until 80 --minutes 30 --tick 200  # end to end
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 0 --until 20 --minutes 20 --tick 200  # ladder, cave, hand-in
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 10 --until 20 --minutes 12 --tick 200 # the blanket alone
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 40 --until 60 --minutes 15 --tick 200 # jug, sink, Cedric
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 50 --until 70 --minutes 15 --tick 200 # axe, logs, the cart
+HEADED=1 bun e2e/monks-friend-240-live.ts --stage 70 --until 80 --minutes 12 --tick 200 # the party
+```
+
+Measured at `--tick 200`, no parks:
+
+| Stages | Minutes | Covers |
+|---|---|---|
+| 0 → 20 | 2 | Omad, the hidden ladder, the cave, the hand-in |
+| 20 → 40 | 1 | Omad names Cedric, Cedric asks for water |
+| 40 → 60 | 2 | the jug at Port Khazard, the guardhouse sink, the cart |
+| 50 → 70 | 2 | Kortan's iron axe, a forest tree, the logs |
+| 70 → 80 | 1 | the dance and `QUEST COMPLETE!` |
+| 0 → 80 | 5 | a clean account to green, 13 steps |
+
+Three details govern this harness:
+
+- **The relog after a seed does two jobs.** `update_questlist` recolours the list at
+  login, and the same script re-arms the `blanket_ladder` timer whenever
+  `%drunkmonkquest >= 10` — so `--stage 10` has no hidden ladder until it has relogged.
+  See [Quest pitfalls](../decisions/quest-pitfalls-10.md).
+- **The `quests` setting is a record id.** It seeds `drunkmonk`; the display name matches
+  nothing, is filtered out, and an empty selection runs every quest instead.
+- **The bank holds coins and food and nothing else.** The jug comes from Port Khazard's
+  general store, the water from the sink at (2610,3195), the axe from Aemad's and the
+  logs from a tree beside Cedric — seeding any of them hides whether the bot can find it.
+
 ## Murder Mystery — leg-scoped harness
 
 [`e2e/murder-mystery-256-live.ts`](../../e2e/murder-mystery-256-live.ts), members-only,
@@ -98,9 +136,11 @@ silver sickle costs.
 
 - [Quest harness recipes (A–D)](quest-harness-recipes.md)
 - [Quest harness recipes (E)](quest-harness-recipes-4.md)
-- [Quest harness recipes (F–H)](quest-harness-recipes-2.md)
+- [Quest harness recipes (F)](quest-harness-recipes-2.md)
+- [Quest harness recipes (H)](quest-harness-recipes-8.md)
 - [Quest harness recipes (I–L)](quest-harness-recipes-3.md)
 - [Quest harness recipes (P–R)](quest-harness-recipes-5.md)
-- [Quest harness recipes (S–Z)](quest-harness-recipes-7.md)
+- [Quest harness recipes (S)](quest-harness-recipes-7.md)
+- [Quest harness recipes (T)](quest-harness-recipes-9.md)
 - [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

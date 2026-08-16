@@ -23,6 +23,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'biohazard-234-live',
+        harness: 'biohazard-234-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        budgetMin: 30,
+        provenAt: '8b1c5e06',
+        documentedIn: 'docs/reference/quest-harness-recipes.md',
+        note: 'clean account to journal complete in 14min at --tick 100, no parks'
+    },
+    {
         id: 'brimhaven-agility-test',
         harness: 'brimhaven-agility-test.ts',
         covers: { scripts: ['BrimhavenAgility'] },
@@ -182,6 +192,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'fishing-contest-244-live',
+        harness: 'fishing-contest-244-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        budgetMin: 15,
+        provenAt: '8b21aef5',
+        documentedIn: 'docs/reference/quest-harness-recipes-2.md',
+        note: 'uncheated --stage 0 --until 5 finished in 6 minutes at --tick 150; --stage is %fishingcompo'
+    },
+    {
         id: 'gatheringbot-cooker-pair-test',
         harness: 'gatheringbot-cooker-pair-test.ts',
         covers: { scripts: ['GatheringBot'] },
@@ -228,6 +248,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'hazeel-cult-248-live',
+        harness: 'hazeel-cult-248-live.ts',
+        covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
+        status: 'vetted',
+        budgetMin: 45,
+        provenAt: 'a8fa0762',
+        documentedIn: 'docs/reference/quest-harness-recipes-8.md',
+        note: 'clean account to journal complete in 4min at --tick 200, no parks; --stage is %hazeelcultquest'
+    },
+    {
         id: 'herblore-secondaries-test',
         harness: 'herblore-secondaries-test.ts',
         covers: { scripts: ['HerbloreSecondaries'] },
@@ -251,7 +281,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['AIOQuester'] },
         status: 'documented',
         budgetMin: 90,
-        documentedIn: 'docs/reference/quest-harness-recipes-2.md'
+        documentedIn: 'docs/reference/quest-harness-recipes-6.md'
     },
     {
         id: 'hosted-proof-test',
@@ -346,6 +376,15 @@ export const CASES: readonly Case[] = [
         covers: { subsystems: ['quests', 'world'] },
         status: 'unvetted',
         note: 'import-fences.md names it as an ABI consumer, not as run instructions'
+    },
+    {
+        id: 'monks-friend-240-live',
+        harness: 'monks-friend-240-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        budgetMin: 30,
+        provenAt: '8b21aef5',
+        note: "Monk's Friend start to finish in 5 minutes at --tick 200; --stage is the raw %drunkmonkquest"
     },
     {
         id: 'mossgiant-dart-test',
@@ -568,6 +607,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'tbwt-261-live',
+        harness: 'tbwt-261-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'documented',
+        budgetMin: 180,
+        documentedIn: 'docs/reference/quest-harness-recipes-9.md'
+    },
+    {
         id: 'thievingbot-test',
         harness: 'thievingbot-test.ts',
         covers: { scripts: ['ThievingBot'] },
@@ -585,6 +632,15 @@ export const CASES: readonly Case[] = [
         harness: 'trapdoor-mines-live.ts',
         covers: { subsystems: ['world'] },
         status: 'unvetted'
+    },
+    {
+        id: 'tribal-totem-262-live',
+        harness: 'tribal-totem-262-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        budgetMin: 45,
+        provenAt: 'ea865e4d',
+        note: 'Tribal Totem start to finish in 5 minutes at --tick 200 on 70 stats; --stage is %totemquest and --combo skips the KURT lock'
     },
     {
         id: 'trollstronghold-264-live',

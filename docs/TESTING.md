@@ -17,5 +17,5 @@
 | [The live-harness ABI](how-to/write-a-harness.md) | the ABI, shared helpers |
 | [Write a harness](how-to/harness-shape.md) | the shape, and the end-to-end smoke |
 | [Seeding test accounts](reference/seeding-test-accounts.md) | inventory vs bank cheats and their traps |
-| Quest harness recipes [A–D](reference/quest-harness-recipes.md), [E](reference/quest-harness-recipes-4.md), [F–H](reference/quest-harness-recipes-2.md), [I–L](reference/quest-harness-recipes-3.md), [M–O](reference/quest-harness-recipes-6.md), [P–R](reference/quest-harness-recipes-5.md), [S–Z](reference/quest-harness-recipes-7.md) | per-quest seed and stage commands |
+| Quest harness recipes [A–D](reference/quest-harness-recipes.md), [E](reference/quest-harness-recipes-4.md), [F](reference/quest-harness-recipes-2.md), [H](reference/quest-harness-recipes-8.md), [I–L](reference/quest-harness-recipes-3.md), [M–O](reference/quest-harness-recipes-6.md), [P–R](reference/quest-harness-recipes-5.md), [S](reference/quest-harness-recipes-7.md), [T](reference/quest-harness-recipes-9.md) | per-quest seed and stage commands |
 | [Quest harness method](reference/quest-harness-method.md) | what every quest harness does, whichever quest it drives |

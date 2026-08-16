@@ -324,6 +324,26 @@ export function mageArenaBarrierEdges(): TransportEdgeData[] {
     ];
 }
 
+// Why: `[oploc1,tribaltotemdoor]` opens only for `coordz(coord) > coordz(loc_coord)`, so the mansion's one ground-floor door lets a player out and never in.
+// Why: derive-doors.ts drops the instance rather than baking it both ways, and this restores the half that works — without it every route out of the mansion reads unreachable.
+
+/** Handelmort Mansion's inner door (loc 0_41_51_11_57), northward side only. */
+export function handelmortDoorEdges(): TransportEdgeData[] {
+    const loc = parseLcCoord('0_41_51_11_57');
+    return [{
+        from: { x: loc.x, z: loc.z + 1, level: 0 },
+        to: { x: loc.x, z: loc.z, level: 0 },
+        locName: 'Door',
+        action: 'Open',
+        kind: 'door',
+        locId: 2706,
+        locX: loc.x,
+        locZ: loc.z,
+        debugName: 'handelmort_inner_door_out',
+        options: ['Open']
+    }];
+}
+
 /**
  * OD-relevant agility shortcuts from skill_agility/shortcuts.rs2 (not full courses).
  * Coal logs + island ropes already live in transports.json — these fill remaining OD gaps.
@@ -417,6 +437,7 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...essenceExitEdges(),
         ...wildyLeverEdges(),
         ...mageArenaBarrierEdges(),
+        ...handelmortDoorEdges(),
         ...agilityShortcutEdges(),
         ...elkoyMazeEdges()
     ];
@@ -436,6 +457,7 @@ export const TRAVEL_FAMILIES = [
     'essence_entry',
     'essence_exit',
     'mage_arena_barrier',
+    'handelmort_door',
     'agility_shortcut',
     'elkoy_maze'
 ] as const;
