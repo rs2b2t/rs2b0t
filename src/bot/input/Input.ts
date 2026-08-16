@@ -66,6 +66,10 @@ export const Input = {
         return actions.menuAction(MiniMenuAction.TGT_BUTTON, 0, 0, spellComId) && actions.menuAction(MiniMenuAction.TGT_LOC, typecode, lx, lz);
     },
 
+    castOnItem(spellComId: number, itemId: number, itemSlot: number, itemComId: number): boolean {
+        return actions.menuAction(MiniMenuAction.TGT_BUTTON, 0, 0, spellComId) && actions.menuAction(MiniMenuAction.TGT_HELD, itemId, itemSlot, itemComId);
+    },
+
     walk(lx: number, lz: number): boolean {
         return actions.walkTo(lx, lz);
     },

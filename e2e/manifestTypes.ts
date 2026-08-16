@@ -8,7 +8,7 @@ export const SCRIPT_NAMES = [
     'FlaxSpinner', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
     'HerbloreSecondaries', 'HillGiant', 'LeatherCrafter', 'MossGiant',
     'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RockCrab', 'RoguesPurse',
-    'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot',
+    'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
     'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WildyAgility'
 ] as const;
 
