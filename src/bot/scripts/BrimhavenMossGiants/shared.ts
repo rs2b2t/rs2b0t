@@ -7,7 +7,6 @@ import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
-import { matchesCommonBankLoot } from '../../api/bank/Banking.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { foodForms, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { rangeLoadoutOf, rangeSupplyEmpty } from '../../api/combat/ranged.js';
@@ -186,9 +185,9 @@ export function findLoot() {
             // Ammo (arrows/bolts) dropped by the target — only when the loot-ammo option is on.
             const lootAmmo = cfg.lootAmmo && cfg.style === 'range' && name === rangeProjectile().toLowerCase();
             // Cake is only ever grabbed while looting (its own phase), so no extra gate is needed here.
+            // Why: common bank junk (beer, kebab, gems) is not looted — that is a banking concern, not a loot-one.
             return (
                 cfg.lootSet.has(name) ||
-                (cfg.bankCommon && matchesCommonBankLoot(g.name ?? '', g.id)) ||
                 (cfg.cake && name === 'slice of cake' && cakeCount() < 2) ||
                 lootAmmo
             );
