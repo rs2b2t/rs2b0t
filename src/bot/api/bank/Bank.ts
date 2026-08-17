@@ -183,9 +183,7 @@ export const Bank = {
         }
         const take = Math.min(count, available);
         const target = before + take;
-        // Withdraw-1 / Withdraw-5 / Withdraw-10 skip the count dialog (more reliable than X).
-        // Every other amount routes through the single Withdraw-X dialog below — one click instead
-        // of a 10/5/1 decomposition (e.g. 49 previously issued 9 clicks). See #652.
+        // Withdraw-1/5/10 skip the count dialog (more reliable than X); every other amount routes through the single Withdraw-X dialog below (e.g. 49 was 9 clicks before #652).
         if (take === 1 || take === 5 || take === 10) {
             const fixedOp = item.ops.find(
                 (o): o is string => o !== null && new RegExp(`withdraw[\\s-]*${take}\\b`, 'i').test(o)
