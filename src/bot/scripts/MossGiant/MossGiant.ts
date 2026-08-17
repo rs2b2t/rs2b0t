@@ -21,7 +21,7 @@ import { DROP_DB } from '../../data/dropdb.js';
 import { STAFFS } from '../../api/combat/equipment.js';
 import { foodForms, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
-import { depositAllExcept, matchesCommonBankLoot } from '../../api/bank/Banking.js';
+import { depositAllExcept } from '../../api/bank/Banking.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -109,7 +109,6 @@ let RUNES_WITHDRAW = 150;
 let AMMO_WITHDRAW = 500;
 let FOOD_WITHDRAW = 20;
 let LOOT_SET = new Set<string>();
-let BANK_COMMON = true;
 let BURY_BONES = false;
 let SAFESPOT = DEFAULT_SAFESPOT;
 let BANK_TILE = DEFAULT_BANK;
@@ -209,11 +208,9 @@ function fieldGiants(): Npc[] {
 }
 
 function findLoot() {
+    // Why: looting respects only the selected drops — "Bank common junk" is a banking concern, not a loot-one.
     return GroundItems.query()
-        .where(g => {
-            const name = (g.name ?? '').toLowerCase();
-            return LOOT_SET.has(name) || (BANK_COMMON && matchesCommonBankLoot(g.name ?? '', g.id));
-        })
+        .where(g => LOOT_SET.has((g.name ?? '').toLowerCase()))
         .within(FIELD_RADIUS)
         .nearest();
 }
@@ -676,7 +673,6 @@ export default class MossGiant extends TaskBot {
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
-        BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         BURY_BONES = this.settings.bool('buryBones', false);
         if (BURY_BONES) {
             LOOT_SET.add('big bones');
