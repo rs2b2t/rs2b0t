@@ -262,6 +262,11 @@ export default class AutoFighter extends TaskBot {
         });
 
         Sustain.set(async () => {
+            // Why: while the bank is open Inventory exposes the bank-side items (Deposit ops),
+            // so 'Eat' fails and the sustain loop spins instead of healing. Eat after banking.
+            if (Bank.isOpen()) {
+                return;
+            }
             if (needEat()) {
                 const food = Inventory.items().find(i => matchesAny(i.name, [FOOD]));
                 if (food) {
@@ -419,7 +424,9 @@ class LootDrops implements Task {
 class EatFood implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
-        return needEat();
+        // Why: the bank side shows Deposit ops, not Eat, so trying to eat while the bank
+        // is open spins forever and blocks BankRun — skip eating until the bank closes.
+        return needEat() && !Bank.isOpen();
     }
     async execute(): Promise<void> {
         for (let bite = 0; bite < 28; bite++) {
@@ -475,6 +482,7 @@ class PanicRetreat implements Task {
             this.bot.setStatus('panic: bank empty — waiting for regen');
             await Execution.delayUntil(() => Skills.hpFraction() >= 0.9 || Game.inCombat() || ChatDialog.canContinue() || EventSignal.pending(), 300_000);
         }
+        await Bank.close();
     }
 }
 
@@ -575,6 +583,8 @@ class BankRun implements Task {
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
         this.bot.setStatus('heading back to the spot');
+        // Why: leaving the bank open after banking blocks eating/fighting at the anchor — close it here.
+        await Bank.close();
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
 
