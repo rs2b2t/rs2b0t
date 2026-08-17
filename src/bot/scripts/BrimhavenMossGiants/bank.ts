@@ -2,13 +2,16 @@ import { Bank } from '../../api/bank/Bank.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
+import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Traversal } from '../../api/walking/Traversal.js';
+import { Navigator } from '../../event/webwalk/Navigator.js';
+import type { DangerZoneRect } from '../../event/webwalk/data/dangerZones.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
 import { runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodForms } from '../../api/combat/food.js';
-import { BOAT_FARE, cfg } from './config.js';
+import { BOAT_FARE, cfg, PIER_TILE } from './config.js';
 import {
     castsLeft,
     equippedProjectileCount,
@@ -211,6 +214,69 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
 
     bot.countBankTrip();
     bot.setStatus('restocked — sailing back to Brimhaven');
+    await sailToField(bot);
+}
+
+/**
+ * Zone covering the Port Sarim / Musa / Seaman Thresnor corridor. The only valid
+ * route to Brimhaven from Ardougne uses Captain Barnaby (pier x≈2683, boat to x≈2775);
+ * that corridor stays west of x=2780, so excluding this rect can never block the
+ * correct route but forces any (re)path away from the wrong port.
+ */
+const WRONG_BOAT_ZONE: DangerZoneRect = { minX: 2780, maxX: 3040, minZ: 3130, maxZ: 3330 };
+
+function routeUsesWrongBoat(hops: readonly { locName?: string }[]): boolean {
+    return hops.some(h => {
+        const n = (h.locName ?? '').toLowerCase();
+        return n.includes('thresnor') || n.includes('musa') || n.includes('port sarim');
+    });
+}
+
+function routeUsesBarnaby(hops: readonly { locName?: string }[]): boolean {
+    return hops.some(h => (h.locName ?? '').toLowerCase().includes('barnaby'));
+}
+
+/**
+ * Sail back to the Brimhaven field, refusing any route that uses the wrong boat.
+ * We plan the path first and reject it if it contains Seaman Thresnor / Musa / Port
+ * Sarim instead of Captain Barnaby, and we also exclude that corridor via avoidZones
+ * so walkResilient's internal repaths can never drift to the wrong port.
+ */
+export async function sailToField(bot: BrimhavenMossGiants): Promise<void> {
+    const to = { x: cfg.fieldTile.x, z: cfg.fieldTile.z, level: cfg.fieldTile.level };
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const me = Game.tile();
+        if (!me) {
+            await Execution.delayTicks(2);
+            continue;
+        }
+        const from = { x: me.x, z: me.z, level: me.level };
+        const res = await Navigator.findPath(from, to, {
+            timeoutMs: 8000,
+            avoidZones: attempt > 0 ? [WRONG_BOAT_ZONE] : undefined
+        });
+        const hops = res.ok ? (res.hops ?? []) : [];
+        const wrong = routeUsesWrongBoat(hops);
+        const barnaby = routeUsesBarnaby(hops);
+        if (!res.ok || wrong || !barnaby) {
+            bot.log(`planned route rejected (ok=${res.ok}, barnaby=${barnaby}, wrongBoat=${wrong}) — replanning (attempt ${attempt + 1})`);
+            continue;
+        }
+        bot.log('planned route uses Captain Barnaby — sailing to Brimhaven');
+        // Anchor at the pier so the boat hop fires from a stationary, in-range spot.
+        if (!(await Traversal.walkResilient(PIER_TILE, { radius: 2, attempts: 4, timeoutMs: 120_000, log: m => bot.log(`  ${m}`) }))) {
+            bot.log('walk to the pier failed — sailing straight to the field');
+        }
+        if (await Traversal.walkResilient(cfg.fieldTile, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) })) {
+            return;
+        }
+        bot.log('sail to field failed — retrying');
+    }
+    // Last resort: walk without validation so we never stall (may still pick the wrong boat).
+    bot.log('route validation exhausted — walking to the field without validation');
+    if (!(await Traversal.walkResilient(PIER_TILE, { radius: 2, attempts: 4, timeoutMs: 120_000, log: m => bot.log(`  ${m}`) }))) {
+        bot.log('walk to the pier failed — sailing straight to the field');
+    }
     await walkToField(bot);
 }
 
