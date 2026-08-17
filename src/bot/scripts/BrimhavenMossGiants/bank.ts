@@ -3,14 +3,17 @@ import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
+import { Skills } from '../../api/skills/Skills.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
 import { runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
+import { foodForms } from '../../api/combat/food.js';
 import { BOAT_FARE, cfg } from './config.js';
 import {
     castsLeft,
     equippedProjectileCount,
     foodCount,
+    hpFrac,
     keepNames,
     primaryFoodCount,
     rangeLoadout,
@@ -93,6 +96,67 @@ export async function withdrawStyleSupplies(bot: BrimhavenMossGiants): Promise<v
     }
 }
 
+/** Top the food stack up to cfg.foodWithdraw (the "correct amount" for a trip). */
+export async function topUpFood(bot: BrimhavenMossGiants): Promise<void> {
+    bot.setStatus(`withdrawing ${cfg.foodName}`);
+    for (let guard = 0; guard < 12 && primaryFoodCount() < cfg.foodWithdraw && !Inventory.isFull(); guard++) {
+        const need = cfg.foodWithdraw - primaryFoodCount();
+        const before = primaryFoodCount();
+        await Bank.withdraw(cfg.foodName, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
+        if (!(await Execution.delayUntil(() => primaryFoodCount() > before, 2500))) {
+            break;
+        }
+    }
+}
+
+/**
+ * Food we can eat at the bank. Mirrors the API's foodForms for the configured food,
+ * but also recognises partial cake/pizza/pie forms the API list omits (e.g. "1/3 cake"),
+ * so healing doesn't stall mid-cake.
+ */
+function edibleAtBank(name: string | null | undefined): boolean {
+    const n = (name ?? '').toLowerCase();
+    if (foodForms(cfg.foodName).includes(n)) {
+        return true;
+    }
+    return /\b\d\/\d (cake|pizza|pie)\b/.test(n) || n === 'slice of cake' || n === 'chocolate slice';
+}
+
+/** Eat food at the bank (safe) to recover HP so we return to the field healthy. */
+export async function healAtBank(bot: BrimhavenMossGiants): Promise<void> {
+    const maxHp = Skills.level('hitpoints');
+    bot.log(`[healAtBank] start — hp=${Skills.effective('hitpoints')}/${maxHp}, foodName='${cfg.foodName}', invUsed=${Inventory.used()}, free=${Inventory.free()}`);
+    // Spam-eat until full, out of food, or the 1-minute budget is up. We don't check
+    // per-bite progress — eating is reliable and the eat cooldown is handled by the delay.
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+        const hp = Skills.effective('hitpoints');
+        if (hp >= maxHp) {
+            bot.log(`[healAtBank] at full hp (${hp}/${maxHp}) — stopping`);
+            break;
+        }
+        if (Inventory.isFull()) {
+            bot.log('[healAtBank] inventory full — stopping');
+            break;
+        }
+        // Prefer the configured food, then fall back to any edible item.
+        const food =
+            Inventory.items().find(i => foodForms(cfg.foodName).includes((i.name ?? '').toLowerCase())) ??
+            Inventory.items().find(i => edibleAtBank(i.name));
+        if (!food) {
+            bot.log(`[healAtBank] no edible food found (inv=${Inventory.items().map(i => i.name).join(', ')}) — stopping`);
+            break;
+        }
+        const foodName = food.name ?? '?';
+        bot.setStatus(`healing at bank (${Math.round(hpFrac() * 100)}% hp)`);
+        bot.log(`[healAtBank] eating '${foodName}' (hp ${hp}/${maxHp})`);
+        await food.interact('Eat');
+        // Wait out the eat cooldown (~3 ticks) before the next bite so clicks aren't dropped.
+        await Execution.delayTicks(3);
+    }
+    bot.log(`[healAtBank] done — hp=${Skills.effective('hitpoints')}/${maxHp}`);
+}
+
 /** Walk to the bank, deposit loot, restock, grab boat coins, then sail back. */
 export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolean): Promise<void> {
     if (!(await Traversal.walkResilient(cfg.bankTile, { radius: 3, attempts: 6, timeoutMs: 240_000, log: m => bot.log(`  ${m}`) }))) {
@@ -104,17 +168,26 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
         return;
     }
     await Bank.depositAllMatching(depositAllExcept(keepNames()), m => bot.log(`  ${m}`));
+    // The bank's item list fills a beat after it opens — withdrawals before that read 0.
+    if (!(await Execution.delayUntil(() => Bank.loaded(), 5000))) {
+        bot.log('bank item list never loaded — will retry next bank trip');
+        return;
+    }
 
     if (withdrawFood) {
-        bot.setStatus(`withdrawing ${cfg.foodName}`);
-        for (let guard = 0; guard < 12 && primaryFoodCount() < cfg.foodWithdraw && !Inventory.isFull(); guard++) {
-            const need = cfg.foodWithdraw - primaryFoodCount();
-            const before = primaryFoodCount();
-            await Bank.withdraw(cfg.foodName, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-            if (!(await Execution.delayUntil(() => primaryFoodCount() > before, 2500))) {
-                break;
+        // 1) grab a stack we can eat from + carry.
+        await topUpFood(bot);
+        // 2) the bank must be closed to eat — close, heal up (so we don't arrive low and burn
+        //    the whole stack at once), then reopen to top off again.
+        if (Skills.effective('hitpoints') < Skills.level('hitpoints') && (await Bank.close())) {
+            await healAtBank(bot);
+            if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => bot.log(`  ${m}`)))) {
+                bot.log('could not reopen the bank to top off food — carrying what we have');
             }
         }
+        // 3) top back up to the correct amount for the trip back to Brimhaven.
+        await topUpFood(bot);
+
         if (primaryFoodCount() === 0) {
             bot.noteBankEmpty(true);
             bot.log(`WARNING: no '${cfg.foodName}' in the bank — carrying on without food. Deposit food (or fix the name) to resume eating.`);
