@@ -16,9 +16,8 @@ import { fmtDuration } from '../../paint/paintLogic.js';
 import { COMBAT_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { foodForms, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
-import { matchesCommonBankLoot } from '../../api/bank/Banking.js';
+import { BANK_LOCATIONS, nearestBank } from '../../api/bank/BankLocations.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
-import { Locs } from '../../api/locs/Locs.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { matchesEntityName } from '../../api/query/Query.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -29,9 +28,10 @@ import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
 
 const TARGET = 'Giant';
 
-// Why: the public Edgeville trapdoor + dungeon gates already sit on the nav graph, so the hut/brass-key shortcut is unused weight.
-const BANK_TILE = new Tile(3094, 3493, 0);
-const TRAPDOOR = new Tile(3096, 3468, 0);
+// Why: routing to the pit/bank is left to the nav graph, which uses the Brass-key hut ladder + keyed
+// door when the key is held and the public trapdoor otherwise — no hard-coded route.
+const BRASS_KEY_AT = new Tile(3131, 9862, 0); // dungeon tile where the Brass key is found
+const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const PIT_RADIUS = 14;
 
 const DROPS: string[] = DROP_DB[TARGET] ?? [];
@@ -114,6 +114,7 @@ export default class HillGiant extends TaskBot {
             new SetAttackStyle(this),
             new BuryBones(this),
             new BankRun(this),
+            new GetKey(this),
             new EnterPit(this),
             new LootCorpse(this),
             new Fight(this)
@@ -206,51 +207,60 @@ export default class HillGiant extends TaskBot {
         if (here && Math.max(Math.abs(here.x - dest.x), Math.abs(here.z - dest.z)) <= 3 && here.level === dest.level) {
             return true;
         }
+        const brassKey = Inventory.count('Brass key');
+        this.log(`pathing to ${what}: Brass Key = ${brassKey > 0} (count ${brassKey})`);
         this.setStatus(`walking to ${what}`);
         return Traversal.walkResilient(dest, { radius: 3, attempts: 6, timeoutMs: 180_000, log: m => this.log(`  ${m}`) });
     }
 
-    /** Bank -> public Edgeville trapdoor -> dungeon gates -> the trip's pit spot. */
+    /** Route to the pit via the nav graph (hut ladder + keyed door when the key is held, else the trapdoor). */
     async travelToPit(): Promise<boolean> {
         if (this.inPit()) {
             return this.walkTo(this.spot, 'the pit spot');
         }
-        const here = Game.tile();
-        if (here && here.z < 6400 && !(await this.descendTrapdoor())) {
-            return false;
+        if (!this.hasBrassKey()) {
+            if (!(await this.goGetKey())) {
+                return false;
+            }
         }
         return this.walkTo(this.spot, 'the giant pit');
     }
 
-    private async descendTrapdoor(): Promise<boolean> {
-        if ((Game.tile()?.z ?? 0) > 9000) {
-            return true;
-        }
-        if (!(await this.walkTo(TRAPDOOR, 'the Edgeville trapdoor'))) {
-            this.log('could not reach the Edgeville trapdoor');
+    hasBrassKey(): boolean {
+        return Inventory.count('Brass key') > 0;
+    }
+
+    /** Fetch the Brass key from its dungeon spot, looting it or fighting the Key master for it. */
+    async goGetKey(): Promise<boolean> {
+        this.log('no Brass key — going to fetch it');
+        if (!(await this.walkTo(BRASS_KEY_AT, 'the Brass key spot'))) {
             return false;
         }
-        for (let attempt = 0; attempt < 7; attempt++) {
-            const trapdoor = Locs.query().name('Trapdoor').within(6).nearest();
-            if (!trapdoor) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            const action = trapdoor.actions().find(op => /climb-down/i.test(op))
-                ?? trapdoor.actions().find(op => /^open$/i.test(op));
-            if (!action) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            this.setStatus(`${action.toLowerCase()} the Edgeville trapdoor`);
-            await trapdoor.interact(action);
-            if (await Execution.delayUntil(() => (Game.tile()?.z ?? 0) > 9000, /^open$/i.test(action) ? 2500 : 8000)) {
-                this.log('climbed down the Edgeville trapdoor');
+        for (let attempt = 0; attempt < 12; attempt++) {
+            if (this.hasBrassKey()) {
+                this.log('got the Brass key');
                 return true;
             }
+            const drop = GroundItems.query().name('Brass key').within(8).nearest();
+            if (drop && (await drop.interact('Take'))) {
+                if (await Execution.delayUntil(() => this.hasBrassKey(), 3000)) {
+                    return true;
+                }
+                continue;
+            }
+            const master = Npcs.query().name('Key master').action('Attack').within(12).nearest()
+                ?? Npcs.query().name('Key master').within(12).nearest();
+            if (master && (await master.interact('Attack'))) {
+                await Execution.delayUntil(() => this.hasBrassKey() || !Game.inCombat(), 30_000);
+                if (this.hasBrassKey()) {
+                    return true;
+                }
+                continue;
+            }
+            await Execution.delayTicks(2);
         }
-        this.log('the Edgeville trapdoor did not drop us into the dungeon');
-        return (Game.tile()?.z ?? 0) > 9000;
+        this.log('could not obtain the Brass key');
+        return false;
     }
 }
 
@@ -361,13 +371,26 @@ class BankRun implements Task {
     async execute(): Promise<void> {
         const { food, foodPerTrip, lootSlots } = this.bot.cfg();
         this.bot.setStatus('banking for food/loot');
-        if (!(await this.bot.walkTo(BANK_TILE, 'the Edgeville bank'))) {
+        const here = Game.tile();
+        // Why: nearestBank() ranks by straight-line distance, meaningless from a dungeon tile (every surface bank reads ~6400 away), so with a Brass key we bank at Varrock West (hut exit); without one we fall back to nearestBank().
+        const bank = !here
+            ? null
+            : this.bot.hasBrassKey()
+                ? BANK_LOCATIONS.find(b => b.name === 'Varrock West') ?? nearestBank(here)
+                : nearestBank(here);
+        if (!bank) {
+            this.bot.log('no bank reachable');
             return;
         }
-        if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))) {
+        if (!(await this.bot.walkTo(bank.tile, `the ${bank.name} bank`))) {
+            return;
+        }
+        const access = bank.access ?? BOOTH;
+        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
             return;
         }
         const keep = keepOnDeposit(food).map(n => n.toLowerCase());
+        keep.push('brass key'); // Why: the Brass key is needed to take the hut shortcut back out of the dungeon
         await Bank.depositAllMatching(name => !keep.includes(name.toLowerCase()));
 
         const needs = tripNeeds(this.bot.foodInPack(), foodPerTrip);
@@ -395,6 +418,16 @@ class BankRun implements Task {
     }
 }
 
+class GetKey implements Task {
+    constructor(private bot: HillGiant) {}
+    validate(): boolean {
+        return !this.bot.hasBrassKey();
+    }
+    async execute(): Promise<void> {
+        await this.bot.goGetKey();
+    }
+}
+
 class EnterPit implements Task {
     constructor(private bot: HillGiant) {}
     validate(): boolean {
@@ -408,12 +441,10 @@ class EnterPit implements Task {
 class LootCorpse implements Task {
     constructor(private bot: HillGiant) {}
     private find() {
-        const { lootSet, bankCommon } = this.bot.cfg();
+        const { lootSet } = this.bot.cfg();
+        // Why: looting respects only the selected drops — "Bank common junk" is a banking concern, not a loot-one.
         return GroundItems.query()
-            .where(g => {
-                const name = (g.name ?? '').toLowerCase();
-                return lootSet.has(name) || (bankCommon && matchesCommonBankLoot(g.name ?? '', g.id));
-            })
+            .where(g => lootSet.has((g.name ?? '').toLowerCase()))
             .within(PIT_RADIUS)
             .nearest();
     }
@@ -458,6 +489,10 @@ class Fight implements Task {
         if (!this.bot.inPit()) {
             this.targetIdx = null;
             return false;
+        }
+        if (!this.bot.hasBrassKey()) {
+            this.targetIdx = null;
+            return false; // Why: never fight without the Brass key — go fetch it first
         }
         // Keep running after we engage so despawn is observed even if Eat/Loot preempted us.
         if (this.targetIdx !== null) {
