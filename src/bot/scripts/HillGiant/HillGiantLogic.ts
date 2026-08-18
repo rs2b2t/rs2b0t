@@ -18,8 +18,7 @@ export const PIT_SPOTS: WorldTile[] = [
     new Tile(3117, 9835, 0),
     new Tile(3103, 9836, 0),
     new Tile(3113, 9841, 0),
-    new Tile(3120, 9843, 0),
-    new Tile(3107, 9845, 0)
+    new Tile(3120, 9843, 0)
 ];
 
 /** Pick a pit spot from `rand` in [0,1). Kept injectable so tests are exact. */
