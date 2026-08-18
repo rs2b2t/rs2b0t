@@ -112,11 +112,7 @@ export async function topUpFood(bot: BrimhavenMossGiants): Promise<void> {
     }
 }
 
-/**
- * Food we can eat at the bank. Mirrors the API's foodForms for the configured food,
- * but also recognises partial cake/pizza/pie forms the API list omits (e.g. "1/3 cake"),
- * so healing doesn't stall mid-cake.
- */
+/** Food we can eat at the bank; mirrors the API foodForms but also accepts partial cake/pizza/pie forms so healing never stalls mid-cake. */
 function edibleAtBank(name: string | null | undefined): boolean {
     const n = (name ?? '').toLowerCase();
     if (foodForms(cfg.foodName).includes(n)) {
@@ -217,12 +213,7 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
     await sailToField(bot);
 }
 
-/**
- * Zone covering the Port Sarim / Musa / Seaman Thresnor corridor. The only valid
- * route to Brimhaven from Ardougne uses Captain Barnaby (pier x≈2683, boat to x≈2775);
- * that corridor stays west of x=2780, so excluding this rect can never block the
- * correct route but forces any (re)path away from the wrong port.
- */
+/** Corridor (x>=2780, west of Captain Barnaby) to avoid so walkResilient repaths can never drift to the Port Sarim / Musa / Thresnor boat. */
 const WRONG_BOAT_ZONE: DangerZoneRect = { minX: 2780, maxX: 3040, minZ: 3130, maxZ: 3330 };
 
 function routeUsesWrongBoat(hops: readonly { locName?: string }[]): boolean {
@@ -236,12 +227,7 @@ function routeUsesBarnaby(hops: readonly { locName?: string }[]): boolean {
     return hops.some(h => (h.locName ?? '').toLowerCase().includes('barnaby'));
 }
 
-/**
- * Sail back to the Brimhaven field, refusing any route that uses the wrong boat.
- * We plan the path first and reject it if it contains Seaman Thresnor / Musa / Port
- * Sarim instead of Captain Barnaby, and we also exclude that corridor via avoidZones
- * so walkResilient's internal repaths can never drift to the wrong port.
- */
+/** Sail back to the field via Captain Barnaby, rejecting any route that uses the wrong boat (Thresnor / Musa / Port Sarim) instead. */
 export async function sailToField(bot: BrimhavenMossGiants): Promise<void> {
     const to = { x: cfg.fieldTile.x, z: cfg.fieldTile.z, level: cfg.fieldTile.level };
     for (let attempt = 0; attempt < 4; attempt++) {
