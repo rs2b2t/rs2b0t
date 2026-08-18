@@ -13,7 +13,8 @@ const worker = self as unknown as WorkerScope;
 
 let finder: PathFinder | null = null;
 
-function init(pack: ArrayBuffer): void {
+function init(pack: ArrayBufferLike): void {
+    // Shared packs arrive already decompressed; a transferred one is still gzip.
     let bytes: Uint8Array = new Uint8Array(pack);
     if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
         bytes = gunzipSync(bytes);
