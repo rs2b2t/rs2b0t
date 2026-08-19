@@ -5,6 +5,7 @@ import { Execution } from '../execution/Execution.js';
 import { CombatStyleController, type CombatModeLabel, type CombatStyleResolution, type MeleeCombatStyle } from '../combat/CombatStyle.js';
 import { resolveTeleport, resolveTeleportComponent } from '../map/Teleport.js';
 import type { Npc } from '../model/Npc.js';
+import type { InvItem } from '../inventory/Inventory.js';
 
 const COM_MODE_VARP = 43;
 const RUN_VARP = 173;
@@ -190,6 +191,16 @@ export const Game = {
         }
 
         return Input.castOnNpc(comId, npc.index);
+    },
+
+    async castOnItem(spell: string, item: InvItem): Promise<boolean> {
+        const root = reader.sideTabInterface(MAGIC_TAB);
+        const comId = reader.targetButtonByBase(root, spell);
+        if (comId === -1) {
+            return false;
+        }
+
+        return Input.castOnItem(comId, item.id, item.slot, item.snap.comId);
     },
 
     /**
