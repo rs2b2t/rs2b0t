@@ -162,7 +162,7 @@ export default class Superheater extends TaskBot {
         this.trips++;
     }
 
-    // Why: Bank.isOpen() only proves the component exists — the item list fills a beat after opening and again after every deposit, so a count of zero can be a not-yet-loaded list rather than a genuinely empty bank. Before halting the script on "out of X", confirm the list is actually loaded and the item truly reads zero; otherwise the caller should retry instead of stopping on a loading artifact.
+    // Why: Bank.isOpen() only proves the component exists — the item list fills a beat after opening and again after every deposit, so a count of zero can be a not-yet-loaded list rather than an empty bank. Before halting the script on "out of X", confirm the list is loaded and the item reads zero; otherwise the caller should retry instead of stopping on a loading artifact.
     async bankTrulyOutOf(name: string): Promise<boolean> {
         const settled = await Execution.delayUntil(() => Bank.loaded(), 3500);
         if (!settled) {
@@ -297,7 +297,7 @@ class Restock implements Task {
             return true;
         }
         if (Inventory.count(NATURE_RUNE) === before && Bank.count(NATURE_RUNE) === 0) {
-            // The bank list may still be settling — confirm the runes are really gone before stopping.
+            // The bank list may still be settling — confirm the runes are gone before stopping.
             if (!(await this.bot.bankTrulyOutOf(NATURE_RUNE))) {
                 this.bot.log('nature-rune count is still settling — retrying');
                 return false;
