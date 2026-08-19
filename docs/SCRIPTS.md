@@ -121,7 +121,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `target` | string | `"Guard"` | Target NPC name |
+| `target` | string | `"Guard"` | Target NPC name(s) |
 | `spot` | string | `"Start position"` | Killing spot — one of: Start position, Custom coordinates |
 | `coordinates` | tile | `{"x":3273,"z":3427,"level":0}` | Killing coordinates (x,z) |
 | `leashRadius` | number (2–30) | `8` | Leash radius (tiles) |
@@ -134,10 +134,12 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
 | `ammoRestockBelow` | number (0–100) | `25` | Bank for ammo below % |
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food to eat |
 | `foodWithdraw` | number (0–27) | `10` | Food to carry |
 | `panicHp` | number (0–100) | `25` | Panic below HP% (no food) |
 | `loot` | string[] | `["clue scroll","uncut sapphire","uncut emerald","uncut ruby","uncut diamond","half of a key","chaos talisman","nature talisman"]` | Loot item names (contains) |
 | `lootMode` | string | `"list"` | Loot entry mode — one of: List (chips), CSV (text + copy/paste) |
+| `avoidHerbs` | string[] | `[]` | Herbs to avoid — one of: Guam leaf, Marrentill, Tarromin, Harralander, Ranarr weed, Toadflax, Irit leaf, Avantoe, Kwuarm, Snapdragon, Cadantine, Lantadyme, Dwarf weed, Torstol, Snake weed, Ardrigal, Sito foil, Volencia moss, Rogues purse |
 | `buryBones` | boolean | `false` | Bury regular bones |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
