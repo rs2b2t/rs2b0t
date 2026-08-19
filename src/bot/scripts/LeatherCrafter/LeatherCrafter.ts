@@ -5,6 +5,7 @@ import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -250,9 +251,11 @@ export default class LeatherCrafter extends LoopingBot {
 
     private async bankLeg(): Promise<void> {
         const here = Game.tile();
-        if (!here || Math.max(Math.abs(here.x - BANK_STAND.x), Math.abs(here.z - BANK_STAND.z)) > 4) {
+        // Why: walk to whichever bank is closest rather than a fixed Al Kharid tile, so the bot crafts from wherever the player already is. Bank contents are account-wide, so nothing else changes.
+        const stand = here ? nearestBank(here)?.tile ?? BANK_STAND : BANK_STAND;
+        if (!here || Math.max(Math.abs(here.x - stand.x), Math.abs(here.z - stand.z)) > 4) {
             this.setStatus('walking to the bank');
-            if (!(await Traversal.walkResilient(BANK_STAND, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
+            if (!(await Traversal.walkResilient(stand, { radius: 3, attempts: 2, timeoutMs: 45_000, log: m => this.log(`  ${m}`) }))) {
                 return;
             }
         }
@@ -275,6 +278,7 @@ export default class LeatherCrafter extends LoopingBot {
         if (invById(NEEDLE) === 0 && !(await this.withdrawRequired(NEEDLE, 1, 'needle', 'no needle in the bank'))) {
             return;
         }
+        // Why: nearest-bank mode only changes which bank is walked to — thread is still withdrawn from the bank you arrive at, same as the Al Kharid default.
         if (invById(THREAD) < 5 && !(await this.withdrawRequired(THREAD, this.threadStock, 'thread', 'no thread in the bank'))) {
             return;
         }
