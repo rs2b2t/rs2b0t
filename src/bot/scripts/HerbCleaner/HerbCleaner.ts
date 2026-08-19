@@ -36,6 +36,7 @@ export default class HerbCleaner extends TaskBot {
 
     private eligible: HerbDef[] = [];
     private deniedKeys = new Set<string>();
+    private confirmedEmpty = new Set<string>(); // herbs confirmed empty in bank
     private plannedLevel = -1;
     private cleaned = 0;
     private trips = 0;
@@ -80,6 +81,13 @@ export default class HerbCleaner extends TaskBot {
             this.plannedLevel = level;
             this.refreshEligible();
         }
+        // Stop if all eligible herbs are confirmed empty in bank
+        const remaining = this.eligible.filter(h => !this.confirmedEmpty.has(h.key));
+        if (remaining.length === 0) {
+            this.log('All selected herbs confirmed empty in bank — stopping');
+            ScriptRunner.stop('all herbs confirmed empty in bank');
+            return;
+        }
         return super.loop();
     }
 
@@ -94,7 +102,11 @@ export default class HerbCleaner extends TaskBot {
         this.status = s;
     }
     targets(): HerbDef[] {
-        return this.eligible;
+        return this.eligible.filter(h => !this.confirmedEmpty.has(h.key));
+    }
+    markEmpty(herb: HerbDef): void {
+        this.confirmedEmpty.add(herb.key);
+        this.log(`${herb.name} confirmed empty in bank — skipping on future trips`);
     }
     countClean(n = 1): void {
         this.cleaned += n;
@@ -251,8 +263,13 @@ class BankTrip implements Task {
 
         while (Date.now() - startMs < maxBankTime) {
             // Try to withdraw herbs first. This fails quickly if bank not loaded.
+            const targets = this.bot.targets();
+            if (targets.length === 0) {
+                this.bot.log('every selected herb is empty in the bank, nothing to withdraw');
+                break;
+            }
             let gotAny = false;
-            for (const herb of this.bot.targets()) {
+            for (const herb of targets) {
                 if (Inventory.isFull()) {
                     this.bot.log(`pack full, need to deposit before withdrawing ${herb.name}`);
                     break;
@@ -266,8 +283,11 @@ class BankTrip implements Task {
                     withdrew += got;
                     gotAny = true;
                     this.bot.log(`withdrew ${got} ${herb.name}`);
+                } else if (Bank.loaded()) {
+                    this.bot.log(`withdraw ${herb.name} failed — marking empty in bank`);
+                    this.bot.markEmpty(herb);
                 } else {
-                    this.bot.log(`withdraw ${herb.name} failed (bank not ready or empty)`);
+                    this.bot.log(`withdraw ${herb.name} failed — bank not ready, retrying`);
                 }
             }
 
