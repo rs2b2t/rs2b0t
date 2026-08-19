@@ -28,6 +28,7 @@ import {
 } from '../slashTool.js';
 import { findTransportLoc } from './transportLoc.js';
 import { chatShowsQuestLock, dismissQuestLockDialogue } from './questLock.js';
+import { DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS } from '../desertMiningCampDoors.js';
 
 const MULTI_DOOR_CROSS_MS = 36_000;
 const OPEN_WAIT_MS = 4000;
@@ -338,7 +339,7 @@ export async function tryNearbyDoor(
         .results()
         .filter(l => {
             const t = l.tile();
-            return !exclude?.has(`${t.x}|${t.z}`);
+            return !DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS.has(l.id) && !exclude?.has(`${t.x}|${t.z}`);
         });
     if (candidates.length === 0) {
         return false;

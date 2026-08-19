@@ -234,9 +234,10 @@ export class ResourcePanel {
         this.now = options.now ?? (() => Date.now());
     }
 
-    setBotCount(count: number): void {
+    setBotCount(count: number, running: number): void {
         const safeCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
-        this.nodes.botCount.textContent = `${safeCount} ${safeCount === 1 ? 'bot' : 'bots'}`;
+        const safeRunning = Number.isFinite(running) && running > 0 ? Math.floor(running) : 0;
+        this.nodes.botCount.textContent = `${safeCount} ${safeCount === 1 ? 'bot' : 'bots'} (${safeRunning} running)`;
     }
 
     async refresh(): Promise<boolean> {

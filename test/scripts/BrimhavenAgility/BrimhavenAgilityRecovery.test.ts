@@ -14,6 +14,7 @@ import {
     ARDY_BANK,
     ARENA_ENTRANCE,
     ARENA_VARP,
+    KARAMJA_GENERAL,
     TICKET_NAME
 } from '#/bot/scripts/BrimhavenAgility/BrimhavenAgilityLogic.js';
 
@@ -52,7 +53,7 @@ beforeEach(() => {
     Inventory.items = () => Array.from({ length: food }, (_, slot) => ({ name: 'Lobster', slot })) as never;
     Inventory.count = name => name === 'Coins' ? coins : (name === TICKET_NAME ? 0 : 0);
     Skills.level = name => name === 'agility' ? 40 : 20;
-    Skills.effective = name => name === 'hitpoints' ? 20 : 1;
+    Skills.effective = name => name === 'hitpoints' ? 20 : name === 'agility' ? 40 : 1;
     Skills.xp = () => 0;
     Traversal.walkResilient = async destination => {
         walks.push(Tile.from(destination));
@@ -107,6 +108,19 @@ describe('BrimhavenAgility off-course recovery', () => {
             expect(bot.inArenaNow()).toBe(false);
             expect(bot.inPitNow()).toBe(false);
             expect(walks).toEqual([Tile.from(ARDY_BANK)]);
+        } finally {
+            bot.disposeSubscriptions();
+        }
+    });
+
+    test('a Brimhaven bot short of the ship fare walks to the Karamja store', async () => {
+        food = 8;
+        coins = 5;
+        Game.tile = () => new Tile(ARENA_ENTRANCE.x, ARENA_ENTRANCE.z, 0);
+        const bot = await startedBot();
+        try {
+            await bot.loop();
+            expect(walks).toEqual([Tile.from(KARAMJA_GENERAL)]);
         } finally {
             bot.disposeSubscriptions();
         }

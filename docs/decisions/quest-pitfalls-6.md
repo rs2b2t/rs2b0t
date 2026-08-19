@@ -39,5 +39,5 @@ Seven, and the first three are dialogue and NPC-lifetime facts rather than quest
 
 - [Quest pitfalls](quest-pitfalls.md)
 - [More pitfalls](quest-pitfalls-2.md)
-- [Nature Spirit's harness recipe](../reference/quest-harness-recipes-6.md)
+- [Nature Spirit's harness recipe](../reference/quest-harness-recipes-14.md)
 - [Add a quest](../how-to/add-a-quest.md)

@@ -121,7 +121,7 @@ function scavengedGear(snap: QuestSnapshot): string[] {
 }
 
 /** A declared loadout is taken literally; declaring nothing falls back to scavenging. */
-function plannedGear(snap: QuestSnapshot): string[] {
+export function plannedGear(snap: QuestSnapshot): string[] {
     const declared = gearOf(QuestLoadout.current);
     const names = declared.length > 0 ? declared : scavengedGear(snap);
     return names.filter(name => !unwearable.has(name.toLowerCase()) && !worn(snap, name));
@@ -152,7 +152,7 @@ function scanBank(): QuestStep {
  * The kit in one step — a step per piece pays a task hand-off each, and
  * `equip` already waits for the item to land. Refusals are shed, not retried.
  */
-function wearAll(names: readonly string[]): QuestStep {
+export function wearAll(names: readonly string[]): QuestStep {
     return {
         kind: 'custom',
         name: `wear ${names.join(', ')}`,
@@ -455,7 +455,7 @@ async function enterPrison(log: (m: string) => void): Promise<boolean> {
 // Why: a failed steal wakes the guard and killing the woken guard drops the same key, so neither outcome is a dead end.
 
 /** Take a cell key off a sleeping guard. */
-async function stealCellKey(guard: string, key: string, stand: Tile, log: (m: string) => void): Promise<boolean> {
+export async function stealCellKey(guard: string, key: string, stand: Tile, log: (m: string) => void): Promise<boolean> {
     for (let attempt = 0; attempt < 25; attempt++) {
         if (Inventory.contains(key) || (await takeGround(key, log))) {
             return true;
@@ -497,7 +497,7 @@ async function stealCellKey(guard: string, key: string, stand: Tile, log: (m: st
     return false;
 }
 
-async function unlockCell(key: string, door: Tile, stand: Tile, log: (m: string) => void): Promise<boolean> {
+export async function unlockCell(key: string, door: Tile, stand: Tile, log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(stand, 1, log))) {
         return false;
     }

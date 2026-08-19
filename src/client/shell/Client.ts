@@ -443,6 +443,8 @@ export class Client extends GameShell {
     /** Login attempt that supplied each stat slot; prevents stale relog data from becoming ready. */
     private statSessionGeneration: number = 0;
     private statSeenGeneration: Int32Array = new Int32Array(Skill.count);
+    /** Distinguishes a complete empty inventory from stale, partial, or stopped transmission. */
+    private invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }> = new Map();
 
     private oneMouseButton: number = 0;
     private isMenuOpen: boolean = false;
@@ -1743,6 +1745,7 @@ export class Client extends GameShell {
         // accepted login its own generation so consumers can distinguish that
         // retained snapshot from UPDATE_STAT packets belonging to this attempt.
         this.statSessionGeneration++;
+        this.invUpdateState.clear();
 
         if (!reconnect) {
             this.loginscreen = 2;
@@ -6422,6 +6425,12 @@ export class Client extends GameShell {
                     inv.linkObjType[i] = -1;
                     inv.linkObjType[i] = 0;
                 }
+                const previous = this.invUpdateState.get(comId);
+                this.invUpdateState.set(comId, {
+                    generation: (previous?.generation ?? 0) + 1,
+                    fullGeneration: 0,
+                    transmitting: false
+                });
 
                 this.ptype = -1;
                 return true;
@@ -6454,6 +6463,9 @@ export class Client extends GameShell {
                     inv.linkObjNumber[i] = 0;
                 }
 
+                const generation = (this.invUpdateState.get(comId)?.generation ?? 0) + 1;
+                this.invUpdateState.set(comId, { generation, fullGeneration: generation, transmitting: true });
+
                 this.ptype = -1;
                 return true;
             }
@@ -6482,6 +6494,13 @@ export class Client extends GameShell {
                         inv.linkObjNumber[slot] = count;
                     }
                 }
+
+                const previous = this.invUpdateState.get(comId);
+                this.invUpdateState.set(comId, {
+                    generation: (previous?.generation ?? 0) + 1,
+                    fullGeneration: previous?.fullGeneration ?? 0,
+                    transmitting: true
+                });
 
                 this.ptype = -1;
                 return true;

@@ -19,6 +19,15 @@ describe('GameMessages', () => {
         expect(GameMessages.sawSince(mark, CANT_REACH)).toBe(true);
     });
 
+    test('stateful patterns remain stable across repeated checks', () => {
+        const mark = GameMessages.mark();
+        GameMessages.record('cart failed');
+        const pattern = /cart failed/g;
+        expect(GameMessages.sawSince(mark, pattern)).toBe(true);
+        expect(GameMessages.sawSince(mark, pattern)).toBe(true);
+        expect(GameMessages.firstSince(mark, pattern)?.text).toBe('cart failed');
+    });
+
     test('identical repeated texts are distinct messages', () => {
         GameMessages.record('x');
         const mark = GameMessages.mark();

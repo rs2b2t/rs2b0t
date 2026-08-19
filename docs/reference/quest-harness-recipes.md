@@ -4,6 +4,55 @@
 
 Per-quest seed and stage commands, with what each recipe has proven.
 
+## Biohazard — stage-scoped harness
+
+[`e2e/biohazard-234-live.ts`](../../e2e/biohazard-234-live.ts) drives the quest from a
+clean account, or one leg of it. `--stage N` writes `%biohazard`, hands over the items
+that stage assumes were already given, and relogs. Plague City is completed for you.
+
+```sh
+HEADED=1 bun e2e/biohazard-234-live.ts --stage 0 --until 16 --minutes 150 --tick 100  # end to end
+HEADED=1 bun e2e/biohazard-234-live.ts --stage 0 --until 5 --minutes 30 --tick 100    # birds and the wall
+HEADED=1 bun e2e/biohazard-234-live.ts --stage 5 --until 7 --minutes 30 --tick 100    # the headquarters
+HEADED=1 bun e2e/biohazard-234-live.ts --stage 12 --until 14 --minutes 40 --tick 100  # the smuggle to Guidor
+```
+
+The bank holds coins and food alone. The bird feed, the pigeons, the rotten apples, the
+doctors' gown, the mourner's key and the priest suit all have sources in the world.
+
+Measured at `--tick 100`, no parks:
+
+| Stages | Minutes | Covers |
+|---|---|---|
+| 0 → 5 | 2 | Elena, Jerico, the cupboard, the pigeons, the tower, Omart |
+| 5 → 7 | 3 | the yard fence, the cauldron, the gown, the key, the crate |
+| 7 → 10 | 1 | Kilron back over the wall, the distillator to Elena |
+| 10 → 12 | 3 | the walk to Rimmington and the chemist |
+| 12 → 14 | 5 | the errand boys, Thessalia, the gate, the inn, Guidor |
+| 14 → 16 | 2 | Elena and King Lathas |
+| 0 → 16 | 14 | a clean account to `QUEST COMPLETE!` |
+
+The Rimmington and Varrock legs are the long ones, and both are walking rather than work.
+
+Five details govern this harness:
+
+- **It deploys its own copy of the client.** `deployIsolatedClient` puts the bundles under
+  `public/bot/<user>/` and serves them from `/bot-<user>.html`, so a concurrent session's
+  deploy cannot replace them mid-run. Doing it any other way loses `navworker.js` as often
+  as `botclient.js`, and a stale navworker reads as a bug in this quest's own new transport.
+- **It is members-only and needs Plague City complete.** The harness sets `%elenaquest 29`
+  and relogs, because `update_questlist` only recolours the journal at login and the module
+  is gated on the *journal*, not the varp.
+- **Stats are 70, not maxed.** `setstat` is a built-in cheat branch with no level-up
+  cascade, so it leaves the player undelayed — unlike `~maxme`, which swallows the next
+  typed command.
+- **Stages 5 to 7 start in West Ardougne** and stage 12 at the Rimmington chemist; every
+  other stage starts at the Ardougne booth.
+- **A mid-quest start past the wall costs one round trip.** The module defers its bank read
+  to the mainland, so `--stage 6` walks out over Kilron, reads the booth, and comes back
+  over Omart's ladder before the gown leg. A run from stage 0 reads the bank on its first
+  tick and never pays it.
+
 ## Clock Tower — stage-scoped harness
 
 [`e2e/clock-tower-236-live.ts`](../../e2e/clock-tower-236-live.ts) drives the
@@ -64,11 +113,23 @@ four components and `2031` for both.
 
 ## See also
 
+- [Quest harness recipes (Big)](quest-harness-recipes-17.md)
+- [Quest harness recipes (Dig)](quest-harness-recipes-15.md)
 - [Quest harness recipes (E)](quest-harness-recipes-4.md)
-- [Quest harness recipes (F–H)](quest-harness-recipes-2.md)
+- [Quest harness recipes (F)](quest-harness-recipes-2.md)
+- [Quest harness recipes (Fre)](quest-harness-recipes-18.md)
+- [Quest harness recipes (G)](quest-harness-recipes-11.md)
+- [Quest harness recipes (Haz–Hol)](quest-harness-recipes-8.md)
+- [Quest harness recipes (Her)](quest-harness-recipes-19.md)
+- [Quest harness recipes (Hor)](quest-harness-recipes-10.md)
 - [Quest harness recipes (I–L)](quest-harness-recipes-3.md)
-- [Quest harness recipes (M–O)](quest-harness-recipes-6.md)
+- [Quest harness recipes (M)](quest-harness-recipes-6.md)
+- [Quest harness recipes (N–O)](quest-harness-recipes-14.md)
 - [Quest harness recipes (P–R)](quest-harness-recipes-5.md)
-- [Quest harness recipes (S–Z)](quest-harness-recipes-7.md)
+- [Quest harness recipes (Sea–Shades)](quest-harness-recipes-7.md)
+- [Quest harness recipes (Sheep–Shield)](quest-harness-recipes-12.md)
+- [Quest harness recipes (Tai–Temple)](quest-harness-recipes-9.md)
+- [Quest harness recipes (Tree–Tribal)](quest-harness-recipes-13.md)
+- [Quest harness recipes (U)](quest-harness-recipes-16.md)
 - [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

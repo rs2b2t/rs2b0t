@@ -7,6 +7,7 @@ import type { Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
 import Tile from '../../geometry/Tile.js';
 import type { Npc } from '../../api/model/Npc.js';
 import { Bank, withdrawOp } from '../../api/bank/Bank.js';
@@ -224,7 +225,20 @@ export class MinerEatFood implements Task {
     }
 }
 
-/** Keep non-tick Wilderness Miner from retaliating after zone entry or relogin. */
+/** Own every non-bank leg of the gated Desert Mining Camp round trip. */
+export class DesertMiningCampTravel implements Task {
+    constructor(private bot: GatheringBot) {}
+
+    validate(): boolean {
+        return this.bot.desertMiningCampTravelNeeded();
+    }
+
+    async execute(): Promise<void> {
+        await this.bot.runDesertMiningCampTravel();
+    }
+}
+
+/** Keep hostile-camp Miner from retaliating after zone entry or relogin. */
 export class MaintainWildernessMinerStance implements Task {
     constructor(private bot: GatheringBot) {}
 
@@ -235,7 +249,7 @@ export class MaintainWildernessMinerStance implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('combat: Auto Retaliate off');
         if (Game.setAutoRetaliate(false)) {
-            this.bot.log('combat: Wilderness Miner re-asserted Auto Retaliate off');
+            this.bot.log('combat: Miner re-asserted Auto Retaliate off');
         }
         // One toggle is enough for this execution; wait for its varp before the
         // scheduler can validate the task again.
@@ -885,6 +899,12 @@ export class BankCatch implements Task {
         ) {
             return false;
         }
+        if (this.bot.strictDesertCampBanking() && Bank.isOpen()) {
+            return true;
+        }
+        if (this.bot.strictDesertCampBanking()) {
+            return this.bot.desertCampBankCatchNeeded();
+        }
         if (this.bot.minerFoodRestockNeeded()) {
             return true;
         }
@@ -899,6 +919,13 @@ export class BankCatch implements Task {
         );
         const log = (m: string) => this.bot.log(`  ${m}`);
         const deposit = (name: string) => this.bot.shouldDeposit(name);
+        const strict = this.bot.strictDesertCampBanking();
+        const beforeOpen = strict ? await this.bot.shantayBackpackBeforeOpen(log) : null;
+        if (strict && beforeOpen === null) {
+            this.bot.stopStrictBankFailure('desert camp: normal backpack was unreadable before Shantay bank');
+            return;
+        }
+        const expectedAfterDeposit = beforeOpen?.filter(item => !deposit(item.name ?? '')) ?? null;
         const refreshRaw = async () => {
             if (!(this.bot.isFishing() && this.bot.getCookMode() === 'bank-raw-then-cook')) {
                 return;
@@ -912,6 +939,10 @@ export class BankCatch implements Task {
 
         this.bot.setStatus('bank: heading to bank');
         if (!(await this.bot.openScriptBank(log))) {
+            if (strict) {
+                this.bot.stopStrictBankFailure('desert camp: Shantay chest is unreachable');
+                return;
+            }
             this.bot.setStatus('bank: nearest bank');
             const banked = await Banking.bankNearest({
                 deposit,
@@ -927,10 +958,64 @@ export class BankCatch implements Task {
                 return;
             }
         } else {
+            if (strict) {
+                if (!(await this.bot.waitBankReady(log))) {
+                    this.bot.stopStrictBankFailure('desert camp: Shantay bank item list did not load');
+                    return;
+                }
+                if (!(await Bank.backpackReady(beforeOpen!, log))) {
+                    this.bot.stopStrictBankFailure('desert camp: Shantay side backpack did not load');
+                    return;
+                }
+            }
             await Execution.delayTicks(bankPaceTicks());
-            await Bank.depositAllMatching(deposit);
+            const bankGenerationBeforeDeposit = strict ? Bank.snapshotGeneration() : -1;
+            try {
+                await Bank.depositAllMatching(deposit, log);
+            } catch (error) {
+                if (this.bot.strictDesertCampBanking()) {
+                    this.bot.stopStrictBankFailure(`desert camp: Shantay deposit failed: ${error instanceof Error ? error.message : String(error)}`);
+                    return;
+                }
+                throw error;
+            }
+            if (strict) {
+                if (!(await Bank.backpackReady(expectedAfterDeposit!, log))) {
+                    this.bot.stopStrictBankFailure('desert camp: Shantay deposit did not produce the expected backpack');
+                    return;
+                }
+                if (expectedAfterDeposit!.length < beforeOpen!.length && !(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
+                    this.bot.stopStrictBankFailure('desert camp: Shantay bank stock did not update after deposit');
+                    return;
+                }
+            }
             await Execution.delayTicks(1);
             await refreshRaw();
+        }
+        if (strict) {
+            await Execution.delayUntilTicks(() => this.bot.desertCampDepositResidue().length === 0 || !Bank.isOpen(), 9);
+            const residue = this.bot.desertCampDepositResidue();
+            if (residue.length > 0) {
+                this.bot.stopStrictBankFailure(`desert camp: Shantay deposit incomplete; still holding ${residue.join(', ')}`);
+                return;
+            }
+            if (!(await this.bot.waitBankReady(log))) {
+                this.bot.stopStrictBankFailure('desert camp: Shantay bank item list did not reload after deposit');
+                return;
+            }
+        }
+        const routePlan = this.bot.desertCampSupplyPlanAtOpenBank();
+        if (routePlan && !routePlan.ok) {
+            this.bot.stopStrictBankFailure(`desert camp: missing supplies: ${routePlan.missing.join(', ')}`);
+            return;
+        }
+        // The Shantay crossing swaps a pass for a disclaimer, so provisioning
+        // must leave its own ore slot instead of expecting the pass to free one.
+        const reservedRouteSlots = routePlan
+            ? this.bot.desertCampFoodReservedSlots(routePlan.requiredSlots)
+            : 0;
+        if (reservedRouteSlots > 0) {
+            this.bot.log(`desert camp: reserving ${reservedRouteSlots} pack slot(s) for route supplies`);
         }
 
         if (had > 0) {
@@ -945,20 +1030,26 @@ export class BankCatch implements Task {
             await this.bot.topUpFishingBaitAtBank(log);
         }
 
-        if (this.bot.minerFoodEnabled() && !(await this.bot.topUpMinerFoodAtBank(log))) {
+        if (this.bot.minerFoodEnabled() && !(await this.bot.topUpMinerFoodAtBank(log, reservedRouteSlots))) {
             return;
         }
 
+        if (routePlan && !(await this.bot.desertCampWithdrawSuppliesAtOpenBank(routePlan))) {
+            return;
+        }
         // Opportunistic tool upgrade while already banking — never yank mid-chop.
         if (await this.bot.tryUpgradeGatherToolAtBank(log)) {
             return;
         }
 
-        if (Bank.isOpen()) {
-            await this.bot.closeScriptBank(log);
+        if (Bank.isOpen() && !(await this.bot.closeScriptBank(log, strict ? { allowForgetful: false } : undefined))) {
+            if (strict) {
+                this.bot.stopStrictBankFailure('desert camp: Shantay bank did not close');
+                return;
+            }
         }
-        // Why: the bot always leaves the bank toward camp after a deposit, unless a cook batch stays.
-        // Why: walkHomeIfNeeded short-circuits inside the soft arrive disk, and long bank→mine legs such as Varrock W → SW mine need the full walkResilient budget.
+        this.bot.completeDesertCampBankTrip();
+        // Why: after depositing, long bank-to-mine legs need the full resilient-walk budget unless a cook batch intentionally stays.
         if (!this.bot.isCookBatchReady()) {
             this.bot.setStatus('bank: returning to camp');
             const home = await this.bot.walkHomeIfNeeded(log);
@@ -1508,8 +1599,15 @@ export class RepairBrokenGatherTool implements Task {
                 await Equipment.unequip(BROKEN_PICKAXE);
             }
 
+            const strict = this.bot.strictDesertCampBanking();
+            const beforeOpen = strict ? await this.bot.shantayBackpackBeforeOpen(log) : null;
+            if (strict && beforeOpen === null) {
+                this.bot.stopMissingGear('normal backpack unreadable before Shantay bank', ['pickaxe']);
+                return;
+            }
+
             if (!(await this.bot.openScriptBank(log))) {
-                if (this.bot.isPowerMode()) {
+                if (this.bot.isPowerMode() || this.bot.strictDesertCampBanking()) {
                     this.bot.stopMissingGear('could not open nearest bank for pickaxe', ['pickaxe']);
                     return;
                 }
@@ -1517,8 +1615,26 @@ export class RepairBrokenGatherTool implements Task {
                 return;
             }
 
-            await Bank.depositAllMatching(this.bot.restockDepositMatcher());
-            await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_PICKAXE.toLowerCase());
+            if (strict && (!(await this.bot.waitBankReady(log)) || !(await Bank.backpackReady(beforeOpen!, log)))) {
+                this.bot.stopMissingGear('Shantay bank did not become transaction-ready', ['pickaxe']);
+                return;
+            }
+
+            const restockDeposit = this.bot.restockDepositMatcher();
+            const deposit = (name: string): boolean => restockDeposit(name) || name.toLowerCase() === BROKEN_PICKAXE.toLowerCase();
+            const expectedAfterDeposit = beforeOpen?.filter(item => !deposit(item.name ?? '')) ?? null;
+            const bankGenerationBeforeDeposit = strict ? Bank.snapshotGeneration() : -1;
+            await Bank.depositAllMatching(deposit);
+            if (strict) {
+                if (!(await Bank.backpackReady(expectedAfterDeposit!, log))) {
+                    this.bot.stopMissingGear('Shantay replacement deposit did not produce the expected backpack', ['pickaxe']);
+                    return;
+                }
+                if (expectedAfterDeposit!.length < beforeOpen!.length && !(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
+                    this.bot.stopMissingGear('Shantay bank stock did not update after replacement deposit', ['pickaxe']);
+                    return;
+                }
+            }
             await Execution.delayUntilTicks(() => Bank.loaded(), 5);
             const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
             if (!pick) {
@@ -1545,6 +1661,10 @@ export class RepairBrokenGatherTool implements Task {
             await Bank.withdraw(pick, one);
             if (!(await Execution.delayUntilTicks(() => Inventory.first(pick) !== null, 5))) {
                 if (this.bot.isPowerMode()) {
+                    this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
+                    return;
+                }
+                if (this.bot.strictDesertCampBanking()) {
                     this.bot.stopMissingGear('pickaxe withdraw failed', [pick]);
                     return;
                 }
@@ -1840,7 +1960,6 @@ export class RestockGatherTool implements Task {
                 : `restock: missing ${label}`
         );
         const log = (m: string) => this.bot.log(`  ${m}`);
-
         // Why: with hammer and bar — or shop GP, or a broken tool — already in the pack, the camp-bank hop is skipped.
         // Why: the suite seeds materials at Varrock West, so walking Draynor first burns the budget before the anvil walk starts.
         if (this.bot.toolAcquireEnabled() && this.bot.acquireReady() && missing.length > 0) {
@@ -1864,13 +1983,24 @@ export class RestockGatherTool implements Task {
             }
         }
 
+        const strict = this.bot.strictDesertCampBanking();
+        const beforeOpen = strict ? await this.bot.shantayBackpackBeforeOpen(log) : null;
+        if (strict && beforeOpen === null) {
+            this.bot.stopMissingGear('normal backpack unreadable before Shantay bank', missing);
+            return;
+        }
+
         if (!(await this.bot.openScriptBank(log))) {
-            if (power) {
+            if (power || this.bot.strictDesertCampBanking()) {
                 this.bot.stopMissingGear('could not open nearest bank', missing);
                 return;
             }
             this.bot.log(`restock: could not open bank for ${label} — will retry`);
             await Execution.delayTicks(3);
+            return;
+        }
+        if (strict && (!(await this.bot.waitBankReady(log)) || !(await Bank.backpackReady(beforeOpen!, log)))) {
+            this.bot.stopMissingGear('Shantay bank did not become transaction-ready', missing);
             return;
         }
         await Execution.delayTicks(bankPaceTicks());
@@ -1879,7 +2009,20 @@ export class RestockGatherTool implements Task {
         if (power || this.bot.awayFromGatherSpot()) {
             this.bot.log('restock: depositing non-gear first');
         }
-        await Bank.depositAllMatching(this.bot.restockDepositMatcher());
+        const deposit = this.bot.restockDepositMatcher();
+        const expectedAfterDeposit = beforeOpen?.filter(item => !deposit(item.name ?? '')) ?? null;
+        const bankGenerationBeforeDeposit = strict ? Bank.snapshotGeneration() : -1;
+        await Bank.depositAllMatching(deposit);
+        if (strict) {
+            if (!(await Bank.backpackReady(expectedAfterDeposit!, log))) {
+                this.bot.stopMissingGear('Shantay restock deposit did not produce the expected backpack', missing);
+                return;
+            }
+            if (expectedAfterDeposit!.length < beforeOpen!.length && !(await Bank.waitSnapshotAfter(bankGenerationBeforeDeposit))) {
+                this.bot.stopMissingGear('Shantay bank stock did not update after restock deposit', missing);
+                return;
+            }
+        }
         await Execution.delayUntilTicks(() => Bank.loaded(), 5);
         await Execution.delayTicks(1);
 
@@ -1910,7 +2053,7 @@ export class RestockGatherTool implements Task {
                         this.bot.markAcquireBackoff(50);
                     }
                 }
-                if (power) {
+                if (power || this.bot.strictDesertCampBanking()) {
                     this.bot.stopMissingGear('bank has no required tools', still);
                     return;
                 }
@@ -1983,7 +2126,7 @@ export class RestockGatherTool implements Task {
                     }
                 }
             }
-            if (power) {
+            if (power || this.bot.strictDesertCampBanking()) {
                 this.bot.stopMissingGear('incomplete after withdraw', still);
                 return;
             }
@@ -2210,6 +2353,9 @@ export class Gather implements Task {
     /** Short-circuits cheap checks before scene queries. */
     private shouldYieldMine(tile: Tile): boolean {
         if (EventSignal.pending() || Inventory.isFull() || ChatDialog.canContinue()) {
+            return true;
+        }
+        if (this.bot.minerFoodEnabled() && this.bot.shouldEatMinerFood()) {
             return true;
         }
         if (combatBreaksGather(Game.inCombat(), this.bot.allowCombatGather())) {
@@ -2556,6 +2702,20 @@ export class Gather implements Task {
             return;
         }
         const tile = target.tile();
+        const here = Game.tile();
+        // Why: scenery interactions can report success while an off-screen target receives no route, leaving broad named camps to reclick forever.
+        if (here && Tile.from(here).distanceTo(tile) > 2) {
+            this.bot.setStatus(`gather: walking to ${this.bot.targetName()} @ ${tile}`);
+            const reached = await Traversal.walkTo(tile, {
+                radius: 1,
+                timeoutMs: 45_000,
+                log: message => this.bot.log(`  ${message}`)
+            });
+            if (!reached) {
+                this.bot.log(`gather: could not approach ${this.bot.targetName()} @ ${tile} from ${here}`);
+            }
+            return;
+        }
         const key = keyOf(tile);
         // Track whether this session produced ore/logs — successful deplete must not
         // soft-cooldown the tile (iron respawn ~6t < old 8t cooldown → far path thrash).
@@ -2571,6 +2731,7 @@ export class Gather implements Task {
             }
 
             await Execution.delayUntilTicks(() => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile), 20);
+            await Sustain.run();
             if (this.gasAt(tile)) {
                 await this.fleeGas(key, tile);
                 return;
@@ -2595,6 +2756,7 @@ export class Gather implements Task {
         }
 
         for (let guard = 0; guard < 200; guard++) {
+            await Sustain.run();
             if (this.shouldYieldMine(tile)) {
                 if (this.gasAt(tile)) {
                     await this.fleeGas(key, tile);
@@ -2603,6 +2765,7 @@ export class Gather implements Task {
             }
             const mark = Inventory.used();
             await Execution.delayUntilTicks(() => Inventory.used() > mark || !Game.animating() || this.shouldYieldMine(tile), 14);
+            await Sustain.run();
             if (this.gasAt(tile)) {
                 await this.fleeGas(key, tile);
                 return;

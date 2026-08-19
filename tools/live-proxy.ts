@@ -44,8 +44,19 @@ function localBotAsset(pathname: string): string | null {
     return existsSync(p) ? p : null;
 }
 
+// Cross-origin isolation is what lets every bot's nav worker map one shared
+// copy of the collision pack instead of decompressing its own 12 MB.
+const ISOLATION_HEADERS: Record<string, string> = {
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-embedder-policy': 'require-corp'
+};
+
 function localFile(path: string, noStore = false): Response {
-    return new Response(Bun.file(path), noStore ? { headers: { 'cache-control': 'no-store' } } : undefined);
+    const headers = { ...ISOLATION_HEADERS };
+    if (noStore) {
+        headers['cache-control'] = 'no-store';
+    }
+    return new Response(Bun.file(path), { headers });
 }
 
 function json(body: unknown, status = 200): Response {

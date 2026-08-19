@@ -29,6 +29,7 @@ interface LoginClientView {
     loginUser: string;
     loginPass: string;
     statSessionGeneration: number;
+    invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }>;
     loginAttempt: AttemptView | null;
     stream: ClientStream | null;
     out: {
@@ -130,6 +131,7 @@ function bareClient(openLoginStream: () => Promise<ClientStream>): LoginClientVi
         loginUser: '',
         loginPass: '',
         statSessionGeneration: 0,
+        invUpdateState: new Map(),
         loginAttempt: null,
         stream: null,
         out: {

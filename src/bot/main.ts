@@ -6,6 +6,7 @@ import { readTraceRing } from './api/ai/clues/ClueTrace.js';
 import { BotDiag } from './runtime/diag/BotDiag.js';
 import { Input } from './input/Input.js';
 import { Navigator } from './event/webwalk/Navigator.js';
+import { setNavPackHost } from './event/webwalk/navPack.js';
 import { installAbi } from './runtime/abi.js';
 import { AutoRelogin } from './runtime/AutoRelogin.js';
 import type { LoginCoordination } from './runtime/LoginCoordination.js';
@@ -28,6 +29,10 @@ import './scripts/index.js';
 export { BotClient, BotHost };
 
 if (typeof document !== 'undefined' && document.getElementById('canvas')) {
+    // Bots on a wall are same-origin iframes, so the top window is where the one
+    // shared collision pack lives; a standalone bot is its own top window.
+    setNavPackHost(window.top ?? window);
+
     const params = new URLSearchParams(window.location.search);
     const nodeid = parseInt(params.get('nodeid') ?? '10', 10);
     const lowmem = params.get('lowmem') !== '0';

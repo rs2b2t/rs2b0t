@@ -79,7 +79,7 @@ export const BANK_LOCATIONS: BankLocation[] = [
     // Why: the live object is "Shantay chest" (id 2693) with Open, not "Bank chest" with Use, and there is no Bank booth here at all.
     {
         name: 'Shantay Pass',
-        tile: new Tile(3309, 3120, 0),
+        tile: new Tile(3308, 3120, 0),
         access: { name: 'Shantay chest', op: 'Open' }
     },
     // Why: this is Gundai's cellar where magearena_ladder_to_cellar lands, reached by slashing the two bigweb_slashable webs along z=3957 and climbing down at (3091,3958) — all three baked as edges, and nothing to do with Kolodion's arena teleport.

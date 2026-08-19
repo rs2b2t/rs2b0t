@@ -160,6 +160,16 @@ describe('Wilderness Miner stance maintenance', () => {
         ).toBe(false);
     });
 
+    test('also restores the Desert Mining Camp stance after relogin', () => {
+        expect(wildernessMinerStanceNeeded({
+            isMiner: true,
+            tile: { x: 3323, z: 9458, level: 0 },
+            tickManipAllowCombat: false,
+            autoRetaliateOn: true,
+            desertCampMiner: true
+        })).toBe(true);
+    });
+
     test('the maintenance task sends one OFF toggle per restored stance', async () => {
         let retaliateOn = true;
         const toggles: boolean[] = [];

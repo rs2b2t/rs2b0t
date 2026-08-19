@@ -48,6 +48,7 @@ unencrypted under a different key; it is detected rather than silently discarded
 
 `ProfileChooser` is the load-or-create screen and `VaultPrompt` the unlock prompt. Both
 are DOM view modules named explicitly in the [DOM fence](import-fences.md).
+Settings exports the unlocked vault plus each account's box storage (selected script, script parameters, Global settings) as plaintext JSON, and replaces both on import.
 
 ## Login coordination
 
@@ -62,7 +63,7 @@ const LOGIN_BATCH_COOLDOWN_MS = 16000;
 ```
 
 A denied but due request keeps its FIFO place across polls, giving the canvas a live
-`position of total`. Granting or removing a slot compacts the queue immediately.
+`N bots in front`. Granting or removing a slot compacts the queue immediately.
 
 ## Resource telemetry
 

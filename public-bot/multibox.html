@@ -93,6 +93,7 @@
         #mbx-app.mbx-rail-hidden .mbx-slot.is-focused .mbx-clip { right: 0; }
 
         .mbx-chooser-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+        #mbx-vault { z-index: 70; }
         .mbx-chooser-overlay[hidden] { display: none; }
         .mbx-chooser { width: 300px; max-height: 70vh; overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .mbx-chooser-title { color: #5be05b; }
@@ -118,12 +119,13 @@
             <div id="mbx-tabs" aria-label="bot tabs"></div>
             <div id="mbx-add" class="mbx-addtile">+ add bot</div>
             <div id="mbx-resources" class="mbx-resources">
-                <div id="mbx-resource-bots" class="mbx-resource-bots">0 bots</div>
+                <div id="mbx-resource-bots" class="mbx-resource-bots">0 bots (0 running)</div>
                 <div class="mbx-bulk-controls" aria-label="all bot controls">
                     <button id="mbx-start-all" type="button">start all</button>
                     <button id="mbx-stop-all" type="button">stop all</button>
                     <button id="mbx-renderers-off" class="mbx-bulk-renderers" type="button">turn all renderers off</button>
                     <button id="mbx-renderers-on" class="mbx-bulk-renderers" type="button">turn all renderers on</button>
+                    <button id="mbx-settings" class="mbx-bulk-renderers" type="button">settings</button>
                 </div>
                 <div id="mbx-resource-cpu-row" class="mbx-resource-row" title="CPU used by every process/thread in the dedicated bot browser"><span class="mbx-resource-label">CPU</span><span id="mbx-resource-cpu" class="mbx-resource-value">measuring…</span></div>
                 <div id="mbx-resource-memory-row" class="mbx-resource-row" title="Current memory charged to the dedicated bot browser"><span class="mbx-resource-label">RAM</span><span id="mbx-resource-memory" class="mbx-resource-value">measuring…</span></div>

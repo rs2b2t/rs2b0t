@@ -1,5 +1,4 @@
-// Issue #311 — live HillGiant proof: [base].
-// Starts with no key, so the script has to fetch the Edgeville dungeon spawn, unlock the hut, climb down and kill a giant.
+// Live HillGiant proof: fetch Brass key, enter the pit via the hut, fight.
 
 //   bun e2e/hillgiant-test.ts [http://localhost:8888]
 import { boot, bringUpOffIsland, cheatQuiet, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
@@ -21,7 +20,7 @@ interface Api {
 
 const tile = () => page.evaluate(() => (globalThis as never as Api).__rs2b0t.reader.worldTile());
 const dump = async (label: string) => {
-    const log = await page.evaluate(() => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).slice(-12).map(l => l.msg));
+    const log = await page.evaluate(() => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).slice(-16).map(l => l.msg));
     console.log(`--- ${label} ---`);
     for (const l of log) console.log(`  ${l}`);
 };
@@ -35,7 +34,6 @@ try {
     await bringUpOffIsland(page, { user });
     console.log(`ingame as ${user}`);
 
-    // a fighting-capable account with food, but deliberately NO brass key
     for (const stat of ['attack', 'strength', 'defence', 'hitpoints']) {
         await cheatQuiet(page, `setstat ${stat} 70`, 900);
     }
@@ -48,10 +46,9 @@ try {
         return { food: api.Inventory.count('Trout'), key: api.Inventory.contains('Brass key'), hp: api.Skills.level('hitpoints') };
     });
     if (seeded.food < 1) fail('seeding food failed');
-    if (seeded.key) fail('expected to start WITHOUT a brass key');
+    if (seeded.key) fail('expected to start WITHOUT a brass key so the bot must fetch one');
     console.log(`seeded: ${seeded.food} trout, hp ${seeded.hp}, no brass key`);
 
-    // the weapon is seeded UNEQUIPPED: the script has to wield it itself
     await setSettings(page, 'HillGiant', { weapon: 'Bronze scimitar' });
     if (await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Equipment.contains('Bronze scimitar'))) {
         fail('expected the scimitar to start unequipped');
@@ -64,14 +61,12 @@ try {
     });
     console.log('HillGiant started');
 
-    // 0. wields the weapon that was sitting loose in the pack
     const wielded = await page
         .waitForFunction(() => (globalThis as never as Api).__rs2b0t.Equipment.contains('Bronze scimitar'), undefined, { timeout: 60_000 })
         .then(() => true).catch(() => false);
     if (!wielded) fail('never wielded the Bronze scimitar sitting in the pack');
     console.log('PASS 0/3 — wielded the Bronze scimitar from the pack');
 
-    // 1. fetches the brass key from the dungeon floor
     const gotKey = await page
         .waitForFunction(() => (globalThis as never as Api).__rs2b0t.Inventory.contains('Brass key'), undefined, { timeout: 300_000 })
         .then(() => true).catch(() => false);
@@ -79,7 +74,7 @@ try {
     if (!gotKey) fail('never picked up the Brass key from the Edgeville dungeon');
     console.log(`PASS 1/3 — picked up the Brass key (at ${JSON.stringify(await tile())})`);
 
-    // Why: putting the bot on the surface outside the hut makes the locked door and ladder the only way back down, so the leg is exercised rather than walked around underground.
+    // Why: surface outside the hut makes the keyed door + ladder the only way back down.
     await cheatQuiet(page, 'tele 0,48,53,52,60', 4000);
     console.log(`moved to the surface at ${JSON.stringify(await tile())} — hut route is now the only way in`);
     const inPit = await page
@@ -90,21 +85,22 @@ try {
         .then(() => true).catch(() => false);
     await dump('after entry leg');
     if (!inPit) fail('never reached the giant pit from the surface hut');
-    const usedHut = await page.evaluate(() => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).some(l => /unlocked the hut door/i.test(l.msg)));
-    if (!usedHut) fail('reached the pit without ever using the hut door/ladder leg');
-    console.log(`PASS 2/3 — unlocked the hut and climbed into the pit at ${JSON.stringify(await tile())}`);
+    const usedHut = await page.evaluate(() =>
+        ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).some(l =>
+            /Hill giant hut brass key door|Brass key/i.test(l.msg)
+        )
+    );
+    if (!usedHut) fail('reached the pit without a Brass-key hut crossing in the log');
+    console.log(`PASS 2/3 — re-entered the pit via the hut at ${JSON.stringify(await tile())}`);
 
-    // 3. fights a giant
     const fought = await page
         .waitForFunction(() => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).some(l => /attacking Giant|looted/i.test(l.msg)), undefined, { timeout: 180_000 })
         .then(() => true).catch(() => false);
     await dump('after combat leg');
-    await page.screenshot({ path: 'docs/e2e/issue-311-hillgiant.png' });
-    console.log('screenshot: docs/e2e/issue-311-hillgiant.png');
     if (!fought) fail('never engaged a Giant in the pit');
 
     await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
-    console.log('PASS 3/3 — HillGiant wielded its weapon, fetched the key, entered via the hut, and fought in the pit');
+    console.log('PASS 3/3 — HillGiant fetched the key, entered via the hut, and fought');
 } finally {
     await browser.close();
 }

@@ -599,7 +599,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'BrimhavenAgility',
     description:
-        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags',
+        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
     category: 'Agility',
     tags: ['brimhaven', 'arena', 'tickets', 'banking', 'food'],
     settingsSchema: BRIMHAVEN_AGILITY_SETTINGS,
@@ -662,9 +662,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'HillGiant',
-    description: 'Edgeville dungeon hill giants — fetches the brass key if the bank has none, unlocks the hut, and banks limpwurt roots and big bones at Varrock West',
+    description: 'Edgeville dungeon hill giants — enters through the public trapdoor and banks limpwurt roots and big bones at Edgeville',
     category: 'Combat',
-    tags: ['combat', 'giants', 'edgeville', 'varrock', 'banking', 'looting'],
+    tags: ['combat', 'giants', 'edgeville', 'banking', 'looting'],
     settingsSchema: HILL_GIANT_SETTINGS,
     create: () => new HillGiant()
 });

@@ -1,5 +1,6 @@
 import { foodForms, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { ArravConfig, type ArravGangSetting } from '../../api/ai/quests/defs/shieldofarrav/config.js';
+import { HeroConfig } from '../../api/ai/quests/defs/heroquest/config.js';
 import type { QuestSustain } from '../../api/ai/quests/engine/types.js';
 
 export interface ResolvedSustainPolicy {
@@ -100,4 +101,12 @@ export function applyArravSettings(raw: { gang: string; partner: string; certs: 
     ArravConfig.gang = ARRAV_GANG_OPTIONS.find(g => g === raw.gang) ?? 'random';
     ArravConfig.partner = raw.partner.trim();
     ArravConfig.certTarget = Math.max(1, Math.floor(Number.isFinite(raw.certs) ? raw.certs : 2));
+}
+
+// Why: the gang is Shield of Arrav's, deliberately — Grip refuses a Black Arm attacker and Katrine
+// refuses a Phoenix candlestick, so the branch a character walks is the gang it already joined.
+
+/** Push the panel setting onto the Hero's Quest config. */
+export function applyHeroSettings(raw: { partner: string }): void {
+    HeroConfig.partner = raw.partner.trim();
 }

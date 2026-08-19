@@ -1,17 +1,17 @@
-// Live proof #428 — HillGiant banks at Varrock West (~3185,3440) rather than East (~3253,3420): [base].
-// Seeds a full pack of loot in the Edgeville giant pit so the bank task fires.
+// Live proof — HillGiant with a Brass key banks at Varrock West (~3185,3440).
 
 //   ENGINE_DIR=... sh tools/deploy-local.sh   # once
-//   bun e2e/hillgiant-bank-428-live.ts [http://localhost:8890]
+//   bun e2e/hillgiant-bank-428-live.ts [http://localhost:8888]
 import { boot, bringUpOffIsland, cheatQuiet, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 
-const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
+const args = positionalArgs(process.argv.slice(2), 'http://localhost:8888');
 const base = args[0];
 const user = args[1] ?? `hgw${Date.now().toString(36).slice(-5)}`;
 
+const EDGEVILLE = { x: 3094, z: 3493 };
 const WEST = { x: 3185, z: 3440 };
 const EAST = { x: 3253, z: 3420 };
-const PIT = { x: 3115, z: 9835 }; // inside giant pit (after hut ladder)
+const PIT = { x: 3115, z: 9835 };
 
 interface Api {
     __rs2b0t: {
@@ -42,24 +42,19 @@ try {
     for (const stat of ['attack', 'strength', 'defence', 'hitpoints']) {
         await cheatQuiet(page, `setstat ${stat} 70`, 800);
     }
-    // Pit with key + food + full loot so BankTask validates immediately.
     await cheatQuiet(page, `tele 0,${PIT.x >> 6},${PIT.z >> 6},${PIT.x & 63},${PIT.z & 63}`, 3500);
-    await cheatQuiet(page, 'give edgevilledungeonkey 1', 1200);
     await cheatQuiet(page, 'give trout 2', 1200);
     await cheatQuiet(page, 'give limpwurt_root 14', 2000);
     await cheatQuiet(page, 'give big_bones 12', 2000);
+    await cheatQuiet(page, 'give edgevilledungeonkey 1', 1200);
 
     const seeded = await page.evaluate(() => {
         const api = (globalThis as never as Api).__rs2b0t;
         return {
-            key: api.Inventory.contains('Brass key'),
             used: api.Inventory.used(),
             tile: api.reader.worldTile()
         };
     });
-    if (!seeded.key) {
-        fail('brass key seed failed');
-    }
     if (seeded.used < 20) {
         fail(`expected a packed inventory, used=${seeded.used}`);
     }
@@ -78,33 +73,30 @@ try {
         }
         g.rs2b0t.runner.start(meta);
     });
-    console.log('HillGiant started — waiting for bank stand');
+    console.log('HillGiant started — waiting for Varrock West bank');
 
-    const deadline = Date.now() + 240_000;
+    const deadline = Date.now() + 180_000;
     let sawWest = false;
-    let sawEast = false;
     while (Date.now() < deadline) {
         const t = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.reader.worldTile());
         const logs = await page.evaluate(() =>
             ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).slice(-20).map(l => l.msg)
         );
-        if (t && t.level === 0) {
+        if (t && t.level === 0 && t.z < 4000) {
             if (cheb(t, WEST) <= 8) {
                 sawWest = true;
                 console.log(`PASS — at Varrock West bank area ${JSON.stringify(t)}`);
                 break;
             }
+            if (cheb(t, EDGEVILLE) <= 8) {
+                fail(`banked at Edgeville ${JSON.stringify(t)}`);
+            }
             if (cheb(t, EAST) <= 8) {
-                sawEast = true;
-                console.log(`FAIL-ish — at Varrock East bank ${JSON.stringify(t)}`);
-                break;
+                fail(`banked at Varrock East ${JSON.stringify(t)}`);
             }
         }
-        if (logs.some(m => /Varrock West bank/i.test(m))) {
-            console.log('saw walk label for Varrock West bank');
-        }
-        if (logs.some(m => /Varrock East bank/i.test(m))) {
-            fail('script still walks to Varrock East bank');
+        if (logs.some(m => /Edgeville bank/i.test(m))) {
+            fail('script still walks to Edgeville bank');
         }
         await page.waitForTimeout(1500);
     }
@@ -117,13 +109,10 @@ try {
         console.log(`  ${m}`);
     }
 
-    if (sawEast && !sawWest) {
-        fail('banked at Varrock East — #428 not applied in this client');
-    }
     if (!sawWest) {
-        fail('never reached Varrock West bank within 4 minutes');
+        fail('never reached Varrock West bank within 3 minutes');
     }
-    console.log('PASS #428 live — HillGiant banks at Varrock West');
+    console.log('PASS — HillGiant banks at Varrock West');
 } finally {
     await browser.close();
 }

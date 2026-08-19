@@ -221,7 +221,9 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'biohazard', name: 'Biohazard', questPoints: 3,
-        requirements: {},
+        requirements: { quests: ['elena'] },
+        // The vials, the sample, the gown, the key and the priest suit are all
+        // sourced per stage by the module, which owns its own inventory.
         items: []
     },
     {
@@ -368,25 +370,22 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'fishingcompo', name: 'Fishing Contest', questPoints: 1,
         requirements: { skills: [{ skill: 'fishing', level: 10 }] },
-        items: [
-            { name: 'Garlic', qty: 1, kind: 'mustHave' },
-            { name: 'Fishing rod', qty: 1, kind: 'mustHave' },
-            { name: 'Red vine worm', qty: 1, kind: 'acquirable' }
-        ]
+        // The garlic, rod, spade and worms are sourced per stage by the module, which
+        // walks Draynor → Falador → Catherby → McGrubor's Wood in that order anyway.
+        items: []
     },
     {
         id: 'fluffs', name: "Gertrude's Cat", questPoints: 1,
         requirements: {},
-        items: [
-            { name: 'Raw sardine', qty: 1, kind: 'mustHave' },
-            { name: 'Bucket of milk', qty: 1, kind: 'mustHave' },
-            { name: 'Coins', qty: 100, kind: 'mustHave' }
-        ]
+        // Why: the milk, the doogle leaves and the sardine are all fed to Fluffs mid-quest, so the module sources each on the leg that needs it rather than the provisioner refetching all three on every resume.
+        items: []
     },
     {
         id: 'grail', name: 'Holy Grail', questPoints: 2,
-        requirements: {},
-        items: []
+        requirements: { quests: ['arthur'] },
+        items: [
+            { name: 'Excalibur', qty: 1, kind: 'acquirable' }
+        ]
     },
     {
         id: 'grandtree', name: 'The Grand Tree', questPoints: 5,
@@ -431,7 +430,10 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'itgronigen', name: 'Observatory Quest', questPoints: 2,
-        requirements: {},
+        // Why: the server gates nothing — `craft_telescope_disc` carries no level check — but the quest is listed at Crafting 10 and the eligibility view should say so.
+        requirements: { skills: [{ skill: 'crafting', level: 10 }] },
+        // Why: the professor takes the planks, the bar, the glass and the mould one stage at a time and deletes each as it lands, so a provisioning list would re-fetch items the quest has already spent.
+        // Why: the module sources every one of them itself, bank first.
         items: []
     },
     {
@@ -473,7 +475,16 @@ export const QUESTS: QuestRecord[] = [
     },
     {
         id: 'mortton', name: 'Shades of Mortton', questPoints: 3,
-        requirements: {},
+        requirements: {
+            skills: [
+                { skill: 'crafting', level: 20 },
+                { skill: 'herblore', level: 15 },
+                { skill: 'firemaking', level: 5 }
+            ],
+            quests: ['priestperil']
+        },
+        // Why: the diary, the herbs, the vials and every building material are sourced in Mort'ton.
+        // Why: the module owns its own loadout and draws coins, food, a tinderbox and the logs itself.
         items: []
     },
     {
@@ -581,9 +592,10 @@ export const QUESTS: QuestRecord[] = [
         requirements: {
             quests: ['biohazard']
         },
+        // Why: the plank only crosses the double spring trap, and the module walks that with the journal
+        // held open instead, so requiring one would block a quest it no longer needs.
         items: [
-            { name: 'Rope', qty: 1, kind: 'mustHave' },
-            { name: 'Plank', qty: 1, kind: 'mustHave' }
+            { name: 'Rope', qty: 1, kind: 'acquirable' }
         ]
     },
     {
@@ -597,7 +609,14 @@ export const QUESTS: QuestRecord[] = [
                 { skill: 'fletching', level: 25 }
             ]
         },
-        items: []
+        items: [
+            // Why: the axe and the knife have permanent spawns inside Rellekka, the tinderbox comes off Arhein in Catherby,
+            // Why: and the shark is bought from Rufus in Canifis, the only shop in the game that restocks one.
+            { name: 'Bronze axe', qty: 1, kind: 'acquirable' },
+            { name: 'Knife', qty: 1, kind: 'acquirable' },
+            { name: 'Tinderbox', qty: 1, kind: 'acquirable' },
+            { name: 'Raw shark', qty: 1, kind: 'acquirable' }
+        ]
     },
     {
         id: 'waterfall',

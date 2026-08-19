@@ -33,7 +33,7 @@ describe('nextCluster', () => {
     });
     test('skips ineligible clusters', () => {
         const fresh = acct({ fishing: 1, ranged: 1, magic: 1 });
-        expect(nextCluster(ROUTE, 'catherby', fresh, {})?.id).toBe('varrock');
+        expect(nextCluster(ROUTE, 'catherby', fresh, {})?.id).toBe('ardougne');
     });
 });
 

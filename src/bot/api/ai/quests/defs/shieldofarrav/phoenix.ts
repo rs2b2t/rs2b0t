@@ -8,12 +8,12 @@ import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
-import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { heldId, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { promptLoc } from '../../exec/prompts.js';
 import { BARAEK, RELDO, SOA_ID, SOA_LOC, SOA_TILE, STRAVEN_HANDIN, STRAVEN_JOIN } from './areas.js';
 import { enterPhoenixInner, leaveHideout, openContainer, talkInHideout, walkAndTalk } from './hideout.js';
 import { SOA_STAGE } from './journal.js';
-import { heldId, liveItem, modalSaid } from './state.js';
+import { liveItem, modalSaid } from './state.js';
 
 /** Baraek wants 20; the float covers a death and a second attempt. */
 const BRIBE_GP = 20;

@@ -2154,6 +2154,51 @@
   },
   {
     "from": {
+      "x": 2541,
+      "z": 3331,
+      "level": 0
+    },
+    "to": {
+      "x": 2542,
+      "z": 3331,
+      "level": 0
+    },
+    "locName": "Fence",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2068,
+    "locX": 2541,
+    "locZ": 3331,
+    "debugName": "mournerstewfence",
+    "options": [
+      "Climb-over"
+    ],
+    "note": "the only way into the mourner HQ yard that is not the gown-locked building (Biohazard)"
+  },
+  {
+    "from": {
+      "x": 2542,
+      "z": 3331,
+      "level": 0
+    },
+    "to": {
+      "x": 2541,
+      "z": 3331,
+      "level": 0
+    },
+    "locName": "Fence",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2068,
+    "locX": 2541,
+    "locZ": 3331,
+    "debugName": "mournerstewfence",
+    "options": [
+      "Climb-over"
+    ]
+  },
+  {
+    "from": {
       "x": 2836,
       "z": 9599,
       "level": 0
@@ -8227,5 +8272,145 @@
         }
       ]
     }
+  },
+  {
+    "from": {
+      "x": 2852,
+      "z": 10060,
+      "level": 1
+    },
+    "to": {
+      "x": 2852,
+      "z": 10064,
+      "level": 0
+    },
+    "locName": "Stone Staircase",
+    "action": "Climb-down",
+    "kind": "stair",
+    "locId": 3789,
+    "locX": 2852,
+    "locZ": 10061,
+    "debugName": "troll_stronghold_stairstop",
+    "options": [
+      "Climb-down"
+    ]
+  },
+  {
+    "from": {
+      "x": 2852,
+      "z": 10064,
+      "level": 0
+    },
+    "to": {
+      "x": 2852,
+      "z": 10060,
+      "level": 1
+    },
+    "locName": "Stone Staircase",
+    "action": "Climb-up",
+    "kind": "stair",
+    "locId": 3788,
+    "locX": 2852,
+    "locZ": 10061,
+    "debugName": "troll_stronghold_stairs",
+    "options": [
+      "Climb-up"
+    ]
+  },
+  {
+    "from": {
+      "x": 2893,
+      "z": 3671,
+      "level": 0
+    },
+    "to": {
+      "x": 2893,
+      "z": 10074,
+      "level": 2
+    },
+    "locName": "Cave Entrance",
+    "action": "Enter",
+    "kind": "dungeon",
+    "locId": 3759,
+    "locX": 2892,
+    "locZ": 3672,
+    "debugName": "troll_mad_eadgar_entrance",
+    "options": [
+      "Enter"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Troll Stronghold",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2893,
+      "z": 10074,
+      "level": 2
+    },
+    "to": {
+      "x": 2893,
+      "z": 3671,
+      "level": 0
+    },
+    "locName": "Cave Exit",
+    "action": "Exit",
+    "kind": "dungeon",
+    "locId": 3760,
+    "locX": 2892,
+    "locZ": 10072,
+    "debugName": "troll_mad_eadgar_exit",
+    "options": [
+      "Exit"
+    ]
+  },
+  {
+    "from": {
+      "x": 2637,
+      "z": 3350,
+      "level": 0
+    },
+    "to": {
+      "x": 2640,
+      "z": 3350,
+      "level": 0
+    },
+    "locName": "Stile",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 993,
+    "locX": 2638,
+    "locZ": 3350,
+    "debugName": "fullstyle",
+    "options": [
+      "Climb-over"
+    ]
+  },
+  {
+    "from": {
+      "x": 2640,
+      "z": 3350,
+      "level": 0
+    },
+    "to": {
+      "x": 2637,
+      "z": 3350,
+      "level": 0
+    },
+    "locName": "Stile",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 993,
+    "locX": 2638,
+    "locZ": 3350,
+    "debugName": "fullstyle",
+    "options": [
+      "Climb-over"
+    ]
   }
 ]

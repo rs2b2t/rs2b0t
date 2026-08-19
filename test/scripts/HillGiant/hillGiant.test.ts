@@ -1,4 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, test } from 'bun:test';
+import { gunzipSync } from 'fflate';
+
 import {
     BIG_BONES,
     BRASS_KEY,
@@ -13,6 +18,41 @@ import {
     tripNeeds
 } from '#/bot/scripts/HillGiant/HillGiantLogic.js';
 import { HILL_GIANT_SETTINGS } from '#/bot/scripts/HillGiant/HillGiant.js';
+import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+
+// The pack is a build artifact, not a committed file, so CI runs without it.
+const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
+const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
+
+/** Varrock West bank, where a trip starts once the bots have banked. */
+const WEST_BANK = { x: 3185, z: 3446, level: 0 };
+
+function walkState(): object {
+    const skills: Record<string, number> = {};
+    for (const s of ['attack', 'defence', 'strength', 'hitpoints', 'agility', 'mining', 'magic', 'prayer', 'ranged', 'thieving']) {
+        skills[s] = 60;
+    }
+    return { members: true, skills, quests: {}, items: { 'Brass key': 1 }, freeSlots: 20 };
+}
+
+describe.skipIf(!HAS_COLLISION_PACK)('HillGiant pit spots are reachable', () => {
+    // Why: a spot can sit inside the pit's bounding box and still be walled off,
+    // and an unreachable one wedges the bot in a retry loop that never ends.
+    test('every pit spot can be pathed to from the bank', () => {
+        let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
+        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+            bytes = gunzipSync(bytes);
+        }
+        const finder = new PathFinder(bytes);
+        loadDefaultNavEdges(finder);
+
+        for (const spot of PIT_SPOTS) {
+            const result = finder.findPath(WEST_BANK, { x: spot.x, z: spot.z, level: spot.level }, { state: walkState() } as never);
+            expect(`${spot.x},${spot.z}: ${result.ok}`).toBe(`${spot.x},${spot.z}: true`);
+        }
+    });
+});
 
 describe('HillGiant pit spots', () => {
     test('every spot sits inside the giant pit', () => {
@@ -61,20 +101,15 @@ describe('HillGiant pit spots', () => {
 });
 
 describe('HillGiant trip needs', () => {
-    test('withdraws a key only when one is not already carried', () => {
-        expect(tripNeeds(false, 0, 12).key).toBe(true);
-        expect(tripNeeds(true, 0, 12).key).toBe(false);
-    });
-
     test('tops food up to the trip size rather than always withdrawing a full load', () => {
-        expect(tripNeeds(true, 0, 12).food).toBe(12);
-        expect(tripNeeds(true, 5, 12).food).toBe(7);
-        expect(tripNeeds(true, 12, 12).food).toBe(0);
-        expect(tripNeeds(true, 20, 12).food).toBe(0);
+        expect(tripNeeds(0, 12).food).toBe(12);
+        expect(tripNeeds(5, 12).food).toBe(7);
+        expect(tripNeeds(12, 12).food).toBe(0);
+        expect(tripNeeds(20, 12).food).toBe(0);
     });
 
-    test('keeps the key and the food when depositing loot', () => {
-        expect(keepOnDeposit('Trout')).toEqual([BRASS_KEY, 'Trout']);
+    test('keeps food and the Brass key when depositing loot', () => {
+        expect(keepOnDeposit('Trout')).toEqual(['Trout', BRASS_KEY]);
     });
 });
 

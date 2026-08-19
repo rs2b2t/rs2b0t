@@ -31,7 +31,7 @@ export interface ToolAcquireHost {
     openBankAt(stand: Tile, log: (m: string) => void): Promise<boolean>;
     waitBankReady(log: (m: string) => void): Promise<boolean>;
     bankPace(log?: (m: string) => void): Promise<void>;
-    closeScriptBank(log: (m: string) => void, opts?: { allowForgetful?: boolean }): Promise<void>;
+    closeScriptBank(log: (m: string) => void, opts?: { allowForgetful?: boolean }): Promise<boolean>;
     walkToToolVendor?(vendor: ToolVendor, log: (m: string) => void): Promise<boolean>;
     heldCount(name: string): number;
     gearKeepNamesList(): string[];

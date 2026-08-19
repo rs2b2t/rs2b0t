@@ -144,6 +144,113 @@ export class PaintState {
 
 export const paintState = new PaintState();
 
+/** Monospace characters that fit a panel `w` px wide with `pad` px of gutter each side. */
+export function paintCols(w: number, pad: number, charW: number): number {
+    if (charW <= 0) {
+        return 0;
+    }
+    return Math.max(0, Math.floor((w - pad * 2) / charW));
+}
+
+/**
+ * Word-wrap `text` to `cols` characters, indenting continuation lines by
+ * `indent` spaces so a wrapped entry still reads as one entry.
+ */
+export function wrapText(text: string, cols: number, indent = 0): string[] {
+    if (cols <= 0) {
+        return [];
+    }
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const pad = ' '.repeat(Math.max(0, Math.min(indent, cols - 1)));
+    const lines: string[] = [];
+    let line = '';
+    const room = (): number => (lines.length === 0 ? cols : cols - pad.length);
+    const flush = (): void => {
+        if (line.length > 0) {
+            lines.push(lines.length === 0 ? line : pad + line);
+            line = '';
+        }
+    };
+    for (let word of words) {
+        // A word wider than the line has to break somewhere; break it at the edge.
+        while (word.length > room()) {
+            flush();
+            const take = room();
+            lines.push(lines.length === 0 ? word.slice(0, take) : pad + word.slice(0, take));
+            word = word.slice(take);
+        }
+        if (line.length === 0) {
+            line = word;
+        } else if (line.length + 1 + word.length <= room()) {
+            line += ` ${word}`;
+        } else {
+            flush();
+            line = word;
+        }
+    }
+    flush();
+    return lines;
+}
+
+/** Pixel widths for weighted columns sharing `total` px. */
+export function cellWidths(total: number, weights: readonly number[]): number[] {
+    const sum = weights.reduce((a, b) => a + Math.max(0, b), 0);
+    if (sum <= 0) {
+        return weights.map(() => 0);
+    }
+    return weights.map(w => (Math.max(0, w) / sum) * total);
+}
+
+/** Rows needed to lay `len` entries `columns` across. */
+export function gridRows(len: number, columns: number): number {
+    if (columns <= 0 || len <= 0) {
+        return 0;
+    }
+    return Math.ceil(len / columns);
+}
+
+/** Rows a single wheel notch moves a scrollable list. */
+export const WHEEL_ROWS = 3;
+
+export interface ListScrollState {
+    offset: number;
+    /** True once the user has scrolled, which detaches the list from `focus`. */
+    manual: boolean;
+    /** The focus row this state was computed against; a change re-attaches. */
+    focus: number;
+}
+
+/**
+ * Scroll position for an immediate-mode list.
+ * Wheel notches detach the list from `focus`; a new `focus` row re-attaches it.
+ */
+export function listScroll(
+    len: number,
+    rows: number,
+    state: ListScrollState,
+    wheel: number,
+    focus: number
+): ListScrollState {
+    const max = Math.max(0, len - rows);
+    const clamp = (n: number): number => Math.min(max, Math.max(0, n));
+    let manual = state.manual;
+    if (focus !== state.focus) {
+        manual = false;
+    }
+    let offset = clamp(Number.isFinite(state.offset) ? Math.trunc(state.offset) : 0);
+    if (wheel !== 0) {
+        manual = true;
+        offset = clamp(offset + Math.trunc(wheel) * WHEEL_ROWS);
+    } else if (!manual && rows > 0 && focus >= 0 && focus < len) {
+        if (focus < offset) {
+            offset = clamp(focus);
+        } else if (focus >= offset + rows) {
+            offset = clamp(focus - rows + 1);
+        }
+    }
+    return { offset, manual, focus };
+}
+
 export function fmtDuration(mins: number): string {
     const t = Math.max(0, Math.floor(mins * 60));
     return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
@@ -184,13 +291,20 @@ export function paintSkillTitle(skill: string): string {
     }
 }
 
+/** Clip to `cols` characters with a trailing ellipsis, keeping leading spaces so padded columns stay aligned. */
+export function clipText(text: string, cols: number): string {
+    if (cols <= 0) {
+        return '';
+    }
+    if (text.length <= cols) {
+        return text;
+    }
+    return `${text.slice(0, cols - 1)}…`;
+}
+
 /** Truncate paint text with an ellipsis (chatbox rows are tight). */
 export function paintClip(text: string, max = 52): string {
-    const s = text.trim();
-    if (s.length <= max) {
-        return s;
-    }
-    return `${s.slice(0, Math.max(0, max - 1))}…`;
+    return clipText(text.trim(), max);
 }
 
 export function fmtXpGained(n: number): string {

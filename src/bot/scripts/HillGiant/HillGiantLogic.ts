@@ -2,11 +2,13 @@ import Tile from '../../geometry/Tile.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { shouldEatToUseFood } from '../../api/combat/food.js';
 
-// Pure decisions for HillGiant, kept out of the game-touching bot so the pit spot spread, the key/food trip requirements and the loot rules can be tested without a client.
+// Pure decisions for HillGiant, kept out of the game-touching bot so the pit spot spread, the food trip requirements and the loot rules can be tested without a client.
 
-export const BRASS_KEY = 'Brass key';
 export const BIG_BONES = 'Big bones';
 export const LIMPWURT = 'Limpwurt root';
+export const BRASS_KEY = 'Brass key';
+// Why: dungeon tile of the Edgeville-dungeon Brass key spawn — used to fetch the hut shortcut key.
+export const KEY_SPAWN = new Tile(3131, 9862, 0);
 
 // Why: several bots on one world otherwise pile onto the same corner and starve each other of spawns, so a trip picks one at random.
 
@@ -16,8 +18,7 @@ export const PIT_SPOTS: WorldTile[] = [
     new Tile(3117, 9835, 0),
     new Tile(3103, 9836, 0),
     new Tile(3113, 9841, 0),
-    new Tile(3120, 9843, 0),
-    new Tile(3107, 9845, 0)
+    new Tile(3120, 9843, 0)
 ];
 
 /** Pick a pit spot from `rand` in [0,1). Kept injectable so tests are exact. */
@@ -30,16 +31,12 @@ export function pickSpot(rand: number, spots: WorldTile[] = PIT_SPOTS): WorldTil
 }
 
 interface TripNeeds {
-    key: boolean;
     food: number;
 }
 
-/**
- * What a trip must leave the bank with. The key is only needed when it is not
- * already carried — it is never dropped, so one is enough forever.
- */
-export function tripNeeds(carryingKey: boolean, foodInPack: number, foodPerTrip: number): TripNeeds {
-    return { key: !carryingKey, food: Math.max(0, foodPerTrip - foodInPack) };
+/** What a trip must leave the bank with. */
+export function tripNeeds(foodInPack: number, foodPerTrip: number): TripNeeds {
+    return { food: Math.max(0, foodPerTrip - foodInPack) };
 }
 
 interface BankDecision {
@@ -95,7 +92,7 @@ export function bonesAction(buryBones: boolean): 'bury' | 'bank' {
 
 /** Names a trip keeps in the pack when depositing at the bank. */
 export function keepOnDeposit(food: string): string[] {
-    return [BRASS_KEY, food];
+    return [food, BRASS_KEY];
 }
 
 // Why: counting on Attack multi-counts, since a death anim stays Attackable for several ticks and each Fight loop re-clicks Attack (#479).

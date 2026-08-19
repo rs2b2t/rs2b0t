@@ -7,7 +7,7 @@ Six fences in [`eslint.config.ts`](../../eslint.config.ts) declare the layering.
 | Fence | Applies to | Allows |
 |---|---|---|
 | Client internals | `src/bot/**`, except `src/bot/adapter/**` and `src/bot/runtime/BotClient.ts` | the four protocol const-enums and `worldmapKeyNames` |
-| DOM | `src/bot/**`, except `src/bot/panel/`, `src/bot/main.ts`, `src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts` and `src/bot/runtime/WorkerClock.ts` | — |
+| DOM | `src/bot/**`, except `src/bot/panel/`, `src/bot/main.ts`, `src/bot/multibox/{DomSlotOps,ProfileChooser,SettingsPanel,TabBar,VaultPrompt,main}.ts` and `src/bot/runtime/WorkerClock.ts` | — |
 | api leaf | `src/bot/api/**` | `runtime/{Settings,BotHost,Scheduler}` only — never script lifecycle |
 | data inert | `src/bot/data/**` | value imports from `geometry/` only; type-only imports anywhere |
 | abi surface | `src/bot/runtime/abi.ts` | `api/`, `data/`, `geometry/`, `nav/`, `adapter/`, and `runtime/{Settings,defineBot}` |

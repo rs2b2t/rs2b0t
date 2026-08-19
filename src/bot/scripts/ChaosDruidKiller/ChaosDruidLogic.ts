@@ -175,6 +175,35 @@ export function inEdgevilleDungeon(tile: WorldTile | null): boolean {
     return chaosDruidArea(tile, EDGEVILLE_DUNGEON_BOUNDS) === 'druid-dungeon';
 }
 
+/** Interior of the picklocked tower (not the door stand at 2565,3356). */
+export const CHAOS_DRUID_TOWER_BOUNDS = { minX: 2560, maxX: 2564, minZ: 3352, maxZ: 3360 } as const;
+
+/** East of the tower on open ground — far enough that Swarm despawns (#497). */
+export const TOWER_SWARM_FLEE = { x: 2576, z: 3356, level: 0 } as const;
+
+export function swarmNpcNearby(
+    npcs: readonly { name: string | null; id: number; distance: number }[],
+    range = 8
+): boolean {
+    return npcs.some(
+        n => n.distance <= range && ((n.name ?? '').toLowerCase() === 'swarm' || n.id === 411)
+    );
+}
+
+/** Stay in the room and Swarm never despawns — we have to walk out first. */
+export function shouldExitTowerForSwarm(inTower: boolean, swarmNearby: boolean): boolean {
+    return inTower && swarmNearby;
+}
+
+/** The locked room is 5×9 — Swarm evade cannot leave the tile (#497). */
+export function inChaosDruidTower(tile: WorldTile | null): boolean {
+    if (tile === null || tile.level !== 0) {
+        return false;
+    }
+    const b = CHAOS_DRUID_TOWER_BOUNDS;
+    return tile.x >= b.minX && tile.x <= b.maxX && tile.z >= b.minZ && tile.z <= b.maxZ;
+}
+
 export function inChaosDruidField(tile: WorldTile | null, spot: DruidSpot = DRUID_SPOTS['Edgeville Dungeon']): boolean {
     if (tile === null) {
         return false;

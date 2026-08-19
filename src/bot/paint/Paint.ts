@@ -1,4 +1,18 @@
-import { cycleOption, paintState, resolveDock, type Dock, type Rect, type Region } from '#/bot/paint/paintLogic.js';
+import {
+    cellWidths,
+    clipText,
+    cycleOption,
+    gridRows,
+    listScroll,
+    paintCols,
+    paintState,
+    resolveDock,
+    wrapText,
+    type Dock,
+    type Rect,
+    type ListScrollState,
+    type Region
+} from '#/bot/paint/paintLogic.js';
 
 /**
  * Layout and behaviour of an overlay HUD.
@@ -8,6 +22,33 @@ interface PaintOptions {
     dock?: Dock;
     accent?: string;
 }
+
+/** One column of a `cells` row. `weight` shares the panel width; default 1. */
+export interface PaintCell {
+    text: string;
+    color?: string;
+    weight?: number;
+}
+
+/** A `list` / `fill` entry — a bare string, or text carrying its own colour. */
+export type PaintLine = string | { text: string; color?: string };
+
+export interface PaintListOptions {
+    /** Colour for entries that do not carry one. */
+    color?: string;
+    /** Entry the list scrolls to keep visible until the user scrolls away. */
+    focus?: number;
+    /** Summary drawn alongside the scroll counter, instead of costing a row of its own. */
+    footer?: string;
+}
+
+export interface PaintFillOptions extends PaintListOptions {
+    /** Panel pixels to leave below the list, for buttons drawn after it. */
+    reserve?: number;
+}
+
+const entryOf = (line: PaintLine): { text: string; color?: string } =>
+    typeof line === 'string' ? { text: line } : line;
 
 const FONT = '12px monospace';
 const FONT_BOLD = 'bold 12px monospace';
@@ -31,6 +72,7 @@ export class PaintFrame {
     private readonly accent: string;
     private readonly panel: Rect;
     private collapsed = false;
+    private readonly charW: number;
 
     constructor(
         private readonly ctx: CanvasRenderingContext2D,
@@ -41,6 +83,7 @@ export class PaintFrame {
         this.cursorY = this.panel.y;
         this.ctx.font = FONT;
         this.ctx.textBaseline = 'middle';
+        this.charW = this.ctx.measureText('0').width || 7;
     }
 
     title(text: string): void {
@@ -113,69 +156,206 @@ export class PaintFrame {
         return active;
     }
 
+    /** Columns of monospace text the panel fits between its gutters. */
+    cols(): number {
+        return paintCols(this.panel.w, PAD, this.charW);
+    }
+
     text(line: string, color?: string): void {
         if (this.collapsed) {
             return;
         }
         this.ctx.fillStyle = color ?? FG;
-        this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        this.ctx.fillText(clipText(line, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
         this.cursorY += LINE;
     }
 
     row(...cols: string[]): void {
-        if (this.collapsed || cols.length === 0) {
+        this.cells(cols.map(text => ({ text })));
+    }
+
+    /** A row of weighted, individually coloured columns, each clipped to its own slot. */
+    cells(cells: PaintCell[]): void {
+        if (this.collapsed || cells.length === 0) {
             return;
         }
-        const colW = (this.panel.w - PAD * 2) / cols.length;
-        this.ctx.fillStyle = FG;
-        cols.forEach((col, i) => this.ctx.fillText(col, this.panel.x + PAD + i * colW, this.cursorY + LINE / 2 + 1));
+        const widths = cellWidths(this.panel.w - PAD * 2, cells.map(c => c.weight ?? 1));
+        let x = this.panel.x + PAD;
+        cells.forEach((cell, i) => {
+            const w = widths[i] ?? 0;
+            // One character of gutter, so a clipped column never touches the next.
+            const room = Math.max(0, Math.floor(w / this.charW) - (i < cells.length - 1 ? 1 : 0));
+            this.ctx.fillStyle = cell.color ?? FG;
+            this.ctx.fillText(clipText(cell.text, room), x, this.cursorY + LINE / 2 + 1);
+            x += w;
+        });
         this.cursorY += LINE;
+    }
+
+    /** Text too long for one line, spilled onto indented continuation lines. */
+    wrap(text: string, color?: string, indent = 2): void {
+        if (this.collapsed) {
+            return;
+        }
+        for (const line of wrapText(text, this.cols(), indent)) {
+            this.ctx.fillStyle = color ?? FG;
+            this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.cursorY += LINE;
+        }
     }
 
     // Why: immediate mode has no retained scroll position, so the offset lives in paintState under the list id and the wheel notches are applied here.
     // Why: the window registers a 'scroll' region so the canvas swallows the wheel rather than letting the game zoom behind the panel.
     // Why: the offset shown is returned, already clamped.
 
-    /** A scrollable list of lines. */
-    list(id: string, lines: string[], rows: number, color?: string): number {
+    /** A scrollable list of lines. Returns the entry index now at the top. */
+    list(id: string, lines: PaintLine[], rows: number, opts: PaintListOptions | string = {}): number {
         if (this.collapsed) {
             return 0;
         }
+        const o: PaintListOptions = typeof opts === 'string' ? { color: opts } : opts;
         const key = `list:${id}`;
-        const maxOffset = Math.max(0, lines.length - rows);
-        const stored = Number(paintState.get(key, '0'));
-        const offset = Math.min(maxOffset, Math.max(0, (Number.isFinite(stored) ? stored : 0) + paintState.consumeWheel(key)));
-        paintState.set(key, String(offset));
-
+        const scroll = this.scrollFor(key, lines.length, rows, o.focus ?? -1);
         const top = this.cursorY;
-        const h = rows * LINE;
-        this.regions.push({ id: key, x: this.panel.x, y: top, w: this.panel.w, h, kind: 'scroll' });
+        this.regions.push({ id: key, x: this.panel.x, y: top, w: this.panel.w, h: rows * LINE, kind: 'scroll' });
 
         if (lines.length === 0) {
             this.text('nothing yet', FG_DIM);
+            this.chrome(top, rows * LINE, 0, 0, 0, 0, o.footer);
             return 0;
         }
 
-        for (const line of lines.slice(offset, offset + rows)) {
-            this.ctx.fillStyle = color ?? FG;
-            this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        const maxOffset = Math.max(0, lines.length - rows);
+        // A scrollbar steals the last character column, so clip narrower while one is drawn.
+        const room = this.cols() - (maxOffset > 0 ? 1 : 0);
+        for (const line of lines.slice(scroll.offset, scroll.offset + rows)) {
+            const entry = entryOf(line);
+            this.ctx.fillStyle = entry.color ?? o.color ?? FG;
+            this.ctx.fillText(clipText(entry.text, room), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
+        }
+        this.chrome(
+            top,
+            rows * LINE,
+            rows / lines.length,
+            scroll.offset / Math.max(1, maxOffset),
+            maxOffset > 0 ? scroll.offset + 1 : 0,
+            maxOffset > 0 ? Math.min(lines.length, scroll.offset + rows) : 0,
+            o.footer,
+            lines.length
+        );
+        return scroll.offset;
+    }
+
+    /**
+     * A `list` sized to whatever panel height is left, minus `reserve` pixels
+     * held back for whatever is drawn after it.
+     */
+    fill(id: string, lines: PaintLine[], opts: PaintFillOptions = {}): number {
+        if (this.collapsed) {
+            return 0;
+        }
+        return this.list(id, lines, this.rowsLeft(lines.length, opts), opts);
+    }
+
+    /** A `fill` laid `columns` across, reading left to right; the wheel moves a full row. */
+    grid(id: string, lines: PaintLine[], columns: number, opts: PaintFillOptions = {}): number {
+        if (this.collapsed) {
+            return 0;
+        }
+        const cols = Math.max(1, Math.trunc(columns));
+        const total = gridRows(lines.length, cols);
+        const rows = this.rowsLeft(total, opts);
+        const key = `list:${id}`;
+        const focus = opts.focus !== undefined && opts.focus >= 0 ? Math.floor(opts.focus / cols) : -1;
+        const scroll = this.scrollFor(key, total, rows, focus);
+        const top = this.cursorY;
+        this.regions.push({ id: key, x: this.panel.x, y: top, w: this.panel.w, h: rows * LINE, kind: 'scroll' });
+
+        if (lines.length === 0) {
+            this.text('nothing yet', FG_DIM);
+            this.chrome(top, rows * LINE, 0, 0, 0, 0, opts.footer);
+            return 0;
         }
 
-        if (maxOffset > 0) {
+        const maxOffset = Math.max(0, total - rows);
+        for (let r = scroll.offset; r < Math.min(total, scroll.offset + rows); r++) {
+            const slice = lines.slice(r * cols, r * cols + cols);
+            // Pad the last row out, so a half-full row keeps the same column widths.
+            while (slice.length < cols) {
+                slice.push('');
+            }
+            this.cells(slice.map(line => {
+                const entry = entryOf(line);
+                return { text: entry.text, color: entry.color ?? opts.color };
+            }));
+        }
+        this.chrome(
+            top,
+            rows * LINE,
+            rows / total,
+            scroll.offset / Math.max(1, maxOffset),
+            maxOffset > 0 ? scroll.offset * cols + 1 : 0,
+            maxOffset > 0 ? Math.min(lines.length, (scroll.offset + rows) * cols) : 0,
+            opts.footer,
+            lines.length
+        );
+        return scroll.offset;
+    }
+
+    /** Rows of the remaining panel height a filling list may use, less its counter row. */
+    private rowsLeft(total: number, opts: PaintFillOptions): number {
+        const bottom = this.panel.y + this.panel.h - (opts.reserve ?? 0);
+        const avail = Math.floor((bottom - this.cursorY) / LINE);
+        // The counter and any footer share one row, so a list needing either shows one fewer.
+        return Math.max(1, total > avail || opts.footer ? avail - 1 : avail);
+    }
+
+    private scrollFor(key: string, total: number, rows: number, focus: number): ListScrollState {
+        const stored = Number(paintState.get(key, '0'));
+        const scroll = listScroll(
+            total,
+            rows,
+            {
+                offset: Number.isFinite(stored) ? stored : 0,
+                manual: paintState.get(`${key}:manual`, '0') === '1',
+                focus: Number(paintState.get(`${key}:focus`, '-1'))
+            },
+            paintState.consumeWheel(key),
+            focus
+        );
+        paintState.set(key, String(scroll.offset));
+        paintState.set(`${key}:manual`, scroll.manual ? '1' : '0');
+        paintState.set(`${key}:focus`, String(scroll.focus));
+        return scroll;
+    }
+
+    /** Scrollbar thumb and the counter row, which any footer shares rather than costing a row. */
+    private chrome(
+        top: number,
+        h: number,
+        shown: number,
+        progress: number,
+        from: number,
+        to: number,
+        footer?: string,
+        total = 0
+    ): void {
+        if (from > 0) {
             // Thumb on the right edge, so it is obvious there is more.
-            const trackH = h;
-            const thumbH = Math.max(6, (rows / lines.length) * trackH);
-            const thumbY = top + (offset / maxOffset) * (trackH - thumbH);
+            const thumbH = Math.max(6, shown * h);
             this.ctx.fillStyle = BG_WIDGET;
-            this.ctx.fillRect(this.panel.x + this.panel.w - 5, top, 3, trackH);
+            this.ctx.fillRect(this.panel.x + this.panel.w - 5, top, 3, h);
             this.ctx.fillStyle = this.accent;
-            this.ctx.fillRect(this.panel.x + this.panel.w - 5, thumbY, 3, thumbH);
+            this.ctx.fillRect(this.panel.x + this.panel.w - 5, top + progress * (h - thumbH), 3, thumbH);
+        }
+        const counter = from > 0 ? `${from}–${to} of ${total}` : '';
+        const text = [counter, footer].filter(Boolean).join(' · ');
+        if (text.length > 0) {
             this.ctx.fillStyle = FG_DIM;
-            this.ctx.fillText(`${offset + 1}–${Math.min(lines.length, offset + rows)} of ${lines.length}`, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(clipText(text, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
-        return offset;
     }
 
     bar(label: string, fraction: number, color?: string): void {

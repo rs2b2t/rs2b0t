@@ -12,6 +12,7 @@ import { Inventory } from '../../../inventory/Inventory.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { evaluate } from '../EligibilityEvaluator.js';
+import { QUESTS } from '../data/quests.js';
 import { QUEST_DEFS, defById } from '../defs/index.js';
 import { executeStep } from '../exec/steps.js';
 import type { BankInventorySnapshot, PlayerState, QuestEligibility, QuestRecord } from '../types.js';
@@ -602,8 +603,9 @@ export class QuestEngine implements Task {
         for (const name of skillNames) {
             skillLevels.set(name, Skills.level(name));
         }
+        // Why: what the account has finished is read from every known quest, not only the ones with a module. A prerequisite whose own quest has no module yet — Biohazard ahead of Underground Pass — would otherwise be unsatisfiable, and the quest it gates would report BLOCKED forever.
         const completedQuests = new Set<string>();
-        for (const r of this.records) {
+        for (const r of QUESTS) {
             if (Quests.status(r.name) === 'complete') {
                 completedQuests.add(r.id);
             }

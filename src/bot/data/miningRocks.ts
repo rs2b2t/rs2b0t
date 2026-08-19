@@ -20,7 +20,10 @@ export const ROCK_TYPES: Record<string, number[]> = {
  * Why: an empty GatheringBot ore selection falls back to every option in `ROCK_OPTIONS`, and a mining bot should never target blurite.
  */
 export const QUEST_ROCK_TYPES: Record<string, number[]> = {
-    Blurite: [2110]
+    Blurite: [2110],
+    // Why: `limestone_rock1/2/3` in `mine.dbrow` name their locs as `loc_4027`-`loc_4029`, which have no
+    // debugname of their own — the quarries are the Arandar pass and Silvarea.
+    Limestone: [4027, 4028, 4029]
 };
 
 export const ROCK_OPTIONS = Object.keys(ROCK_TYPES);

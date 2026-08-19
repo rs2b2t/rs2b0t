@@ -1,5 +1,7 @@
 // docs/reference/quest-primitives.md
+import { reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { Reach } from '../../../walking/Reach.js';
 import type Tile from '../../../../geometry/Tile.js';
 import { Traversal } from '../../../walking/Traversal.js';
@@ -83,6 +85,97 @@ export async function driveUntil(
         await Execution.delayTicks(1);
     }
     return expect();
+}
+
+export interface DoorCrossing {
+    /** Exact loc id of the shut door. */
+    id: number;
+    /** The tile to click it from, on the side being left. */
+    stand: Tile;
+    /** True once the character stands past the door — a component test, never a distance one. */
+    isFar: () => boolean;
+    /** Options to take when the door raises a dialogue instead of opening. */
+    prefer?: readonly string[];
+    /** Display name of the loc, when it is not a Door. */
+    name?: string;
+    /** Op the loc advertises, when it is not Open. */
+    op?: string;
+    /** Id of the key to use on the loc, for a door whose Open answers "This door is locked". */
+    useItem?: number;
+    // Why: `~check_axis` reads your side off one coordinate, so an axis door is clicked from its own tile.
+    /** How far off the stand counts as arrived. Zero for an axis-tested door. */
+    standRadius?: number;
+    log: (m: string) => void;
+}
+
+const DOOR_MS = 12_000;
+// Why: the server runs the door's script a tick after the click, so the dialogue check needs a window.
+const DIALOG_MS = 5_000;
+// Why: a quest door can be a kingdom away — the Brimhaven crossings are reached from Varrock by ferry,
+// and a two-minute budget times out mid-ocean and reports the door as missing.
+const DOOR_WALK_MS = 300_000;
+
+// Why: `~open_and_close_door` teleports the actor through and re-shuts in three ticks, so the far side
+// is the only proof a crossing landed — and no door can ever be held open for a partner.
+
+/**
+ * Cross a quest door that teleports rather than opening.
+ * @see docs/reference/quest-primitives.md
+ */
+export async function crossTeleportDoor(door: DoorCrossing): Promise<boolean> {
+    const { id, stand, isFar, log } = door;
+    if (isFar()) {
+        return true;
+    }
+    // Why: a `~mesbox` left over from the door's own challenge — "You hear the door being unbarred from
+    // inside." — swallows the next Open click with no refusal to say why.
+    if (reader.modals().main !== -1) {
+        await Modals.close();
+    }
+    const radius = door.standRadius ?? 1;
+    if (!(await Traversal.walkResilient(stand, { radius, attempts: 3, timeoutMs: DOOR_WALK_MS, log }))) {
+        return false;
+    }
+    const op = door.op ?? 'Open';
+    const name = door.name ?? 'Door';
+    // Why: `~door_open` swings the loc onto a different tile and id, so the shut id is not what stands
+    // there after anyone has opened it — and a sealed pocket has one door, so the actioned neighbour is it.
+    const loc = Locs.query().action(op).within(4).where(l => l.id === id).nearest()
+        ?? Locs.query().action(op).within(2).where(l => l.name === name).nearest();
+    if (!loc) {
+        log(`no ${name.toLowerCase()} ${id} offering '${op}' within four tiles of (${stand.x},${stand.z})`);
+        return false;
+    }
+    // Why: a key door's `oploc1` answers "This <name> is locked" and only its `oplocu` opens, so the
+    // crossing is a use-item on the leaf rather than a click on its op.
+    if (door.useItem !== undefined) {
+        const key = Inventory.items().find(item => item.id === door.useItem);
+        if (!key) {
+            log(`no key ${door.useItem} in the pack for ${name.toLowerCase()} ${id}`);
+            return false;
+        }
+        if (!(await key.useOn(loc))) {
+            log(`${name.toLowerCase()} ${id} refused the key`);
+            return false;
+        }
+    } else if (!(await loc.interact(op))) {
+        log(`${name.toLowerCase()} ${id} refused the ${op} click`);
+        return false;
+    }
+    // Why: the server runs the door's script a tick after the click lands, so a dialogue check taken
+    // straight off `interact` sees nothing and the challenge goes unanswered.
+    if (door.prefer) {
+        await Execution.delayUntil(() => isFar() || ChatDialog.isOpen() || ChatDialog.canContinue(), DIALOG_MS);
+        if (!isFar() && (ChatDialog.isOpen() || ChatDialog.canContinue())) {
+            await driveChoice([...door.prefer], log);
+        }
+    }
+    await Execution.delayUntil(isFar, DOOR_MS);
+    if (!isFar()) {
+        return false;
+    }
+    await settleScene();
+    return true;
 }
 
 export interface LocPrompt {

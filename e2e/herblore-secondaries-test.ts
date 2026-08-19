@@ -118,7 +118,9 @@ try {
 
         // drop pack between cases so seeds land
         await page.evaluate(async () => {
-            const Inv = (globalThis as any).__rs2b0t?.Inventory;
+            const Inv = (globalThis as unknown as {
+                __rs2b0t?: { Inventory?: { items(): { name?: string; interact(op: string): unknown }[] } };
+            }).__rs2b0t?.Inventory;
             if (!Inv?.items) return;
             for (const it of [...Inv.items()]) {
                 if (!it?.name) continue;
@@ -136,7 +138,9 @@ try {
         // clear level-up / mesbox so ~bankitem can stick
         for (let i = 0; i < 6; i++) {
             await page.evaluate(() => {
-                const g = globalThis as any;
+                const g = globalThis as unknown as {
+                    rs2b0t?: { reader?: { modals?(): { chat: number } }; actions?: { continueDialog?(): void } };
+                };
                 const r = g.rs2b0t?.reader;
                 if (r?.modals?.().chat !== -1) g.rs2b0t?.actions?.continueDialog?.();
             });

@@ -43,6 +43,8 @@ import {
     isBurialBone,
     resolveKillingSpot,
     shouldBuryRegularBones,
+    autoRetaliateShouldEnable,
+    assertAutoRetaliateOn,
     SPOT_OPTIONS,
     START_POSITION,
     wantsAutoFighterLoot
@@ -282,6 +284,7 @@ export default class AutoFighter extends TaskBot {
                     this.died = false;
                 }
             }),
+            new EnableAutoRetaliate(this),
             new EatFood(this),
             new PanicRetreat(this),
             new BuryBones(this),
@@ -331,6 +334,25 @@ export default class AutoFighter extends TaskBot {
     countTrip(): void { this.trips++; }
     noteSupplyEmpty(v: boolean): void { this.supplyEmpty = v; }
     supplyKnownEmpty(): boolean { return this.supplyEmpty; }
+}
+
+class EnableAutoRetaliate implements Task {
+    constructor(private bot: AutoFighter) {}
+    validate(): boolean {
+        return autoRetaliateShouldEnable(Game.autoRetaliateOn());
+    }
+    async execute(): Promise<void> {
+        this.bot.setStatus('enabling auto retaliate');
+        await Game.openSideTab(0);
+        for (let i = 0; i < 5 && !Game.autoRetaliateOn(); i++) {
+            Game.setAutoRetaliate(true);
+            if (await Execution.delayUntil(() => Game.autoRetaliateOn(), 1500)) {
+                break;
+            }
+        }
+        assertAutoRetaliateOn(Game.autoRetaliateOn());
+        this.bot.log('Auto Retaliate on');
+    }
 }
 
 class LootDrops implements Task {

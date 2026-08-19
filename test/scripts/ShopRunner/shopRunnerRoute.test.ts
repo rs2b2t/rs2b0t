@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ROUTE, SMOKE_ROUTE } from '#/bot/scripts/ShopRunner/ShopRunnerRoute.js';
+import { ROUTE } from '#/bot/scripts/ShopRunner/ShopRunnerRoute.js';
 import { SHOP_DB } from '#/bot/data/shopdb.js';
 import { SHOPRUNNER_SETTINGS } from '#/bot/scripts/ShopRunner/ShopRunner.js';
 import type { Route } from '#/bot/api/shop/types.js';
@@ -31,13 +31,15 @@ function checkRoute(route: Route): void {
 describe('route data integrity vs generated shopdb', () => {
     test('ShopRunner exposes both requested Herblore supplies', () => {
         expect(SHOPRUNNER_SETTINGS.buyItems.options).toContain('Vial');
+        expect(SHOPRUNNER_SETTINGS.buyItems.options).toContain('Vial of water');
         expect(SHOPRUNNER_SETTINGS.buyItems.options).toContain('Eye of newt');
         expect(SHOPRUNNER_SETTINGS.buyItems.default).toContain('Vial');
+        expect(SHOPRUNNER_SETTINGS.buyItems.default).toContain('Vial of water');
         expect(SHOPRUNNER_SETTINGS.buyItems.default).toContain('Eye of newt');
     });
     test('live route resolves entirely against SHOP_DB', () => {
         checkRoute(ROUTE);
-        expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'taverley', 'catherby', 'fishingguild', 'rangingguild', 'magicguild', 'magearena']);
+        expect(ROUTE.clusters.map(c => c.id)).toEqual(['varrock', 'portsarim', 'taverley', 'catherby', 'fishingguild', 'rangingguild', 'ardougne', 'magicguild', 'magearena']);
     });
     test('skill gates sit on the guild clusters', () => {
         const byId = new Map(ROUTE.clusters.map(c => [c.id, c]));
@@ -47,6 +49,7 @@ describe('route data integrity vs generated shopdb', () => {
         expect(byId.get('catherby')!.gates).toEqual([]);
         expect(byId.get('fishingguild')!.gates).toEqual([{ skill: { name: 'fishing', level: 68 } }]);
         expect(byId.get('rangingguild')!.gates).toEqual([{ skill: { name: 'ranged', level: 40 } }]);
+        expect(byId.get('ardougne')!.gates).toEqual([]);
         expect(byId.get('magicguild')!.gates).toEqual([{ skill: { name: 'magic', level: 66 } }]);
         expect(byId.get('magearena')!.gates).toEqual([]);
     });
@@ -71,11 +74,19 @@ describe('route data integrity vs generated shopdb', () => {
             buys: [{ obj: 'eye_of_newt' }, { obj: 'vial_empty' }]
         }]);
     });
-    test('smoke route is the Aubury-only varrock cluster', () => {
-        checkRoute(SMOKE_ROUTE);
-        expect(SMOKE_ROUTE.clusters).toHaveLength(1);
-        expect(SMOKE_ROUTE.clusters[0].shops).toHaveLength(1);
-        expect(SMOKE_ROUTE.clusters[0].shops[0].shopId).toBe('runeshop');
+    test('Ardougne buys filled vials from Aemad and banks at East Ardougne', () => {
+        const ardougne = ROUTE.clusters.find(c => c.id === 'ardougne')!;
+        expect(ardougne.repeatWhileFull).toBe(true);
+        expect(ardougne.bank.stand).toEqual({ x: 2655, z: 3283, level: 0 });
+        expect(ardougne.shops).toEqual([{
+            shopId: 'adventurershop',
+            keeperNpc: 'Aemad',
+            stand: { x: 2613, z: 3294, level: 0 },
+            buys: [{ obj: 'vial_water' }]
+        }]);
+    });
+    test('ShopRunner has no smoke-varrock route setting', () => {
+        expect(SHOPRUNNER_SETTINGS).not.toHaveProperty('route');
     });
 });
 

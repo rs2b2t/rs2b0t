@@ -57,6 +57,7 @@ import {
 } from './exec/doorCrossing.js';
 import { handleSpecialCrossing } from './exec/specialCrossing.js';
 import {
+    awaitTransportLoc,
     findTransportLoc,
     matchesTransportLanding,
     matchesTransportLoc,
@@ -96,9 +97,16 @@ const MAX_REPATHS = 5;
 const MIN_FOLLOW_REMAINING_MS = 3_000;
 const PATH_REQUEST_TIMEOUT_MS = 30_000;
 const TRANSPORT_WAIT_MS = 8000;
+/** Ceiling on the client scene rebuild after a landing, before a hop's loc counts as absent. */
+const SCENE_REBUILD_MS = 3000;
+// Why: the same rebuild that hides a hop's loc also empties `toLocal` for the tiles ahead, so every click candidate fails and the follow repaths with nothing clicked — five times inside the window, then the walk starts over from the top.
+/** All-candidate misses to sit out before repathing, while nothing has been clicked yet. */
+const CANDIDATE_SETTLE_TRIES = 3;
 const SCENE_STEP_MS = 8000;
 /** Walking the last tiles onto a hop's planned approach after a server can't-reach. */
 const APPROACH_STEP_MS = 4000;
+/** Walking off a shortcut's landing tile onto the one the graph planned. */
+const SHORTCUT_LANDING_MS = 6000;
 /** Continues/choices to drive on a post-quest unlock conversation. */
 const POST_QUEST_TALK_STEPS = 60;
 /** How long a talked-to NPC has to put its dialogue on screen. */
@@ -268,6 +276,8 @@ class WalkExecutorImpl {
         }
 
         try {
+            // Why: one budget for the walk, so a landing costs a settle once rather than once per repath.
+            const settleBudget = { left: CANDIDATE_SETTLE_TRIES };
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
                 const me = reader.worldTile();
                 if (!me) {
@@ -333,7 +343,7 @@ class WalkExecutorImpl {
                     this.lastOutcome = 'failed';
                     return false;
                 }
-                const result = await this.followPath(tiles, dest, radius, deadline, log);
+                const result = await this.followPath(tiles, dest, radius, deadline, log, settleBudget);
                 if (result === 'arrived') {
                     this.lastOutcome = 'arrived';
                     return true;
@@ -605,6 +615,7 @@ class WalkExecutorImpl {
             const radius = 4;
             const timeoutMs = 120_000;
             const deadline = performance.now() + timeoutMs;
+            const settleBudget = { left: CANDIDATE_SETTLE_TRIES };
             for (let repaths = 0; repaths <= MAX_REPATHS; repaths++) {
                 const me = reader.worldTile();
                 if (!me) {
@@ -620,7 +631,7 @@ class WalkExecutorImpl {
                 }
                 const tiles = expandWaypoints(path.waypoints);
                 this.publishPath(tiles, 0, -1);
-                const result = await this.followPath(tiles, stand, radius, deadline, m => log(`  ${m}`));
+                const result = await this.followPath(tiles, stand, radius, deadline, m => log(`  ${m}`), settleBudget);
                 if (result === 'arrived' || result === 'closest' || result === 'blocked') {
                     return true;
                 }
@@ -820,7 +831,8 @@ class WalkExecutorImpl {
         dest: WorldTile,
         radius: number,
         deadline: number,
-        log: (msg: string) => void
+        log: (msg: string) => void,
+        settleBudget: { left: number } = { left: CANDIDATE_SETTLE_TRIES }
     ): Promise<FollowResult> {
         let pathIdx = 0;
         let stallRetries = 0;
@@ -1176,6 +1188,13 @@ class WalkExecutorImpl {
                             return 'repath';
                         }
                     }
+                    // Why: a walk that has clicked nothing yet is one the scene may not have caught up with, and repathing inside that window burns the five-repath budget on an identical path.
+                    // Why: the budget spans the walk rather than the follow, so a destination that was never reachable still fails in about the time it used to.
+                    if (clicks === 0 && settleBudget.left > 0) {
+                        settleBudget.left--;
+                        await Execution.delayTicks(2);
+                        continue;
+                    }
                     log(
                         `client walk pathfind failed for all click candidates near path idx ${pathIdx} — repathing immediately (${clicks} clicks)`
                     );
@@ -1232,7 +1251,10 @@ class WalkExecutorImpl {
         }
 
         for (let attempt = 0; attempt < 2; attempt++) {
-            const loc = findTransportLoc(transport);
+            const landing = transport.toLevel !== undefined || transport.toTile !== undefined;
+            const loc = landing
+                ? await awaitTransportLoc(transport, SCENE_REBUILD_MS, Execution.delayUntil.bind(Execution))
+                : findTransportLoc(transport);
             if (!loc) {
                 if (transport.toLevel === undefined && transport.toTile === undefined) {
                     // Already open / no shut Open-target: do not burn TRANSPORT_WAIT.
@@ -1267,6 +1289,9 @@ class WalkExecutorImpl {
             } else if (transport.toTile !== undefined) {
                 const landed = (): boolean => matchesTransportLanding(transport, step.level, before, reader.worldTile());
                 crossed = (await Execution.delayUntil(() => landed() || cantReach(), TRANSPORT_WAIT_MS)) && landed();
+                if (!crossed && (await this.stepOffTransportLoc(transport, step, log))) {
+                    crossed = landed();
+                }
             } else {
                 const open = (): boolean => findTransportLoc(transport) === null || Reachability.canStep(approach, step);
                 crossed = (await Execution.delayUntil(() => open() || cantReach() || chatShowsQuestLock(), TRANSPORT_WAIT_MS)) && open();
@@ -1277,6 +1302,7 @@ class WalkExecutorImpl {
                     await Execution.delayTicks(2);
                 }
                 log(`${transport.action} ${transport.locName} at (${transport.locX},${transport.locZ}) ok`);
+                await this.settleShortcutLanding(transport, step, log);
                 RouteState.noteTransport(approach, step);
                 // Catalog entry edges (Teleport wizard) when not routed through specialCrossing.
                 if (/^teleport$/i.test(transport.action ?? '')) {
@@ -1339,6 +1365,36 @@ class WalkExecutorImpl {
             }
         }
         return false;
+    }
+
+    // Why: a vault can park the character on the loc's own tile — Gertrude's lumber-yard fence teleports onto the fence and stops there — and the planner refuses to route out of a tile the pack calls solid, so every repath plans the same crossing again and the two take turns forever.
+    // Why: the raw walk packet is the way out, as the server pathfinds from where the character stands rather than from what the pack believes.
+
+    /** Walk from a shortcut's landing tile onto the one its edge planned. */
+    private async settleShortcutLanding(transport: TransportInfo, step: PathStep, log: (msg: string) => void): Promise<void> {
+        const landing = transport.toTile;
+        if (transport.kind !== 'shortcut' || landing === undefined) {
+            return;
+        }
+        const here = reader.worldTile();
+        if (!here || (here.x === landing.x && here.z === landing.z && here.level === step.level)) {
+            return;
+        }
+        log(`${transport.locName} landed at (${here.x},${here.z}) — stepping onto the planned (${landing.x},${landing.z})`);
+        await DirectNavigator.walkTo({ x: landing.x, z: landing.z, level: step.level }, 0, SHORTCUT_LANDING_MS);
+    }
+
+    // Why: a short hop has to land on its planned tile, or every frame of a stile's animation reads as crossed — so the one crossing that ends mid-span is recognised by where it stopped rather than by loosening that rule.
+
+    /** True once a crossing that ended on the loc's own tile has been walked off it. */
+    private async stepOffTransportLoc(transport: TransportInfo, step: PathStep, log: (msg: string) => void): Promise<boolean> {
+        const here = reader.worldTile();
+        if (transport.kind !== 'shortcut' || !here || here.x !== transport.locX || here.z !== transport.locZ) {
+            return false;
+        }
+        log(`${transport.locName} left us standing on it at (${here.x},${here.z})`);
+        await this.settleShortcutLanding(transport, step, log);
+        return true;
     }
 
     // Why: some crossings open only after a conversation the journal cannot show — the Salve barrier wants `%priestperil` one stage past complete.

@@ -249,4 +249,40 @@ describe('ProfileVault tabs', () => {
         const v = new ProfileVault();
         await expect(v.unlock('pw')).rejects.toThrow();
     });
+
+    test('replaceAll overwrites profiles and tabs and persists them', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'old', password: 'x' });
+        await v.replaceAll({
+            profiles: [
+                { username: 'alice', password: 'a', tab: 'miners' },
+                { username: 'bob', password: 'b' }
+            ],
+            tabs: ['miners'],
+            activeTab: 'miners'
+        });
+        expect(v.snapshot()).toEqual({
+            profiles: [
+                { username: 'alice', password: 'a', tab: 'miners' },
+                { username: 'bob', password: 'b', tab: 'Main' }
+            ],
+            tabs: ['miners'],
+            activeTab: 'miners'
+        });
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual(v.snapshot());
+    });
+
+    test('replaceAll rejects a profile pointing at a missing tab', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await expect(v.replaceAll({
+            profiles: [{ username: 'x', password: '', tab: 'ghost' }],
+            tabs: [],
+            activeTab: 'Main'
+        })).rejects.toThrow(/ghost/);
+    });
 });

@@ -324,6 +324,26 @@ export function mageArenaBarrierEdges(): TransportEdgeData[] {
     ];
 }
 
+// Why: `[oploc1,tribaltotemdoor]` opens only for `coordz(coord) > coordz(loc_coord)`, so the mansion's one ground-floor door lets a player out and never in.
+// Why: derive-doors.ts drops the instance rather than baking it both ways, and this restores the half that works — without it every route out of the mansion reads unreachable.
+
+/** Handelmort Mansion's inner door (loc 0_41_51_11_57), northward side only. */
+export function handelmortDoorEdges(): TransportEdgeData[] {
+    const loc = parseLcCoord('0_41_51_11_57');
+    return [{
+        from: { x: loc.x, z: loc.z + 1, level: 0 },
+        to: { x: loc.x, z: loc.z, level: 0 },
+        locName: 'Door',
+        action: 'Open',
+        kind: 'door',
+        locId: 2706,
+        locX: loc.x,
+        locZ: loc.z,
+        debugName: 'handelmort_inner_door_out',
+        options: ['Open']
+    }];
+}
+
 /**
  * OD-relevant agility shortcuts from skill_agility/shortcuts.rs2 (not full courses).
  * Coal logs + island ropes already live in transports.json — these fill remaining OD gaps.
@@ -404,6 +424,171 @@ export function elkoyMazeEdges(): TransportEdgeData[] {
     ];
 }
 
+/**
+ * Tourist Trap mining-camp barriers and cart whose handlers teleport or
+ * direction-gate the player. Adjacent door rows are excluded at graph load.
+ */
+export function desertMiningCampEdges(): TransportEdgeData[] {
+    const complete: TransportRequires = {
+        quests: [{ quest: 'The Tourist Trap', minStatus: 'complete' }]
+    };
+    const disguised: TransportRequires = {
+        worn: [
+            { name: "Slaves' shirt", count: 1 },
+            { name: 'Slave robe', count: 1 },
+            { name: 'Slave boots', count: 1 }
+        ]
+    };
+    const completeAndDisguised: TransportRequires = {
+        ...disguised,
+        ...complete
+    };
+    const wroughtKey: TransportRequires = {
+        items: [{ name: 'Wrought iron key', count: 1, consumed: false }]
+    };
+    const scripted = (
+        from: NavPoint,
+        to: NavPoint,
+        locName: string,
+        action: string,
+        kind: string,
+        locId: number,
+        locX: number,
+        locZ: number,
+        debugName: string,
+        requires?: TransportRequires
+    ): TransportEdgeData => ({
+        from: { ...from },
+        to: { ...to },
+        locName,
+        action,
+        kind,
+        locId,
+        locX,
+        locZ,
+        debugName,
+        options: [action],
+        ...(requires ? { requires } : {})
+    });
+
+    const surfaceDoor = { x: 3301, z: 3036, level: 0 };
+    const mineDoor = { x: 3278, z: 9427, level: 0 };
+    const caveWest = { x: 3278, z: 9415, level: 0 };
+    const caveEast = { x: 3286, z: 9415, level: 0 };
+    const lowerCart = { x: 3303, z: 9416, level: 0 };
+    const deepCart = { x: 3319, z: 9430, level: 0 };
+    const wroughtSouth = { x: 3322, z: 9448, level: 0 };
+    const wroughtNorth = { x: 3322, z: 9449, level: 0 };
+
+    return [
+        scripted(
+            surfaceDoor,
+            mineDoor,
+            'Mine door entrance',
+            'Open',
+            'dungeon',
+            2675,
+            3301,
+            3036,
+            'desert_mining_camp_door_in',
+            disguised
+        ),
+        scripted(
+            mineDoor,
+            surfaceDoor,
+            'Mine door entrance',
+            'Open',
+            'dungeon',
+            2690,
+            3278,
+            9426,
+            'desert_mining_camp_door_out',
+            disguised
+        ),
+        scripted(
+            caveWest,
+            caveEast,
+            'Mine cave',
+            'Walk through',
+            'dungeon',
+            2699,
+            3281,
+            9415,
+            'desert_mining_camp_cave_in',
+            completeAndDisguised
+        ),
+        scripted(
+            caveEast,
+            caveWest,
+            'Mine cave',
+            'Walk through',
+            'dungeon',
+            2698,
+            3283,
+            9415,
+            'desert_mining_camp_cave_out',
+            complete
+        ),
+        scripted(
+            caveEast,
+            caveWest,
+            'Mine cave',
+            'Walk through',
+            'dungeon',
+            2698,
+            3283,
+            9415,
+            'desert_mining_camp_cave_out_disguised',
+            disguised
+        ),
+        scripted(
+            lowerCart,
+            { x: 3319, z: 9431, level: 0 },
+            'Mine Cart',
+            'Search',
+            'dungeon',
+            2684,
+            3303,
+            9417,
+            'desert_mining_camp_cart_in'
+        ),
+        scripted(
+            deepCart,
+            { x: 3302, z: 9417, level: 0 },
+            'Mine Cart',
+            'Search',
+            'dungeon',
+            2684,
+            3318,
+            9430,
+            'desert_mining_camp_cart_out'
+        ),
+        scripted(
+            wroughtSouth,
+            wroughtNorth,
+            'Gate',
+            'Open',
+            'gate',
+            2687,
+            3322,
+            9448,
+            'desert_mining_camp_wrought_in',
+            wroughtKey
+        ),
+        scripted(
+            wroughtNorth,
+            wroughtSouth,
+            'Gate',
+            'Open',
+            'gate',
+            2687,
+            3322,
+            9448,
+            'desert_mining_camp_wrought_out'
+        )
+    ];
+}
+
 /** All curated travel rows to merge with transports.json at graph load. */
 export function curatedTravelEdges(): TransportEdgeData[] {
     return [
@@ -417,8 +602,10 @@ export function curatedTravelEdges(): TransportEdgeData[] {
         ...essenceExitEdges(),
         ...wildyLeverEdges(),
         ...mageArenaBarrierEdges(),
+        ...handelmortDoorEdges(),
         ...agilityShortcutEdges(),
-        ...elkoyMazeEdges()
+        ...elkoyMazeEdges(),
+        ...desertMiningCampEdges()
     ];
 }
 
@@ -436,7 +623,9 @@ export const TRAVEL_FAMILIES = [
     'essence_entry',
     'essence_exit',
     'mage_arena_barrier',
+    'handelmort_door',
     'agility_shortcut',
-    'elkoy_maze'
+    'elkoy_maze',
+    'desert_mining_camp'
 ] as const;
 

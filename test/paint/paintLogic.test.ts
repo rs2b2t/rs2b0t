@@ -1,5 +1,18 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { PaintState, hitRegion, resolveDock, toCanvasPoint, type Region } from '#/bot/paint/paintLogic.js';
+import {
+    PaintState,
+    WHEEL_ROWS,
+    cellWidths,
+    clipText,
+    gridRows,
+    hitRegion,
+    listScroll,
+    paintCols,
+    resolveDock,
+    toCanvasPoint,
+    wrapText,
+    type Region
+} from '#/bot/paint/paintLogic.js';
 
 describe('toCanvasPoint', () => {
     test('maps CSS pixels to 765x503 logical space via the bounding rect', () => {
@@ -83,5 +96,125 @@ describe('PaintState', () => {
         state.publishRegions([{ id: 'panel', x: 0, y: 0, w: 100, h: 100, kind: 'panel' }]);
         state.reset();
         expect(state.pointerDown(50, 50)).toBe(false);
+    });
+});
+
+describe('paintCols', () => {
+    test('counts whole monospace characters that fit inside the padding', () => {
+        expect(paintCols(506, 8, 7)).toBe(70);
+        expect(paintCols(100, 8, 7)).toBe(12);
+    });
+
+    test('a panel narrower than its padding fits nothing', () => {
+        expect(paintCols(10, 8, 7)).toBe(0);
+        expect(paintCols(506, 8, 0)).toBe(0);
+    });
+});
+
+describe('wrapText', () => {
+    test('packs whole words up to the column count', () => {
+        expect(wrapText('the quick brown fox jumps', 11)).toEqual(['the quick', 'brown fox', 'jumps']);
+    });
+
+    test('indents continuation lines so a wrapped reason reads as one entry', () => {
+        expect(wrapText('needs 56 agility and 50 quest points', 14, 2)).toEqual([
+            'needs 56',
+            '  agility and',
+            '  50 quest',
+            '  points'
+        ]);
+    });
+
+    test('hard-splits a word longer than the line', () => {
+        expect(wrapText('supercalifragilistic', 8)).toEqual(['supercal', 'ifragili', 'stic']);
+    });
+
+    test('collapses runs of whitespace and drops empty text', () => {
+        expect(wrapText('  a   b  ', 10)).toEqual(['a b']);
+        expect(wrapText('   ', 10)).toEqual([]);
+        expect(wrapText('anything', 0)).toEqual([]);
+    });
+});
+
+describe('clipText', () => {
+    test('text that fits is untouched', () => {
+        expect(clipText('idle', 10)).toBe('idle');
+    });
+
+    test('overlong text ends in an ellipsis inside the column count', () => {
+        expect(clipText('abcdefghij', 5)).toBe('abcd…');
+        expect(clipText('abcdefghij', 5).length).toBe(5);
+    });
+
+    test('leading spaces survive, so padded list columns stay aligned', () => {
+        expect(clipText('   7  Green dragonhide', 40)).toBe('   7  Green dragonhide');
+    });
+
+    test('no columns means nothing to draw', () => {
+        expect(clipText('abc', 0)).toBe('');
+    });
+});
+
+describe('cellWidths', () => {
+    test('splits the total evenly when every cell weighs the same', () => {
+        expect(cellWidths(300, [1, 1, 1])).toEqual([100, 100, 100]);
+    });
+
+    test('a heavier cell takes proportionally more room', () => {
+        expect(cellWidths(300, [2, 1])).toEqual([200, 100]);
+    });
+
+    test('no cells take no room', () => {
+        expect(cellWidths(300, [])).toEqual([]);
+    });
+});
+
+describe('gridRows', () => {
+    test('a queue laid two across needs half as many rows, rounded up', () => {
+        expect(gridRows(61, 2)).toBe(31);
+        expect(gridRows(60, 2)).toBe(30);
+    });
+
+    test('one column is a plain list', () => {
+        expect(gridRows(7, 1)).toBe(7);
+    });
+
+    test('an empty grid has no rows', () => {
+        expect(gridRows(0, 2)).toBe(0);
+        expect(gridRows(7, 0)).toBe(0);
+    });
+});
+
+describe('listScroll', () => {
+    const state = (offset: number, manual: boolean, focus: number) => ({ offset, manual, focus });
+
+    test('a wheel notch moves several rows and hands the list to the user', () => {
+        expect(listScroll(60, 6, state(0, false, -1), 1, -1)).toEqual({ offset: WHEEL_ROWS, manual: true, focus: -1 });
+    });
+
+    test('scrolling stops at both ends', () => {
+        expect(listScroll(60, 6, state(0, true, -1), -1, -1).offset).toBe(0);
+        expect(listScroll(60, 6, state(54, true, -1), 1, -1).offset).toBe(54);
+    });
+
+    test('a list shorter than its window never scrolls', () => {
+        expect(listScroll(4, 6, state(0, false, -1), 1, -1).offset).toBe(0);
+    });
+
+    test('follows the focus row while the user has not scrolled', () => {
+        expect(listScroll(60, 6, state(0, false, 20), 0, 20).offset).toBe(15);
+        expect(listScroll(60, 6, state(30, false, 20), 0, 20).offset).toBe(20);
+    });
+
+    test('a focus row already on screen leaves the offset alone', () => {
+        expect(listScroll(60, 6, state(18, false, 20), 0, 20).offset).toBe(18);
+    });
+
+    test('once scrolled, the list stops following', () => {
+        expect(listScroll(60, 6, state(0, true, 20), 0, 20).offset).toBe(0);
+    });
+
+    test('a new focus row re-attaches the list the user scrolled away from', () => {
+        expect(listScroll(60, 6, state(0, true, 20), 0, 40)).toEqual({ offset: 35, manual: false, focus: 40 });
     });
 });

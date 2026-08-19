@@ -28,6 +28,7 @@ export interface RawClient {
     statXP: Int32Array;
     statSessionGeneration: number;
     statSeenGeneration: Int32Array;
+    invUpdateState: Map<number, { generation: number; fullGeneration: number; transmitting: boolean }>;
     runenergy: number;
     runweight: number;
 
@@ -106,6 +107,7 @@ export const SELF_TEST = [
     'statXP',
     'statSessionGeneration',
     'statSeenGeneration',
+    'invUpdateState',
     'runenergy',
     'runweight',
     'var',

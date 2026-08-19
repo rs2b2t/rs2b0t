@@ -300,6 +300,32 @@ describe('gatheringCombatPolicy (Wilderness Miner)', () => {
     });
 });
 
+describe('gatheringCombatPolicy (Desert Mining Camp)', () => {
+    const common = {
+        isMiner: true,
+        tile: { x: 3286, z: 9415, level: 0 },
+        autoLocation: false,
+        tickManipAllowCombat: false,
+        desertCampMiner: true
+    };
+
+    test('Cake sustain and the dedicated route own resident NPC combat', () => {
+        expect(gatheringCombatPolicy({ ...common, incomingPlayerAttacker: false })).toEqual({
+            mode: 'desert-camp-miner-npc',
+            allowGather: true,
+            flee: false
+        });
+    });
+
+    test('a detectable player attack still restores flee behavior', () => {
+        expect(gatheringCombatPolicy({ ...common, incomingPlayerAttacker: true })).toEqual({
+            mode: 'desert-camp-miner-player',
+            allowGather: false,
+            flee: true
+        });
+    });
+});
+
 describe('effectiveGatherLeash', () => {
     test('Auto keeps the UI setting (freeform / unverified snaps)', () => {
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);

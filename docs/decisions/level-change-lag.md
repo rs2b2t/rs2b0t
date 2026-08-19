@@ -24,6 +24,11 @@ if (crossed) {
 **Rule: require positive evidence of scene sync before concluding something is
 absent.** An empty result immediately after a level change means "ask again".
 
+A long teleport rebuilds the scene the same way a level change does. `Reach.locOp`
+re-asks for up to 3s when the loc is blank and the character is already standing within
+query range of it ([`Reach.ts`](../../src/bot/api/walking/Reach.ts)); a blank from
+further off still walks the hint, because distance explains it without a rebuild.
+
 ## See also
 
 - [World-walking](../NAV.md)

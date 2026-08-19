@@ -1,6 +1,6 @@
 [Manual](../README.md) › [Testing](../TESTING.md) › Quest harness recipes
 
-# Quest harness recipes (M–O)
+# Quest harness recipes (M)
 
 Per-quest seed and stage commands, with what each recipe has proven.
 
@@ -97,48 +97,25 @@ and David:
 The end-to-end run is shorter than the sum of its legs because a seeded leg pays for a
 walk out to wherever the previous leg would already have left the bot standing.
 
-## Nature Spirit — stage-scoped harness
-
-[`e2e/naturespirit-239-live.ts`](../../e2e/naturespirit-239-live.ts), members-only,
-so `:8890`:
-
-```sh
-HEADED=1 bun e2e/naturespirit-239-live.ts --stage 0 --until 110 --minutes 120 --tick 200  # end to end
-HEADED=1 bun e2e/naturespirit-239-live.ts --stage 0 --until 40 --minutes 45 --tick 200    # camp chain
-HEADED=1 bun e2e/naturespirit-239-live.ts --stage 40 --until 75 --minutes 30 --tick 200   # ritual and grotto
-HEADED=1 bun e2e/naturespirit-239-live.ts --stage 70 --until 85 --minutes 20 --stocked    # the sickle
-HEADED=1 bun e2e/naturespirit-239-live.ts --stage 85 --until 110 --minutes 30 --tick 200  # the ghasts
-```
-
-Three things it does beyond the Horror shape:
-
-- **Sets both prerequisites.** Eligibility reads the quest-list colour, so
-  `prieststart` and `priestperil` are set and the run relogs — `update_questlist`
-  only recolours at login. `priestperil` goes to 61, not 60: the Salve barrier the
-  route depends on is `^priestperil_access_holy_barrier`.
-- **Gives the pack what the stage implies.** A mid-quest start hands over the
-  ghostspeak amulet, and from stage 75 the blessed sickle and a druid pouch — both
-  come from Filliman, so a run seeded past him otherwise describes an unreachable
-  state. Stage 0 gets none of it, which is what makes the end-to-end run the proof.
-- **`--stocked` banks a mould and a silver bar** — ordinary clutter on an
-  established account, and the only way to reach the cast without the Al Kharid
-  round trip. Leave it off for anything claiming the quest works.
-
-The bank holds coins and food alone by default. Nothing seeds a pickaxe: mining
-without one raises no refusal at all, so a seeded run would pass while the quest
-could not mine.
-
-Measured end to end at `--tick 200`: **19 minutes, 37 steps, no parks** — walking,
-with no teleports. Roughly half of that is the Mort Myre ↔ Al Kharid round trip the
-silver sickle costs.
-
 ## See also
 
 - [Quest harness recipes (A–D)](quest-harness-recipes.md)
+- [Quest harness recipes (Big)](quest-harness-recipes-17.md)
+- [Quest harness recipes (Dig)](quest-harness-recipes-15.md)
 - [Quest harness recipes (E)](quest-harness-recipes-4.md)
-- [Quest harness recipes (F–H)](quest-harness-recipes-2.md)
+- [Quest harness recipes (F)](quest-harness-recipes-2.md)
+- [Quest harness recipes (Fre)](quest-harness-recipes-18.md)
+- [Quest harness recipes (G)](quest-harness-recipes-11.md)
+- [Quest harness recipes (Haz–Hol)](quest-harness-recipes-8.md)
+- [Quest harness recipes (Her)](quest-harness-recipes-19.md)
+- [Quest harness recipes (Hor)](quest-harness-recipes-10.md)
 - [Quest harness recipes (I–L)](quest-harness-recipes-3.md)
+- [Quest harness recipes (N–O)](quest-harness-recipes-14.md)
 - [Quest harness recipes (P–R)](quest-harness-recipes-5.md)
-- [Quest harness recipes (S–Z)](quest-harness-recipes-7.md)
+- [Quest harness recipes (Sea–Shades)](quest-harness-recipes-7.md)
+- [Quest harness recipes (Sheep–Shield)](quest-harness-recipes-12.md)
+- [Quest harness recipes (Tai–Temple)](quest-harness-recipes-9.md)
+- [Quest harness recipes (Tree–Tribal)](quest-harness-recipes-13.md)
+- [Quest harness recipes (U)](quest-harness-recipes-16.md)
 - [Quest harness method](quest-harness-method.md)
 - [Seeding test accounts](seeding-test-accounts.md)

@@ -11,6 +11,7 @@ client installs at `globalThis.__rs2b0t` and throws if the versions do not match
 |---|---|
 | [Write a bot](how-to/write-a-bot.md) | getting started, and a full worked example |
 | [Bots](reference/api-bots.md) | `LoopingBot`, `TaskBot`, `TreeBot`, `Execution`, `defineBot` |
+| [Paint](reference/api-paint.md) | the overlay HUD: tabs, scrolling lists, wrapping, docking |
 | [Game](reference/api-game.md) | `Game`, camera, world primitives |
 | [Entities](reference/api-entities.md) | queries, entity shapes |
 | [Items](reference/api-items.md) | inventory, equipment, bank, acquisition |

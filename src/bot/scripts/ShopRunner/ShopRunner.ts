@@ -18,7 +18,7 @@ import { talkThrough } from '../../api/ai/quests/exec/primitives.js';
 import { buyoutPlan } from '../../api/shop/BuyoutLogic.js';
 import { clusterEligible, estimateClusterGp, nextCluster, withdrawFor } from './ShopRunnerRingLogic.js';
 import { SHOP_DB } from '../../data/shopdb.js';
-import { ROUTE, SMOKE_ROUTE } from './ShopRunnerRoute.js';
+import { ROUTE } from './ShopRunnerRoute.js';
 import type { AccountView, NavPointLike, Route } from '../../api/shop/types.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 
@@ -31,8 +31,7 @@ export const SHOPRUNNER_SETTINGS: SettingsSchema = {
     gpBufferPct: { type: 'number', default: 25, min: 0, max: 100, label: 'Gp buffer %', help: 'withdraw the cluster buyout estimate plus this margin' },
     maxGpPerLeg: { type: 'number', default: 100_000, min: 1000, label: 'Max gp per withdrawal' },
     stopFloorGp: { type: 'number', default: 5000, min: 0, label: 'Stop below bank gp', help: 'clean stop when the bank runs dry' },
-    mageArena: { type: 'boolean', default: true, label: 'Mage Arena leg', help: 'the deep-wilderness Lundail buyout (knife-only protocol)' },
-    route: { type: 'string', default: 'live', options: ['live', 'smoke-varrock'], label: 'Route', help: 'smoke-varrock is the Aubury-only test route' }
+    mageArena: { type: 'boolean', default: true, label: 'Mage Arena leg', help: 'the deep-wilderness Lundail buyout (knife-only protocol)' }
 };
 
 const STATE_KEY_PREFIX = 'rs2b0t:shoprun:state:';
@@ -68,7 +67,6 @@ export class ShopRunner extends TaskBot {
         this.maxGpPerLeg = this.settings.num('maxGpPerLeg', 100_000);
         this.stopFloorGp = this.settings.num('stopFloorGp', 5000);
         this.toggles = { mageArena: this.settings.bool('mageArena', true) };
-        this.route = this.settings.str('route', 'live') === 'smoke-varrock' ? SMOKE_ROUTE : ROUTE;
         this.chosen = new Set(this.settings.list('buyItems', BUYABLE_NAMES).map(s => s.toLowerCase()));
 
         for (const cluster of this.route.clusters) {

@@ -18,6 +18,7 @@ let walkResult: boolean;
 let _walkLastOutcome: string;
 let canReachResult: boolean;
 let cantReach: boolean;
+let locBlankQueries: number;
 let locInteractCount: number;
 let doorInteractCount: number;
 let npcInteractCount: number;
@@ -35,8 +36,19 @@ const restoreExec = stubProps(Execution, {
     delayTicks: async () => {}
 });
 
+/** Re-checks the predicate up to `rounds` times, the way Execution.delayUntil polls across ticks. */
+const pollingDelayUntil = (rounds: number) => async (cond: () => boolean): Promise<boolean> => {
+    for (let i = 0; i < rounds; i++) {
+        if (cond()) {
+            return true;
+        }
+    }
+    return cond();
+};
+
+/** Scene queries that come back blank before the loc appears, standing in for a rebuild in flight. */
 const locHandle = () =>
-    sceneLoc
+    sceneLoc && locBlankQueries-- <= 0
         ? {
             name: sceneLoc.name,
             id: sceneLoc.id ?? 0,
@@ -166,6 +178,7 @@ beforeEach(() => {
     WalkExecutor.lastOutcome = 'failed';
     canReachResult = true;
     cantReach = false;
+    locBlankQueries = 0;
     locInteractCount = 0;
     doorInteractCount = 0;
     npcInteractCount = 0;
@@ -342,6 +355,32 @@ describe('Reach.locOp', () => {
         expectFlips = false;
         const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
         expect(r).toBe('retry');
+    });
+    test('a scene still rebuilding at the stand is waited out, not read as absent', async () => {
+        sceneLoc = { name: 'Portal', id: 4171, ops: ['Use'], tile: { x: 5, z: 5, level: 0 }, interactResult: true };
+        locBlankQueries = 3;
+        const restore = stubProps(Execution, { delayUntil: pollingDelayUntil(6) });
+        try {
+            const r = await Reach.locOp({ name: 'Portal', op: 'Use', near: { x: 5, z: 5, level: 0 }, id: 4171, expect: () => expectFlips });
+            expect(r).toBe('done');
+            expect(locInteractCount).toBe(1);
+        } finally {
+            restore();
+        }
+    });
+    test('a blank scene far from the stand still walks the hint without waiting', async () => {
+        reader.worldTile = () => ({ x: 90, z: 90, level: 0 });
+        let waited = false;
+        const restore = stubProps(Execution, { delayUntil: async () => { waited = true; return false; } });
+        try {
+            const r = await Reach.locOp({ name: 'Ladder', op: 'Climb-down', near: { x: 5, z: 5, level: 0 }, expect: () => expectFlips });
+            expect(r).toBe('retry');
+            expect(waited).toBe(false);
+            expect(walkCalls.length).toBe(1);
+        } finally {
+            restore();
+            reader.worldTile = () => ({ x: 0, z: 0, level: 0 });
+        }
     });
 });
 

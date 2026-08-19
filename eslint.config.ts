@@ -67,12 +67,12 @@ export default defineConfig([
         }
     },
     // Only panel/ and the entrypoints may touch the DOM (keeps headless viable).
-    // Why: MultiBox is a second DOM entrypoint, so main.ts, DomSlotOps.ts and ProfileChooser.ts are exempted while the rest of src/bot/multibox/ stays fenced.
+    // Why: MultiBox is a second DOM entrypoint, so main.ts and the rail/overlay views are exempted while the rest of src/bot/multibox/ stays fenced.
     {
         files: ['src/bot/**/*.ts'],
-        ignores: ['src/bot/panel/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/TabBar.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts', 'src/bot/runtime/WorkerClock.ts'],
+        ignores: ['src/bot/panel/**', 'src/bot/main.ts', 'src/bot/multibox/DomSlotOps.ts', 'src/bot/multibox/ProfileChooser.ts', 'src/bot/multibox/SettingsPanel.ts', 'src/bot/multibox/TabBar.ts', 'src/bot/multibox/VaultPrompt.ts', 'src/bot/multibox/main.ts', 'src/bot/runtime/WorkerClock.ts'],
         rules: {
-            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }, { name: 'window', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }]
+            'no-restricted-globals': ['error', { name: 'document', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,SettingsPanel,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }, { name: 'window', message: 'DOM only in src/bot/panel/, main.ts, src/bot/multibox/{DomSlotOps,ProfileChooser,SettingsPanel,TabBar,VaultPrompt,main}.ts and runtime/WorkerClock.ts.' }]
         }
     },
 

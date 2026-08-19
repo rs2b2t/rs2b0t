@@ -1,3 +1,4 @@
+import { navPackForWorker } from './navPack.js';
 import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
 import type { PathPolicy } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
@@ -52,16 +53,10 @@ class NavigatorImpl {
         worker.onmessage = (event: MessageEvent): void => this.onMessage(event.data as NavResponse);
         worker.onerror = (event: ErrorEvent): void => this.fail(`worker error: ${event.message}`);
 
-        fetch(new URL('./collision.lcnav.gz', import.meta.url))
-            .then(res => {
-                if (!res.ok) {
-                    throw new Error(`collision pack fetch failed: HTTP ${res.status}`);
-                }
-                return res.arrayBuffer();
-            })
-            .then(pack => {
+        navPackForWorker(new URL('./collision.lcnav.gz', import.meta.url))
+            .then(({ pack, transfer }) => {
                 if (this.worker === worker) {
-                    worker.postMessage({ type: 'init', pack }, [pack]);
+                    worker.postMessage({ type: 'init', pack }, transfer);
                 }
             })
             .catch(err => this.fail(err instanceof Error ? err.message : String(err)));

@@ -1,4 +1,4 @@
-import { FOOD_OPTIONS } from '../../api/combat/food.js';
+import { FOOD_OPTIONS, MIN_EAT_HP } from '../../api/combat/food.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 
 export const MINER_FOOD_SETTINGS = {
@@ -26,6 +26,25 @@ export interface MinerFoodConfig {
     target: number;
 }
 
+export function desertCampFoodReservedSlots(routeSupplySlots: number): number {
+    return Math.max(0, Math.floor(routeSupplySlots)) + 1;
+}
+
+export function desertCampFoodReserveDepleted(foodCount: number): boolean {
+    return foodCount <= 1;
+}
+
+export function unsupportedCampOres(
+    selected: readonly string[],
+    supported: readonly string[] | null | undefined
+): string[] {
+    if (!supported) {
+        return [];
+    }
+    const available = new Set(supported.map(name => name.trim().toLowerCase()));
+    return selected.filter(name => !available.has(name.trim().toLowerCase()));
+}
+
 /** Resolve the opt-in Miner food settings into a usable trip configuration. */
 export function minerFoodConfig(name: string, target: number): MinerFoodConfig | null {
     const normalizedName = name.trim();
@@ -36,19 +55,27 @@ export function minerFoodConfig(name: string, target: number): MinerFoodConfig |
     return normalizedTarget > 0 ? { name: normalizedName, target: normalizedTarget } : null;
 }
 
-/**
- * Eat when the configured food's heal fits, or consume one slot
- * from a full pack so mining can continue with another ore.
- */
-export function shouldEatMinerFood(opts: { hp: number; maxHp: number; heal: number; foodCount: number; inventoryFull: boolean }): boolean {
+export function shouldEatMinerFood(opts: {
+    hp: number;
+    maxHp: number;
+    heal: number;
+    foodCount: number;
+    inventoryFull: boolean;
+    retainForTravel?: boolean;
+    hazardMaxHit?: number;
+}): boolean {
     if (opts.foodCount <= 0) {
         return false;
     }
-    if (opts.inventoryFull) {
+    if (opts.inventoryFull && !opts.retainForTravel) {
         return true;
     }
     if (opts.hp <= 0 || opts.maxHp <= 0 || opts.heal <= 0) {
         return false;
+    }
+    const hazardFloor = Math.min(opts.maxHp - 1, Math.max(0, Math.floor(opts.hazardMaxHit ?? 0)));
+    if (opts.hp <= Math.max(MIN_EAT_HP, hazardFloor)) {
+        return true;
     }
     return opts.hp + opts.heal <= opts.maxHp;
 }
@@ -56,11 +83,22 @@ export function shouldEatMinerFood(opts: { hp: number; maxHp: number; heal: numb
 type MinerFoodWithdrawalPlan = { ok: true; withdraw: number } | { ok: false; withdraw: 0; reason: 'bank-stock' | 'pack-space'; missing: number };
 
 /** Plan an exact top-up without silently accepting a short bank or a cramped pack. */
-export function planMinerFoodWithdrawal(opts: { target: number; held: number; banked: number; freeSlots: number }): MinerFoodWithdrawalPlan {
+export function planMinerFoodWithdrawal(opts: {
+    target: number;
+    held: number;
+    banked: number;
+    freeSlots: number;
+    reservedSlots?: number;
+}): MinerFoodWithdrawalPlan {
     const target = Math.max(0, Math.floor(opts.target));
     const held = Math.max(0, Math.floor(opts.held));
     const banked = Math.max(0, Math.floor(opts.banked));
-    const freeSlots = Math.max(0, Math.floor(opts.freeSlots));
+    const rawFreeSlots = Math.max(0, Math.floor(opts.freeSlots));
+    const reservedSlots = Math.max(0, Math.floor(opts.reservedSlots ?? 0));
+    if (reservedSlots > rawFreeSlots) {
+        return { ok: false, withdraw: 0, reason: 'pack-space', missing: reservedSlots - rawFreeSlots };
+    }
+    const freeSlots = rawFreeSlots - reservedSlots;
     const shortfall = Math.max(0, target - held);
     if (shortfall === 0) {
         return { ok: true, withdraw: 0 };

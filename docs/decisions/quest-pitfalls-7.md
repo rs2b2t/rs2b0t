@@ -80,5 +80,5 @@ Four more came from the two-account trade, and they generalise to any partner ha
 
 - [Quest pitfalls](quest-pitfalls.md)
 - [More pitfalls](quest-pitfalls-2.md)
-- [Shield of Arrav's harness recipe](../reference/quest-harness-recipes-7.md)
+- [Shield of Arrav's harness recipe](../reference/quest-harness-recipes-12.md)
 - [Add a quest](../how-to/add-a-quest.md)

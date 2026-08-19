@@ -72,6 +72,26 @@ describe('resolveMiningLocation', () => {
         expect(loc?.notes).toContain('no Brass key required');
     });
 
+    test('Desert Mining Camp exposes every ore verified in its underground scene', () => {
+        const loc = resolveMiningLocation('desert mining camp', new Tile(0, 0, 0));
+        expect(loc?.resources).toEqual(['copper', 'tin', 'mithril', 'adamantite']);
+    });
+
+    test('Desert Mining Camp Surface exposes the live surface rocks including coal', () => {
+        const loc = resolveMiningLocation('desert mining camp surface', new Tile(0, 0, 0));
+        expect(loc?.name).toBe('Desert Mining Camp Surface');
+        expect(loc?.spot).toEqual(new Tile(3293, 3016, 0));
+        expect(loc?.bankStand).toEqual(new Tile(3308, 3120, 0));
+        expect(loc?.resources).toEqual(['copper', 'tin', 'iron', 'coal']);
+    });
+
+    test('Auto snaps surface and underground desert camps from their own map squares', () => {
+        expect(resolveMiningLocation('Auto', new Tile(3293, 3016, 0))?.name).toBe(
+            'Desert Mining Camp Surface'
+        );
+        expect(resolveMiningLocation('Auto', new Tile(3323, 9458, 0))?.name).toBe('Desert Mining Camp');
+    });
+
     test('named Wilderness Skeleton Mine selects the verified coal field', () => {
         const loc = resolveMiningLocation('WILDERNESS SKELETON MINE', new Tile(0, 0, 0));
         expect(loc?.name).toBe('Wilderness Skeleton Mine');
@@ -150,6 +170,7 @@ describe('MINING_LOCATIONS table', () => {
         expect(rec('Wilderness Hobgoblin Mine')).toBe(57); // Hobgoblin 28
         expect(rec('Wilderness Skeleton Mine')).toBe(45); // Skeleton 22
         expect(rec('Desert Mining Camp')).toBe(91); // Guard 45
+        expect(rec('Desert Mining Camp Surface')).toBe(91); // Guard 45
         // Inside guild — no resident aggro
         expect(rec('Mining Guild')).toBeUndefined();
         expect(rec('Rimmington Mine')).toBeUndefined();

@@ -32,6 +32,17 @@ export function wantsAutoFighterLoot(name: string | null, configured: string[], 
     return matchesAny(name, configured) || (buryBones && isBurialBone(name));
 }
 
+/** Fight.validate is false while Game.inCombat(), so retaliate-off + an attacking random (strange fruit) never picks a new target. */
+export function autoRetaliateShouldEnable(on: boolean): boolean {
+    return !on;
+}
+
+export function assertAutoRetaliateOn(on: boolean): void {
+    if (!on) {
+        throw new Error('[AutoFighter] could not enable Auto Retaliate');
+    }
+}
+
 export function shouldBuryRegularBones(state: BoneBurialState): boolean {
     // A full backpack is deliberately not a blocker: burying creates the slot
     // needed to pick up the next drop.

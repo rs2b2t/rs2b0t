@@ -5,11 +5,14 @@ import {
     shouldWalkHomeToGatherAnchor,
     tileWithinLeash
 } from '../../api/tasks/Anchor.js';
+import { reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
+import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
 import Tile from '../../geometry/Tile.js';
-import { Bank, withdrawOp } from '../../api/bank/Bank.js';
+import { Bank, withdrawOp, type BackpackItem } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
@@ -182,11 +185,15 @@ import {
     minerFoodRestockNeeded,
     planMinerFoodWithdrawal,
     shouldEatMinerFood,
+    desertCampFoodReservedSlots,
+    desertCampFoodReserveDepleted,
+    unsupportedCampOres,
     type MinerFoodConfig
 } from './MinerLogic.js';
 import {
     BankCatch,
     ClearPackJunk,
+    DesertMiningCampTravel,
     DropProduct,
     EnsureGatherToolEquipped,
     EnsureShortbowRapid,
@@ -211,6 +218,16 @@ import {
     UpgradeGatherTool,
     WaitStickyCombat
 } from './GatheringBotTasks.js';
+import {
+    desertCampBankCatchNeeded as shouldRunDesertCampBankCatch,
+    desertCampBankTripDirection,
+    desertCampDestinationFor,
+    desertCampKeepNames,
+    DesertMiningCampRoute,
+    isDesertCampLocation,
+    type DesertCampRouteDirection,
+    type DesertCampSupplyPlan
+} from './DesertMiningCampRoute.js';
 
 
 /** Default half-size of the Auto (start) burn box around the script start tile. */
@@ -329,6 +346,7 @@ export default class GatheringBot extends TaskBot {
 
     private rockIds = new Set<number>();
     private productKeywords: string[] = [];
+    private selectedRockNames: string[] = [];
     private gearKeep: string[] = [];
     private fishMethod: FishingMethod | null = null;
     private fishing = false;
@@ -340,6 +358,10 @@ export default class GatheringBot extends TaskBot {
     private minerFood: MinerFoodConfig | null = null;
     private minerFoodStartupPending = false;
     private minerFoodEaten = 0;
+
+    private desertCampRoute: DesertMiningCampRoute | null = null;
+    private desertCampStartupBankPending = false;
+    private desertCampBankTrip = false;
 
     private cookMode: CookMode = 'off';
     private burntPolicy: BurntPolicy = 'drop';
@@ -428,6 +450,7 @@ export default class GatheringBot extends TaskBot {
 
         if ('rocks' in this.settings.raw()) {
             const chosen = this.settings.list('rocks');
+            this.selectedRockNames = chosen;
             const rocks = chosen.length > 0 ? chosen : ROCK_OPTIONS;
             this.targetType = 'loc';
             this.target = 'Rocks';
@@ -523,8 +546,24 @@ export default class GatheringBot extends TaskBot {
             this.leash = effectiveGatherLeash(this.leash, locSetting);
         }
 
-        // Why: after ::tele or a zone load, Locs and Npcs are empty for a beat (docs/decisions/level-change-lag.md).
-        // Why: blank is not absent, so the first gather tick waits rather than idling on "no rocks/trees in leash" with an empty scene.
+        const desertCamp = isDesertCampLocation(this.location?.name) ? this.location : null;
+        if (desertCamp) {
+            const camp = desertCamp.name;
+            const supported = desertCamp.resources;
+            if (!supported) {
+                throw new Error(`${camp} has no configured ore types`);
+            }
+            const unsupported = unsupportedCampOres(this.selectedRockNames, supported);
+            if (unsupported.length > 0) {
+                const message = `${camp} supports ${supported.join(', ')}; ` + `selected ${unsupported.join(', ')}`;
+                this.setStatus(`${message} — stopped`);
+                this.log(message);
+                ScriptRunner.stop(message);
+                return;
+            }
+        }
+
+        // Why: after ::tele or a zone load, Locs and Npcs are briefly empty; blank is not absent, so wait instead of idling on a false no-target result.
         if (this.fishing) {
             await Execution.delayUntilTicks(() => Npcs.query().results().length > 0, 9);
         } else {
@@ -537,6 +576,13 @@ export default class GatheringBot extends TaskBot {
         {
             this.muleMode = parseMuleMode(this.settings.str('muleMode', 'Off'));
             this.mulePartners = parsePartnerList(this.settings.str('mulePartner', ''));
+            if (desertCamp && this.muleMode !== 'off') {
+                const message = `${desertCamp.name} does not support Mule mode '${this.muleMode}'`;
+                this.setStatus(`${message} — stopped`);
+                this.log(message);
+                ScriptRunner.stop(message);
+                return;
+            }
             if (this.muleMode !== 'off' && this.powerMode) {
                 this.log(`mule: '${this.muleMode}' disabled under location None (drop-only)`);
                 this.muleMode = 'off';
@@ -670,6 +716,13 @@ export default class GatheringBot extends TaskBot {
         this.toolAcquire = parseToolAcquireMode(this.settings.str('toolAcquire', 'Off'));
         this.forgetfulBank = this.settings.bool('forgetfulBank', false);
         this.startupToolBankSyncPending = false;
+        if (desertCamp && this.toolAcquire === 'on') {
+            const message = `${desertCamp.name} does not support Tool acquire Buy/repair`;
+            this.setStatus(`${message} — stopped`);
+            this.log(message);
+            ScriptRunner.stop(message);
+            return;
+        }
         if (this.toolAcquire === 'on') {
             this.log('tools: acquire Buy/repair enabled (shops + broken repair + mith+ axe smith when bars ready)');
             if (this.fishing && this.fishMethod?.gear.some(g => isFishingBaitPiece(g))) {
@@ -681,6 +734,43 @@ export default class GatheringBot extends TaskBot {
                 this.startupToolBankSyncPending = true;
                 this.log('tools: will check bank once for a better axe/pick before gathering');
             }
+        }
+
+        if (desertCamp) {
+            const camp = desertCamp.name;
+            if (!this.minerFood) {
+                const message = `${camp} requires Food to withdraw greater than 0`;
+                this.setStatus(`${message} — stopped`);
+                this.log(message);
+                ScriptRunner.stop(message);
+                return;
+            }
+            if (desertCampFoodReserveDepleted(this.minerFood.target)) {
+                const message = `${camp} requires Food to withdraw of at least 2`;
+                this.setStatus(`${message} — stopped`);
+                this.log(message);
+                ScriptRunner.stop(message);
+                return;
+            }
+            const destination = desertCampDestinationFor(camp);
+            this.desertCampRoute = new DesertMiningCampRoute(
+                {
+                    log: message => this.log(message),
+                    setStatus: message => this.setStatus(message),
+                    stop: reason => ScriptRunner.stop(reason),
+                    foodCount: () => this.minerFoodCount()
+                },
+                destination
+            );
+            this.desertCampStartupBankPending = true;
+            this.anchor = desertCamp.spot;
+            this.log(`desert camp: dedicated gated route enabled; dest=${destination}; initial provisioning bank required`);
+
+            Sustain.set(async () => {
+                if (!Bank.isOpen() && !EventSignal.pending() && reader.modals().main === -1 && !ChatDialog.isOpen() && !ChatDialog.canContinue() && this.shouldEatMinerFood()) {
+                    await this.eatMinerFood();
+                }
+            });
         }
         if (this.forgetfulBank) {
             this.log(`bank: forgetful exits on (~1/${FORGETFUL_BANK_ODDS} chance after close)`);
@@ -702,11 +792,14 @@ export default class GatheringBot extends TaskBot {
 
         // #170 — bank junk so gather can start with a full pack of trash.
         // Skip power drop-only, Cooker (raw pack to cook), Supplier (empty/feeder).
+        const purgePackOnStart = this.settings.bool('purgePackOnStart', true);
+        const deferDesertPurge = purgePackOnStart && this.desertCampRoute !== null;
         if (
-            this.settings.bool('purgePackOnStart', true)
+            purgePackOnStart
             && !this.powerMode
             && !this.isMuleCooker()
             && !this.isMuleSupplier()
+            && !deferDesertPurge
         ) {
             const keep = new Set(this.gearKeep.map(n => n));
             for (const n of toolKeepNames(this.toolReqs)) {
@@ -740,6 +833,10 @@ export default class GatheringBot extends TaskBot {
             // its varp, including after later zone entry or relogin.
             this.log(
                 'combat: Wilderness Miner holds ground against NPCs; player attacks still flee'
+            );
+        } else if (this.desertCampRoute) {
+            this.log(
+                'combat: Desert Camp Miner holds ground against NPCs; player attacks still flee'
             );
         } else if (!isAutoLocation(this.locationSetting)) {
             if (Game.setAutoRetaliate(false)) {
@@ -836,6 +933,7 @@ export default class GatheringBot extends TaskBot {
             // Entry/relogin can restore Auto Retaliate. Re-assert the Wilderness
             // Miner stance after dialog/eating/player flee, before any gather work.
             new MaintainWildernessMinerStance(this),
+            ...(this.desertCampRoute ? [new DesertMiningCampTravel(this)] : []),
             ...(!muleSide && this.tickManip.shortbowRapid ? [new EnsureShortbowRapid(this)] : []),
             ...(!muleSide && this.tickManip.cookEatInterleave ? [new TannerfishSustain(this)] : []),
             ...(!muleSide && this.tickManip.useKnifeDelay ? [new TrimKnifeDelayLogs(this)] : []),
@@ -914,6 +1012,11 @@ export default class GatheringBot extends TaskBot {
 
     private rebuildGearKeep(): string[] {
         const names = new Set<string>(toolKeepNames(this.toolReqs));
+        if (this.desertCampRoute) {
+            for (const name of desertCampKeepNames(this.desertCampRoute.destination)) {
+                names.add(name);
+            }
+        }
         if (this.minerFood) {
             for (const form of foodForms(this.minerFood.name)) {
                 names.add(form);
@@ -1016,7 +1119,29 @@ export default class GatheringBot extends TaskBot {
 
     /** @see waitBankReady in api/bank/Banking */
     async waitBankReady(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
-        return waitBankReady(log);
+        const open = await waitBankReady(log);
+        if (!open || !this.desertCampRoute) {
+            return open;
+        }
+        await Execution.delayUntil(() => !Bank.isOpen() || Bank.snapshotReady(), 4000);
+        if (Bank.snapshotReady()) {
+            return true;
+        }
+        log('bank: Shantay item snapshot did not arrive — refusing to read stock');
+        return false;
+    }
+
+    async shantayBackpackBeforeOpen(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<BackpackItem[] | null> {
+        if (Bank.isOpen() && !(await this.closeScriptBank(log, { allowForgetful: false }))) {
+            log('bank: could not close Shantay bank before capturing the backpack');
+            return null;
+        }
+        await Execution.delayUntil(() => Bank.isOpen() || Bank.normalBackpackSnapshot() !== null, 4000);
+        const snapshot = Bank.normalBackpackSnapshot();
+        if (snapshot === null) {
+            log('bank: normal 28-slot backpack did not become readable before opening Shantay bank');
+        }
+        return snapshot;
     }
 
     async withdrawCoinsFor(need: number, log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
@@ -1181,25 +1306,28 @@ export default class GatheringBot extends TaskBot {
     async closeScriptBank(
         log: (m: string) => void = m => this.log(`  ${m}`),
         opts: { allowForgetful?: boolean } = {}
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (!Bank.isOpen()) {
-            return;
+            return true;
         }
         await this.bankPace();
-        await Bank.close();
+        if (!(await Bank.close())) {
+            log('bank: close did not dismiss the bank modal');
+            return false;
+        }
         await Execution.delayTicks(1);
 
         const allowForgetful = opts.allowForgetful !== false;
         if (!allowForgetful || !this.forgetfulBank) {
-            return;
+            return true;
         }
         if (Math.floor(Math.random() * FORGETFUL_BANK_ODDS) !== 0) {
-            return;
+            return true;
         }
 
         const here = Game.tile();
         if (!here) {
-            return;
+            return true;
         }
         log(`bank: forgot something — stepping out then back (1/${FORGETFUL_BANK_ODDS})`);
         const stand = this.location?.bankStand ?? here;
@@ -1211,14 +1339,16 @@ export default class GatheringBot extends TaskBot {
             await this.waitBankReady(log);
             // Glance only — no withdraw; the double-take.
             await this.bankPace();
-            if (Bank.isOpen()) {
-                await Bank.close();
+            if (Bank.isOpen() && !(await Bank.close())) {
+                log('bank: forgetful close did not dismiss the bank modal');
+                return false;
             }
         }
         // Nudge back toward the booth stand so callers that walk home aren't stranded sideways.
         if (stand) {
             await Traversal.walkResilient(stand, { radius: 3, timeoutMs: 12_000, log });
         }
+        return true;
     }
 
     /** Host surface for api/acquisition/ToolAcquireExec (buy / repair / smith). */
@@ -1491,6 +1621,9 @@ export default class GatheringBot extends TaskBot {
             return `burning ${this.burnLogs} when full`;
         }
         if (this.minerFood) {
+            if (this.desertCampRoute) {
+                return `banking when full; retaining ${this.minerFood.name} for Desert Camp travel`;
+            }
             return `eating ${this.minerFood.name} for ore slots, then banking to restock`;
         }
         if (this.powerMode) {
@@ -1815,9 +1948,10 @@ export default class GatheringBot extends TaskBot {
         return this.combatPolicy().flee;
     }
 
-    /** Player-attack signal for the wilderness-only Miner override. */
+    /** Player-attack signal for Miner modes that normally hold ground against NPCs. */
     wildernessMinerPlayerAttack(): boolean {
-        return this.combatPolicy().mode === 'wilderness-miner-player';
+        const mode = this.combatPolicy().mode;
+        return mode === 'wilderness-miner-player' || mode === 'desert-camp-miner-player';
     }
 
     wildernessMinerStanceNeeded(): boolean {
@@ -1825,7 +1959,8 @@ export default class GatheringBot extends TaskBot {
             isMiner: this.mining(),
             tile: Game.tile(),
             tickManipAllowCombat: this.tickManip.allowCombat,
-            autoRetaliateOn: Game.autoRetaliateOn()
+            autoRetaliateOn: Game.autoRetaliateOn(),
+            desertCampMiner: this.desertCampRoute !== null
         });
     }
 
@@ -1835,7 +1970,8 @@ export default class GatheringBot extends TaskBot {
             tile: Game.tile(),
             incomingPlayerAttacker: incomingPlayerAttacker(Players.query().results()),
             autoLocation: isAutoLocation(this.locationSetting),
-            tickManipAllowCombat: this.tickManip.allowCombat
+            tickManipAllowCombat: this.tickManip.allowCombat,
+            desertCampMiner: this.desertCampRoute !== null
         });
     }
 
@@ -2115,7 +2251,9 @@ export default class GatheringBot extends TaskBot {
             maxHp: Skills.level('hitpoints'),
             heal: foodHealAmount(config.name),
             foodCount: this.minerFoodCount(),
-            inventoryFull: Inventory.isFull()
+            inventoryFull: Inventory.isFull(),
+            retainForTravel: this.desertCampRoute !== null,
+            hazardMaxHit: this.desertCampRoute ? 9 : undefined
         });
     }
 
@@ -2123,6 +2261,9 @@ export default class GatheringBot extends TaskBot {
         const config = this.minerFood;
         if (!config || Bank.isOpen()) {
             return false;
+        }
+        if (this.desertCampRoute && Inventory.isFull() && this.hasDepositable()) {
+            this.desertCampBankTrip = true;
         }
         const food = Inventory.items().find(i => isFoodItem(i.name, config.name));
         if (!food) {
@@ -2136,7 +2277,7 @@ export default class GatheringBot extends TaskBot {
             id: food.id,
             name: food.name
         };
-        const reason = Inventory.isFull() ? 'ore room' : 'full heal';
+        const reason = Inventory.isFull() && !this.desertCampRoute ? 'ore room' : 'full heal';
         this.setStatus(`food: eating ${food.name} (${reason})`);
         this.log(
             `food: eat ${food.name} (${reason}; hp ${before.hp}/${Skills.level('hitpoints')}, pack ${before.used}/28)`
@@ -2164,27 +2305,31 @@ export default class GatheringBot extends TaskBot {
     }
 
     /** Top up the configured Miner food while BankCatch already has the bank open. */
-    async topUpMinerFoodAtBank(log: (m: string) => void): Promise<boolean> {
+    async topUpMinerFoodAtBank(log: (m: string) => void, reservedSlots: number): Promise<boolean> {
         const config = this.minerFood;
         if (!config) {
             return true;
         }
-        await Execution.delayUntilTicks(() => Bank.loaded(), 6);
+        await Execution.delayUntilTicks(() => (this.desertCampRoute ? Bank.snapshotReady() : Bank.loaded()), 6);
         await Execution.delayTicks(1);
 
         const held = this.minerFoodCount();
-        const banked = Bank.count(config.name);
+        const bankForms = this.desertCampRoute ? foodForms(config.name) : [config.name];
+        const banked = bankForms.reduce((sum, form) => sum + Bank.count(form), 0);
         const plan = planMinerFoodWithdrawal({
             target: config.target,
             held,
             banked,
-            freeSlots: Inventory.free()
+            freeSlots: Inventory.free(),
+            reservedSlots
         });
         if (!plan.ok) {
             const detail =
                 plan.reason === 'bank-stock'
                     ? `bank + pack are short by ${plan.missing}`
-                    : `pack needs ${plan.missing} more free slot(s)`;
+                    : reservedSlots > 0
+                        ? `pack needs ${plan.missing} more free slot(s) after reserving ${reservedSlots} for route supplies`
+                        : `pack needs ${plan.missing} more free slot(s)`;
             const message = `food: cannot prepare ${config.target} ${config.name} (${detail})`;
             this.setStatus(`${message} — stopped`);
             this.log(`${message}; stopping`);
@@ -2198,7 +2343,22 @@ export default class GatheringBot extends TaskBot {
         if (plan.withdraw > 0) {
             this.setStatus(`food: withdrawing ${plan.withdraw} ${config.name}`);
             log(`food: withdraw ${plan.withdraw} ${config.name} (${held} → ${config.target})`);
-            if (!(await Bank.withdrawX(config.name, plan.withdraw))) {
+            let remaining = plan.withdraw;
+            for (const form of bankForms) {
+                const take = Math.min(remaining, Bank.count(form));
+                if (take <= 0) {
+                    continue;
+                }
+                if (!(await Bank.withdrawX(form, take))) {
+                    remaining = -1;
+                    break;
+                }
+                remaining -= take;
+                if (remaining === 0) {
+                    break;
+                }
+            }
+            if (remaining !== 0) {
                 const message = `food: withdraw failed for ${plan.withdraw} ${config.name}`;
                 this.setStatus(`${message} — stopped`);
                 this.log(`${message}; stopping`);
@@ -2225,6 +2385,10 @@ export default class GatheringBot extends TaskBot {
         this.minerFoodStartupPending = false;
         this.log(`food: trip ready with ${after} ${config.name}`);
         return true;
+    }
+
+    desertCampFoodReservedSlots(routeSupplySlots: number): number {
+        return desertCampFoodReservedSlots(routeSupplySlots);
     }
 
     /** Drop one product log (farmer t6 / power-style). */
@@ -2254,6 +2418,9 @@ export default class GatheringBot extends TaskBot {
         log: (m: string) => void = m => this.log(`  ${m}`),
         arriveRadius = HOME_ARRIVE_RADIUS
     ): Promise<boolean> {
+        if (this.desertCampRoute) {
+            return this.runDesertMiningCampTravel();
+        }
         const here = Game.tile();
         const anchor = this.getAnchor();
         if (here && !shouldWalkHomeToGatherAnchor(anchor.distanceTo(here), arriveRadius)) {
@@ -2263,8 +2430,81 @@ export default class GatheringBot extends TaskBot {
         return Traversal.walkResilient(anchor, { radius: arriveRadius, log });
     }
 
-    // Why: tool upgrades must never pull the player off trees or rocks on a cold start.
-    // Why: the Draynor bank is only ~12 tiles from the willow anchor, inside ReturnToAnchor slack, so "away from spot" alone is not a safe upgrade gate.
+    private desertCampDirection(): DesertCampRouteDirection {
+        const needsBank = (Inventory.isFull() && this.hasDepositable())
+            || this.minerFoodRestockNeeded()
+            || (this.desertCampRoute !== null && desertCampFoodReserveDepleted(this.minerFoodCount()))
+            || this.desertCampStartupBankPending
+            || this.startupToolBankSyncNeeded()
+            || !hasAllTools(this.toolReqs, this.skillLevel, this.heldCount);
+        const state = desertCampBankTripDirection(this.desertCampBankTrip, needsBank);
+        this.desertCampBankTrip = state.bankTrip;
+        return state.direction;
+    }
+
+    desertMiningCampTravelNeeded(): boolean {
+        if (!this.desertCampRoute || Bank.isOpen() || EventSignal.pending()) {
+            return false;
+        }
+        const direction = this.desertCampDirection();
+        if (direction === 'enter' && this.shouldSuppressCampReentry()) {
+            return false;
+        }
+        return this.desertCampRoute.needsStep(direction);
+    }
+
+    async runDesertMiningCampTravel(): Promise<boolean> {
+        if (!this.desertCampRoute) {
+            throw new Error('Desert Mining Camp travel ran without an initialized route');
+        }
+        const direction = this.desertCampDirection();
+        if (direction === 'enter' && this.shouldSuppressCampReentry()) {
+            this.setStatus('combat: holding outside camp after player attack');
+            return false;
+        }
+        return this.desertCampRoute.runStep(direction);
+    }
+
+    desertCampBankCatchNeeded(): boolean {
+        return shouldRunDesertCampBankCatch(this.desertCampBankTrip, this.desertCampStartupBankPending, this.minerFoodRestockNeeded(), Inventory.isFull() && this.hasDepositable());
+    }
+
+    completeDesertCampBankTrip(): void {
+        this.desertCampStartupBankPending = false;
+        this.desertCampBankTrip = false;
+    }
+
+    desertCampDepositResidue(): string[] {
+        if (!this.desertCampRoute) {
+            return [];
+        }
+        return Inventory.items()
+            .filter(item => this.shouldDeposit(item.name ?? ''))
+            .map(item => item.name ?? `item ${item.id}`);
+    }
+
+    desertCampSupplyPlanAtOpenBank(): DesertCampSupplyPlan | null {
+        return this.desertCampRoute?.planSuppliesAtOpenBank() ?? null;
+    }
+
+    async desertCampWithdrawSuppliesAtOpenBank(plan: DesertCampSupplyPlan): Promise<boolean> {
+        if (!this.desertCampRoute) {
+            throw new Error('Desert Mining Camp supplies requested without an initialized route');
+        }
+        return this.desertCampRoute.withdrawPlannedSuppliesAtOpenBank(plan);
+    }
+
+    strictDesertCampBanking(): boolean {
+        return this.desertCampRoute !== null;
+    }
+
+    stopStrictBankFailure(reason: string): void {
+        this.setStatus(`${reason} — stopped`);
+        this.log(reason);
+        ScriptRunner.stop(reason);
+    }
+
+    // Why: the Draynor bank is inside ReturnToAnchor slack, so "away from spot" alone could pull a cold-start bot off its resources for a tool upgrade.
 
     /** True when already at or near the script bank, or the bank UI is open. */
     nearScriptBank(radius = 8): boolean {
@@ -2668,7 +2908,7 @@ export default class GatheringBot extends TaskBot {
         if (unique.length === 0) {
             return true;
         }
-        const bankDisplaced = opts.bankDisplaced !== false;
+        const bankDisplaced = opts.bankDisplaced !== false && this.desertCampRoute === null;
         if (Bank.isOpen()) {
             if (!(await Bank.close())) {
                 log('equip: could not close bank');

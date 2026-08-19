@@ -6,13 +6,31 @@ import type { TransportInfo } from '../PathFinder.js';
 import type { WorldTile } from '../../../adapter/ClientAdapter.js';
 import { Locs, type Loc } from '../../../api/locs/Locs.js';
 import { chebyshev } from '../geometry/followMath.js';
-import { locRefFromTransport, matchesLocRef } from '../locRef.js';
+import { DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS } from '../desertMiningCampDoors.js';
+import {
+    locRefFromTransport,
+    locRefValid,
+    matchesLocRef,
+    type LocSceneSnap
+} from '../locRef.js';
 
 export function matchesTransportLoc(
     transport: TransportInfo,
     loc: { readonly id: number; tile(): { x: number; z: number } }
 ): boolean {
     return matchesLocRef(locRefFromTransport(transport), loc);
+}
+
+/** Live scene still has this transport placement (or open leaf for Open actions). */
+export function transportLocValid(transport: TransportInfo, level = 0): boolean {
+    const ref = locRefFromTransport(transport, level);
+    const scene: LocSceneSnap[] = Locs.query()
+        .results()
+        .map(l => {
+            const t = l.tile();
+            return { id: l.id, name: l.name, actions: l.actions(), x: t.x, z: t.z };
+        });
+    return locRefValid(ref, scene);
 }
 
 /** How far off a long hop may land. Short hops must be exact — see below. */
@@ -85,6 +103,10 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
     if (byMeta) {
         return byMeta;
     }
+    // Why: adjacent scripted leaves have different handlers, so a missing identity must not select a sibling.
+    if (transport.locId !== undefined && DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS.has(transport.locId)) {
+        return null;
+    }
     // Fallback: name+action near the recorded placement (scene lag / id drift after
     // ship hops — gangplanks on Brimhaven deck after Barnaby).
     const nearName = Locs.query()
@@ -145,6 +167,23 @@ export function findTransportLoc(transport: TransportInfo): Loc | null {
         }
     }
     return null;
+}
+
+// Why: a ship or teleport landing rebuilds the client scene, so the disembark loc is unqueryable for a few ticks and the first lookup misses — failing there repaths off a deck the walker is standing on.
+
+/** Look for a transport loc, waiting out a scene rebuild before reporting it absent. */
+export async function awaitTransportLoc(
+    transport: TransportInfo,
+    waitMs: number,
+    delayUntil: (pred: () => boolean, ms: number) => Promise<boolean>,
+    find: (t: TransportInfo) => Loc | null = findTransportLoc
+): Promise<Loc | null> {
+    const present = find(transport);
+    if (present) {
+        return present;
+    }
+    await delayUntil(() => find(transport) !== null, waitMs);
+    return find(transport);
 }
 
 export async function openShutTrapdoor(

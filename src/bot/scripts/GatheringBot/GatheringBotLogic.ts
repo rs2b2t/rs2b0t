@@ -7,6 +7,8 @@ import { combatBreaksGather } from './TickManipLogic.js';
 
 type GatheringCombatMode =
     | 'standard'
+    | 'desert-camp-miner-npc'
+    | 'desert-camp-miner-player'
     | 'wilderness-miner-npc'
     | 'wilderness-miner-player';
 
@@ -34,23 +36,22 @@ export function incomingPlayerAttacker(
     return players.some(player => player.targetsMe());
 }
 
-/** Re-assert the non-retaliating Wilderness Miner stance after entry or relogin. */
+/** Re-assert a non-retaliating hostile-camp Miner stance after entry or relogin. */
 export function wildernessMinerStanceNeeded(opts: {
     isMiner: boolean;
     tile: WildTile | null;
     tickManipAllowCombat: boolean;
     autoRetaliateOn: boolean;
+    desertCampMiner?: boolean;
 }): boolean {
     return (
-        wildernessMinerAt(opts) &&
+        (wildernessMinerAt(opts) || opts.desertCampMiner === true) &&
         !opts.tickManipAllowCombat &&
         opts.autoRetaliateOn
     );
 }
 
-// Why: Wilderness Miner is the only special case — aggressive NPCs are part of those mining camps, so it holds its ground and keeps mining.
-// Why: a detectable player attack always restores flee behaviour.
-// Why: every other gatherer keeps the Auto and tick-manip policy unchanged.
+// Why: Wilderness and Desert Camp miners must hold ground through resident NPC combat, while a detectable player attack still restores flee behavior.
 
 /** Resolves the gatherer's live combat policy. */
 export function gatheringCombatPolicy(opts: {
@@ -59,7 +60,13 @@ export function gatheringCombatPolicy(opts: {
     incomingPlayerAttacker: boolean;
     autoLocation: boolean;
     tickManipAllowCombat: boolean;
+    desertCampMiner?: boolean;
 }): GatheringCombatPolicy {
+    if (opts.desertCampMiner) {
+        return opts.incomingPlayerAttacker
+            ? { mode: 'desert-camp-miner-player', allowGather: false, flee: true }
+            : { mode: 'desert-camp-miner-npc', allowGather: true, flee: false };
+    }
     if (wildernessMinerAt(opts)) {
         if (opts.incomingPlayerAttacker) {
             return {

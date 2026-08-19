@@ -230,6 +230,23 @@ export class ProfileVault {
         return { tabs: [...this.customTabs], activeTab: this.active };
     }
 
+    snapshot(): { profiles: Profile[]; tabs: string[]; activeTab: string } {
+        return { profiles: this.list(), ...this.tabState() };
+    }
+
+    async replaceAll(data: { profiles: Profile[]; tabs: string[]; activeTab: string }): Promise<void> {
+        this.assertUnlocked();
+        const profiles = profilesFrom(data.profiles);
+        if (profiles.length !== data.profiles.length) {
+            throw new Error('profile list contains an invalid entry');
+        }
+        assertTabStateValid(data.tabs, data.activeTab, profiles);
+        this.cache = profiles.map(p => ({ ...p }));
+        this.customTabs = [...data.tabs];
+        this.active = data.activeTab;
+        await this.persist();
+    }
+
     async upsert(p: Profile): Promise<void> {
         if (p.username.length === 0) {
             return;

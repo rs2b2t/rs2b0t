@@ -17,6 +17,22 @@ function backpackFull(): boolean {
     return size > 0 && backpackSnapshots().length >= size;
 }
 
+export type BackpackItem = Pick<InvItemSnapshot, 'slot' | 'id' | 'name' | 'count'>;
+
+function sameBackpack(
+    left: readonly BackpackItem[],
+    right: readonly BackpackItem[]
+): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+    return left.every(item => right.some(candidate =>
+        candidate.slot === item.slot
+        && candidate.id === item.id
+        && candidate.count === item.count
+    ));
+}
+
 async function bankBackpackReady(): Promise<boolean> {
     if (reader.bankComId() === -1) {
         return false;
@@ -27,10 +43,20 @@ async function bankBackpackReady(): Promise<boolean> {
     if (reader.bankComId() === -1 || reader.modals().side === -1) {
         return false;
     }
-    // The side component arrives before its inventory snapshot. Waiting one
-    // game tick prevents a late pre-existing stack from looking like progress.
     await Execution.delayTicks(1);
     return reader.bankComId() !== -1 && reader.modals().side !== -1;
+}
+
+async function continueObjectBankDialog(log?: (msg: string) => void): Promise<boolean> {
+    if (!(await ChatDialog.continue())) {
+        log?.('bank: failed to Continue the object dialogue');
+        return false;
+    }
+    if (!(await Execution.delayUntil(() => Bank.isOpen(), 4000))) {
+        log?.('bank: object dialogue completed without opening the bank');
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -47,6 +73,56 @@ export const Bank = {
     // deposit. Until then every count() reads 0, which is indistinguishable from an empty bank.
     loaded(): boolean {
         return reader.bankItems().length > 0;
+    },
+
+    snapshotReady(): boolean {
+        return reader.bankSnapshotReady();
+    },
+
+    snapshotGeneration(): number {
+        return reader.bankSnapshotGeneration();
+    },
+
+    async waitSnapshotAfter(generation: number, timeoutMs = 4000): Promise<boolean> {
+        if (generation < 0) {
+            return false;
+        }
+        await Execution.delayUntil(
+            () => !Bank.isOpen() || reader.bankSnapshotGeneration() > generation,
+            timeoutMs
+        );
+        return Bank.isOpen()
+            && reader.bankSnapshotReady()
+            && reader.bankSnapshotGeneration() > generation;
+    },
+
+    normalBackpackSnapshot(): BackpackItem[] | null {
+        if (Bank.isOpen() || reader.inventorySize() !== 28 || !reader.inventorySnapshotReady()) {
+            return null;
+        }
+        return reader.inventory().map(({ slot, id, name, count }) => ({ slot, id, name, count }));
+    },
+
+    async backpackReady(
+        expected: readonly BackpackItem[],
+        log?: (msg: string) => void
+    ): Promise<boolean> {
+        if (!(await bankBackpackReady())) {
+            log?.('bank: side backpack modal did not become ready');
+            return false;
+        }
+        await Execution.delayUntil(
+            () => !Bank.isOpen()
+                || (reader.bankSideSnapshotReady() && sameBackpack(reader.bankSideItems(), expected)),
+            4000
+        );
+        const ready = Bank.isOpen()
+            && reader.bankSideSnapshotReady()
+            && sameBackpack(reader.bankSideItems(), expected);
+        if (!ready) {
+            log?.('bank: side backpack did not match the pre-open backpack');
+        }
+        return ready;
     },
 
     // bank_main:com_93/94 (5386/5387) = Note/Item; opening the bank resets to Item, so set after opening
@@ -266,7 +342,7 @@ export const Bank = {
             if (chosen) {
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
                     if (Bank.isOpen()) { return true; }
                 }
             }
@@ -281,7 +357,7 @@ export const Bank = {
             if (adj && adjOp) {
                 await adj.interact(adjOp);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
-                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
                 }
             }
         }
@@ -392,7 +468,7 @@ export const Bank = {
             if (chosen) {
                 await booth.interact(chosen);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 8000)) {
-                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
                     if (Bank.isOpen()) { return true; }
                 }
             }
@@ -413,7 +489,7 @@ export const Bank = {
             if (adjOp) {
                 await adjacent.interact(adjOp);
                 if (await Execution.delayUntil(() => Bank.isOpen() || ChatDialog.canContinue(), 4000)) {
-                    if (ChatDialog.canContinue()) { await ChatDialog.continue(); }
+                    if (ChatDialog.canContinue() && await continueObjectBankDialog(log)) { return true; }
                 }
             }
         }

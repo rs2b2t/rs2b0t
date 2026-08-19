@@ -27,7 +27,7 @@ const BANK = {
     ardougneEast: new Tile(2655, 3283, 0),
     ardougneWest: new Tile(2616, 3332, 0),
     shilo: new Tile(2852, 2954, 0),
-    shantay: new Tile(3309, 3120, 0),
+    shantay: new Tile(3308, 3120, 0),
     grandTree: new Tile(2449, 3482, 1)
 } as const;
 
@@ -191,14 +191,24 @@ export const MINING_LOCATIONS: MiningLocation[] = [
     ),
     mine(
         'Desert Mining Camp',
-        // NE mithril/addy pocket past the wrought-iron gate (doors 3322–3323,9448); 3325,9456 sits almost on the rocks, so the stand nudges W/N.
-        // Surface door 3301,3036 — the gather bot does not auto-enter.
+        // Why: this anchor keeps both the west copper/tin and northeast mithril/addy clusters inside the named-camp leash.
         new Tile(3323, 9458, 0),
         BANK.shantay,
-        ['mithril', 'adamantite'],
-        'Underground NE rocks after Tourist Trap; not auto-entered from surface',
+        ['copper', 'tin', 'mithril', 'adamantite'],
+        'Underground rocks; requires completed Tourist Trap, camp keys and slave gear',
         true,
-        // Guard/Mercenary 45 (gear-triggered) → 2×45+1
+        // Guard/Mercenary 45 → 2×45+1. Route food mitigates damage but does not make low combat safe.
+        91
+    ),
+    mine(
+        'Desert Mining Camp Surface',
+        // Why: stand between the four coal rocks so iron/copper west and tin north stay inside the camp leash.
+        new Tile(3293, 3016, 0),
+        BANK.shantay,
+        ['copper', 'tin', 'iron', 'coal'],
+        'Surface rocks inside the camp; requires completed Tourist Trap and Metal key',
+        true,
+        // Guard/Mercenary 45 → 2×45+1. Same camp as the underground mine.
         91
     ),
     mine(

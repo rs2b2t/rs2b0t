@@ -100,7 +100,8 @@ describe('checkGates (both engine gates, before the walk to Karamja)', () => {
 
 describe('boat fare (the navigator prunes crossings it cannot pay for)', () => {
     test('FARE matches what the Karamja ship crossings actually charge', () => {
-        const ships = SPECIAL_CROSSINGS.filter(sc => /ship/i.test(sc.label ?? ''));
+        // The four ferry labels end in " ship"; anchoring keeps the Karamja shipyard gate out.
+        const ships = SPECIAL_CROSSINGS.filter(sc => / ship$/i.test(sc.label ?? ''));
         expect(ships.length).toBeGreaterThan(0);
         for (const ship of ships) {
             expect(ship.requires?.item).toBe(COINS);

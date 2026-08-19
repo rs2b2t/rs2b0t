@@ -32,6 +32,15 @@
 `transports.json` adds ships, gangplanks, the coal log, ropeswings, essence exits, the
 Shantay free exit and mining guild ladders.
 
+Three of its entries were curated for Eadgar's Ruse and are load-bearing for anything
+walking that ground:
+
+| Crossing | Loc | Why it is curated |
+|---|---|---|
+| Troll storeroom staircase | 3788 / 3789 at 2852,10061 | The stair deriver reads `case <coord> : p_telejump(...)` and these stairs are written `switch_int(loc_angle)`, so the storeroom half of the stronghold's bottom floor had no way in |
+| Mad Eadgar's cave | 3759 / 3760 | Gated on Troll Stronghold complete — an unfreed Eadgar leaves the entrance landing on an empty level 0 |
+| Ardougne farm stile | 993 at 2638,3350 | The wheat field is a sealed 228-tile pocket without it |
+
 ## Plane notes
 
 | Hop | Levels |

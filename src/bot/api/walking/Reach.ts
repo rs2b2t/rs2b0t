@@ -66,6 +66,20 @@ async function closeIn(near: WorldTile, radius: number, log: (m: string) => void
     return 'retry';
 }
 
+/** How long a blank scene at the stand is worth re-asking, matching the transport layer's ceiling. */
+const LOC_SCENE_MS = 3000;
+
+// Why: a teleport or level change empties every scene query for a few ticks, so blank while standing where the loc lives means not-yet-rebuilt, not absent (docs/decisions/level-change-lag.md). Walking the hint instead skips the op entirely and hands the caller a 'retry' it reads as a failure.
+
+/** Re-ask for a loc the player is already standing among, so a rebuild in flight does not read as absent. */
+async function sceneSettled(find: () => unknown, near: WorldTile, within: number): Promise<boolean> {
+    const here = reader.worldTile();
+    if (!here || here.level !== near.level || chebyshev(here, near) > within) {
+        return false;
+    }
+    return Execution.delayUntil(() => find() !== null, LOC_SCENE_MS);
+}
+
 const REACH_DOOR_ATTEMPTS = 8;
 
 // Why: a shut wall-door blocks the step onto its own tile, so an adjacentOk probe rejects the one door that needs opening (#293).
@@ -186,7 +200,7 @@ export const Reach = {
             .within(opts.within ?? 10)
             .where(l => opts.id === undefined || l.id === opts.id)
             .nearest();
-        if (!find()) {
+        if (!find() && !(await sceneSettled(find, opts.near, opts.within ?? 10))) {
             return closeIn(opts.near, 2, log);
         }
         const arrived = await Traversal.walkResilient(opts.near, { radius: 1, attempts: 4, timeoutMs: 90_000, log });

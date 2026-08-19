@@ -131,7 +131,7 @@ export interface TransportEdgeData {
 }
 
 export type NavRequest =
-    | { type: 'init'; pack: ArrayBuffer }
+    | { type: 'init'; pack: ArrayBufferLike }
     | {
           type: 'path';
           id: number;
@@ -277,13 +277,9 @@ export class PathFinder {
         }
         this.members = pack[5] === 1;
 
-        // Copy when buffer is SharedArrayBuffer / ArrayBufferLike so DataView is happy.
-        const ab =
-            pack.buffer instanceof ArrayBuffer
-                ? pack.buffer
-                : new Uint8Array(pack).buffer;
-        const view = new DataView(ab, pack.buffer instanceof ArrayBuffer ? pack.byteOffset : 0, pack.byteLength);
-        const count = view.getUint16(8, true);
+        // Read the count off the bytes directly: a DataView over a shared pack
+        // would have forced a 12 MB copy per worker to reach two bytes.
+        const count = pack[8] | (pack[9] << 8);
         let pos = 10;
         for (let i = 0; i < count; i++) {
             const mx = pack[pos++];

@@ -85,9 +85,9 @@ describe('ResourcePanel', () => {
             }
         });
 
-        panel.setBotCount(14);
+        panel.setBotCount(14, 6);
         expect(await panel.refresh()).toBe(true);
-        expect(nodes.botCount.textContent).toBe('14 bots');
+        expect(nodes.botCount.textContent).toBe('14 bots (6 running)');
         expect(nodes.cpu.textContent).toBe('1.6 cores (10% of 16)');
         expect(nodes.memory.textContent).toBe('2.8 GB');
         expect(nodes.memory.title).toBe('Memory source: pss');
@@ -101,8 +101,8 @@ describe('ResourcePanel', () => {
             { input: '/__rs2b0t/resources', cache: 'no-store' }
         ]);
 
-        panel.setBotCount(1);
-        expect(nodes.botCount.textContent).toBe('1 bot');
+        panel.setBotCount(1, 0);
+        expect(nodes.botCount.textContent).toBe('1 bot (0 running)');
     });
 
     test('renders measured zero traffic after two idle proxy samples', async () => {

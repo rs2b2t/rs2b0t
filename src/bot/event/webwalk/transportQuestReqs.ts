@@ -105,6 +105,13 @@ export const TRANSPORT_QUEST_SEEDS: readonly QuestVarSeed[] = [
         // ^dragon_complete = 10
         complete: 10,
         usedBy: ['dragonsecretdoor', 'crandor_rock_opening', 'crandor_climbing_rope']
+    },
+    {
+        // questlist.if omits "The"; generic travel exposes the guarded cave post-quest.
+        journal: 'Tourist Trap',
+        varp: 'desertrescue',
+        complete: 30,
+        usedBy: ['Desert Mining Camp guarded cave']
     }
 ] as const;
 
@@ -122,7 +129,10 @@ const TRANSPORT_QUEST_ALIASES: Readonly<Record<string, string>> = {
     "eadgar's ruse": "Eadgar's Ruse",
     waterfall: 'Waterfall Quest',
     'waterfall quest': 'Waterfall Quest',
-    'dragon slayer': 'Dragon Slayer'
+    'dragon slayer': 'Dragon Slayer',
+    // The 2004 journal omits "The" while some catalog/content names include it.
+    'the tourist trap': 'Tourist Trap',
+    'tourist trap': 'Tourist Trap'
 };
 
 export function canonicalQuestName(name: string): string {

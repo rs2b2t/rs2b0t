@@ -57,7 +57,7 @@ test('Duel Arena opens its chest before using the bank action', () => {
 
 test('Shantay Pass banks via the Shantay chest (Open then continue chat)', () => {
     const shantay = BANK_LOCATIONS.find(b => b.name === 'Shantay Pass');
-    expect(shantay?.tile.x).toBe(3309);
+    expect(shantay?.tile.x).toBe(3308);
     expect(shantay?.tile.z).toBe(3120);
     expect(shantay?.access).toEqual({ name: 'Shantay chest', op: 'Open' });
     expect(BANK_LOCATIONS.filter(bank => bank.access).map(bank => bank.name).sort()).toEqual([

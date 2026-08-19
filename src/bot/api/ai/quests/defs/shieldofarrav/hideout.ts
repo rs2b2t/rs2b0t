@@ -1,20 +1,16 @@
-import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { Modals } from '../../../../ui/widgets/Modals.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
-import { Locs } from '../../../../locs/Locs.js';
 import { Reach } from '../../../../walking/Reach.js';
-import { Traversal } from '../../../../walking/Traversal.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { SOA_LOC, SOA_TILE, inBlackArmInner, inBlackArmUpper, inPhoenixHq, inPhoenixInner, inStoreGround, inWeaponStore } from './areas.js';
-import { driveChoice, promptLoc, settleScene } from '../../exec/prompts.js';
+import { crossTeleportDoor, settleScene } from '../../exec/prompts.js';
+import { climb, walkAndTalk } from '../../exec/legs.js';
 import type { NpcStop } from '../../exec/primitives.js';
 
-const CLIMB_MS = 12_000;
-const WALK_MS = 120_000;
+// Why: the generic legs live in exec/ so a second partner quest can use them; the hideout keeps only
+// the Shield of Arrav pockets they are pointed at.
+export { climb, openContainer, talkUntil, walkAndTalk } from '../../exec/legs.js';
 
 // Why: `isFar` is a component test, not a distance test — the two sides of a one-tile wall are two tiles apart.
 
@@ -25,101 +21,14 @@ async function crossDoor(
     isFar: (t: WorldTile | null) => boolean,
     log: (m: string) => void
 ): Promise<boolean> {
-    if (isFar(Game.tile())) {
-        return true;
-    }
-    if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: WALK_MS, log }))) {
-        return false;
-    }
-    // Why: `~open_hideout_door` calls `~door_open`, which swings the loc onto a different tile and id, so the shut id is not what stands there after anyone has opened it — and a sealed pocket has one door, so the Open-actioned neighbour is it.
-    const door = Locs.query().action('Open').within(4).where(l => l.id === id).nearest()
-        ?? Locs.query().action('Open').within(2).where(l => l.name === 'Door').nearest();
-    if (!door) {
-        log(`no door ${id} or Door within four tiles of (${stand.x},${stand.z})`);
-        return false;
-    }
     const mark = GameMessages.mark();
-    if (!(await door.interact('Open'))) {
-        log(`door ${id} refused the Open click`);
-        return false;
-    }
-    const crossed = await Execution.delayUntil(() => isFar(Game.tile()), CLIMB_MS);
+    const crossed = await crossTeleportDoor({ id, stand, isFar: () => isFar(Game.tile()), log });
     if (!crossed) {
         for (const line of GameMessages.since(mark)) {
             log(`door ${id}: ${line.text}`);
         }
-        return false;
     }
-    await settleScene();
-    return true;
-}
-
-// Why: the scene keeps the shut id for a tick after the Open lands, so one check calls a successful open a failure.
-
-/** Open a shut container and wait for its open twin to appear in the scene. */
-export async function openContainer(
-    name: string,
-    shutId: number,
-    openId: number,
-    stand: Tile,
-    log: (m: string) => void
-): Promise<boolean> {
-    const open = () => Locs.query().within(6).where(l => l.id === openId).nearest();
-    for (let attempt = 0; attempt < 3; attempt++) {
-        if (open()) {
-            return true;
-        }
-        await promptLoc({
-            name,
-            op: 'Open',
-            near: stand,
-            id: shutId,
-            within: 6,
-            expect: () => open() !== null
-        }, log);
-        await settleScene();
-    }
-    if (open()) {
-        return true;
-    }
-    log(`the shut ${name.toLowerCase()} (${shutId}) never became ${openId}`);
-    return false;
-}
-
-/** Climb a loc that changes level, proving the arrival rather than the click. */
-export async function climb(
-    locId: number,
-    op: string,
-    stand: Tile,
-    arrive: Tile,
-    log: (m: string) => void
-): Promise<boolean> {
-    const here = Game.tile();
-    if (here && here.level === arrive.level) {
-        return true;
-    }
-    if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: WALK_MS, log }))) {
-        return false;
-    }
-    const loc = Locs.query().action(op).within(4).where(l => l.id === locId).nearest();
-    if (!loc) {
-        log(`no loc ${locId} offering '${op}' near (${stand.x},${stand.z})`);
-        return false;
-    }
-    if (!(await loc.interact(op))) {
-        log(`loc ${locId} refused '${op}'`);
-        return false;
-    }
-    await Execution.delayUntil(() => {
-        const t = Game.tile();
-        return t !== null && t.level === arrive.level;
-    }, CLIMB_MS);
-    await settleScene();
-    if (Game.tile()?.level === arrive.level) {
-        return true;
-    }
-    log(`'${op}' on loc ${locId} never reached level ${arrive.level}`);
-    return false;
+    return crossed;
 }
 
 export async function enterHideout(log: (m: string) => void): Promise<boolean> {
@@ -147,63 +56,6 @@ export async function enterHideout(log: (m: string) => void): Promise<boolean> {
     }
     log(`descent into the hideout returned '${status}' and left the character on the surface`);
     return false;
-}
-
-// Why: `talkThrough` never walks, and `gotoNpc`'s shared hop calls a stand two tiles off "arrived" without moving.
-
-/** Walk to a stop and drive its dialogue. */
-export async function walkAndTalk(
-    stop: NpcStop,
-    prefer: readonly string[],
-    log: (m: string) => void
-): Promise<boolean> {
-    const here = Game.tile();
-    if (!here || stop.anchor.distanceTo(here) > stop.leash || here.level !== stop.anchor.level) {
-        await Traversal.walkResilient(stop.anchor, { radius: 2, attempts: 3, timeoutMs: WALK_MS, log });
-    }
-    const status = await Reach.npcDialog({ name: stop.npc, near: stop.anchor, log });
-    if (status !== 'done') {
-        log(`could not open a dialogue with ${stop.npc} (${status})`);
-        return false;
-    }
-    return driveChoice([...prefer], log);
-}
-
-// Why: `~mesbox` and `~objbox` build a MAIN modal that no dialogue driver can see, and the curator and the king both use them mid-conversation — a chat-only driver stalls on the first one.
-
-/** Drive a conversation that mixes chat with mesboxes, until the goal lands. */
-export async function talkUntil(
-    stop: NpcStop,
-    prefer: readonly string[],
-    expect: () => boolean,
-    log: (m: string) => void,
-    ms = 45_000
-): Promise<boolean> {
-    if (expect()) {
-        return true;
-    }
-    await walkAndTalk(stop, prefer, log);
-    const deadline = performance.now() + ms;
-    while (performance.now() < deadline && !expect()) {
-        if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
-            await driveChoice([...prefer], log);
-            continue;
-        }
-        if (reader.modals().main !== -1) {
-            await Modals.close();
-            await Execution.delayTicks(1);
-            continue;
-        }
-        await Execution.delayTicks(1);
-    }
-    // Why: the closing mesbox stays up after the goal lands, and a main modal blocks the next leg's player interaction.
-    if (reader.modals().main !== -1) {
-        await Modals.close();
-    }
-    if (!expect()) {
-        log(`${stop.npc} conversation ended without the expected result`);
-    }
-    return expect();
 }
 
 /** Reach an NPC that lives inside the hideout, entering it first. */

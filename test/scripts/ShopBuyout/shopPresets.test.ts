@@ -22,5 +22,6 @@ describe('shop presets', () => {
         expect(names.some(n => n.includes('rune'))).toBe(true);
         expect(names.some(n => n.includes('arrow'))).toBe(true);
         expect(names).toContain('feather');
+        expect(names).toContain('vial of water');
     });
 });

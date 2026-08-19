@@ -9,6 +9,7 @@ import CollisionMap from '#/client/dash3d/CollisionMap.js';
 import Model from '#/client/dash3d/Model.js';
 import type ModelSource from '#/client/dash3d/ModelSource.js';
 import { ClientProt } from '#/client/io/ClientProt.js';
+import { ServerProt } from '#/client/io/ServerProt.js';
 
 import { SELF_TEST, type RawClient } from './RawClient.js';
 
@@ -27,12 +28,91 @@ export function invalidateLocSnapshots(): void {
 /** Releases the attached client; later reads degrade to empty rather than dereferencing a half-dead client. */
 export function detach(): void {
     raw = null;
+    bankInventorySession = null;
+    previousBankGeneration.clear();
     invalidateLocSnapshots();
 }
 const SCRATCH_SLOT = 499;
 
 let raw: RawClient | null = null;
 let packetListener: ((ptype: number) => void) | null = null;
+let adapterLoginGeneration = -1;
+let bankInventorySession: {
+    mainComId: number;
+    sideComId: number;
+    mainOpenedAt: number;
+    sideOpenedAt: number;
+} | null = null;
+const previousBankGeneration = new Map<number, number>();
+
+function invState(comId: number): { generation: number; fullGeneration: number; transmitting: boolean } {
+    return raw?.invUpdateState.get(comId) ?? { generation: 0, fullGeneration: 0, transmitting: false };
+}
+
+function noteModalPacket(ptype: number): void {
+    if (!raw) {
+        bankInventorySession = null;
+        return;
+    }
+    if (raw.statSessionGeneration !== adapterLoginGeneration) {
+        adapterLoginGeneration = raw.statSessionGeneration;
+        bankInventorySession = null;
+        previousBankGeneration.clear();
+    }
+    if (ptype === ServerProt.IF_CLOSE) {
+        if (bankInventorySession) {
+            previousBankGeneration.set(
+                bankInventorySession.mainComId,
+                invState(bankInventorySession.mainComId).generation
+            );
+            previousBankGeneration.set(
+                bankInventorySession.sideComId,
+                invState(bankInventorySession.sideComId).generation
+            );
+        }
+        bankInventorySession = null;
+        return;
+    }
+    if (ptype !== ServerProt.IF_OPENMAIN_SIDE) {
+        return;
+    }
+    if (
+        bankInventorySession
+        && reader.bankComId() === bankInventorySession.mainComId
+        && raw.sideModalId !== -1
+        && findInvComponentIn(
+            raw.sideModalId,
+            com => (com.iop?.[0] ?? '').toLowerCase().includes('deposit')
+        ) === bankInventorySession.sideComId
+    ) {
+        return;
+    }
+    if (bankInventorySession) {
+        previousBankGeneration.set(
+            bankInventorySession.mainComId,
+            invState(bankInventorySession.mainComId).generation
+        );
+        previousBankGeneration.set(
+            bankInventorySession.sideComId,
+            invState(bankInventorySession.sideComId).generation
+        );
+    }
+    const mainComId = findInvComponentIn(
+        raw.mainModalId,
+        com => (com.iop?.[0] ?? '').toLowerCase().includes('withdraw')
+    );
+    const sideComId = findInvComponentIn(
+        raw.sideModalId,
+        com => (com.iop?.[0] ?? '').toLowerCase().includes('deposit')
+    );
+    bankInventorySession = mainComId === -1 || sideComId === -1 ? null : {
+        mainComId,
+        sideComId,
+        // Inventory snapshots and IF_OPENMAIN_SIDE can arrive in either order.
+        mainOpenedAt: previousBankGeneration.get(mainComId) ?? 0,
+        sideOpenedAt: previousBankGeneration.get(sideComId) ?? 0
+    };
+}
 
 /** Whether the login snapshot has populated every skill exposed by this client. */
 export function activeStatsReady(baseLevels: ArrayLike<number>): boolean {
@@ -201,6 +281,9 @@ interface SelectButtonLabel {
 export function attach(client: unknown): string[] {
     const missing = SELF_TEST.filter(name => !(name in (client as Record<string, unknown>)));
     raw = client as RawClient;
+    bankInventorySession = null;
+    adapterLoginGeneration = raw.statSessionGeneration;
+    previousBankGeneration.clear();
     // Why: a memo that outlived its client would make a relogin read the previous session's locs.
     invalidateLocSnapshots();
 
@@ -208,9 +291,10 @@ export function attach(client: unknown): string[] {
         const orig = raw.tcpIn;
         raw.tcpIn = async function (this: RawClient): Promise<boolean> {
             const processed = await orig.call(this);
-            if (processed && packetListener) {
+            if (processed) {
                 try {
-                    packetListener(this.ptype0);
+                    noteModalPacket(this.ptype0);
+                    packetListener?.(this.ptype0);
                 } catch (err) {
                     console.error('[rs2b0t] packet listener error', err);
                 }
@@ -862,6 +946,14 @@ export const reader = {
         return IfType.list[comId].linkObjType?.length ?? 0;
     },
 
+    inventorySnapshotReady(): boolean {
+        const comId = findTabInvComponent(3);
+        const state = comId === -1 ? null : invState(comId);
+        return state !== null
+            && state.transmitting
+            && state.fullGeneration > 0;
+    },
+
     equipment(): InvItemSnapshot[] {
         const comId = findTabInvComponent(4);
         if (comId === -1) {
@@ -899,6 +991,39 @@ export const reader = {
         }
 
         return readInvComponent(comId, () => IfType.list[comId].iop ?? []);
+    },
+
+    bankSnapshotReady(): boolean {
+        const session = bankInventorySession;
+        const state = session === null ? null : invState(session.mainComId);
+        return session !== null
+            && reader.bankComId() === session.mainComId
+            && state !== null
+            && state.transmitting
+            && state.fullGeneration > session.mainOpenedAt;
+    },
+
+    bankSideSnapshotReady(): boolean {
+        const session = bankInventorySession;
+        if (!raw || session === null || raw.sideModalId === -1) {
+            return false;
+        }
+        const sideComId = findInvComponentIn(
+            raw.sideModalId,
+            com => (com.iop?.[0] ?? '').toLowerCase().includes('deposit')
+        );
+        const state = invState(session.sideComId);
+        return sideComId === session.sideComId
+            && state.transmitting
+            && state.fullGeneration > session.sideOpenedAt;
+    },
+
+    bankSnapshotGeneration(): number {
+        const session = bankInventorySession;
+        if (session === null || reader.bankComId() !== session.mainComId) {
+            return -1;
+        }
+        return invState(session.mainComId).generation;
     },
 
     chatContinueComId(): number {

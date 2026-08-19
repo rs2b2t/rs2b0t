@@ -76,14 +76,16 @@ const TRANSPORT_SKILL_GATES: readonly {
 // Why: the journal is the only quest state on the wire, so a stage check maps to `started` or `complete` and never finer.
 // Why: a crossing needing a post-quest step — the Salve barrier wants stage 61, one Drezel conversation past complete — is gated on complete here and unlocked at execute time.
 // Why: offline probes carry no WorldState, so these fail open and pack-tool parity is unchanged.
-const CROSSING_QUEST_GATES: readonly {
+const CROSSING_GATES: readonly {
     x: number;
     z: number;
     level: number;
-    quest: string;
-    minStatus: 'started' | 'complete';
+    quest?: string;
+    minStatus?: 'started' | 'complete';
     /** Worn item the same handler demands (gas mask, …). */
     worn?: { name: string; count: number }[];
+    /** Inventory item the handler checks without consuming. */
+    items?: { name: string; count: number }[];
     /** Content script and the stage it tests. */
     note: string;
 }[] = [
@@ -100,6 +102,36 @@ const CROSSING_QUEST_GATES: readonly {
         x: 2530, z: 9703, level: 0, quest: 'Plague City', minStatus: 'started',
         worn: [{ name: 'Gas mask', count: 1 }],
         note: 'plaguesewerpipe needs the mask worn, not carried'
+    },
+    // quest_desertrescue.rs2 open_desertcamp_gate — both directions retain the key.
+    // The gate itself has no quest-stage check; this remains usable while the quest runs.
+    {
+        x: 3273,
+        z: 3028,
+        level: 0,
+        items: [{ name: 'Metal key', count: 1 }],
+        note: 'miningcampgateclosedl needs the Metal key in inventory'
+    },
+    {
+        x: 3274,
+        z: 3028,
+        level: 0,
+        items: [{ name: 'Metal key', count: 1 }],
+        note: 'miningcampgateclosedl needs the Metal key in inventory'
+    },
+    {
+        x: 3273,
+        z: 3029,
+        level: 0,
+        items: [{ name: 'Metal key', count: 1 }],
+        note: 'miningcampgateclosedr needs the Metal key in inventory'
+    },
+    {
+        x: 3274,
+        z: 3029,
+        level: 0,
+        items: [{ name: 'Metal key', count: 1 }],
+        note: 'miningcampgateclosedr needs the Metal key in inventory'
     }
 ];
 
@@ -147,12 +179,17 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
         gated = true;
     }
 
-    const quest = CROSSING_QUEST_GATES.find(q => q.x === x && q.z === z && q.level === level);
-    if (quest) {
-        requires.quests = [{ quest: quest.quest, minStatus: quest.minStatus }];
+    const gate = CROSSING_GATES.find(q => q.x === x && q.z === z && q.level === level);
+    if (gate) {
         gated = true;
-        if (quest.worn && quest.worn.length > 0) {
-            requires.worn = [...(requires.worn ?? []), ...quest.worn.map(w => ({ name: w.name, count: w.count }))];
+        if (gate.quest && gate.minStatus) {
+            requires.quests = [{ quest: gate.quest, minStatus: gate.minStatus }];
+        }
+        if (gate.items && gate.items.length > 0) {
+            requires.items = [...(requires.items ?? []), ...gate.items.map(i => ({ ...i, consumed: false }))];
+        }
+        if (gate.worn && gate.worn.length > 0) {
+            requires.worn = [...(requires.worn ?? []), ...gate.worn.map(w => ({ name: w.name, count: w.count }))];
         }
     }
 

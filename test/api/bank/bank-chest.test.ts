@@ -8,6 +8,7 @@ import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
+import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
 import { Input } from '#/bot/input/Input.js';
 
@@ -22,6 +23,8 @@ const originals = {
     bankSideItems: reader.bankSideItems,
     invButton: Input.invButton,
     locQuery: Locs.query,
+    chatCanContinue: ChatDialog.canContinue,
+    chatContinue: ChatDialog.continue,
     walkResilient: Traversal.walkResilient
 };
 
@@ -36,6 +39,8 @@ afterEach(() => {
     (reader as any).bankSideItems = originals.bankSideItems;
     (Input as any).invButton = originals.invButton;
     (Locs as any).query = originals.locQuery;
+    (ChatDialog as any).canContinue = originals.chatCanContinue;
+    (ChatDialog as any).continue = originals.chatContinue;
     (Traversal as any).walkResilient = originals.walkResilient;
 });
 
@@ -96,7 +101,7 @@ test('opens a closed chest before delegating to its bank action', async () => {
     };
     const opened = {
         name: 'Open chest',
-        actions: () => chestOpen ? ['Bank', 'Shut'] : []
+        actions: () => (chestOpen ? ['Bank', 'Shut'] : [])
     };
     (Locs as any).query = queryReturning([closed, opened]);
     (Bank as any).isOpen = () => false;
@@ -232,10 +237,47 @@ test('Shantay Pass open uses Shantay chest (not Bank booth)', async () => {
     };
 
     const result = await Banking.open({
-        stand: { x: 3309, z: 3120, level: 0 },
+        stand: { x: 3308, z: 3120, level: 0 },
         log: () => {}
     });
 
     expect(result).toBe(true);
     expect(access).toEqual({ name: 'Shantay chest', op: 'Open' });
+});
+
+test('object bank waits for its Continue dialogue to open the bank', async () => {
+    let bankOpen = false;
+    let dialogOpen = false;
+    let resumePending = false;
+    let interactions = 0;
+    const chest = {
+        name: 'Shantay chest',
+        actions: () => ['Open'],
+        distance: () => 1,
+        tile: () => ({ x: 3308, z: 3120, level: 0 }),
+        interact: async () => {
+            if (resumePending) throw new Error('duplicate chest interaction canceled pending bank open');
+            interactions++;
+            dialogOpen = true;
+            return true;
+        }
+    };
+    (Locs as any).query = queryReturning([chest]);
+    (Bank as any).isOpen = () => bankOpen;
+    (ChatDialog as any).canContinue = () => dialogOpen;
+    (ChatDialog as any).continue = async () => {
+        dialogOpen = false;
+        resumePending = true;
+        return true;
+    };
+    (Execution as any).delayUntil = async (condition: () => boolean) => {
+        if (!condition() && resumePending) {
+            resumePending = false;
+            bankOpen = true;
+        }
+        return condition();
+    };
+
+    expect(await Bank.openNearest('Shantay chest', 'Open')).toBe(true);
+    expect(interactions).toBe(1);
 });

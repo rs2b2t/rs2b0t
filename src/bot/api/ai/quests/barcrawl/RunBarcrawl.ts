@@ -28,26 +28,43 @@ import {
 // Why: the scroll is a main modal built with `if_settext`, so no dialogue driver can see it.
 // Why: every other modal read comes back empty while it is up, so it has to be closed again, like a quest journal.
 
+/** How many times a Read that opens nothing is re-sent before the card is called unreadable. */
+const READ_TRIES = 3;
+
 /** Read the barcrawl card. */
 export async function readCard(log?: (m: string) => void): Promise<BarcrawlProgress | null> {
-    const card = Inventory.first(BARCRAWL_CARD);
-    if (!card) {
+    if (!Inventory.first(BARCRAWL_CARD)) {
         return null;
     }
+    // Why: the previous read's close takes a tick to land, and a `before` sampled while that scroll is still up can never differ from the id the next Read opens — every read after a successful one then times out on a scroll that is on screen.
+    await Modals.closeIfOpen();
+    await Execution.delayUntil(() => reader.modals().main === -1, 3000);
     const before = reader.modals().main;
     const mark = GameMessages.mark();
-    if (!(await card.interact('Read'))) {
-        log?.('the card refused its Read op');
-        return null;
-    }
-    // Why: the modal id arrives in `if_openmain`, each line of the scroll arrives in its own `if_settext`, and component text persists in the interface list between modals.
-    // Why: sampling on the tick the id changes therefore reads an empty scroll, or the previous read's.
-    // Why: settling a tick and waiting for text that parses as the card is what makes the read honest, where waiting on the id alone is not.
-    const idChanged = await Execution.delayUntil(() => {
-        const main = reader.modals().main;
-        return main !== -1 && main !== before;
-    }, 5000);
+    // Why: the client clears the modal on the close it sends, but the server clears it a tick or more later and drops an `opheld` that arrives in between — so the first Read after a read of its own opens nothing at all.
+    // Why: `drinkAt` survived that by reading three times; every other caller read once and called the card unreadable, which is a failed quest step per bar.
+    let idChanged = false;
     let parsed: BarcrawlProgress | null = null;
+    for (let attempt = 0; attempt < READ_TRIES && !idChanged; attempt++) {
+        if (attempt > 0) {
+            await Execution.delayTicks(3);
+        }
+        const card = Inventory.first(BARCRAWL_CARD);
+        if (!card) {
+            return null;
+        }
+        if (!(await card.interact('Read'))) {
+            log?.('the card refused its Read op');
+            return null;
+        }
+        // Why: the modal id arrives in `if_openmain`, each line of the scroll arrives in its own `if_settext`, and component text persists in the interface list between modals.
+        // Why: sampling on the tick the id changes therefore reads an empty scroll, or the previous read's.
+        // Why: settling a tick and waiting for text that parses as the card is what makes the read honest, where waiting on the id alone is not.
+        idChanged = await Execution.delayUntil(() => {
+            const main = reader.modals().main;
+            return main !== -1 && main !== before;
+        }, 5000);
+    }
     if (idChanged) {
         await Execution.delayTicks(1);
         await Execution.delayUntil(() => parseCard(reader.mainModalTexts()) !== null, 5000);

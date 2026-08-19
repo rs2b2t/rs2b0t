@@ -27,6 +27,7 @@ abstract class AbstractBot {
 ```
 
 - `onStop` runs on **both** a clean stop and a crash — release resources here.
+- `onPaint` draws the overlay HUD; its widgets are in [Paint](api-paint.md).
 - Event callbacks (`this.on`) fire mid-frame: set flags or `log`, and keep the work in `loop()`.
 
 ### LoopingBot

@@ -16,6 +16,16 @@ interface BankLocation {
     name: string;
 }
 
+/** A spell in the teleport table: what it costs, what it needs, and where it lands. */
+interface TeleportMethod {
+    name: string;
+    runeCost: Record<string, number>;
+    levelRequired: number;
+    spellName: string;
+    destination: string;
+    bank: { x: number; z: number };
+}
+
 const CONFIG = {
     // Teleport methods and their requirements
     teleports: {
@@ -67,7 +77,7 @@ const CONFIG = {
             destination: 'Watchtower',
             bank: { x: 2547, z: 3111 }
         }
-    } as { [key: string]: any },
+    } as { [key: string]: TeleportMethod },
     
     // All bank locations for nearest bank detection
     allBanks: [
@@ -194,7 +204,7 @@ export default class AIOTeleport extends LoopingBot {
     private minLawRunes: number = 100;
     private useStaffRunes: boolean = true;
     
-    private teleportMethod: any = null;
+    private teleportMethod: TeleportMethod | null = null;
     private teleportsCompleted: number = 0;
     private totalRunesUsed: number = 0;
     private startedAt: number = Date.now();
@@ -792,8 +802,7 @@ export default class AIOTeleport extends LoopingBot {
         if (!this.teleportMethod) return false;
         
         const cost = this.teleportMethod.runeCost;
-        for (const [runeName, amount] of Object.entries(cost)) {
-            const needed = amount as number;
+        for (const [runeName, needed] of Object.entries(cost)) {
             if (!this.hasRune(runeName, needed)) {
                 return false;
             }

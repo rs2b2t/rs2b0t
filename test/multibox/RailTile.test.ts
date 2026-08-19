@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { renderRailTile } from '#/bot/multibox/RailTile.js';
+import { renderRailTile, slotIsRunning } from '#/bot/multibox/RailTile.js';
 import type { SlotSnapshot } from '#/bot/multibox/types.js';
 
 function slot(ingame: boolean, scriptState: string): SlotSnapshot {
@@ -30,6 +30,8 @@ test('green dot requires both login and a running script', () => {
 
     renderRailTile(tile, slot(true, 'running'));
     expect(dot.classList.contains('is-running')).toBe(true);
+    expect(slotIsRunning(slot(true, 'running'))).toBe(true);
+    expect(slotIsRunning(slot(true, 'idle'))).toBe(false);
     expect(dot.title).toBe('logged in — script running');
     expect(tile.querySelector('.mbx-name')?.textContent).toBe('Player Name');
 });

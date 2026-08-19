@@ -11,7 +11,9 @@ import {
     shouldBuryRegularBones,
     SPOT_OPTIONS,
     START_POSITION,
-    wantsAutoFighterLoot
+    wantsAutoFighterLoot,
+    autoRetaliateShouldEnable,
+    assertAutoRetaliateOn
 } from '#/bot/scripts/AutoFighter/AutoFighterData.js';
 import { matchesEntityName } from '#/bot/api/query/Query.js';
 import { resolveControl } from '#/bot/panel/paramControls.js';
@@ -126,5 +128,12 @@ describe('AutoFighter data', () => {
         expect(shouldKeepBankItem('Bones', 526, 'Trout', true, [], [], false)).toBe(false);
         expect(shouldKeepBankItem('Bones', 526, 'Trout', true, [], [], true)).toBe(true);
         expect(shouldKeepBankItem('Big bones', 532, 'Trout', true, [], [], true)).toBe(false);
+    });
+
+    test('AutoFighter turns Auto Retaliate on and fails loudly if it stays off', () => {
+        expect(autoRetaliateShouldEnable(false)).toBe(true);
+        expect(autoRetaliateShouldEnable(true)).toBe(false);
+        assertAutoRetaliateOn(true);
+        expect(() => assertAutoRetaliateOn(false)).toThrow('[AutoFighter] could not enable Auto Retaliate');
     });
 });
