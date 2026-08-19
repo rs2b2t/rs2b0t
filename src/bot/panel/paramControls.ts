@@ -39,10 +39,21 @@ export function visibilityDeps(schema: SettingsSchema): Set<string> {
     return deps;
 }
 
-type ControlKind =
-    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'color' | 'multiselect' | 'taglist' | 'tile';
+/** Keys whose change must re-render the panel: visibility deps plus any setting that drives another setting's control (csvToggle). */
+export function refreshDeps(schema: SettingsSchema): Set<string> {
+    const deps = visibilityDeps(schema);
+    for (const def of Object.values(schema)) {
+        if (def.csvToggle) {
+            deps.add(def.csvToggle);
+        }
+    }
+    return deps;
+}
 
-export function resolveControl(def: SettingDef): ControlKind {
+type ControlKind =
+    | 'checkbox' | 'slider' | 'number' | 'dropdown' | 'text' | 'color' | 'multiselect' | 'taglist' | 'tile' | 'csv';
+
+export function resolveControl(def: SettingDef, valueOf?: (key: string) => string): ControlKind {
     switch (def.type) {
         case 'boolean':
             return 'checkbox';
@@ -56,6 +67,9 @@ export function resolveControl(def: SettingDef): ControlKind {
             }
             return def.options && def.options.length > 0 ? 'dropdown' : 'text';
         case 'string[]':
+            if (def.csvToggle && valueOf && valueOf(def.csvToggle) === 'csv') {
+                return 'csv';
+            }
             return def.options && def.options.length > 0 ? 'multiselect' : 'taglist';
     }
 }
@@ -100,12 +114,13 @@ function isTruthy(value: string): boolean {
     return normalized === 'true' || normalized === '1' || normalized === 'yes';
 }
 
-export function summarize(def: SettingDef, value: string): string {
-    switch (resolveControl(def)) {
+export function summarize(def: SettingDef, value: string, valueOf?: (key: string) => string): string {
+    switch (resolveControl(def, valueOf)) {
         case 'checkbox':
             return isTruthy(value) ? 'on' : 'off';
         case 'multiselect':
-        case 'taglist': {
+        case 'taglist':
+        case 'csv': {
             const items = listItems(value);
             return items.length > 0 ? items.map(item => settingOptionLabel(def, item)).join(', ') : '(none)';
         }
@@ -329,6 +344,61 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
             return wrap;
         }
     },
+    csv: {
+        edit(_def, current, onChange, { disabled }) {
+            const wrap = el('div', 'rs2b0t-ctl-csv');
+            Object.assign(wrap.style, { display: 'flex', flexDirection: 'column', gap: '6px' });
+
+            const ta = document.createElement('textarea');
+            ta.className = 'rs2b0t-param-text rs2b0t-param-csvtext';
+            ta.value = current;
+            ta.rows = 3;
+            ta.disabled = disabled;
+            ta.spellcheck = false;
+            ta.placeholder = 'comma-separated values, e.g. Bones, Ashes, Coins';
+            Object.assign(ta.style, { width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: '12px' });
+            ta.addEventListener('change', () => onChange(ta.value.trim()));
+
+            const btnRow = el('div', 'rs2b0t-ctl-csvbtns');
+            Object.assign(btnRow.style, { display: 'flex', gap: '6px' });
+
+            const copy = el('button', 'rs2b0t-button');
+            copy.type = 'button';
+            copy.textContent = 'Copy';
+            copy.disabled = disabled;
+            copy.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(ta.value);
+                    copy.textContent = 'Copied!';
+                    setTimeout(() => { copy.textContent = 'Copy'; }, 1000);
+                } catch {
+                    // clipboard may be blocked by permissions policy
+                }
+            });
+
+            const paste = el('button', 'rs2b0t-button');
+            paste.type = 'button';
+            paste.textContent = 'Paste';
+            paste.disabled = disabled;
+            paste.addEventListener('click', async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        ta.value = text.trim();
+                        onChange(ta.value);
+                    }
+                } catch {
+                    // clipboard read may be denied by permissions policy
+                }
+            });
+
+            btnRow.appendChild(copy);
+            btnRow.appendChild(paste);
+            wrap.appendChild(ta);
+            wrap.appendChild(btnRow);
+            return wrap;
+        }
+    },
     tile: {
         edit(_def, current, onChange, { disabled }) {
             const wrap = el('div', 'rs2b0t-ctl-tile');
@@ -375,6 +445,6 @@ const CONTROLS: Record<ControlKind, ParamControl> = {
     }
 };
 
-export function renderControl(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }): HTMLElement {
-    return CONTROLS[resolveControl(def)].edit(def, current, onChange, opts);
+export function renderControl(def: SettingDef, current: string, onChange: (raw: string) => void, opts: { disabled: boolean }, valueOf?: (key: string) => string): HTMLElement {
+    return CONTROLS[resolveControl(def, valueOf)].edit(def, current, onChange, opts);
 }

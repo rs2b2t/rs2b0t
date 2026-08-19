@@ -1,5 +1,5 @@
 import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
-import { groupSchema, isVisible, renderControl, visibilityDeps } from './paramControls.js';
+import { groupSchema, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
 
@@ -145,7 +145,7 @@ export default class ParamsModal {
                 + 'Global settings (lamp skill, auto-login, …) stay editable while a script runs.';
             this.bodyEl.appendChild(note);
         }
-        const deps = visibilityDeps(this.schema);
+        const deps = refreshDeps(this.schema);
         const valueOf = (key: string): string => (this.schema[key] ? SettingsStore.displayString(this.scriptName, key, this.schema[key]) : '');
         const collapsed = this.collapsed.get(this.scriptName) ?? new Set<string>();
         this.collapsed.set(this.scriptName, collapsed);
@@ -177,12 +177,12 @@ export default class ParamsModal {
             }
 
             for (const key of visibleKeys) {
-                host.appendChild(this.renderRow(key, disabled, deps));
+                host.appendChild(this.renderRow(key, disabled, deps, valueOf));
             }
         }
     }
 
-    private renderRow(key: string, disabled: boolean, deps: Set<string>): HTMLElement {
+    private renderRow(key: string, disabled: boolean, deps: Set<string>, valueOf: (key: string) => string): HTMLElement {
         const def = this.schema[key];
         const row = el('div', 'rs2b0t-param-row');
 
@@ -203,7 +203,7 @@ export default class ParamsModal {
             if (deps.has(key)) {
                 this.render();
             }
-        }, { disabled });
+        }, { disabled }, valueOf);
         control.classList.add('rs2b0t-param-control');
         row.appendChild(control);
         return row;

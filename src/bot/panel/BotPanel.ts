@@ -261,7 +261,7 @@ export default class BotPanel {
             const k = el('span', 'rs2b0t-param-skey');
             k.textContent = key;
             const v = el('span', 'rs2b0t-param-sval');
-            v.textContent = summarize(def, SettingsStore.displayString(meta.name, key, def));
+            v.textContent = summarize(def, SettingsStore.displayString(meta.name, key, def), valueOf);
             item.appendChild(k);
             item.appendChild(v);
             summary.appendChild(item);
