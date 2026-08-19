@@ -162,6 +162,15 @@ export default class Superheater extends TaskBot {
         this.trips++;
     }
 
+    // Why: Bank.isOpen() only proves the component exists — the item list fills a beat after opening and again after every deposit, so a count of zero can be a not-yet-loaded list rather than a genuinely empty bank. Before halting the script on "out of X", confirm the list is actually loaded and the item truly reads zero; otherwise the caller should retry instead of stopping on a loading artifact.
+    async bankTrulyOutOf(name: string): Promise<boolean> {
+        const settled = await Execution.delayUntil(() => Bank.loaded(), 3500);
+        if (!settled) {
+            return false;
+        }
+        return Bank.count(name) === 0;
+    }
+
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#ff9d3b' });
         p.title(`Superheater — ${this.status}`);
@@ -203,6 +212,11 @@ class EnsureGear implements Task {
         }
         if (Inventory.count(FIRE_STAFF) === 0) {
             if (!(await Bank.withdrawX(FIRE_STAFF, 1))) {
+                // The bank list may still be settling after open — re-check before declaring the staff gone.
+                if (!(await this.bot.bankTrulyOutOf(FIRE_STAFF))) {
+                    this.bot.log(`withdraw of ${FIRE_STAFF} stalled but the bank list is still settling — retrying`);
+                    return;
+                }
                 this.bot.log(`no ${FIRE_STAFF} in the bank — stopping`);
                 ScriptRunner.stop(`no ${FIRE_STAFF} in the bank`);
                 return;
@@ -283,6 +297,11 @@ class Restock implements Task {
             return true;
         }
         if (Inventory.count(NATURE_RUNE) === before && Bank.count(NATURE_RUNE) === 0) {
+            // The bank list may still be settling — confirm the runes are really gone before stopping.
+            if (!(await this.bot.bankTrulyOutOf(NATURE_RUNE))) {
+                this.bot.log('nature-rune count is still settling — retrying');
+                return false;
+            }
             this.bot.log(`no ${NATURE_RUNE}s in the bank — stopping`);
             ScriptRunner.stop(`no ${NATURE_RUNE}s in the bank`);
         }
@@ -298,11 +317,25 @@ class Restock implements Task {
             const got = Inventory.count(ore) - before;
             this.bot.log(`got ${got} ${ore}`);
             if (!ok || got === 0) {
+                // The bank list can read zero while it is still loading after open/deposit — verify it is settled before declaring the ore gone.
+                if (!(await this.bot.bankTrulyOutOf(ore))) {
+                    this.bot.log(`withdraw of ${ore} stalled but the bank list is still settling — retrying`);
+                    return false;
+                }
+                if (Bank.count(ore) > 0) {
+                    this.bot.log(`bank still has ${ore} but the withdraw stalled — retrying`);
+                    return false;
+                }
                 this.bot.log(`no ${ore} in the bank (wanted ${count}) — stopping`);
                 ScriptRunner.stop(`no ${ore} in the bank`);
                 return false;
             }
             if (got < count) {
+                // Same settling guard before concluding the bank is short on this ore.
+                if (!(await this.bot.bankTrulyOutOf(ore))) {
+                    this.bot.log(`partial withdraw of ${ore} but the bank list is still settling — retrying`);
+                    return false;
+                }
                 this.bot.log(`WARNING: only ${got}/${count} ${ore} withdrawn — a partial recipe smelts the wrong bar`);
                 ScriptRunner.stop(`only ${got} ${ore} in the bank`);
                 return false;
