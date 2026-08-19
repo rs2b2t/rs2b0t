@@ -57,6 +57,7 @@ import { Reach } from '../../api/walking/Reach.js';
 import { RANDOM_EVENT_CASKET_ID } from '../../api/bank/Banking.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { HERBS, HERB_OPTIONS } from '../HerbCleaner/HerbCleanerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const KIT = ['spade', 'sextant', 'watch', 'chart'];
@@ -68,7 +69,7 @@ const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_MAGE_RANGE = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 
 export const SETTINGS: SettingsSchema = {
-    target: { type: 'string', default: 'Guard', label: 'Target NPC name', help: 'exact in-game name, e.g. Guard, Chicken, or Moss giant' },
+    target: { type: 'string', default: 'Guard', label: 'Target NPC name(s)', help: 'comma-separated exact in-game names to fight, e.g. Guard, Knight, Moss giant' },
     spot: { type: 'string', default: START_POSITION, options: SPOT_OPTIONS, label: 'Killing spot', help: 'use the tile where the script starts, or walk to custom coordinates' },
     coordinates: { type: 'tile', default: DEFAULT_CUSTOM_SPOT, label: 'Killing coordinates (x,z)', showIf: { key: 'spot', anyOf: [CUSTOM_COORDINATES] } },
     leashRadius: { type: 'number', default: 8, min: 2, max: 30, label: 'Leash radius (tiles)' },
@@ -88,6 +89,7 @@ export const SETTINGS: SettingsSchema = {
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
     ammoRestockBelow: { type: 'number', default: 25, min: 0, max: 100, label: 'Bank for ammo below %', group: 'Combat', showIf: SHOW_MAGE_RANGE, help: 'when not banking for food, go bank once magic casts / ranged ammo drop below this percentage of a full trip' },
     loadout: LOADOUT_SETTING,
+    food: { type: 'string', default: '', label: 'Food to eat', help: 'exact item name to eat (e.g. Shark, Monkfish, Trout). Leave blank to use the loadout’s food, falling back to Trout' },
     foodWithdraw: { type: 'number', default: 10, min: 0, max: 27, label: 'Food to carry' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
     loot: { type: 'string[]', default: DEFAULT_LOOT, label: 'Loot item names (contains)', help: 'defaults to gem-table items + clue scrolls, nothing else', csvToggle: 'lootMode' },
@@ -99,6 +101,7 @@ export const SETTINGS: SettingsSchema = {
         label: 'Loot entry mode',
         help: 'List = add items one at a time (current). CSV = paste a comma-separated list with copy/paste buttons.'
     },
+    avoidHerbs: { type: 'string[]', default: [], options: HERB_OPTIONS, label: 'Herbs to avoid', group: 'Banking & loot', help: 'pick herbs to never pick up; matched by item id for grimy and cleaned forms, since every grimy herb reads as "Herb"' },
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
@@ -117,6 +120,10 @@ export const SETTINGS: SettingsSchema = {
 };
 
 let TARGET = 'Guard';
+
+function targetNames(): string[] {
+    return TARGET.split(',').map(s => s.trim()).filter(Boolean);
+}
 let ANCHOR = DEFAULT_CUSTOM_SPOT;
 let LEASH = 8;
 let FOOD = 'Trout';
@@ -138,6 +145,11 @@ let AMMO = 'Bronze arrow';
 let AMMO_WITHDRAW = 500;
 let AMMO_RESTOCK_BELOW = 0.25;
 let TRACKED_GEAR: string[] = [];
+let AVOID_HERB_IDS = new Set<number>();
+
+function isAvoidedHerb(id: number): boolean {
+    return AVOID_HERB_IDS.has(id);
+}
 
 function foodCount(): number {
     return countMatching(Inventory.items(), [FOOD]);
@@ -221,10 +233,15 @@ export default class AutoFighter extends TaskBot {
         const spotMode = this.settings.str('spot', START_POSITION);
         ANCHOR = resolveKillingSpot(spotMode, Tile.from(Game.tile()!), this.settings.tile('coordinates', DEFAULT_CUSTOM_SPOT));
         LEASH = this.settings.num('leashRadius', 8);
-        FOOD = scriptFood(this.settings, 'Trout');
+        FOOD = this.settings.str('food', '').trim() || scriptFood(this.settings, 'Trout');
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 10);
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         LOOT = this.settings.list('loot', DEFAULT_LOOT).map(s => s.trim().toLowerCase());
+        AVOID_HERB_IDS = new Set(
+            HERBS
+                .filter(h => this.settings.list('avoidHerbs', []).includes(h.name))
+                .flatMap(h => [h.id, h.unidId])
+        );
         BURY_BONES = this.settings.bool('buryBones', false);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         BANK_AT = this.settings.num('bankAtLootSlots', 12);
@@ -289,7 +306,7 @@ export default class AutoFighter extends TaskBot {
         this.startedAt = Date.now();
         this.lastBankAt = this.startedAt;
         this.xpAtStart = COMBAT_SKILLS.reduce((n, sk) => n + Skills.xp(sk), 0);
-        this.log(`AutoFighter starting — '${TARGET}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
+        this.log(`AutoFighter starting — '${targetNames().join(', ')}' at ${spotMode} ${ANCHOR} r${LEASH}, style ${STYLE}${STYLE === 'mage' ? ` (${SPELL}, ${RUNES_WITHDRAW} casts)` : STYLE === 'range' ? ` (${RANGE_MODE === 0 ? 'accurate' : RANGE_MODE === 1 ? 'rapid' : 'longrange'}, ${AMMO}x${AMMO_WITHDRAW})` : ` (${MELEE_STYLE})`}, banking ${AUTO_BANK ? 'auto' : 'none'}${BANK_EVERY_MINUTES > 0 ? ` every ${BANK_EVERY_MINUTES}m` : ''}, food '${FOOD}'x${FOOD_WITHDRAW}, loot [${LOOT.join(', ')}]${BURY_BONES ? `, burying ${BURIAL_BONE_NAME}` : ''}`);
 
         this.on('chat.message', e => {
             if (/oh dear.*you are dead/i.test(e.text)) {
@@ -328,7 +345,7 @@ export default class AutoFighter extends TaskBot {
     }
 
     override grindTargets(): string[] {
-        return [TARGET.toLowerCase()];
+        return targetNames().map(s => s.toLowerCase());
     }
     override recoveryAnchor(): Tile | null {
         return ANCHOR;
@@ -396,7 +413,7 @@ class LootDrops implements Task {
     constructor(private bot: AutoFighter) {}
     private find() {
         return GroundItems.query()
-            .where(g => isLoot(g.name))
+            .where(g => isLoot(g.name) && !isAvoidedHerb(g.id))
             .within(LEASH + 4)
             .nearest();
     }
@@ -761,14 +778,18 @@ class ReequipGear implements Task {
 class Fight implements Task {
     constructor(private bot: AutoFighter) {}
     private findTarget() {
-        return Npcs.query()
-            .name(TARGET)
+        const q = Npcs.query()
             .action('Attack')
-            .where(n => !n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH)
-            .nearest();
+            .where(n => !n.inCombat && n.tile().distanceTo(ANCHOR) <= LEASH);
+        const names = targetNames();
+        if (names.length > 0) {
+            q.name(...names);
+        }
+        return q.nearest();
     }
     private track(engaged: Npc): Npc | null {
-        return Npcs.all().find(n => n.index === engaged.index && matchesEntityName(n.name, TARGET)) ?? null;
+        const names = targetNames();
+        return Npcs.all().find(n => n.index === engaged.index && names.some(name => matchesEntityName(n.name, name))) ?? null;
     }
     validate(): boolean {
         return !Game.inCombat() && !needEat() && this.findTarget() !== null;
@@ -778,7 +799,7 @@ class Fight implements Task {
         if (!target) {
             return;
         }
-        this.bot.setStatus(`attacking ${TARGET} at ${target.tile()}`);
+        this.bot.setStatus(`attacking ${target.name} at ${target.tile()}`);
         const status = await Reach.entityOp({
             find: () => this.track(target),
             op: 'Attack',
@@ -787,7 +808,7 @@ class Fight implements Task {
             // so probe the scene and open the blocking door ourselves (#293)
             openWhenUnreachable: true,
             expectMs: 5000,
-            what: TARGET,
+            what: target.name ?? undefined,
             log: message => this.bot.log(message)
         });
         if (status !== 'done' || ChatDialog.canContinue()) {
