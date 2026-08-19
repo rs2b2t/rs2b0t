@@ -27,7 +27,7 @@ import {
     resourceWithinCamp,
     spotWithinGatherRange
 } from './GatherCamp.js';
-import { LOCAL_MINE_PREFER_RADIUS, shouldCooldownGatherTile } from './TargetPick.js';
+import { LOCAL_MINE_PREFER_RADIUS } from './TargetPick.js';
 import { Trade } from '../../api/trade/Trade.js';
 import {
     DEFAULT_TRADE_RANGE,
@@ -2192,6 +2192,9 @@ export class Gather implements Task {
     /** NPC index of the spot we last successfully started fishing on (null = no active session). */
     private activeFishIndex: number | null = null;
 
+    /** Consecutive failed approach/click strikes per gather tile key (ban after two). */
+    private gatherClickFails = new Map<string, number>();
+
     /**
      * Distance origin for ranking fishing spots (prefer nearest to player).
      * Game.tile() is a plain WorldTile, wrap with Tile.from for distanceTo.
@@ -2703,7 +2706,11 @@ export class Gather implements Task {
         }
         const tile = target.tile();
         const here = Game.tile();
-        // Why: scenery interactions can report success while an off-screen target receives no route, leaving broad named camps to reclick forever.
+        const key = keyOf(tile);
+        // Why: set when the walk could not arrive within radius but we fell through to a click; used to log the obstacle case resolving.
+        let approachedViaClick = false;
+        // Why: a fence/wall leaves the only walkable tile across an obstacle, so the pathfinder returns "closest"; click the object directly from click range instead of re-walking forever, and ban the tile after two failed clicks.
+        const CLICK_RANGE = 10;
         if (here && Tile.from(here).distanceTo(tile) > 2) {
             this.bot.setStatus(`gather: walking to ${this.bot.targetName()} @ ${tile}`);
             const reached = await Traversal.walkTo(tile, {
@@ -2711,12 +2718,19 @@ export class Gather implements Task {
                 timeoutMs: 45_000,
                 log: message => this.bot.log(`  ${message}`)
             });
-            if (!reached) {
-                this.bot.log(`gather: could not approach ${this.bot.targetName()} @ ${tile} from ${here}`);
+            const now = Game.tile();
+            // Why: an obstacle can leave the nearest reachable tile just outside radius; the click itself can still route to the object, so do not expand the walk radius.
+            if (now && reached && Tile.from(now).distanceTo(tile) <= CLICK_RANGE) {
+                // Walk could not arrive within radius (obstacle); click instead.
+                approachedViaClick = true;
+            } else {
+                if (!reached) {
+                    this.bot.log(`gather: could not approach ${this.bot.targetName()} @ ${tile} from ${here}`);
+                }
+                this.banOnRepeatGatherFail(key, tile);
+                return;
             }
-            return;
         }
-        const key = keyOf(tile);
         // Track whether this session produced ore/logs, successful deplete must not
         // soft-cooldown the tile (iron respawn ~6t < old 8t cooldown → far path thrash).
         let gotProduct = false;
@@ -2724,13 +2738,46 @@ export class Gather implements Task {
         if (!Game.animating()) {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${tile}`);
             const before = Inventory.used();
+            const startPos = Game.tile();
             if (!(await target.interact(this.bot.actionName()))) {
-                this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
+                this.banOnRepeatGatherFail(key, tile);
                 await Execution.delayTicks(2);
                 return;
             }
+            // Why: a fence/wall can make the click path partway then stop without a chop, so confirm the player actually closed in on the object (within 1 tile, or closer than where the click started) before counting progress.
+            const startDist = startPos ? Tile.from(startPos).distanceTo(tile) : Infinity;
+            const closingIn = (): boolean => {
+                const p = Game.tile();
+                if (!p) {
+                    return false;
+                }
+                const d = Tile.from(p).distanceTo(tile);
+                return d <= 1 || (startDist !== Infinity && d < startDist);
+            };
+            await Execution.delayUntilTicks(
+                () => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile) || closingIn(),
+                20
+            );
+            const after = Game.tile();
+            const afterDist = after ? Tile.from(after).distanceTo(tile) : Infinity;
+            const closed =
+                Game.animating() ||
+                Inventory.used() > before ||
+                this.shouldYieldMine(tile) ||
+                afterDist <= 1 ||
+                (startDist !== Infinity && afterDist < startDist);
+            if (!closed) {
+                // Clicked but the player never closed in, so the object sits behind a
+                // fence/wall the path cannot cross. Ban the tile after two attempts.
+                this.banOnRepeatGatherFail(key, tile);
+                await Execution.delayTicks(2);
+                return;
+            }
+            this.gatherClickFails.delete(key);
+            if (approachedViaClick) {
+                this.bot.log(`gather: reached ${this.bot.targetName()} @ ${tile} via click (walk blocked by obstacle) — failure resolved`);
+            }
 
-            await Execution.delayUntilTicks(() => Inventory.used() > before || Game.animating() || this.shouldYieldMine(tile), 20);
             await Sustain.run();
             if (this.gasAt(tile)) {
                 await this.fleeGas(key, tile);
@@ -2742,9 +2789,10 @@ export class Gather implements Task {
             if (Inventory.used() === before && !Game.animating()) {
                 if (ChatDialog.canContinue()) {
                     this.bot.reject(key);
-                } else if (shouldCooldownGatherTile(false, this.findRock() !== null)) {
-                    // Failed click with other targets available, brief skip only.
-                    this.bot.cooldown(key);
+                } else {
+                    // No chop started and the player is not closing in, ban the tile
+                    // after two attempts so we roll a different tree/rock.
+                    this.banOnRepeatGatherFail(key, tile);
                 }
                 return;
             }
@@ -2782,6 +2830,18 @@ export class Gather implements Task {
                 // Why: iron respawns faster than an 8-tick tile skip, nearby ore is back up while the bot paths across the mine.
                 return;
             }
+        }
+    }
+
+    // Why: two failed clicks on the same gather tile ban it (reject) so the bot rolls a different tree/rock instead of re-walking to an unreachable tile forever (e.g. Edgeville yew behind a fence).
+    private banOnRepeatGatherFail(key: string, tile: Tile): void {
+        const fails = (this.gatherClickFails.get(key) ?? 0) + 1;
+        if (fails >= 2) {
+            this.gatherClickFails.delete(key);
+            this.bot.reject(key);
+            this.bot.log(`gather: banned unreachable ${this.bot.targetName()} @ ${tile} (click failed twice)`);
+        } else {
+            this.gatherClickFails.set(key, fails);
         }
     }
 
