@@ -26,6 +26,7 @@ const BANK = {
     seers: new Tile(2725, 3491, 0),
     ardougneEast: new Tile(2655, 3283, 0),
     ardougneWest: new Tile(2616, 3332, 0),
+    yanille: new Tile(2612, 3092, 0),
     shilo: new Tile(2852, 2954, 0),
     shantay: new Tile(3308, 3120, 0),
     grandTree: new Tile(2449, 3482, 1)
@@ -109,7 +110,7 @@ export const MINING_LOCATIONS: MiningLocation[] = [
         'Fight Arena Mine',
         // Adjacent stand: 2630,3145 is inside a rock loc.
         new Tile(2631, 3146, 0),
-        BANK.ardougneEast,
+        BANK.yanille,
         ['iron', 'mithril']
     ),
     mine(
