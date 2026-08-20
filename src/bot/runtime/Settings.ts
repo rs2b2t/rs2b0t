@@ -22,6 +22,8 @@ export interface SettingDef {
     color?: boolean;
     /** Player data, so ParamsModal refreshes them from the named source at open. */
     optionsFrom?: 'loadouts';
+    /** For `string[]` settings: when this key's value is `'csv'`, render a CSV textarea with copy/paste buttons instead of the chip list. */
+    csvToggle?: string;
 }
 
 /** Return an option's display label without changing its persisted value. */

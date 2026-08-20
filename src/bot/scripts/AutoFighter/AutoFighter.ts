@@ -90,7 +90,15 @@ export const SETTINGS: SettingsSchema = {
     loadout: LOADOUT_SETTING,
     foodWithdraw: { type: 'number', default: 10, min: 0, max: 27, label: 'Food to carry' },
     panicHp: { type: 'number', default: 25, min: 0, max: 100, label: 'Panic below HP% (no food)' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT, label: 'Loot item names (contains)', help: 'defaults to gem-table items + clue scrolls, nothing else' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT, label: 'Loot item names (contains)', help: 'defaults to gem-table items + clue scrolls, nothing else', csvToggle: 'lootMode' },
+    lootMode: {
+        type: 'string',
+        default: 'list',
+        options: ['list', 'csv'],
+        optionLabels: { list: 'List (chips)', csv: 'CSV (text + copy/paste)' },
+        label: 'Loot entry mode',
+        help: 'List = add items one at a time (current). CSV = paste a comma-separated list with copy/paste buttons.'
+    },
     buryBones: { type: 'boolean', default: false, label: 'Bury regular bones', group: 'Banking & loot', help: 'pick up and bury regular Bones for Prayer XP (always looted when on)' },
     solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues' },
     banking: { type: 'string', default: 'Auto', options: BANKING_OPTIONS, label: 'Banking', help: 'Auto = bank loot at the nearest bank and return; None = no loot-only bank trips' },
