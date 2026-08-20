@@ -5,10 +5,13 @@ import {
     inCutscene,
     KARAMBWAN_BAIT,
     KARAMBWANJI_WANTED,
+    SPEAR_HUNT_KILLS,
     TB_ID,
     TB_LUBUFU,
     TB_MAIN,
     TB_NPC,
+    TB_POTIONS,
+    TB_SPEAR_DROPS,
     TB_TAMAYU,
     TB_TIADECHE,
     TB_TILE,
@@ -46,7 +49,18 @@ import {
     poisonSpear
 } from './crafting.js';
 import { TB_FLAG, readTbwtProgress } from './journal.js';
-import { heldId, lubufuStage, prepare, readiness, tamayuStage, tiadecheStage, tinsayStage } from './supplies.js';
+import {
+    bareSpearHeld,
+    dosesHeld,
+    heldId,
+    kpSpearHeld,
+    lubufuStage,
+    prepare,
+    readiness,
+    tamayuStage,
+    tiadecheStage,
+    tinsayStage
+} from './supplies.js';
 import { useOnNpc, type Log } from './talk.js';
 
 export { TBWT_QUEST, TB_ID, TB_LUBUFU, TB_MAIN, TB_TAMAYU, TB_TIADECHE, TB_TINSAY } from './areas.js';
@@ -103,15 +117,21 @@ function tiadecheCatchLeg(snap: QuestSnapshot, stage: number): QuestStep {
     return baitedVessel(snap) ?? custom('hand Tiadeche the baited vessel', tiadecheCatch);
 }
 
-// Why: only a spear that is both stronger than bronze and Karambwan-poisoned satisfies Tamayu, and
-// the poison is a poorly cooked Karambwan ground with a pestle, his own gift is the first one of those.
+// Why: only a spear both stronger than bronze and Karambwan-poisoned satisfies Tamayu, and the
+// poison is a poorly cooked Karambwan ground with a pestle, his own gift being the first of those.
+
+// Why: the paste is ground first and the shaft found second, so the hunt is a last resort.
 
 function karambwanSpear(snap: QuestSnapshot): QuestStep | null {
-    if (heldId(snap, TB_ID.SPEAR_KP) > 0) {
+    if (kpSpearHeld(snap) > 0) {
         return null;
     }
     if (heldId(snap, TB_ID.KARAMBWAN_POISON_PASTE) > 0) {
-        return custom('smear the Karambwan paste over the iron spear', poisonSpear);
+        const spear = bareSpearHeld(snap);
+        if (!spear) {
+            return custom('hunt Jogres for a spear', killFor(TB_NPC.JOGRE, TB_TILE.JOGRES, TB_SPEAR_DROPS, 'a spear', SPEAR_HUNT_KILLS));
+        }
+        return custom(`smear the Karambwan paste over the ${spear.name.toLowerCase()}`, poisonSpear(spear));
     }
     if (heldId(snap, TB_ID.POORLY_COOKED_KARAMBWAN) > 0) {
         return custom('grind the cooked Karambwan into poison', grind(TB_ID.POORLY_COOKED_KARAMBWAN, TB_ID.KARAMBWAN_POISON_PASTE));
@@ -136,11 +156,16 @@ function tamayuLeg(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage < TB_TAMAYU.WATCHED_CUTSCENE) {
         return custom("watch Tamayu's hunt", huntShaikahan);
     }
+    // Why: he counts doses and only the fourth writes a journal line, so this pours one per pass.
     if (!hasFlag(snap.progress, TB_FLAG.AGILITY)) {
-        return custom('give Tamayu the agility potion', giveTamayu(TB_ID.AGILITY_POTION_4));
+        const bottle = TB_POTIONS.find(potion => heldId(snap, potion.id) > 0);
+        if (!bottle) {
+            return wait(`Tamayu is short of his four doses and the pack holds ${dosesHeld(snap)}`);
+        }
+        return custom(`give Tamayu the ${bottle.name}`, giveTamayu(bottle.id));
     }
     if (!hasFlag(snap.progress, TB_FLAG.SPEAR)) {
-        return karambwanSpear(snap) ?? custom('give Tamayu the Karambwan-poisoned spear', giveTamayu(TB_ID.SPEAR_KP));
+        return karambwanSpear(snap) ?? custom('give Tamayu the Karambwan-poisoned spear', giveTamayu(kpSpearHeld(snap)));
     }
     return custom('follow Tamayu on the killing hunt', huntShaikahan);
 }
@@ -169,7 +194,7 @@ function sandwichLeg(snap: QuestSnapshot): QuestStep {
     }
     if (heldId(snap, TB_ID.MONKEY_SKIN) === 0) {
         if (heldId(snap, TB_ID.MONKEY_CORPSE) === 0) {
-            return custom('shoot a monkey for its corpse', killFor(TB_NPC.MONKEY, TB_TILE.MONKEYS, TB_ID.MONKEY_CORPSE, 'Monkey corpse'));
+            return custom('shoot a monkey for its corpse', killFor(TB_NPC.MONKEY, TB_TILE.MONKEYS, [TB_ID.MONKEY_CORPSE], 'Monkey corpse'));
         }
         return custom('ask Tamayu to skin the monkey', giveTamayu(TB_ID.MONKEY_CORPSE));
     }
@@ -193,7 +218,7 @@ function bonesLeg(snap: QuestSnapshot): QuestStep {
         return custom('grind the Karambwanji into paste', grind(TB_ID.RAW_KARAMBWANJI, TB_ID.KARAMBWANJI_PASTE));
     }
     if (heldId(snap, TB_ID.JOGRE_BONES) === 0) {
-        return custom('kill a Jogre for its bones', killFor(TB_NPC.JOGRE, TB_TILE.JOGRES, TB_ID.JOGRE_BONES, 'Jogre bones'));
+        return custom('kill a Jogre for its bones', killFor(TB_NPC.JOGRE, TB_TILE.JOGRES, [TB_ID.JOGRE_BONES], 'Jogre bones'));
     }
     return custom('burn the Jogre bones', burnJogreBones);
 }

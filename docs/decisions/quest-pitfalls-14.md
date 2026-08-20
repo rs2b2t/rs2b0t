@@ -26,7 +26,27 @@ cost either a read of the content scripts or a live run.
   catch → Tamayu → Tinsay → Tiadeche's manual is the only order that closes.
 - **Melee cannot kill the monkey while the quest is live.** `opnpc2,monkey` measures
   `~player_attackrange` and dodges anything at range 1, in silence apart from a chat
-  line. The kit is a shortbow from the start rather than a swap for one kill.
+  line. The kit is a bow from the start rather than a swap for one kill. Which bow is
+  free: `player_ranged_check_ammo` only asks whether the quiver holds the `arrows`
+  category, so every arrow fires from every bow, and the module draws the best bow the
+  account's Ranged level can wield out of whatever the bank holds.
+- **Tamayu's spear test is a category test, and it re-runs on every hand-over.**
+  `tbwt_tamayu` clears `received_acceptable_spear`, `received_poisoned_spear` and
+  `received_kp_spear` at the top of each `oc_category(last_useitem) = weapon_spear`
+  branch and re-sets them from that one spear, so a strong spear followed by a poisoned
+  one leaves only the second bit set. One spear has to carry both: any tier from iron up
+  with the Karambwan paste on it. Bronze sets no strength bit at any dose of poison, and
+  a (p) spear cannot take the paste at all, `make_tbwt_poisoned_weapon` reads a
+  `tbwt_weapon_poisoned` param that only the unpoisoned tiers carry.
+- **Nothing on Karamja sells a spear, and the Jogres drop one.** Their table is
+  `iron_spear` at 4 in 129 (and `bronze_spear` at 30, which is no use), and their patch
+  is already on this quest's route for the marinade bones. A bank with no spear in it is
+  a hunt of up to forty Jogres, not a park.
+- **The agility potion is four doses, not one bottle.** `~set_tbwt_tamayu_agility_count`
+  adds `$doses` per hand-over and the hunt needs four, so a (2) and a (2) do what a (4)
+  does. Only the fourth writes "I have increased his agility" on the journal page, so a
+  part-poured Tamayu is indistinguishable from an untouched one: the pack fills to four
+  doses whenever it holds none, and pours one bottle per pass until the line appears.
 - **Karamja has two ranges and neither can be used.** The Brimhaven one at (2787,3191)
   is inside the Shrimp and Parrot kitchen, whose door answers "This door seems to be
   locked..." until Heroes' Quest; the one at (2814,3161) sits in a room the baked graph

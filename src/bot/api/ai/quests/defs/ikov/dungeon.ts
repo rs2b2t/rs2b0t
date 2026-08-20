@@ -26,7 +26,7 @@ import {
     pastSouthGate,
     westOfBridge
 } from './areas.js';
-import { heldOrBanked, lightCandle } from './supplies.js';
+import { lightCandle } from './supplies.js';
 
 const WALK_MS = 300_000;
 /** Circuits of the six chests per invocation, before the tick goes back to the engine. */
@@ -511,10 +511,17 @@ export function arrowsSecured(snap: QuestSnapshot): boolean {
     return (snap.inv.get(key) ?? 0) + (snap.bank?.get(key) ?? 0) >= ARROWS_WANTED;
 }
 
+// Why: a banked pair is not a worn pair. Reading the bank as "done" left them in the booth and sent
+// the gate check down the dark stairs for a second pair, see docs/decisions/quest-pitfalls-25.md.
+
 /** The boots errand on its own; it takes a leg of the descent per call and holds nothing until the last. */
 export function bootsStep(snap: QuestSnapshot): QuestStep | null {
-    if (wearingBoots() || heldOrBanked(snap, IKOV_OBJ.BOOTS) > 0) {
+    // A pair in the pack is one `unlockSouthGate` puts on itself.
+    if (wearingBoots() || (snap.invIds?.get(IKOV_OBJ.BOOTS) ?? 0) > 0) {
         return null;
+    }
+    if ((snap.bankIds?.get(IKOV_OBJ.BOOTS) ?? 0) > 0) {
+        return { kind: 'withdraw', items: [{ name: IKOV_NAME.BOOTS, id: IKOV_OBJ.BOOTS, qty: 1 }] };
     }
     return { kind: 'custom', name: 'fetch the boots of lightness', run: fetchBoots };
 }

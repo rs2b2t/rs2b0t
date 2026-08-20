@@ -165,11 +165,13 @@ describe('nature spirit decide', () => {
         }))).toBe('harvest natures bounty');
     });
 
-    test('a bloom needs prayer, so a short bar goes to the altar of nature first', () => {
+    // Why: the grotto's Altar of nature is on the level the door only teleports to once the quest is
+    // over, so mid-quest the recharge is Paterdomus, the temple the swamp route already passes.
+    test('a bloom needs prayer, so a short bar goes to the Paterdomus altar first', () => {
         const kit: [number, number][] = [[NS_ID.SICKLE_BLESSED, 1], [NS_ID.POUCH_EMPTY, 1]];
         for (const prayer of [0, 1, BLOOM_MAX_COST - 1]) {
             expect(named(step({ stage: NS_STAGE.BLESSED_SICKLE, invIds: kit, prayer })))
-                .toBe('recharge at the altar of nature');
+                .toBe('recharge prayer at the Paterdomus altar');
         }
     });
 

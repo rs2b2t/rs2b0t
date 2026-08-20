@@ -50,6 +50,8 @@ export interface QuestSnapshot {
     prayer?: number;
     /** Attack level, which is the tier of melee weapon the account can wield. */
     attack?: number;
+    /** Ranged level, which is the tier of bow the account can wield. */
+    ranged?: number;
     freeSlots?: number;
 }
 

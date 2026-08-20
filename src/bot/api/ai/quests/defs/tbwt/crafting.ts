@@ -5,7 +5,6 @@ import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
-import type { Npc } from '../../../../model/Npc.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Shop } from '../../../../shop/Shop.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
@@ -13,6 +12,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { settleScene, useOnLoc } from '../../exec/prompts.js';
 import { TB_ID, TB_LOC, TB_NAME, TB_NPC, TB_TILE } from './areas.js';
+import { foodNames } from './supplies.js';
 import { type Log, walkTo } from './talk.js';
 
 const heldId = (id: number): number => Inventory.items().filter(i => i.id === id).reduce((n, i) => n + i.count, 0);
@@ -34,18 +34,21 @@ export async function combine(useId: number, targetId: number, productId: number
     return Execution.delayUntil(() => heldId(productId) > 0, 10_000);
 }
 
-/** Take the nearest matching drop; false when there is nothing to take yet. */
-export async function takeGround(id: number, name: string, log: Log): Promise<boolean> {
-    const drop = GroundItems.query().where(g => g.id === id).within(14).nearest();
+const heldAny = (ids: readonly number[]): number => ids.reduce((n, id) => n + heldId(id), 0);
+const foodHeld = (): number => foodNames().reduce((n, name) => n + Inventory.count(name), 0);
+
+/** Take the nearest drop matching any of `ids`; false when there is nothing to take yet. */
+export async function takeGround(ids: readonly number[], name: string, log: Log): Promise<boolean> {
+    const drop = GroundItems.query().where(g => ids.includes(g.id)).within(14).nearest();
     if (!drop) {
         log(`no '${name}' on the ground within 14 tiles`);
         return false;
     }
-    const before = heldId(id);
+    const before = heldAny(ids);
     if (!(await drop.interact('Take'))) {
         return false;
     }
-    return Execution.delayUntil(() => heldId(id) > before, 8000);
+    return Execution.delayUntil(() => heldAny(ids) > before, 8000);
 }
 
 // Why: the shoal is an NPC with `op1=Net`, and each cast is a fresh interaction rather than a held loop.
@@ -211,9 +214,12 @@ export function grind(itemId: number, productId: number): (log: Log) => Promise<
     return log => combine(TB_ID.PESTLE, itemId, productId, log);
 }
 
-/** Smear the poisonous paste over the iron spear. */
-export function poisonSpear(log: Log): Promise<boolean> {
-    return combine(TB_ID.IRON_SPEAR, TB_ID.KARAMBWAN_POISON_PASTE, TB_ID.SPEAR_KP, log);
+// Why: only `[opheldu,tbwt_poisonous_karambwan_paste]` answers, so the spear is the item used and
+// the paste is what it lands on, the other way round hits `_weapon_spear`'s silent default.
+
+/** Smear the poisonous paste over whichever spear the pack is carrying. */
+export function poisonSpear(spear: { id: number; kpId: number }): (log: Log) => Promise<boolean> {
+    return log => combine(spear.id, TB_ID.KARAMBWAN_POISON_PASTE, spear.kpId, log);
 }
 
 export function makeSandwich(log: Log): Promise<boolean> {
@@ -226,47 +232,64 @@ export function pasteBones(log: Log): Promise<boolean> {
 
 // Why: the monkey deflects every melee swing while the quest is live (`opnpc2,monkey`), so the bow is worn from the start rather than swapped in here.
 
-/** Kill one named NPC and take what it drops. */
+// Why: `kills` separates a drop from a hunt. Jogre bones fall from every corpse; a spear falls 4
+// times in 129, and giving up after one kill would fail its way through thirty decide() passes.
+
+/** Kill up to `kills` of one NPC, stopping as soon as one of `dropIds` is in the pack. */
 export function killFor(
     npcName: string,
     anchor: Tile,
-    dropId: number,
-    dropName: string
+    dropIds: readonly number[],
+    dropName: string,
+    kills = 1
 ): (log: Log) => Promise<boolean> {
     return async log => {
-        if (heldId(dropId) > 0) {
-            return true;
-        }
-        if (await takeGround(dropId, dropName, () => undefined)) {
-            return true;
-        }
-        if (!(await walkTo(anchor, 5, log))) {
-            return false;
-        }
-        await settleScene();
-        const target = (): Npc | null => Npcs.query().name(npcName).action('Attack')
-            .where(n => !n.targetsAnotherPlayer()).within(12).nearest();
-        const victim = target();
-        if (!victim) {
-            log(`no ${npcName} within 12 tiles of the stand`);
-            return false;
-        }
-        const index = victim.index;
-        if (!(await victim.interact('Attack'))) {
-            return false;
-        }
-        // Hold this one until it dies: `Game.inCombat()` reads our own bar, so a
-        // decoy landing a hit would otherwise end the wait.
-        const deadline = performance.now() + 120_000;
-        while (performance.now() < deadline) {
-            await Sustain.run();
-            if (!Npcs.all().some(n => n.index === index)) {
-                break;
+        for (let kill = 0; kill < kills; kill++) {
+            if (heldAny(dropIds) > 0) {
+                return true;
             }
-            await Execution.delayTicks(1);
+            if (await takeGround(dropIds, dropName, () => undefined)) {
+                return true;
+            }
+            // A hunt that outlives the food is how an account dies in the jungle.
+            if (kill > 0 && foodHeld() === 0) {
+                log(`out of food ${kill} kills into the ${npcName} hunt — banking before the next one`);
+                return false;
+            }
+            if (!(await walkTo(anchor, 5, log))) {
+                return false;
+            }
+            await settleScene();
+            const victim = Npcs.query().name(npcName).action('Attack')
+                .where(n => !n.targetsAnotherPlayer()).within(12).nearest();
+            if (!victim) {
+                log(`no ${npcName} within 12 tiles of the stand`);
+                return false;
+            }
+            const index = victim.index;
+            if (!(await victim.interact('Attack'))) {
+                return false;
+            }
+            // Hold this one until it dies: `Game.inCombat()` reads our own bar, so a
+            // decoy landing a hit would otherwise end the wait.
+            const deadline = performance.now() + 120_000;
+            while (performance.now() < deadline) {
+                await Sustain.run();
+                if (!Npcs.all().some(n => n.index === index)) {
+                    break;
+                }
+                await Execution.delayTicks(1);
+            }
+            await Execution.delayTicks(2);
+            await takeGround(dropIds, dropName, () => undefined);
         }
-        await Execution.delayTicks(2);
-        return takeGround(dropId, dropName, log);
+        if (heldAny(dropIds) > 0) {
+            return true;
+        }
+        log(kills === 1
+            ? `the ${npcName} left no '${dropName}' within 14 tiles`
+            : `${kills} ${npcName}s died without dropping '${dropName}'`);
+        return false;
     };
 }
 
@@ -278,12 +301,12 @@ export async function burnJogreBones(log: Log): Promise<boolean> {
     if (heldId(TB_ID.BURNT_JOGRE_BONES) > 0) {
         return true;
     }
-    if (await takeGround(TB_ID.BURNT_JOGRE_BONES, TB_NAME.BURNT_JOGRE_BONES, () => undefined)) {
+    if (await takeGround([TB_ID.BURNT_JOGRE_BONES], TB_NAME.BURNT_JOGRE_BONES, () => undefined)) {
         return true;
     }
     // Why: lighting drops the bones on the floor first, so a run that lost the roll left them there rather than in the pack.
     if (heldId(TB_ID.JOGRE_BONES) === 0) {
-        await takeGround(TB_ID.JOGRE_BONES, TB_NAME.JOGRE_BONES, () => undefined);
+        await takeGround([TB_ID.JOGRE_BONES], TB_NAME.JOGRE_BONES, () => undefined);
     }
     const bones = Inventory.items().find(i => i.id === TB_ID.JOGRE_BONES);
     const tinderbox = Inventory.items().find(i => i.id === TB_ID.TINDERBOX);
@@ -314,5 +337,5 @@ export async function burnJogreBones(log: Log): Promise<boolean> {
         log(`the bones never caught at (${at?.x},${at?.z}) — the roll never landed`);
         return false;
     }
-    return takeGround(TB_ID.BURNT_JOGRE_BONES, TB_NAME.BURNT_JOGRE_BONES, log);
+    return takeGround([TB_ID.BURNT_JOGRE_BONES], TB_NAME.BURNT_JOGRE_BONES, log);
 }

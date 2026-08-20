@@ -672,6 +672,7 @@ export class QuestEngine implements Task {
             tile: Game.tile(),
             prayer: Skills.effective('prayer'),
             attack: Skills.level('attack'),
+            ranged: Skills.level('ranged'),
             freeSlots: Inventory.free()
         };
     }

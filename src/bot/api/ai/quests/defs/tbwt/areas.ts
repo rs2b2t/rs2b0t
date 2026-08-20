@@ -90,9 +90,6 @@ export const TB_ID = {
     RUM: 431,
     RUM_SLICED: 3164,
     RUM_WHOLE: 3165,
-    IRON_SPEAR: 1239,
-    SPEAR_KP: 3171,
-    AGILITY_POTION_4: 3032,
     VESSEL: 3157,
     VESSEL_LOADED: 3159,
     RAW_KARAMBWANJI: 3150,
@@ -119,23 +116,84 @@ export const TB_NAME = {
     TINDERBOX: 'Tinderbox',
     SEAWEED: 'Seaweed',
     BANANA: 'Banana',
-    IRON_SPEAR: 'Iron spear',
-    AGILITY_POTION_4: 'Agility potion(4)',
     RAW_KARAMBWANJI: 'Raw karambwanji',
     RAW_SHRIMP: 'Raw shrimps',
     BURNT_JOGRE_BONES: 'Burnt jogre bones',
     JOGRE_BONES: 'Jogre bones',
     MONKEY_CORPSE: 'Monkey corpse',
     RUM: 'Karamjan rum',
-    BOW: 'Maple shortbow',
-    ARROWS: 'Adamant arrow',
     BODY: 'Rune chainbody',
     LEGS: 'Rune platelegs',
     HELM: 'Rune full helm'
 } as const;
 
+// Why: `tbwt_tamayu` re-reads all three spear bits from the last spear it was handed, so that
+// spear has to be both above bronze and Karambwan poisoned, see docs/decisions/quest-pitfalls-14.md.
+
+// Why: cheapest first, `inv_del(inv, $spear, 1)` means Tamayu keeps whatever he is given.
+
+/** Spears Tamayu accepts, cheapest first: the bare spear, and the Karambwan-poisoned one it becomes. */
+export const TB_SPEARS: readonly { name: string; id: number; kpName: string; kpId: number }[] = [
+    { name: 'Iron spear', id: 1239, kpName: 'Iron spear(kp)', kpId: 3171 },
+    { name: 'Steel spear', id: 1241, kpName: 'Steel spear(kp)', kpId: 3172 },
+    { name: 'Mithril spear', id: 1243, kpName: 'Mithril spear(kp)', kpId: 3173 },
+    { name: 'Adamant spear', id: 1245, kpName: 'Adamant spear(kp)', kpId: 3174 },
+    { name: 'Rune spear', id: 1247, kpName: 'Rune spear(kp)', kpId: 3175 }
+];
+
+/** Jogres drop one 4 times in 129, and their patch is already on this quest's route. */
+export const SPEAR_HUNT_KILLS = 40;
+
+// Why: the (p) tiers are absent because `make_tbwt_poisoned_weapon` reads a `tbwt_weapon_poisoned`
+// param that only the unpoisoned spears carry, so paste never lands on one.
+
+/** Every spear this leg may end up holding, for the deposit keep-list. */
+export const TB_SPEAR_IDS: readonly number[] = TB_SPEARS.flatMap(s => [s.id, s.kpId]);
+
+/** Bare spears the jungle hunt will pick up, cheapest first. */
+export const TB_SPEAR_DROPS: readonly number[] = TB_SPEARS.map(s => s.id);
+
+/** Doses Tamayu drinks before he can match the Shaikahan; the journal only says so at the fourth. */
+export const AGILITY_DOSES = 4;
+
+/** Agility potions, fullest first: `~set_tbwt_tamayu_agility_count` adds doses, so any mix of four does. */
+export const TB_POTIONS: readonly { name: string; id: number; doses: number }[] = [
+    { name: 'Agility potion(4)', id: 3032, doses: 4 },
+    { name: 'Agility potion(3)', id: 3034, doses: 3 },
+    { name: 'Agility potion(2)', id: 3036, doses: 2 },
+    { name: 'Agility potion(1)', id: 3038, doses: 1 }
+];
+
+export const TB_POTION_IDS: readonly number[] = TB_POTIONS.map(p => p.id);
+
+// Why: the bow is worn rather than spent, so the best one the account can draw is the right one.
+
+/** Bows, best first, with the Ranged level each needs to be wielded. */
+export const TB_BOWS: readonly { name: string; ranged: number }[] = [
+    { name: 'Magic shortbow', ranged: 50 },
+    { name: 'Magic longbow', ranged: 50 },
+    { name: 'Yew shortbow', ranged: 40 },
+    { name: 'Yew longbow', ranged: 40 },
+    { name: 'Maple shortbow', ranged: 30 },
+    { name: 'Maple longbow', ranged: 30 },
+    { name: 'Willow shortbow', ranged: 20 },
+    { name: 'Willow longbow', ranged: 20 },
+    { name: 'Oak shortbow', ranged: 5 },
+    { name: 'Oak longbow', ranged: 5 },
+    { name: 'Shortbow', ranged: 1 },
+    { name: 'Longbow', ranged: 1 }
+];
+
+// Why: `player_ranged_check_ammo` only asks for the `arrows` category, so any arrow fires from any
+// bow. Adamant leads because the live run is proven on it and 200 rune arrows outprice the reward.
+
+/** Arrows, in the order this quest spends them. */
+export const TB_ARROWS: readonly string[] = [
+    'Adamant arrow', 'Rune arrow', 'Mithril arrow', 'Steel arrow', 'Iron arrow', 'Bronze arrow'
+];
+
 /** Worn from the start: the monkey dodges every melee swing while TBWT is live. */
-export const TB_GEAR: readonly string[] = [TB_NAME.BOW, TB_NAME.ARROWS, TB_NAME.BODY, TB_NAME.LEGS, TB_NAME.HELM];
+export const TB_ARMOUR: readonly string[] = [TB_NAME.BODY, TB_NAME.LEGS, TB_NAME.HELM];
 
 export const ARROW_TARGET = 200;
 export const FOOD_TARGET = FOOD_FLOAT;

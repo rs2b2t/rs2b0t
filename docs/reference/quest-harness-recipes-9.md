@@ -16,6 +16,7 @@ HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --at 2912,3118,0        
 HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --at 2844,3042,0     # Tamayu's hunt
 HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 3 --flags 480  # the killing hunt alone
 HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 4 --at 2764,2976,0  # Tinsay
+HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --no-spear --at 2844,3042,0 # the Jogre spear hunt
 ```
 
 `--flags` is `%tbwt_flags`: bits 3-5 hold Tamayu's agility count, bit 6 that his spear
@@ -44,7 +45,11 @@ Four details govern this harness:
   them off the wire and only opens the journal for the other three brothers.
 - **The bank holds no knife, pestle or tinderbox.** Jiminua stocks all three inside the
   village, and seeding them would hide whether the bot can buy them. The net, seaweed,
-  iron spear and agility potion are seeded, because nothing on Karamja sells those.
+  spear and agility potion are seeded, because nothing on Karamja sells those.
+- **None of the seeded kit is the item the module used to name.** The rack is a yew
+  shortbow, a steel spear and two Agility potion(2)s, so a finished run has proved bow,
+  spear tier and dose arithmetic are chosen from the bank. `--no-spear` empties the rack
+  and the Tamayu leg hunts Jogres instead, at 4 drops in 129 kills the slowest leg here.
 - **The kit is ranged.** `opnpc2,monkey` deflects every melee swing while the quest is
   live, so a seed with a scimitar in it never gets a monkey corpse.
 - **The bundle guard earns its keep here.** Five other quest harnesses were deploying

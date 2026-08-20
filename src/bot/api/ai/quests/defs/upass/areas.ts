@@ -136,6 +136,8 @@ export const UP_LOC = {
 // its origin, so walking to it fails outright and the step reads as a missing loc.
 export const UP_TILE = {
     ARDOUGNE_BANK: new Tile(2655, 3283, 0),
+    AEMAD: new Tile(2613, 3294, 0),
+    LOWE: new Tile(3231, 3421, 0),
     LATHAS: new Tile(2578, 3293, 1),
     CASTLE_STAIRS: new Tile(2572, 3296, 0),
     WALL_GATE_EAST: new Tile(2559, 3300, 0),

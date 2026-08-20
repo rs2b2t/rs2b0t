@@ -195,6 +195,24 @@ describe('Temple of Ikov decide', () => {
         expect(label(step)).toBe('custom:unlock the south gate');
     });
 
+    // Why: a banked pair read as "done", so nothing withdrew them, the gate check descended for a
+    // second pair without a candle, and failed in 2ms forever, a failing step feeds no watchdog.
+    test('boots in the bank are withdrawn, not descended for a second time', () => {
+        const step = decide(snap(IKOV_STAGE.STARTED, { inv: KIT, bank: [[IKOV_OBJ.BOOTS, 1]] }));
+        expect(step.kind).toBe('withdraw');
+        expect(step.kind === 'withdraw' && step.items.map(i => i.id)).toContain(IKOV_OBJ.BOOTS);
+    });
+
+    // Why: the candle cannot be bought underground, so the kit is sourced before the descent is
+    // chosen, and that ordering is what keeps `fetchBoots` from being reached without one.
+    test('the candle kit is bought before the descent is chosen', () => {
+        const step = decide(snap(IKOV_STAGE.STARTED, {
+            inv: KIT.filter(([id]) => id !== IKOV_OBJ.LIT_CANDLE && id !== IKOV_OBJ.TINDERBOX)
+        }));
+        expect(step.kind).toBe('buy');
+        expect(step.kind === 'buy' && step.item).toBe(IKOV_NAME.TINDERBOX);
+    });
+
     test('arrows in hand at stage 10: the trap lever is next', () => {
         const step = decide(snap(IKOV_STAGE.STARTED, {
             inv: [...KIT, [IKOV_OBJ.BOOTS, 1]],

@@ -50,7 +50,7 @@ import {
     throwDoll
 } from './doll.js';
 import { outstandingCrossing, takeNextCrossing } from './railings.js';
-import { drawGear, kitShortfall, meleeCarried, sourceKit, wearGear } from './supplies.js';
+import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, wearGear } from './supplies.js';
 
 const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
     ({ kind: 'custom', name, run });
@@ -99,8 +99,8 @@ function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
         }
         return custom('wrap and light a fire arrow', makeFireArrow);
     }
-    if (!worn(snap, UP_ITEM.LIT_ARROW) || !worn(snap, UP_ITEM.SHORTBOW)) {
-        return custom('wield the shortbow and the lit arrow', armFireArrow);
+    if (!worn(snap, UP_ITEM.LIT_ARROW) || !bowWorn(snap)) {
+        return custom('wield the bow and the lit arrow', armFireArrow);
     }
     return custom('fire the lit arrow at the bridge stay rope', shootGuiderope);
 }

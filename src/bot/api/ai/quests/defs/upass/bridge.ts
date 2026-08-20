@@ -1,4 +1,3 @@
-import { Equipment } from '../../../../equipment/Equipment.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { CANT_REACH, GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Game } from '../../../../game/Game.js';
@@ -13,6 +12,7 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { talkStrict } from '../../exec/primitives.js';
 import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, upassArea } from './areas.js';
+import { BOW_IDS } from './supplies.js';
 import { travelTo } from './pass.js';
 
 const KOFTIK = 'Koftik';
@@ -226,8 +226,9 @@ export async function makeFireArrow(log: (m: string) => void): Promise<boolean> 
 
 /** Bow in hand, lit arrow in the quiver, the rope shot reads both off `worn`. */
 export async function armFireArrow(log: (m: string) => void): Promise<boolean> {
-    if (heldId(UP_ITEM.SHORTBOW.id) > 0 && !(await Equipment.equip(UP_ITEM.SHORTBOW.name))) {
-        log('could not wield the shortbow');
+    const bow = Inventory.items().find(item => BOW_IDS.has(item.id));
+    if (bow && !(await bow.interact('Wield'))) {
+        log(`could not wield the ${bow.name ?? 'bow'}`);
         return false;
     }
     if (heldId(UP_ITEM.LIT_ARROW.id) > 0) {

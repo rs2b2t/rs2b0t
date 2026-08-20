@@ -1,6 +1,6 @@
-/** Live Tai Bwo Wannai Trio harness (#261): --stage N --lubufu N --tiadeche N --tinsay N --tamayu N --flags N --at x,z,level --skills N --until N --minutes N --tick ms, base :8890.
+/** Live Tai Bwo Wannai Trio harness (#261): --stage N --lubufu N --tiadeche N --tinsay N --tamayu N --flags N --at x,z,level --skills N --until N --minutes N --tick ms --no-spear, base :8890.
  *  Why: members-only, so the :8888 sim refuses every gate; `--stage` and the four brother varps are set together and followed by a relog, since update_questlist only recolours the journal at login.
- *  Why: the bank holds coins, food, the ranged kit and the four items no Karamjan shop stocks, the knife, pestle and tinderbox stay out, because buying those at Jiminua's is part of what the run proves. */
+ *  Why: the bank holds coins, food, the ranged kit and the items no Karamjan shop stocks, the knife, pestle and tinderbox stay out, because buying those at Jiminua's is part of what the run proves. */
 
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 0 --minutes 180 --tick 300
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --until 4 --minutes 45           # the Lubufu bait leg
@@ -8,6 +8,7 @@
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --at 2844,3042,0   # Tamayu
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 3 --flags 480   # the killing hunt
 //   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --tamayu 4 --at 2764,2976,0   # Tinsay
+//   HEADED=1 bun e2e/tbwt-261-live.ts --stage 3 --lubufu 31 --tiadeche 4 --no-spear --at 2844,3042,0   # the Jogre spear hunt
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
@@ -50,6 +51,8 @@ interface Args {
     at: Tile | null;
     /** Hand the kit straight to the pack, so a leg test skips the ferry round trip to the bank. */
     packed: boolean;
+    /** Seed no spear at all, so the Tamayu leg has to hunt Jogres for one. */
+    noSpear: boolean;
     deploy: boolean;
 }
 
@@ -78,12 +81,14 @@ function parse(argv: string[]): Args {
         food: 'Lobster',
         at: null,
         packed: false,
+        noSpear: false,
         deploy: true
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
         if (flag === '--no-deploy') { out.deploy = false; continue; }
         if (flag === '--packed') { out.packed = true; continue; }
+        if (flag === '--no-spear') { out.noSpear = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -127,24 +132,30 @@ const SKILLS = [
 ];
 
 /**
- * Coins, food, the ranged kit, and the four items no shop on Karamja sells.
+ * Coins, food, the ranged kit, and the items no shop on Karamja sells.
  * The knife, pestle and tinderbox stay out: Jiminua stocks all three inside the
  * village, and seeding them would hide whether the bot can buy them.
+ * Why: none of the three is the item the module used to name. A yew shortbow, a
+ * steel spear and two half-bottles are what prove the kit is chosen rather than
+ * hard-coded, and `--no-spear` empties the rack so the Jogre hunt has to answer.
  */
 function bankSeed(): BankSeedItem[] {
-    return [
+    const seed: BankSeedItem[] = [
         { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
         { debugName: args.food.toLowerCase().replace(/ /g, '_'), displayName: args.food, qty: 60 },
-        { debugName: 'maple_shortbow', displayName: 'Maple shortbow', qty: 1 },
+        { debugName: 'yew_shortbow', displayName: 'Yew shortbow', qty: 1 },
         { debugName: 'adamant_arrow', displayName: 'Adamant arrow', qty: 500 },
         { debugName: 'rune_chainbody', displayName: 'Rune chainbody', qty: 1 },
         { debugName: 'rune_platelegs', displayName: 'Rune platelegs', qty: 1 },
         { debugName: 'rune_full_helm', displayName: 'Rune full helm', qty: 1 },
         { debugName: 'net', displayName: 'Small fishing net', qty: 1 },
         { debugName: 'seaweed', displayName: 'Seaweed', qty: 2 },
-        { debugName: 'iron_spear', displayName: 'Iron spear', qty: 1 },
-        { debugName: '4dose1agility', displayName: 'Agility potion(4)', qty: 1 }
+        { debugName: '2dose1agility', displayName: 'Agility potion(2)', qty: 2 }
     ];
+    if (!args.noSpear) {
+        seed.push({ debugName: 'steel_spear', displayName: 'Steel spear', qty: 1 });
+    }
+    return seed;
 }
 
 /** `--packed`: the kit in the pack, so a leg test spends its budget on the leg rather than the ferry. */
@@ -154,10 +165,10 @@ const PACK_SEED = [
     'give pestle_and_mortar 1',
     'give tinderbox 1',
     'give seaweed 1',
-    'give iron_spear 1',
-    'give 4dose1agility 1',
+    'give steel_spear 1',
+    'give 2dose1agility 2',
     'give lobster 6',
-    'give maple_shortbow 1',
+    'give yew_shortbow 1',
     'give adamant_arrow 200',
     'give rune_chainbody 1',
     'give rune_platelegs 1',

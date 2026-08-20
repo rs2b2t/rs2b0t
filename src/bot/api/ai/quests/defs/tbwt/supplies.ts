@@ -2,15 +2,22 @@ import { Equipment } from '../../../../equipment/Equipment.js';
 import { QuestFood } from '../../food.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
+    AGILITY_DOSES,
     ARROW_TARGET,
     COIN_TARGET,
     FOOD_TARGET,
     onKaramja,
-    TB_GEAR,
+    TB_ARMOUR,
+    TB_ARROWS,
+    TB_BOWS,
     TB_ID,
     TB_LUBUFU,
     TB_NAME,
     TB_NPC,
+    TB_POTIONS,
+    TB_POTION_IDS,
+    TB_SPEARS,
+    TB_SPEAR_IDS,
     TB_TAMAYU,
     TB_TILE,
     TB_TINSAY
@@ -52,8 +59,6 @@ const KNIFE: Supply = { name: TB_NAME.KNIFE, id: TB_ID.KNIFE, qty: 1, fromJiminu
 const PESTLE: Supply = { name: TB_NAME.PESTLE, id: TB_ID.PESTLE, qty: 1, fromJiminua: true };
 const TINDERBOX: Supply = { name: TB_NAME.TINDERBOX, id: TB_ID.TINDERBOX, qty: 1, fromJiminua: true };
 const SEAWEED: Supply = { name: TB_NAME.SEAWEED, id: TB_ID.SEAWEED, qty: 1 };
-const IRON_SPEAR: Supply = { name: TB_NAME.IRON_SPEAR, id: TB_ID.IRON_SPEAR, qty: 1 };
-const AGILITY: Supply = { name: TB_NAME.AGILITY_POTION_4, id: TB_ID.AGILITY_POTION_4, qty: 1 };
 
 // Why: a supply drops off the list the moment its leg is behind us, so the quest never crosses back to Ardougne for a knife it has already used.
 
@@ -80,26 +85,95 @@ export function outstandingSupplies(snap: QuestSnapshot): Supply[] {
     if (tinsay < TB_TINSAY.GIVEN_SANDWICH && heldId(snap, TB_ID.SANDWICH) === 0) {
         out.push(SEAWEED);
     }
-    if (tamayu < TB_TAMAYU.COMPLETE) {
-        // Why: the paste is half the spear, not the spear, a pack holding paste and no shaft still needs one.
-        const spearDone = hasFlag(snap.progress, TB_FLAG.SPEAR) || heldId(snap, TB_ID.SPEAR_KP) > 0;
-        if (!spearDone) {
-            out.push(IRON_SPEAR);
-        }
-        if (!hasFlag(snap.progress, TB_FLAG.AGILITY)) {
-            out.push(AGILITY);
-        }
-    }
     return out;
 }
 
 /** Kept by id, so all three "Karambwan vessel"s and all three "Karamjan rum"s survive a deposit. */
-export const TB_KEEP_IDS: readonly number[] = Object.values(TB_ID);
+export const TB_KEEP_IDS: readonly number[] = [...Object.values(TB_ID), ...TB_SPEAR_IDS, ...TB_POTION_IDS];
+
+// Why: the paste is half the spear, not the spear, a pack holding paste and no shaft still needs one.
+
+/** The Karambwan-poisoned spear the pack is carrying, 0 when there is none. */
+export function kpSpearHeld(snap: QuestSnapshot): number {
+    return TB_SPEARS.find(spear => heldId(snap, spear.kpId) > 0)?.kpId ?? 0;
+}
+
+/** The bare spear the paste still has to go on, null when the pack holds none. */
+export function bareSpearHeld(snap: QuestSnapshot): typeof TB_SPEARS[number] | null {
+    return TB_SPEARS.find(spear => heldId(snap, spear.id) > 0) ?? null;
+}
+
+/** True while the Tamayu leg still owes him a spear and the pack holds nothing that becomes one. */
+export function spearWanted(snap: QuestSnapshot): boolean {
+    return tamayuStage(snap) < TB_TAMAYU.COMPLETE
+        && !hasFlag(snap.progress, TB_FLAG.SPEAR)
+        && kpSpearHeld(snap) === 0
+        && bareSpearHeld(snap) === null;
+}
+
+/** Doses of agility potion the pack is carrying, across every bottle size. */
+export function dosesHeld(snap: QuestSnapshot): number {
+    return TB_POTIONS.reduce((total, potion) => total + heldId(snap, potion.id) * potion.doses, 0);
+}
+
+// Why: only the fourth dose shows on the page, so a part-poured Tamayu reads as an untouched one.
+// Filling to four whenever the pack holds none keeps that from meaning a crossing between bottles.
+
+/** True while Tamayu is still short of his four doses and the pack has nothing to pour. */
+export function dosesWanted(snap: QuestSnapshot): boolean {
+    return tamayuStage(snap) < TB_TAMAYU.COMPLETE
+        && !hasFlag(snap.progress, TB_FLAG.AGILITY)
+        && dosesHeld(snap) === 0;
+}
+
+/** The cheapest spear the bank holds that Tamayu will take, bare ones before poisoned ones. */
+export function spearInBank(snap: QuestSnapshot): { name: string; id: number } | null {
+    const bare = TB_SPEARS.find(spear => bankedId(snap, spear.id) > 0);
+    if (bare) {
+        return { name: bare.name, id: bare.id };
+    }
+    const done = TB_SPEARS.find(spear => bankedId(snap, spear.kpId) > 0);
+    return done ? { name: done.kpName, id: done.kpId } : null;
+}
+
+/** Bottles to draw for Tamayu's four doses, fullest first. Empty when the bank holds no agility potion. */
+export function potionsInBank(snap: QuestSnapshot): { name: string; qty: number; id: number }[] {
+    const lines: { name: string; qty: number; id: number }[] = [];
+    let doses = 0;
+    for (const potion of TB_POTIONS) {
+        const stocked = bankedId(snap, potion.id);
+        const take = Math.min(stocked, Math.ceil((AGILITY_DOSES - doses) / potion.doses));
+        if (take > 0) {
+            lines.push({ name: potion.name, qty: take, id: potion.id });
+            doses += take * potion.doses;
+        }
+        if (doses >= AGILITY_DOSES) {
+            break;
+        }
+    }
+    return lines;
+}
+
+/** The bow this run draws: what is worn or carried, else the best one the bank holds and the account can wield. */
+export function bowChoice(snap: QuestSnapshot): string | null {
+    const usable = TB_BOWS.filter(bow => (snap.ranged ?? 99) >= bow.ranged);
+    return usable.find(bow => worn(snap, bow.name) || held(snap, bow.name) > 0)?.name
+        ?? usable.find(bow => banked(snap, bow.name) > 0)?.name
+        ?? null;
+}
+
+/** The arrows this run fires: what is worn or carried, else the first the bank holds. */
+export function arrowChoice(snap: QuestSnapshot): string | null {
+    return TB_ARROWS.find(name => worn(snap, name) || held(snap, name) > 0)
+        ?? TB_ARROWS.find(name => banked(snap, name) > 0)
+        ?? null;
+}
 
 const scanBank: QuestStep = { kind: 'scanBank', bank: TB_TILE.ARDOUGNE_BANK };
 
-function keepNames(): string[] {
-    return [...TB_GEAR, ...foodNames()].map(n => n.toLowerCase());
+function keepNames(snap: QuestSnapshot): string[] {
+    const kit = [bowChoice(snap), arrowChoice(snap)].filter((n): n is string => Boolean(n));
+    return [...kit, ...TB_ARMOUR, ...foodNames()].map(n => n.toLowerCase());
 }
 
 function wearAll(names: readonly string[]): QuestStep {
@@ -139,13 +213,19 @@ const DEPOSIT_BELOW_FREE = 6;
  */
 export function prepare(snap: QuestSnapshot): QuestStep | null {
     const missing = outstandingSupplies(snap).filter(s => heldId(snap, s.id) < s.qty);
-    const gearMissing = TB_GEAR.filter(name => !worn(snap, name));
+    const bow = bowChoice(snap);
+    const arrows = arrowChoice(snap);
+    const kit = [bow, arrows].filter((n): n is string => Boolean(n));
+    const gearMissing = [...kit, ...TB_ARMOUR].filter(name => !worn(snap, name));
     // Why: only an outstanding purchase justifies a crossing for coin; the ferry's own 30gp fare is covered by the float this withdraws.
     const buying = tinsayStage(snap) < TB_TINSAY.GIVEN_RUM || missing.some(s => s.fromJiminua);
     const coinsLow = buying && held(snap, TB_NAME.COINS) < 100;
     const starving = foodHeld(snap) === 0;
+    const wantSpear = spearWanted(snap);
+    const wantDoses = dosesWanted(snap);
 
-    if (missing.length === 0 && gearMissing.length === 0 && !coinsLow && !starving) {
+    if (missing.length === 0 && gearMissing.length === 0 && kit.length === 2 && !coinsLow && !starving
+        && !wantSpear && !wantDoses) {
         return null;
     }
 
@@ -168,7 +248,7 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
     }
 
     if ((snap.freeSlots ?? 28) < DEPOSIT_BELOW_FREE) {
-        return { kind: 'deposit', keep: keepNames(), keepIds: TB_KEEP_IDS, bank: TB_TILE.ARDOUGNE_BANK, exactKeep: true };
+        return { kind: 'deposit', keep: keepNames(snap), keepIds: TB_KEEP_IDS, bank: TB_TILE.ARDOUGNE_BANK, exactKeep: true };
     }
 
     const fromBank: { name: string; qty: number; id?: number }[] = [];
@@ -181,11 +261,32 @@ export function prepare(snap: QuestSnapshot): QuestStep | null {
             unavailable.push(s.name);
         }
     }
+    if (!bow) {
+        unavailable.push(`any bow this account can draw at Ranged ${snap.ranged ?? '?'}`);
+    }
+    if (!arrows) {
+        unavailable.push('any arrows');
+    }
     for (const name of gearMissing) {
         if (banked(snap, name) > 0) {
-            fromBank.push({ name, qty: name === TB_NAME.ARROWS ? ARROW_TARGET : 1 });
+            fromBank.push({ name, qty: name === arrows ? ARROW_TARGET : 1 });
         } else {
             unavailable.push(name);
+        }
+    }
+    // Why: an empty bank is not a dead end here, Jogres drop spears and their patch is on the route.
+    if (wantSpear) {
+        const stocked = spearInBank(snap);
+        if (stocked) {
+            fromBank.push({ name: stocked.name, qty: 1, id: stocked.id });
+        }
+    }
+    if (wantDoses) {
+        const bottles = potionsInBank(snap);
+        if (bottles.length > 0) {
+            fromBank.push(...bottles);
+        } else {
+            unavailable.push('an agility potion, any dose');
         }
     }
     if (coinsLow && banked(snap, TB_NAME.COINS) > 0) {

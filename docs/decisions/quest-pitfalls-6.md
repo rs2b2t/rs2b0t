@@ -2,7 +2,7 @@
 
 # Quest pitfalls: Nature Spirit
 
-Seven, and the first three are dialogue and NPC-lifetime facts rather than quest ones.
+Eight, and the first three are dialogue and NPC-lifetime facts rather than quest ones.
 
 - **A topic that re-offers its own list loops until the driver gives up.** Every branch
   of Filliman's tree ends by re-printing the same four or five options, so a prefer list
@@ -34,6 +34,16 @@ Seven, and the first three are dialogue and NPC-lifetime facts rather than quest
 - **Fetch what is not quest-gated before starting the quest.** The ghostspeak amulet is
   wanted from the first word with the spirit and nothing about it is gated, yet starting
   first sends the bot east to the mausoleum, west to Lumbridge, and east again.
+
+- **The grotto's Altar of nature is one level above the grotto the quest teleports you
+  into.** Both sit on (3441,9740): `druidic_spirit_grotto` (Search) on level 0 and
+  `druidic_spirit_grotto_naturealtar` (Pray-at) on level 1, and `oploc1,grotto_door` picks
+  between them by stage, `p_teleport(1_53_152_50_6)` only at `^druidspirit_complete` and
+  `0_53_152_50_6` for everything before it. A mid-quest recharge therefore stands one
+  floor under the altar it is querying for, and the bloom leg is the only thing that
+  spends prayer, so the bar empties and the step fails on every pass. The recharge is
+  Paterdomus instead: one `altar` (loc 409) at (3416,3488,0), the temple the swamp route
+  already passes through.
 
 ## See also
 

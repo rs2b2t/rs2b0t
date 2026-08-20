@@ -10,6 +10,9 @@ type Stack = number | [number, number];
 const counts = (stacks: Stack[]): Map<number, number> =>
     new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
 
+/** itemdb ids the bow-family tests lean on. */
+const ITEM_ID = { OAK_SHORTBOW: 843, CROSSBOW: 837 } as const;
+
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const WEST_ARDOUGNE = { x: 2500, z: 3300, level: 0 };
 const AREA1 = { x: 2450, z: 9716, level: 0 };
@@ -142,7 +145,86 @@ describe('Underground Pass decide()', () => {
             banked: []
         }));
         expect(kindOf(step)).toBe('wait');
-        expect(reasonOf(step)).toContain('Shortbow');
+        expect(reasonOf(step)).toContain('a bow');
+    });
+
+    // Why: upass_bridge.rs2 checks oc_category = weapon_bow, which is thirteen items, so a pack holding an
+    // oak shortbow was being told to go and find id 841.
+    test('any bow satisfies the bridge shot, not only the plain shortbow', () => {
+        const noPlainBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.SPOKEN_KOFTIK,
+            tile: WEST_ARDOUGNE,
+            carried: [...noPlainBow, ITEM_ID.OAK_SHORTBOW]
+        }));
+        expect(kindOf(step)).not.toBe('wait');
+    });
+
+    // Why: a crossbow is weapon_crossbow and fires bolts, so it must not read as the bow the rope shot needs.
+    test('a crossbow is not a bow', () => {
+        const noPlainBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({
+            stage: UP_STAGE.SPOKEN_KOFTIK,
+            tile: WEST_ARDOUGNE,
+            carried: [...noPlainBow, ITEM_ID.CROSSBOW],
+            banked: []
+        }));
+        expect(kindOf(step)).toBe('wait');
+        expect(reasonOf(step)).toContain('bow');
+    });
+
+    // Why: bestInBank built '<tier> <kind>' names from a tier list with no dragon in it, and matched on
+    // endsWith(kind) with no dagger in it, so a Dragon dagger(p) read as no weapon at all.
+    test('a dragon dagger counts as a melee weapon, poisoned or not', () => {
+        for (const weapon of ['dragon dagger', 'dragon dagger(p)', 'poisoned dagger(p)']) {
+            const step = decide(snapshot({ carried: KIT, wornNames: [weapon], flags: [UP_FLAG.STARTED] }));
+            expect(reasonOf(step)).not.toContain('melee weapon');
+        }
+    });
+
+    // Why: the bank running dry is not the end of the road, Aemad sells rope forty tiles from the booth
+    // this quest already banks at.
+    test('rope the bank does not have is bought at Aemad', () => {
+        const noRope = KIT.filter(s => !Array.isArray(s) || s[0] !== UP_ITEM.ROPE.id);
+        const step = decide(snapshot({ carried: [...noRope, [UP_ITEM.COINS.id, 5000]] }));
+        expect(kindOf(step)).toBe('buy');
+        expect((step as { item: string }).item).toBe(UP_ITEM.ROPE.name);
+        expect((step as { shop: { npc: string } }).shop.npc).toBe('Aemad');
+    });
+
+    // Why: no bow in the bank either, and Lowe is the only bow counter this repo already has a stand for.
+    test('a bow the bank does not have is bought at Lowe', () => {
+        const noBow = KIT.filter(s => s !== UP_ITEM.SHORTBOW.id);
+        const step = decide(snapshot({ carried: [...noBow, [UP_ITEM.COINS.id, 5000]] }));
+        expect(kindOf(step)).toBe('buy');
+        expect((step as { shop: { npc: string } }).shop.npc).toBe('Lowe');
+    });
+
+    // Why: the buy step tops its own purse up from the bank, so a broke account must not be handed one.
+    // Walking to Aemad with no coins fails at the counter and the engine retries that walk forever.
+    test('with no coins anywhere it never walks to a counter it cannot pay', () => {
+        const noRope = KIT.filter(s => !Array.isArray(s) || s[0] !== UP_ITEM.ROPE.id);
+        expect(kindOf(decide(snapshot({ carried: noRope, banked: [] })))).not.toBe('buy');
+        const atTheMouth = decide(snapshot({
+            stage: UP_STAGE.SPOKEN_KOFTIK,
+            tile: WEST_ARDOUGNE,
+            carried: noRope,
+            banked: []
+        }));
+        expect(kindOf(atTheMouth)).toBe('wait');
+        expect(reasonOf(atTheMouth)).toContain('Rope');
+    });
+
+    // Why: with no coins either, it still has to stop and say so rather than walk to a counter it cannot pay.
+    test('short of kit and coins alike, it stops and names the shortfall', () => {
+        const step = decide(snapshot({
+            stage: UP_STAGE.SPOKEN_KOFTIK,
+            tile: WEST_ARDOUGNE,
+            carried: [UP_ITEM.TINDERBOX.id],
+            banked: []
+        }));
+        expect(kindOf(step)).toBe('wait');
+        expect(reasonOf(step)).toContain('Rope');
     });
 
     test('in the first cavern with no cloth, it asks Koftik for one', () => {

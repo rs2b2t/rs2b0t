@@ -108,21 +108,26 @@ export async function blessSickle(log: (m: string) => void): Promise<boolean> {
     return driveUntil(() => heldId(NS_ID.SICKLE_BLESSED) > 0, [], log);
 }
 
-// Why: `oploc1,druidic_spirit_grotto_naturealtar` tops the bar to `stat_base(prayer) + 2`, so one Pray-at is the whole trip and there is nothing to repeat.
+// Why: the grotto's Altar of nature sits on level 1 of (3441,9740) and the door only teleports there
+// once the quest is over, so mid-quest there is no altar below the camp at all, see quest-pitfalls-6.
 
-/** Top the prayer bar up at the grotto's Altar of nature. */
+/** Top the prayer bar up at Paterdomus, the temple this quest already walks through. */
 export async function rechargePrayer(log: (m: string) => void): Promise<boolean> {
     const full = Skills.level('prayer');
     if (Skills.effective('prayer') >= full) {
         return true;
     }
-    if (!(await enterGrotto(log))) {
+    // The grotto is a scripted pocket, so the walker needs the door before it has a route anywhere.
+    if (inside() && !(await leaveGrotto(log))) {
+        return false;
+    }
+    if (!(await Traversal.walkResilient(NS_TILE.TEMPLE_ALTAR, { radius: 2, attempts: 4, timeoutMs: 300_000, log }))) {
         return false;
     }
     await settleScene();
-    const altar = Locs.query().name(NS_LOC.ALTAR).action('Pray-at').within(16).nearest();
+    const altar = Locs.query().name(NS_LOC.TEMPLE_ALTAR).action('Pray-at').within(8).nearest();
     if (!altar) {
-        log('no Altar of nature in the grotto to pray at');
+        log(`no altar within 8 tiles of (${NS_TILE.TEMPLE_ALTAR.x},${NS_TILE.TEMPLE_ALTAR.z}) to pray at`);
         return false;
     }
     const before = Skills.effective('prayer');

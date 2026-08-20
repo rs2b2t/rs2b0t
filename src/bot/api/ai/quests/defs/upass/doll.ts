@@ -12,6 +12,7 @@ import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_AMULETS, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, insideIbanTemple, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
+import { BOW_IDS } from './supplies.js';
 
 /** Rub an element into the doll. */
 async function rubIntoDoll(element: UpassItem, log: (m: string) => void): Promise<boolean> {
@@ -280,7 +281,7 @@ async function shedSpentKit(need: number, log: (m: string) => void): Promise<voi
         if (Inventory.free() >= need) {
             break;
         }
-        const item = Inventory.items().find(i => i.id === spent.id);
+        const item = Inventory.items().find(i => i.id === spent.id || (spent.id === UP_ITEM.SHORTBOW.id && BOW_IDS.has(i.id)));
         const op = item?.actions().find(o => /drop/i.test(o));
         if (item && op && await item.interact(op)) {
             await Execution.delayTicks(1);

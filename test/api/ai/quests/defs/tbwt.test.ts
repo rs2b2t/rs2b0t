@@ -1,12 +1,31 @@
 import { describe, expect, test } from 'bun:test';
 
-import { TB_GEAR, TB_ID, TB_LUBUFU, TB_MAIN, TB_NAME, TB_TAMAYU, TB_TIADECHE, TB_TINSAY } from '#/bot/api/ai/quests/defs/tbwt/areas.js';
+import {
+    TB_ARMOUR,
+    TB_ID,
+    TB_LUBUFU,
+    TB_MAIN,
+    TB_NAME,
+    TB_POTIONS,
+    TB_SPEARS,
+    TB_TAMAYU,
+    TB_TIADECHE,
+    TB_TINSAY
+} from '#/bot/api/ai/quests/defs/tbwt/areas.js';
 import { decide, tbwt } from '#/bot/api/ai/quests/defs/tbwt/index.js';
 import { TB_FLAG } from '#/bot/api/ai/quests/defs/tbwt/journal.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
 const VILLAGE = { x: 2780, z: 3087, level: 0 };
+
+const IRON = TB_SPEARS[0]!;
+const STEEL = TB_SPEARS[1]!;
+const DOSE4 = TB_POTIONS[0]!;
+const DOSE2 = TB_POTIONS[2]!;
+
+/** The kit a 70-ranged account with a stocked bank ends up in. */
+const KIT = ['Maple shortbow', 'Adamant arrow', ...TB_ARMOUR];
 
 interface Options {
     journal?: QuestSnapshot['journal'];
@@ -32,8 +51,8 @@ const FULL_PACK: [number, number][] = [
     [TB_ID.PESTLE, 1],
     [TB_ID.TINDERBOX, 1],
     [TB_ID.SEAWEED, 1],
-    [TB_ID.IRON_SPEAR, 1],
-    [TB_ID.AGILITY_POTION_4, 1]
+    [IRON.id, 1],
+    [DOSE4.id, 1]
 ];
 
 function snap(options: Options = {}): QuestSnapshot {
@@ -59,7 +78,7 @@ function snap(options: Options = {}): QuestSnapshot {
         journal: options.journal ?? (main === TB_MAIN.NOT_STARTED ? 'notStarted' : 'inProgress'),
         inv,
         invIds: ids,
-        worn: new Set(options.bare ? [] : TB_GEAR.map(n => n.toLowerCase())),
+        worn: new Set(options.bare ? [] : KIT.map(n => n.toLowerCase())),
         wornIds: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
@@ -69,7 +88,8 @@ function snap(options: Options = {}): QuestSnapshot {
         bankIds: new Map(),
         bankKnown: true,
         tile: options.tile ?? VILLAGE,
-        freeSlots: options.freeSlots ?? 12
+        freeSlots: options.freeSlots ?? 12,
+        ranged: 70
     };
 }
 
@@ -194,7 +214,14 @@ describe('tai bwo wannai trio decide', () => {
 
         test('the agility potion goes first', () => {
             expect(named(step({ ...past, tamayu: TB_TAMAYU.WATCHED_CUTSCENE })))
-                .toBe('give Tamayu the agility potion');
+                .toBe(`give Tamayu the ${DOSE4.name}`);
+        });
+
+        // Why: he counts doses rather than bottles, and the journal only says so at the fourth.
+        test('a part-doses pack pours what it has, one bottle per pass', () => {
+            const base = { ...past, tamayu: TB_TAMAYU.WATCHED_CUTSCENE };
+            expect(named(step({ ...base, invIds: [[DOSE4.id, 0], [DOSE2.id, 2]] })))
+                .toBe(`give Tamayu the ${DOSE2.name}`);
         });
 
         // Why: Tiadeche's gift is the raw Karambwan the poison is ground from, which is why his leg runs first.
@@ -206,8 +233,24 @@ describe('tai bwo wannai trio decide', () => {
                 .toBe('grind the cooked Karambwan into poison');
             expect(named(step({ ...base, invIds: [[TB_ID.KARAMBWAN_POISON_PASTE, 1]] })))
                 .toBe('smear the Karambwan paste over the iron spear');
-            expect(named(step({ ...base, invIds: [[TB_ID.SPEAR_KP, 1]] })))
+            expect(named(step({ ...base, invIds: [[IRON.kpId, 1]] })))
                 .toBe('give Tamayu the Karambwan-poisoned spear');
+        });
+
+        // Why: any tier above bronze sets both bits Tamayu checks, so whatever the bank had is what he gets.
+        test('whichever tier the pack carries is the one poisoned and handed over', () => {
+            const base = { ...past, tamayu: TB_TAMAYU.WATCHED_CUTSCENE, agility: true };
+            expect(named(step({ ...base, invIds: [[IRON.id, 0], [STEEL.id, 1], [TB_ID.KARAMBWAN_POISON_PASTE, 1]] })))
+                .toBe('smear the Karambwan paste over the steel spear');
+            expect(named(step({ ...base, invIds: [[IRON.id, 0], [STEEL.kpId, 1]] })))
+                .toBe('give Tamayu the Karambwan-poisoned spear');
+        });
+
+        // Why: no shop on Karamja sells a spear, and Jogres drop one 4 times in 129.
+        test('a pack with the poison and no shaft hunts Jogres for one', () => {
+            const base = { ...past, tamayu: TB_TAMAYU.WATCHED_CUTSCENE, agility: true };
+            expect(named(step({ ...base, invIds: [[IRON.id, 0], [TB_ID.KARAMBWAN_POISON_PASTE, 1]] })))
+                .toBe('hunt Jogres for a spear');
         });
 
         // Why: the shoal is 160 tiles from the bait, and three Karambwan in ten burn on the fire.

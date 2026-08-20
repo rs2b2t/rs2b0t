@@ -81,6 +81,13 @@ The fourteen that are the route and the temple; the seven that are engine behavi
   room, where the half-plane above said the gate was open, so the leg reported success
   with no boots, the next pass climbed back out, and the two thrashed until the quest
   parked three times. It keeps a step of its own, and `decide` re-reads the pack each pass.
+- **A banked pair of boots is not a worn pair, and nothing else withdraws them.** The boots
+  errand asked `heldOrBanked`, so a pair sitting in a booth read as "done", and `decide`
+  fell straight through to the gate check. That check descends for a second pair, and its
+  candle had been dropped from the kit by the same bank read, so it logged "short a
+  tinderbox or a candle" and returned false in 2ms, forever: a failing step feeds no
+  no-progress watchdog, so the run never parked. The errand now withdraws what the bank
+  holds and only descends when there is no pair anywhere.
 - **All six chests are `forceapproach=north`, and each placement rotates that.** Walking
   to within two tiles of the chest and clicking Open worked for the ones whose legal side
   the walk happened to land on and was dropped in silence for the rest, two of six on the

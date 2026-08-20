@@ -149,7 +149,7 @@ async function lightCandle(log: (m: string) => void): Promise<boolean> {
     const tinderbox = Inventory.items().find(i => i.id === IKOV_OBJ.TINDERBOX);
     const candle = Inventory.items().find(i => i.id === IKOV_OBJ.UNLIT_CANDLE);
     if (!tinderbox || !candle) {
-        log('ikov: the pack is short a tinderbox or a candle');
+        log(`ikov: the pack is short ${!tinderbox ? 'a tinderbox' : 'a candle'} for the dark stairs`);
         return false;
     }
     log('ikov: lighting the candle for the dark stairs');
