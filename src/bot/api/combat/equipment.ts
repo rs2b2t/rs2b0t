@@ -7,7 +7,25 @@ export const BOWS: string[] = [
     'Magic shortbow', 'Magic longbow'
 ];
 
+export const CROSSBOWS: string[] = [
+    'Crossbow',
+    'Bronze crossbow', 'Iron crossbow', 'Steel crossbow', 'Black crossbow',
+    'Mithril crossbow', 'Adamant crossbow', 'Rune crossbow',
+    'Dorgeshuun crossbow', 'Karil\'s crossbow'
+];
+
 export const DARTS: string[] = ['Bronze dart', 'Iron dart', 'Steel dart', 'Black dart', 'Mithril dart', 'Adamant dart', 'Rune dart'];
+
+/** Arrow tiers used by bows (mirrors BOWS, kept in the API like the other gear lists). */
+export const ARROWS: string[] = [
+    'Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow', 'Dragon arrow'
+];
+
+/** Bolt tiers used by crossbows (mirrors CROSSBOWS). */
+export const BOLTS: string[] = [
+    'Bronze bolts', 'Iron bolts', 'Steel bolts', 'Black bolts', 'Mithril bolts', 'Adamant bolts', 'Rune bolts',
+    'Broad bolts', 'Bone bolts'
+];
 
 /**
  * One-handed melee weapons, so the shield slot stays free.
