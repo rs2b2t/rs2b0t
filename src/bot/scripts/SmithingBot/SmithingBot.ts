@@ -13,6 +13,7 @@ import { walkOpening } from '../../event/webwalk/walkOpening.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
+import { PRODUCT_OPTIONS, barsFor, canSmith, countBars } from './SmithingBotLogic.js';
 
 const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
@@ -21,8 +22,6 @@ const HAMMER = 'Hammer';
 const ANVIL = 'Anvil';
 const OPENABLE_OBSTACLES = ['door', 'gate'];
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
-
-const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 
 export const SETTINGS: SettingsSchema = {
     bar: { type: 'string', default: 'Bronze', options: BAR_OPTIONS, label: 'Bar tier' },
@@ -94,8 +93,11 @@ export default class SmithingBot extends TaskBot {
     leashRadius(): number { return this.leash; }
 
     barCount(): number {
-        const pat = this.barItemName().toLowerCase();
-        return Inventory.items().filter(i => i.name?.toLowerCase().includes(pat)).reduce((n, i) => n + Math.max(1, i.count), 0);
+        return countBars(Inventory.items(), this.barItemName());
+    }
+
+    canSmith(): boolean {
+        return canSmith(this.barCount(), this.product);
     }
 
     lastBar(): InvItem | null {
@@ -117,7 +119,8 @@ export default class SmithingBot extends TaskBot {
 
 class SmithPanel implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return ChatDialog.isMainMakePanel(); }
+    // Why: an open make-panel with leftover bars must lose to BankTrip, not click Make-10.
+    validate(): boolean { return ChatDialog.isMainMakePanel() && this.bot.canSmith(); }
     async execute(): Promise<void> {
         this.bot.setStatus('choosing item');
         const start = this.bot.barCount();
@@ -131,7 +134,7 @@ class SmithPanel implements Task {
         await Execution.delayUntil(() => Game.animating() || this.bot.barCount() < start || ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 3000);
         let mark = this.bot.barCount();
         for (let guard = 0; guard < 200; guard++) {
-            if (this.bot.barCount() === 0 || ChatDialog.isMainMakePanel() || ChatDialog.canContinue()) { return; }
+            if (!this.bot.canSmith() || ChatDialog.isMainMakePanel() || ChatDialog.canContinue()) { return; }
             const progressed = await Execution.delayUntil(() => this.bot.barCount() < mark || ChatDialog.isMainMakePanel() || ChatDialog.canContinue(), 4000);
             const now = this.bot.barCount();
             if (now < mark) {
@@ -146,7 +149,8 @@ class SmithPanel implements Task {
 
 class BankTrip implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() === 0; }
+    // Why: leftover bars below the product cost are unsmithable, same as an empty pack.
+    validate(): boolean { return !this.bot.canSmith(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
         await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
@@ -180,6 +184,12 @@ class BankTrip implements Task {
             return;
         }
         const barName = barBank.name;
+        // Why: withdrawing a leftover that cannot make one item walks back to the anvil and banks again forever.
+        if (Bank.count(barName) < barsFor(this.bot.productName())) {
+            this.bot.log(`not enough '${this.bot.barItemName()}' in the bank to make a ${this.bot.productName()} — idling`);
+            await Execution.delayTicks(5);
+            return;
+        }
         const allOp = withdrawOp(barBank.ops, 'all');
         if (allOp) {
             this.bot.log(`withdrawing all ${barName} ('${allOp}')`);
@@ -198,7 +208,7 @@ class BankTrip implements Task {
 
 class Smith implements Task {
     constructor(private bot: SmithingBot) {}
-    validate(): boolean { return this.bot.barCount() > 0 && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
+    validate(): boolean { return this.bot.canSmith() && !ChatDialog.isOpen() && !ChatDialog.isMainMakePanel(); }
     async execute(): Promise<void> {
         const anvil = () =>
             Locs.query().name(this.bot.anvilLocName()).withinOf(this.bot.anvilTile(), this.bot.leashRadius()).nearest();
