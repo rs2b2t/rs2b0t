@@ -619,6 +619,14 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'spirit-tree-walk-live',
+        harness: 'spirit-tree-walk-live.ts',
+        covers: { subsystems: ['nav'] },
+        status: 'unvetted',
+        budgetMin: 15,
+        note: 'every transport quest complete, then three legs the pack plans through a Spirit Tree'
+    },
+    {
         id: 'observatory-252-live',
         harness: 'observatory-252-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },

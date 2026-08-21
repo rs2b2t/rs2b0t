@@ -13,7 +13,7 @@ import { Equipment } from '../../../api/equipment/Equipment.js';
 import { Inventory } from '../../../api/inventory/Inventory.js';
 import { Quests } from '../../../api/ui/questlog/Quests.js';
 import { Skills } from '../../../api/skills/Skills.js';
-import { Locs } from '../../../api/locs/Locs.js';
+import { Locs, type Loc } from '../../../api/locs/Locs.js';
 import { Npcs } from '../../../api/npcs/Npcs.js';
 import { GameMessages } from '../../../api/chatbox/gameMessages.js';
 import { Sustain } from '../../../api/sustain/Sustain.js';
@@ -33,6 +33,15 @@ import { findTransportLoc } from './transportLoc.js';
 const DIALOGUE_STEPS = 24;
 const SHIP_DIALOGUE_STEPS = 40;
 const GATE_REOPENS = 2;
+
+// Why: a hop fires from `DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV` of its stand and a spirit tree is a 4x4 whose scene handle is the far corner, so a player-relative radius can miss a tree it is standing beside.
+// Why: the op carries the loc's own coordinates and the server walks us in, so the net costs nothing but a longer reach.
+
+/** Chebyshev around the crossing's stand tile to resolve a hub loc. */
+const HUB_LOC_RADIUS = 10;
+
+/** How long a landing may leave the scene empty before an absent loc is believed. */
+const SCENE_REBUILD_MS = 3000;
 
 function isNearTile(
     me: { x: number; z: number; level: number },
@@ -135,11 +144,18 @@ export async function handleSpecialCrossing(
 
     // Loc-backed multi-dest hubs (spirit trees): interact loc then dialog, no NPC.
     if (!sc.npc && sc.dialogue && sc.toTile && /spirit/i.test(sc.locName)) {
-        const loc =
-            Locs.query().name(sc.locName).action(sc.action).within(3).nearest()
-            ?? Locs.query().name(sc.locName).within(3).nearest();
+        const stand = { x: sc.x, z: sc.z, level: sc.level };
+        const find = (): Loc | null =>
+            Locs.query().name(sc.locName).action(sc.action).withinOf(stand, HUB_LOC_RADIUS).nearest()
+            ?? Locs.query().name(sc.locName).withinOf(stand, HUB_LOC_RADIUS).nearest();
+        // Why: a landing rebuilds the scene, and the hop out of a tree we have this moment landed under is decided in that window, so an empty query is waited out rather than believed.
+        let loc = find();
+        if (!loc) {
+            await Execution.delayUntil(() => find() !== null, SCENE_REBUILD_MS);
+            loc = find();
+        }
         if (!loc || !(await loc.interact(sc.action))) {
-            log(`${sc.label}: '${sc.locName}' not interactable`);
+            log(`${sc.label}: '${sc.locName}' not interactable near (${sc.x},${sc.z})`);
             return false;
         }
         const rad = sc.arrivalRadius ?? 3;
