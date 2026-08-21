@@ -6,19 +6,18 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { QuestFood } from '../../food.js';
 import { BONE_SPAWNS, SV_ITEM, SV_NPC, SV_TILE, type ShiloItem } from './areas.js';
 
-// Why: Jiminua stocks rope, spade, chisel, candle, tinderbox, hammer, a bronze bar and food, thirty-five tiles from Trufitus.
-// Why: Karamja has no bank until this quest opens Shilo's, so everything except coins and bones is bought here rather than carried.
+// Why: Jiminua stocks rope, spade, chisel, candle, tinderbox, hammer and a bronze bar, thirty-five tiles from Trufitus.
+// Why: Karamja has no bank until this quest opens Shilo's, so everything except coins, bones and food is bought here rather than carried.
 const JIMINUA_SHOP = { npc: SV_NPC.JIMINUA, anchor: SV_TILE.JIMINUA };
-
-// Asking prices run well above obj cost and climb as stock drains; this leaves headroom.
-const BREAD_PRICE = 40;
 
 /** Two ship fares, the Jiminua kit, and headroom for a second shop trip. */
 export const KARAMJA_PURSE = 2000;
 
-export const QUEST_FOOD = 'Bread';
+/** Drawn in this order when the food the script was given is not in the bank. */
+export const FOOD_FALLBACKS = ['Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout'] as const;
 
 export function held(snap: QuestSnapshot, id: number): number {
     return snap.invIds?.get(id) ?? 0;
@@ -26,6 +25,10 @@ export function held(snap: QuestSnapshot, id: number): number {
 
 export function banked(snap: QuestSnapshot, id: number): number {
     return snap.bankIds?.get(id) ?? 0;
+}
+
+function bankedByName(snap: QuestSnapshot, name: string): number {
+    return snap.bank?.get(name.toLowerCase()) ?? 0;
 }
 
 export function owned(snap: QuestSnapshot, id: number): number {
@@ -40,7 +43,7 @@ export function scanBank(): QuestStep {
     return { kind: 'scanBank', bank: SV_TILE.ARDOUGNE_BANK };
 }
 
-export function withdrawFrom(items: { name: string; id: number; qty: number }[]): QuestStep {
+export function withdrawFrom(items: { name: string; id?: number; qty: number }[]): QuestStep {
     return { kind: 'withdraw', items, bank: SV_TILE.ARDOUGNE_BANK };
 }
 
@@ -111,12 +114,34 @@ export function sourceTools(snap: QuestSnapshot, need: readonly ShiloItem[]): Qu
     return short.length === 0 ? null : stockUp(short);
 }
 
+/** What the pack may eat, the food the script was given first. */
+export function foodNames(): string[] {
+    const chosen = QuestFood.name?.trim();
+    const names = [chosen, ...FOOD_FALLBACKS].filter((n): n is string => Boolean(n));
+    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
+}
+
+export function foodHeld(snap: QuestSnapshot): number {
+    return foodNames().reduce((total, name) => total + (snap.inv.get(name.toLowerCase()) ?? 0), 0);
+}
+
+// Why: `ownsInventory` opts the module out of the engine's food withdrawal, so the float is drawn here.
+// Why: nothing on Karamja sells food worth taking to Nazastarool and the island has no bank, so the pack is filled at Ardougne before the crossing.
+
+/** Draw `want` food from Ardougne, or null once the pack carries it. */
 export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null {
-    const carried = snap.inv.get(QUEST_FOOD.toLowerCase()) ?? 0;
+    const carried = foodHeld(snap);
     if (carried >= want) {
         return null;
     }
-    return { kind: 'buy', item: QUEST_FOOD, qty: want - carried, shop: JIMINUA_SHOP, estGp: (want - carried) * BREAD_PRICE };
+    if (!snap.bankKnown) {
+        return scanBank();
+    }
+    const stocked = foodNames().find(name => bankedByName(snap, name) > 0);
+    if (!stocked) {
+        return { kind: 'wait', reason: `bank has no food: none of ${foodNames().join(', ')}` };
+    }
+    return withdrawFrom([{ name: stocked, qty: Math.min(want - carried, bankedByName(snap, stocked)) }]);
 }
 
 /**

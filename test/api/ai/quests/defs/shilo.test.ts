@@ -4,6 +4,7 @@ import { SV_STAGE, parseShiloJournal } from '#/bot/api/ai/quests/defs/shilo/jour
 import { decide, shilo } from '#/bot/api/ai/quests/defs/shilo/index.js';
 import { evaluate } from '#/bot/api/ai/quests/EligibilityEvaluator.js';
 import { flagValue, hasFlag } from '#/bot/api/ai/quests/engine/types.js';
+import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
@@ -43,11 +44,16 @@ const PROVISIONED = new Map<number, number>([
     [SV_ITEM.BONES.id, 3]
 ]);
 
+/** The configured food is Trout by default, so a Lobster bank proves the fallback. */
+const FOOD_BANK = new Map<string, number>([['lobster', 20]]);
+
 function carrying(...pairs: [number, number][]): Map<number, number> {
     return new Map([...PROVISIONED, ...pairs]);
 }
 
 const name = (s: ReturnType<typeof decide>): string => (s.kind === 'custom' ? s.name : s.kind);
+
+const withdrawn = (s: ReturnType<typeof decide>) => (s.kind === 'withdraw' ? s.items : null);
 
 describe('shiloArea', () => {
     test('classifies each sealed pocket by a tile inside it', () => {
@@ -274,6 +280,27 @@ describe('shilo decide — provisioning', () => {
         expect(name(step)).toContain('bones');
     });
 
+    test('on the mainland it takes the food float along with the coins and bones', () => {
+        const step = decide(snapshot({
+            journal: 'notStarted',
+            stage: SV_STAGE.NOT_STARTED,
+            tile: MAINLAND,
+            invIds: new Map(PROVISIONED),
+            bank: FOOD_BANK
+        }));
+        expect(withdrawn(step)).toEqual([{ name: 'Lobster', qty: 8 }]);
+    });
+
+    test('an empty larder never holds up the legs before the tomb', () => {
+        const step = decide(snapshot({
+            journal: 'notStarted',
+            stage: SV_STAGE.NOT_STARTED,
+            tile: MAINLAND,
+            invIds: new Map(PROVISIONED)
+        }));
+        expect(name(step)).toContain('Mosol Rei');
+    });
+
     test('once on Karamja it never walks back for supplies', () => {
         const step = decide(snapshot({
             journal: 'notStarted',
@@ -445,6 +472,7 @@ describe('shilo decide — the tomb', () => {
             progress: progress(SV_STAGE.UNLOCKED_RASH_TOMB, flags),
             invIds: carrying(...ids),
             wornIds: new Set(wornIds),
+            bank: FOOD_BANK,
             tile
         }));
 
@@ -454,15 +482,16 @@ describe('shilo decide — the tomb', () => {
         expect(step.kind === 'equip' && step.item).toBe('Beads of the dead');
     });
 
-    test('wearing them, it stocks food and enters', () => {
+    test('wearing them, it draws the float and enters', () => {
         const food = tomb([[SV_ITEM.BONE_KEY.id, 1]], KARAMJA, [SV_ITEM.DEAD_BEADS.id]);
-        expect(food.kind === 'buy' && food.item).toBe('Bread');
+        expect(withdrawn(food)).toEqual([{ name: 'Lobster', qty: 8 }]);
 
         const inv = new Map([...PROVISIONED, [SV_ITEM.BONE_KEY.id, 1]]);
         const step = decide(snapshot({
             progress: progress(SV_STAGE.UNLOCKED_RASH_TOMB),
             invIds: inv,
-            inv: new Map([['bread', 8]]),
+            inv: new Map([['lobster', 8]]),
+            bank: FOOD_BANK,
             wornIds: new Set([SV_ITEM.DEAD_BEADS.id]),
             tile: KARAMJA
         }));
@@ -653,21 +682,43 @@ describe('shilo decide — pockets a step enters itself', () => {
     });
 });
 
-describe('shilo decide — a half-stocked bakery', () => {
-    const readyForTomb = (bread: number) => decide(snapshot({
+describe('shilo decide — the tomb larder', () => {
+    const readyForTomb = (food: number, bank = FOOD_BANK) => decide(snapshot({
         progress: progress(SV_STAGE.UNLOCKED_RASH_TOMB),
         invIds: carrying([SV_ITEM.BONE_KEY.id, 1]),
-        inv: new Map([['bread', bread]]),
+        inv: new Map([['lobster', food]]),
+        bank,
         wornIds: new Set([SV_ITEM.DEAD_BEADS.id]),
         tile: KARAMJA
     }));
 
-    test('an empty pack buys food before the tomb', () => {
-        expect(readyForTomb(0).kind).toBe('buy');
+    test('an empty pack draws food before the tomb', () => {
+        expect(withdrawn(readyForTomb(0))).toEqual([{ name: 'Lobster', qty: 8 }]);
     });
 
-    test('four loaves are enough to go in — Jiminua bakes ten at a time', () => {
+    test('four is enough to go in, a top-up is a return crossing', () => {
         expect(name(readyForTomb(4))).toContain("enter Rashiliyia's tomb");
+    });
+
+    test('the food the script was given wins over the fallbacks', () => {
+        const chosen = QuestFood.name;
+        QuestFood.name = 'Shark';
+        try {
+            const step = readyForTomb(0, new Map([['lobster', 20], ['shark', 20]]));
+            expect(withdrawn(step)).toEqual([{ name: 'Shark', qty: 8 }]);
+        } finally {
+            QuestFood.name = chosen;
+        }
+    });
+
+    test('a bank with none of it waits at the door rather than entering', () => {
+        const step = readyForTomb(0, new Map());
+        expect(step.kind).toBe('wait');
+        expect(step.kind === 'wait' && step.reason).toContain('no food');
+    });
+
+    test('it draws what the bank has when that is short of the float', () => {
+        expect(withdrawn(readyForTomb(0, new Map([['tuna', 3]])))).toEqual([{ name: 'Tuna', qty: 3 }]);
     });
 });
 

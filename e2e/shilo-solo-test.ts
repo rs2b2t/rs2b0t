@@ -103,8 +103,8 @@ try {
         }
         console.log(`gave ${pair}`);
     }
-    // Why: coins and bones are the only things this quest cannot buy on Karamja, and `::give` reaches the inventory rather than the bank, so the withdraw path stays a unit-test concern.
-    const carried = purse || (which === 'shilo' ? 'coins:20000,bones:3' : 'coins:20000');
+    // Why: coins, bones and food are the only things this quest cannot get on Karamja, and `::give` reaches the inventory rather than the bank, so the withdraw path stays a unit-test concern.
+    const carried = purse || (which === 'shilo' ? 'coins:20000,bones:3,lobster:8' : 'coins:20000');
     for (const pair of carried.split(',').map(s => s.trim()).filter(Boolean)) {
         const [obj, n] = pair.split(':');
         if (!(await cheatQuiet(page, `give ${obj} ${Number(n) || 1}`))) {
@@ -153,7 +153,7 @@ try {
     }
 
     await page.evaluate(id => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', id), which === 'shilo' ? 'zombiequeen' : 'junglepotion');
-    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', 'Bread'));
+    await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:food', 'Lobster'));
     await startScript(page, 'AIOQuester');
     console.log(`started AIOQuester on ${quest.name} — watching`);
 

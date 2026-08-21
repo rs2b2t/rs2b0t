@@ -1,6 +1,7 @@
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { QUESTS } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
+import { FOOD_FLOAT } from '../../food.js';
 import { SV_ITEM, SV_TILE, shiloArea, type ShiloArea, type ShiloItem } from './areas.js';
 import {
     buryZadimus,
@@ -37,9 +38,10 @@ import {
 } from './rashtomb.js';
 import { startQuest, takeWampumBelt } from './start.js';
 import {
+    FOOD_FALLBACKS,
     KARAMJA_PURSE,
-    QUEST_FOOD,
     banked,
+    foodHeld,
     held,
     owned,
     sourceBones,
@@ -56,13 +58,13 @@ import {
 const TOMB_BONES = 3;
 
 /** Enough to survive a Nazastarool phase and the Undead Ones between them. */
-const TOMB_FOOD = 8;
+const TOMB_FOOD = FOOD_FLOAT;
 
-// Why: Jiminua bakes ten loaves at a time and the stock drains, so insisting on the full eight would send the bot back for the last two while the oven catches up.
+// Why: a top-up is a return crossing now the float comes from Ardougne, so a pack a few short still goes in.
 // Why: below this the tomb is not worth entering.
 const TOMB_FOOD_MIN = 4;
 
-// Why: everything the quest needs is on the island except coins and bones, and there is no bank here until the quest itself opens Shilo's.
+// Why: everything the quest needs is on the island except coins, bones and food, and there is no bank here until the quest itself opens Shilo's.
 // Why: provisioning therefore only runs while still on the mainland.
 
 /** True while on Karamja, generously bounded. */
@@ -112,15 +114,17 @@ function inTheOpenOrIn(area: ShiloArea, ownPocket: ShiloArea, stepIfOk: QuestSte
     return area === ownPocket ? stepIfOk : inTheOpen(area, stepIfOk);
 }
 
-// Why: coins and bones are the only things this quest cannot buy on Karamja, and the nearest bank is an ocean away.
-// Why: both are therefore settled before the crossing and never mid-quest, unless something is lost.
+// Why: coins, bones and food are the only things this quest cannot get on Karamja, and the nearest bank is an ocean away.
+// Why: all three are therefore settled before the crossing and never mid-quest, unless something is lost.
 
-/** Provision coins and bones before the crossing, or null. */
+/** Provision coins, bones and food before the crossing, or null. */
 function provision(snap: QuestSnapshot, area: ShiloArea): QuestStep | null {
     if (area !== 'karamja' || onKaramja(snap.tile)) {
         return null;
     }
-    return sourceCoins(snap, KARAMJA_PURSE) ?? sourceBones(snap, TOMB_BONES);
+    const food = sourceFood(snap, TOMB_FOOD);
+    // Why: an empty larder is only fatal at the tomb door, so it waits there rather than holding up the legs before it.
+    return sourceCoins(snap, KARAMJA_PURSE) ?? sourceBones(snap, TOMB_BONES) ?? (food?.kind === 'wait' ? null : food);
 }
 
 /** Bank-first for anything the quest may have left behind on a previous run. */
@@ -262,8 +266,7 @@ function bonesWanted(snap: QuestSnapshot): number {
 
 /** Nothing can be fetched from inside, so the bones and the food go in with us. */
 function tombSupplies(snap: QuestSnapshot, bones: number): QuestStep | null {
-    const carried = snap.inv.get(QUEST_FOOD.toLowerCase()) ?? 0;
-    const food = carried < TOMB_FOOD_MIN ? sourceFood(snap, TOMB_FOOD) : null;
+    const food = foodHeld(snap) < TOMB_FOOD_MIN ? sourceFood(snap, TOMB_FOOD) : null;
     return (bones > 0 ? sourceBones(snap, bones) : null) ?? food;
 }
 
@@ -404,7 +407,9 @@ export const shilo: QuestModule = {
     bank: SV_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readShiloProgress,
-    sustain: { foods: [QUEST_FOOD, 'Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.6 },
+    // Literals, not foodNames(): this object is built at import, when the food
+    // setting still holds its default. The host merges the configured food in.
+    sustain: { foods: [...FOOD_FALLBACKS], eatBelowHp: 0.6 },
     decide
 };
 
