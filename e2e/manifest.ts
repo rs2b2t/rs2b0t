@@ -619,6 +619,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'hardclue-nav-live',
+        harness: 'clues/hardclue-nav-live.ts',
+        covers: { subsystems: ['nav', 'clues'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 240,
+        args: ['--limit', '8'],
+        note: 'web-walks to every hard clue destination with the transport quests complete and the gate kit carried; --limit 0 sweeps them all'
+    },
+    {
         id: 'spirit-tree-walk-live',
         harness: 'spirit-tree-walk-live.ts',
         covers: { subsystems: ['nav'] },
