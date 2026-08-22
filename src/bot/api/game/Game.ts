@@ -4,6 +4,7 @@ import { Input } from '../../input/Input.js';
 import { Execution } from '../execution/Execution.js';
 import { CombatStyleController, type CombatModeLabel, type CombatStyleResolution, type MeleeCombatStyle } from '../combat/CombatStyle.js';
 import { resolveTeleport, resolveTeleportComponent } from '../map/Teleport.js';
+import type { InvItem } from '../inventory/Inventory.js';
 import type { Loc } from '../model/Loc.js';
 import type { Npc } from '../model/Npc.js';
 
@@ -210,6 +211,19 @@ export const Game = {
         }
 
         return Input.castOnLoc(comId, local.lx, local.lz, loc.snap.typecode);
+    },
+
+    /** Cast a targeted spell at a backpack item (High / Low Level Alchemy). */
+    async castOnInv(spell: string, item: InvItem): Promise<boolean> {
+        const root = reader.sideTabInterface(MAGIC_TAB);
+        let comId = reader.targetButtonByBase(root, spell);
+        if (comId === -1 && root !== -1) {
+            comId = reader.buttonByText(root, spell);
+        }
+        if (comId === -1) {
+            return false;
+        }
+        return Input.castOnHeld(comId, item.id, item.slot, item.snap.comId);
     },
 
     /**

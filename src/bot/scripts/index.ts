@@ -50,6 +50,7 @@ import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot/Smithi
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher/BankFletcher.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
+import BankCleaner, { BANK_CLEANER_SETTINGS } from './BankCleaner/BankCleaner.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner/FlaxSpinner.js';
 import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
@@ -66,6 +67,7 @@ import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout/ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner/FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner/ShopRunner.js';
 import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport/AIOTeleport.js';
+import Alcher, { ALCHER_SETTINGS } from './Alcher/Alcher.js';
 import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
@@ -78,6 +80,16 @@ ScriptRegistry.register({
     tags: ['teleport', 'magic', 'banking', 'aio'],
     settingsSchema: AIOTELEPORT_SETTINGS,
     create: () => new AIOTeleport()
+});
+
+ScriptRegistry.register({
+    name: 'Alcher',
+    description:
+        'High or Low alchemy from a dropdown, item name or ID in the text box. Alchs from the pack and restocks at the nearest bank. Needs Nature runes and Fire runes (or a fire staff).',
+    category: 'Magic',
+    tags: ['magic', 'alch', 'high alchemy', 'low alchemy', 'utility'],
+    settingsSchema: ALCHER_SETTINGS,
+    create: () => new Alcher()
 });
 
 ScriptRegistry.register({
@@ -511,6 +523,16 @@ ScriptRegistry.register({
     tags: ['prayer', 'bones', 'banking', 'afk'],
     settingsSchema: BONE_BURIER_SETTINGS,
     create: () => new BoneBurier()
+});
+
+ScriptRegistry.register({
+    name: 'BankCleaner',
+    description:
+        'Opens the nearest bank and packs stacks by family (runes, staves, ores, bars, food, gear). Uses bank slot-swap packets instead of mouse-dragging.',
+    category: 'Utility',
+    tags: ['bank', 'sort', 'utility', 'cleaner'],
+    settingsSchema: BANK_CLEANER_SETTINGS,
+    create: () => new BankCleaner()
 });
 
 ScriptRegistry.register({

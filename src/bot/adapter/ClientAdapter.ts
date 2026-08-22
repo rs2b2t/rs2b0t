@@ -1509,6 +1509,25 @@ export const actions = {
         return true;
     },
 
+    /**
+     * Swap two slots on an inventory component (the packet a finished bank drag writes).
+     * Why: 2004scape has no sort-bank button; INV_BUTTOND is the only rearrange the server accepts.
+     */
+    invButtonD(comId: number, fromSlot: number, toSlot: number, mode = 0): boolean {
+        if (!raw || !raw.ingame || !raw.out) {
+            return false;
+        }
+        raw.out.p1Enc(ClientProt.INV_BUTTOND);
+        raw.out.p2(comId);
+        raw.out.p2(fromSlot);
+        raw.out.p2(toSlot);
+        raw.out.p1(mode);
+        if (mode === 0) {
+            IfType.list[comId]?.swapSlots(fromSlot, toSlot);
+        }
+        return true;
+    },
+
     walkTo(lx: number, lz: number): boolean {
         if (!raw || !raw.ingame || !raw.localPlayer) {
             return false;
