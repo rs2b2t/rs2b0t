@@ -139,7 +139,7 @@ describe('Bank named Withdraw-X', () => {
         }
     });
 
-    test('routes a non-round quantity through the Withdraw-X dialog in a single click', async () => {
+    test('routes a non-1/5/10 quantity through the Withdraw-X dialog in a single click', async () => {
         let bankCount = 100;
         let inventory: InvItemSnapshot[] = [];
         let clickedOperation = 0;
