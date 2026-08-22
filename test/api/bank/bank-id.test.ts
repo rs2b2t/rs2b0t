@@ -139,26 +139,28 @@ describe('Bank named Withdraw-X', () => {
         }
     });
 
-    test('decomposes a small arbitrary quantity into reliable fixed operations', async () => {
+    test('routes a non-1/5/10 quantity through the Withdraw-X dialog in a single click', async () => {
         let bankCount = 100;
         let inventory: InvItemSnapshot[] = [];
-        const clickedOperations: number[] = [];
+        let clickedOperation = 0;
+        let answered = 0;
         (reader as any).bankItems = () => [namedItem(bankCount)];
         readyBank(() => inventory);
         (Input as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
-            clickedOperations.push(op);
-            const quantity = op === 3 ? 10 : op === 2 ? 5 : 1;
+            clickedOperation = op;
+            return true;
+        };
+        (actions as any).answerCountDialog = (quantity: number) => {
+            answered = quantity;
             const carried = inventory[0]?.count ?? 0;
             inventory = [{ ...namedItem(carried + quantity), comId: 3214 }];
             bankCount -= quantity;
             return true;
         };
-        (actions as any).answerCountDialog = () => {
-            throw new Error('a decomposed withdrawal must not use the count dialog');
-        };
 
         expect(await Bank.withdrawX('Lobster', 40)).toBe(true);
-        expect(clickedOperations).toEqual([3, 3, 3, 3]);
+        expect(clickedOperation).toBe(5); // Withdraw-X op, not a 10/5/1 decomposition
+        expect(answered).toBe(40);
         expect(inventory[0]?.count).toBe(40);
     });
 
