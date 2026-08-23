@@ -1,4 +1,4 @@
-import { foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
+import { FOOD_OPTIONS, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -57,6 +57,14 @@ const BANK_TILE: WorldTile = EDGEVILLE_BANK;
 
 export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
     loadout: LOADOUT_SETTING,
+
+    food: {
+        type: 'string',
+        default: '',
+        options: FOOD_OPTIONS,
+        label: 'Food (overrides loadout)',
+        help: "exact food to eat and withdraw; blank uses the loadout's food, or 'Lobster' if the loadout names none"
+    },
 
     foodWithdraw: {
         type: 'number',
@@ -256,7 +264,7 @@ export default class WildyAgility extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        FOOD = scriptFood(this.settings, 'Lobster').toLowerCase();
+        FOOD = (this.settings.str('food', '').trim() || scriptFood(this.settings, 'Lobster')).toLowerCase();
 
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         MIN_FOOD = this.settings.num('minFood', 1);
