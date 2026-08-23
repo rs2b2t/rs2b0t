@@ -1,4 +1,4 @@
-import { foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
+import { foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -74,6 +74,12 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
         label: 'Bank below food count',
         help: 'at script start (and after death), bank if carrying fewer than this many; 0 = skip the startup food check'
     },
+    acquireFoodAtStart: {
+        type: 'boolean',
+        default: true,
+        label: 'Acquire food at start',
+        help: "if the inventory has no 'Food to withdraw' when the script starts (and you're not already on the course), withdraw from the bank before heading out; turn off to skip the startup bank trip even when empty"
+    },
     obstacleTimeoutTicks: {
         type: 'number',
         default: 24,
@@ -86,6 +92,7 @@ export const WILDY_AGILITY_SETTINGS: SettingsSchema = {
 
 let FOOD = 'lobster';
 
+let ACQUIRE_FOOD_AT_START = true;
 
 let FOOD_WITHDRAW = 20;
 let MIN_FOOD = 1;
@@ -104,7 +111,7 @@ async function ensureRetaliateOff(log: (m: string) => void): Promise<void> {
 }
 
 function foodCount(): number {
-    return Inventory.items().filter(i => i.name?.toLowerCase().includes(FOOD)).length;
+    return Inventory.items().filter(i => isFoodItem(i.name, FOOD)).length;
 }
 
 function needEat(): boolean {
@@ -253,6 +260,7 @@ export default class WildyAgility extends TaskBot {
 
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
         MIN_FOOD = this.settings.num('minFood', 1);
+        ACQUIRE_FOOD_AT_START = this.settings.bool('acquireFoodAtStart', true);
         OBSTACLE_TIMEOUT_TICKS = this.settings.num('obstacleTimeoutTicks', 24);
         this.course = [...COURSE_OBSTACLES];
 
@@ -280,19 +288,23 @@ export default class WildyAgility extends TaskBot {
         // Why: a startup below minFood banks before walking to the wilderness.
         // Why: already on the course or in a pit skips it, since mid-session restock is death-only. There is no safe gate exit from the lap zone.
         const startingFood = foodCount();
-        if (MIN_FOOD > 0 && startingFood < MIN_FOOD) {
+        const needStartupFood = (MIN_FOOD > 0 && startingFood < MIN_FOOD) || (ACQUIRE_FOOD_AT_START && startingFood === 0);
+        if (needStartupFood) {
             if (this.entered || inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
                 this.log(
                     `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) but already on course — continuing until death`
                 );
             } else {
+                // Why: when minFood is 0 but acquireFoodAtStart is on, the required
+                // floor is 1; otherwise honour minFood. The retry loop runs until the
+                // bank actually opens (don't gate it on `foodCount() < MIN_FOOD`, which
+                // is always false at MIN_FOOD 0 and would skip the bank entirely).
+                const required = MIN_FOOD > 0 ? MIN_FOOD : 1;
                 this.log(
                     `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) — banking before heading to the course`
                 );
-                // Retry bank-open failures; only stop once the bank opened and still
-                // has fewer than minFood (empty / wrong food name).
                 let opened = false;
-                for (let attempt = 0; attempt < 6 && foodCount() < MIN_FOOD; attempt++) {
+                for (let attempt = 0; attempt < 6 && !opened; attempt++) {
                     opened = await this.bankForFood('startup');
                     if (opened) {
                         break;
@@ -300,9 +312,9 @@ export default class WildyAgility extends TaskBot {
                     this.log(`startup bank open failed (attempt ${attempt + 1}/6) — retrying`);
                     await Execution.delayTicks(2);
                 }
-                if (!opened || foodCount() < MIN_FOOD) {
+                if (!opened || foodCount() < required) {
                     this.setStatus(`out of '${FOOD}' in bank — stopped`);
-                    ScriptRunner.stop(`only ${foodCount()} '${FOOD}' after bank (need ${MIN_FOOD})`);
+                    ScriptRunner.stop(`only ${foodCount()} '${FOOD}' after bank (need ${required})`);
                     return;
                 }
             }
@@ -413,7 +425,7 @@ export default class WildyAgility extends TaskBot {
 
     private async withdrawFood(): Promise<void> {
         for (let i = 0; i < FOOD_WITHDRAW * 2 && foodCount() < FOOD_WITHDRAW; i++) {
-            const banked = Bank.items().find(it => it.name?.toLowerCase().includes(FOOD));
+            const banked = Bank.items().find(it => isFoodItem(it.name, FOOD));
             if (!banked?.name) {
                 this.log(`no '${FOOD}' left in the bank`);
                 return;
@@ -498,7 +510,7 @@ class EatFood implements Task {
             if (!needEat()) {
                 return;
             }
-            const food = Inventory.items().find(i => i.name?.toLowerCase().includes(FOOD));
+            const food = Inventory.items().find(i => isFoodItem(i.name, FOOD));
             if (!food) {
                 return;
             }
