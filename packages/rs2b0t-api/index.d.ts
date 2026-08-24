@@ -311,6 +311,7 @@ export const Inventory: {
     /** Occupied slots. */
     used(): number;
     isFull(): boolean;
+    free(): number;
 };
 
 /**
@@ -420,6 +421,7 @@ export const Bank: {
         op: string,
         log?: (msg: string) => void
     ): Promise<boolean>;
+    close(): Promise<void>;
     /** Open the nearest named bank object already in the loaded scene. */
     openNearest(
         boothName: string,
