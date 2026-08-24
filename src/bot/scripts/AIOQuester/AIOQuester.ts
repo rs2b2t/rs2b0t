@@ -38,6 +38,11 @@ export const QUEST_OPTION_LABELS: Record<string, string> = Object.fromEntries(
     QUEST_DEFS.map(def => [def.record.id, def.record.name])
 );
 
+// Why: the picker is 63 chips deep, so it is sorted by name to be searchable by eye; the engine runs QUEST_DEFS order, so ticking A-Z cannot reorder the run.
+const QUEST_OPTION_IDS = QUEST_DEFS
+    .map(def => def.record.id)
+    .sort((a, b) => QUEST_OPTION_LABELS[a].localeCompare(QUEST_OPTION_LABELS[b]));
+
 const FALLBACK_FOOD = 'Lobster';
 
 /** Panel pixels the button row needs, held back from any list that fills the panel. */
@@ -52,10 +57,10 @@ export const AIO_SETTINGS: SettingsSchema = {
     quests: {
         type: 'string[]',
         default: [],
-        options: QUEST_DEFS.map(d => d.record.id),
+        options: QUEST_OPTION_IDS,
         optionLabels: QUEST_OPTION_LABELS,
         label: 'Quest queue (empty = all)',
-        help: 'which implemented quests to complete, run in the listed order; leave empty to run every implemented quest'
+        help: 'which implemented quests to complete; leave empty to run every implemented quest. Tick order does not matter, the queue runs the built-in order that puts prerequisites first'
     },
     loadout: LOADOUT_SETTING,
     food: {
@@ -172,7 +177,7 @@ export default class AIOQuester extends TaskBot {
         // A death must release the active quest operation before the engine can recover it.
         EventSignal.setInterrupt(() => this.skipRequested || this.died);
 
-        const queueNames = [...this.picked].map(id => defById(id)?.record.name ?? id);
+        const queueNames = QUEST_DEFS.filter(d => this.picked.has(d.record.id)).map(d => d.record.name);
         this.log(`AIOQuester, queue: ${queueNames.join(', ') || '(none)'}`);
         this.add(new ContinueDialog(), new EatFood(this), new QuestEngine(this));
     }

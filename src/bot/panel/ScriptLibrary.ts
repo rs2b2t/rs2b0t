@@ -187,7 +187,7 @@ export default class ScriptLibrary {
 
     private renderList(): void {
         this.listEl.replaceChildren();
-        const items = ScriptRegistry.list().filter(m => this.matches(m));
+        const items = ScriptRegistry.list().filter(m => this.matches(m)).sort((a, b) => a.name.localeCompare(b.name));
         if (items.length === 0) {
             const none = el('div', 'rs2b0t-dim');
             none.textContent = 'no scripts match';

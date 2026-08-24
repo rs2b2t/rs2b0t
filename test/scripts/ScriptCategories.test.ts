@@ -36,6 +36,17 @@ test('category chips list All first, then the rest alphabetically', () => {
     expect(rest.indexOf('Combat')).toBeLessThan(rest.indexOf('Woodcutting'));
 });
 
+test('the library lists its cards alphabetically, whatever order they registered in', () => {
+    document.body.replaceChildren();
+    const library = new ScriptLibrary(() => {});
+    library.open();
+
+    const names = Array.from(document.querySelectorAll<HTMLElement>('.rs2b0t-card-name')).map(el => el.textContent!);
+    expect(names.length).toBe(ScriptRegistry.list().length);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    expect(ScriptRegistry.list().map(m => m.name)).not.toEqual(names);
+});
+
 test('Escape closes the open script selector and stops propagation to outer handlers', () => {
     document.body.replaceChildren();
     const library = new ScriptLibrary(() => {});
