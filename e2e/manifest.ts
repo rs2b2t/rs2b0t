@@ -475,6 +475,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'loot-csv-panel-live',
+        harness: 'loot-csv-panel-live.ts',
+        covers: { scripts: ['AutoFighter'], subsystems: ['panel'] },
+        status: 'vetted',
+        provenAt: 'e3ef8111',
+        budgetMin: 4,
+        note: 'drives the params modal: list chips, switch to CSV, copy, paste, and back to chips with the pasted list intact'
+    },
+    {
         id: 'lostcity-spirit-eat-393-live',
         harness: 'lostcity-spirit-eat-393-live.ts',
         covers: { scripts: ['AIOQuester'] },
