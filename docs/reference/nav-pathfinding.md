@@ -63,6 +63,25 @@ that has refused to open.
 [`DirectNavigator`](../../src/bot/event/webwalk/DirectNavigator.ts) is the script-facing wrapper,
 see [Movement](../reference/api-movement.md).
 
+## The origin is snapped to a tile with a way out
+
+`findPath` snaps `from` with `snapWalkable` before it searches, because the live tile
+is often one the pack calls blocked: a scripted `p_teleport` ignores collision, so a
+crossing can leave the player standing on a loc.
+
+A candidate has to be walkable **and** hold an exit or a transport edge. 6,423 walkable
+tiles have neither, and A\* expands nothing from one of them, so a plan that starts
+there reports every destination unreachable instead of routing.
+[`goalCandidates`](../../src/bot/event/webwalk/PathFinder.ts) has always applied the same
+connectivity rule to the target.
+
+The Shilo log balance is the crossing that found it. `zq_logbalance` is two 1x1 blocking
+locs at (2907,3049) and (2909,3049) with one open tile between them, and the script
+crosses in two `p_teleport` hops of two tiles, so the player stands on (2908,3049) for a
+tick. `matchesTransportLanding` accepts that midpoint whenever the loc was clicked from
+two or more tiles out, the walker re-paths from it, and before this rule every hard clue
+past the log read as unreachable.
+
 ## Following a path
 
 [`WalkExecutor`](../../src/bot/event/webwalk/WalkExecutor.ts) turns waypoints into clicks. Each

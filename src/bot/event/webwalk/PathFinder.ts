@@ -456,9 +456,23 @@ export class PathFinder {
         list.push({ to, cost, transport, requires, kind, teleportId });
     }
 
+    // Why: a walkable tile with no exit expands nothing, so snapping onto one reports the whole map unreachable; the Shilo log's midpoint is such a tile and the walker stands on it mid-crossing.
     snapWalkable(p: NavPoint, radius: number): NavPoint | null {
-        if (this.walkable(p.x, p.z, p.level)) {
-            return p;
+        let stranded: NavPoint | null = null;
+        const usable = (x: number, z: number): NavPoint | null => {
+            if (!this.walkable(x, z, p.level)) {
+                return null;
+            }
+            const tile = { x, z, level: p.level };
+            if (this.exitMask(x, z, p.level) !== 0 || this.edgesFrom(x, z, p.level).length > 0) {
+                return tile;
+            }
+            stranded ??= tile;
+            return null;
+        };
+        const here = usable(p.x, p.z);
+        if (here) {
+            return here;
         }
         for (let r = 1; r <= radius; r++) {
             for (let dx = -r; dx <= r; dx++) {
@@ -466,13 +480,14 @@ export class PathFinder {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) {
                         continue;
                     }
-                    if (this.walkable(p.x + dx, p.z + dz, p.level)) {
-                        return { x: p.x + dx, z: p.z + dz, level: p.level };
+                    const hit = usable(p.x + dx, p.z + dz);
+                    if (hit) {
+                        return hit;
                     }
                 }
             }
         }
-        return null;
+        return stranded;
     }
 
     private goalCandidates(p: NavPoint, radius: number): Set<number> {
