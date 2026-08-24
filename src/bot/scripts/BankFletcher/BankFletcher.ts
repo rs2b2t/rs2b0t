@@ -279,19 +279,9 @@ class BankTrip implements Task {
                 await Execution.delayUntil(() => Inventory.contains(knifeName), 3000);
             }
 
-            const allOp = withdrawOp(logItem.ops, 'all');
-            if (allOp) {
-                this.bot.log(`withdrawing all ${logName} ('${allOp}')`);
-                await Bank.withdraw(logName, allOp);
-                await Execution.delayUntil(() => this.bot.logCount() > 0 || Bank.count(logName) === 0, 4000);
-            } else {
-                const tenOp = withdrawOp(logItem.ops, '10') ?? withdrawOp(logItem.ops, 'any') ?? 'Withdraw-10';
-                this.bot.log(`withdrawing ${logName} 10 at a time ('${tenOp}')`);
-                for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(logName) > 0; n++) {
-                    const before = this.bot.logCount();
-                    await Bank.withdraw(logName, tenOp);
-                    if (!(await Execution.delayUntil(() => this.bot.logCount() > before || Inventory.isFull(), 3000))) { break; }
-                }
+            this.bot.log(`withdrawing ${logName}`);
+            if (!(await Bank.withdrawLoad(logName))) {
+                this.bot.log(`could not withdraw ${logName} — will retry`);
             }
         } finally {
             // Leave the bank so knife/log item-on-item can run (#484). Multibox / renderer-off

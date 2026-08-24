@@ -30,6 +30,7 @@ let bankItems: InvItemSnapshot[];
 let boneCount: number;
 let stops: number;
 let withdrawals: { name: string; op: string }[];
+let bankCalls: { deposit: (name: string) => boolean }[];
 
 function bot(name = 'Bones'): BoneBurier {
     const instance = new BoneBurier();
@@ -52,12 +53,14 @@ beforeEach(() => {
     boneCount = 0;
     stops = 0;
     withdrawals = [];
+    bankCalls = [];
 
     actions.closeModal = () => {
         bankOpen = false;
         return true;
     };
-    Banking.bankNearest = async () => {
+    Banking.bankNearest = async opts => {
+        bankCalls.push({ deposit: opts.deposit });
         bankOpen = true;
         return true;
     };
@@ -119,6 +122,21 @@ test('closes the bank and stops when the configured bones run out', async () => 
     expect(bankOpen).toBe(false);
     expect(withdrawals).toEqual([]);
     expect(stops).toBe(1);
+});
+
+test('deposits the whole pack on restock, even when it is already full', async () => {
+    bankItems = [
+        { id: 526, count: 100, slot: 0, name: 'Bones', comId: 5382, ops: ['Withdraw-1', 'Withdraw-All'] }
+    ];
+    Inventory.free = () => 0;
+
+    await restock(bot('Bones'));
+
+    expect(stops).toBe(0);
+    expect(bankCalls).toHaveLength(1);
+    expect(bankCalls[0]!.deposit('Strange fruit')).toBe(true);
+    expect(bankCalls[0]!.deposit('Bones')).toBe(true);
+    expect(withdrawals).toEqual([{ name: 'Bones', op: 'Withdraw-All' }]);
 });
 
 test('closes the bank before burying and records progress', async () => {

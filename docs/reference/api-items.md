@@ -64,6 +64,7 @@ Bank.withdraw(name: string, op?: string): boolean | Promise<boolean>
 Bank.withdrawById(id: number, op?: string): boolean | Promise<boolean>
 Bank.withdrawX(name: string, count: number): Promise<boolean>   // Withdraw-X + dialog
 Bank.withdrawXById(id: number, count: number): Promise<boolean>
+Bank.withdrawLoad(name: string): Promise<boolean>               // All, else X for free slots
 Bank.deposit(name: string, op?: string): boolean | Promise<boolean>
 Bank.depositInventory(): Promise<void>
 Bank.depositAllMatching(match: (name, id) => boolean, log?): Promise<void>
@@ -73,7 +74,7 @@ Bank.openNearest(boothName, op, log?): Promise<boolean>
 Bank.openNearestAccess(access, log?): Promise<boolean>
 
 // Pick a real withdraw label from item.ops ("Withdraw-All" vs "Withdraw All")
-withdrawOp(ops, amount: 'all' | '10' | '1' | 'any'): string | null
+withdrawOp(ops, amount: 'all' | '10' | '5' | '1' | 'x' | 'any'): string | null
 ```
 
 **Gotchas**
@@ -91,10 +92,7 @@ withdrawOp(ops, amount: 'all' | '10' | '1' | 'any'): string | null
 if (!(await Banking.open({ stand: bankTile }))) return;
 await Execution.delayUntil(() => Bank.loaded(), 3000);
 await Bank.depositAllMatching(depositAllExcept(['Harpoon', 'Fishing bait']));
-const bait = Bank.items().find(i => i.name === 'Fishing bait');
-const op = bait ? withdrawOp(bait.ops, 'all') : null;
-if (op) await Bank.withdraw('Fishing bait', op);
-// or exact qty:
+await Bank.withdrawLoad('Fishing bait');
 await Bank.withdrawX('Feather', 100);
 // or by id when names collide:
 // await Bank.withdrawById(someId, op);

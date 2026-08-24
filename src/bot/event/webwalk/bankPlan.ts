@@ -43,6 +43,12 @@ export function itemsRequiredByWaypoints(waypoints: Waypoint[]): Record<string, 
         if (count <= 0) {
             return;
         }
+        // Why: each ship/toll fare is spent on that hop, so Port Sarim→Karamja then Brimhaven→Ardougne is 60 coins, not max(30, 30) (#709).
+        // Why: keys and tools are still a peak-hold (one Brass key opens every door that wants it).
+        if (name.toLowerCase() === 'coins') {
+            need[name] = (need[name] ?? 0) + count;
+            return;
+        }
         need[name] = Math.max(need[name] ?? 0, count);
     };
 

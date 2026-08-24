@@ -100,15 +100,10 @@ export default class BoneBurier extends LoopingBot {
             this.finishComplete();
             return;
         }
-        if (Inventory.free() === 0) {
-            this.status = 'pack full';
-            ScriptRunner.stop(`pack is full of other items — free at least one slot for '${this.boneName}', then restart.`);
-            return;
-        }
 
         this.status = 'opening nearest bank';
         const opened = await Banking.bankNearest({
-            deposit: () => false,
+            deposit: () => true,
             commonJunk: false,
             log: message => this.log(`  ${message}`)
         });

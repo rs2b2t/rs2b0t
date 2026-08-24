@@ -368,7 +368,7 @@ export interface BankObjectAccess {
  */
 export function withdrawOp(
     ops: readonly (string | null)[],
-    amount: 'all' | '10' | '1' | 'any'
+    amount: 'all' | '10' | '5' | '1' | 'x' | 'any'
 ): string | null;
 
 /**
@@ -392,11 +392,13 @@ export const Bank: {
     count(name: string): number;
     /**
      * Withdraw by context-menu op label (default `'Withdraw-1'`).
-     * Prefer `withdrawOp(item.ops, 'all'|'10'|'1'|'any')` for the real label.
+     * Prefer `withdrawOp(item.ops, 'all'|'10'|'5'|'1'|'x'|'any')` for the real label.
      */
     withdraw(name: string, op?: string): boolean | Promise<boolean>;
     /** Withdraw-X + count dialog for an exact quantity. */
     withdrawX(name: string, count: number): Promise<boolean>;
+    /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
+    withdrawLoad(name: string): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
     /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;

@@ -20,6 +20,8 @@ import {
     withdrawFor,
     canSmelt,
     countPrimary,
+    smeltStalled,
+    SMELT_IDLE_MS,
     type Recipe
 } from './SmelterBotLogic.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -213,12 +215,31 @@ class SmeltTrip implements Task {
         const barKeyword = ({ Adamant: 'Adamantite', Rune: 'Runite' } as Record<string, string>)[recipe.bar] ?? recipe.bar;
         const before = this.bot.primaryCount();
         this.bot.setStatus(`smelting ${recipe.bar}`);
-        if (await ChatDialog.makeX(barKeyword, SMELT_X)) {
-            await Execution.delayUntil(() => this.bot.primaryCount() === 0 || ChatDialog.canContinue(), 120000);
-            if (this.bot.primaryCount() < before) { this.bot.recordSmelt(before - this.bot.primaryCount()); }
-        } else {
+        if (!(await ChatDialog.makeX(barKeyword, SMELT_X))) {
             this.bot.log(`Smelt panel open but couldn't Smelt-X '${barKeyword}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
             await Execution.delayTicks(2);
+            return;
+        }
+        // Why: a single 120s delayUntil parks the task loop, so ContinueDialog never runs and a furnace that never consumed ore looks dead (#711).
+        let last = before;
+        let lastChange = Date.now();
+        const deadline = Date.now() + 120_000;
+        while (Date.now() < deadline) {
+            const now = this.bot.primaryCount();
+            if (now === 0 || ChatDialog.canContinue()) {
+                break;
+            }
+            if (now < last) {
+                last = now;
+                lastChange = Date.now();
+            } else if (smeltStalled(now, last, Date.now() - lastChange, SMELT_IDLE_MS)) {
+                this.bot.log('smelting made no progress — retrying');
+                break;
+            }
+            await Execution.delayTicks(1);
+        }
+        if (this.bot.primaryCount() < before) {
+            this.bot.recordSmelt(before - this.bot.primaryCount());
         }
     }
 }

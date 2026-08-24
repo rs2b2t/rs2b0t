@@ -76,3 +76,11 @@ export function countPrimary(items: readonly PackItem[], recipe: Recipe): number
     const pat = primaryOre(recipe);
     return items.filter(i => matches(i.name, pat)).length;
 }
+
+/** Milliseconds of no ore drop before the smelt task yields instead of parking the loop (#711). */
+export const SMELT_IDLE_MS = 8_000;
+
+/** True when the furnace has stopped consuming ore and the wait should retry. */
+export function smeltStalled(nowCount: number, lastCount: number, idleMs: number, limitMs = SMELT_IDLE_MS): boolean {
+    return nowCount >= lastCount && idleMs > limitMs;
+}

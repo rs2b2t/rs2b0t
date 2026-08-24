@@ -180,18 +180,9 @@ class BankTrip implements Task {
             return;
         }
         const barName = barBank.name;
-        const allOp = withdrawOp(barBank.ops, 'all');
-        if (allOp) {
-            this.bot.log(`withdrawing all ${barName} ('${allOp}')`);
-            await Bank.withdraw(barName, allOp);
-            await Execution.delayUntil(() => this.bot.barCount() > 0 || Bank.count(barName) === 0, 4000);
-        } else {
-            const tenOp = withdrawOp(barBank.ops, '10') ?? withdrawOp(barBank.ops, 'any') ?? 'Withdraw-10';
-            for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(barName) > 0; n++) {
-                const before = this.bot.barCount();
-                await Bank.withdraw(barName, tenOp);
-                if (!(await Execution.delayUntil(() => this.bot.barCount() > before || Inventory.isFull(), 3000))) { break; }
-            }
+        this.bot.log(`withdrawing ${barName}`);
+        if (!(await Bank.withdrawLoad(barName))) {
+            this.bot.log(`could not withdraw ${barName} — will retry`);
         }
     }
 }

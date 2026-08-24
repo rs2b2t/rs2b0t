@@ -81,6 +81,45 @@ describe('itemsRequiredByWaypoints / missing', () => {
         expect(need['Coins']).toBe(10);
     });
 
+    test('two ship fares sum, they are not the same 30 coins twice', () => {
+        const path: Waypoint[] = [
+            { x: 3027, z: 3218, level: 1 },
+            {
+                x: 2956,
+                z: 3143,
+                level: 1,
+                transport: {
+                    locName: 'Seaman Thresnor',
+                    action: 'Pay-fare',
+                    locX: 3027,
+                    locZ: 3218,
+                    kind: 'ship'
+                }
+            },
+            { x: 2772, z: 3234, level: 1 },
+            {
+                x: 2683,
+                z: 3268,
+                level: 1,
+                transport: {
+                    locName: 'Customs officer',
+                    action: 'Pay-fare',
+                    locX: 2772,
+                    locZ: 3234,
+                    kind: 'ship'
+                }
+            }
+        ];
+        expect(itemsRequiredByWaypoints(path)['Coins']).toBe(60);
+
+        const empty = emptyWorldStateData();
+        expect(missingItemsForPath(path, empty)).toEqual([{ name: 'Coins', count: 60 }]);
+
+        const half = emptyWorldStateData();
+        half.items = { Coins: 30 };
+        expect(missingItemsForPath(path, half)).toEqual([{ name: 'Coins', count: 30 }]);
+    });
+
     // Why: the baked pack keys the crossing at the approach stand (3304,3118) while the loc sits at (3302,3116), so a lookup on the loc alone finds nothing.
     test('Shantay pass toll is found when the loc tile differs from the crossing key', () => {
         const path: Waypoint[] = [

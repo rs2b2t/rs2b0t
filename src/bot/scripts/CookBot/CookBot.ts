@@ -5,7 +5,7 @@ import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Bank, withdrawOp } from '../../api/bank/Bank.js';
+import { Bank } from '../../api/bank/Bank.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -130,19 +130,9 @@ class BankTrip implements Task {
             return;
         }
         const bankName = fishItem.name;
-        const allOp = withdrawOp(fishItem.ops, 'all');
-        if (allOp) {
-            this.bot.log(`withdrawing all ${bankName} ('${allOp}')`);
-            await Bank.withdraw(bankName, allOp);
-            await Execution.delayUntil(() => this.bot.rawCount() > 0 || Bank.count(bankName) === 0, 4000);
-        } else {
-            const tenOp = withdrawOp(fishItem.ops, '10') ?? withdrawOp(fishItem.ops, 'any') ?? 'Withdraw-10';
-            this.bot.log(`withdrawing ${bankName} 10 at a time ('${tenOp}')`);
-            for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
-                const before = this.bot.rawCount();
-                await Bank.withdraw(bankName, tenOp);
-                if (!(await Execution.delayUntil(() => this.bot.rawCount() > before || Inventory.isFull(), 3000))) { break; }
-            }
+        this.bot.log(`withdrawing ${bankName}`);
+        if (!(await Bank.withdrawLoad(bankName))) {
+            this.bot.log(`could not withdraw ${bankName} — will retry`);
         }
     }
 }

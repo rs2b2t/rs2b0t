@@ -9,6 +9,8 @@ import {
     withdrawFor,
     canSmelt,
     countPrimary,
+    smeltStalled,
+    SMELT_IDLE_MS,
     type PackItem
 } from '#/bot/scripts/SmelterBot/SmelterBotLogic.js';
 
@@ -180,5 +182,17 @@ describe('canSmelt', () => {
     });
     test('an empty pack cannot', () => {
         expect(canSmelt([], steel)).toBe(false);
+    });
+});
+
+describe('smeltStalled', () => {
+    test('does not stall while ore is still dropping', () => {
+        expect(smeltStalled(10, 14, SMELT_IDLE_MS + 1)).toBe(false);
+    });
+    test('stalls when ore has not dropped past the idle window', () => {
+        expect(smeltStalled(14, 14, SMELT_IDLE_MS + 1)).toBe(true);
+    });
+    test('does not stall inside the idle window', () => {
+        expect(smeltStalled(14, 14, SMELT_IDLE_MS - 1)).toBe(false);
     });
 });

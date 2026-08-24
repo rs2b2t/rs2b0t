@@ -34,7 +34,7 @@ import type { WorldStateData } from './worldStateData.js';
 import { formatHops } from './hops.js';
 import { executeTeleportHop } from './teleportExecute.js';
 import { missingItemsForPath, pathHasTeleport, planBankLeg, type MissingItem } from './bankPlan.js';
-import { explainUnreachable } from './gateItems.js';
+import { explainUnreachable, gateItemCandidates } from './gateItems.js';
 import { virtualizeWithItems } from './virtualState.js';
 import { findForwardRecoveryIndex, stallPhase } from './routeRecovery.js';
 import { RouteState } from './routeState.js';
@@ -515,10 +515,9 @@ class WalkExecutorImpl {
             return false;
         }
 
-        const bankItems = this.readBankItemCounts();
-        if (!bankItems || Object.keys(bankItems).length === 0) {
-            return false;
-        }
+        const knownBank = this.readBankItemCounts();
+        // Why: WalkTo does not pass a bank snapshot, so a Varrock→Ardougne walk never withdrew the second 30gp fare unless a caller had already opened the bank (#709).
+        const bankItems = knownBank && Object.keys(knownBank).length > 0 ? knownBank : gateItemCandidates();
 
         let state: WorldStateData | undefined;
         try {

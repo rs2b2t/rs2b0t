@@ -139,26 +139,28 @@ describe('Bank named Withdraw-X', () => {
         }
     });
 
-    test('decomposes a small arbitrary quantity into reliable fixed operations', async () => {
+    test('routes a non-1/5/10 quantity through the Withdraw-X dialog in a single click', async () => {
         let bankCount = 100;
         let inventory: InvItemSnapshot[] = [];
-        const clickedOperations: number[] = [];
+        let clickedOperation = 0;
+        let answered = 0;
         (reader as any).bankItems = () => [namedItem(bankCount)];
         readyBank(() => inventory);
         (Input as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
-            clickedOperations.push(op);
-            const quantity = op === 3 ? 10 : op === 2 ? 5 : 1;
+            clickedOperation = op;
+            return true;
+        };
+        (actions as any).answerCountDialog = (quantity: number) => {
+            answered = quantity;
             const carried = inventory[0]?.count ?? 0;
             inventory = [{ ...namedItem(carried + quantity), comId: 3214 }];
             bankCount -= quantity;
             return true;
         };
-        (actions as any).answerCountDialog = () => {
-            throw new Error('a decomposed withdrawal must not use the count dialog');
-        };
 
         expect(await Bank.withdrawX('Lobster', 40)).toBe(true);
-        expect(clickedOperations).toEqual([3, 3, 3, 3]);
+        expect(clickedOperation).toBe(5); // Withdraw-X op, not a 10/5/1 decomposition
+        expect(answered).toBe(40);
         expect(inventory[0]?.count).toBe(40);
     });
 
@@ -180,5 +182,84 @@ describe('Bank named Withdraw-X', () => {
 
         expect(await Bank.withdrawX('Lobster', 10)).toBe(true);
         expect(answered).toBe(3);
+    });
+});
+
+describe('Bank.withdrawLoad', () => {
+    function readyBank(inventory: () => InvItemSnapshot[]): void {
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankSideItems = inventory;
+        (reader as any).inventory = inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+    }
+
+    test('uses Withdraw-All when the op exists', async () => {
+        let inventory: InvItemSnapshot[] = [];
+        const allItem = (): InvItemSnapshot => ({
+            ...namedItem(80),
+            ops: ['Withdraw-1', 'Withdraw-5', 'Withdraw-10', 'Withdraw-All', 'Withdraw-X']
+        });
+        (reader as any).bankItems = () => [allItem()];
+        readyBank(() => inventory);
+        let clickedOperation = 0;
+        (Input as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
+            clickedOperation = op;
+            inventory = Array.from({ length: 28 }, (_, slot) => ({ ...namedItem(1), slot, comId: 3214 }));
+            return true;
+        };
+        (actions as any).answerCountDialog = () => {
+            throw new Error('Withdraw-All must not use the count dialog');
+        };
+
+        expect(await Bank.withdrawLoad('Lobster')).toBe(true);
+        expect(clickedOperation).toBe(4);
+        expect(inventory).toHaveLength(28);
+    });
+
+    test('Withdraw-X fills free slots when All is missing', async () => {
+        let inventory: InvItemSnapshot[] = [];
+        let answered = 0;
+        let clickedOperation = 0;
+        (reader as any).bankItems = () => [namedItem(80)];
+        readyBank(() => inventory);
+        (Input as any).invButton = (_id: number, _slot: number, _comId: number, op: number) => {
+            clickedOperation = op;
+            return true;
+        };
+        (actions as any).answerCountDialog = (quantity: number) => {
+            answered = quantity;
+            inventory = Array.from({ length: quantity }, (_, slot) => ({ ...namedItem(1), slot, comId: 3214 }));
+            return true;
+        };
+
+        expect(await Bank.withdrawLoad('Lobster')).toBe(true);
+        expect(clickedOperation).toBe(5);
+        expect(answered).toBe(28);
+        expect(inventory).toHaveLength(28);
+    });
+
+    test('returns false when the item is not in the bank', async () => {
+        (reader as any).bankItems = () => [namedItem(20)];
+        readyBank(() => []);
+        (Input as any).invButton = () => {
+            throw new Error('must not click a missing item');
+        };
+
+        expect(await Bank.withdrawLoad('Shark')).toBe(false);
+    });
+
+    test('returns true without clicking when the pack is already full', async () => {
+        const inventory = Array.from({ length: 28 }, (_, slot) => ({ ...namedItem(1), slot, comId: 3214 }));
+        (reader as any).bankItems = () => [namedItem(80)];
+        readyBank(() => inventory);
+        (Input as any).invButton = () => {
+            throw new Error('a full pack must not withdraw');
+        };
+
+        expect(await Bank.withdrawLoad('Lobster')).toBe(true);
     });
 });
