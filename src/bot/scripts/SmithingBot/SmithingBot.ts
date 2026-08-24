@@ -24,7 +24,7 @@ const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
 
-// Why: a product needs this many bars to forge even one, so smithing only starts when the pack holds at least that many — otherwise the make panel opens and forges nothing (then loops).
+// Why: a product needs this many bars to forge even one, so smithing starts only when the pack holds that many. Below it the make panel opens, forges nothing and loops.
 const BARS_PER_PRODUCT: Readonly<Record<string, number>> = {
     Dagger: 1, Sword: 1, Scimitar: 2, Longsword: 2, '2h sword': 3, Axe: 1, Mace: 1,
     Warhammer: 3, Battleaxe: 3, Chainbody: 2, Platelegs: 3, Plateskirt: 3, Platebody: 5,

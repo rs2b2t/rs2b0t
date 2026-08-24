@@ -803,6 +803,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'smithingbot-bank-loop-live',
+        harness: 'smithingbot-bank-loop-live.ts',
+        covers: { scripts: ['SmithingBot'] },
+        status: 'vetted',
+        provenAt: '57498434',
+        budgetMin: 10,
+        note: 'Varrock West bank → anvil → bank on a 54-bar Platebody load; the remainder the bot cannot smith has to send it back'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },
