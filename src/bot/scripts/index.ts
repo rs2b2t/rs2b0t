@@ -56,6 +56,7 @@ import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletche
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
 import FlaxSpinner, { SETTINGS as FLAXSPINNER_SETTINGS } from './FlaxSpinner/FlaxSpinner.js';
+import FlaxAIO, { SETTINGS as FLAXAIO_SETTINGS } from './FlaxAIO/flaxaio.js';
 import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
 import CoalTrucks from './CoalTrucks/CoalTrucks.js';
@@ -589,6 +590,15 @@ ScriptRegistry.register({
     tags: ['seers', 'crafting', 'banking', 'afk'],
     settingsSchema: FLAXSPINNER_SETTINGS,
     create: () => new FlaxSpinner()
+});
+
+ScriptRegistry.register({
+    name: 'FlaxAIO',
+    description: 'Seers flax all-in-one — pick flax at the field and/or spin it at the wheel into bow strings, banking between. Pick and Spin are both optional toggles (at least one must be on); with both on it picks, spins on the way back, and banks the bow strings',
+    category: 'Crafting',
+    tags: ['seers', 'crafting', 'gathering', 'banking', 'afk', 'flax', 'bow-strings'],
+    settingsSchema: FLAXAIO_SETTINGS,
+    create: () => new FlaxAIO()
 });
 
 ScriptRegistry.register({
