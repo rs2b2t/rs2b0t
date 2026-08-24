@@ -80,8 +80,10 @@ Runs the Wilderness Agility Course, eats while running, and on death banks (food
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food (overrides loadout) — one of: Shark, Lobster, Swordfish, Tuna, Salmon, Trout, Pike, Bass, Herring, Sardine, Anchovies, Shrimps, Cooked meat, Cooked chicken, Bread, Stew, Cake, Chocolate cake, Plain pizza, Meat pizza, Anchovy pizza, Pineapple pizza, Redberry pie, Meat pie, Apple pie |
 | `foodWithdraw` | number (1–28) | `20` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
+| `acquireFoodAtStart` | boolean | `true` | Acquire food at start |
 | `obstacleTimeoutTicks` | number (5–60) | `24` | Obstacle timeout (ticks) |
 
 ## Combat

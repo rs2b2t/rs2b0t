@@ -954,5 +954,14 @@ export const CASES: readonly Case[] = [
         args: ['--stage', '5', '--until', '6', '--at', '2901,3466,0', '--stocked', '--minutes', '30'],
         budgetMin: 35,
         note: "Witch's House by stage; --stage jumps %ballquest, --stocked hands over the cheese and gloves so a staged run does not shop for them"
+    },
+    {
+        id: 'wildyagility-food-startup-live',
+        harness: 'wildyagility-food-startup-live.ts',
+        covers: { scripts: ['WildyAgility'] },
+        status: 'vetted',
+        provenAt: '43a7a587',
+        budgetMin: 6,
+        note: 'cake and chocolate cake both banked; the startup trip must bring back only the one the setting names'
     }
 ];

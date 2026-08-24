@@ -300,16 +300,13 @@ export default class WildyAgility extends TaskBot {
         if (needStartupFood) {
             if (this.entered || inPit(here, COURSE_CENTRE, PIT_Z_GAP)) {
                 this.log(
-                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) but already on course — continuing until death`
+                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) but already on course, continuing until death`
                 );
             } else {
-                // Why: when minFood is 0 but acquireFoodAtStart is on, the required
-                // floor is 1; otherwise honour minFood. The retry loop runs until the
-                // bank actually opens (don't gate it on `foodCount() < MIN_FOOD`, which
-                // is always false at MIN_FOOD 0 and would skip the bank entirely).
+                // Why: with minFood 0 and acquireFoodAtStart on, the floor is 1; otherwise honour minFood. The retry gates on the bank opening, not on `foodCount() < MIN_FOOD`, which is always false at minFood 0 and would skip the bank.
                 const required = MIN_FOOD > 0 ? MIN_FOOD : 1;
                 this.log(
-                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}) — banking before heading to the course`
+                    `only ${startingFood} '${FOOD}' (min ${MIN_FOOD}), banking before heading to the course`
                 );
                 let opened = false;
                 for (let attempt = 0; attempt < 6 && !opened; attempt++) {
@@ -317,11 +314,11 @@ export default class WildyAgility extends TaskBot {
                     if (opened) {
                         break;
                     }
-                    this.log(`startup bank open failed (attempt ${attempt + 1}/6) — retrying`);
+                    this.log(`startup bank open failed (attempt ${attempt + 1}/6), retrying`);
                     await Execution.delayTicks(2);
                 }
                 if (!opened || foodCount() < required) {
-                    this.setStatus(`out of '${FOOD}' in bank — stopped`);
+                    this.setStatus(`out of '${FOOD}' in bank, stopped`);
                     ScriptRunner.stop(`only ${foodCount()} '${FOOD}' after bank (need ${required})`);
                     return;
                 }
