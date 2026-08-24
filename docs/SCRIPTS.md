@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 53. Categories: 19.
+- Scripts: 54. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -29,7 +29,7 @@
 - [Smithing](#smithing) — 2
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
-- [Woodcutting](#woodcutting) — 1
+- [Woodcutting](#woodcutting) — 2
 
 ## Agility
 
@@ -898,6 +898,16 @@ Solves the easy clue scroll (or opens the casket) in your pack — banks everyth
 | `useTeleports` | boolean | `true` | Use teleports |
 
 ## Woodcutting
+
+### GnomeMagicChopper
+
+Locates every Magic tree in Tree Gnome Stronghold (west 2372,3425 / south-bank 2433,3410 / east 2491,3413), runs to the nearest one that is up, and chops it. If none are up it hops to the next pin. Banks at the upstairs gnome booths (stairs 2444,3416 and 2445,3443 only). If fletching is on: magic shortbows at 80 / longbows at 85. On death: Lumbridge knife spawn, 500gp, Steel axe from Bob, SneakyArdougne boats, then gnome restock.
+
+- Tags: `woodcutting`, `fletching`, `magic`, `gnome`, `stronghold`, `shortbow`, `longbow`, `death-recovery`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `fletchLogs` | boolean | `true` | Fletch logs into bows |
 
 ### Woodcutter
 

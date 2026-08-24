@@ -5,7 +5,7 @@ export const SCRIPT_NAMES = [
     'BrimhavenAgility', 'ChaosDruidKiller', 'ChickenKiller', 'ClueSolver',
     'CoalTrucks', 'CookBot', 'DartFletcher', 'DoorOpener', 'DuelArena', 'EdgevilleMonkeyBars',
     'EssMiner', 'FireGiant', 'Firemaker', 'FlaxPicker', 'FlaxRunner',
-    'FlaxSpinner', 'GatheringBot', 'GemCutter', 'GreenDragon', 'HerbCleaner',
+    'FlaxSpinner', 'GatheringBot', 'GemCutter', 'GnomeMagicChopper', 'GreenDragon', 'HerbCleaner',
     'HerbloreSecondaries', 'HillGiant', 'LeatherCrafter', 'MossGiant',
     'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RockCrab', 'RoguesPurse',
     'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot',

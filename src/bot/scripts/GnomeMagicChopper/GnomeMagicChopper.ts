@@ -171,12 +171,12 @@ function isUpstairs(tile: MaybeTile = Game.tile()) {
     return playerFloor(tile) >= 1;
 }
 
-/** Whole Tree Gnome Stronghold, including the south gate. */
+/** Tree Gnome Stronghold, including the south gate. */
 function inGnomeArea(tile: MaybeTile) {
     return !!tile && inBox(tile, 2360, 3375, 2520, 3520);
 }
 
-/** The band that actually holds the three Magic trees. */
+/** The band that holds the three Magic trees. */
 function inTreeBand(tile: MaybeTile) {
     return !!tile && playerFloor(tile) === 0 && inBox(tile, 2360, 3395, 2515, 3455);
 }
@@ -728,7 +728,7 @@ export default class GnomeMagicChopper extends LoopingBot {
                 this.gearReady = false;
                 this.status = 'dead';
                 this.log(
-                    `died (#${this.deaths}) — knife spawn → 500gp → Bob → SneakyArdougne → gnome magics`
+                    `died (#${this.deaths}), knife spawn → 500gp → Bob → SneakyArdougne → gnome magics`
                 );
             }
             if (STUN_RE.test(e.text)) {
@@ -739,7 +739,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         this.on('skill.level', e => {
             if (e.name === 'fletching') {
                 const plan = this.planAt(e.level);
-                this.log(`fletching ${e.previous} → ${e.level} — now making ${plan.label}`);
+                this.log(`fletching ${e.previous} → ${e.level}, now making ${plan.label}`);
                 this.planId = plan.id;
             }
             if (e.name === 'woodcutting') {
@@ -750,13 +750,13 @@ export default class GnomeMagicChopper extends LoopingBot {
         const plan = this.currentPlan();
         const pins = TREE_PINS.map(p => `${p.tile.x},${p.tile.z}`).join(' / ');
         this.log(
-            `GnomeMagicChopper — magics at ${pins} — ` +
+            `GnomeMagicChopper, magics at ${pins}, ` +
                 (this.fletchEnabled()
                     ? `fletching ${Skills.level('fletching')} → ${plan.label}`
                     : 'banking logs (fletch off)')
         );
         if (Skills.level('woodcutting') < 75) {
-            this.log(`WARNING: Woodcutting ${Skills.level('woodcutting')} < 75 — Magic trees may refuse chops`);
+            this.log(`WARNING: Woodcutting ${Skills.level('woodcutting')} < 75, Magic trees may refuse chops`);
         }
         this.status = 'ready';
     }
@@ -856,7 +856,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         if (!inGnomeArea(here)) {
             this.status = 'walking to Gnome Stronghold';
-            this.log(`outside gnome — walking to gate ${GNOME_ENTRANCE.x},${GNOME_ENTRANCE.z}`);
+            this.log(`outside gnome, walking to gate ${GNOME_ENTRANCE.x},${GNOME_ENTRANCE.z}`);
             await Traversal.walkResilient(GNOME_ENTRANCE, {
                 radius: 3,
                 log: m => this.log(`  ${m}`)
@@ -905,7 +905,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             : `chopping (${tree.distance()}t)`;
         this.log(
             `chopping Magic tree @ ${t.x},${t.z}` +
-                (contested ? ` (${contested} other player(s) on it — joining)` : '')
+                (contested ? ` (${contested} other player(s) on it, joining)` : '')
         );
         await tree.interact(op);
         const gotLog = await Execution.delayUntil(
@@ -934,18 +934,18 @@ export default class GnomeMagicChopper extends LoopingBot {
     }
 
     stopNoKnife(context: string): void {
-        this.status = 'no knife — stopped';
+        this.status = 'no knife, stopped';
         this.log(
-            `${context}: no Knife in inventory or gnome bank — stopping ` +
+            `${context}: no Knife in inventory or gnome bank, stopping ` +
                 '(withdraw a Knife, then restart)'
         );
         ScriptRunner.stop(`${context}: no Knife in inventory or gnome bank`);
     }
 
     stopNoAxe(context: string): void {
-        this.status = 'no axe — stopped';
+        this.status = 'no axe, stopped';
         this.log(
-            `${context}: no usable axe in pack or gnome bank — stopping ` +
+            `${context}: no usable axe in pack or gnome bank, stopping ` +
                 '(withdraw an axe your Woodcutting can use, then restart)'
         );
         ScriptRunner.stop(`${context}: no usable axe in pack or gnome bank`);
@@ -958,12 +958,12 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         if (this.gearReady && this.fletchEnabled() && !gearHasKnife()) {
-            this.log('gear: Knife missing — checking gnome bank');
+            this.log('gear: Knife missing, checking gnome bank');
             this.gearReady = false;
         }
 
         if (this.gearReady && !gearBestHeldAxe() && !gearHasBrokenAxe()) {
-            this.log('gear: axe missing — checking gnome bank');
+            this.log('gear: axe missing, checking gnome bank');
             this.gearReady = false;
         }
 
@@ -994,7 +994,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         if (!Bank.isOpen()) {
             this.log('gear: opening gnome bank for best axe / knife');
             if (!(await this.openGnomeBank())) {
-                this.log('gear: could not open gnome bank — retrying');
+                this.log('gear: could not open gnome bank, retrying');
                 await Execution.delayTicks(3);
                 return true;
             }
@@ -1065,7 +1065,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         this.gearReady = true;
-        this.log(`gear: ready — ${gearBestHeldAxe()}`);
+        this.log(`gear: ready, ${gearBestHeldAxe()}`);
         await this.leaveBankStairs();
         return true;
     }
@@ -1215,7 +1215,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             return dir === 'up' ? floor > beforeFloor : floor < beforeFloor;
         }, 8000);
         if (!moved) {
-            this.log(`climb ${dir} did not finish — retrying`);
+            this.log(`climb ${dir} did not finish, retrying`);
             await this.openNearbyDoor();
             return false;
         }
@@ -1240,7 +1240,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             log: m => this.log(`  ${m}`)
         });
         if (!ok) {
-            this.log('path to bank stairs failed — retrying');
+            this.log('path to bank stairs failed, retrying');
             return false;
         }
         const now = Game.tile();
@@ -1262,7 +1262,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             log: m => this.log(`  ${m}`)
         });
         if (!ok) {
-            this.log('path to central booths failed — will try the other staircase');
+            this.log('path to central booths failed, will try the other staircase');
             return false;
         }
         return isUpstairs() && distToBooths(Game.tile()) <= 4;
@@ -1280,7 +1280,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         if (!up) {
             return false;
         }
-        this.log('upstairs — walking to central booths 2445,3425');
+        this.log('upstairs, walking to central booths 2445,3425');
         return true;
     }
 
@@ -1299,7 +1299,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         if (!down) {
             return false;
         }
-        this.log('back on the ground — heading to magics');
+        this.log('back on the ground, heading to magics');
         return true;
     }
 
@@ -1308,7 +1308,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             if (atGnomeBankFloor()) {
                 return true;
             }
-            this.log('wrong bank open — closing');
+            this.log('wrong bank open, closing');
             await Bank.close();
             await Execution.delayTicks(1);
         }
@@ -1323,7 +1323,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             const failed = nearestBankStairPin(Game.tile());
             this.blockedStairPin = failed;
             this.log(
-                `could not reach booths ${BANK_STAND.x},${BANK_STAND.z},1 from this staircase — ` +
+                `could not reach booths ${BANK_STAND.x},${BANK_STAND.z},1 from this staircase, ` +
                     `will use the other allowed stairs next`
             );
             await this.leaveBankStairs();
@@ -1336,7 +1336,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         const failed = nearestBankStairPin(Game.tile());
         this.blockedStairPin = failed;
-        this.log('booths did not open — climbing down to try the other allowed staircase');
+        this.log('booths did not open, climbing down to try the other allowed staircase');
         await this.leaveBankStairs();
         return false;
     }
@@ -1472,8 +1472,8 @@ export default class GnomeMagicChopper extends LoopingBot {
         const next = nextTreePin(this.treePinId);
         this.treePinId = next.id;
         this.hops++;
-        this.status = `no magics — ${next.name}`;
-        this.log(`no Magic trees in view — running to ${next.name} ${next.tile.x},${next.tile.z}`);
+        this.status = `no magics, ${next.name}`;
+        this.log(`no Magic trees in view, running to ${next.name} ${next.tile.x},${next.tile.z}`);
         await Traversal.walkResilient(next.tile, {
             radius: 3,
             log: m => this.log(`  ${m}`)
@@ -1495,7 +1495,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const log = lastLog();
         if (!knife) {
             this.gearReady = false;
-            this.log('WARNING: no Knife in inventory — will check gnome bank');
+            this.log('WARNING: no Knife in inventory, will check gnome bank');
             await Execution.delayTicks(2);
             return;
         }
@@ -1526,7 +1526,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         if (!opened && logCount() >= before) {
-            this.log('fletch useOn did not start — retrying');
+            this.log('fletch useOn did not start, retrying');
         }
     }
 
@@ -1538,7 +1538,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const products = ChatDialog.makeProducts();
         const match = matchMakeProduct(products, plan.menuMatch);
         if (!match) {
-            this.log(`make menu missing '${plan.label}' (have: [${products.join(', ')}]) — closing`);
+            this.log(`make menu missing '${plan.label}' (have: [${products.join(', ')}]), closing`);
             await Execution.delayTicks(2);
             return;
         }
@@ -1607,7 +1607,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         if (!Bank.isOpen()) {
             if (!(await this.openGnomeBank())) {
-                this.log('could not open gnome bank — retrying');
+                this.log('could not open gnome bank, retrying');
                 await Execution.delayTicks(3);
                 return;
             }
@@ -1642,7 +1642,7 @@ export default class GnomeMagicChopper extends LoopingBot {
                 await Execution.delayTicks(1);
             } else {
                 if (this.recovering()) {
-                    this.log('death: Knife not in this bank — will retry restock');
+                    this.log('death: Knife not in this bank, will retry restock');
                     return false;
                 }
                 this.stopNoKnife('banking');
@@ -1658,7 +1658,7 @@ export default class GnomeMagicChopper extends LoopingBot {
                 await Bank.withdrawX(best, 1);
                 await Execution.delayTicks(1);
             } else {
-                this.log(`gear: WARNING — no usable axe in bank for WC ${wc}`);
+                this.log(`gear: WARNING, no usable axe in bank for WC ${wc}`);
             }
         }
 
@@ -1677,7 +1677,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         this.recoverPhase = RECOVER.KNIFE;
         const here = Game.tile();
         this.log(
-            `respawned at ${here?.x},${here?.z} (${regionOf(here)}) — ` +
+            `respawned at ${here?.x},${here?.z} (${regionOf(here)}), ` +
                 `grab Knife, 500gp, Steel axe, then SneakyArdougne back to gnome magics`
         );
         this.status = 'death: knife spawn';
@@ -1717,7 +1717,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async recoverPickupKnife() {
         if (gearHasKnife()) {
-            this.log('death: already have Knife — nearest bank for 500gp');
+            this.log('death: already have Knife, nearest bank for 500gp');
             this.recoverPhase = RECOVER.BANK_GP;
             return;
         }
@@ -1735,13 +1735,13 @@ export default class GnomeMagicChopper extends LoopingBot {
             ground = GroundItems.query().name('Knife').within(6).nearest();
         }
         if (!ground) {
-            this.log('death: Knife not on ground yet — waiting');
+            this.log('death: Knife not on ground yet, waiting');
             await Execution.delayTicks(5);
             return;
         }
 
         if (Inventory.isFull()) {
-            this.log('death: inventory full — banking first');
+            this.log('death: inventory full, banking first');
             this.recoverPhase = RECOVER.BANK_GP;
             return;
         }
@@ -1750,7 +1750,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         await ground.interact('Take');
         await Execution.delayUntil(() => gearHasKnife(), 8000);
         if (gearHasKnife()) {
-            this.log('death: Knife acquired — nearest bank for 500gp');
+            this.log('death: Knife acquired, nearest bank for 500gp');
             this.recoverPhase = RECOVER.BANK_GP;
         }
     }
@@ -1761,7 +1761,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         if (!Bank.isOpen()) {
             this.log('death: opening nearest bank for 500gp');
             if (!(await Banking.open({ log: m => this.log(`  ${m}`) }))) {
-                this.log('death: could not open bank — retrying');
+                this.log('death: could not open bank, retrying');
                 await Execution.delayTicks(3);
                 return;
             }
@@ -1779,7 +1779,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             const need = DEATH_GP - have;
             const banked = gearBankCoins();
             if (banked <= 0) {
-                this.log(`death: only ${have}gp on us and none in bank — taking what we have`);
+                this.log(`death: only ${have}gp on us and none in bank, taking what we have`);
             } else {
                 const take = Math.min(need, banked);
                 this.log(`death: withdrawing ${take}gp (${have} held, need ${DEATH_GP})`);
@@ -1796,18 +1796,18 @@ export default class GnomeMagicChopper extends LoopingBot {
         await Execution.delayTicks(1);
 
         if (ownSteel) {
-            this.log('death: already own steel+ axe — banking Knife then boats');
+            this.log('death: already own steel+ axe, banking Knife then boats');
             this.recoverPhase = RECOVER.BANK_TOOLS;
             return;
         }
 
         if (coins < GEAR_STEEL_COST) {
-            this.log(`death: only ${coins}gp (need ${GEAR_STEEL_COST} for Steel axe) — will retry bank`);
+            this.log(`death: only ${coins}gp (need ${GEAR_STEEL_COST} for Steel axe), will retry bank`);
             await Execution.delayTicks(5);
             return;
         }
 
-        this.log(`death: ${coins}gp in pack — buying Steel axe from Bob`);
+        this.log(`death: ${coins}gp in pack, buying Steel axe from Bob`);
         this.recoverPhase = RECOVER.BUY_AXE;
     }
 
@@ -1845,7 +1845,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async buySteelAtOpenShop() {
         if (gearHasSteelOrBetter()) {
-            this.log('gear: already own steel+ axe — closing Bob');
+            this.log('gear: already own steel+ axe, closing Bob');
             await Shop.close();
             return true;
         }
@@ -1905,25 +1905,25 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         if (!knifeBanked) {
             if (gearHasKnife()) {
-                this.log('death: Knife still in pack — retrying deposit');
+                this.log('death: Knife still in pack, retrying deposit');
                 return;
             }
-            this.log('death: Knife not in bank — grabbing another from the spawn');
+            this.log('death: Knife not in bank, grabbing another from the spawn');
             this.recoverPhase = RECOVER.KNIFE;
             return;
         }
         if (!axeBanked) {
-            this.log('death: no steel+ axe in bank — buying from Bob');
+            this.log('death: no steel+ axe in bank, buying from Bob');
             this.recoverPhase = RECOVER.BUY_AXE;
             return;
         }
         if (coins < GP_TARGET) {
-            this.log(`death: only ${coins}gp for boats — withdrawing more`);
+            this.log(`death: only ${coins}gp for boats, withdrawing more`);
             this.recoverPhase = RECOVER.BANK_GP;
             return;
         }
 
-        this.log(`death: tools banked, ${coins}gp for boats — SneakyArdougne to gnome`);
+        this.log(`death: tools banked, ${coins}gp for boats, SneakyArdougne to gnome`);
         this.travelPhase = this.inferTravelPhase();
         this.recoverPhase = RECOVER.TRAVEL;
     }
@@ -1953,7 +1953,7 @@ export default class GnomeMagicChopper extends LoopingBot {
     async returnViaSneaky() {
         if (this.travelPhase == null || this.travelPhase === PHASE.DONE) {
             this.travelPhase = this.inferTravelPhase();
-            this.log(`death: SneakyArdougne — phase ${this.travelPhase} · ${gearInvCoins()}gp`);
+            this.log(`death: SneakyArdougne, phase ${this.travelPhase} · ${gearInvCoins()}gp`);
         }
 
         if (await this.handleBoatDialog()) {
@@ -1976,7 +1976,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             this.travelPhase = PHASE.DONE;
             this.recoverPhase = RECOVER.RESTOCK;
             this.status = 'death: arrived Kandarin';
-            this.log('death: arrived via boats — walk to gnome, withdraw Steel axe + Knife');
+            this.log('death: arrived via boats, walk to gnome, withdraw Steel axe + Knife');
             return;
         }
 
@@ -2045,7 +2045,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const coinsBefore = gearInvCoins();
         const op = talkOp(npc);
         this.status = `Talk-to ${npc.name ?? 'sailor'}`;
-        this.log(`Talk-to ${npc.name} @ dock (${coinsBefore}gp) — navigating dialogue`);
+        this.log(`Talk-to ${npc.name} @ dock (${coinsBefore}gp), navigating dialogue`);
 
         if (!(await npc.interact(op))) {
             await Execution.delayTicks(2);
@@ -2053,7 +2053,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         if (!(await Execution.delayUntil(() => dialogOpen() || arrivedFn() || this.movedFar(before, 15), 8000))) {
-            this.log('sailor dialog did not open — retrying');
+            this.log('sailor dialog did not open, retrying');
             return false;
         }
 
@@ -2089,14 +2089,14 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async doThieve() {
         if (gearInvCoins() >= GP_TARGET) {
-            this.log(`have ${gearInvCoins()}gp (≥ ${GP_TARGET}) — heading to Port Sarim`);
+            this.log(`have ${gearInvCoins()}gp (≥ ${GP_TARGET}), heading to Port Sarim`);
             this.travelPhase = PHASE.WALK_SARIM;
             this.status = 'walk Port Sarim';
             return;
         }
 
         if (Skills.effective('hitpoints') < MIN_HP) {
-            this.status = `HP ${Skills.effective('hitpoints')} — regen to ${MIN_HP}`;
+            this.status = `HP ${Skills.effective('hitpoints')}, regen to ${MIN_HP}`;
             await Execution.delayTicks(2);
             return;
         }
@@ -2123,7 +2123,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         if (Game.inCombat()) {
-            this.status = 'in combat — waiting';
+            this.status = 'in combat, waiting';
             await Execution.delayTicks(2);
             return;
         }
@@ -2200,14 +2200,14 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async doBoatKaramja() {
         if (this.onKaramja()) {
-            this.log('arrived Musa Point / Karamja — walking to Brimhaven');
+            this.log('arrived Musa Point / Karamja, walking to Brimhaven');
             this.travelPhase = PHASE.WALK_BRIMHAVEN;
             return;
         }
 
         if (gearInvCoins() < 30) {
             this.status = 'need 30gp for Sarim boat';
-            this.log(`WARNING: only ${gearInvCoins()}gp — need 30 for Port Sarim → Karamja`);
+            this.log(`WARNING: only ${gearInvCoins()}gp, need 30 for Port Sarim → Karamja`);
             this.travelPhase = PHASE.THIEVE;
             await Execution.delayTicks(5);
             return;
@@ -2301,7 +2301,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         if (gearInvCoins() < 30) {
             this.status = 'need 30gp for Brimhaven boat';
-            this.log(`WARNING: only ${gearInvCoins()}gp — need 30 for Brimhaven → Ardougne`);
+            this.log(`WARNING: only ${gearInvCoins()}gp, need 30 for Brimhaven → Ardougne`);
             await Execution.delayTicks(8);
             return;
         }
@@ -2409,11 +2409,11 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         this.status = 'death: withdraw axe + knife';
-        this.log('death: gnome bank — withdraw Steel axe + Knife, then chop');
+        this.log('death: gnome bank, withdraw Steel axe + Knife, then chop');
 
         if (!Bank.isOpen()) {
             if (!(await this.openGnomeBank())) {
-                this.log('death: could not open gnome bank — retrying');
+                this.log('death: could not open gnome bank, retrying');
                 await Execution.delayTicks(3);
                 return;
             }
@@ -2437,18 +2437,18 @@ export default class GnomeMagicChopper extends LoopingBot {
             this.recoverPhase = RECOVER.NONE;
             this.travelPhase = PHASE.DONE;
             this.treePinId = 'bank';
-            this.log('death: restocked axe + Knife — resuming gnome magics');
+            this.log('death: restocked axe + Knife, resuming gnome magics');
             this.status = 'returning to magics';
             await this.leaveBankStairs();
         } else {
-            this.log('death: restock incomplete — will retry gnome bank');
+            this.log('death: restock incomplete, will retry gnome bank');
             await Execution.delayTicks(5);
         }
     }
 
     override onStop(): void {
         this.log(
-            `stopped — chopped ~${this.chopped}, fletched ~${this.fletched}, ` +
+            `stopped, chopped ~${this.chopped}, fletched ~${this.fletched}, ` +
                 `bank trips ${this.bankTrips}, hops ${this.hops}, deaths ${this.deaths} (${this.status})`
         );
     }
@@ -2464,7 +2464,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const pin = this.currentPin();
 
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7ec8a3' });
-        p.title(`GnomeMagicChopper — ${this.status}`);
+        p.title(`GnomeMagicChopper, ${this.status}`);
         p.row(`WC ${Skills.level('woodcutting')}`, `Fletch ${Skills.level('fletching')}`, `${fmtDuration(elapsed / 60_000)}`);
         p.row(plan.label, `pin ${pin.name}`, `trees ${this.treesUp}`);
         p.row(`logs ${logCount()}`, `bows ${bowCount()}`, `trips ${this.bankTrips}`);
