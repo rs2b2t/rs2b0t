@@ -9,9 +9,7 @@ import { handleSpecialCrossing, type PathStepTile } from '#/bot/event/webwalk/ex
 import { DEFAULT_TRANSPORT_APPROACH_CHEBYSHEV } from '#/bot/event/webwalk/pathFollowPolicy.js';
 import { stubProps } from '../../lib/stubSingletons.js';
 
-// Why: live, a walk from Varrock bank refused the young tree twice on every pass, fell through to
-// the gnome glider and timed out; the hop fires from four tiles out and the tree was searched for
-// within three of the player.
+// Why: the hop fires from four tiles out while the tree was searched for within three of the player, so live the Varrock young tree was refused on every pass.
 
 /** Village landing (spirit_tree.constant ^village_tree) and the loc's own scene tile. */
 const VILLAGE_STAND: WorldTile = { x: 2542, z: 3169, level: 0 };

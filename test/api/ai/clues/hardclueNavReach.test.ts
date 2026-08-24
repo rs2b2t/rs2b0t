@@ -12,9 +12,7 @@ import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
-// Why: tools/clues/audit-clues.ts plans with no world state, which fails open and admits every
-// gated edge, so it cannot say what an account with kit and quests reaches. This asks the harder question
-// the live sweep asks: with the quests done and the gate kit in the pack, what is still shut?
+// Why: audit-clues.ts plans with no world state, which fails open on every gated edge; this asks what is still shut with the quests done and the gate kit in the pack.
 
 /** Both origins the clue audit plans from. */
 const STARTS: readonly NavPoint[] = [

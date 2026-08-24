@@ -112,9 +112,7 @@ export const KEEP_IDS: readonly number[] = [
     ...BOW_IDS
 ];
 
-// Why: the buy step tops the purse up itself against the bank it is handed, so the only thing to decide
-// here is whether there are coins at all. A buy emitted with none walks to a counter it cannot pay and
-// fails there, which the engine retries; falling through instead reaches the shortfall stop that says so.
+// Why: the buy step tops the purse up itself, so a buy emitted with no coins walks to a counter it cannot pay and retries there; falling through reaches the shortfall stop instead.
 
 /** True when pack and bank between them cover the asking price. */
 function canAfford(snap: QuestSnapshot, gp: number): boolean {
