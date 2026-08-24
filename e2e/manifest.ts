@@ -532,6 +532,15 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/reference/quest-harness-recipes-3.md'
     },
     {
+        id: 'miner-fight-arena-bank-live',
+        harness: 'miner-fight-arena-bank-live.ts',
+        covers: { scripts: ['GatheringBot'] },
+        status: 'vetted',
+        provenAt: '4f99b5cf',
+        budgetMin: 8,
+        note: 'a full ore pack at the Fight Arena Mine has to reach the Yanille booth, and the run fails if the walk drifts to East Ardougne'
+    },
+    {
         id: 'mossgiant-dart-test',
         harness: 'mossgiant-dart-test.ts',
         covers: { scripts: ['MossGiant'] },
