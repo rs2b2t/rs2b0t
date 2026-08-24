@@ -532,6 +532,15 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/reference/quest-harness-recipes-3.md'
     },
     {
+        id: 'leathercrafter-nearest-bank-live',
+        harness: 'leathercrafter-nearest-bank-live.ts',
+        covers: { scripts: ['LeatherCrafter'] },
+        status: 'vetted',
+        provenAt: '64a451e9',
+        budgetMin: 8,
+        note: 'starts at Varrock West with the kit banked there; coming within 20 tiles of the Al Kharid booth fails the run'
+    },
+    {
         id: 'miner-fight-arena-bank-live',
         harness: 'miner-fight-arena-bank-live.ts',
         covers: { scripts: ['GatheringBot'] },

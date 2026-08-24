@@ -278,7 +278,6 @@ export default class LeatherCrafter extends LoopingBot {
         if (invById(NEEDLE) === 0 && !(await this.withdrawRequired(NEEDLE, 1, 'needle', 'no needle in the bank'))) {
             return;
         }
-        // Why: nearest-bank mode only changes which bank is walked to — thread is still withdrawn from the bank you arrive at, same as the Al Kharid default.
         if (invById(THREAD) < 5 && !(await this.withdrawRequired(THREAD, this.threadStock, 'thread', 'no thread in the bank'))) {
             return;
         }
