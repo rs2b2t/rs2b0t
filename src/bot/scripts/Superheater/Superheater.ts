@@ -54,7 +54,7 @@ export default class Superheater extends TaskBot {
     private bar: Recipe = recipeForBar('Bronze')!;
     private natures = NATURES_DEFAULT;
 
-    // Why: the bank access is resolved once; every trip just opens the booth.
+    // Why: the bank access is resolved once; every trip only opens the booth.
     private bankAccess: { name: string; op: string } = BOOTH;
 
     private smelted = 0;
@@ -162,7 +162,7 @@ export default class Superheater extends TaskBot {
         this.trips++;
     }
 
-    // Why: Bank.isOpen() only proves the component exists — the item list fills a beat after opening and again after every deposit, so a count of zero can be a not-yet-loaded list rather than an empty bank. Before halting the script on "out of X", confirm the list is loaded and the item reads zero; otherwise the caller should retry instead of stopping on a loading artifact.
+    // Why: Bank.isOpen() only proves the component exists. The item list fills a beat after opening and again after every deposit, so a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is loaded and the item reads zero; otherwise retry.
     async bankTrulyOutOf(name: string): Promise<boolean> {
         const settled = await Execution.delayUntil(() => Bank.loaded(), 3500);
         if (!settled) {
@@ -194,7 +194,7 @@ export default class Superheater extends TaskBot {
     }
 }
 
-// Why: set the staff of fire once; deposit everything, withdraw one, close so Wield is a real backpack op, wield, reopen.
+// Why: set the staff of fire once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
 class EnsureGear implements Task {
     constructor(private bot: Superheater) {}
 
@@ -212,7 +212,7 @@ class EnsureGear implements Task {
         }
         if (Inventory.count(FIRE_STAFF) === 0) {
             if (!(await Bank.withdrawX(FIRE_STAFF, 1))) {
-                // The bank list may still be settling after open — re-check before declaring the staff gone.
+                // The bank list may still be settling after open, so re-check before declaring the staff gone.
                 if (!(await this.bot.bankTrulyOutOf(FIRE_STAFF))) {
                     this.bot.log(`withdraw of ${FIRE_STAFF} stalled but the bank list is still settling — retrying`);
                     return;
@@ -237,7 +237,7 @@ class EnsureGear implements Task {
     }
 }
 
-// Why: restock tops up nature runes then withdraws exactly one trip's ores and closes; the bank is normally already open.
+// Why: restock tops up nature runes, withdraws one trip's ores and closes; the bank is normally already open.
 class Restock implements Task {
     constructor(private bot: Superheater) {}
 
@@ -250,7 +250,7 @@ class Restock implements Task {
             return;
         }
 
-        // Why: clear whatever is left (bars, partial ores, junk) — only nature runes stay — so every restock starts from a known-empty pack.
+        // Why: clear whatever is left, bars, partial ores and junk, keeping only nature runes, so every restock starts from a known-empty pack.
         this.bot.setStatus('restocking');
         if (Inventory.used() > 0) {
             const before = Inventory.used();
@@ -285,7 +285,7 @@ class Restock implements Task {
 
     private async topUpNatures(): Promise<boolean> {
         const have = Inventory.count(NATURE_RUNE);
-        // Why: only top up when the pack can't cover the next trip — no need to carry more than the casts-per-inventory amount.
+        // Why: only top up when the pack cannot cover the next trip. Carrying more than the casts-per-inventory amount buys nothing.
         const coversTrip = have >= barsPerTrip(this.bot.recipe());
         const want = this.bot.natureTarget() - have;
         if (coversTrip || want <= 0) {
@@ -297,7 +297,7 @@ class Restock implements Task {
             return true;
         }
         if (Inventory.count(NATURE_RUNE) === before && Bank.count(NATURE_RUNE) === 0) {
-            // The bank list may still be settling — confirm the runes are gone before stopping.
+            // The bank list may still be settling, so confirm the runes are gone before stopping.
             if (!(await this.bot.bankTrulyOutOf(NATURE_RUNE))) {
                 this.bot.log('nature-rune count is still settling — retrying');
                 return false;
@@ -317,7 +317,7 @@ class Restock implements Task {
             const got = Inventory.count(ore) - before;
             this.bot.log(`got ${got} ${ore}`);
             if (!ok || got === 0) {
-                // The bank list can read zero while it is still loading after open/deposit — verify it is settled before declaring the ore gone.
+                // The bank list can read zero while it is still loading after open or deposit, so verify it is settled before declaring the ore gone.
                 if (!(await this.bot.bankTrulyOutOf(ore))) {
                     this.bot.log(`withdraw of ${ore} stalled but the bank list is still settling — retrying`);
                     return false;
@@ -366,7 +366,7 @@ class Smelt implements Task {
 
         const recipe = this.bot.recipe();
 
-        // Why: casting on a partial recipe smelts the wrong bar (iron without coal makes an iron bar), so every cast requires the full set plus a nature rune — exactly what canSmeltOne() checks. Pace each cast on the bar forming: the ore count drops a tick or two after the cast lands, so wait before clicking again.
+        // Why: casting on a partial recipe smelts the wrong bar, iron without coal makes an iron bar, so every cast needs the full set plus a nature rune, which is what canSmeltOne() checks. Pace each cast on the bar forming: the ore count drops a tick or two after the cast lands, so wait before clicking again.
         const start = barsSmeltable(recipe, ore => Inventory.count(ore));
 
         while (this.bot.canSmeltOne()) {
@@ -397,7 +397,7 @@ class Smelt implements Task {
     }
 }
 
-// Why: bank the bars — deposit everything except the nature-rune stack and leave the bank open so the next Restock reuses it.
+// Why: bank the bars by depositing everything except the nature-rune stack, and leave the bank open so the next Restock reuses it.
 class BankBars implements Task {
     constructor(private bot: Superheater) {}
 

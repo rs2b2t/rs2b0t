@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 54. Categories: 19.
+- Scripts: 55. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -26,7 +26,7 @@
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
 - [Runecrafting](#runecrafting) — 3
-- [Smithing](#smithing) — 2
+- [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
 - [Woodcutting](#woodcutting) — 2
@@ -832,6 +832,17 @@ Varrock anvil smithing — withdraw bars + a hammer, make the chosen item at the
 | `bankStand` | tile | `{"x":3185,"z":3440,"level":0}` | Bank stand tile (x,z) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `leashRadius` | number (2–20) | `6` | Anvil search radius (tiles) |
+
+### Superheater
+
+Smelts bars with the Superheat Item spell instead of a furnace — withdraws ore, casts onto the primary ore, banks the bars, repeat
+
+- Tags: `smithing`, `magic`, `superheat`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `bar` | string | `"Bronze"` | Bar to smelt — one of: Bronze, Iron, Silver, Steel, Gold, Mithril, Adamant, Rune, Blurite |
+| `natures` | number (28–1000) | `50` | Nature runes to keep in the pack |
 
 ## Thieving
 

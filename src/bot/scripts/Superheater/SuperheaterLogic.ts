@@ -1,4 +1,4 @@
-// Pure data/decisions for Superheater — smelts bars with Superheat Item; the pack holds 28 slots but one is always taken by the nature-rune stack, leaving 27 for ore.
+// Pure data and decisions for Superheater, which smelts bars with Superheat Item. The pack holds 28 slots and the nature-rune stack always takes one, leaving 27 for ore.
 
 export interface Recipe {
     readonly bar: string;
@@ -22,7 +22,7 @@ export const RECIPES: readonly Recipe[] = [
     { bar: 'Rune', level: 85, ingredients: [{ ore: 'Runite ore', perBar: 1 }, { ore: 'Coal', perBar: 8 }] }
 ];
 
-/** Nature rune — 1 per cast, kept in the pack across the deposit-all-except. */
+/** Nature rune, one per cast, kept in the pack across the deposit-all-except. */
 export const NATURE_RUNE = 'Nature rune';
 
 /** Wielded once so casts cost only the nature runes. */
@@ -31,7 +31,7 @@ export const FIRE_STAFF = 'Staff of fire';
 /** Superheat Item unlocks at 43 Magic. */
 export const MAGIC_REQUIRED = 43;
 
-/** Target nature-rune pack count — well above the 27 casts of one trip. */
+/** Target nature-rune pack count, well above the 27 casts of one trip. */
 export const NATURES_DEFAULT = 50;
 
 /** Any literal above 27 covers a full trip; the setting min enforces > 27. */
@@ -73,7 +73,7 @@ export function withdrawSet(recipe: Recipe): Record<string, number> {
     return set;
 }
 
-/** The ingredient names in order — the first is the cast target. */
+/** The ingredient names in order. The first is the cast target. */
 export function primaryOre(recipe: Recipe): string {
     return recipe.ingredients[0].ore;
 }

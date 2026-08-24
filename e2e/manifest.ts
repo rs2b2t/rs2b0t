@@ -866,6 +866,15 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West bank → anvil → bank on a 54-bar Platebody load; the remainder the bot cannot smith has to send it back'
     },
     {
+        id: 'superheater-smelt-live',
+        harness: 'superheater-smelt-live.ts',
+        covers: { scripts: ['Superheater'] },
+        status: 'vetted',
+        provenAt: '7fe84288',
+        budgetMin: 10,
+        note: 'Varrock West with iron, coal, natures and a staff of fire banked; passes on steel bars plus magic and smithing XP together'
+    },
+    {
         id: 'strangebox-repro-live',
         harness: 'strangebox-repro-live.ts',
         covers: { subsystems: ['random-events'] },
