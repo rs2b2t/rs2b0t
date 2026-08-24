@@ -14,7 +14,7 @@ export class GearEquip implements Task {
     constructor(private bot: BrimhavenMossGiants) {}
     private needWeapon(): boolean {
         if (cfg.style === 'range' && rangeLoadout().thrown) {
-            // darts are the projectile stack — handled by needQuiver
+            // darts are the projectile stack, handled by needQuiver
             return false;
         }
         return cfg.weapon !== '' && !Equipment.contains(cfg.weapon) && Inventory.first(cfg.weapon) !== null;

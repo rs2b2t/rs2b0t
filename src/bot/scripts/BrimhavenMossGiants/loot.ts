@@ -34,7 +34,7 @@ export class Eat implements Task {
     }
 }
 
-/** Clear ground drops — the LOOT phase. */
+/** Clear ground drops, the LOOT phase. */
 export class LootCorpse implements Task {
     constructor(private bot: BrimhavenMossGiants) {}
     validate(): boolean {

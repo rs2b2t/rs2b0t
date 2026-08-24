@@ -49,7 +49,7 @@ export function needEat(): boolean {
     return cakeCount() > 0 && shouldEatToUseFood({ hp, maxHp, heal: foodHealAmount('slice of cake'), foodCount: cakeCount() });
 }
 
-/** Full pack + food + loot on the ground — free a slot instead of banking early. */
+/** Full pack, food and loot on the ground: free a slot instead of banking early. */
 export function needEatForLoot(): boolean {
     return Inventory.isFull() && hasFood() && findLoot() !== null;
 }
@@ -141,7 +141,7 @@ export async function equipPackProjectiles(): Promise<boolean> {
 
 // ── Field / target queries ──────────────────────────────────────────────────
 
-/** Brimhaven is multicombat with the safespot disabled — never stand on a tile. */
+/** Brimhaven is multicombat with the safespot disabled, so never stand on a tile. */
 export function usesSafespot(): boolean {
     return false;
 }
@@ -168,7 +168,7 @@ export function fieldGiants(): Npc[] {
         .results();
 }
 
-/** All moss giants within the hunt radius — the bot will walk to these to engage. */
+/** All moss giants within the hunt radius, the ones the bot walks to and engages. */
 export function huntGiants(): Npc[] {
     return Npcs.query()
         .name(TARGET)
@@ -182,10 +182,10 @@ export function findLoot() {
     return GroundItems.query()
         .where(g => {
             const name = (g.name ?? '').toLowerCase();
-            // Ammo (arrows/bolts) dropped by the target — only when the loot-ammo option is on.
+            // Arrows and bolts dropped by the target, only when the loot-ammo option is on.
             const lootAmmo = cfg.lootAmmo && cfg.style === 'range' && name === rangeProjectile().toLowerCase();
             // Cake is only ever grabbed while looting (its own phase), so no extra gate is needed here.
-            // Why: common bank junk (beer, kebab, gems) is not looted — that is a banking concern, not a loot-one.
+            // Why: common bank junk such as beer, kebab and gems is a banking concern rather than a loot one.
             return (
                 cfg.lootSet.has(name) ||
                 (cfg.cake && name === 'slice of cake' && cakeCount() < 2) ||

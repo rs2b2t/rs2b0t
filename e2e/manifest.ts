@@ -92,6 +92,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'brimhaven-mossgiants-live',
+        harness: 'brimhaven-mossgiants-live.ts',
+        covers: { scripts: ['BrimhavenMossGiants'] },
+        status: 'vetted',
+        provenAt: 'd00d66de',
+        budgetMin: 18,
+        note: 'empty pack at the Ardougne pier bank; passes only after the bank phase, the Captain Barnaby hop and combat XP on the island. Seeds Agility 30: the field sits behind an Agility 10 ropeswing and a combat-only account reads the field as unreachable'
+    },
+    {
         id: 'brimhaven-swarm-597-live',
         harness: 'brimhaven-swarm-597-live.ts',
         covers: { scripts: ['BrimhavenAgility'] },

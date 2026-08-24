@@ -11,7 +11,7 @@ import { Phase, getPhase } from './phase.js';
 import type { Task } from '../../api/bot/Bot.js';
 import type BrimhavenMossGiants from './BrimhavenMossGiants.js';
 
-/** The kill loop: attack giants and survive. No looting — that's the LOOT phase. */
+/** The kill loop: attack giants and survive. Looting belongs to the LOOT phase. */
 export class Fight implements Task {
     private targetIdx: number | null = null;
     constructor(private bot: BrimhavenMossGiants) {}
@@ -50,7 +50,7 @@ export class Fight implements Task {
             }
 
             if (giants.length === 0) {
-                // No giants in the hunt area — return to the field and wait there.
+                // No giants in the hunt area, so return to the field and wait there.
                 if (!atField()) {
                     if (!(await quickReturnToField(this.bot))) {
                         return;
@@ -64,7 +64,7 @@ export class Fight implements Task {
 
             const target = giants.sort((a, b) => a.distance() - b.distance())[0];
             if (target.distance() > 8) {
-                // Out of attack range — walk into range, then re-evaluate.
+                // Out of attack range, so walk into range and re-evaluate.
                 await Traversal.walkResilient(target.tile(), {
                     radius: 1,
                     attempts: 4,

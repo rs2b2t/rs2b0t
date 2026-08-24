@@ -3,9 +3,9 @@ import type { MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 
 export const TARGET = 'Moss giant';
 
-// Brimhaven moss giant island — safespot disabled (multicombat, walk-and-fight).
+// Brimhaven moss giant island: safespot disabled, so multicombat walk-and-fight.
 export const FIELD_TILE = new Tile(2698, 3206, 0);
-// Ardougne south-east bank by Captain Barnaby's pier — the boat launch point.
+// Ardougne south-east bank by Captain Barnaby's pier, the boat launch point.
 export const BANK_TILE = new Tile(2655, 3283, 0);
 // Stand tile on the Ardougne pier next to Captain Barnaby; anchoring here before sailing makes the outbound boat hop fire from a clean, in-range spot instead of mid-walk (a failed hop repaths via the wrong port).
 export const PIER_TILE = new Tile(2683, 3272, 0);

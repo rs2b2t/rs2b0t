@@ -51,7 +51,7 @@ export async function withdrawTo(name: string, target: number): Promise<number> 
 
 /** Pull weapon + style supplies (runes / projectiles) out of the bank. */
 export async function withdrawStyleSupplies(bot: BrimhavenMossGiants): Promise<void> {
-    // darts are the projectile stack (not a durable weapon) — restocked below
+    // darts are the projectile stack rather than a durable weapon, restocked below
     const needWeapon =
         cfg.style !== 'melee' &&
         cfg.weapon !== '' &&
@@ -86,7 +86,7 @@ export async function withdrawStyleSupplies(bot: BrimhavenMossGiants): Promise<v
         bot.setStatus(`withdrawing ${projectile}`);
         const got = await withdrawTo(projectile, cfg.ammoWithdraw);
         if (got > 0) {
-            // bank modal blocks equip — same pattern as RockCrab dart restock
+            // bank modal blocks equip, same pattern as the RockCrab dart restock
             if (!(await Bank.close()) || !(await equipPackProjectiles())) {
                 bot.log(`WARNING: withdrew ${projectile}, but could not equip the stack — will retry from the pack`);
             }
@@ -126,7 +126,7 @@ export async function healAtBank(bot: BrimhavenMossGiants): Promise<void> {
     const maxHp = Skills.level('hitpoints');
     bot.log(`[healAtBank] start — hp=${Skills.effective('hitpoints')}/${maxHp}, foodName='${cfg.foodName}', invUsed=${Inventory.used()}, free=${Inventory.free()}`);
     // Spam-eat until full, out of food, or the 1-minute budget is up. We don't check
-    // per-bite progress — eating is reliable and the eat cooldown is handled by the delay.
+    // per-bite progress, since eating is reliable and the delay covers the eat cooldown.
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
         const hp = Skills.effective('hitpoints');
@@ -167,7 +167,7 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
         return;
     }
     await Bank.depositAllMatching(depositAllExcept(keepNames()), m => bot.log(`  ${m}`));
-    // The bank's item list fills a beat after it opens — withdrawals before that read 0.
+    // The bank's item list fills a beat after it opens, so withdrawals before that read 0.
     if (!(await Execution.delayUntil(() => Bank.loaded(), 5000))) {
         bot.log('bank item list never loaded — will retry next bank trip');
         return;
@@ -176,7 +176,7 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
     if (withdrawFood) {
         // 1) grab a stack we can eat from + carry.
         await topUpFood(bot);
-        // 2) the bank must be closed to eat — close, heal up (so we don't arrive low and burn
+        // 2) the bank must be closed to eat, so close, heal up (so we don't arrive low and burn
         //    the whole stack at once), then reopen to top off again.
         if (Skills.effective('hitpoints') < Skills.level('hitpoints') && (await Bank.close())) {
             await healAtBank(bot);
