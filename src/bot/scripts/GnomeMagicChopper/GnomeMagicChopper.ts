@@ -73,8 +73,6 @@ const GEAR_KNIFE_SPAWN = new Tile(3224, 3202, 0);
 const GEAR_STEEL_AXE = 'Steel axe';
 const GEAR_STEEL_COST = 250;
 const GEAR_BROKEN_AXE = 'Broken axe';
-const GEAR_REPAIR_PREFER = ['repair', 'fix', 'fix my', 'yes'];
-const GEAR_REPAIR_COIN_FLOAT = 100;
 
 const DEATH_RE = /oh dear.*you are dead/i;
 const DEATH_GP = 500;
@@ -428,44 +426,6 @@ function gearHasBrokenAxe() {
         (Inventory.count(GEAR_BROKEN_AXE) || 0) > 0 ||
         Inventory.items().some(i => (i.name ?? '').toLowerCase() === 'broken axe')
     );
-}
-
-function gearPickRepairOption(options: string[]) {
-    for (const p of GEAR_REPAIR_PREFER) {
-        const hit = options.find(o => (o ?? '').toLowerCase().includes(p.toLowerCase()));
-        if (hit) {
-            return hit;
-        }
-    }
-    return options.length > 0 ? options[options.length - 1] : null;
-}
-
-async function gearDriveRepairDialog(log: (msg: string) => void) {
-    for (let i = 0; i < 80; i++) {
-        if (!ChatDialog.isOpen() && !ChatDialog.canContinue()) {
-            if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) {
-                break;
-            }
-        }
-        if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
-            continue;
-        }
-        const opts = typeof ChatDialog.options === 'function' ? ChatDialog.options() : [];
-        if (opts.length > 0) {
-            const pick = gearPickRepairOption(opts);
-            if (!pick) {
-                log(`gear: no repair option in [${opts.join(' | ')}]`);
-                return false;
-            }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
-            continue;
-        }
-        await Execution.delayTicks(1);
-    }
-    return !ChatDialog.isOpen();
 }
 
 async function gearWaitBankLoaded() {
@@ -1324,7 +1284,7 @@ export default class GnomeMagicChopper extends LoopingBot {
             this.blockedStairPin = failed;
             this.log(
                 `could not reach booths ${BANK_STAND.x},${BANK_STAND.z},1 from this staircase, ` +
-                    `will use the other allowed stairs next`
+                    'will use the other allowed stairs next'
             );
             await this.leaveBankStairs();
             return false;
@@ -1598,7 +1558,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const logs = logCount();
         this.status = 'banking';
         this.log(
-            `banking` +
+            'banking' +
                 (shorts ? ` ${shorts} Magic shortbow` : '') +
                 (bows - shorts > 0 ? ` ${bows - shorts} Magic longbow` : '') +
                 (logs ? ` ${logs} Magic logs` : '') +
@@ -1678,7 +1638,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const here = Game.tile();
         this.log(
             `respawned at ${here?.x},${here?.z} (${regionOf(here)}), ` +
-                `grab Knife, 500gp, Steel axe, then SneakyArdougne back to gnome magics`
+                'grab Knife, 500gp, Steel axe, then SneakyArdougne back to gnome magics'
         );
         this.status = 'death: knife spawn';
     }
