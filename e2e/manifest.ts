@@ -52,6 +52,15 @@ export const CASES: readonly Case[] = [
         note: 'pauses and resumes in the middle of a walk and proves one loop body comes back, not two (#580 regression)'
     },
     {
+        id: 'autofighter-bank-resume-live',
+        harness: 'autofighter-bank-resume-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'vetted',
+        provenAt: 'b668c7d8',
+        budgetMin: 12,
+        note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
+    },
+    {
         id: 'baxtorian-rope-369-live',
         harness: 'baxtorian-rope-369-live.ts',
         covers: { subsystems: ['world'] },

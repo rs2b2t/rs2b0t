@@ -424,8 +424,7 @@ class LootDrops implements Task {
 class EatFood implements Task {
     constructor(private bot: AutoFighter) {}
     validate(): boolean {
-        // Why: the bank side shows Deposit ops, not Eat, so trying to eat while the bank
-        // is open spins forever and blocks BankRun — skip eating until the bank closes.
+        // Why: the bank side shows Deposit ops rather than Eat, so eating with the bank open spins forever and blocks BankRun. Wait for the bank to close.
         return needEat() && !Bank.isOpen();
     }
     async execute(): Promise<void> {
@@ -583,7 +582,7 @@ class BankRun implements Task {
         this.bot.bankAfterSolve = false;
         this.bot.countTrip();
         this.bot.setStatus('heading back to the spot');
-        // Why: leaving the bank open after banking blocks eating/fighting at the anchor — close it here.
+        // Why: an open bank left behind blocks eating and fighting at the anchor.
         await Bank.close();
         await Traversal.walkResilient(ANCHOR, { radius: 3, attempts: 4, timeoutMs: 300_000, log: m => this.bot.log(`  ${m}`) });
     }
