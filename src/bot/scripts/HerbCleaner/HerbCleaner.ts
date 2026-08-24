@@ -36,7 +36,7 @@ export default class HerbCleaner extends TaskBot {
 
     private eligible: HerbDef[] = [];
     private deniedKeys = new Set<string>();
-    private confirmedEmpty = new Set<string>(); // herbs confirmed empty in bank
+    private confirmedEmpty = new Set<string>();
     private plannedLevel = -1;
     private cleaned = 0;
     private trips = 0;
@@ -81,11 +81,10 @@ export default class HerbCleaner extends TaskBot {
             this.plannedLevel = level;
             this.refreshEligible();
         }
-        // Stop if all eligible herbs are confirmed empty in bank
-        const remaining = this.eligible.filter(h => !this.confirmedEmpty.has(h.key));
-        if (remaining.length === 0) {
-            this.log('All selected herbs confirmed empty in bank — stopping');
-            ScriptRunner.stop('all herbs confirmed empty in bank');
+        // Why: a withdraw that fails against a loaded bank means that herb is gone, so once every eligible herb is marked the trips have nothing left to fetch.
+        if (this.targets().length === 0) {
+            this.log('every selected herb is empty in the bank, stopping');
+            ScriptRunner.stop('every selected herb is empty in the bank');
             return;
         }
         return super.loop();
@@ -106,7 +105,7 @@ export default class HerbCleaner extends TaskBot {
     }
     markEmpty(herb: HerbDef): void {
         this.confirmedEmpty.add(herb.key);
-        this.log(`${herb.name} confirmed empty in bank — skipping on future trips`);
+        this.log(`${herb.name} is empty in the bank, skipping it on later trips`);
     }
     countClean(n = 1): void {
         this.cleaned += n;
@@ -283,11 +282,12 @@ class BankTrip implements Task {
                     withdrew += got;
                     gotAny = true;
                     this.bot.log(`withdrew ${got} ${herb.name}`);
-                } else if (Bank.loaded()) {
-                    this.bot.log(`withdraw ${herb.name} failed — marking empty in bank`);
+                } else if (Bank.snapshotReady() && !Bank.items().some(i => i.id === herb.unidId)) {
+                    // Why: Bank.loaded() is 'the bank holds something', which is false for the empty bank this case exists for. The snapshot arriving without the herb in it is the evidence that it is gone.
+                    this.bot.log(`the bank snapshot has no ${herb.name}, marking it empty`);
                     this.bot.markEmpty(herb);
                 } else {
-                    this.bot.log(`withdraw ${herb.name} failed — bank not ready, retrying`);
+                    this.bot.log(`withdraw ${herb.name} failed, bank not ready, retrying`);
                 }
             }
 

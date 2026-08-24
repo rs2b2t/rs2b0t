@@ -349,6 +349,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'herbcleaner-empty-bank-live',
+        harness: 'herbcleaner-empty-bank-live.ts',
+        covers: { scripts: ['HerbCleaner'] },
+        status: 'vetted',
+        provenAt: '723cde25',
+        budgetMin: 8,
+        note: 'two herbs selected and only one banked; the run waits for the absent one to be marked and the script to stop'
+    },
+    {
         id: 'hazeel-cult-248-live',
         harness: 'hazeel-cult-248-live.ts',
         covers: { scripts: ['AIOQuester'], subsystems: ['quests'] },
