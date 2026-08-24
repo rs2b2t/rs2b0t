@@ -61,6 +61,15 @@ export const CASES: readonly Case[] = [
         note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
     },
     {
+        id: 'autofighter-targets-loot-live',
+        harness: 'autofighter-targets-loot-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'vetted',
+        provenAt: '7fe84288',
+        budgetMin: 14,
+        note: 'spawns two Chickens and two Rats, drops guam and marrentill, then proves both names die, the avoided guam stays down, and an explicit Cake setting beats a pack of trout'
+    },
+    {
         id: 'baxtorian-rope-369-live',
         harness: 'baxtorian-rope-369-live.ts',
         covers: { subsystems: ['world'] },
