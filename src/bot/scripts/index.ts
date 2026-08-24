@@ -67,6 +67,7 @@ import ShopBuyout, { SHOPBUYOUT_SETTINGS } from './ShopBuyout/ShopBuyout.js';
 import FlaxRunner, { SETTINGS as FLAXRUNNER_SETTINGS } from './FlaxRunner/FlaxRunner.js';
 import { ShopRunner, SHOPRUNNER_SETTINGS } from './ShopRunner/ShopRunner.js';
 import AIOTeleport, { SETTINGS as AIOTELEPORT_SETTINGS } from './AIOTeleport/AIOTeleport.js';
+import GnomeMagicChopper, { GNOME_MAGIC_CHOPPER_SETTINGS } from './GnomeMagicChopper/GnomeMagicChopper.js';
 import ArravSupplier, { ARRAV_SUPPLIER_SETTINGS } from './ArravSupplier/ArravSupplier.js';
 import Barcrawl from './Barcrawl/Barcrawl.js';
 import DuelArena, { DUEL_ARENA_SETTINGS } from './DuelArena/DuelArena.js';
@@ -232,6 +233,16 @@ ScriptRegistry.register({
     tags: ['gathering', 'banking', 'drop', 'firemaking'],
     settingsSchema: WOODCUTTER_SETTINGS,
     create: () => new Woodcutter()
+});
+
+ScriptRegistry.register({
+    name: 'GnomeMagicChopper',
+    description:
+        'Locates every Magic tree in Tree Gnome Stronghold (west 2372,3425 / south-bank 2433,3410 / east 2491,3413), runs to the nearest one that is up, and chops it. If none are up it hops to the next pin. Banks at the upstairs gnome booths (stairs 2444,3416 and 2445,3443 only). If fletching is on: magic shortbows at 80 / longbows at 85. On death: Lumbridge knife spawn, 500gp, Steel axe from Bob, SneakyArdougne boats, then gnome restock.',
+    category: 'Woodcutting',
+    tags: ['woodcutting', 'fletching', 'magic', 'gnome', 'stronghold', 'shortbow', 'longbow', 'death-recovery'],
+    settingsSchema: GNOME_MAGIC_CHOPPER_SETTINGS,
+    create: () => new GnomeMagicChopper()
 });
 
 ScriptRegistry.register({
