@@ -26,7 +26,7 @@ async function climbLadder(bot: FlaxAIO, name: string, op: string): Promise<bool
 export class AscendTask implements Task {
     constructor(private bot: FlaxAIO) {}
     validate(): boolean {
-        // Why: in both-mode, finish filling the pack with flax before heading up to spin — only ascend once the inventory is full.
+        // Why: in both-mode, fill the pack with flax before heading up to spin, so ascend only once the inventory is full.
         return this.bot.spinning && Game.tile()?.level === 0 && this.bot.fibreCount() > 0 && (!this.bot.picking || Inventory.isFull());
     }
     async execute(): Promise<void> {
@@ -69,11 +69,13 @@ export class SpinTask implements Task {
             }
         }
         if (ChatDialog.isMakeMenu()) {
+            // Why: the wheel menu asks which fibre to spin, so the entries are Wool and Flax rather than the products they become.
             if (!(await ChatDialog.makeX(this.bot.flaxName(), this.bot.fibreCount()))) {
-                this.bot.log(`Spin menu open but couldn't Make-X '${this.bot.flaxName()}' — products: [${ChatDialog.makeProducts().join(', ')}]`);
+                this.bot.log(`Spin menu open but Make-X '${this.bot.flaxName()}' missed; menu offers [${ChatDialog.makeProducts().join(', ')}]`);
                 await Execution.delayTicks(2);
                 return;
             }
+            this.bot.log(`Make-X '${this.bot.flaxName()}' x${this.bot.fibreCount()} accepted`);
         }
         await this.ride();
     }
@@ -82,6 +84,7 @@ export class SpinTask implements Task {
         this.bot.setStatus('spinning');
         let last = this.bot.fibreCount();
         let idle = 0;
+        this.bot.log(`riding the wheel with ${last} '${this.bot.flaxName()}'`);
         while (this.bot.fibreCount() > 0) {
             if (ChatDialog.canContinue() || !this.bot.onFloor(1)) {
                 return;

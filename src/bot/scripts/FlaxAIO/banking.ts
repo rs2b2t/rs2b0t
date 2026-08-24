@@ -1,6 +1,5 @@
 import { Bank, withdrawOp } from '../../api/bank/Bank.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Inventory } from '../../api/inventory/Inventory.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { nearestStand, travelTo } from './walking.js';

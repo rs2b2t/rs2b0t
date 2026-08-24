@@ -14,7 +14,7 @@ export function nearestStand(bot: FlaxAIO): Tile {
     for (let x = bot.bankStand().x - bot.bankStandSpan(); x <= bot.bankStand().x + bot.bankStandSpan(); x++) {
         row.push(new Tile(x, z, level));
     }
-    // Why: prefer a stand we can already reach, falling back to the whole row if the nav graph sees none of them.
+    // Why: prefer a stand we can already reach, falling back to the full row if the nav graph sees none of them.
     const pool = row.filter(t => Reachability.canReach(t));
     const pick = pool.length > 0 ? pool : row;
     if (!me) {

@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 57. Categories: 19.
+- Scripts: 58. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -14,7 +14,7 @@
 - [Agility](#agility) — 4
 - [Combat](#combat) — 12
 - [Cooking](#cooking) — 1
-- [Crafting](#crafting) — 6
+- [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
@@ -416,6 +416,17 @@ Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at
 | `leashRadius` | number (2–20) | `8` | Range search radius (tiles) |
 
 ## Crafting
+
+### FlaxAIO
+
+Seers flax all-in-one — pick flax at the field and/or spin it at the wheel into bow strings, banking between. Pick and Spin are both optional toggles (at least one must be on); with both on it picks, spins on the way back, and banks the bow strings
+
+- Tags: `seers`, `crafting`, `gathering`, `banking`, `afk`, `flax`, `bow-strings`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `picking` | boolean | `true` | Pick flax |
+| `spinning` | boolean | `true` | Spin flax |
 
 ### FlaxPicker
 

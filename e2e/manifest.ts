@@ -324,6 +324,14 @@ export const CASES: readonly Case[] = [
         note: 'Seven trials at 70 stats and --tick 200; --stage counts whole trials won. Koschei passes on a roll that lands on the last hitpoint, so a run can spend one death and a walk back from Lumbridge'
     },
     {
+        id: 'flaxaio-pick-spin-live',
+        harness: 'flaxaio-pick-spin-live.ts',
+        covers: { scripts: ['FlaxAIO'] },
+        status: 'broken',
+        budgetMin: 18,
+        note: 'both toggles on from an empty pack at the Seers bank. Picking passes; the spin leg does not. Make-X is accepted 17 times at the wheel and the flax count never moves, so the run parks until the watchdog walks it home'
+    },
+    {
         id: 'gatheringbot-cooker-pair-test',
         harness: 'gatheringbot-cooker-pair-test.ts',
         covers: { scripts: ['GatheringBot'] },

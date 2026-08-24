@@ -12,7 +12,7 @@ import { BankTask } from './banking.js';
 import { EscapeFlaxTrap, GoToFieldTask, PickTask } from './picking.js';
 import { AscendTask, DescendTask, SpinTask } from './spinning.js';
 
-// Why: these are Seers-village layout constants, not player choices — a future "location" preset would swap the whole set at once.
+// Why: these are Seers-village layout constants rather than player choices. A future "location" preset would swap the set at once.
 const FIELD = new Tile(2741, 3444, 0);
 const FIELD_GATE = new Tile(2736, 3443, 0);
 const BANK_STAND = new Tile(2725, 3493, 0);
@@ -93,7 +93,7 @@ export default class FlaxAIO extends TaskBot {
 
         const mins = (Date.now() - this.startedAt) / 60_000;
         const xph = mins > 0.5 ? `${(((this.spun * 15) / mins) * 60 / 1000).toFixed(1)}k` : '—';
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Picked: ${this.picked}`, `Spun: ${this.spun}`);
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Picked: ${this.picked}`, `Spun: ${this.spun}`, `XP/hr: ${xph}`);
         p.row(`Flax: ${this.flaxCount()}`, `Bow strings: ${this.bowstringCount()}`, `Bank trips: ${this.trips}`);
 
         p.gap();

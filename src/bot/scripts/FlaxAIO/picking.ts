@@ -46,7 +46,7 @@ function flaxLocAt(bot: FlaxAIO, x: number, z: number, level: number): Loc | nul
         .nearest();
 }
 
-function pocketTiles(bot: FlaxAIO): { x: number; z: number }[] {
+function pocketTiles(): { x: number; z: number }[] {
     const me = Game.tile();
     if (!me) {
         return [];
@@ -99,7 +99,7 @@ export function boxedByFlax(bot: FlaxAIO): boolean {
     if (!Inventory.isFull()) {
         return false;
     }
-    const pocket = pocketTiles(bot);
+    const pocket = pocketTiles();
     return pocket.length < POCKET_CAP && boundaryFlax(bot, pocket).length > 0;
 }
 
@@ -126,7 +126,7 @@ export async function carveOut(bot: FlaxAIO): Promise<void> {
         if (ChatDialog.canContinue() || EventSignal.pending()) {
             return;
         }
-        const pocket = pocketTiles(bot);
+        const pocket = pocketTiles();
         if (pocket.length >= POCKET_CAP) {
             bot.log('carved back out to open ground');
             return;
