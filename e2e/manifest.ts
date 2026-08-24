@@ -36,6 +36,15 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'alcher-nearest-bank-live',
+        harness: 'alcher-nearest-bank-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'vetted',
+        provenAt: 'd00d66de',
+        budgetMin: 12,
+        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
+    },
+    {
         id: 'ardyfighter-restock-loop-live',
         harness: 'ardyfighter-restock-loop-live.ts',
         covers: { scripts: ['ArdyFighter'] },

@@ -19,7 +19,7 @@ const FIRE_STAFF = 'Staff of fire';
 const NATURE_RUNE = 'Nature rune';
 /** High Level Alchemy unlocks at 55 Magic. */
 const ALCHEMY_REQUIRED = 55;
-/** Each cast resolves over ~5 ticks — wait before clicking the next note. */
+/** Each cast resolves over about 5 ticks, so wait before clicking the next note. */
 const ALCH_TICKS = 5;
 
 export const ALCHER_SETTINGS: SettingsSchema = {
@@ -45,7 +45,7 @@ export default class Alcher extends TaskBot {
     private item = 'Rune platebody';
     private alchs = 27;
 
-    // Why: the bank access is resolved once; every trip just opens the booth.
+    // Why: the bank access is resolved once; every trip only opens the booth.
     private bankAccess: { name: string; op: string } = BOOTH;
 
     private trips = 0;
@@ -167,7 +167,7 @@ export default class Alcher extends TaskBot {
     }
 }
 
-// Why: set the staff of fire once; deposit everything, withdraw one, close so Wield is a real backpack op, wield, reopen.
+// Why: set the staff of fire once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
 class EnsureGear implements Task {
     constructor(private bot: Alcher) {}
 
@@ -210,7 +210,7 @@ class Restock implements Task {
     constructor(private bot: Alcher) {}
 
     validate(): boolean {
-        // Why: fire whenever the pack can't do even one cast — a bank short of the desired trip amount still yields a partial load that gets alched, so we never loop on a shortfall we can't reach.
+        // Why: fire whenever the pack cannot cover one cast. A bank short of the trip amount still yields a partial load that gets alched, so a shortfall never turns into a loop.
         return !this.bot.canAlchOne();
     }
 
@@ -242,7 +242,7 @@ class Restock implements Task {
             const got = Inventory.count(this.bot.itemName()) - before;
             this.bot.log(`withdrew ${got} ${this.bot.itemName()} (noted)`);
             if (!ok || got === 0) {
-                // Why: an empty read here can just mean the bank list hasn't loaded yet (it fills a beat after the component appears) — retry instead of concluding the bank is out.
+                // Why: an empty read here can mean the bank list has not loaded yet, since it fills a beat after the component appears. Retry rather than conclude the bank is out.
                 if (!Bank.loaded()) {
                     this.bot.log('bank item list not loaded yet — retrying restock');
                     return;
@@ -280,7 +280,7 @@ class Restock implements Task {
         this.bot.log(`restocked: ${Inventory.count(this.bot.itemName())} ${this.bot.itemName()} notes + ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s`);
     }
 
-    // Why: withdraw by name once the bank's main item list has loaded — reading it before that returns zero and looks like an empty bank, the false "no item in the bank" stop on a cold start.
+    // Why: withdraw by name once the bank's main item list has loaded. Reading it earlier returns zero and looks like an empty bank, which is the false "no item in the bank" stop on a cold start.
     private async withdraw(name: string, count: number): Promise<boolean> {
         if (!Bank.loaded()) {
             this.bot.log(`waiting for the bank item list (${name})`);

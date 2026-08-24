@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 56. Categories: 19.
+- Scripts: 57. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -19,7 +19,7 @@
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
-- [Magic](#magic) — 1
+- [Magic](#magic) — 2
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 2
 - [Navigation](#navigation) — 2
@@ -639,6 +639,17 @@ Automated teleportation with intelligent banking and safety features
 | `lawBatchSize` | number (10–10000) | `1000` | Law Rune Batch Size |
 | `minLawRunes` | number (10–1000) | `100` | Minimum Law Runes |
 | `useStaffRunes` | boolean | `true` | Use Staff Runes |
+
+### Alcher
+
+High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat
+
+- Tags: `magic`, `high alchemy`, `alchemy`, `banking`, `noted`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `item` | string | `"Rune platebody"` | Item to alch |
+| `alchs` | number (1–1000) | `27` | Alchs per trip |
 
 ## Mining
 
