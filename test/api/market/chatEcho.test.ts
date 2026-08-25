@@ -9,6 +9,8 @@ import {
     parseCommand
 } from '#/bot/api/market/chatProtocol.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
+import Packet from '#/client/io/Packet.js';
+import WordPack from '#/client/wordfilter/WordPack.js';
 import { Ledger } from '#/bot/api/market/ledger.js';
 import { formatValuation, valueOffer } from '#/bot/api/market/quote.js';
 import type { PriceBook } from '#/bot/api/market/priceBook.js';
@@ -55,7 +57,7 @@ const EVERY_REPLY: string[] = [
     "You're #1 in the queue.",
     formatValuation(valuation),
     'Thanks Elliott. Pleasure doing business.',
-    `Buying/selling: ${formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'both')[0]}`,
+    `Trading: ${formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'both')[0]}`,
     'Quote first, e.g. "buy 100 iron ore".',
     'Trade declined: their offer does not match the quote.',
     'Elliott, stand next to me.'
@@ -78,5 +80,36 @@ describe('the keyword has to lead', () => {
         expect(parseCommand('Quote first, e.g. "buy 100 iron ore".')).toEqual({ kind: 'none' });
         expect(parseCommand('anyone selling 100 iron ore?')).toEqual({ kind: 'none' });
         expect(parseCommand('he said buy 100 iron ore')).toEqual({ kind: 'none' });
+    });
+});
+
+/** What the wire does to a line: pack it, unpack it, and compare on the codec's own terms. */
+function overTheWire(line: string): string {
+    const out = new Packet(new Uint8Array(256));
+    WordPack.pack(out, line);
+    const size = out.pos;
+    return WordPack.unpack(new Packet(out.data.slice(0, size)), size).trim().toLowerCase();
+}
+
+// Why: WordPack maps any character outside its alphabet to a space without complaining, so '18/22'
+// Why: leaves the shop and arrives as '18 22'. Only a round trip catches it.
+describe('every reply survives the chat wire', () => {
+    for (const line of EVERY_REPLY) {
+        test(`carries intact: ${line.slice(0, 42)}`, () => {
+            expect(overTheWire(line)).toBe(line.trim().toLowerCase());
+        });
+    }
+});
+
+describe('the wire itself', () => {
+    test('a slash is silently eaten, which is what the rule above exists for', () => {
+        expect(overTheWire('18/22')).toBe('18 22');
+    });
+
+    test('the separators the shop does use come back', () => {
+        expect(overTheWire('18-22')).toBe('18-22');
+        expect(overTheWire("2 matches: 'maple longbow' #851. which?")).toBe(
+            "2 matches: 'maple longbow' #851. which?"
+        );
     });
 });

@@ -91,6 +91,7 @@ export function formatAmbiguous(items: readonly { name: string; id: number }[]):
     return truncateChat(`${items.length} matches: ${shown}. Which?`);
 }
 
+// Why: WordPack's alphabet has no '/', and a character it cannot carry is silently sent as a space, so 18/22 arrives as "18 22".
 export function formatPriceList(
     entries: readonly { name: string; buy: number; sell: number }[],
     side: 'both' | 'buy' | 'sell'
@@ -102,7 +103,7 @@ export function formatPriceList(
         if (side === 'sell') {
             return `${e.name} ${formatGp(e.sell)}`;
         }
-        return `${e.name} ${formatGp(e.buy)}/${formatGp(e.sell)}`;
+        return `${e.name} ${formatGp(e.buy)}-${formatGp(e.sell)}`;
     });
 
     const lines: string[] = [];

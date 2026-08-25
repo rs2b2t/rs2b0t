@@ -715,7 +715,7 @@ export default class MarketMaker extends TaskBot {
         });
         const [first] = formatPriceList(entries, 'both');
         if (first !== undefined) {
-            this.say(truncateChat(`Buying/selling: ${first}`.slice(0, CHAT_LIMIT)));
+            this.say(truncateChat(`Trading: ${first}`.slice(0, CHAT_LIMIT)));
         }
         this.lastAdvertiseAt = Date.now();
     }
