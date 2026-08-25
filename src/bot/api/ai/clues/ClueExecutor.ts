@@ -10,6 +10,7 @@ import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { GroundItems } from '#/bot/api/grounditems/GroundItems.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
 import { Npcs } from '#/bot/api/npcs/Npcs.js';
+import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import type { GroundItem } from '#/bot/api/model/GroundItem.js';
 import type { Loc } from '#/bot/api/model/Loc.js';
 import type { Npc } from '#/bot/api/model/Npc.js';
@@ -487,7 +488,7 @@ async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void>
 
 function blockReason(step: ClueStep): string | null {
     if (step.type !== 'open-casket') {
-        const gated = clueGate(step.id);
+        const gated = clueGate(step.id, quest => Quests.status(quest));
         if (gated) {
             return gated;
         }

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { CLUE_GATES } from '#/bot/api/ai/clues/data/clueGates.js';
 import { PUZZLE_PIECE_SLOT } from '#/bot/api/ai/clues/data/puzzlePieces.js';
+import { QUESTS } from '#/bot/api/ai/quests/data/quests.js';
 import { PUZZLE_BLANK_SLOT } from '#/bot/api/ai/clues/puzzleLogic.js';
 
 const rows = Object.values(CLUE_DB);
@@ -68,9 +69,16 @@ describe('puzzle boxes', () => {
 
 describe('gated clues', () => {
     test('every gate names a real clue and gives a reason', () => {
-        for (const [idStr, reason] of Object.entries(CLUE_GATES)) {
+        for (const [idStr, gate] of Object.entries(CLUE_GATES)) {
             expect(CLUE_DB[Number(idStr)], `gate ${idStr} is not a clue`).toBeDefined();
-            expect(reason.length).toBeGreaterThan(10);
+            expect(gate.reason.length).toBeGreaterThan(10);
+        }
+    });
+
+    test('every gate names a quest the bot can drive', () => {
+        const known = new Set(QUESTS.map(q => q.name));
+        for (const [idStr, gate] of Object.entries(CLUE_GATES)) {
+            expect(known.has(gate.quest), `gate ${idStr} names '${gate.quest}'`).toBe(true);
         }
     });
 });
