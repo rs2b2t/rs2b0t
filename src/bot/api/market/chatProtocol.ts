@@ -68,7 +68,8 @@ export function formatGp(n: number): string {
     return n.toLocaleString('en-US');
 }
 
-/** Lists the matches, tagging with `#id` only when two of them read the same. */
+/** Lists the matches, falling back to `#id` only where two of them read exactly the same. */
+// Why: a bow pair is split by the "u" suffix before it ever gets here, so the id is for collisions no word can separate.
 export function formatAmbiguous(items: readonly { name: string; id: number }[]): string {
     const seen = new Map<string, number>();
     for (const i of items) {

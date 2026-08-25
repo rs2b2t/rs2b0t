@@ -49,7 +49,16 @@ export function searchCatalog(cat: Catalog, query: string, limit = 50): ObjRecor
     return hits.slice(0, limit);
 }
 
-// Why: the strung and unstrung maple longbow are both named "Maple longbow" with nothing else to tell them apart, so `#62` is the only handle a player can type.
+/** Narrow a name collision to the strung or the unstrung half. */
+// Why: every bow shares its display name with its unstrung twin, and the only thing separating them in the client's data is that the strung one can be worn.
+function preferWorn(matches: readonly ObjRecord[], unstrung: boolean): ObjRecord[] {
+    if (matches.length < 2) {
+        return [...matches];
+    }
+    const wanted = matches.filter(r => r.equippable !== unstrung);
+    return wanted.length === 1 ? wanted : [...matches];
+}
+
 export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
     const byId = /^#(\d+)$/.exec(query.trim());
     if (byId) {
@@ -61,8 +70,22 @@ export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
     if (q.length === 0) {
         return [];
     }
+
     const exact = cat.items.filter(r => key(r.name) === q);
-    return exact.length > 0 ? exact : cat.items.filter(r => key(r.name).includes(q));
+    if (exact.length > 0) {
+        return preferWorn(exact, false);
+    }
+
+    // "maple longbow u" is the unstrung "Maple longbow".
+    const trailingU = /^(.+) u$/.exec(q);
+    if (trailingU) {
+        const base = cat.items.filter(r => key(r.name) === trailingU[1]);
+        if (base.length > 0) {
+            return preferWorn(base, true);
+        }
+    }
+
+    return preferWorn(cat.items.filter(r => key(r.name).includes(q)), false);
 }
 
 let live: Catalog | null = null;

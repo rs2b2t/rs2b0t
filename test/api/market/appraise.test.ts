@@ -7,7 +7,7 @@ import type { OfferItem } from '#/bot/api/market/quote.js';
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 
 function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, certlink: -1, certtemplate: -1, ...over };
+    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
 }
 
 const IRON = 440;

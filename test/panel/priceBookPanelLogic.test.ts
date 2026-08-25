@@ -15,7 +15,7 @@ import {
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 
 function rec(id: number, name: string, cost: number): ObjRecord {
-    return { id, name, cost, stackable: false, members: false, certlink: -1, certtemplate: -1 };
+    return { id, name, cost, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1 };
 }
 
 const CAT = buildCatalog([rec(440, 'Iron ore', 17), rec(1515, 'Yew logs', 320), rec(995, 'Coins', 1)]);

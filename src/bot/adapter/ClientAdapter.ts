@@ -341,6 +341,8 @@ export interface ObjRecord {
     cost: number;
     stackable: boolean;
     members: boolean;
+    /** Has a wear model, which is what separates a strung bow from its unstrung twin of the same name. */
+    equippable: boolean;
     certlink: number;
     certtemplate: number;
 }
@@ -1002,6 +1004,7 @@ export const reader = {
                 cost: type.cost,
                 stackable: type.stackable,
                 members: type.members,
+                equippable: type.manwear !== -1,
                 certlink: type.certlink,
                 certtemplate: type.certtemplate
             });

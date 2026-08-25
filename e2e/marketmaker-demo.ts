@@ -89,7 +89,7 @@ function derived(mid: number): { buy: number; sell: number } {
 function joiningInstructions(clientPage: string): string {
     const rows = STOCK.map(s => {
         const { buy, sell } = derived(s.mid);
-        const tag = STOCK.filter(o => o.name === s.name).length > 1 ? ` #${s.id}` : '';
+        const tag = s.obj.startsWith('unstrung_') ? ' (u)' : '';
         return `    ${(s.name + tag).padEnd(24)} buys at ${gp(buy).padStart(7)}   sells at ${gp(sell).padStart(7)}`;
     }).join('\n');
 
@@ -139,8 +139,8 @@ ${rows}
     add more mid-trade         the price follows, and the trade still settles
     put coins in when selling  it ignores them and tells you to take them back
     trade it something junk    valued at nothing, and it says so
-    buy 10 maple longbow       two items share that name, so it asks which;
-                               answer with 'buy 10 #851' or 'buy 10 #62'
+    buy 10 maple longbow       the strung one
+    buy 10 maple longbow u     the unstrung one, and the same for every bow
     offer more than ${gp(MAX_TRADE)}gp    over the per-trade cap, so it takes what fits
     dump 9999 lobster on it    past its cap, so it takes what it can and says so
     open a trade, then close   it drops you and ignores you for a minute
