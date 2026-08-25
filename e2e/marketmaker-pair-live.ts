@@ -1,5 +1,5 @@
 /** Two-account MarketMaker e2e at Seers bank: the maker runs the shop and a scripted customer works it over.
- *  Four legs: a sale, a purchase, a short pay the maker must never accept, and an offer holding a stray item it must decline.
+ *  Five legs: a sale, a purchase, a short pay it must never accept, the cooldown that follows a walked-away trade, and an offer holding a stray item it must decline.
  *  Quotes travel over public chat, and the maker pays out in notes, so the chat protocol and the cert mapping are both live here. */
 
 // Usage:
@@ -39,6 +39,8 @@ const BOOK = JSON.stringify([{
     rows: [{ id: IRON_ORE, mid: 20, cap: 4000, buying: true, selling: true }]
 }]);
 
+/** Short, so the cooldown leg is provable without a slow test. */
+const COOLDOWN_S = 20;
 const SALE_QTY = 100;
 const SALE_PRICE = 22;
 const BUY_QTY = 100;
@@ -123,18 +125,40 @@ async function say(page: Page, text: string): Promise<void> {
     await page.waitForTimeout(1200);
 }
 
-/** Wait for a public line from the maker. Proves the quote reached the customer over the chat wire. */
-async function waitForMakerLine(page: Page, re: RegExp, ms: number): Promise<string | null> {
+/** Newest chat line, so a later wait can tell a fresh reply from one still sitting in the buffer. */
+async function chatMark(page: Page): Promise<string> {
+    return page.evaluate(() => {
+        const top = (globalThis as never as Abi).__rs2b0t.reader.chat(1)[0];
+        return top ? `${top.type}|${top.username ?? ''}|${top.text}` : '';
+    });
+}
+
+/**
+ * Wait for a public line from the maker that arrived after `mark`.
+ * Why: chat(20) keeps a rolling buffer, so a bare search matches the previous leg's quote and a leg
+ * that should fail passes.
+ */
+async function waitForMakerLine(page: Page, re: RegExp, ms: number, mark: string): Promise<string | null> {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline) {
         const hit = await page.evaluate(
-            ([name, source]) => {
+            ([name, source, since]) => {
                 const lines = (globalThis as never as Abi).__rs2b0t.reader.chat(20);
+                const sig = (l: { type: number; username: string | null; text: string }) =>
+                    `${l.type}|${l.username ?? ''}|${l.text}`;
                 const from = (u: string | null) => (u ?? '').replace(/^@cr\d@/, '').trim().toLowerCase();
-                const want = new RegExp(source as string, 'i');
-                return lines.find(l => from(l.username) === (name as string).toLowerCase() && want.test(l.text))?.text ?? null;
+                const want = new RegExp(source, 'i');
+                for (const line of lines) {
+                    if (sig(line) === since) {
+                        break;
+                    }
+                    if (from(line.username) === name.toLowerCase() && want.test(line.text)) {
+                        return line.text;
+                    }
+                }
+                return null;
             },
-            [MAKER, re.source] as [string, string]
+            [MAKER, re.source, mark] as [string, string, string]
         );
         if (hit) {
             return hit;
@@ -144,6 +168,33 @@ async function waitForMakerLine(page: Page, re: RegExp, ms: number): Promise<str
     return null;
 }
 
+/**
+ * Say a command until the maker answers it.
+ * Why: a random event can teleport the maker out of chat range mid-run, and a customer would
+ * repeat themselves rather than conclude the shop is broken. The gap stays inside the bot's own
+ * per-player command budget.
+ */
+async function askUntilQuoted(page: Page, command: string, re: RegExp, tries = 5): Promise<string | null> {
+    for (let i = 0; i < tries; i++) {
+        const mark = await chatMark(page);
+        await say(page, command);
+        const hit = await waitForMakerLine(page, re, 20_000, mark);
+        if (hit) {
+            return hit;
+        }
+        console.log(`${at()} no answer to '${command}' (try ${i + 1}/${tries})`);
+    }
+    return null;
+}
+
+async function where(page: Page): Promise<string> {
+    return page.evaluate(() => {
+        const g = (globalThis as never as Abi).__rs2b0t;
+        const t = g.reader.worldTile();
+        return t ? `${t.x},${t.z},${t.level}` : 'nowhere';
+    });
+}
+
 async function dump(makerPage: Page, custPage: Page, label: string): Promise<string> {
     const logs = (await makerLogs(makerPage)).slice(-10);
     const chat = await custPage.evaluate(() =>
@@ -151,7 +202,17 @@ async function dump(makerPage: Page, custPage: Page, label: string): Promise<str
             .chat(12)
             .map(l => `${l.type}|${l.username ?? ''}|${l.text}`)
     );
-    return `${label}\n  maker log: ${logs.join('\n             ')}\n  chat seen: ${chat.join('\n             ')}`;
+    const [makerAt, custAt, state] = await Promise.all([
+        where(makerPage),
+        where(custPage),
+        makerPage.evaluate(() => (globalThis as never as Abi).rs2b0t.runner.state)
+    ]);
+    return [
+        label,
+        `  maker at ${makerAt} (spot ${SPOT.x},${SPOT.z}), runner ${state}; customer at ${custAt}`,
+        `  maker log: ${logs.join('\n             ')}`,
+        `  chat seen: ${chat.join('\n             ')}`
+    ].join('\n');
 }
 
 async function countById(page: Page, id: number): Promise<number> {
@@ -278,7 +339,8 @@ try {
         // Why: advertising off keeps the chat log readable while the legs run.
         advertiseSeconds: '0',
         engagementTimeoutSeconds: '120',
-        maxQueue: '4',
+        quoteSeconds: '90',
+        cooldownSeconds: String(COOLDOWN_S),
         coinFloat: '50000'
     });
 
@@ -310,8 +372,7 @@ try {
     // ---- leg 1: the customer buys 100 iron ore -------------------------
     const oreBefore = await oreCount(custPage);
     const gpBefore = await countById(custPage, COINS);
-    await say(custPage, `buy ${SALE_QTY} iron ore`);
-    const saleQuote = await waitForMakerLine(custPage, /trade me/i, 90_000);
+    const saleQuote = await askUntilQuoted(custPage, `buy ${SALE_QTY} iron ore`, /trade me/i);
     if (saleQuote === null) {
         fail(await dump(makerPage, custPage, 'sale leg: the maker never quoted'));
     }
@@ -337,8 +398,7 @@ try {
     }
     const oreBefore2 = await oreCount(custPage);
     const gpBefore2 = await countById(custPage, COINS);
-    await say(custPage, `sell ${BUY_QTY} iron ore`);
-    const buyQuote = await waitForMakerLine(custPage, /i'll pay/i, 90_000);
+    const buyQuote = await askUntilQuoted(custPage, `sell ${BUY_QTY} iron ore`, /i'll pay/i);
     if (buyQuote === null) {
         fail(await dump(makerPage, custPage, 'purchase leg: the maker never quoted'));
     }
@@ -366,8 +426,7 @@ try {
     const gpBefore3 = await countById(custPage, COINS);
     const logMark = (await makerLogs(makerPage)).length;
 
-    await say(custPage, `buy ${SALE_QTY} iron ore`);
-    if ((await waitForMakerLine(custPage, /trade me/i, 90_000)) === null) {
+    if ((await askUntilQuoted(custPage, `buy ${SALE_QTY} iron ore`, /trade me/i)) === null) {
         fail(await dump(makerPage, custPage, 'short-pay leg: the maker never quoted'));
     }
     await customerTrade(custPage, MAKER, { name: 'Coins', id: COINS, qty: 100 }, 'short pay');
@@ -391,15 +450,28 @@ try {
     results.push(`never accepted a 100gp short pay on a ${SALE_QTY * SALE_PRICE}gp quote`);
     console.log(`${at()} PASS leg 3: ${results[2]}`);
 
-    // ---- leg 4: an offer holding something it never quoted is declined ---
+    // ---- leg 4: walking away from a trade costs the walker, not the shop ----
+    // Why: this is the inversion a FIFO queue got backwards, so it is worth proving rather than assuming.
+    // Why: the bot needs a few beats to notice the closed window before the cooldown is on.
+    await custPage.waitForTimeout(8_000);
+    const mark4 = await chatMark(custPage);
+    await say(custPage, `buy ${SALE_QTY} iron ore`);
+    if ((await waitForMakerLine(custPage, /trade me/i, 12_000, mark4)) !== null) {
+        fail(await dump(makerPage, custPage, 'cooldown leg: the maker quoted someone who just walked out of a trade'));
+    }
+    results.push(`ignored a customer for ${COOLDOWN_S}s after they walked away mid-trade`);
+    console.log(`${at()} PASS leg 4: ${results[3]}`);
+
+    await custPage.waitForTimeout((COOLDOWN_S + 5) * 1000);
+
+    // ---- leg 5: an offer holding something it never quoted is declined ---
     if (Date.now() > deadline) {
         fail('out of budget before the decline leg');
     }
     const oreBefore4 = await oreCount(custPage);
     const declineMark = (await makerLogs(makerPage)).length;
 
-    await say(custPage, `buy ${SALE_QTY} iron ore`);
-    if ((await waitForMakerLine(custPage, /trade me/i, 90_000)) === null) {
+    if ((await askUntilQuoted(custPage, `buy ${SALE_QTY} iron ore`, /trade me/i)) === null) {
         fail(await dump(makerPage, custPage, 'decline leg: the maker never quoted'));
     }
     // Why: the stray goes in BEFORE the price, since a matching offer is accepted the moment it lands and there would be no window left to slip anything into.
@@ -418,7 +490,7 @@ try {
         fail(await dump(makerPage, custPage, 'decline leg: ore moved on a trade the maker should have declined'));
     }
     results.push('declined an offer holding an item it never quoted');
-    console.log(`${at()} PASS leg 4: ${results[3]}`);
+    console.log(`${at()} PASS leg 5: ${results[4]}`);
 
     console.log(`PASS: ${results.join(', ')}`);
     process.exit(0);
