@@ -6,7 +6,7 @@ export interface ResolvedPrices {
 }
 
 // Why: margin is the TOTAL spread, so it splits either side of mid and a 20% book quotes 90/110 on a 100gp item.
-// Why: multiply before dividing — `100 * (1 + 20/200)` is 110.00000000000001, and the ceil overcharges every round number by 1gp.
+// Why: multiply before dividing. `100 * (1 + 20/200)` is 110.00000000000001, so the ceil overcharges every round number by 1gp.
 export function resolvePrices(book: PriceBook, row: PriceRow): ResolvedPrices {
     const m = row.margin ?? book.margin;
     const buy = Math.max(1, row.buy ?? Math.floor((row.mid * (200 - m)) / 200));

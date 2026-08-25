@@ -10,6 +10,7 @@ import Model from '#/client/dash3d/Model.js';
 import type ModelSource from '#/client/dash3d/ModelSource.js';
 import { ClientProt } from '#/client/io/ClientProt.js';
 import { ServerProt } from '#/client/io/ServerProt.js';
+import WordPack from '#/client/wordfilter/WordPack.js';
 
 import { SELF_TEST, type RawClient } from './RawClient.js';
 
@@ -321,6 +322,17 @@ export function attach(client: unknown): string[] {
 export function setPacketListener(cb: ((ptype: number) => void) | null): void {
     packetListener = cb;
 }
+
+/** The client's own chat input cap. */
+const PUBLIC_CHAT_LIMIT = 80;
+
+// tradeconfirm inv components; the engine picks the *_LARGE pair once a side offers 14 or more items.
+const TRADE_CONFIRM_MINE_SMALL = 3542; // tradeconfirm:inv1
+const TRADE_CONFIRM_MINE_LARGE = 3538; // tradeconfirm:inv2
+const TRADE_CONFIRM_THEIRS_SMALL = 3532; // tradeconfirm:otherinv1
+const TRADE_CONFIRM_THEIRS_LARGE = 3539; // tradeconfirm:otherinv2
+const TRADE_CONFIRM_MINE_NOTHING = 3557; // tradeconfirm:inv_nothing
+const TRADE_CONFIRM_THEIRS_NOTHING = 3558; // tradeconfirm:otherinv_nothing
 
 /** One obj definition, flattened for bot code that may not import client internals. */
 export interface ObjRecord {
@@ -1351,6 +1363,25 @@ export const reader = {
         return IfType.list[3417]?.text ?? null; // trademain:otherplayer, "Trading With: <name>"
     },
 
+    // Why: the confirm screen is its own interface with its own inv components, and it is the screen the accept lands on, so the offer screen's 3415/3416 are the wrong thing to re-read here.
+    // Why: the engine transmits into inv1/otherinv1 below 14 items and inv2/otherinv2 at 14 or more (interface_trade/scripts/trade.rs2), so both must be read.
+    tradeConfirmOffers(): { mine: InvItemSnapshot[]; theirs: InvItemSnapshot[] } {
+        const read = (comId: number): InvItemSnapshot[] =>
+            readInvComponent(comId, () => IfType.list[comId]?.iop ?? []);
+        return {
+            mine: [...read(TRADE_CONFIRM_MINE_SMALL), ...read(TRADE_CONFIRM_MINE_LARGE)],
+            theirs: [...read(TRADE_CONFIRM_THEIRS_SMALL), ...read(TRADE_CONFIRM_THEIRS_LARGE)]
+        };
+    },
+
+    // Why: an empty offer is legal, so only the "Absolutely nothing!" label separates it from a screen the server has not filled yet.
+    tradeConfirmReady(): boolean {
+        const offers = reader.tradeConfirmOffers();
+        const mineReady = offers.mine.length > 0 || (IfType.list[TRADE_CONFIRM_MINE_NOTHING]?.text ?? '') !== '';
+        const theirsReady = offers.theirs.length > 0 || (IfType.list[TRADE_CONFIRM_THEIRS_NOTHING]?.text ?? '') !== '';
+        return mineReady && theirsReady;
+    },
+
     closeButtonComId(rootComId: number): number {
         if (!raw || rootComId === -1) {
             return -1;
@@ -1556,6 +1587,23 @@ export const actions = {
         raw.out.p1Enc(ClientProt.RESUME_P_COUNTDIALOG);
         raw.out.p4(Math.max(0, Math.floor(value)));
         raw.dialogInputOpen = false;
+        return true;
+    },
+
+    // Why: mirrors the client's own MESSAGE_PUBLIC write (Client.ts, chat input handler), colour 0 and effect 0 since the bot never uses chat effects.
+    sayPublic(text: string): boolean {
+        const message = text.trim().slice(0, PUBLIC_CHAT_LIMIT);
+        if (!raw || !raw.out || message.length === 0) {
+            return false;
+        }
+
+        raw.out.p1Enc(ClientProt.MESSAGE_PUBLIC);
+        raw.out.p1(0);
+        const start = raw.out.pos;
+        raw.out.p1(0);
+        raw.out.p1(0);
+        WordPack.pack(raw.out, message);
+        raw.out.psize1(raw.out.pos - start);
         return true;
     },
 
