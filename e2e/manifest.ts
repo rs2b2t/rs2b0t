@@ -339,6 +339,16 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/how-to/gatheringbot-smoke.md'
     },
     {
+        id: 'marketmaker-pair-live',
+        harness: 'marketmaker-pair-live.ts',
+        covers: { scripts: ['MarketMaker'] },
+        status: 'vetted',
+        provenAt: 'a6ab6384',
+        budgetMin: 12,
+        env: { BUDGET_S: '700' },
+        note: 'two accounts at Seers bank: a sale, a purchase, a short pay never accepted, and an offer holding a stray item declined'
+    },
+    {
         id: 'gatheringbot-mule-pair-test',
         harness: 'gatheringbot-mule-pair-test.ts',
         covers: { scripts: ['GatheringBot'] },
