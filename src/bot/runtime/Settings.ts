@@ -21,7 +21,7 @@ export interface SettingDef {
     /** Render a freeform string as an HTML colour picker + hex field. */
     color?: boolean;
     /** Player data, so ParamsModal refreshes them from the named source at open. */
-    optionsFrom?: 'loadouts';
+    optionsFrom?: 'loadouts' | 'priceBooks';
     /** For `string[]` settings: when this key's value is `'csv'`, render a CSV textarea with copy/paste buttons instead of the chip list. */
     csvToggle?: string;
 }
@@ -515,6 +515,21 @@ export const LOADOUT_SETTINGS: SettingsSchema = {
         default: '[]',
         label: 'Loadouts',
         help: 'JSON written by the Loadout panel'
+    }
+};
+
+/**
+ * Player-defined price books. Storage only, the price book panel owns editing,
+ * so this never appears in a settings modal.
+ */
+export const PRICE_BOOK_SETTINGS_NS = 'PriceBooks';
+
+export const PRICE_BOOK_SETTINGS: SettingsSchema = {
+    books: {
+        type: 'string',
+        default: '[]',
+        label: 'Price books',
+        help: 'JSON written by the price book panel'
     }
 };
 
