@@ -46,6 +46,8 @@ const OPEN_MS = Number(arg('open-secs') ?? 240) * 1000;
 const DIAG_MS = Number(arg('diag-secs') ?? 25) * 1000;
 /** Default. The clue must solve; the gate opening is a step on the way, not the result. */
 const GATE_ONLY = argv.includes('--gate-only');
+/** Prepend the unfinished-quest half, which is the only way this harness prints an abandon. */
+const CHECK_GATE = argv.includes('--check-gate');
 const ONLY = arg('ids')?.split(',').map(Number);
 
 const QUEST = 'Regicide';
@@ -306,33 +308,35 @@ try {
     await seedLoadout(page);
     await setSettings(page, 'ClueSolver', { loadout: LOADOUT_NAME, foodWithdraw: 12, restorePrayer: true, useTeleports: true });
 
-    // Why: `unknown` is the quest tab unread, and it would shut the gate for the wrong reason,
-    // which would let the shut phase pass on an account whose journal was never loaded.
-    const before = await questStatus(page);
-    console.log(`${stamp()} ${QUEST} reads ${before}`);
-    if (before === 'unknown') {
-        fail(`${QUEST} reads unknown — the quest tab never loaded, so neither phase would mean anything`);
-    }
-    if (before === 'complete') {
-        fail(`${QUEST} already reads complete on a fresh account — nothing to open`);
-    }
-
-    console.log(`\n════ phase 1: ${QUEST} ${before} — the gate must shut ════`);
-    for (const id of IDS) {
-        console.log(`\n══ ${id} ${CLUE_DB[id]!.obj}`);
-        if (!(await teleTo(page, ARDOUGNE_BANK, 10, 25_000))) {
-            fail(`tele to the Ardougne bank did not arrive before clue ${id}`);
+    // Why: the ask is whether these clues work once the quest is done, so the account is finished
+    // Why: before it is handed a clue. --check-gate prepends the unfinished half for the days the
+    // Why: question is whether the gate still shuts, and it is the only way to see an abandon here.
+    if (CHECK_GATE) {
+        const before = await questStatus(page);
+        console.log(`${stamp()} ${QUEST} reads ${before}`);
+        if (before === 'unknown') {
+            fail(`${QUEST} reads unknown — the quest tab never loaded, so the gate check means nothing`);
         }
-        await seedClue(page, id);
-        const leg = await runLeg(page, id, SHUT_MS);
-        if (leg.pastGate) {
-            record({ id, phase: 'shut', ok: false, detail: 'reached the solve step — the gate let it through' });
-        } else if (leg.abandon === null) {
-            record({ id, phase: 'shut', ok: false, detail: `no abandon inside ${SHUT_MS / 1000}s — the gate never fired` });
-        } else if (!gateLine(id).test(leg.abandon)) {
-            record({ id, phase: 'shut', ok: false, detail: `abandoned on '${leg.abandon}', which is not the ${QUEST} gate` });
-        } else {
-            record({ id, phase: 'shut', ok: true, detail: leg.abandon });
+        if (before === 'complete') {
+            fail(`${QUEST} already reads complete on a fresh account — nothing to shut`);
+        }
+        console.log(`\n════ gate check: ${QUEST} ${before} — the clues must abandon ════`);
+        for (const id of IDS) {
+            console.log(`\n══ ${id} ${CLUE_DB[id]!.obj}`);
+            if (!(await teleTo(page, ARDOUGNE_BANK, 10, 25_000))) {
+                fail(`tele to the Ardougne bank did not arrive before clue ${id}`);
+            }
+            await seedClue(page, id);
+            const leg = await runLeg(page, id, SHUT_MS);
+            if (leg.pastGate) {
+                record({ id, phase: 'shut', ok: false, detail: 'reached the solve step — the gate let it through' });
+            } else if (leg.abandon === null) {
+                record({ id, phase: 'shut', ok: false, detail: `no abandon inside ${SHUT_MS / 1000}s — the gate never fired` });
+            } else if (!gateLine(id).test(leg.abandon)) {
+                record({ id, phase: 'shut', ok: false, detail: `abandoned on '${leg.abandon}', which is not the ${QUEST} gate` });
+            } else {
+                record({ id, phase: 'shut', ok: true, detail: leg.abandon });
+            }
         }
     }
 
@@ -353,10 +357,10 @@ try {
     const after = await questStatus(page);
     console.log(`${stamp()} ${QUEST} reads ${after}`);
     if (after !== 'complete') {
-        fail(`${QUEST} reads ${after} after the seed and relog — the open phase would prove nothing`);
+        fail(`${QUEST} reads ${after} after the seed and relog — a solve would prove nothing`);
     }
 
-    console.log(`\n════ phase 2: ${QUEST} complete — the gate must open ════`);
+    console.log(`\n════ ${QUEST} complete — every clue must solve ════`);
     for (const id of IDS) {
         console.log(`\n══ ${id} ${CLUE_DB[id]!.obj}`);
         if (!(await teleTo(page, ARDOUGNE_BANK, 10, 25_000))) {
@@ -409,7 +413,7 @@ try {
         console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.phase} ${r.id} ${CLUE_DB[r.id]!.obj}: ${r.detail}`);
     }
 
-    const payload = { legs: results, quest: QUEST, gateOnly: GATE_ONLY, base };
+    const payload = { legs: results, quest: QUEST, gateOnly: GATE_ONLY, checkGate: CHECK_GATE, base };
     if (pass === results.length) {
         await proof.writeSuccess(page, payload);
         console.log(`proof=${proof.paths.successProof}`);

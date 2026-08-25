@@ -152,8 +152,7 @@ export async function climbOutOfPit(log: (m: string) => void): Promise<boolean> 
 
 /**
  * Cross one seam. True only once the player has changed pocket.
- * Why: the op walks the player before its script resolves, so nothing can be judged on a tile change, the pitfall's agility roll drops a failure into a spike pit, and both look like movement. The pocket is the only honest signal.
- * Why: `regicide_move_trap_woodspring` p_walks a failed sticks roll to a tile beside the loc, which is sometimes the far side of the barrier, so the walk back to the bank is a route the baked pack cannot answer. Every failure inside the loop therefore spends an attempt rather than ending the crossing, or one bad roll retires a leg the next roll would have taken.
+ * Why: the op walks the player before its script resolves, so nothing can be judged on a tile change, the pitfall's agility roll drops a failure into a spike pit, and both look like movement. The pocket is the only honest signal. `regicide_move_trap_woodspring` p_walks a failed sticks roll to a tile beside the loc, sometimes the far side of the barrier, so the walk back to the bank is a route the baked pack cannot answer, and every failure inside the loop therefore spends an attempt rather than retiring a crossing the next roll would have taken.
  */
 async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolean> {
     const stand = new Tile(leg.from.stand.x, leg.from.stand.z, 0);
