@@ -13,6 +13,8 @@ const BASE = process.env.BASE ?? 'http://localhost:8890';
 /** Fixed, so the shop's bank and its takings survive a restart. */
 const SHOP = process.env.SHOP ?? 'seersmarket';
 const SPOT = { x: 2725, z: 3491, level: 0 } as const;
+/** The real game's tick. The local sim ships at 300ms, which makes the shop feel twice as quick as it is. */
+const TICK_MS = Number(process.env.TICK_MS) || 600;
 
 interface Stock {
     obj: string;
@@ -146,6 +148,7 @@ ${rows}
     open a trade, then close   it drops you and ignores you for 15 seconds
 
 ${'='.repeat(78)}
+  The world is running at ${TICK_MS}ms per tick, the same as the real game.
   Ctrl-C here to close the shop.
 ${'='.repeat(78)}
 `;
@@ -166,6 +169,9 @@ try {
     await mainlandAccount(page, BASE, SHOP, isolated.page);
     await maxmeAndClearDialogs(page);
     await clearChatDialogs(page);
+
+    console.log(`demo: setting the world tick to ${TICK_MS}ms`);
+    await cheatQuiet(page, `speed ${TICK_MS}`);
 
     console.log('demo: seeding the bank');
     await cheatQuiet(page, '~clearinv');
