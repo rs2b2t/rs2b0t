@@ -139,6 +139,7 @@ export function decideBeat(input: {
     theirSig: string;
     window: Window;
     oweMatched: boolean;
+    wantMatched: boolean;
     oweAnything: boolean;
     stillBeatsNeeded: number;
     reOfferCap: number;
@@ -156,6 +157,10 @@ export function decideBeat(input: {
         return input.window.reOffers >= input.reOfferCap
             ? { do: 'give-up', reason: 'too many changes in one trade' }
             : { do: 'offer', reason: 'my side does not match what I owe' };
+    }
+    // Why: a sale is x * y = z, so short money is not a smaller deal, it is not the deal.
+    if (!input.wantMatched) {
+        return { do: 'wait', reason: 'their side is not the deal yet' };
     }
     return { do: 'accept' };
 }

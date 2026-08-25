@@ -142,7 +142,7 @@ describe('cooldowns punish the staller', () => {
 });
 
 describe('decideBeat', () => {
-    const base = { stillBeatsNeeded: 3, reOfferCap: 12, oweMatched: false, oweAnything: true };
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, oweMatched: false, wantMatched: true, oweAnything: true };
 
     // Why: any change resets both accepts, so acting on a moving side means neither ever settles.
     test('a side that just moved is always waited on', () => {
@@ -184,6 +184,18 @@ describe('decideBeat', () => {
             oweMatched: true
         });
         expect(beat).toEqual({ do: 'accept' });
+    });
+
+    // Why: a sale is x * y = z, so short money is not a smaller deal, it is not the deal.
+    test('their side not being the deal waits rather than accepting', () => {
+        const beat = decideBeat({
+            ...base,
+            theirSig: '440x100',
+            window: windowAt(),
+            oweMatched: true,
+            wantMatched: false
+        });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side is not the deal yet' });
     });
 
     // Why: this is the steady-state claim. Nothing changing means nothing happens.

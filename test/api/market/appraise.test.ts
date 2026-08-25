@@ -70,6 +70,7 @@ describe('buying: the bot prices what is in front of it', () => {
         const a = look([item(IRON, 'Iron ore', 100)]);
         expect(a.kind).toBe('buy');
         expect([...a.owe]).toEqual([[COINS, 1800]]);
+        expect([...a.want]).toEqual([[IRON, 100]]);
         expect(a.total).toBe(1800);
     });
 
@@ -170,50 +171,47 @@ describe('buying: it never offers more than it has', () => {
     });
 });
 
-describe('selling: coins on their side buy what they cover', () => {
+describe('selling: the customer named x, it costs y, they owe x * y', () => {
     const intent = { itemId: IRON, maxQty: 100 };
     const stocked = desk({ have: { [IRON]: 5_000 } });
 
-    test('exact money buys the lot', () => {
+    // Why: the deal is fixed by what they asked for. Nothing in the window changes the price or the quantity.
+    test('the quantity comes from the request, not from their coins', () => {
         const a = look([item(COINS, 'Coins', 2200)], { intent, desk: stocked });
         expect(a.kind).toBe('sell');
         expect([...a.owe]).toEqual([[IRON, 100]]);
+        expect([...a.want]).toEqual([[COINS, 2200]]);
         expect(a.total).toBe(2200);
     });
 
-    // Why: short money buying fewer units is the point of pricing the window live.
-    test('short money buys fewer', () => {
+    test('short money is not a smaller deal, it is the same deal unpaid', () => {
         const a = look([item(COINS, 'Coins', 1100)], { intent, desk: stocked });
-        expect([...a.owe]).toEqual([[IRON, 50]]);
-        expect(a.total).toBe(1100);
+        expect([...a.owe]).toEqual([[IRON, 100]]);
+        expect([...a.want]).toEqual([[COINS, 2200]]);
     });
 
-    test('the remainder above a whole unit is named, not pocketed quietly', () => {
+    test('no coins yet is still the same deal', () => {
+        const a = look([], { intent, desk: stocked });
+        expect([...a.owe]).toEqual([[IRON, 100]]);
+        expect([...a.want]).toEqual([[COINS, 2200]]);
+    });
+
+    test('the remainder above the price is named, not pocketed quietly', () => {
         const a = look([item(COINS, 'Coins', 2210)], { intent, desk: stocked });
-        expect([...a.owe]).toEqual([[IRON, 100]]);
+        expect([...a.want]).toEqual([[COINS, 2200]]);
         expect(a.ignored).toContainEqual({ name: 'coins', count: 10 });
-    });
-
-    test('it never hands over more than the customer asked for', () => {
-        const a = look([item(COINS, 'Coins', 100_000)], { intent, desk: stocked });
-        expect([...a.owe]).toEqual([[IRON, 100]]);
     });
 
     test('it never hands over more than it holds', () => {
         const a = look([item(COINS, 'Coins', 2200)], { intent, desk: desk({ have: { [IRON]: 30 } }) });
         expect([...a.owe]).toEqual([[IRON, 30]]);
+        expect([...a.want]).toEqual([[COINS, 660]]);
     });
 
-    test('too little money buys nothing, and says the unit price', () => {
-        const a = look([item(COINS, 'Coins', 5)], { intent, desk: stocked });
+    test('out of stock is nothing at all', () => {
+        const a = look([item(COINS, 'Coins', 2200)], { intent, desk: desk() });
         expect(a.kind).toBe('nothing');
-        expect(a.note).toContain('22');
-    });
-
-    test('no money yet is a prompt, not a refusal', () => {
-        const a = look([], { intent, desk: stocked });
-        expect(a.kind).toBe('nothing');
-        expect(a.note).toContain('put up coins');
+        expect(a.note).toContain('out of');
     });
 
     test('goods on their side during a sale are ignored and named', () => {

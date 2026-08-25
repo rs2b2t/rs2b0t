@@ -1,11 +1,10 @@
 import { unnotedId, type Catalog } from './catalog.js';
 import { rowOf, type PriceBook } from './priceBook.js';
 import { resolvePrices, rowValid } from './prices.js';
-import { roomUnderCap } from './ledger.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
 
-/** What the customer asked for in chat. Only the selling direction needs one. */
+/** What the customer asked to buy. Only that direction needs one. */
 export interface SellIntent {
     itemId: number;
     maxQty: number;
@@ -18,46 +17,56 @@ export interface DeskState {
     purse: number;
 }
 
+/** The deal: quantity times unit price, on both sides. */
 export interface Appraisal {
     kind: 'buy' | 'sell' | 'nothing';
-    /** unnoted id -> units the bot should have on its own side. */
+    /** What the bot puts up. */
     owe: Map<number, number>;
-    /** gp value of the exchange. */
+    /** What the customer must have up for the deal to be on. */
+    want: Map<number, number>;
     total: number;
     lines: ValuedLine[];
-    /** Named so the customer can pull them back out before the bot accepts. */
+    /** Named so the customer can take them back before the bot accepts. */
     ignored: { name: string; count: number }[];
-    /** Set when the bot trimmed the deal rather than refused it. */
     note: string | null;
 }
 
-function units(item: OfferItem): number {
-    return Math.max(1, item.count);
+type Ignored = { name: string; count: number }[];
+
+function nothing(ignored: Ignored, note: string | null): Appraisal {
+    return { kind: 'nothing', owe: new Map(), want: new Map(), total: 0, lines: [], ignored, note };
 }
 
-/** Merge a trade side onto unnoted ids, keeping coins separate. */
-function fold(cat: Catalog, items: readonly OfferItem[], coinId: number): {
-    goods: Map<number, { name: string; count: number }>;
-    coins: number;
-} {
+/** Merge a trade side onto unnoted ids, keeping coins apart. */
+function fold(cat: Catalog, items: readonly OfferItem[], coinId: number) {
     const goods = new Map<number, { name: string; count: number }>();
     let coins = 0;
     for (const item of items) {
+        const units = Math.max(1, item.count);
         if (item.id === coinId) {
-            coins += units(item);
+            coins += units;
             continue;
         }
         const id = unnotedId(cat, item.id);
         const name = cat.byId.get(id)?.name ?? item.name ?? `item ${id}`;
-        const prev = goods.get(id);
-        goods.set(id, { name, count: (prev?.count ?? 0) + units(item) });
+        goods.set(id, { name, count: (goods.get(id)?.count ?? 0) + units });
     }
     return { goods, coins };
 }
 
+/** The unit price, or null when the book will not trade that item that way. */
+function priceOf(book: PriceBook, id: number, side: 'buying' | 'selling'): number | null {
+    const row = rowOf(book, id);
+    if (!row || !rowValid(book, row) || !row[side]) {
+        return null;
+    }
+    const { buy, sell } = resolvePrices(book, row);
+    return side === 'buying' ? buy : sell;
+}
+
 /**
- * What the bot should have on its own side, given what the customer has on theirs.
- * Why: derived every beat rather than remembered, so nothing can go stale and running the beat twice changes nothing.
+ * The deal, given what the customer has up and what they asked for.
+ * Why: derived every beat rather than remembered, so nothing can go stale and running it twice changes nothing.
  */
 export function appraise(input: {
     book: PriceBook;
@@ -69,128 +78,117 @@ export function appraise(input: {
 }): Appraisal {
     const { book, cat, desk, coinId, theirOffer, intent } = input;
     const { goods, coins } = fold(cat, theirOffer, coinId);
-    const ignored: { name: string; count: number }[] = [];
+    const ignored: Ignored = [];
 
-    if (intent !== null) {
-        for (const [, g] of goods) {
+    if (intent) {
+        for (const g of goods.values()) {
             ignored.push(g);
         }
-        return sellTo(book, cat, desk, intent, coins, ignored);
+        return sale(book, cat, desk, coinId, intent, coins, ignored);
     }
 
     if (coins > 0) {
         ignored.push({ name: 'coins', count: coins });
     }
-    return buyFrom(book, desk, coinId, goods, ignored);
+    return purchase(book, desk, coinId, goods, ignored);
 }
 
-function buyFrom(
-    book: PriceBook,
-    desk: DeskState,
-    coinId: number,
-    goods: Map<number, { name: string; count: number }>,
-    ignored: { name: string; count: number }[]
-): Appraisal {
-    const lines: ValuedLine[] = [];
-    let total = 0;
-    let note: string | null = null;
-
-    for (const [id, { name, count }] of goods) {
-        const row = rowOf(book, id);
-        if (!row || !row.buying || !rowValid(book, row)) {
-            ignored.push({ name, count });
-            continue;
-        }
-        const take = Math.min(count, roomUnderCap(row.cap, desk.held(id), 0));
-        if (take < count) {
-            ignored.push({ name, count: count - take });
-            note = 'some of that is over my cap';
-        }
-        if (take <= 0) {
-            continue;
-        }
-        const { buy } = resolvePrices(book, row);
-        lines.push({ id, name, count: take, each: buy, value: take * buy });
-        total += take * buy;
-    }
-
-    const ceiling = Math.min(desk.purse, book.maxTradeValue);
-    if (total > ceiling) {
-        return trimBuy(lines, ignored, ceiling, coinId);
-    }
-    if (total <= 0) {
-        return { kind: 'nothing', owe: new Map(), total: 0, lines, ignored, note };
-    }
-    return { kind: 'buy', owe: new Map([[coinId, total]]), total, lines, ignored, note };
-}
-
-/**
- * Drop entire lines until the bill fits what the bot can pay.
- * Why: paying for part of a stack means picking which units, and the trade window has no way to say so.
- */
-function trimBuy(
-    lines: ValuedLine[],
-    ignored: { name: string; count: number }[],
-    ceiling: number,
-    coinId: number
-): Appraisal {
-    const kept: ValuedLine[] = [];
-    let total = 0;
-    for (const line of [...lines].sort((a, b) => b.value - a.value)) {
-        if (total + line.value <= ceiling) {
-            kept.push(line);
-            total += line.value;
-        } else {
-            ignored.push({ name: line.name, count: line.count });
-        }
-    }
-    const note = `I can only cover ${formatGp(total)}gp of that`;
-    if (total <= 0) {
-        return { kind: 'nothing', owe: new Map(), total: 0, lines: kept, ignored, note };
-    }
-    return { kind: 'buy', owe: new Map([[coinId, total]]), total, lines: kept, ignored, note };
-}
-
-function sellTo(
+/** They named x, the book says y, they owe x * y. */
+function sale(
     book: PriceBook,
     cat: Catalog,
     desk: DeskState,
+    coinId: number,
     intent: SellIntent,
     coins: number,
-    ignored: { name: string; count: number }[]
+    ignored: Ignored
 ): Appraisal {
-    const row = rowOf(book, intent.itemId);
     const name = cat.byId.get(intent.itemId)?.name ?? `item ${intent.itemId}`;
-    if (!row || !row.selling || !rowValid(book, row)) {
-        return { kind: 'nothing', owe: new Map(), total: 0, lines: [], ignored, note: `I don't sell ${name} any more` };
+    const each = priceOf(book, intent.itemId, 'selling');
+    if (each === null) {
+        return nothing(ignored, `I don't sell ${name} any more`);
     }
 
-    const { sell } = resolvePrices(book, row);
-    const affordable = Math.floor(coins / sell);
-    const qty = Math.min(affordable, intent.maxQty, desk.available(intent.itemId), Math.floor(book.maxTradeValue / sell));
-
+    const qty = Math.min(intent.maxQty, desk.available(intent.itemId), Math.floor(book.maxTradeValue / each));
     if (qty <= 0) {
-        const note = coins <= 0
-            ? `put up coins and I'll count them: ${name} is ${formatGp(sell)}ea`
-            : `${formatGp(coins)}gp is short of one ${name} at ${formatGp(sell)}`;
-        return { kind: 'nothing', owe: new Map(), total: 0, lines: [], ignored, note };
+        return nothing(ignored, `I'm out of ${name}`);
     }
 
-    const total = qty * sell;
+    const total = qty * each;
     if (coins > total) {
         ignored.push({ name: 'coins', count: coins - total });
     }
     return {
         kind: 'sell',
         owe: new Map([[intent.itemId, qty]]),
+        want: new Map([[coinId, total]]),
         total,
-        lines: [{ id: intent.itemId, name, count: qty, each: sell, value: total }],
+        lines: [{ id: intent.itemId, name, count: qty, each, value: total }],
         ignored,
-        note: qty < intent.maxQty ? `that is all the ${name} ${formatGp(coins)}gp covers` : null
+        note: qty < intent.maxQty ? `that is all the ${name} I have` : null
     };
 }
 
-/** One line, so the customer sees what their side is worth before the bot accepts anything. */
+/** They put x up, the book says y, the bot owes x * y. */
+function purchase(
+    book: PriceBook,
+    desk: DeskState,
+    coinId: number,
+    goods: Map<number, { name: string; count: number }>,
+    ignored: Ignored
+): Appraisal {
+    const lines: ValuedLine[] = [];
+    let note: string | null = null;
+
+    for (const [id, { name, count }] of goods) {
+        const each = priceOf(book, id, 'buying');
+        const row = rowOf(book, id);
+        const take = each === null || !row ? 0 : Math.min(count, Math.max(0, row.cap - desk.held(id)));
+        if (take < count) {
+            ignored.push({ name, count: count - take });
+            if (each !== null) {
+                note = 'some of that is over my cap';
+            }
+        }
+        if (take > 0 && each !== null) {
+            lines.push({ id, name, count: take, each, value: take * each });
+        }
+    }
+
+    // Why: paying for part of a stack means picking which units and the window has no way to say so, so a thin purse drops entire lines, dearest first.
+    const ceiling = Math.min(desk.purse, book.maxTradeValue);
+    lines.sort((a, b) => b.value - a.value);
+    const afford: ValuedLine[] = [];
+    let total = 0;
+    let dropped = false;
+    for (const line of lines) {
+        if (total + line.value <= ceiling) {
+            afford.push(line);
+            total += line.value;
+        } else {
+            ignored.push({ name: line.name, count: line.count });
+            dropped = true;
+        }
+    }
+    if (dropped) {
+        note = `I can only cover ${formatGp(total)}gp of that`;
+    }
+
+    if (total <= 0) {
+        return nothing(ignored, note);
+    }
+    return {
+        kind: 'buy',
+        owe: new Map([[coinId, total]]),
+        want: new Map(afford.map(l => [l.id, l.count])),
+        total,
+        lines: afford,
+        ignored,
+        note
+    };
+}
+
+/** One line, so the customer sees the deal before the bot accepts anything. */
 export function describeAppraisal(a: Appraisal): string {
     const parts = a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`);
     for (const i of a.ignored) {
@@ -200,9 +198,8 @@ export function describeAppraisal(a: Appraisal): string {
         parts.push(`${a.note}.`);
     }
     if (parts.length === 0) {
-        // Why: an empty window is the moment a customer is most likely to be lost, so it gets the instruction rather than a shrug.
+        // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.
         return 'Put items in and I price them as you go. To buy, say what you want first.';
     }
-    const tail = a.kind === 'nothing' ? '' : ` Total ${formatGp(a.total)}gp.`;
-    return truncateChat(`${parts.join(' ')}${tail}`);
+    return truncateChat(`${parts.join(' ')}${a.kind === 'nothing' ? '' : ` Total ${formatGp(a.total)}gp.`}`);
 }

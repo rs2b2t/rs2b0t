@@ -293,10 +293,6 @@ export default class MarketMaker extends TaskBot {
         return this.desk;
     }
 
-    stock(): Ledger {
-        return this.ledger;
-    }
-
     setStatus(s: string): void {
         this.status = s;
     }
@@ -434,7 +430,7 @@ export default class MarketMaker extends TaskBot {
             const id = unnotedId(this.cat, item.id);
             units.set(id, (units.get(id) ?? 0) + item.count);
         }
-        this.ledger.setStock([...units].map(([id, count]) => ({ id, count })), units.get(this.coinId) ?? 0);
+        this.ledger.setStock([...units].map(([id, count]) => ({ id, count })));
         return true;
     }
 
@@ -477,7 +473,7 @@ export default class MarketMaker extends TaskBot {
         const name = this.cat.byId.get(want.itemId)?.name ?? 'that';
         const row = rowOf(this.activeBook(), want.itemId);
         const each = row ? resolvePrices(this.activeBook(), row).sell : 0;
-        this.say(`Put up coins and I'll hand over ${name} at ${formatGp(each)}ea.`);
+        this.say(`${formatGp(want.maxQty)} x ${name} = ${formatGp(want.maxQty * each)}gp. Put that up.`);
     }
 
     /** Say how the shop works. */
@@ -524,7 +520,7 @@ export default class MarketMaker extends TaskBot {
         const maxQty = want === 'all' ? Math.floor(book.maxTradeValue / sell) : want;
 
         this.desk.remember({ customer: from, itemId: hit.id, maxQty, askedAtMs: Date.now() });
-        this.say(`${hit.name} is ${formatGp(sell)}ea. Trade me and put up coins.`);
+        this.say(`${formatGp(maxQty)} x ${hit.name} = ${formatGp(maxQty * sell)}gp (${formatGp(sell)}ea). Trade me.`);
     }
 
     // ---- the window ------------------------------------------------------
@@ -597,14 +593,14 @@ export default class MarketMaker extends TaskBot {
             if (id === this.coinId) {
                 this.gpOut += qty;
             } else {
-                this.ledger.applySold(id, qty, 0);
+                this.ledger.add(id, -qty);
             }
         }
         for (const [id, qty] of accepted.get) {
             if (id === this.coinId) {
                 this.gpIn += qty;
             } else {
-                this.ledger.applyBought(id, qty);
+                this.ledger.add(id, qty);
             }
         }
         if (accepted.give.has(this.coinId)) {
@@ -805,10 +801,12 @@ class ServeWindow implements Task {
         const theirSig = sideSignature(normaliseOffer(cat, Trade.theirOffer() as OfferItem[]));
         const mine = normaliseOffer(cat, Trade.myOffer() as OfferItem[]);
 
+        const theirs = normaliseOffer(cat, Trade.theirOffer() as OfferItem[]);
         const beat = decideBeat({
             theirSig,
             window: w,
             oweMatched: offersMatch(mine, a.owe),
+            wantMatched: offersMatch(theirs, a.want),
             oweAnything: a.owe.size > 0,
             stillBeatsNeeded: STILL_BEATS,
             reOfferCap: REOFFER_CAP
