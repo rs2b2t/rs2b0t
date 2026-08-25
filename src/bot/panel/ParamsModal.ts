@@ -2,6 +2,7 @@ import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { groupSchema, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
+import { PriceBooks } from '../api/market/bookStore.js';
 
 export default class ParamsModal {
     private backdrop: HTMLElement;
@@ -16,6 +17,8 @@ export default class ParamsModal {
     /** When false, skip credentials strip even if scriptName is Global (Nav settings). */
     private showGlobalExtra = true;
     private collapsed = new Map<string, Set<string>>();
+    /** Set once by BotPanel; opens the price book window over this modal. */
+    onEditPriceBook: ((bookName: string) => void) | null = null;
 
     constructor(private isActive: () => boolean, private onChanged: () => void) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
@@ -73,6 +76,9 @@ export default class ParamsModal {
         for (const def of Object.values(schema)) {
             if (def.optionsFrom === 'loadouts') {
                 def.options = Loadouts.names();
+            }
+            if (def.optionsFrom === 'priceBooks') {
+                def.options = PriceBooks.names();
             }
         }
         this.scriptName = scriptName;
@@ -205,6 +211,23 @@ export default class ParamsModal {
             }
         }, { disabled }, valueOf);
         control.classList.add('rs2b0t-param-control');
+
+        // Why: the price book is a table, not a value, so the dropdown picks one and the button opens the editor.
+        if (def.optionsFrom === 'priceBooks' && this.onEditPriceBook) {
+            const pair = el('div', 'rs2b0t-param-control rs2b0t-param-with-edit');
+            pair.appendChild(control);
+            const edit = el('button', 'rs2b0t-button');
+            edit.dataset.action = 'edit-price-book';
+            edit.textContent = 'Edit…';
+            edit.disabled = disabled;
+            edit.addEventListener('click', () => {
+                this.onEditPriceBook?.(SettingsStore.displayString(this.scriptName, key, def));
+            });
+            pair.appendChild(edit);
+            row.appendChild(pair);
+            return row;
+        }
+
         row.appendChild(control);
         return row;
     }

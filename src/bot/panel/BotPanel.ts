@@ -9,6 +9,7 @@ import { ScriptRunner } from '../runtime/ScriptRunner.js';
 import { GLOBAL_SETTINGS_CORE, NAV_SETTINGS, SettingsStore } from '../runtime/Settings.js';
 import ScriptLibrary from './ScriptLibrary.js';
 import ParamsModal from './ParamsModal.js';
+import { PriceBookPanel } from './PriceBookPanel.js';
 import { LoadoutPanel } from './LoadoutPanel.js';
 import { isVisible, summarize } from './paramControls.js';
 import { el } from './dom.js';
@@ -38,6 +39,7 @@ export default class BotPanel {
     private settingsBox: HTMLElement;
     private paramsModal!: ParamsModal;
     private readonly loadoutPanel = new LoadoutPanel();
+    private readonly priceBookPanel = new PriceBookPanel();
     private rendererControl?: RendererControl;
     private rendererToggle?: HTMLInputElement;
 
@@ -135,9 +137,16 @@ export default class BotPanel {
         loadoutBtn.title = 'Gear and supplies you have declared, for scripts to wear.';
         loadoutBtn.addEventListener('click', () => this.loadoutPanel.open());
 
+        const priceBookBtn = document.createElement('button');
+        priceBookBtn.className = 'rs2b0t-button rs2b0t-param-edit';
+        priceBookBtn.textContent = 'Price books';
+        priceBookBtn.title = 'Buy and sell prices for the shop bots.';
+        priceBookBtn.addEventListener('click', () => this.priceBookPanel.open());
+
         settingsBtns.appendChild(globalBtn);
         settingsBtns.appendChild(navBtn);
         settingsBtns.appendChild(loadoutBtn);
+        settingsBtns.appendChild(priceBookBtn);
         settings.appendChild(settingsBtns);
 
         root.appendChild(settings);
@@ -146,7 +155,9 @@ export default class BotPanel {
             () => isActiveState(ScriptRunner.state),
             () => this.renderSettings()
         );
+        this.paramsModal.onEditPriceBook = name => this.priceBookPanel.open(name);
         document.body.appendChild(this.loadoutPanel.root);
+        document.body.appendChild(this.priceBookPanel.root);
         this.paramsModal.setGlobalExtra(this.buildCredentials());
 
         ScriptRegistry.onChange(() => {

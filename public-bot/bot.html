@@ -546,6 +546,130 @@
             font-size: 0;
         }
 
+        /* --- price book panel --------------------------------------------- */
+        .rs2b0t-pricebook {
+            width: min(760px, 94vw);
+        }
+
+        .rs2b0t-pricebook-fields {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .rs2b0t-pricebook-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .rs2b0t-pricebook-field-label {
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        .rs2b0t-pricebook-field .rs2b0t-loadout-qty {
+            flex: 0 0 90px;
+        }
+
+        .rs2b0t-pricebook-table {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-height: 46vh;
+            overflow-y: auto;
+        }
+
+        .rs2b0t-pricebook-row {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr) 74px 74px 74px 84px 30px 30px 26px;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .rs2b0t-pricebook-row[data-invalid] {
+            border: 1px solid #a83232;
+        }
+
+        .rs2b0t-pricebook-head .rs2b0t-pricebook-cell {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .rs2b0t-pricebook-cell {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .rs2b0t-pricebook-name {
+            font-size: 12px;
+            color: #ddd;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
+        }
+
+        .rs2b0t-pricebook-cell .rs2b0t-loadout-qty {
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+            font-size: 11px;
+        }
+
+        .rs2b0t-pricebook-cell .rs2b0t-loadout-qty[data-pinned] {
+            border-color: #04A800;
+            color: #fff;
+        }
+
+        .rs2b0t-pricebook-toggle {
+            padding: 2px 0;
+            width: 100%;
+            font-size: 11px;
+        }
+
+        .rs2b0t-pricebook-toggle[data-on=true] {
+            color: #04A800;
+        }
+
+        .rs2b0t-pricebook-toggle[data-on=false] {
+            color: #666;
+        }
+
+        .rs2b0t-pricebook-row .rs2b0t-loadout-face {
+            width: 28px;
+            height: 28px;
+            flex: 0 0 28px;
+            font-size: 0;
+        }
+
+        .rs2b0t-pricebook-empty {
+            font-size: 12px;
+            color: #777;
+            padding: 8px 4px;
+        }
+
+        .rs2b0t-pricebook-addbar {
+            display: flex;
+            gap: 6px;
+        }
+
+        .rs2b0t-pricebook-cost {
+            margin-left: auto;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .rs2b0t-loadout-result[data-added] {
+            opacity: 0.45;
+            cursor: default;
+        }
+
         .rs2b0t-modal-header {
             display: flex;
             justify-content: space-between;
