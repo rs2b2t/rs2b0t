@@ -83,6 +83,20 @@ describe('resolveByName', () => {
         expect(resolveByName(CAT, 'dragon claws')).toEqual([]);
     });
 
+    // Why: two objs can share a display name exactly, so the id is the only handle left.
+    test('#id picks one item outright', () => {
+        expect(resolveByName(CAT, '#851').map(r => r.id)).toEqual([851]);
+        expect(resolveByName(CAT, ' #64 ').map(r => r.id)).toEqual([64]);
+    });
+
+    test('#id for something not in the catalog returns empty', () => {
+        expect(resolveByName(CAT, '#99999')).toEqual([]);
+    });
+
+    test('a noted id is not addressable, since rows key on the unnoted one', () => {
+        expect(resolveByName(CAT, '#441')).toEqual([]);
+    });
+
     test('an empty query matches nothing', () => {
         expect(resolveByName(CAT, '  ')).toEqual([]);
     });

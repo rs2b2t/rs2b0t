@@ -42,7 +42,7 @@ const EVERY_REPLY: string[] = [
     ...formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'sell'),
     "I don't sell 'dragon claws'.",
     "I don't buy 'dragon claws'.",
-    formatAmbiguous(['Maple longbow', 'Maple longbow (u)']),
+    formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Maple longbow', id: 62 }]),
     'Out of Iron ore.',
     `Iron ore is over my ${formatGp(100_000)}gp trade cap.`,
     'Someone beat you to that Iron ore.',

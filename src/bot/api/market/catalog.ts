@@ -49,7 +49,14 @@ export function searchCatalog(cat: Catalog, query: string, limit = 50): ObjRecor
     return hits.slice(0, limit);
 }
 
+// Why: the strung and unstrung maple longbow are both named "Maple longbow" with nothing else to tell them apart, so `#62` is the only handle a player can type.
 export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
+    const byId = /^#(\d+)$/.exec(query.trim());
+    if (byId) {
+        const hit = cat.items.find(r => r.id === Number(byId[1]));
+        return hit ? [hit] : [];
+    }
+
     const q = key(query);
     if (q.length === 0) {
         return [];

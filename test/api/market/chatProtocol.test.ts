@@ -98,11 +98,25 @@ describe('formatting', () => {
     });
 
     test('ambiguous reply lists at most three names', () => {
-        expect(formatAmbiguous(['Maple longbow', 'Maple longbow (u)'])).toBe(
-            "2 matches: 'Maple longbow', 'Maple longbow (u)'. Which?"
+        expect(formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Yew longbow', id: 855 }])).toBe(
+            "2 matches: 'Maple longbow', 'Yew longbow'. Which?"
         );
-        expect(formatAmbiguous(['a', 'b', 'c', 'd'])).toContain('4 matches');
-        expect(formatAmbiguous(['a', 'b', 'c', 'd'])).not.toContain("'d'");
+        const four = [
+            { name: 'a', id: 1 },
+            { name: 'b', id: 2 },
+            { name: 'c', id: 3 },
+            { name: 'd', id: 4 }
+        ];
+        expect(formatAmbiguous(four)).toContain('4 matches');
+        expect(formatAmbiguous(four)).not.toContain("'d'");
+    });
+
+    // Why: the strung and unstrung maple longbow are both literally "Maple longbow", so listing the
+    // Why: names alone gives the player nothing to choose between.
+    test('names that read the same are tagged with their id', () => {
+        expect(formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Maple longbow', id: 62 }])).toBe(
+            "2 matches: 'Maple longbow' #851, 'Maple longbow' #62. Which?"
+        );
     });
 
     test('price list chunks into lines under the chat limit', () => {

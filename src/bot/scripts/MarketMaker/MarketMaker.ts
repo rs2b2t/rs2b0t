@@ -430,7 +430,7 @@ export default class MarketMaker extends TaskBot {
             return null;
         }
         if (candidates.length > 1) {
-            this.say(formatAmbiguous(candidates.map(c => c.name)));
+            this.say(formatAmbiguous(candidates.map(c => ({ name: c.name, id: c.id }))));
             return null;
         }
         return { id: candidates[0].id, name: candidates[0].name };

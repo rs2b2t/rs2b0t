@@ -78,9 +78,17 @@ export function formatBuyQuote(name: string, qty: number, each: number): string 
     );
 }
 
-export function formatAmbiguous(names: readonly string[]): string {
-    const shown = names.slice(0, 3).map(n => `'${n}'`).join(', ');
-    return truncateChat(`${names.length} matches: ${shown}. Which?`);
+/** Lists the matches, tagging with `#id` only when two of them read the same. */
+export function formatAmbiguous(items: readonly { name: string; id: number }[]): string {
+    const seen = new Map<string, number>();
+    for (const i of items) {
+        seen.set(i.name, (seen.get(i.name) ?? 0) + 1);
+    }
+    const shown = items
+        .slice(0, 3)
+        .map(i => ((seen.get(i.name) ?? 0) > 1 ? `'${i.name}' #${i.id}` : `'${i.name}'`))
+        .join(', ');
+    return truncateChat(`${items.length} matches: ${shown}. Which?`);
 }
 
 export function formatPriceList(
