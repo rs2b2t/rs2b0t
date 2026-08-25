@@ -40,6 +40,8 @@ import { advertiseDue, Queue, shouldRestock, shouldSettle, type Engagement } fro
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const COIN_NAME = 'Coins';
+// Why: obj 617 is `fake_coins`, also named "Coins" and also stackable, so resolving the currency by name picks the Pirate's Treasure prop and every quote asks for the wrong item. Nothing on the client's ObjType separates them, so the id is pinned and checked at startup.
+const COIN_ID = 995;
 /** Chat types the client uses for player speech (Client.ts addChat). */
 const PUBLIC_CHAT_TYPES = new Set([1, 2]);
 /** Chat type 4 is "<name> wishes to trade with you." */
@@ -148,12 +150,13 @@ export default class MarketMaker extends TaskBot {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         this.cat = liveCatalog();
-        this.coinId = this.cat.items.find(r => r.name === COIN_NAME)?.id ?? -1;
-        if (this.coinId === -1) {
-            this.log('the item catalog has no Coins entry, so nothing can be priced — stopping');
-            ScriptRunner.stop('no Coins in the catalog');
+        const coin = this.cat.byId.get(COIN_ID);
+        if (coin?.name !== COIN_NAME || !coin.stackable) {
+            this.log(`obj ${COIN_ID} is '${coin?.name ?? 'missing'}', not stackable ${COIN_NAME} — the cache does not match this build, stopping`);
+            ScriptRunner.stop('coin id does not match the cache');
             return;
         }
+        this.coinId = COIN_ID;
 
         this.spot = this.settings.tile('spot', this.spot);
         this.engagementTimeoutMs = this.settings.num('engagementTimeoutSeconds', 90) * 1000;
@@ -572,6 +575,19 @@ export default class MarketMaker extends TaskBot {
         this.say(`Thanks ${e.customer}. Pleasure doing business.`);
     }
 
+    /** One line, since the live harness surfaces a bounded number of log lines per poll. */
+    describeMismatch(e: Engagement): string {
+        const show = (m: ReadonlyMap<number, number>): string =>
+            [...m].map(([id, n]) => `${this.cat.byId.get(id)?.name ?? id}(${id})x${n}`).join('+') || 'nothing';
+        const mine = normaliseOffer(this.cat, Trade.myOffer() as OfferItem[]);
+        const theirs = normaliseOffer(this.cat, Trade.theirOffer() as OfferItem[]);
+        const confirm = Trade.onConfirmScreen() ? reader.tradeConfirmOffers() : null;
+        const confirmPart = confirm === null
+            ? ''
+            : ` confirm[ready=${reader.tradeConfirmReady()} mine=${show(normaliseOffer(this.cat, confirm.mine as OfferItem[]))} theirs=${show(normaliseOffer(this.cat, confirm.theirs as OfferItem[]))}]`;
+        return `mismatch: want give=${show(e.give)} get=${show(e.get)}; saw mine=${show(mine)} theirs=${show(theirs)}${confirmPart}`;
+    }
+
     abandon(e: Engagement, reason: string): void {
         this.refused++;
         this.ledger.release(e.customer);
@@ -634,6 +650,12 @@ export default class MarketMaker extends TaskBot {
 
 function sameName(a: string, b: string): boolean {
     return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Client.ts prefixes a moderator's chat username with @cr1@ / @cr2@ for the crown icon. */
+function bareName(username: string | null): string {
+    const raw = (username ?? '').trim();
+    return /^@cr\d@/.test(raw) ? raw.slice(5) : raw;
 }
 
 /** Close stray modals and return to the stand tile. */
@@ -705,6 +727,7 @@ class ServeTrade implements Task {
 
         // Why: a stranger opening a trade must not cost the queued customer their engagement.
         if (decision.action === 'decline' && !stranger) {
+            this.bot.log(this.bot.describeMismatch(e));
             this.bot.say(`Trade declined: ${decision.reason}.`);
             this.bot.abandon(e, decision.reason);
         }
@@ -761,13 +784,15 @@ class Restock implements Task {
         await Bank.setNoteMode(true);
 
         for (const [id, want] of e.give) {
-            const held = id === this.bot.coins() ? this.bot.packCoins() : this.bot.packCount(id);
-            const short = want - held;
+            const inPack = () => (id === this.bot.coins() ? this.bot.packCoins() : this.bot.packCount(id));
+            const short = want - inPack();
             if (short <= 0) {
                 continue;
             }
-            if (!(await Bank.withdrawXById(id, short))) {
-                this.bot.log(`bank has no ${this.bot.catalog().byId.get(id)?.name ?? id} to withdraw`);
+            await Bank.withdrawXById(id, short);
+            // Why: note mode delivers the cert id, so Bank.withdrawXById waits on an id that never arrives and reports false on a withdrawal that worked. Count both forms instead.
+            if (!(await Execution.delayUntil(() => inPack() >= want, 5_000))) {
+                this.bot.log(`bank came up short on ${this.bot.catalog().byId.get(id)?.name ?? id}: ${inPack()}/${want}`);
             }
         }
 
@@ -835,7 +860,7 @@ class Listen implements Task {
 
         const me = reader.localPlayerName() ?? '';
         for (const line of this.bot.freshChat()) {
-            const from = (line.username ?? '').trim();
+            const from = bareName(line.username);
             if (from.length === 0 || sameName(from, me) || this.bot.blocked(from)) {
                 continue;
             }
