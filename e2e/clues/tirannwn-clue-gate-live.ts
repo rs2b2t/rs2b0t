@@ -61,7 +61,9 @@ const STATS = [
     'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
     'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
 ];
+/** `--agility N` lowers the sticks/pitfall roll so a run exercises the retry budget. */
 const STAT_LEVEL = 70;
+const AGILITY = Number(arg('agility') ?? STAT_LEVEL);
 
 // Why: the gate is checked before the spade and the sextant trio, so a missing tool would hide
 // behind it in the shut phase and replace it in the open one. Hand over the lot up front.
@@ -293,7 +295,10 @@ try {
     await setTickRate(page, TICK_MS);
 
     for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${STAT_LEVEL}`);
+        await cheatQuiet(page, `setstat ${skill} ${skill === 'agility' ? AGILITY : STAT_LEVEL}`);
+    }
+    if (AGILITY !== STAT_LEVEL) {
+        console.log(`  agility ${AGILITY} (rest ${STAT_LEVEL}) — trap rolls will fail more often`);
     }
     await clearChatDialogs(page, 'level-up dialog(s)');
     await giveItems(page, KIT);

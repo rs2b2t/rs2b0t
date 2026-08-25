@@ -114,6 +114,11 @@ const MAX_LEGS = 40;
 // Why: the pitfall, the tripwire and the sticks all roll `stat_random(agility, …)` and leave the player where they were, or in the pit below, on a failure, so one send is a roll rather than a verdict.
 // Why: eight rather than four, because the sticks roll `stat_random(agility, 30, 155)`, which is under a coin flip even at 70, a four-try budget fails the leg outright about one run in ten.
 const CROSS_TRIES = 8;
+/** Walks to a crossing's bank that may answer `unreachable`, each costing its own timeout. */
+const STAND_TRIES = 3;
+const STAND_MS = 45_000;
+/** Refused crossings tolerated across one journey before the destination is called unreachable. */
+const CROSS_FAILS = 3;
 /** `regicide_trap_hand_holds`, the way out of a spike pit. */
 const HAND_HOLDS = 3927;
 
@@ -147,10 +152,12 @@ export async function climbOutOfPit(log: (m: string) => void): Promise<boolean> 
 
 /**
  * Cross one seam. True only once the player has changed pocket.
- * Why: the op walks the player before its script resolves, so nothing can be judged on a tile change, the pitfall's agility roll drops a failure into a spike pit, the woodspring's throws the player ten tiles back, and both look like movement. The pocket is the only honest signal.
+ * Why: the op walks the player before its script resolves, so nothing can be judged on a tile change, the pitfall's agility roll drops a failure into a spike pit, and both look like movement. The pocket is the only honest signal.
+ * Why: `regicide_move_trap_woodspring` p_walks a failed sticks roll to a tile beside the loc, which is sometimes the far side of the barrier, so the walk back to the bank is a route the baked pack cannot answer. Every failure inside the loop therefore spends an attempt rather than ending the crossing, or one bad roll retires a leg the next roll would have taken.
  */
 async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolean> {
     const stand = new Tile(leg.from.stand.x, leg.from.stand.z, 0);
+    let walkFails = 0;
     for (let attempt = 0; attempt < CROSS_TRIES; attempt++) {
         if (pocketAt(Game.tile()) === leg.to.pocket) {
             return true;
@@ -158,20 +165,26 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
         if ((Game.tile()?.z ?? 0) > 9000 && !(await climbOutOfPit(log))) {
             return false;
         }
-        // Why: a failed jump is 15 damage and a fall, the tripwires poison, and the sticks throw the player ten tiles back for 8, a crossing retried eight times is a fight the walk between attempts is too short to pay for on its own.
+        // Why: a failed jump is 15 damage and a fall, the tripwires poison, and the sticks hit for 8, a crossing retried eight times is a fight the walk between attempts is too short to pay for on its own.
         await Sustain.run();
-        if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: 90_000, log }))) {
-            log(`could not stand at (${stand.x},${stand.z}) to take ${leg.seam.op} ${leg.seam.loc}`);
-            return false;
+        if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: STAND_MS, log }))) {
+            // Why: bounded separately from the roll budget, because a walk that cannot answer burns
+            // Why: its full timeout every attempt while a failed roll costs a couple of ticks.
+            if (++walkFails >= STAND_TRIES) {
+                log(`could not stand at (${stand.x},${stand.z}) to take ${leg.seam.op} ${leg.seam.loc} after ${walkFails} tries`);
+                return false;
+            }
+            log(`could not stand at (${stand.x},${stand.z}) — retrying from (${Game.tile()?.x},${Game.tile()?.z})`);
+            continue;
         }
         await settleScene();
         const loc = seamLoc(leg.seam);
         if (!loc) {
-            log(`no ${leg.seam.loc} at (${leg.seam.x},${leg.seam.z})`);
-            return false;
+            log(`no ${leg.seam.loc} at (${leg.seam.x},${leg.seam.z}) — retrying`);
+            continue;
         }
         if (!(await loc.interact(leg.seam.op))) {
-            return false;
+            continue;
         }
         if (await Execution.delayUntil(() => pocketAt(Game.tile()) === leg.to.pocket, CROSS_MS)) {
             const now = Game.tile();
@@ -181,6 +194,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
         const now = Game.tile();
         log(`${leg.seam.op} ${leg.seam.loc} @(${leg.seam.x},${leg.seam.z}) left us at (${now?.x},${now?.z}) — retrying`);
     }
+    log(`${CROSS_TRIES} tries at ${leg.seam.op} ${leg.seam.loc} without reaching ${leg.to.pocket}`);
     return false;
 }
 
@@ -189,6 +203,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
  * Why: a component report over the quest's own anchors answers FAIL for every pair inside Tirannwn, so a plain `walkResilient` there reports "unreachable" for anything past a crossing and the step reads as a missing loc. Inside one pocket the navigator is still the right tool, which is why each round tries it.
  */
 export async function travelTirannwn(dest: Tile, radius: number, stage: number, log: (m: string) => void): Promise<boolean> {
+    let crossFails = 0;
     for (let hop = 0; hop < MAX_LEGS; hop++) {
         const here = Game.tile();
         if (here && here.level === dest.level && dest.distanceTo(here) <= radius) {
@@ -209,7 +224,14 @@ export async function travelTirannwn(dest: Tile, radius: number, stage: number, 
             return Traversal.walkResilient(dest, { radius, attempts: 2, timeoutMs: 180_000, log });
         }
         if (!(await crossSeam(route[0], log))) {
-            return false;
+            // Why: a trap that refused the crossing has usually moved the player, sometimes into a
+            // Why: different pocket, so the next round replans from where they now stand rather
+            // Why: than retiring a leg whose route is still open from the new tile.
+            if (++crossFails >= CROSS_FAILS) {
+                log(`${crossFails} crossings refused on the way to (${dest.x},${dest.z}) — giving up`);
+                return false;
+            }
+            log(`crossing ${route[0].seam.loc} refused — replanning from ${pocketAt(Game.tile()) ?? ARDOUGNE}`);
         }
     }
     log(`${MAX_LEGS} crossings without reaching (${dest.x},${dest.z})`);
