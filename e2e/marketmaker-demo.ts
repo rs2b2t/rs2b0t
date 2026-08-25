@@ -6,7 +6,7 @@
 //   BASE=http://localhost:8890 SHOP=seersmarket HEADED=1 bun e2e/marketmaker-demo.ts
 
 import type { Page } from 'playwright-core';
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, launchBrowser, logout } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
@@ -160,6 +160,7 @@ ${'='.repeat(78)}
 const isolated = deployIsolatedClient('demo');
 const browser = await launchBrowser({ swiftshader: true });
 let closing = false;
+let shopPage: Page | null = null;
 
 process.on('SIGINT', () => {
     closing = true;
@@ -167,6 +168,7 @@ process.on('SIGINT', () => {
 
 try {
     const page = await (await browser.newContext()).newPage();
+    shopPage = page;
 
     console.log(`demo: bringing up '${SHOP}' at ${BASE}`);
     await mainlandAccount(page, BASE, SHOP, isolated.page);
@@ -252,7 +254,16 @@ try {
         }
     }
 } finally {
-    console.log('demo: closing the shop');
+    // Why: killing the browser without logging out leaves the account in-world, and the next run is
+    // Why: refused at the login screen until the engine times the session out.
+    console.log('demo: logging the shop out');
+    if (shopPage) {
+        try {
+            await logout(shopPage);
+        } catch {
+            /* already gone */
+        }
+    }
     await browser.close();
     isolated.cleanup();
 }
