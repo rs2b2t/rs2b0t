@@ -115,30 +115,34 @@ ${gifts}
        ::give cert_iron_ore 1000
        ::give cert_yew_logs 200
 
-  3. Talk to it in PUBLIC chat, standing next to it:
+  3. SELLING TO IT needs no words. Trade it, put things in, and watch it price
+     them as you go. Add more and the price follows. Take something out and it
+     follows back down. It accepts once you have both stopped moving.
 
+  4. BUYING FROM IT needs one line in PUBLIC chat first, because a trade window
+     cannot carry "I want 100 iron ore":
+
+       buy 100 iron ore           names what you want, at its price
        prices                     what it trades, both sides
-       buying                     what it pays
-       buy 100 iron ore           it sells you 100
-       sell 100 iron ore          it buys 100 off you
-       buy 1k iron ore            k and m suffixes work
-       sell all iron ore          'all' works
+       buying / selling           one side of the book
 
-     Then send it a trade request. It opens the trade and puts up the goods.
+     Then trade it and put up coins. It hands over as much as your coins cover,
+     so 1,100gp against a 22gp item gets you 50, not a refusal.
 
-  4. Its book today:
+  5. Its book today:
 
 ${rows}
 
   Things worth trying:
 
+    trade it a mixed pile      ores, logs, runes at once; it prices the lot
+    add more mid-trade         the price follows, and the trade still settles
+    put coins in when selling  it ignores them and tells you to take them back
+    trade it something junk    valued at nothing, and it says so
     buy 10 maple longbow       two items share that name, so it asks which;
                                answer with 'buy 10 #851' or 'buy 10 #62'
-    buy 100 rune scimitar      over the ${gp(MAX_TRADE)}gp per-trade cap, so it quotes you less
-    sell 9999 lobster          past its cap, so it takes what it can and says so
-    buy 100 dragon claws       not in the book
-    open a trade, pay short    it waits, and never accepts
-    open a trade, add junk     it declines
+    offer more than ${gp(MAX_TRADE)}gp    over the per-trade cap, so it takes what fits
+    dump 9999 lobster on it    past its cap, so it takes what it can and says so
     open a trade, then close   it drops you and ignores you for a minute
 
 ${'='.repeat(78)}
@@ -193,7 +197,7 @@ try {
         spot: `${SPOT.x},${SPOT.z},${SPOT.level}`,
         advertiseSeconds: '90',
         engagementTimeoutSeconds: '90',
-        quoteSeconds: '60',
+        intentSeconds: '90',
         cooldownSeconds: '60',
         coinFloat: '200000'
     } as Record<string, string>);
