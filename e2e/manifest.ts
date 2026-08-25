@@ -343,10 +343,10 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: 'a6ab6384',
-        budgetMin: 12,
-        env: { BUDGET_S: '700' },
-        note: 'two accounts at Seers bank: a sale, a purchase, a short pay never accepted, and an offer holding a stray item declined'
+        provenAt: '5341c424',
+        budgetMin: 16,
+        env: { BUDGET_S: '900' },
+        note: 'two accounts at Seers bank: a sale, a purchase, a short pay never accepted, a cooldown after walking out, and an offer holding a stray item declined'
     },
     {
         id: 'gatheringbot-mule-pair-test',
