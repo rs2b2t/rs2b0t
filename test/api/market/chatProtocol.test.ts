@@ -1,0 +1,130 @@
+import { describe, expect, test } from 'bun:test';
+
+import {
+    CHAT_LIMIT,
+    formatAmbiguous,
+    formatBuyQuote,
+    formatGp,
+    formatPriceList,
+    formatSellQuote,
+    parseCommand,
+    parseCount,
+    truncateChat
+} from '#/bot/api/market/chatProtocol.js';
+
+describe('parseCount', () => {
+    test('plain integers', () => {
+        expect(parseCount('100')).toBe(100);
+        expect(parseCount('1')).toBe(1);
+    });
+
+    test('k and m suffixes', () => {
+        expect(parseCount('1k')).toBe(1000);
+        expect(parseCount('2K')).toBe(2000);
+        expect(parseCount('1m')).toBe(1_000_000);
+    });
+
+    test('all', () => {
+        expect(parseCount('all')).toBe('all');
+        expect(parseCount('ALL')).toBe('all');
+    });
+
+    test('rejects zero, negatives and words', () => {
+        expect(parseCount('0')).toBeNull();
+        expect(parseCount('-5')).toBeNull();
+        expect(parseCount('me')).toBeNull();
+        expect(parseCount('')).toBeNull();
+        expect(parseCount('1.5')).toBeNull();
+    });
+});
+
+describe('parseCommand', () => {
+    test('buy is the player buying, so the bot sells', () => {
+        expect(parseCommand('buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore' });
+    });
+
+    test('sell is the player selling, so the bot buys', () => {
+        expect(parseCommand('sell 100 iron ore')).toEqual({ kind: 'quoteBuy', qty: 100, query: 'iron ore' });
+    });
+
+    test('case and surrounding whitespace do not matter', () => {
+        expect(parseCommand('  BUY 1k Iron Ore ')).toEqual({ kind: 'quoteSell', qty: 1000, query: 'Iron Ore' });
+    });
+
+    test('bare list commands', () => {
+        expect(parseCommand('prices')).toEqual({ kind: 'prices' });
+        expect(parseCommand('buying')).toEqual({ kind: 'buying' });
+        expect(parseCommand('selling')).toEqual({ kind: 'selling' });
+    });
+
+    test('a keyword with no count is not a command', () => {
+        expect(parseCommand('buy me a beer')).toEqual({ kind: 'none' });
+    });
+
+    test('a keyword with a count but no item is not a command', () => {
+        expect(parseCommand('buy 100')).toEqual({ kind: 'none' });
+    });
+
+    test('a keyword that is not leading is not a command', () => {
+        expect(parseCommand('i want to buy 100 iron ore')).toEqual({ kind: 'none' });
+    });
+
+    test('empty and punctuation-only lines are not commands', () => {
+        expect(parseCommand('')).toEqual({ kind: 'none' });
+        expect(parseCommand('!!!')).toEqual({ kind: 'none' });
+    });
+
+    test('a list keyword with trailing words is not a command', () => {
+        expect(parseCommand('prices are too high')).toEqual({ kind: 'none' });
+    });
+
+    test('all is carried through as a count', () => {
+        expect(parseCommand('sell all iron ore')).toEqual({ kind: 'quoteBuy', qty: 'all', query: 'iron ore' });
+    });
+});
+
+describe('formatting', () => {
+    test('formatGp groups thousands', () => {
+        expect(formatGp(2000)).toBe('2,000');
+        expect(formatGp(17)).toBe('17');
+    });
+
+    test('sell quote names the total and the unit price', () => {
+        expect(formatSellQuote('Iron ore', 100, 20)).toBe('100 x Iron ore = 2,000gp (20ea). Trade me.');
+    });
+
+    test('buy quote says what the bot pays', () => {
+        expect(formatBuyQuote('Iron ore', 100, 14)).toBe("I'll pay 1,400gp for 100 Iron ore (14ea). Trade me.");
+    });
+
+    test('ambiguous reply lists at most three names', () => {
+        expect(formatAmbiguous(['Maple longbow', 'Maple longbow (u)'])).toBe(
+            "2 matches: 'Maple longbow', 'Maple longbow (u)'. Which?"
+        );
+        expect(formatAmbiguous(['a', 'b', 'c', 'd'])).toContain('4 matches');
+        expect(formatAmbiguous(['a', 'b', 'c', 'd'])).not.toContain("'d'");
+    });
+
+    test('price list chunks into lines under the chat limit', () => {
+        const entries = Array.from({ length: 12 }, (_, i) => ({ name: `Item number ${i}`, buy: 10, sell: 20 }));
+        const lines = formatPriceList(entries, 'both');
+        expect(lines.length).toBeGreaterThan(1);
+        for (const line of lines) {
+            expect(line.length).toBeLessThanOrEqual(CHAT_LIMIT);
+        }
+    });
+
+    test('price list shows one side when asked', () => {
+        expect(formatPriceList([{ name: 'Iron ore', buy: 14, sell: 20 }], 'buy')).toEqual(['Iron ore 14']);
+        expect(formatPriceList([{ name: 'Iron ore', buy: 14, sell: 20 }], 'sell')).toEqual(['Iron ore 20']);
+    });
+
+    test('an empty price list produces no lines', () => {
+        expect(formatPriceList([], 'both')).toEqual([]);
+    });
+
+    test('truncateChat cuts to the game limit', () => {
+        expect(truncateChat('x'.repeat(200))).toHaveLength(CHAT_LIMIT);
+        expect(truncateChat('short')).toBe('short');
+    });
+});
