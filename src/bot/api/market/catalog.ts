@@ -59,6 +59,17 @@ function preferWorn(matches: readonly ObjRecord[], unstrung: boolean): ObjRecord
     return wanted.length === 1 ? wanted : [...matches];
 }
 
+/** Exact match, forgiving a plural. */
+// Why: people ask for "1k maple longbows", and the item is called "Maple longbow".
+function exactish(cat: Catalog, q: string): ObjRecord[] {
+    const hit = cat.items.filter(r => key(r.name) === q);
+    if (hit.length > 0 || !q.endsWith('s')) {
+        return hit;
+    }
+    const singular = q.slice(0, -1);
+    return cat.items.filter(r => key(r.name) === singular);
+}
+
 export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
     const byId = /^#(\d+)$/.exec(query.trim());
     if (byId) {
@@ -71,7 +82,7 @@ export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
         return [];
     }
 
-    const exact = cat.items.filter(r => key(r.name) === q);
+    const exact = exactish(cat, q);
     if (exact.length > 0) {
         return preferWorn(exact, false);
     }
@@ -79,7 +90,7 @@ export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
     // "maple longbow u" is the unstrung "Maple longbow".
     const trailingU = /^(.+) u$/.exec(q);
     if (trailingU) {
-        const base = cat.items.filter(r => key(r.name) === trailingU[1]);
+        const base = exactish(cat, trailingU[1]);
         if (base.length > 0) {
             return preferWorn(base, true);
         }

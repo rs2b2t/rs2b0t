@@ -200,7 +200,8 @@ export function describeAppraisal(a: Appraisal): string {
         parts.push(`${a.note}.`);
     }
     if (parts.length === 0) {
-        return 'Nothing I trade in that offer.';
+        // Why: an empty window is the moment a customer is most likely to be lost, so it gets the instruction rather than a shrug.
+        return 'Put items in and I price them as you go. To buy, say what you want first.';
     }
     const tail = a.kind === 'nothing' ? '' : ` Total ${formatGp(a.total)}gp.`;
     return truncateChat(`${parts.join(' ')}${tail}`);

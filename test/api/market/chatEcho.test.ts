@@ -4,6 +4,7 @@ import {
     formatAmbiguous,
     formatGp,
     formatPriceList,
+    HELP_LINES,
     parseCommand
 } from '#/bot/api/market/chatProtocol.js';
 import { appraise, describeAppraisal } from '#/bot/api/market/appraise.js';
@@ -40,6 +41,10 @@ const EVERY_REPLY: string[] = [
     formatAmbiguous([{ name: 'Maple longbow', id: 851 }, { name: 'Maple longbow', id: 62 }]),
     `Iron ore is ${formatGp(22)}ea. Trade me and put up coins.`,
     'Just trade me and put it up. I price what I see.',
+    ...HELP_LINES,
+    'Put items in and I price them as you go. To buy, say what you want first.',
+    `Put up coins and I'll hand over Iron ore at ${formatGp(22)}ea.`,
+    'Fetching your Iron ore, one moment.',
     priced([{ id: 440, name: 'Iron ore', count: 100 }]),
     priced([{ id: 440, name: 'Iron ore', count: 100 }, { id: 995, name: 'Coins', count: 500 }]),
     priced([{ id: 1127, name: 'Rune platebody', count: 1 }]),
@@ -48,10 +53,12 @@ const EVERY_REPLY: string[] = [
     priced([{ id: 995, name: 'Coins', count: 5 }], { itemId: 440, maxQty: 100 }),
     'Thanks Elliott. Pleasure doing business.',
     `Trading: ${formatPriceList([{ name: 'Iron ore', buy: 18, sell: 22 }], 'both')[0]}`,
-    'Trade declined: too many changes in one trade.',
-    'Trade declined: the confirm screen changed.',
-    'Trade declined. Ask again in a minute.',
-    'Trade closed. Ask again in a minute.',
+    'Trade declined: too many changes in one trade. Ask again in 15s.',
+    'Trade declined: the confirm screen changed. Ask again in 15s.',
+    'Trade declined. Ask again in 15s.',
+    'Trade closed. Ask again in 15s.',
+    'That did not open. Trade me again.',
+    'Fetching your Iron ore, one moment.',
     'Elliott, stand next to me.'
 ];
 

@@ -235,8 +235,11 @@ describe('describeAppraisal', () => {
         expect(describeAppraisal(look([item(IRON, 'Iron ore', 100)]))).toBe('Iron ore x100 = 1,800. Total 1,800gp.');
     });
 
-    test('an empty window says so without a total', () => {
-        expect(describeAppraisal(look([]))).toBe('Nothing I trade in that offer.');
+    // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.
+    test('an empty window explains how to use the shop', () => {
+        expect(describeAppraisal(look([]))).toBe(
+            'Put items in and I price them as you go. To buy, say what you want first.'
+        );
     });
 
     test('every line fits the chat limit', () => {

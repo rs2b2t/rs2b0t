@@ -81,6 +81,17 @@ describe('resolveByName', () => {
         expect(resolveByName(CAT, 'maple longbow (u)').map(r => r.id)).toEqual([62]);
     });
 
+    // Why: people ask for "1k maple longbows", and the item is called "Maple longbow".
+    test('a plural still finds the item', () => {
+        expect(resolveByName(CAT, 'maple longbows').map(r => r.id)).toEqual([851]);
+        expect(resolveByName(CAT, 'maple longbows u').map(r => r.id)).toEqual([62]);
+        expect(resolveByName(CAT, 'iron ores').map(r => r.id)).toEqual([440]);
+    });
+
+    test('a name that genuinely ends in s is not stripped', () => {
+        expect(resolveByName(CAT, 'coins').map(r => r.id)).toEqual([995]);
+    });
+
     test('a partial name still narrows to the strung one', () => {
         expect(resolveByName(CAT, 'maple').map(r => r.id)).toEqual([851]);
     });

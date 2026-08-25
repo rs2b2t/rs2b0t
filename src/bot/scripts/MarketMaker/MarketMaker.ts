@@ -15,6 +15,7 @@ import {
     formatAmbiguous,
     formatGp,
     formatPriceList,
+    HELP_LINES,
     parseCommand,
     truncateChat
 } from '../../api/market/chatProtocol.js';
@@ -114,7 +115,7 @@ export const MARKET_MAKER_SETTINGS: SettingsSchema = {
     },
     cooldownSeconds: {
         type: 'number',
-        default: 60,
+        default: 15,
         min: 0,
         max: 3600,
         label: 'Cooldown after a failed trade (s)',
@@ -151,7 +152,7 @@ export default class MarketMaker extends TaskBot {
     private spot = new Tile(2725, 3491, 0);
     private windowMs = 90_000;
     private intentTtlMs = 90_000;
-    private cooldownMs = 60_000;
+    private cooldownMs = 15_000;
     private advertiseSeconds = 60;
     private coinFloat = 200_000;
     private blacklist: string[] = [];
@@ -172,6 +173,7 @@ export default class MarketMaker extends TaskBot {
 
     private lastAdvertiseAt = 0;
     private advertiseCursor = 0;
+    private advertCycle = 0;
 
     private status = 'starting';
     private startedAt = Date.now();
@@ -195,7 +197,7 @@ export default class MarketMaker extends TaskBot {
         this.spot = this.settings.tile('spot', this.spot);
         this.windowMs = this.settings.num('engagementTimeoutSeconds', 90) * 1000;
         this.intentTtlMs = this.settings.num('intentSeconds', 90) * 1000;
-        this.cooldownMs = this.settings.num('cooldownSeconds', 60) * 1000;
+        this.cooldownMs = this.settings.num('cooldownSeconds', 15) * 1000;
         this.advertiseSeconds = this.settings.num('advertiseSeconds', 60);
         this.coinFloat = this.settings.num('coinFloat', 200_000);
         this.blacklist = this.settings.list('blacklist').map(n => n.trim().toLowerCase()).filter(Boolean);
@@ -293,6 +295,12 @@ export default class MarketMaker extends TaskBot {
             this.lastStrayLog = now;
             this.log(`stray modal ${comId} open, closing it`);
         }
+    }
+
+    /** How long a dropped customer waits, in words. */
+    // Why: hardcoding "a minute" goes wrong the moment the setting is tuned, and the customer is the one who has to believe it.
+    coolNote(): string {
+        return this.cooldownMs <= 0 ? 'Try again.' : `Ask again in ${Math.round(this.cooldownMs / 1000)}s.`;
     }
 
     bankReady(nowMs: number): boolean {
@@ -419,6 +427,9 @@ export default class MarketMaker extends TaskBot {
             case 'selling':
                 this.listPrices('sell');
                 return;
+            case 'help':
+                this.explain();
+                return;
             case 'quoteSell':
                 this.wantToBuy(from, cmd.qty, cmd.query);
                 return;
@@ -427,6 +438,27 @@ export default class MarketMaker extends TaskBot {
                 this.say('Just trade me and put it up. I price what I see.');
                 return;
             case 'none':
+        }
+    }
+
+    /** First thing a customer hears when their window opens. */
+    // Why: the shop's interface is invisible, and the moment someone opens a trade is the one moment they are certain to be looking.
+    greet(customer: string): void {
+        const want = this.desk.intentFor(customer, Date.now(), this.intentTtlMs);
+        if (want === null) {
+            this.say('Put items in and I price them as you go. To buy, say what you want first.');
+            return;
+        }
+        const name = this.cat.byId.get(want.itemId)?.name ?? 'that';
+        const row = rowOf(this.activeBook(), want.itemId);
+        const each = row ? resolvePrices(this.activeBook(), row).sell : 0;
+        this.say(`Put up coins and I'll hand over ${name} at ${formatGp(each)}ea.`);
+    }
+
+    /** Say how the shop works. */
+    explain(): void {
+        for (const line of HELP_LINES) {
+            this.say(line);
         }
     }
 
@@ -600,7 +632,7 @@ export default class MarketMaker extends TaskBot {
         const open = this.desk.current();
 
         if (open && this.desk.expired(now, this.windowMs)) {
-            this.say('Trade declined. Ask again in a minute.');
+            this.say(`Trade declined. ${this.coolNote()}`);
             this.abandon(open.customer, 'ran past the transaction window');
             return;
         }
@@ -616,7 +648,7 @@ export default class MarketMaker extends TaskBot {
             if (this.tradeClosedAt === null) {
                 this.tradeClosedAt = now;
             } else if (now - this.tradeClosedAt >= TRADE_GONE_MS) {
-                this.say('Trade closed. Ask again in a minute.');
+                this.say(`Trade closed. ${this.coolNote()}`);
                 this.abandon(open.customer, 'customer closed the window');
             }
         } else {
@@ -644,9 +676,16 @@ export default class MarketMaker extends TaskBot {
             const { buy, sell } = resolvePrices(book, r);
             return { name: this.cat.byId.get(r.id)?.name ?? `item ${r.id}`, buy, sell };
         });
-        const [first] = formatPriceList(entries, 'both');
-        if (first !== undefined) {
-            this.say(truncateChat(`Trading: ${first}`.slice(0, CHAT_LIMIT)));
+        // Why: a price list alone never tells a passer-by how to trade at all, so every other line is the how-to.
+        this.advertCycle++;
+        if (this.advertCycle % 2 === 0) {
+            this.say(HELP_LINES[0]);
+            this.say(HELP_LINES[1]);
+        } else {
+            const [first] = formatPriceList(entries, 'both');
+            if (first !== undefined) {
+                this.say(truncateChat(`Trading: ${first}`.slice(0, CHAT_LIMIT)));
+            }
         }
         this.lastAdvertiseAt = Date.now();
     }
@@ -720,6 +759,7 @@ class ServeWindow implements Task {
         const w = this.bot.counter().current()!;
         if (!w.sawOpen) {
             this.bot.log(`window with ${w.customer} is open on my side`);
+            this.bot.greet(w.customer);
         }
         w.sawOpen = true;
         const partner = Trade.partner();
@@ -773,7 +813,7 @@ class ServeWindow implements Task {
                 await Trade.accept();
                 return;
             case 'give-up':
-                this.bot.say(`Trade declined: ${beat.reason}.`);
+                this.bot.say(`Trade declined: ${beat.reason}. ${this.bot.coolNote()}`);
                 await Trade.decline();
                 this.bot.abandon(w.customer, beat.reason);
                 return;
@@ -795,7 +835,7 @@ class ServeWindow implements Task {
             return;
         }
         if (!ok) {
-            this.bot.say('Trade declined: the confirm screen changed.');
+            this.bot.say(`Trade declined: the confirm screen changed. ${this.bot.coolNote()}`);
             await Trade.decline();
             this.bot.abandon(customer, 'confirm screen does not match what was accepted');
             return;

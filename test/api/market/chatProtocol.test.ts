@@ -79,6 +79,38 @@ describe('parseCommand', () => {
     test('all is carried through as a count', () => {
         expect(parseCommand('sell all iron ore')).toEqual({ kind: 'quoteBuy', qty: 'all', query: 'iron ore' });
     });
+
+    // Why: this is how a person says it out loud, and a shop that only takes "buy" reads as broken.
+    test('buying N x is the same as buy N x', () => {
+        expect(parseCommand('buying 1k maple longbows')).toEqual({
+            kind: 'quoteSell',
+            qty: 1000,
+            query: 'maple longbows'
+        });
+        expect(parseCommand('selling 500 iron ore')).toEqual({ kind: 'quoteBuy', qty: 500, query: 'iron ore' });
+    });
+
+    test('a bare buying or selling is still the price list', () => {
+        expect(parseCommand('buying')).toEqual({ kind: 'buying' });
+        expect(parseCommand('selling')).toEqual({ kind: 'selling' });
+    });
+
+    // Why: players reach for a slash out of habit.
+    test('a leading slash is accepted on any command', () => {
+        expect(parseCommand('/prices')).toEqual({ kind: 'prices' });
+        expect(parseCommand('/help')).toEqual({ kind: 'help' });
+        expect(parseCommand('/buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore' });
+    });
+
+    test('help has a few spellings and they all land', () => {
+        for (const word of ['help', 'commands', 'shop']) {
+            expect(parseCommand(word)).toEqual({ kind: 'help' });
+        }
+    });
+
+    test('a slash on its own is not a command', () => {
+        expect(parseCommand('/')).toEqual({ kind: 'none' });
+    });
 });
 
 describe('formatting', () => {

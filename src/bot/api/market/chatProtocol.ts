@@ -4,6 +4,7 @@ export type Command =
     | { kind: 'prices' }
     | { kind: 'buying' }
     | { kind: 'selling' }
+    | { kind: 'help' }
     | { kind: 'none' };
 
 /** 2004 chat input cap. */
@@ -25,9 +26,14 @@ export function parseCount(token: string): number | 'all' | null {
     return n > 0 ? n : null;
 }
 
+/** Words that mean the speaker wants to buy, and the speaker wants to sell. */
+const BUYING = new Set(['buy', 'buying']);
+const SELLING = new Set(['sell', 'selling']);
+
 // Why: a line only counts as a command when every part parses, so ordinary chat like "buy me a beer" is ignored in silence rather than answered.
 export function parseCommand(text: string): Command {
-    const parts = text.trim().split(/\s+/).filter(Boolean);
+    // Why: players reach for a slash out of habit, and refusing it looks like the shop is broken.
+    const parts = text.trim().replace(/^\//, '').split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
         return NONE;
     }
@@ -43,10 +49,13 @@ export function parseCommand(text: string): Command {
         if (head === 'selling') {
             return { kind: 'selling' };
         }
+        if (head === 'help' || head === 'commands' || head === 'shop') {
+            return { kind: 'help' };
+        }
         return NONE;
     }
 
-    if (head !== 'buy' && head !== 'sell') {
+    if (!BUYING.has(head) && !SELLING.has(head)) {
         return NONE;
     }
     const qty = parseCount(parts[1]);
@@ -57,8 +66,15 @@ export function parseCommand(text: string): Command {
     if (query.length === 0) {
         return NONE;
     }
-    return head === 'buy' ? { kind: 'quoteSell', qty, query } : { kind: 'quoteBuy', qty, query };
+    return BUYING.has(head) ? { kind: 'quoteSell', qty, query } : { kind: 'quoteBuy', qty, query };
 }
+
+/** How to use the shop, in lines that fit the chat limit. */
+export const HELP_LINES: readonly string[] = [
+    'To SELL to me: trade me and put items in. I price them as you go.',
+    "To BUY from me: say 'buying 100 iron ore', then trade me and put up coins.",
+    "Say 'prices' for my book, or 'help' for this again."
+];
 
 export function truncateChat(text: string): string {
     return text.length <= CHAT_LIMIT ? text : text.slice(0, CHAT_LIMIT);
