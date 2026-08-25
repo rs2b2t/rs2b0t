@@ -16,6 +16,8 @@ export interface DisplayRow {
     valid: boolean;
 }
 
+// Why: an override shows verbatim, even when it is invalid. resolvePrices clamps sell to buy+1 for the
+// Why: trading path, and echoing that clamp back would silently replace the number the operator typed.
 export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
     return book.rows.map(row => {
         const { buy, sell } = resolvePrices(book, row);
@@ -23,8 +25,8 @@ export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
             id: row.id,
             name: cat.byId.get(row.id)?.name ?? `item ${row.id}`,
             mid: row.mid,
-            buy,
-            sell,
+            buy: row.buy ?? buy,
+            sell: row.sell ?? sell,
             cap: row.cap,
             buying: row.buying,
             selling: row.selling,

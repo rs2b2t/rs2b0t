@@ -57,6 +57,13 @@ describe('displayRows', () => {
         expect(displayRows(b, CAT)[0].valid).toBe(false);
     });
 
+    // Why: resolvePrices clamps sell to buy+1 so the trading path never loses money; echoing that clamp into the panel would replace the number the operator typed.
+    test('an invalid override still shows what was typed', () => {
+        let b = setField(BOOK, 440, 'buy', 100);
+        b = setField(b, 440, 'sell', 50);
+        expect(displayRows(b, CAT)[0]).toMatchObject({ buy: 100, sell: 50, valid: false });
+    });
+
     test('an id missing from the catalog still renders', () => {
         const orphan = { ...BOOK, rows: [{ id: 9999, mid: 5, cap: 1, buying: true, selling: true }] };
         expect(displayRows(orphan, CAT)[0].name).toBe('item 9999');
