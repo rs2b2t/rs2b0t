@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 58. Categories: 19.
+- Scripts: 59. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -21,7 +21,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 2
+- [Money making](#money-making) — 3
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -703,6 +703,22 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
 
 ## Money making
+
+### MarketMaker
+
+Player shop — stands at a bank, buys and sells the items in a price book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted
+
+- Tags: `trading`, `shop`, `bank`, `chat`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `priceBook` | string | `""` | Price book — one of:  |
+| `spot` | tile | `{"x":2725,"z":3491,"level":0}` | Stand tile (x,z) |
+| `advertiseSeconds` | number (0–600) | `60` | Advertise every (s) |
+| `engagementTimeoutSeconds` | number (15–600) | `90` | Engagement timeout (s) |
+| `maxQueue` | number (1–10) | `4` | Customers in the queue |
+| `coinFloat` | number (0–100000000) | `50000` | Coins to carry (float) |
+| `blacklist` | string[] | `[]` | Refuse these names |
 
 ### ShopBuyout
 
