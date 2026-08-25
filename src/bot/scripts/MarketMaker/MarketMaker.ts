@@ -239,11 +239,36 @@ export default class MarketMaker extends TaskBot {
         );
     }
 
-    /** Talking is not a task. */
-    // Why: draining in the lowest-priority task means the shop goes mute for the length of any bank trip, which is exactly when a customer is waiting on an answer.
+    /** Listening and talking are not tasks. */
+    // Why: doing either in the lowest-priority task means the shop goes deaf and mute for the length of any bank trip, and chat scrolls out of the client's 20-line buffer while it is away.
     override async loop(): Promise<number | void> {
+        this.pumpChat();
         this.drainChat();
         return super.loop();
+    }
+
+    /** Read what has been said and act on it. */
+    pumpChat(): void {
+        const me = reader.localPlayerName() ?? '';
+        const now = Date.now();
+        for (const line of this.freshChat()) {
+            const from = bareName(line.username);
+            if (from.length === 0 || sameName(from, me) || this.blocked(from)) {
+                continue;
+            }
+            if (line.type === TRADE_REQUEST_TYPE) {
+                this.tradeRequests.add(from);
+                continue;
+            }
+            if (!PUBLIC_CHAT_TYPES.has(line.type)) {
+                continue;
+            }
+            // Why: the cooldown and the budget are checked before the parse, so a flood costs the flooder nothing to send and the bot nothing to answer.
+            if (this.desk.onCooldown(from, now) || !this.spend(from, now)) {
+                continue;
+            }
+            this.handleCommand(from, line.text);
+        }
     }
 
     // ---- state the tasks read -------------------------------------------
@@ -986,7 +1011,7 @@ class Advertise implements Task {
     }
 }
 
-/** Always last: reads chat, answers requests, ages out the window. */
+/** Always last: ages out the window. Chat is pumped from the loop, not from here. */
 class Listen implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
@@ -998,28 +1023,6 @@ class Listen implements Task {
         const w = this.bot.counter().current();
         this.bot.setStatus(w ? `serving ${w.customer}` : 'open for business');
         this.bot.dropExpired();
-
-        const me = reader.localPlayerName() ?? '';
-        const now = Date.now();
-        for (const line of this.bot.freshChat()) {
-            const from = bareName(line.username);
-            if (from.length === 0 || sameName(from, me) || this.bot.blocked(from)) {
-                continue;
-            }
-            if (line.type === TRADE_REQUEST_TYPE) {
-                this.bot.requests().add(from);
-                continue;
-            }
-            if (!PUBLIC_CHAT_TYPES.has(line.type)) {
-                continue;
-            }
-            // Why: the cooldown and the budget are checked before the parse, so a flood costs the flooder nothing to send and the bot nothing to answer.
-            if (this.bot.counter().onCooldown(from, now) || !this.bot.spend(from, now)) {
-                continue;
-            }
-            this.bot.handleCommand(from, line.text);
-        }
-
         await Execution.delayTicks(1);
     }
 }
