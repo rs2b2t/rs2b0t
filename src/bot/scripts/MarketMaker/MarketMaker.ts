@@ -36,7 +36,16 @@ import { Paint } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { advertiseDue, Queue, shouldRestock, shouldSettle, type Engagement } from './marketMakerLogic.js';
+import {
+    advertiseDue,
+    Desk,
+    freshChatLines,
+    RateLimiter,
+    shouldRestock,
+    shouldSettle,
+    type Engagement,
+    type EngagementKind
+} from './marketMakerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const COIN_NAME = 'Coins';
@@ -54,6 +63,15 @@ const CHAT_REPEAT_MS = 15_000;
 const BANK_REACH = 12;
 const SPOT_LEASH = 3;
 const ADVERTISE_ITEMS = 4;
+/** Live quotes held at once. Bounds the memory one player with throwaway names can cost. */
+const QUOTE_CAP = 24;
+/** Outbound lines held at once; the oldest is dropped so a flood cannot build a backlog. */
+const CHAT_BACKLOG_CAP = 6;
+const COMMANDS_PER_WINDOW = 3;
+const COMMAND_WINDOW_MS = 10_000;
+const COMMAND_PENALTY_MS = 30_000;
+/** Why: the engine shuts the offer screen a tick before it opens the confirm screen, so a bare "not open" read drops a trade that is completing normally. */
+const TRADE_GONE_MS = 3_000;
 
 export const MARKET_MAKER_SETTINGS: SettingsSchema = {
     priceBook: {
@@ -83,15 +101,24 @@ export const MARKET_MAKER_SETTINGS: SettingsSchema = {
         default: 90,
         min: 15,
         max: 600,
-        label: 'Engagement timeout (s)',
-        help: 'a customer who quotes and never trades is dropped after this, freeing their reserved stock'
+        label: 'Transaction window (s)',
+        help: 'the whole transaction, bank trip included; a customer who runs past it is dropped and cooled off'
     },
-    maxQueue: {
+    quoteSeconds: {
         type: 'number',
-        default: 4,
-        min: 1,
-        max: 10,
-        label: 'Customers in the queue'
+        default: 60,
+        min: 15,
+        max: 600,
+        label: 'Quote lifetime (s)',
+        help: 'how long a quote stays redeemable; short, so nobody banks a quote against a mispriced row and cashes it after you fix the row'
+    },
+    cooldownSeconds: {
+        type: 'number',
+        default: 60,
+        min: 0,
+        max: 3600,
+        label: 'Cooldown after a failed trade (s)',
+        help: 'a customer who opens a trade and does not finish it is ignored for this long, so stalling costs the staller rather than everyone behind them'
     },
     coinFloat: {
         type: 'number',
@@ -126,15 +153,19 @@ export default class MarketMaker extends TaskBot {
     private blacklist: string[] = [];
 
     private readonly ledger = new Ledger();
-    private queue = new Queue(4);
+    private readonly desk = new Desk(QUOTE_CAP);
+    private readonly limiter = new RateLimiter(COMMANDS_PER_WINDOW, COMMAND_WINDOW_MS, COMMAND_PENALTY_MS);
     private readonly tradeState = { waitedTicks: 0 };
+    private quoteTtlMs = 60_000;
+    private cooldownMs = 60_000;
 
     private pending: PendingLine[] = [];
     private lastSaidAt = 0;
     private readonly saidRecently = new Map<string, number>();
-    private lastChatSig: string | null = null;
+    private lastChat: string[] = [];
     private readonly tradeRequests = new Set<string>();
 
+    private tradeClosedAt: number | null = null;
     private lastAdvertiseAt = 0;
     private advertiseCursor = 0;
 
@@ -163,7 +194,8 @@ export default class MarketMaker extends TaskBot {
         this.advertiseSeconds = this.settings.num('advertiseSeconds', 60);
         this.coinFloat = this.settings.num('coinFloat', 50_000);
         this.blacklist = this.settings.list('blacklist').map(n => n.trim().toLowerCase()).filter(Boolean);
-        this.queue = new Queue(this.settings.num('maxQueue', 4));
+        this.quoteTtlMs = this.settings.num('quoteSeconds', 60) * 1000;
+        this.cooldownMs = this.settings.num('cooldownSeconds', 60) * 1000;
 
         const bookName = this.settings.str('priceBook');
         this.book = PriceBooks.byName(bookName);
@@ -194,8 +226,9 @@ export default class MarketMaker extends TaskBot {
         this.add(
             new Recover(this),
             new ServeTrade(this),
-            new OpenTrade(this),
+            new AcceptCustomer(this),
             new Restock(this),
+            new OpenTrade(this),
             new Settle(this),
             new Advertise(this),
             new Listen(this)
@@ -220,8 +253,12 @@ export default class MarketMaker extends TaskBot {
         return this.spot;
     }
 
-    engagements(): Queue {
-        return this.queue;
+    counter(): Desk {
+        return this.desk;
+    }
+
+    quoteTtl(): number {
+        return this.quoteTtlMs;
     }
 
     stock(): Ledger {
@@ -254,13 +291,22 @@ export default class MarketMaker extends TaskBot {
 
     // ---- chat ------------------------------------------------------------
 
+    /** One command's worth of budget for this player. False means ignore them. */
+    spend(name: string, nowMs: number): boolean {
+        return this.limiter.allow(name, nowMs);
+    }
+
     /** Queue a line. Draining is rate limited so a busy shop does not read as spam. */
+    // Why: the backlog is capped and drops oldest, so no flood can push the bot minutes behind answering questions nobody remembers asking.
     say(text: string): void {
         const line = truncateChat(text);
         if (line.length === 0 || this.pending.some(p => p.text === line)) {
             return;
         }
         this.pending.push({ text: line, atMs: Date.now() });
+        while (this.pending.length > CHAT_BACKLOG_CAP) {
+            this.pending.shift();
+        }
     }
 
     drainChat(): void {
@@ -279,29 +325,20 @@ export default class MarketMaker extends TaskBot {
         }
     }
 
-    /** Newest-first chat since the last read, oldest-first on the way out. */
+    /** Chat since the last read, oldest-first. */
     freshChat(): { type: number; username: string | null; text: string }[] {
         const lines = reader.chat(CHAT_LINES_PER_READ);
-        if (lines.length === 0) {
-            return [];
-        }
         const sig = (l: { type: number; username: string | null; text: string }) =>
             `${l.type}|${l.username ?? ''}|${l.text}`;
+        const now = lines.map(sig);
+        const fresh = freshChatLines(this.lastChat, now);
+        this.lastChat = now;
 
-        if (this.lastChatSig === null) {
-            this.lastChatSig = sig(lines[0]);
-            return [];
-        }
-
-        const fresh: typeof lines = [];
-        for (const line of lines) {
-            if (sig(line) === this.lastChatSig) {
-                break;
-            }
-            fresh.push(line);
-        }
-        this.lastChatSig = sig(lines[0]);
-        return fresh.reverse();
+        const byText = new Map(lines.map(l => [sig(l), l]));
+        return fresh.flatMap(s => {
+            const line = byText.get(s);
+            return line ? [line] : [];
+        });
     }
 
     blocked(name: string): boolean {
@@ -354,10 +391,10 @@ export default class MarketMaker extends TaskBot {
                 this.listPrices('sell');
                 return;
             case 'quoteSell':
-                this.quoteSale(from, cmd.qty, cmd.query);
+                this.quoteFor(from, 'sell', cmd.qty, cmd.query);
                 return;
             case 'quoteBuy':
-                this.quotePurchase(from, cmd.qty, cmd.query);
+                this.quoteFor(from, 'buy', cmd.qty, cmd.query);
                 return;
             case 'none':
                 return;
@@ -399,86 +436,106 @@ export default class MarketMaker extends TaskBot {
         return { id: candidates[0].id, name: candidates[0].name };
     }
 
-    private quoteSale(from: string, want: number | 'all', query: string): void {
+    /** How many units this side can honour right now, and at what unit price. */
+    // Why: called when quoting and again when the customer turns up, so a stale quote cannot be redeemed after the row is corrected.
+    priceNow(
+        itemId: number,
+        kind: EngagementKind,
+        want: number | 'all'
+    ): { qty: number; unit: number; refusal: string | null } {
         const book = this.activeBook();
-        const hit = this.resolveRow(query, 'selling');
+        const row = rowOf(book, itemId);
+        const name = this.cat.byId.get(itemId)?.name ?? `item ${itemId}`;
+        if (!row || !rowValid(book, row) || !(kind === 'sell' ? row.selling : row.buying)) {
+            return { qty: 0, unit: 0, refusal: `I don't ${kind === 'sell' ? 'sell' : 'buy'} ${name} any more.` };
+        }
+
+        const { buy, sell } = resolvePrices(book, row);
+        const unit = kind === 'sell' ? sell : buy;
+
+        let ceiling: number;
+        let refusal: string;
+        if (kind === 'sell') {
+            ceiling = this.ledger.available(itemId, this.packCount(itemId));
+            refusal = `Out of ${name}.`;
+        } else {
+            const room = roomUnderCap(row.cap, this.ledger.held(itemId) + this.packCount(itemId), 0);
+            const affordable = Math.floor(this.ledger.available(this.coinId, this.packCoins()) / unit);
+            ceiling = Math.min(room, affordable);
+            refusal = room <= 0 ? `I'm full on ${name}.` : `I can't afford that many ${name}.`;
+        }
+
+        const asked = want === 'all' ? ceiling : Math.min(want, ceiling);
+        const qty = Math.min(asked, Math.floor(book.maxTradeValue / unit));
+        if (qty <= 0) {
+            return {
+                qty: 0,
+                unit,
+                refusal: ceiling > 0 ? `${name} is over my ${formatGp(book.maxTradeValue)}gp trade cap.` : refusal
+            };
+        }
+        return { qty, unit, refusal: null };
+    }
+
+    // Why: quoting reserves nothing. Stock is committed only when someone opens a trade, so chat alone cannot lock the shop's inventory and several bots at one bank stop starving each other.
+    private quoteFor(from: string, kind: EngagementKind, want: number | 'all', query: string): void {
+        const hit = this.resolveRow(query, kind === 'sell' ? 'selling' : 'buying');
         if (!hit) {
             return;
         }
-        const row = rowOf(book, hit.id)!;
-        const { sell } = resolvePrices(book, row);
 
-        const available = this.ledger.available(hit.id, this.packCount(hit.id));
-        let qty = want === 'all' ? available : Math.min(want, available);
-        qty = Math.min(qty, Math.floor(book.maxTradeValue / sell));
-        if (qty <= 0) {
-            this.say(available <= 0 ? `Out of ${hit.name}.` : `${hit.name} is over my ${formatGp(book.maxTradeValue)}gp trade cap.`);
+        const { qty, unit, refusal } = this.priceNow(hit.id, kind, want);
+        if (refusal !== null) {
+            this.say(refusal);
             return;
         }
 
-        if (!this.ledger.reserve(from, hit.id, qty, Date.now())) {
-            this.say(`Someone beat you to that ${hit.name}.`);
-            return;
-        }
-
-        const engagement: Engagement = {
-            customer: from,
-            kind: 'sell',
-            give: new Map([[hit.id, qty]]),
-            get: new Map([[this.coinId, qty * sell]]),
-            quotedAtMs: Date.now(),
-            opened: false
-        };
-        this.offerQuote(from, engagement, formatSellQuote(hit.name, qty, sell));
+        this.desk.quote({ customer: from, kind, itemId: hit.id, qty, unitPrice: unit, quotedAtMs: Date.now() });
+        this.say(kind === 'sell' ? formatSellQuote(hit.name, qty, unit) : formatBuyQuote(hit.name, qty, unit));
     }
 
-    private quotePurchase(from: string, want: number | 'all', query: string): void {
-        const book = this.activeBook();
-        const hit = this.resolveRow(query, 'buying');
-        if (!hit) {
-            return;
+    /** Turn a live quote into the one transaction in flight, re-pricing it first. Null when it can no longer be honoured. */
+    acceptCustomer(customer: string): Engagement | null {
+        const q = this.desk.liveQuote(customer, Date.now(), this.quoteTtlMs);
+        if (!q) {
+            return null;
         }
-        const row = rowOf(book, hit.id)!;
-        const { buy } = resolvePrices(book, row);
+        this.desk.dropQuote(customer);
 
-        const room = roomUnderCap(row.cap, this.ledger.held(hit.id) + this.packCount(hit.id), 0);
-        const purse = this.ledger.available(this.coinId, this.packCoins());
-        const affordable = Math.floor(purse / buy);
-        let qty = Math.min(want === 'all' ? room : want, room, affordable);
-        qty = Math.min(qty, Math.floor(book.maxTradeValue / buy));
-        if (qty <= 0) {
-            this.say(room <= 0 ? `I'm full on ${hit.name}.` : `I can't afford that many ${hit.name}.`);
-            return;
+        const name = this.cat.byId.get(q.itemId)?.name ?? `item ${q.itemId}`;
+        const now = this.priceNow(q.itemId, q.kind, q.qty);
+        if (now.refusal !== null) {
+            this.say(now.refusal);
+            return null;
         }
-
-        const total = qty * buy;
-        if (!this.ledger.reserve(from, this.coinId, total, Date.now())) {
-            this.say('My coins are spoken for, one moment.');
-            return;
+        if (now.unit !== q.unitPrice) {
+            this.say(`${name} moved to ${formatGp(now.unit)}ea. Ask again.`);
+            return null;
+        }
+        if (now.qty < q.qty) {
+            this.say(`Only ${formatGp(now.qty)} ${name} left. Ask again.`);
+            return null;
         }
 
+        const gp = q.qty * q.unitPrice;
         const engagement: Engagement = {
-            customer: from,
-            kind: 'buy',
-            give: new Map([[this.coinId, total]]),
-            get: new Map([[hit.id, qty]]),
-            quotedAtMs: Date.now(),
+            customer,
+            kind: q.kind,
+            give: q.kind === 'sell' ? new Map([[q.itemId, q.qty]]) : new Map([[this.coinId, gp]]),
+            get: q.kind === 'sell' ? new Map([[this.coinId, gp]]) : new Map([[q.itemId, q.qty]]),
+            startedAtMs: Date.now(),
             opened: false
         };
-        this.offerQuote(from, engagement, formatBuyQuote(hit.name, qty, buy));
-    }
 
-    private offerQuote(from: string, engagement: Engagement, quote: string): void {
-        const placed = this.queue.enqueue(from, engagement);
-        if (placed === 'full') {
-            this.ledger.release(from);
-            this.say('Queue is full, ask again in a minute.');
-            return;
+        const holdId = q.kind === 'sell' ? q.itemId : this.coinId;
+        const holdQty = q.kind === 'sell' ? q.qty : gp;
+        if (!this.ledger.reserve(customer, holdId, holdQty, Date.now())) {
+            this.say(`Someone beat you to that ${name}.`);
+            return null;
         }
-        this.say(quote);
-        if (placed === 'queued') {
-            this.say(`You're #${this.queue.size() - 1} in the queue.`);
-        }
+
+        this.desk.startServing(engagement);
+        return engagement;
     }
 
     // ---- trade -----------------------------------------------------------
@@ -570,7 +627,8 @@ export default class MarketMaker extends TaskBot {
             this.bought++;
         }
         this.ledger.release(e.customer);
-        this.queue.finish(e.customer);
+        this.desk.finishServing();
+        this.tradeClosedAt = null;
         this.log(`trade complete with ${e.customer} (${e.kind})`);
         this.say(`Thanks ${e.customer}. Pleasure doing business.`);
     }
@@ -588,20 +646,53 @@ export default class MarketMaker extends TaskBot {
         return `mismatch: want give=${show(e.give)} get=${show(e.get)}; saw mine=${show(mine)} theirs=${show(theirs)}${confirmPart}`;
     }
 
+    /** Drop the customer in flight and ignore them for a while. */
+    // Why: a stall and a probe of the refusal rules look identical from here, so the cost lands on whoever failed the trade rather than on everyone behind them.
     abandon(e: Engagement, reason: string): void {
         this.refused++;
         this.ledger.release(e.customer);
-        this.queue.finish(e.customer);
+        this.desk.dropQuote(e.customer);
+        this.desk.finishServing();
+        this.tradeClosedAt = null;
+        if (this.cooldownMs > 0) {
+            this.desk.cool(e.customer, Date.now() + this.cooldownMs);
+        }
         this.log(`dropped ${e.customer}: ${reason}`);
     }
 
+    /** Age out the transaction window, an abandoned window, stale quotes and stale holds. */
     dropExpired(): void {
         const now = Date.now();
-        for (const name of this.queue.expire(now, this.engagementTimeoutMs)) {
-            this.ledger.release(name);
-            this.log(`${name} never traded, releasing their hold`);
+
+        const stale = this.desk.staleServing(now, this.engagementTimeoutMs);
+        if (stale) {
+            this.say('Trade declined. Ask again in a minute.');
+            this.abandon(stale, 'ran past the transaction window');
+        } else {
+            this.releaseIfWalkedAway(now);
         }
+
+        this.desk.prune(now, this.quoteTtlMs);
         this.ledger.expire(now, this.engagementTimeoutMs);
+    }
+
+    /** Free the counter when the customer closes the window instead of trading. */
+    // Why: without this one decline holds the shop for the rest of the transaction window, so a griefer costs everyone 90s per click.
+    private releaseIfWalkedAway(nowMs: number): void {
+        const served = this.desk.current();
+        if (!served?.opened || Trade.active()) {
+            this.tradeClosedAt = null;
+            return;
+        }
+        if (this.tradeClosedAt === null) {
+            this.tradeClosedAt = nowMs;
+            return;
+        }
+        if (nowMs - this.tradeClosedAt >= TRADE_GONE_MS) {
+            this.tradeClosedAt = null;
+            this.say('Trade closed. Ask again in a minute.');
+            this.abandon(served, 'customer closed the window');
+        }
     }
 
     // ---- advertising -----------------------------------------------------
@@ -637,11 +728,11 @@ export default class MarketMaker extends TaskBot {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7fb3ff' });
         p.title(`MarketMaker — ${this.status}`);
         const mins = (Date.now() - this.startedAt) / 60_000;
-        const e = this.queue.current();
+        const e = this.desk.current();
         p.row(`Runtime: ${fmtDuration(mins)}`, `Book: ${this.book?.name ?? '-'}`, `Spread: ${this.book?.margin ?? 0}%`);
         p.row(`Sold: ${this.sold}`, `Bought: ${this.bought}`, `Refused: ${this.refused}`);
         p.row(`GP in: ${formatGp(this.gpIn)}`, `GP out: ${formatGp(this.gpOut)}`, `Pack coins: ${formatGp(this.packCoins())}`);
-        p.row(`Serving: ${e?.customer ?? 'nobody'}`, `Queue: ${this.queue.size()}`, `Pack: ${Inventory.used()}/28`);
+        p.row(`Serving: ${e?.customer ?? 'nobody'}`, `Quotes: ${this.desk.quoteCount()}`, `Pack: ${Inventory.used()}/28`);
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
@@ -692,7 +783,7 @@ class ServeTrade implements Task {
     }
 
     async execute(): Promise<void> {
-        const e = this.bot.engagements().current();
+        const e = this.bot.counter().current();
         if (!e) {
             this.bot.setStatus('declining an unquoted trade');
             this.bot.say('Quote first, e.g. "buy 100 iron ore".');
@@ -734,23 +825,49 @@ class ServeTrade implements Task {
     }
 }
 
-/** Open the screen once the engaged customer has sent a trade request. */
+/** Take the first live-quote holder who asks, and commit stock to them. */
+// Why: no list of who is next means nothing to camp or fill with throwaway names; whoever clicks first wins.
+class AcceptCustomer implements Task {
+    constructor(private readonly bot: MarketMaker) {}
+
+    validate(): boolean {
+        return !Trade.active()
+            && this.bot.counter().current() === null
+            && this.bot.requests().size > 0;
+    }
+
+    async execute(): Promise<void> {
+        const asked = [...this.bot.requests()];
+        this.bot.requests().clear();
+
+        for (const name of asked) {
+            if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, Date.now())) {
+                continue;
+            }
+            const taken = this.bot.acceptCustomer(name);
+            if (taken) {
+                this.bot.setStatus(`serving ${taken.customer}`);
+                this.bot.log(`serving ${taken.customer} (${taken.kind})`);
+                return;
+            }
+        }
+        await Execution.delayTicks(1);
+    }
+}
+
+/** Open the screen once the served customer's goods are in the pack. */
 class OpenTrade implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
     validate(): boolean {
-        const e = this.bot.engagements().current();
-        if (!e || e.opened || Trade.active()) {
-            return false;
-        }
-        return [...this.bot.requests()].some(name => sameName(name, e.customer));
+        const e = this.bot.counter().current();
+        return e !== null && !e.opened && !Trade.active();
     }
 
     async execute(): Promise<void> {
-        const e = this.bot.engagements().current()!;
+        const e = this.bot.counter().current()!;
         this.bot.setStatus(`opening a trade with ${e.customer}`);
-        this.bot.requests().clear();
-        this.bot.engagements().markOpened(e.customer);
+        this.bot.counter().markOpened();
         if (!(await Trade.request(e.customer))) {
             this.bot.log(`${e.customer} is not in range to trade`);
             this.bot.say(`${e.customer}, stand next to me.`);
@@ -766,7 +883,7 @@ class Restock implements Task {
         if (Trade.active()) {
             return false;
         }
-        const e = this.bot.engagements().current();
+        const e = this.bot.counter().current();
         if (!e || e.opened) {
             return false;
         }
@@ -774,7 +891,7 @@ class Restock implements Task {
     }
 
     async execute(): Promise<void> {
-        const e = this.bot.engagements().current()!;
+        const e = this.bot.counter().current()!;
         this.bot.setStatus(`fetching ${e.customer}'s order`);
 
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {
@@ -806,7 +923,7 @@ class Settle implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
     validate(): boolean {
-        if (Trade.active() || this.bot.engagements().current() !== null) {
+        if (Trade.active() || this.bot.counter().current() !== null) {
             return false;
         }
         return shouldSettle(Inventory.free(), this.bot.packCoins(), this.bot.float());
@@ -854,11 +971,12 @@ class Listen implements Task {
     }
 
     async execute(): Promise<void> {
-        const e = this.bot.engagements().current();
+        const e = this.bot.counter().current();
         this.bot.setStatus(e ? `waiting on ${e.customer}` : 'open for business');
         this.bot.dropExpired();
 
         const me = reader.localPlayerName() ?? '';
+        const now = Date.now();
         for (const line of this.bot.freshChat()) {
             const from = bareName(line.username);
             if (from.length === 0 || sameName(from, me) || this.bot.blocked(from)) {
@@ -868,9 +986,15 @@ class Listen implements Task {
                 this.bot.requests().add(from);
                 continue;
             }
-            if (PUBLIC_CHAT_TYPES.has(line.type)) {
-                this.bot.handleCommand(from, line.text);
+            if (!PUBLIC_CHAT_TYPES.has(line.type)) {
+                continue;
             }
+            // Why: the cooldown and the budget are checked before the parse, so a flood costs the
+            // Why: flooder nothing to send and the bot nothing to answer.
+            if (this.bot.counter().onCooldown(from, now) || !this.bot.spend(from, now)) {
+                continue;
+            }
+            this.bot.handleCommand(from, line.text);
         }
 
         this.bot.drainChat();
