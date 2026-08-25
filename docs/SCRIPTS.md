@@ -716,9 +716,9 @@ Player shop — stands at a bank, buys and sells the items in a price book, quot
 | `spot` | tile | `{"x":2725,"z":3491,"level":0}` | Stand tile (x,z) |
 | `advertiseSeconds` | number (0–600) | `60` | Advertise every (s) |
 | `engagementTimeoutSeconds` | number (15–600) | `90` | Transaction window (s) |
-| `quoteSeconds` | number (15–600) | `60` | Quote lifetime (s) |
+| `intentSeconds` | number (15–600) | `90` | Buy request lifetime (s) |
 | `cooldownSeconds` | number (0–3600) | `60` | Cooldown after a failed trade (s) |
-| `coinFloat` | number (0–100000000) | `50000` | Coins to carry (float) |
+| `coinFloat` | number (0–100000000) | `200000` | Coins to carry (float) |
 | `blacklist` | string[] | `[]` | Refuse these names |
 
 ### ShopBuyout

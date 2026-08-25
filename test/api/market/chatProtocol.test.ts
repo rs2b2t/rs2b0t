@@ -3,10 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import {
     CHAT_LIMIT,
     formatAmbiguous,
-    formatBuyQuote,
     formatGp,
     formatPriceList,
-    formatSellQuote,
     parseCommand,
     parseCount,
     truncateChat
@@ -87,14 +85,6 @@ describe('formatting', () => {
     test('formatGp groups thousands', () => {
         expect(formatGp(2000)).toBe('2,000');
         expect(formatGp(17)).toBe('17');
-    });
-
-    test('sell quote names the total and the unit price', () => {
-        expect(formatSellQuote('Iron ore', 100, 20)).toBe('100 x Iron ore = 2,000gp (20ea). Trade me.');
-    });
-
-    test('buy quote says what the bot pays', () => {
-        expect(formatBuyQuote('Iron ore', 100, 14)).toBe("I'll pay 1,400gp for 100 Iron ore (14ea). Trade me.");
     });
 
     test('ambiguous reply lists at most three names', () => {

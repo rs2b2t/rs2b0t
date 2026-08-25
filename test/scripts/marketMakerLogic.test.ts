@@ -2,30 +2,32 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 
 import {
     advertiseDue,
+    decideBeat,
     Desk,
     freshChatLines,
     RateLimiter,
-    shouldRestock,
     shouldSettle,
-    type Engagement,
-    type Quote
+    sideSignature,
+    type Intent,
+    type Window
 } from '#/bot/scripts/MarketMaker/marketMakerLogic.js';
 
 const IRON = 440;
 const COINS = 995;
 
-function quote(customer: string, atMs = 0, over: Partial<Quote> = {}): Quote {
-    return { customer, kind: 'sell', itemId: IRON, qty: 100, unitPrice: 22, quotedAtMs: atMs, ...over };
+function intent(customer: string, atMs = 0, over: Partial<Intent> = {}): Intent {
+    return { customer, itemId: IRON, maxQty: 100, askedAtMs: atMs, ...over };
 }
 
-function engagement(customer: string, atMs = 0): Engagement {
+function windowAt(over: Partial<Window> = {}): Window {
     return {
-        customer,
-        kind: 'sell',
-        give: new Map([[IRON, 100]]),
-        get: new Map([[COINS, 2200]]),
-        startedAtMs: atMs,
-        opened: false
+        customer: 'alice',
+        openedAtMs: 0,
+        stillBeats: 3,
+        reOffers: 0,
+        lastSig: '440x100',
+        accepted: null,
+        ...over
     };
 }
 
@@ -35,81 +37,87 @@ beforeEach(() => {
     desk = new Desk(8);
 });
 
-describe('quotes are indicative, not a place in line', () => {
-    test('a live quote comes back until it expires', () => {
-        desk.quote(quote('alice', 0));
-        expect(desk.liveQuote('alice', 30_000, 60_000)?.qty).toBe(100);
-        expect(desk.liveQuote('alice', 61_000, 60_000)).toBeNull();
+describe('intents are a request, not a promise', () => {
+    test('a live intent comes back until it expires', () => {
+        desk.remember(intent('alice', 0));
+        expect(desk.intentFor('alice', 30_000, 60_000)?.maxQty).toBe(100);
+        expect(desk.intentFor('alice', 61_000, 60_000)).toBeNull();
     });
 
     test('lookup is case-insensitive, since the client capitalises names', () => {
-        desk.quote(quote('alice', 0));
-        expect(desk.liveQuote('Alice', 0, 60_000)).not.toBeNull();
+        desk.remember(intent('alice', 0));
+        expect(desk.intentFor('Alice', 0, 60_000)).not.toBeNull();
     });
 
-    test('re-quoting replaces rather than stacking', () => {
-        desk.quote(quote('alice', 0));
-        desk.quote(quote('alice', 5_000, { qty: 50 }));
-        expect(desk.liveQuote('alice', 5_000, 60_000)?.qty).toBe(50);
-        expect(desk.quoteCount()).toBe(1);
+    test('asking again replaces rather than stacking', () => {
+        desk.remember(intent('alice', 0));
+        desk.remember(intent('alice', 5_000, { maxQty: 50 }));
+        expect(desk.intentFor('alice', 5_000, 60_000)?.maxQty).toBe(50);
+        expect(desk.intentCount()).toBe(1);
     });
 
-    // Why: an unbounded quote map is a memory griefing vector for anyone with throwaway names.
-    test('the book is capped, dropping the oldest quote', () => {
+    // Why: an unbounded map is a memory griefing vector for anyone with throwaway names.
+    test('the book is capped, dropping the oldest', () => {
         for (let i = 0; i < 10; i++) {
-            desk.quote(quote(`p${i}`, i));
+            desk.remember(intent(`p${i}`, i));
         }
-        expect(desk.quoteCount()).toBe(8);
-        expect(desk.liveQuote('p0', 10, 60_000)).toBeNull();
-        expect(desk.liveQuote('p9', 10, 60_000)).not.toBeNull();
+        expect(desk.intentCount()).toBe(8);
+        expect(desk.intentFor('p0', 10, 60_000)).toBeNull();
     });
 
     test('pruning drops what has expired', () => {
-        desk.quote(quote('alice', 0));
-        desk.quote(quote('bob', 50_000));
-        desk.prune(60_001, 60_000);
-        expect(desk.quoteCount()).toBe(1);
-        expect(desk.liveQuote('bob', 60_001, 60_000)).not.toBeNull();
+        desk.remember(intent('alice', 0));
+        desk.remember(intent('bob', 50_000));
+        desk.pruneIntents(60_001, 60_000);
+        expect(desk.intentCount()).toBe(1);
     });
 
-    test('dropping a quote removes it', () => {
-        desk.quote(quote('alice', 0));
-        desk.dropQuote('ALICE');
-        expect(desk.liveQuote('alice', 0, 60_000)).toBeNull();
-    });
-});
-
-describe('one customer at a time', () => {
-    test('nothing is served until a customer is started', () => {
-        expect(desk.current()).toBeNull();
+    test('nextIntent is the oldest live one, which is whose goods get fetched', () => {
+        desk.remember(intent('alice', 0));
+        desk.remember(intent('bob', 1_000));
+        expect(desk.nextIntent(2_000, 60_000)?.customer).toBe('alice');
+        desk.forget('alice');
+        expect(desk.nextIntent(2_000, 60_000)?.customer).toBe('bob');
     });
 
-    test('starting sets the served customer', () => {
-        desk.startServing(engagement('alice'));
-        expect(desk.current()?.customer).toBe('alice');
-    });
-
-    test('finishing clears it', () => {
-        desk.startServing(engagement('alice'));
-        desk.finishServing();
-        expect(desk.current()).toBeNull();
-    });
-
-    test('markOpened flags the served engagement', () => {
-        desk.startServing(engagement('alice'));
-        desk.markOpened();
-        expect(desk.current()?.opened).toBe(true);
-    });
-
-    // Why: the whole transaction, bank trip included, sits under one deadline.
-    test('the served customer is stale past the window', () => {
-        desk.startServing(engagement('alice', 1_000));
-        expect(desk.staleServing(60_000, 90_000)).toBeNull();
-        expect(desk.staleServing(92_000, 90_000)?.customer).toBe('alice');
+    test('nextIntent skips expired ones', () => {
+        desk.remember(intent('alice', 0));
+        expect(desk.nextIntent(90_000, 60_000)).toBeNull();
     });
 });
 
-describe('cooldowns punish the griefer, not the queue', () => {
+describe('one window at a time', () => {
+    test('nothing is open until a window is', () => {
+        expect(desk.current()).toBeNull();
+    });
+
+    test('opening names the customer and zeroes the counters', () => {
+        const w = desk.open('alice', 1_000);
+        expect(w.customer).toBe('alice');
+        expect(w.stillBeats).toBe(0);
+        expect(w.reOffers).toBe(0);
+        expect(desk.current()).toBe(w);
+    });
+
+    test('closing clears it', () => {
+        desk.open('alice', 0);
+        desk.close();
+        expect(desk.current()).toBeNull();
+    });
+
+    // Why: the transaction sits under one deadline, so nothing can hold the counter open.
+    test('a window goes stale past its deadline', () => {
+        desk.open('alice', 1_000);
+        expect(desk.expired(60_000, 90_000)).toBe(false);
+        expect(desk.expired(92_000, 90_000)).toBe(true);
+    });
+
+    test('a closed desk is never expired', () => {
+        expect(desk.expired(999_999, 1)).toBe(false);
+    });
+});
+
+describe('cooldowns punish the staller', () => {
     test('a cooled customer is ignored until the deadline', () => {
         desk.cool('mallory', 60_000);
         expect(desk.onCooldown('mallory', 59_000)).toBe(true);
@@ -124,24 +132,71 @@ describe('cooldowns punish the griefer, not the queue', () => {
     test('an uncooled customer is never blocked', () => {
         expect(desk.onCooldown('alice', 999_999)).toBe(false);
     });
+});
 
-    // Why: this is the inversion the FIFO queue got backwards. Stalling costs the staller their
-    // Why: access, and everyone else keeps trading while they wait it out.
-    test('a stalling attacker cannot starve an honest customer', () => {
-        desk.quote(quote('mallory', 0));
-        desk.startServing(engagement('mallory', 0));
+describe('decideBeat', () => {
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, oweMatched: false, oweAnything: true };
 
-        const stale = desk.staleServing(95_000, 90_000);
-        expect(stale?.customer).toBe('mallory');
-        desk.finishServing();
-        desk.cool('mallory', 95_000 + 60_000);
-        desk.dropQuote('mallory');
+    // Why: any change resets both accepts, so acting on a moving side means neither ever settles.
+    test('a side that just moved is always waited on', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x150', window: windowAt(), oweMatched: true });
+        expect(beat).toEqual({ do: 'wait', reason: 'their side moved' });
+    });
 
-        // Mallory keeps typing; the bot ignores them and serves Alice.
-        expect(desk.onCooldown('mallory', 100_000)).toBe(true);
-        desk.quote(quote('alice', 100_000));
-        desk.startServing(engagement('alice', 100_000));
-        expect(desk.current()?.customer).toBe('alice');
+    test('a still side that has not settled long enough waits', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ stillBeats: 2 }) });
+        expect(beat.do).toBe('wait');
+    });
+
+    test('an empty window waits rather than accepting nothing', () => {
+        const beat = decideBeat({ ...base, theirSig: '', window: windowAt({ lastSig: '' }), oweAnything: false });
+        expect(beat).toEqual({ do: 'wait', reason: 'nothing to trade yet' });
+    });
+
+    test('a settled side the bot has not matched gets an offer', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt() });
+        expect(beat.do).toBe('offer');
+    });
+
+    test('a settled side the bot has matched is accepted', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt(), oweMatched: true });
+        expect(beat).toEqual({ do: 'accept' });
+    });
+
+    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the whole window.
+    test('past the re-offer cap it gives up rather than keep paying', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ reOffers: 12 }) });
+        expect(beat.do).toBe('give-up');
+    });
+
+    test('the cap does not fire on a window it has already matched', () => {
+        const beat = decideBeat({
+            ...base,
+            theirSig: '440x100',
+            window: windowAt({ reOffers: 99 }),
+            oweMatched: true
+        });
+        expect(beat).toEqual({ do: 'accept' });
+    });
+
+    // Why: this is the steady-state claim. Nothing changing means nothing happens.
+    test('a beat that repeats with no change decides the same thing twice', () => {
+        const input = { ...base, theirSig: '440x100', window: windowAt(), oweMatched: true };
+        expect(decideBeat(input)).toEqual(decideBeat(input));
+    });
+});
+
+describe('sideSignature', () => {
+    test('order does not matter', () => {
+        expect(sideSignature(new Map([[440, 10], [995, 5]]))).toBe(sideSignature(new Map([[995, 5], [440, 10]])));
+    });
+
+    test('a count change changes the signature', () => {
+        expect(sideSignature(new Map([[440, 10]]))).not.toBe(sideSignature(new Map([[440, 11]])));
+    });
+
+    test('empty is stable', () => {
+        expect(sideSignature(new Map())).toBe('');
     });
 });
 
@@ -196,20 +251,6 @@ describe('advertiseDue', () => {
     });
 });
 
-describe('shouldRestock', () => {
-    test('true when the pack is short of what was promised', () => {
-        expect(shouldRestock(new Map([[IRON, 100]]), () => 50)).toBe(true);
-    });
-
-    test('false when the pack already holds it', () => {
-        expect(shouldRestock(new Map([[IRON, 100]]), () => 100)).toBe(false);
-    });
-
-    test('an empty need never restocks', () => {
-        expect(shouldRestock(new Map(), () => 0)).toBe(false);
-    });
-});
-
 describe('shouldSettle', () => {
     test('true when free slots run low', () => {
         expect(shouldSettle(2, 0, 50_000)).toBe(true);
@@ -241,8 +282,7 @@ describe('freshChatLines', () => {
         expect(freshChatLines(['a'], ['d', 'c', 'b', 'a'])).toEqual(['b', 'c', 'd']);
     });
 
-    // Why: this is the case a newest-signature mark loses, and repeating yourself is what a customer
-    // Why: does the moment the shop looks like it ignored them.
+    // Why: repeating yourself is what a customer does the moment the shop looks like it ignored them.
     test('a verbatim repeat is heard again', () => {
         expect(freshChatLines(['buy', 'x'], ['buy', 'buy', 'x'])).toEqual(['buy']);
     });
@@ -264,5 +304,11 @@ describe('freshChatLines', () => {
 
     test('a buffer with no overlap at all is treated as entirely new', () => {
         expect(freshChatLines(['a'], ['z', 'y'])).toEqual(['y', 'z']);
+    });
+});
+
+describe('the coin id is never assumed', () => {
+    test('sideSignature carries coins like any other id', () => {
+        expect(sideSignature(new Map([[COINS, 2200]]))).toBe('995x2200');
     });
 });

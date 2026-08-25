@@ -1,26 +1,23 @@
-export type EngagementKind = 'buy' | 'sell';
+import type { SellIntent } from '../../api/market/appraise.js';
 
-/** An indicative price, not a promise and not a place in line. */
-// Why: the price is re-derived when the customer turns up, so a quote against a mispriced row cannot be banked and redeemed after the row is fixed.
-export interface Quote {
+/** A chat request naming what the customer wants to buy. Carries no price and no reservation. */
+export interface Intent extends SellIntent {
     customer: string;
-    /** 'sell' means the bot sells. */
-    kind: EngagementKind;
-    /** Unnoted obj id. */
-    itemId: number;
-    qty: number;
-    unitPrice: number;
-    quotedAtMs: number;
+    askedAtMs: number;
 }
 
-/** The one transaction in flight. */
-export interface Engagement {
+/** The window in flight. Everything here dies with the window. */
+export interface Window {
     customer: string;
-    kind: EngagementKind;
-    give: Map<number, number>;
-    get: Map<number, number>;
-    startedAtMs: number;
-    opened: boolean;
+    openedAtMs: number;
+    /** Consecutive beats where the customer's side has not moved. */
+    stillBeats: number;
+    /** How many times the bot has changed its own side. */
+    reOffers: number;
+    /** Signature of the customer's side last beat. */
+    lastSig: string;
+    /** Set the moment the bot accepts, and checked again on the confirm screen. */
+    accepted: { give: Map<number, number>; get: Map<number, number> } | null;
 }
 
 /** Bank once free slots drop this low, so a purchase always has room to land. */
@@ -30,81 +27,82 @@ function key(name: string): string {
     return name.trim().toLowerCase();
 }
 
-/** Live quotes, cooldowns, and the single customer being served. There is no queue. */
-// Why: a list of who is next can be camped or filled with throwaway names, so the race is settled by whoever opens a trade first and by the engine turning the rest away.
+/** Chat intents, cooldowns, and the one open window. */
+// Why: there is no queue and no quote. The engine allows one window per player, so the server is the mutex and the window is the transaction.
 export class Desk {
-    private quotes = new Map<string, Quote>();
+    private intents = new Map<string, Intent>();
     private cooldowns = new Map<string, number>();
-    private serving: Engagement | null = null;
+    private window: Window | null = null;
 
-    constructor(private readonly quoteCap: number) {}
+    constructor(private readonly intentCap: number) {}
 
-    // ---- quotes ----
+    // ---- intents ----
 
-    quote(q: Quote): void {
-        const k = key(q.customer);
-        this.quotes.delete(k);
-        this.quotes.set(k, q);
-        // Map preserves insertion order, so the first key is the oldest quote.
-        while (this.quotes.size > this.quoteCap) {
-            const oldest = this.quotes.keys().next().value;
+    remember(intent: Intent): void {
+        const k = key(intent.customer);
+        this.intents.delete(k);
+        this.intents.set(k, intent);
+        while (this.intents.size > this.intentCap) {
+            const oldest = this.intents.keys().next().value;
             if (oldest === undefined) {
                 break;
             }
-            this.quotes.delete(oldest);
+            this.intents.delete(oldest);
         }
     }
 
-    liveQuote(customer: string, nowMs: number, ttlMs: number): Quote | null {
-        const q = this.quotes.get(key(customer));
-        if (!q || nowMs - q.quotedAtMs > ttlMs) {
+    intentFor(customer: string, nowMs: number, ttlMs: number): Intent | null {
+        const i = this.intents.get(key(customer));
+        if (!i || nowMs - i.askedAtMs > ttlMs) {
             return null;
         }
-        return q;
+        return i;
     }
 
-    dropQuote(customer: string): void {
-        this.quotes.delete(key(customer));
+    forget(customer: string): void {
+        this.intents.delete(key(customer));
     }
 
-    prune(nowMs: number, ttlMs: number): void {
-        for (const [k, q] of this.quotes) {
-            if (nowMs - q.quotedAtMs > ttlMs) {
-                this.quotes.delete(k);
+    pruneIntents(nowMs: number, ttlMs: number): void {
+        for (const [k, i] of this.intents) {
+            if (nowMs - i.askedAtMs > ttlMs) {
+                this.intents.delete(k);
             }
         }
     }
 
-    quoteCount(): number {
-        return this.quotes.size;
-    }
-
-    // ---- the one transaction ----
-
-    current(): Engagement | null {
-        return this.serving;
-    }
-
-    startServing(e: Engagement): void {
-        this.serving = e;
-    }
-
-    markOpened(): void {
-        if (this.serving) {
-            this.serving.opened = true;
+    /** The oldest live intent, which is whose goods the bot fetches next. */
+    nextIntent(nowMs: number, ttlMs: number): Intent | null {
+        for (const i of this.intents.values()) {
+            if (nowMs - i.askedAtMs <= ttlMs) {
+                return i;
+            }
         }
+        return null;
     }
 
-    finishServing(): void {
-        this.serving = null;
+    intentCount(): number {
+        return this.intents.size;
     }
 
-    /** The served engagement once it has run past the window, so the caller can drop and cool it. */
-    staleServing(nowMs: number, windowMs: number): Engagement | null {
-        if (!this.serving || nowMs - this.serving.startedAtMs <= windowMs) {
-            return null;
-        }
-        return this.serving;
+    // ---- the window ----
+
+    open(customer: string, nowMs: number): Window {
+        this.window = { customer, openedAtMs: nowMs, stillBeats: 0, reOffers: 0, lastSig: '', accepted: null };
+        return this.window;
+    }
+
+    current(): Window | null {
+        return this.window;
+    }
+
+    close(): void {
+        this.window = null;
+    }
+
+    /** True once the window has run past its deadline. */
+    expired(nowMs: number, windowMs: number): boolean {
+        return this.window !== null && nowMs - this.window.openedAtMs > windowMs;
     }
 
     // ---- cooldowns ----
@@ -124,6 +122,76 @@ export class Desk {
         }
         return true;
     }
+}
+
+/** How the beat should move, given what the window looks like now. */
+export type Beat =
+    | { do: 'offer'; reason: string }
+    | { do: 'wait'; reason: string }
+    | { do: 'accept' }
+    | { do: 'give-up'; reason: string };
+
+/** One beat of an open window, as a pure decision. */
+// Why: the bot only acts on a side that has stopped moving. Any change resets both accepts, so a bot that answers every twitch never lets the trade settle.
+export function decideBeat(input: {
+    theirSig: string;
+    window: Window;
+    oweMatched: boolean;
+    oweAnything: boolean;
+    stillBeatsNeeded: number;
+    reOfferCap: number;
+}): Beat {
+    if (input.theirSig !== input.window.lastSig) {
+        return { do: 'wait', reason: 'their side moved' };
+    }
+    if (input.window.stillBeats < input.stillBeatsNeeded) {
+        return { do: 'wait', reason: 'settling' };
+    }
+    if (!input.oweAnything) {
+        return { do: 'wait', reason: 'nothing to trade yet' };
+    }
+    if (!input.oweMatched) {
+        return input.window.reOffers >= input.reOfferCap
+            ? { do: 'give-up', reason: 'too many changes in one trade' }
+            : { do: 'offer', reason: 'my side does not match what I owe' };
+    }
+    return { do: 'accept' };
+}
+
+/** Stable signature of a trade side, so "unchanged" is decidable. */
+export function sideSignature(side: ReadonlyMap<number, number>): string {
+    return [...side].sort((a, b) => a[0] - b[0]).map(([id, n]) => `${id}x${n}`).join(',');
+}
+
+export function advertiseDue(lastMs: number, nowMs: number, everySeconds: number): boolean {
+    return everySeconds > 0 && nowMs - lastMs >= everySeconds * 1000;
+}
+
+export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
+    return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
+}
+
+/** New chat lines since the last read, oldest-first. Both arrays are signatures, newest-first. */
+// Why: marking the place with only the newest signature loses a verbatim repeat, since the mark and the new line look identical, so a customer who says the same thing twice is heard once.
+export function freshChatLines(prev: readonly string[], now: readonly string[]): string[] {
+    if (prev.length === 0 || now.length === 0) {
+        return [];
+    }
+
+    for (let shift = 0; shift < now.length; shift++) {
+        let aligned = true;
+        for (let i = 0; i < prev.length && shift + i < now.length; i++) {
+            if (now[shift + i] !== prev[i]) {
+                aligned = false;
+                break;
+            }
+        }
+        if (aligned) {
+            return now.slice(0, shift).reverse();
+        }
+    }
+
+    return [...now].reverse();
 }
 
 /** Per-player command budget. */
@@ -160,44 +228,4 @@ export class RateLimiter {
         this.hits.set(k, recent);
         return true;
     }
-}
-
-export function advertiseDue(lastMs: number, nowMs: number, everySeconds: number): boolean {
-    return everySeconds > 0 && nowMs - lastMs >= everySeconds * 1000;
-}
-
-export function shouldRestock(need: ReadonlyMap<number, number>, inPack: (id: number) => number): boolean {
-    for (const [id, qty] of need) {
-        if (inPack(id) < qty) {
-            return true;
-        }
-    }
-    return false;
-}
-
-export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
-    return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
-}
-
-/** New chat lines since the last read, oldest-first. Both arrays are signatures, newest-first. */
-// Why: marking the place with only the newest signature loses a verbatim repeat, since the mark and the new line look identical, so a customer who says the same thing twice is heard once.
-export function freshChatLines(prev: readonly string[], now: readonly string[]): string[] {
-    if (prev.length === 0 || now.length === 0) {
-        return [];
-    }
-
-    for (let shift = 0; shift < now.length; shift++) {
-        let aligned = true;
-        for (let i = 0; i < prev.length && shift + i < now.length; i++) {
-            if (now[shift + i] !== prev[i]) {
-                aligned = false;
-                break;
-            }
-        }
-        if (aligned) {
-            return now.slice(0, shift).reverse();
-        }
-    }
-
-    return [...now].reverse();
 }

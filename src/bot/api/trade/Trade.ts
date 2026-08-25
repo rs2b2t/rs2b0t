@@ -7,6 +7,8 @@ const TRADE_OP = 4; // OP_PLAYER4 = "Trade with" (login.rs2: set_player_op("Trad
 const OFFER_INV = 3322; // tradeside:inv, your pack while trading; option4 = "Offer All"
 const OFFER_ALL = 4;
 const OFFER_X = 5; // tradeside option5 = "Offer X" -> count dialog
+const MY_OFFER_INV = 3415; // trademain:inv, your side of the offer
+const REMOVE_ALL = 4; // inv_button4 = @removefromtrade(slot, max)
 const ACCEPT_OFFER = 3420; // trademain:accept (first screen)
 const ACCEPT_CONFIRM = 3546; // tradeconfirm:accept (second screen)
 const DECLINE = 3422; // trademain:decline
@@ -124,6 +126,24 @@ export const Trade = {
 
         actions.answerCountDialog(n);
         return Execution.delayUntil(() => Trade.myOffer().reduce((s, o) => s + Math.max(1, o.count), 0) >= n, 4000);
+    },
+
+    /** Take everything back off your own side. */
+    // Why: re-deriving an offer from scratch is two operations and cannot drift, where nudging it item by item has to reason about what is already up.
+    async removeAll(): Promise<boolean> {
+        if (!reader.tradeOfferOpen()) {
+            return false;
+        }
+        for (let guard = 0; guard < 28; guard++) {
+            const mine = reader.tradeMyOffer();
+            if (mine.length === 0) {
+                return true;
+            }
+            const it = mine[0];
+            await Input.invButton(it.id, it.slot, MY_OFFER_INV, REMOVE_ALL);
+            await Execution.delayTicks(1);
+        }
+        return reader.tradeMyOffer().length === 0;
     },
 
     async accept(): Promise<boolean> {

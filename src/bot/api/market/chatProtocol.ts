@@ -68,16 +68,6 @@ export function formatGp(n: number): string {
     return n.toLocaleString('en-US');
 }
 
-export function formatSellQuote(name: string, qty: number, each: number): string {
-    return truncateChat(`${formatGp(qty)} x ${name} = ${formatGp(qty * each)}gp (${formatGp(each)}ea). Trade me.`);
-}
-
-export function formatBuyQuote(name: string, qty: number, each: number): string {
-    return truncateChat(
-        `I'll pay ${formatGp(qty * each)}gp for ${formatGp(qty)} ${name} (${formatGp(each)}ea). Trade me.`
-    );
-}
-
 /** Lists the matches, tagging with `#id` only when two of them read the same. */
 export function formatAmbiguous(items: readonly { name: string; id: number }[]): string {
     const seen = new Map<string, number>();
