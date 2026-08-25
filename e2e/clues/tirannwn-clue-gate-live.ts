@@ -1,22 +1,21 @@
 /** The three Regicide-gated clues (3560, 3562, 3564) through ClueSolver twice on one account:
  *  once with the quest unfinished, once with `regicide_quest` seeded complete.
- *  What this asserts is the gate. Unfinished must abandon naming Regicide; complete must not,
- *  which is all `clueGate(id, status)` does.
- *  The walk that follows is reported and never failed on: the baked nav pack still carries no
- *  edges across Isafdar, and `PACK_UNREACHABLE` names the missing loc for all three.
- *  `--expect-solve` is the flag to flip once the solver can cross REGICIDE_SEAMS. */
+ *  A pass is a solved trail. Unfinished must abandon naming Regicide; complete must walk the
+ *  clue, cross Isafdar and open the casket. The gate opening is a step on the way, not the result.
+ *  Isafdar has no baked nav edges, so the crossings come from REGICIDE_SEAMS via travelTirannwn.
+ *  `--gate-only` stops at the gate verdict and reports the walk, for bisecting a regression. */
 
 //   ~/redeploy.sh
 //   bun e2e/clues/tirannwn-clue-gate-live.ts
 //   bun e2e/clues/tirannwn-clue-gate-live.ts --ids 3564          # one clue
 //   bun e2e/clues/tirannwn-clue-gate-live.ts --open-secs 300     # longer post-gate walk
 //   HEADED=1 bun e2e/clues/tirannwn-clue-gate-live.ts --tick 150
-//   bun e2e/clues/tirannwn-clue-gate-live.ts --expect-solve      # also require the trail to finish
+//   bun e2e/clues/tirannwn-clue-gate-live.ts --gate-only         # stop at the gate, do not judge the solve
 import type { Page } from 'playwright-core';
 
 import { CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { CLUE_GATES } from '#/bot/api/ai/clues/data/clueGates.js';
-import { PACK_UNREACHABLE } from '#/bot/api/ai/clues/data/unreachable.js';
+import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
 
 import { deployIsolatedClient, fail, launchBrowser, setSettings } from '../lib/harness.js';
 import { createHarnessProof } from '../lib/harnessProof.js';
@@ -45,7 +44,8 @@ const SHUT_MS = Number(arg('shut-secs') ?? 180) * 1000;
 const OPEN_MS = Number(arg('open-secs') ?? 240) * 1000;
 /** How long to keep reading nav lines after the solve step starts, for the report. */
 const DIAG_MS = Number(arg('diag-secs') ?? 25) * 1000;
-const EXPECT_SOLVE = argv.includes('--expect-solve');
+/** Default. The clue must solve; the gate opening is a step on the way, not the result. */
+const GATE_ONLY = argv.includes('--gate-only');
 const ONLY = arg('ids')?.split(',').map(Number);
 
 const QUEST = 'Regicide';
@@ -101,7 +101,27 @@ const rx = (literal: string): string => literal.replace(/[.*+?^${}()|[\]\\]/g, '
 const gateLine = (id: number): RegExp => new RegExp(`${rx(CLUE_GATES[id]!.reason)}\\s*\\(${QUEST} reads`, 'i');
 const ANY_GATE_RE = new RegExp(`${QUEST} reads`, 'i');
 const ABANDON_RE = /abandoning [^:]+: (.+)$/;
-const SOLVED_RE = /trail (done|complete)|opened the casket|reward/i;
+// Why: ClueSolver logs this only after SolveClue reports 'clue solved', so it is the one line
+// Why: that means the trail finished rather than the walk merely progressing.
+const SOLVED_RE = /trail done . returning to the/i;
+/** How close counts as having reached the dig site or the NPC anchor. */
+const ARRIVED_TILES = 6;
+
+interface Dest { x: number; z: number; level: number }
+
+function destination(id: number): Dest {
+    const row = CLUE_DB[id]!;
+    if (row.coord) {
+        return { ...row.coord };
+    }
+    const anchor = TALK_ANCHORS[id];
+    if (!anchor) {
+        fail(`clue ${id} has neither a coord nor a talk anchor`);
+    }
+    return { x: anchor.x, z: anchor.z, level: anchor.level };
+}
+
+const cheb = (a: Dest, b: Dest): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
 const NAV_STOP_RE = /no path to|unreachable|walk timed out|could not stand/i;
 
 type Abi = {
@@ -112,8 +132,38 @@ type Abi = {
     __rs2b0t: {
         Inventory: { items(): { id: number; name: string | null }[] };
         Quests: { status(n: string): string };
+        Game: { tile(): Dest | null };
     };
 };
+
+const LOADOUT_NAME = 'tirannwn-clue';
+
+// Why: ClueSolver reads its food through `scriptFood`, which resolves the LOADOUT, not a `food`
+// Why: setting. With no loadout defined it falls back to '' and `isFood` answers false for every
+// Why: item, so Sustain never eats and the bot walks Isafdar foodless until a trap kills it.
+async function seedLoadout(page: Page): Promise<void> {
+    const ok = await page.evaluate(name => {
+        const g = globalThis as never as {
+            __rs2b0t: { Loadouts: { save(l: readonly unknown[]): void; byName(n: string): unknown } };
+        };
+        g.__rs2b0t.Loadouts.save([{
+            name,
+            worn: {
+                righthand: 'Rune scimitar',
+                torso: 'Rune chainbody',
+                legs: 'Rune platelegs',
+                head: 'Rune med helm',
+                lefthand: 'Rune kiteshield'
+            },
+            carry: [{ item: 'Shark', qty: 12 }]
+        }]);
+        return g.__rs2b0t.Loadouts.byName(name) !== null;
+    }, LOADOUT_NAME);
+    if (!ok) {
+        fail(`loadout '${LOADOUT_NAME}' did not save — ClueSolver would run foodless`);
+    }
+    console.log(`  loadout '${LOADOUT_NAME}': Shark x12 + rune gear`);
+}
 
 const t0 = Date.now();
 const stamp = (): string => `[${Math.round((Date.now() - t0) / 1000)}s]`;
@@ -146,6 +196,10 @@ interface LegOutcome {
     abandon: string | null;
     solved: boolean;
     gate: boolean;
+    /** Closest the player got to the clue's own coord, which is the Isafdar crossing proved. */
+    nearest: number;
+    /** The seeded clue left the pack, so its step completed rather than being abandoned on. */
+    consumed: boolean;
     /** ClueExecutor logged its `leg N ... solving` line, which it only reaches past `blockReason`. */
     pastGate: boolean;
 }
@@ -155,6 +209,8 @@ interface LegOutcome {
  *  through four walk attempts at 45s each on a destination the pack cannot route to. */
 async function runLeg(page: Page, id: number, budgetMs: number, diagMs?: number): Promise<LegOutcome> {
     await ensureRunnerStopped(page);
+    const dest = destination(id);
+    let nearest = 9999;
     await page.evaluate(() => {
         const g = (globalThis as never as Abi).rs2b0t;
         g.runner.start(g.registry.get('ClueSolver'));
@@ -169,6 +225,10 @@ async function runLeg(page: Page, id: number, budgetMs: number, diagMs?: number)
     let diagDeadline: number | null = null;
     while (Date.now() < deadline) {
         await page.waitForTimeout(2000);
+        const at = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Game.tile());
+        if (at && at.level === dest.level) {
+            nearest = Math.min(nearest, cheb(at, dest));
+        }
         const lines = await logLines(page);
         for (const line of lines.slice(seen)) {
             console.log(`    ${line}`);
@@ -195,8 +255,9 @@ async function runLeg(page: Page, id: number, budgetMs: number, diagMs?: number)
         }
     }
     const lines = await logLines(page);
+    const consumed = !(await holdsClue(page, id));
     await ensureRunnerStopped(page);
-    return { lines, abandon, solved, pastGate, gate: lines.some(l => ANY_GATE_RE.test(l)) };
+    return { lines, abandon, solved, pastGate, nearest, consumed, gate: lines.some(l => ANY_GATE_RE.test(l)) };
 }
 
 /** The first nav line worth quoting, so the open phase reports why the walk stopped. */
@@ -237,7 +298,8 @@ try {
     await clearChatDialogs(page, 'level-up dialog(s)');
     await giveItems(page, KIT);
     await seedItemsToBank(page, BANK_SEED, ARDOUGNE_BANK);
-    await setSettings(page, 'ClueSolver', { foodWithdraw: 12, restorePrayer: true, useTeleports: true });
+    await seedLoadout(page);
+    await setSettings(page, 'ClueSolver', { loadout: LOADOUT_NAME, foodWithdraw: 12, restorePrayer: true, useTeleports: true });
 
     // Why: `unknown` is the quest tab unread, and it would shut the gate for the wrong reason,
     // which would let the shut phase pass on an account whose journal was never loaded.
@@ -296,37 +358,43 @@ try {
             fail(`tele to the Ardougne bank did not arrive before clue ${id}`);
         }
         await seedClue(page, id);
-        const leg = await runLeg(page, id, OPEN_MS, EXPECT_SOLVE ? undefined : DIAG_MS);
+        const leg = await runLeg(page, id, OPEN_MS, GATE_ONLY ? DIAG_MS : undefined);
         if (leg.gate) {
             record({ id, phase: 'open', ok: false, detail: `still gated: ${leg.abandon ?? 'gate line with no abandon'}` });
             continue;
         }
-        if (leg.solved) {
-            record({ id, phase: 'open', ok: true, detail: 'trail solved' });
+        const reached = leg.nearest <= ARRIVED_TILES;
+        // Why: the log line alone would pass on a trail that solved some other clue, and the
+        // Why: distance alone would pass on a walk that arrived and then failed the dig. Both,
+        // Why: plus the seeded clue leaving the pack, is what "this clue was solved" means.
+        if (reached && leg.consumed) {
+            record({
+                id,
+                phase: 'open',
+                ok: true,
+                detail: `solved: reached ${leg.nearest} tiles from (${destination(id).x},${destination(id).z}), clue consumed`
+                    + `${leg.solved ? ', trail done' : ''}`
+            });
             continue;
         }
         // Why: no gate line is absence of evidence, and a leg that died in the bank stop would show
         // the same. The `leg N ... solving` line is the positive one: ClueExecutor logs it on the
         // statement after `blockReason` returns null.
+        const stopped = leg.abandon ?? navDiagnosis(leg.lines) ?? `still going at ${OPEN_MS / 1000}s`;
         if (!leg.pastGate) {
-            record({
-                id,
-                phase: 'open',
-                ok: false,
-                detail: `never reached the solve step: ${leg.abandon ?? `nothing inside ${OPEN_MS / 1000}s`}`
-            });
+            record({ id, phase: 'open', ok: false, detail: `never reached the solve step: ${stopped}` });
             continue;
         }
-        // Why: past the gate and into the walk is what this change buys. The pack has no edges
-        // across Isafdar, so the leg stopping there is the known gap, not a regression.
-        const stopped = leg.abandon ?? navDiagnosis(leg.lines) ?? 'walking when the budget ran out';
+        // Why: --gate-only stops at the gate verdict and reports the walk. It is for bisecting a
+        // Why: regression, not for judging the clue, so the default run fails here until it solves.
+        const how = `nearest=${leg.nearest === 9999 ? 'never on level' : leg.nearest} consumed=${leg.consumed}`;
         record({
             id,
             phase: 'open',
-            ok: !EXPECT_SOLVE,
-            detail: EXPECT_SOLVE
-                ? `did not solve: ${stopped}`
-                : `past the gate, then '${stopped}' — known gap: ${PACK_UNREACHABLE[id] ?? 'none recorded'}`
+            ok: GATE_ONLY,
+            detail: GATE_ONLY
+                ? `past the gate, then '${stopped}' (gate-only: not a solve)`
+                : `did not solve: ${stopped} [${how}]`
         });
     }
 
@@ -336,7 +404,7 @@ try {
         console.log(`  ${r.ok ? 'PASS' : 'FAIL'}  ${r.phase} ${r.id} ${CLUE_DB[r.id]!.obj}: ${r.detail}`);
     }
 
-    const payload = { legs: results, quest: QUEST, expectSolve: EXPECT_SOLVE, base };
+    const payload = { legs: results, quest: QUEST, gateOnly: GATE_ONLY, base };
     if (pass === results.length) {
         await proof.writeSuccess(page, payload);
         console.log(`proof=${proof.paths.successProof}`);
