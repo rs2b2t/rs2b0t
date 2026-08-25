@@ -103,3 +103,56 @@ export function decideMarketTrade(input: {
 
     return { action: 'accept' };
 }
+
+export interface MarketTradeHooks {
+    screen(): TradeScreen;
+    partnerHeader(): string | null;
+    myOffer(): OfferItem[];
+    theirOffer(): OfferItem[];
+    /** null until the confirm screen has filled. Only called on that screen. */
+    confirmMatches(expect: TradeExpectation): boolean | null;
+    offerGive(give: ReadonlyMap<number, number>): Promise<boolean>;
+    accept(): Promise<boolean>;
+    decline(): Promise<void>;
+    log(msg: string): void;
+}
+
+/** One beat of an open market trade. Call from a Task that owns the loop, since movement cancels the modal. */
+export async function driveMarketTradeBeat(
+    expect: TradeExpectation,
+    cat: Catalog,
+    hooks: MarketTradeHooks,
+    state: { waitedTicks: number }
+): Promise<TradeDecision> {
+    const screen = hooks.screen();
+    const header = hooks.partnerHeader();
+    state.waitedTicks = header === null ? state.waitedTicks + 1 : 0;
+
+    const decision = decideMarketTrade({
+        screen,
+        partnerHeader: header,
+        expect,
+        cat,
+        myOffer: hooks.myOffer(),
+        theirOffer: hooks.theirOffer(),
+        confirmMatches: screen === 'confirm' ? hooks.confirmMatches(expect) : null,
+        waitedTicks: state.waitedTicks
+    });
+
+    switch (decision.action) {
+        case 'offer':
+            await hooks.offerGive(expect.give);
+            break;
+        case 'accept':
+            await hooks.accept();
+            break;
+        case 'decline':
+            hooks.log(`trade declined: ${decision.reason}`);
+            await hooks.decline();
+            break;
+        case 'wait':
+            break;
+    }
+
+    return decision;
+}
