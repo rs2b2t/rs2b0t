@@ -10,6 +10,8 @@ const OFFER_X = 5; // tradeside option5 = "Offer X" -> count dialog
 const ACCEPT_OFFER = 3420; // trademain:accept (first screen)
 const ACCEPT_CONFIRM = 3546; // tradeconfirm:accept (second screen)
 const DECLINE = 3422; // trademain:decline
+/** Short, since on content without the trigger this wait is pure latency before the close. */
+const DECLINE_BUTTON_WAIT_MS = 1200;
 
 export interface TradeItem {
     id: number;
@@ -136,12 +138,18 @@ export const Trade = {
         return false;
     },
 
+    // Why: rs2b2t content wires declining to [if_close,trademain] / [if_close,tradeconfirm], which is what returns the offered items and tells the partner. `trademain:decline` (3422) carries no if_button trigger there, so clicking it alone answers "No trigger for [if_button,trademain:decline]" and leaves the window open with the goods in it.
     async decline(): Promise<void> {
         if (!Trade.active()) {
             return;
         }
 
         actions.ifButton(DECLINE);
+        if (await Execution.delayUntil(() => !Trade.active(), DECLINE_BUTTON_WAIT_MS)) {
+            return;
+        }
+
+        actions.closeModal();
         await Execution.delayUntil(() => !Trade.active(), 3000);
     }
 };
