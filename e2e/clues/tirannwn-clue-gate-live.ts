@@ -248,6 +248,12 @@ async function runLeg(page: Page, id: number, budgetMs: number, diagMs?: number)
             }
         }
         seen = lines.length;
+        // Why: the trail hands back a fresh clue the moment this one is solved, and letting the
+        // Why: solver start it prints that clue's own abandon under this clue's heading. Stop on
+        // Why: the verdict itself: the seeded clue gone from a pack that reached its destination.
+        if (nearest <= ARRIVED_TILES && !(await holdsClue(page, id))) {
+            break;
+        }
         if (abandon !== null || solved) {
             break;
         }
