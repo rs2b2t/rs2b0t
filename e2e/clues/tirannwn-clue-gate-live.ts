@@ -3,6 +3,8 @@
  *  A pass is a solved trail. Unfinished must abandon naming Regicide; complete must walk the
  *  clue, cross Isafdar and open the casket. The gate opening is a step on the way, not the result.
  *  Isafdar has no baked nav edges, so the crossings come from REGICIDE_SEAMS via travelTirannwn.
+ *  A fourth leg starts inside the elf camp holding a mainland clue, because a trail that chains
+ *  out has to cross the seam graph in reverse and the palisade is directed.
  *  `--gate-only` stops at the gate verdict and reports the walk, for bisecting a regression. */
 
 //   ~/redeploy.sh
@@ -10,6 +12,7 @@
 //   bun e2e/clues/tirannwn-clue-gate-live.ts --ids 3564          # one clue
 //   bun e2e/clues/tirannwn-clue-gate-live.ts --open-secs 300     # longer post-gate walk
 //   HEADED=1 bun e2e/clues/tirannwn-clue-gate-live.ts --tick 150
+//   bun e2e/clues/tirannwn-clue-gate-live.ts --no-exit           # skip the leaving-Tirannwn leg
 //   bun e2e/clues/tirannwn-clue-gate-live.ts --gate-only         # stop at the gate, do not judge the solve
 import type { Page } from 'playwright-core';
 
@@ -48,10 +51,17 @@ const DIAG_MS = Number(arg('diag-secs') ?? 25) * 1000;
 const GATE_ONLY = argv.includes('--gate-only');
 /** Prepend the unfinished-quest half, which is the only way this harness prints an abandon. */
 const CHECK_GATE = argv.includes('--check-gate');
+/** Skip the leg that starts inside Tirannwn and has to get out to a mainland clue. */
+const NO_EXIT = argv.includes('--no-exit');
 const ONLY = arg('ids')?.split(',').map(Number);
 
 const QUEST = 'Regicide';
 const ARDOUGNE_BANK = { x: 2655, z: 3283, level: 0 };
+// Why: a search 16 tiles north of the Ardougne bank, so once the palisade is behind the bot the
+// Why: rest is ordinary baked pack and the leg is a test of the way out rather than a long walk.
+const EXIT_CLUE = 2705;
+/** The elf camp, the pocket furthest inside, so the way out is the full seam chain. */
+const EXIT_START = { x: 2205, z: 3252, level: 0 };
 const REGICIDE_COMPLETE = 15;
 const UPASS_COMPLETE = 10;
 // Why: every orb, badge and the horn, the bits `cave_well` and the temple doors read; seeded
@@ -277,7 +287,7 @@ function navDiagnosis(lines: readonly string[]): string | null {
 
 interface Result {
     id: number;
-    phase: 'shut' | 'open';
+    phase: 'shut' | 'open' | 'exit';
     ok: boolean;
     detail: string;
 }
@@ -411,6 +421,46 @@ try {
                 ? `past the gate, then '${stopped}' (gate-only: not a solve)`
                 : `did not solve: ${stopped} [${how}]`
         });
+    }
+
+    // Why: every leg above walks INTO Tirannwn. A trail that chains to the mainland has to come
+    // Why: back out, and that is a different route through the seam graph: the palisade is directed
+    // Why: and the pockets are crossed in reverse.
+    if (!NO_EXIT && !CHECK_GATE) {
+        const row = CLUE_DB[EXIT_CLUE]!;
+        console.log(`\n════ leaving Tirannwn for ${row.obj} at (${row.coord!.x},${row.coord!.z}) ════`);
+        if (!(await teleTo(page, EXIT_START, 10, 25_000))) {
+            fail(`tele into the elf camp at ${EXIT_START.x},${EXIT_START.z} did not arrive`);
+        }
+        await seedClue(page, EXIT_CLUE);
+        const leg = await runLeg(page, EXIT_CLUE, OPEN_MS);
+        const out = leg.lines.some(l => /overpass_gate_(left|right) → ardougne/.test(l));
+        const stopped = leg.abandon ?? navDiagnosis(leg.lines) ?? `still going at ${OPEN_MS / 1000}s`;
+        // Why: solving it is not enough. Before the seam graph could report an outbound crossing,
+        // Why: the bot still got out, by walking to Port Sarim and paying for a boat to Karamja and
+        // Why: back. That is a pass on the clue and a failure of the way out, so the gate is asserted.
+        if (leg.nearest <= ARRIVED_TILES && leg.consumed && out) {
+            record({
+                id: EXIT_CLUE,
+                phase: 'exit',
+                ok: true,
+                detail: `out through the palisade and solved: ${leg.nearest} tiles from (${row.coord!.x},${row.coord!.z})`
+            });
+        } else if (leg.nearest <= ARRIVED_TILES && leg.consumed) {
+            record({
+                id: EXIT_CLUE,
+                phase: 'exit',
+                ok: false,
+                detail: 'solved, but left Tirannwn without crossing the palisade — the seam graph did not take it out'
+            });
+        } else {
+            record({
+                id: EXIT_CLUE,
+                phase: 'exit',
+                ok: false,
+                detail: `did not get out and solve: ${stopped} [nearest=${leg.nearest === 9999 ? 'never on level' : leg.nearest} palisade=${out}]`
+            });
+        }
     }
 
     const pass = results.filter(r => r.ok).length;

@@ -5,7 +5,6 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
-import { Traversal } from '../../api/walking/Traversal.js';
 import { Paint } from '../../paint/Paint.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -16,7 +15,7 @@ import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { ClueExecutor } from '../../api/ai/clues/ClueExecutor.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
-import { SolveClue, heldClueLikeId } from '../../api/ai/clues/SolveClue.js';
+import { SolveClue, heldClueLikeId, walkToBank } from '../../api/ai/clues/SolveClue.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
@@ -99,7 +98,7 @@ export default class ClueSolver extends TaskBot {
                 if (Math.max(Math.abs(bank.tile.x - here.x), Math.abs(bank.tile.z - here.z)) > 3) {
                     this.setStatus(`returning to the ${bank.name} bank`);
                     this.log(`[clue] trail done — returning to the ${bank.name} bank (${bank.tile})`);
-                    if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.log(`  ${m}`) }))) {
+                    if (!(await walkToBank(bank.tile, m => this.log(`  ${m}`)))) {
                         this.log('[clue] walk to the bank failed — idling here');
                         this.returnToBank = false;
                         this.setStatus('waiting for a clue');

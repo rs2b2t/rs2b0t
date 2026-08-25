@@ -7,6 +7,8 @@ import type { Task } from '#/bot/api/bot/Bot.js';
 import { Prayer } from '#/bot/api/prayer/Prayer.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
+import { crossesTirannwn, walkAcrossTirannwn } from '#/bot/api/ai/clues/tirannwnTravel.js';
+import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { foodHealAmount, shouldEatToUseFood } from '#/bot/api/combat/food.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
@@ -74,6 +76,16 @@ export interface SolveClueHost {
     restorePrayer?(): boolean;
     /** Route trail legs through the teleport catalog and stock the runes. */
     useTeleports?(): boolean;
+}
+
+// Why: nearestBank from inside the elf camp answers the Grand Tree, and the walk there crosses
+// Why: Isafdar, which the baked pack cannot route. The bank stop runs before every trail, so a clue
+// Why: that leads into Tirannwn strands the bot on its own prep rather than on the clue.
+export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<boolean> {
+    if (crossesTirannwn(tile)) {
+        return walkAcrossTirannwn(tile, 3, log);
+    }
+    return Traversal.walkResilient(tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log });
 }
 
 export class SolveClue implements Task {
@@ -225,7 +237,7 @@ export class SolveClue implements Task {
         this.host.setStatus('clue — reclaiming stripped gear');
         this.host.log(`[clue] reclaiming gear banked for Entrana: ${want.join(', ')}`);
 
-        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.host.log(`  ${m}`) }))) {
+        if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] walk to the bank failed — gear stays banked, will retry');
             return;
         }
@@ -268,7 +280,7 @@ export class SolveClue implements Task {
         this.host.setStatus('clue — banking loot before the trail');
         this.host.log(`[clue] banking loot at the ${bank.name} bank (${bank.tile}) before solving`);
 
-        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => this.host.log(`  ${m}`) }))) {
+        if (!(await walkToBank(bank.tile, m => this.host.log(`  ${m}`)))) {
             this.host.log('[clue] walk to the bank failed — will retry');
             return false;
         }

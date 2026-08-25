@@ -29,9 +29,7 @@ import { casketRewardSlots } from '#/bot/api/ai/clues/packPlan.js';
 import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { talkThrough } from '#/bot/api/ai/quests/exec/primitives.js';
-import { pocketAt, travelTirannwn } from '#/bot/api/ai/quests/defs/regicide/pockets.js';
-import { RG_STAGE } from '#/bot/api/ai/quests/defs/regicide/journal.js';
-import Tile from '#/bot/geometry/Tile.js';
+import { crossesTirannwn, walkAcrossTirannwn } from '#/bot/api/ai/clues/tirannwnTravel.js';
 import { Reach } from '#/bot/api/walking/Reach.js';
 import { WalkExecutor } from '#/bot/event/webwalk/WalkExecutor.js';
 
@@ -121,19 +119,13 @@ function walkOpts(log: (m: string) => void, radius = ARRIVE_RADIUS): Parameters<
 /** Tolls already bought this trail, so a stuck leg cannot shop in a loop. */
 const gateItemsTried = new Set<string>();
 
-// Why: the seam graph gates the dense forests on stage 8 and the palisade southbound on 13, so a
-// Why: journal that does not read complete must not be handed a stage that opens them.
-function tirannwnStage(): number {
-    return Quests.status('Regicide') === 'complete' ? RG_STAGE.COMPLETE : RG_STAGE.NOT_STARTED;
-}
-
 /**
  * Walk a clue leg, treating an unpayable toll as a shopping trip rather than a dead end.
  * Why: the navigator names what the route was short of, the Kharidian desert has one entrance and it eats a Shantay pass, so a leg failing for want of a 5gp ticket buys one and walks again.
  */
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
-    if (pocketAt(dest) !== undefined || pocketAt(Game.tile()) !== undefined) {
-        return travelTirannwn(new Tile(dest.x, dest.z, dest.level), radius, tirannwnStage(), log);
+    if (crossesTirannwn(dest)) {
+        return walkAcrossTirannwn(dest, radius, log);
     }
     if (await Traversal.walkResilient(dest, walkOpts(log, radius))) {
         return true;
@@ -417,11 +409,10 @@ async function acquireRiddleKey(kf: NonNullable<ClueRow['keyFrom']>, huntTile: N
 // Why: reach logic finish the approach inside it.
 async function reachTirannwn(step: ClueStep, log: (m: string) => void): Promise<void> {
     const target = stepTarget(step);
-    const pocket = target ? pocketAt(target) : undefined;
-    if (target === null || pocket === undefined || pocketAt(Game.tile()) === pocket) {
+    if (target === null || !crossesTirannwn(target)) {
         return;
     }
-    await travelTirannwn(new Tile(target.x, target.z, target.level), ARRIVE_RADIUS, tirannwnStage(), log);
+    await walkAcrossTirannwn(target, ARRIVE_RADIUS, log);
 }
 
 async function dispatch(step: ClueStep, log: (m: string) => void): Promise<void> {

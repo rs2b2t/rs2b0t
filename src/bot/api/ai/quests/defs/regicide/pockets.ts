@@ -117,10 +117,22 @@ const CROSS_TRIES = 8;
 /** Walks to a crossing's bank that may answer `unreachable`, each costing its own timeout. */
 const STAND_TRIES = 3;
 const STAND_MS = 45_000;
+// Why: a crossing's bank is metres away inside the same pocket, so the walk to it has no business
+// Why: in the transport graph. Left open, the navigator answered a blocked gate stand with a ship
+// Why: to Karamja and carried the player out of Tirannwn before reporting that it had failed.
+const LOCAL_WALK = { useTeleportCatalog: false, policy: { useTeleports: false } } as const;
 /** Refused crossings tolerated across one journey before the destination is called unreachable. */
 const CROSS_FAILS = 3;
 /** `regicide_trap_hand_holds`, the way out of a spike pit. */
 const HAND_HOLDS = 3927;
+
+// Why: pocketAt answers undefined for every tile the palisade does not seal in, and ARDOUGNE is the
+// Why: name the graph gives that outside. Comparing the raw answer to a leg's target pocket made
+// Why: every crossing OUT of Tirannwn read as a failure at the moment it succeeded, so it spent its
+// Why: retry budget re-entering the gate and then handed the leg to a ship route.
+function standingIn(): string {
+    return pocketAt(Game.tile()) ?? ARDOUGNE;
+}
 
 function seamLoc(seam: RegicideSeam): Loc | null {
     return Locs.query()
@@ -158,7 +170,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
     const stand = new Tile(leg.from.stand.x, leg.from.stand.z, 0);
     let walkFails = 0;
     for (let attempt = 0; attempt < CROSS_TRIES; attempt++) {
-        if (pocketAt(Game.tile()) === leg.to.pocket) {
+        if (standingIn() === leg.to.pocket) {
             return true;
         }
         if ((Game.tile()?.z ?? 0) > 9000 && !(await climbOutOfPit(log))) {
@@ -166,7 +178,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
         }
         // Why: a failed jump is 15 damage and a fall, the tripwires poison, and the sticks hit for 8, a crossing retried eight times is a fight the walk between attempts is too short to pay for on its own.
         await Sustain.run();
-        if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: STAND_MS, log }))) {
+        if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: STAND_MS, log, ...LOCAL_WALK }))) {
             // Why: bounded separately from the roll budget, because a walk that cannot answer burns
             // Why: its full timeout every attempt while a failed roll costs a couple of ticks.
             if (++walkFails >= STAND_TRIES) {
@@ -185,7 +197,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void): Promise<boolea
         if (!(await loc.interact(leg.seam.op))) {
             continue;
         }
-        if (await Execution.delayUntil(() => pocketAt(Game.tile()) === leg.to.pocket, CROSS_MS)) {
+        if (await Execution.delayUntil(() => standingIn() === leg.to.pocket, CROSS_MS)) {
             const now = Game.tile();
             log(`${leg.seam.op} ${leg.seam.loc} → ${leg.to.pocket} (${now?.x},${now?.z})`);
             return true;
