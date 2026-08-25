@@ -55,6 +55,23 @@ describe('parseCommand', () => {
         expect(parseCommand('selling')).toEqual({ kind: 'selling' });
     });
 
+    test('several words ask for the book', () => {
+        for (const word of ['list', 'book', 'rates', 'stock', 'prices']) {
+            expect(parseCommand(word)).toEqual({ kind: 'prices' });
+        }
+    });
+
+    // Why: the engine filters every public message before broadcasting, and reads "pric" as an obfuscated
+    // Why: slur, so a customer typing "prices" reaches the shop as "****es".
+    test('the censored form of prices still asks for the book', () => {
+        expect(parseCommand('****es')).toEqual({ kind: 'prices' });
+    });
+
+    test('stars alone are not a command', () => {
+        expect(parseCommand('****')).toEqual({ kind: 'none' });
+        expect(parseCommand('***')).toEqual({ kind: 'none' });
+    });
+
     test('a keyword with no count is not a command', () => {
         expect(parseCommand('buy me a beer')).toEqual({ kind: 'none' });
     });

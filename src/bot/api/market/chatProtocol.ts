@@ -29,6 +29,10 @@ export function parseCount(token: string): number | 'all' | null {
 /** Words that mean the speaker wants to buy, and the speaker wants to sell. */
 const BUYING = new Set(['buy', 'buying']);
 const SELLING = new Set(['sell', 'selling']);
+/** Ways of asking for the book. */
+const LISTING = new Set(['list', 'book', 'rates', 'stock', 'prices']);
+// Why: the engine filters every public message before broadcasting it (MessagePublicHandler), and it reads "pric" as an obfuscated slur, so "prices" reaches the shop as "****es" and never parses.
+const CENSORED_PRICES = /^\*+es$/;
 
 // Why: a line only counts as a command when every part parses, so ordinary chat like "buy me a beer" is ignored in silence rather than answered.
 export function parseCommand(text: string): Command {
@@ -40,7 +44,7 @@ export function parseCommand(text: string): Command {
     const head = parts[0].toLowerCase();
 
     if (parts.length === 1) {
-        if (head === 'prices') {
+        if (LISTING.has(head) || CENSORED_PRICES.test(head)) {
             return { kind: 'prices' };
         }
         if (head === 'buying') {
@@ -70,10 +74,11 @@ export function parseCommand(text: string): Command {
 }
 
 /** How to use the shop, in lines that fit the chat limit. */
+// Why: every line here is broadcast through the engine's word filter, so the words have to survive it.
 export const HELP_LINES: readonly string[] = [
     'To SELL to me: trade me and put items in. I price them as you go.',
     "To BUY from me: say 'buying 100 iron ore', then trade me and put up coins.",
-    "Say 'prices' for my book, or 'help' for this again."
+    "Say 'list' for my book, or 'help' for this again."
 ];
 
 export function truncateChat(text: string): string {

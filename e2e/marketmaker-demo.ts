@@ -124,9 +124,12 @@ ${gifts}
   4. BUYING FROM IT needs one line in PUBLIC chat first, because a trade window
      cannot carry "I want 100 iron ore":
 
-       buy 100 iron ore           names what you want, at its price
-       prices                     what it trades, both sides
+       buying 100 iron ore        names what you want, at its price
+       list                       what it trades, both sides
        buying / selling           one side of the book
+       help                       how to use it, in the shop's own words
+
+     A leading slash works too: /help, /list, /buying 100 iron ore.
 
      Then trade it and put up coins. It hands over as much as your coins cover,
      so 1,100gp against a 22gp item gets you 50, not a refusal.
