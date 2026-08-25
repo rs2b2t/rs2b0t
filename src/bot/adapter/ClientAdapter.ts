@@ -322,6 +322,24 @@ export function setPacketListener(cb: ((ptype: number) => void) | null): void {
     packetListener = cb;
 }
 
+/** One obj definition, flattened for bot code that may not import client internals. */
+export interface ObjRecord {
+    id: number;
+    name: string;
+    cost: number;
+    stackable: boolean;
+    members: boolean;
+    certlink: number;
+    certtemplate: number;
+}
+
+let objCatalogCache: ObjRecord[] | null = null;
+
+/** Test seam; the live client only fills this table once, at login. */
+export function resetObjCatalog(): void {
+    objCatalogCache = null;
+}
+
 export const reader = {
     attached(): boolean {
         return raw !== null;
@@ -947,6 +965,38 @@ export const reader = {
 
     inventory(): InvItemSnapshot[] {
         return readInvComponent(findTabInvComponent(3), type => heldOps(type.iop));
+    },
+
+    // Why: call after login, since a free world rewrites every members item's name to "Members Object".
+    objCatalog(): ObjRecord[] {
+        if (objCatalogCache) {
+            return objCatalogCache;
+        }
+
+        const out: ObjRecord[] = [];
+        for (let id = 0; id < ObjType.numDefinitions; id++) {
+            let type: ObjType;
+            try {
+                type = ObjType.list(id);
+            } catch {
+                break;
+            }
+            if (type.name === null) {
+                continue;
+            }
+            out.push({
+                id,
+                name: type.name,
+                cost: type.cost,
+                stackable: type.stackable,
+                members: type.members,
+                certlink: type.certlink,
+                certtemplate: type.certtemplate
+            });
+        }
+
+        objCatalogCache = out;
+        return out;
     },
 
     inventorySize(): number {
