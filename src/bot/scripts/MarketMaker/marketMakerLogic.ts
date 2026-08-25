@@ -16,6 +16,8 @@ export interface Window {
     reOffers: number;
     /** Signature of the customer's side last beat. */
     lastSig: string;
+    /** True once the modal has been seen open on this client. */
+    sawOpen: boolean;
     /** Set the moment the bot accepts, and checked again on the confirm screen. */
     accepted: { give: Map<number, number>; get: Map<number, number> } | null;
 }
@@ -88,7 +90,7 @@ export class Desk {
     // ---- the window ----
 
     open(customer: string, nowMs: number): Window {
-        this.window = { customer, openedAtMs: nowMs, stillBeats: 0, reOffers: 0, lastSig: '', accepted: null };
+        this.window = { customer, openedAtMs: nowMs, stillBeats: 0, reOffers: 0, lastSig: '', sawOpen: false, accepted: null };
         return this.window;
     }
 

@@ -68,6 +68,10 @@ const STILL_BEATS = 3;
 const REOFFER_CAP = 12;
 // Why: the engine shuts the offer screen a tick before it opens the confirm screen, so a bare "not open" read drops a trade that is completing normally.
 const TRADE_GONE_MS = 3_000;
+/** How long to wait for a window we asked for to appear on this client. */
+const OPEN_WAIT_MS = 10_000;
+/** Why: a bank task that can fail and immediately re-validate is a livelock, so a failed trip backs off. */
+const BANK_BACKOFF_MS = 30_000;
 
 export const MARKET_MAKER_SETTINGS: SettingsSchema = {
     priceBook: {
@@ -163,6 +167,8 @@ export default class MarketMaker extends TaskBot {
     private readonly tradeRequests = new Set<string>();
     private tradeClosedAt: number | null = null;
     private lastTold = '';
+    private bankBackoffUntil = 0;
+    private lastStrayLog = 0;
 
     private lastAdvertiseAt = 0;
     private advertiseCursor = 0;
@@ -231,6 +237,13 @@ export default class MarketMaker extends TaskBot {
         );
     }
 
+    /** Talking is not a task. */
+    // Why: draining in the lowest-priority task means the shop goes mute for the length of any bank trip, which is exactly when a customer is waiting on an answer.
+    override async loop(): Promise<number | void> {
+        this.drainChat();
+        return super.loop();
+    }
+
     // ---- state the tasks read -------------------------------------------
 
     activeBook(): PriceBook {
@@ -271,6 +284,24 @@ export default class MarketMaker extends TaskBot {
 
     float(): number {
         return this.coinFloat;
+    }
+
+    /** A modal the bot did not mean to have open is worth saying out loud, once in a while. */
+    noteStray(comId: number): void {
+        const now = Date.now();
+        if (now - this.lastStrayLog > 5_000) {
+            this.lastStrayLog = now;
+            this.log(`stray modal ${comId} open, closing it`);
+        }
+    }
+
+    bankReady(nowMs: number): boolean {
+        return nowMs >= this.bankBackoffUntil;
+    }
+
+    backOffBank(reason: string): void {
+        this.bankBackoffUntil = Date.now() + BANK_BACKOFF_MS;
+        this.log(`bank trip fell short (${reason}) — backing off ${BANK_BACKOFF_MS / 1000}s`);
     }
 
     requests(): Set<string> {
@@ -344,13 +375,16 @@ export default class MarketMaker extends TaskBot {
         return Inventory.countById(this.coinId);
     }
 
-    /** What the bot can hand over and pay with this instant. */
-    // Why: only what is in the pack can go into a window, so `available` is the pack and never the bank.
+    /** What the bot can hand over and pay with now: the pack, plus whatever is already on our own side. */
+    // Why: an item in the offer has left the pack view, so counting the pack alone makes the bot appraise itself as empty the moment it puts something up, owe nothing, and wait out the window.
     deskState(): DeskState {
+        const mine = Trade.active()
+            ? normaliseOffer(this.cat, Trade.myOffer() as OfferItem[])
+            : new Map<number, number>();
         return {
-            available: id => this.packCount(id),
-            held: id => this.ledger.held(id) + this.packCount(id),
-            purse: this.packCoins()
+            available: id => this.packCount(id) + (mine.get(id) ?? 0),
+            held: id => this.ledger.held(id) + this.packCount(id) + (mine.get(id) ?? 0),
+            purse: this.packCoins() + (mine.get(this.coinId) ?? 0)
         };
     }
 
@@ -529,6 +563,14 @@ export default class MarketMaker extends TaskBot {
         this.say(`Thanks ${customer}. Pleasure doing business.`);
     }
 
+    /** Let a customer go without a cooldown, for a failure that was not theirs. */
+    release(customer: string, reason: string): void {
+        this.desk.close();
+        this.tradeClosedAt = null;
+        this.lastTold = '';
+        this.log(`released ${customer}: ${reason}`);
+    }
+
     /** Drop the window in flight and ignore the customer for a while. */
     // Why: a stall and a probe of the refusal rules look identical from here, so the cost lands on whoever failed the trade rather than on everyone behind them.
     abandon(customer: string, reason: string): void {
@@ -563,7 +605,14 @@ export default class MarketMaker extends TaskBot {
             return;
         }
 
-        if (open && open.lastSig !== '' && !Trade.active()) {
+        // Why: a request sent as a modal closes can open the window on their client alone, leaving the bot holding one it cannot see until the deadline.
+        if (open && !open.sawOpen && now - open.openedAtMs > OPEN_WAIT_MS) {
+            this.say('That did not open. Trade me again.');
+            this.release(open.customer, 'the window never opened on my side');
+            return;
+        }
+
+        if (open && open.sawOpen && !Trade.active()) {
             if (this.tradeClosedAt === null) {
                 this.tradeClosedAt = now;
             } else if (now - this.tradeClosedAt >= TRADE_GONE_MS) {
@@ -645,8 +694,10 @@ class Recover implements Task {
     }
 
     async execute(): Promise<void> {
-        if (reader.modals().main !== -1) {
+        const main = reader.modals().main;
+        if (main !== -1) {
             this.bot.setStatus('closing a stray window');
+            this.bot.noteStray(main);
             actions.closeModal();
             await Execution.delayTicks(1);
             return;
@@ -667,6 +718,10 @@ class ServeWindow implements Task {
 
     async execute(): Promise<void> {
         const w = this.bot.counter().current()!;
+        if (!w.sawOpen) {
+            this.bot.log(`window with ${w.customer} is open on my side`);
+        }
+        w.sawOpen = true;
         const partner = Trade.partner();
         if (partner !== null && !sameName(partner, w.customer)) {
             this.bot.log(`window opened with ${partner}, not ${w.customer} — declining`);
@@ -758,19 +813,33 @@ class OpenWindow implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
     validate(): boolean {
-        return this.bot.counter().current() === null && this.bot.requests().size > 0 && !Trade.active();
+        // Why: requesting while the bank is still closing opens the window on their client and not on ours, and the bot then owns a window it cannot see.
+        return this.bot.counter().current() === null
+            && this.bot.requests().size > 0
+            && !Trade.active()
+            && reader.modals().main === -1;
     }
 
     async execute(): Promise<void> {
-        const asked = [...this.bot.requests()];
-        this.bot.requests().clear();
-
-        for (const name of asked) {
-            if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, Date.now())) {
+        const now = Date.now();
+        for (const name of [...this.bot.requests()]) {
+            if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
+                this.bot.requests().delete(name);
                 continue;
             }
+
+            // Why: opening before the goods are in the pack strands the window, because Restock cannot run while one is open and the bot then owes nothing until the deadline.
+            const want = this.bot.counter().intentFor(name, now, this.bot.intentTtl());
+            if (want !== null && this.bot.packCount(want.itemId) < want.maxQty) {
+                const what = this.bot.catalog().byId.get(want.itemId)?.name ?? 'that';
+                this.bot.say(`Fetching your ${what}, one moment.`);
+                continue;
+            }
+
+            this.bot.requests().delete(name);
             this.bot.setStatus(`opening a window with ${name}`);
-            this.bot.counter().open(name, Date.now());
+            this.bot.log(`opening a window with ${name}`);
+            this.bot.counter().open(name, now);
             if (!(await Trade.request(name))) {
                 this.bot.log(`${name} is not in range to trade`);
                 this.bot.say(`${name}, stand next to me.`);
@@ -787,6 +856,9 @@ class Restock implements Task {
 
     validate(): boolean {
         if (Trade.active() || this.bot.counter().current() !== null) {
+            return false;
+        }
+        if (!this.bot.bankReady(Date.now())) {
             return false;
         }
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl());
@@ -809,7 +881,7 @@ class Restock implements Task {
             await Bank.withdrawXById(want.itemId, short);
             // Why: note mode delivers the cert id, so Bank.withdrawXById waits on an id that never arrives and reports false on a withdrawal that worked.
             if (!(await Execution.delayUntil(() => this.bot.packCount(want.itemId) >= want.maxQty, 5_000))) {
-                this.bot.log(`bank came up short on ${name}: ${this.bot.packCount(want.itemId)}/${want.maxQty}`);
+                this.bot.backOffBank(`${name} ${this.bot.packCount(want.itemId)}/${want.maxQty}`);
             }
         }
 
@@ -823,7 +895,7 @@ class Settle implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
     validate(): boolean {
-        if (Trade.active() || this.bot.counter().current() !== null) {
+        if (Trade.active() || this.bot.counter().current() !== null || !this.bot.bankReady(Date.now())) {
             return false;
         }
         if (this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
@@ -836,19 +908,27 @@ class Settle implements Task {
     async execute(): Promise<void> {
         this.bot.setStatus('banking the takings');
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {
+            this.bot.backOffBank('could not open the bank');
             return;
         }
 
-        // Why: deposit everything and take the float back, so a new item never squats a slot forever.
-        await Bank.depositAllMatching(() => true, m => this.bot.log(m));
-        await this.bot.refreshLedger();
-
-        const float = Math.min(this.bot.float(), this.bot.stock().coins());
-        if (float > 0) {
-            await Bank.setNoteMode(false);
-            await Bank.withdrawXById(this.bot.coins(), float);
+        // Why: an empty pack has nothing to deposit, and the deposit path bails on the side backpack view rather than no-opping.
+        if (Inventory.used() > 0) {
+            await Bank.depositAllMatching(() => true, m => this.bot.log(m));
         }
-        await this.bot.refreshLedger();
+
+        // Why: read the float off the live bank rather than the ledger, which is stale exactly when a trip has gone wrong.
+        const short = this.bot.float() - this.bot.packCoins();
+        const inBank = Bank.countById(this.bot.coins());
+        if (short > 0 && inBank > 0) {
+            await Bank.setNoteMode(false);
+            await Bank.withdrawXById(this.bot.coins(), Math.min(short, inBank));
+            await Execution.delayUntil(() => this.bot.packCoins() >= Math.min(this.bot.float(), inBank), 5_000);
+        }
+
+        if (!(await this.bot.refreshLedger()) || this.bot.packCoins() < Math.min(this.bot.float(), inBank)) {
+            this.bot.backOffBank(`float ${this.bot.packCoins()}/${this.bot.float()}`);
+        }
         await Bank.close();
     }
 }
@@ -900,7 +980,6 @@ class Listen implements Task {
             this.bot.handleCommand(from, line.text);
         }
 
-        this.bot.drainChat();
         await Execution.delayTicks(1);
     }
 }

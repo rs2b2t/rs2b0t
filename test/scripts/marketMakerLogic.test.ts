@@ -26,6 +26,7 @@ function windowAt(over: Partial<Window> = {}): Window {
         stillBeats: 3,
         reOffers: 0,
         lastSig: '440x100',
+        sawOpen: true,
         accepted: null,
         ...over
     };
@@ -97,6 +98,12 @@ describe('one window at a time', () => {
         expect(w.stillBeats).toBe(0);
         expect(w.reOffers).toBe(0);
         expect(desk.current()).toBe(w);
+    });
+
+    // Why: asking for a window is not the same as getting one. A request sent as a modal closes opens
+    // Why: it on their client alone, and the bot would otherwise hold a window it cannot see.
+    test('a fresh window has not been seen open yet', () => {
+        expect(desk.open('alice', 0).sawOpen).toBe(false);
     });
 
     test('closing clears it', () => {

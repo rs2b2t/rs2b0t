@@ -181,7 +181,7 @@ describe('selling: coins on their side buy what they cover', () => {
         expect(a.total).toBe(2200);
     });
 
-    // Why: short money buying fewer units is the whole point of pricing the window live.
+    // Why: short money buying fewer units is the point of pricing the window live.
     test('short money buys fewer', () => {
         const a = look([item(COINS, 'Coins', 1100)], { intent, desk: stocked });
         expect([...a.owe]).toEqual([[IRON, 50]]);
