@@ -593,11 +593,33 @@
             border: 1px solid #a83232;
         }
 
+        /* The header stays put while the rows scroll under it, so the columns stay named in an 80-item book. */
+        .rs2b0t-pricebook-head {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #131313;
+        }
+
         .rs2b0t-pricebook-head .rs2b0t-pricebook-cell {
             font-size: 10px;
             color: #888;
             text-transform: uppercase;
             letter-spacing: 0.04em;
+        }
+
+        /* Mid, buy, sell and cap read as columns; the two toggles sit centred over their buttons. */
+        .rs2b0t-pricebook-head .rs2b0t-pricebook-cell:nth-child(n+3):nth-child(-n+6) {
+            justify-content: flex-end;
+        }
+
+        .rs2b0t-pricebook-head .rs2b0t-pricebook-cell:nth-child(7),
+        .rs2b0t-pricebook-head .rs2b0t-pricebook-cell:nth-child(8) {
+            justify-content: center;
+        }
+
+        .rs2b0t-pricebook-row:nth-of-type(even) {
+            background: rgba(255, 255, 255, 0.022);
         }
 
         .rs2b0t-pricebook-cell {
@@ -620,6 +642,9 @@
             width: 100%;
             min-width: 0;
             font-size: 11px;
+            /* Why: prices are compared down the column, so the digits have to line up and share a width. */
+            text-align: right;
+            font-variant-numeric: tabular-nums;
         }
 
         .rs2b0t-pricebook-cell .rs2b0t-loadout-qty[data-pinned] {
@@ -652,6 +677,104 @@
             font-size: 12px;
             color: #777;
             padding: 8px 4px;
+        }
+
+        /* --- order book: shelves, sorting, bulk add ----------------------- */
+        .rs2b0t-pricebook-shelfbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding-bottom: 2px;
+        }
+
+        .rs2b0t-pricebook-chip {
+            background: #1c1c1c;
+            border: 1px solid #333;
+            border-radius: 10px;
+            color: #9a9a9a;
+            font-size: 10px;
+            padding: 2px 8px;
+            cursor: pointer;
+        }
+
+        .rs2b0t-pricebook-chip:hover {
+            border-color: #555;
+            color: #ccc;
+        }
+
+        .rs2b0t-pricebook-chip[data-on=true] {
+            background: #223040;
+            border-color: #3f6b9c;
+            color: #cfe2ff;
+        }
+
+        .rs2b0t-pricebook-sort {
+            background: none;
+            border: 0;
+            padding: 0;
+            font: inherit;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #888;
+            cursor: pointer;
+        }
+
+        .rs2b0t-pricebook-sort:hover {
+            color: #ccc;
+        }
+
+        .rs2b0t-pricebook-sort[data-on=true] {
+            color: #cfe2ff;
+        }
+
+        .rs2b0t-pricebook-note {
+            font-size: 11px;
+            color: #888;
+            padding-bottom: 4px;
+        }
+
+        .rs2b0t-pricebook-shelves {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+
+        .rs2b0t-pricebook-shelf {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto 96px;
+            align-items: center;
+            gap: 8px;
+            padding: 3px 4px;
+            border-radius: 3px;
+        }
+
+        .rs2b0t-pricebook-shelf:nth-child(even) {
+            background: rgba(255, 255, 255, 0.022);
+        }
+
+        .rs2b0t-pricebook-shelf-name {
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        .rs2b0t-pricebook-shelf-count {
+            font-size: 10px;
+            color: #888;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rs2b0t-pricebook-shelf-add {
+            font-size: 11px;
+            padding: 2px 0;
+        }
+
+        .rs2b0t-pricebook-shelf-add:disabled {
+            color: #04a800;
+            cursor: default;
+            opacity: 0.7;
         }
 
         .rs2b0t-pricebook-addbar {

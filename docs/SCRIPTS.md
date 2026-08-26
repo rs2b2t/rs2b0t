@@ -706,13 +706,13 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 
 ### MarketMaker
 
-Player shop — stands at a bank, buys and sells the items in a price book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted
+Player shop — stands at a bank, buys and sells the items in an order book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted
 
 - Tags: `trading`, `shop`, `bank`, `chat`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `priceBook` | string | `""` | Price book — one of:  |
+| `priceBook` | string | `""` | Order book — one of:  |
 | `spot` | tile | `{"x":2725,"z":3491,"level":0}` | Stand tile (x,z) |
 | `advertiseSeconds` | number (0–600) | `60` | Advertise every (s) |
 | `engagementTimeoutSeconds` | number (15–600) | `90` | Transaction window (s) |

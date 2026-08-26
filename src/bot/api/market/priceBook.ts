@@ -20,7 +20,8 @@ export interface PriceBook {
     rows: PriceRow[];
 }
 
-export const DEFAULT_MARGIN = 20;
+/** Total spread a new book quotes, split either side of mid. */
+export const DEFAULT_MARGIN = 5;
 export const DEFAULT_MAX_TRADE = 1_000_000;
 
 function int(value: unknown, fallback: number): number {

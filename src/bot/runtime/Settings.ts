@@ -519,7 +519,7 @@ export const LOADOUT_SETTINGS: SettingsSchema = {
 };
 
 /**
- * Player-defined price books. Storage only, the price book panel owns editing,
+ * Player-defined order books. Storage only, the order book panel owns editing,
  * so this never appears in a settings modal.
  */
 export const PRICE_BOOK_SETTINGS_NS = 'PriceBooks';
@@ -528,8 +528,8 @@ export const PRICE_BOOK_SETTINGS: SettingsSchema = {
     books: {
         type: 'string',
         default: '[]',
-        label: 'Price books',
-        help: 'JSON written by the price book panel'
+        label: 'Order books',
+        help: 'JSON written by the order book panel'
     }
 };
 

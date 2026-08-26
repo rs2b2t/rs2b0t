@@ -4,22 +4,31 @@ import {
     DEFAULT_MARGIN,
     DEFAULT_MAX_TRADE,
     removeBook,
+    rowOf,
     uniqueBookName,
     upsertBook,
     type PriceBook
 } from '../api/market/priceBook.js';
+import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
 import {
     addRow,
+    addRows,
     displayRows,
     dropRow,
+    formatPrice,
+    nextSort,
+    parsePrice,
     pickerRows,
     setField,
     setMargin,
     setMaxTradeValue,
     toggleSide,
-    type DisplayRow
+    viewRows,
+    type DisplayRow,
+    type SortDir,
+    type SortKey
 } from './priceBookPanelLogic.js';
 
 const ICON_FILL_MS = 500;
@@ -27,7 +36,7 @@ const ICON_FILL_TRIES = 12;
 const PICKER_LIMIT = 60;
 
 /**
- * Editor for the player's named price books.
+ * Editor for the player's named order books.
  * Why: every mutation goes through the store and re-renders, so no in-memory copy can drift from what is saved.
  */
 export class PriceBookPanel {
@@ -37,6 +46,9 @@ export class PriceBookPanel {
     private selected: string | null = null;
     private query = '';
     private adding = false;
+    private browsing = false;
+    private shelf: Category | 'All' = 'All';
+    private sort: { key: SortKey; dir: SortDir } = { key: 'name', dir: 'asc' };
     private renaming = false;
     private iconTries = 0;
     private iconTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +72,7 @@ export class PriceBookPanel {
         const wanted = bookName?.trim().toLowerCase();
         this.selected = names.find(n => n.toLowerCase() === wanted) ?? names[0] ?? null;
         this.adding = false;
+        this.browsing = false;
         this.renaming = false;
         this.query = '';
         this.iconTries = 0;
@@ -69,6 +82,7 @@ export class PriceBookPanel {
     close(): void {
         this.root.style.display = 'none';
         this.adding = false;
+        this.browsing = false;
         this.stopIconFill();
     }
 
@@ -102,10 +116,14 @@ export class PriceBookPanel {
         const book = this.current();
         if (book) {
             this.window.appendChild(this.bookFields(book));
+            this.window.appendChild(this.shelfBar(book, liveCatalog()));
             this.window.appendChild(this.table(book, liveCatalog()));
             this.window.appendChild(this.addBar());
             if (this.adding) {
                 this.window.appendChild(this.picker(book, liveCatalog()));
+            }
+            if (this.browsing) {
+                this.window.appendChild(this.browser(book, liveCatalog()));
             }
         }
         if (this.fillIcons() > 0) {
@@ -117,7 +135,7 @@ export class PriceBookPanel {
         const bar = el('div', 'rs2b0t-loadout-header');
 
         const title = el('span', 'rs2b0t-loadout-title');
-        title.textContent = 'Price book';
+        title.textContent = 'Order book';
         bar.appendChild(title);
 
         bar.appendChild(this.renaming ? this.nameField() : this.namePicker());
@@ -231,7 +249,7 @@ export class PriceBookPanel {
 
         box.appendChild(this.numberField('Max trade gp', book.maxTradeValue, 'max-trade', value => {
             this.commit(setMaxTradeValue(book, value));
-        }, 'refuse any single trade worth more than this'));
+        }, 'refuse any single trade worth more than this', true));
 
         return box;
     }
@@ -241,7 +259,8 @@ export class PriceBookPanel {
         value: number,
         role: string,
         onChange: (value: number) => void,
-        help?: string
+        help?: string,
+        big = false
     ): HTMLElement {
         const wrap = el('label', 'rs2b0t-pricebook-field');
         const text = el('span', 'rs2b0t-pricebook-field-label');
@@ -252,11 +271,25 @@ export class PriceBookPanel {
         wrap.appendChild(text);
 
         const input = el('input', 'rs2b0t-loadout-qty');
-        input.type = 'number';
-        input.min = '0';
         input.dataset.role = role;
-        input.value = String(value);
-        input.addEventListener('change', () => onChange(Number(input.value)));
+        if (big) {
+            input.type = 'text';
+            input.inputMode = 'numeric';
+            input.value = formatPrice(value);
+            input.addEventListener('change', () => {
+                const parsed = parsePrice(input.value);
+                if (parsed === null) {
+                    input.value = formatPrice(value);
+                    return;
+                }
+                onChange(parsed);
+            });
+        } else {
+            input.type = 'number';
+            input.min = '0';
+            input.value = String(value);
+            input.addEventListener('change', () => onChange(Number(input.value)));
+        }
         wrap.appendChild(input);
         return wrap;
     }
@@ -264,10 +297,10 @@ export class PriceBookPanel {
     private table(book: PriceBook, cat: Catalog): HTMLElement {
         const table = el('div', 'rs2b0t-pricebook-table');
         table.appendChild(this.headRow());
-        const rows = displayRows(book, cat);
+        const rows = viewRows(displayRows(book, cat), this.shelf, this.sort.key, this.sort.dir);
         if (rows.length === 0) {
             const empty = el('div', 'rs2b0t-pricebook-empty');
-            empty.textContent = 'No items yet. Add one below.';
+            empty.textContent = this.shelf === 'All' ? 'No items yet. Add some below.' : `Nothing on the ${this.shelf} shelf yet.`;
             table.appendChild(empty);
             return table;
         }
@@ -279,12 +312,107 @@ export class PriceBookPanel {
 
     private headRow(): HTMLElement {
         const head = el('div', 'rs2b0t-pricebook-row rs2b0t-pricebook-head');
-        for (const label of ['', 'Item', 'Mid', 'Buy', 'Sell', 'Cap', 'B', 'S', '']) {
+        const cols: { label: string; key?: SortKey }[] = [
+            { label: '' },
+            { label: 'Item', key: 'name' },
+            { label: 'Mid' },
+            { label: 'Buy', key: 'buy' },
+            { label: 'Sell', key: 'sell' },
+            { label: 'Cap', key: 'cap' },
+            { label: 'B' },
+            { label: 'S' },
+            { label: '' }
+        ];
+        for (const col of cols) {
             const cell = el('span', 'rs2b0t-pricebook-cell');
-            cell.textContent = label;
+            if (col.key === undefined) {
+                cell.textContent = col.label;
+            } else {
+                const btn = el('button', 'rs2b0t-pricebook-sort');
+                const active = this.sort.key === col.key;
+                btn.textContent = active ? `${col.label} ${this.sort.dir === 'asc' ? '▲' : '▼'}` : col.label;
+                btn.dataset.on = String(active);
+                btn.title = `sort by ${col.label.toLowerCase()}`;
+                btn.addEventListener('click', () => {
+                    this.sort = nextSort(this.sort, col.key!);
+                    this.render();
+                });
+                cell.appendChild(btn);
+            }
             head.appendChild(cell);
         }
         return head;
+    }
+
+    /** Which shelf the table is showing, and how many rows the book carries from it. */
+    private shelfBar(book: PriceBook, cat: Catalog): HTMLElement {
+        const bar = el('div', 'rs2b0t-pricebook-shelfbar');
+        const rows = displayRows(book, cat);
+        const counts = new Map<string, number>();
+        for (const row of rows) {
+            counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
+            if (row.popular) {
+                counts.set('Popular', (counts.get('Popular') ?? 0) + 1);
+            }
+        }
+
+        const chip = (label: string, shelf: Category | 'All', n: number): HTMLElement => {
+            const btn = el('button', 'rs2b0t-pricebook-chip');
+            btn.textContent = `${label} ${n}`;
+            btn.dataset.on = String(this.shelf === shelf);
+            btn.addEventListener('click', () => {
+                this.shelf = shelf;
+                this.render();
+            });
+            return btn;
+        };
+
+        bar.appendChild(chip('All', 'All', rows.length));
+        for (const name of CATEGORIES) {
+            const n = counts.get(name) ?? 0;
+            if (n > 0) {
+                bar.appendChild(chip(name, name, n));
+            }
+        }
+        return bar;
+    }
+
+    /** Every item the client knows, by shelf, so a whole shelf goes in at once. */
+    private browser(book: PriceBook, cat: Catalog): HTMLElement {
+        const box = el('div', 'rs2b0t-loadout-picker');
+        const all = shelves(cat);
+
+        const note = el('div', 'rs2b0t-pricebook-note');
+        note.textContent = 'Adds every item on a shelf at its own value, and leaves anything already in the book alone.';
+        box.appendChild(note);
+
+        const list = el('div', 'rs2b0t-pricebook-shelves');
+        for (const name of CATEGORIES) {
+            const items = all.get(name) ?? [];
+            if (items.length === 0) {
+                continue;
+            }
+            const missing = items.filter(r => rowOf(book, r.id) === null);
+            const line = el('div', 'rs2b0t-pricebook-shelf');
+
+            const label = el('span', 'rs2b0t-pricebook-shelf-name');
+            label.textContent = name;
+            line.appendChild(label);
+
+            const count = el('span', 'rs2b0t-pricebook-shelf-count');
+            count.textContent = missing.length === 0 ? `all ${items.length} in book` : `${missing.length} of ${items.length} not in book`;
+            line.appendChild(count);
+
+            const add = el('button', 'rs2b0t-button rs2b0t-pricebook-shelf-add');
+            add.textContent = missing.length === 0 ? '✓' : `+ add ${missing.length}`;
+            add.disabled = missing.length === 0;
+            add.addEventListener('click', () => this.commit(addRows(book, missing.map(r => ({ id: r.id, cost: r.cost })))));
+            line.appendChild(add);
+
+            list.appendChild(line);
+        }
+        box.appendChild(list);
+        return box;
     }
 
     private itemRow(book: PriceBook, row: DisplayRow): HTMLElement {
@@ -317,15 +445,24 @@ export class PriceBookPanel {
     private priceCell(role: string, value: number, pinned: boolean, onChange: (value: number) => void): HTMLElement {
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const input = el('input', 'rs2b0t-loadout-qty');
-        input.type = 'number';
-        input.min = '0';
+        // Why: the box shows 1.25M, which a number input will not hold, so it takes text and parses it back.
+        input.type = 'text';
+        input.inputMode = 'numeric';
         input.dataset.role = role;
-        input.value = String(value);
+        input.value = formatPrice(value);
         if (pinned) {
             input.dataset.pinned = 'true';
             input.title = 'pinned override, click the dot to clear';
         }
-        input.addEventListener('change', () => onChange(Number(input.value)));
+        input.addEventListener('change', () => {
+            const parsed = parsePrice(input.value);
+            if (parsed === null) {
+                // Why: writing what cannot be read would store NaN, so an unreadable edit is put back instead.
+                input.value = formatPrice(value);
+                return;
+            }
+            onChange(parsed);
+        });
         cell.appendChild(input);
         return cell;
     }
@@ -346,7 +483,13 @@ export class PriceBookPanel {
         const bar = el('div', 'rs2b0t-pricebook-addbar');
         bar.appendChild(this.action('add', this.adding ? 'done' : '+ add item', () => {
             this.adding = !this.adding;
+            this.browsing = false;
             this.query = '';
+            this.render();
+        }));
+        bar.appendChild(this.action('browse', this.browsing ? 'done' : 'browse categories', () => {
+            this.browsing = !this.browsing;
+            this.adding = false;
             this.render();
         }));
         return bar;

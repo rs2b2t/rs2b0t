@@ -660,7 +660,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'MarketMaker',
-    description: 'Player shop — stands at a bank, buys and sells the items in a price book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted',
+    description: 'Player shop — stands at a bank, buys and sells the items in an order book, quotes in public chat ("buy 100 iron ore"), and declines any trade that does not match what it quoted',
     category: 'Money making',
     tags: ['trading', 'shop', 'bank', 'chat', 'afk'],
     settingsSchema: MARKET_MAKER_SETTINGS,

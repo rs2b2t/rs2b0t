@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+    DEFAULT_MARGIN,
     parseBooks,
     removeBook,
     rowOf,
@@ -36,7 +37,7 @@ describe('parseBooks', () => {
             { name: 'x', rows: [{ id: 440 }, { mid: 5 }, { id: 'nope', mid: 5 }] }
         ]));
         expect(parsed).toHaveLength(1);
-        expect(parsed[0].margin).toBe(20);
+        expect(parsed[0].margin).toBe(DEFAULT_MARGIN);
         expect(parsed[0].maxTradeValue).toBe(1_000_000);
         expect(parsed[0].rows).toEqual([{ id: 440, mid: 1, cap: 0, buying: true, selling: true }]);
     });

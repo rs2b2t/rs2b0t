@@ -139,7 +139,7 @@ export default class BotPanel {
 
         const priceBookBtn = document.createElement('button');
         priceBookBtn.className = 'rs2b0t-button rs2b0t-param-edit';
-        priceBookBtn.textContent = 'Price books';
+        priceBookBtn.textContent = 'Order books';
         priceBookBtn.title = 'Buy and sell prices for the shop bots.';
         priceBookBtn.addEventListener('click', () => this.priceBookPanel.open());
 
