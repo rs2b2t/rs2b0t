@@ -28,6 +28,7 @@
         "gen:cluedb": "bun tools/clues/gen-cluedb.ts",
         "gen:dropdb": "bun tools/combat/gen-dropdb.ts",
         "gen:itemdb": "bun tools/items/gen-itemdb.ts",
+        "gen:untradeable": "bun tools/items/gen-untradeable.ts",
         "gen:scriptdocs": "bun tools/gen-scriptdocs.ts",
         "verify:gatheringbot": "bun e2e/gatheringbot-test.ts",
         "verify:thievingbot": "bun e2e/thievingbot-test.ts",
