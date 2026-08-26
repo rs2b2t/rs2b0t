@@ -26,8 +26,7 @@ export function offersMatch(actual: ReadonlyMap<number, number>, expected: Reado
 }
 
 /** Their side carries at least what was asked for, whatever else is on it. */
-// Why: a customer who rounds up, or leaves something else in the window, has still put the deal up. Holding out
-// Why: for an exact side means the shop waits out a trade that was already good, and the extra is theirs to give.
+// Why: rounding up, or leaving something else in the window, is still the deal; an exact side waits out a good trade.
 export function offerCovers(actual: ReadonlyMap<number, number>, expected: ReadonlyMap<number, number>): boolean {
     for (const [id, count] of expected) {
         if ((actual.get(id) ?? 0) < count) {

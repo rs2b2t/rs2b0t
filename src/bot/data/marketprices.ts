@@ -1,7 +1,5 @@
-// A one-time snapshot, taken to hydrate sensible defaults rather than to be kept in step with the market.
-// Source: https://markets.lostcity.rs/sales on 2026-08-26, 259 coin-priced listings over 132 items.
-// Each figure is the median of the coin offers seen, midpointed where both a bid and an ask were up.
-// Prices move; treat these as a starting point to edit, not as what anything is worth today.
+// A one-time snapshot to hydrate defaults, not a feed: median coin offers, midpointed where both sides were up.
+// From https://markets.lostcity.rs/sales on 2026-08-26, 259 listings over 132 items. Prices move; edit freely.
 
 /** What an item was changing hands for when the snapshot was taken. */
 export interface MarketPrice {

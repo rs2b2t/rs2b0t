@@ -94,8 +94,7 @@ export class Desk {
     }
 
     /** Cut an order down to what the shop managed to get, so it stops trying to top it up. */
-    // Why: an order it can never fill keeps Restock firing for ever, and Restock at the bank is what stops the
-    // Why: shop banking at all, so the order has to become satisfiable rather than stay outstanding.
+    // Why: an unfillable order keeps Restock at the bank for ever, which is what stops the shop banking at all.
     limitTo(customer: string, qty: number): void {
         const i = this.intents.get(key(customer));
         if (i && qty > 0 && qty < i.maxQty) {

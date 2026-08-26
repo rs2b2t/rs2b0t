@@ -504,12 +504,8 @@ export default class MarketMaker extends TaskBot {
         this.say(`${formatGp(want.maxQty)} x ${name} = ${formatGp(want.maxQty * each)}gp. Put that up.`);
     }
 
-    /**
-     * Put the shop back to an empty desk: no window, nothing owed, nobody waiting out a cooldown.
-     * Rate limited hard, since it throws away work in flight.
-     */
-    // Why: the shop can tie itself up in a way no customer can talk it out of, and the alternative to this is
-    // Why: an operator noticing and restarting the script.
+    /** Back to an empty desk: no window, nothing owed, nobody cooling off. Rate limited, it discards work. */
+    // Why: the shop can tie itself up past talking to, and the alternative is an operator restarting the script.
     private async resetState(): Promise<void> {
         const now = Date.now();
         const since = now - this.lastResetAt;

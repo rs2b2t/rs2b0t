@@ -55,10 +55,7 @@ export interface Known {
     consumable?: string;
 }
 
-/**
- * Which shelf an item belongs on, from its name and whatever the loadout data knows about it.
- * What is known is passed in rather than looked up, so the rules stay decidable on their own.
- */
+/** Which shelf an item belongs on. What the loadout data knows is passed in, so the rules stay decidable alone. */
 // Why: the client's obj data carries no category of any kind, so the shelf has to be read back out of the name.
 export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: Known = {}): Category {
     const name = rec.name.toLowerCase();
@@ -147,11 +144,8 @@ const POPULAR_NAMES: readonly string[] = [
 
 const POPULAR_SET = new Set(POPULAR_NAMES.map(n => n.toLowerCase()));
 
-/**
- * Whether an item belongs on the Popular shelf.
- * Popular overlaps the others rather than replacing them: a nature rune is on both Runes and Popular.
- */
-// Why: it answers "what would a shop stock on day one", which cuts across the shelves rather than sitting beside them.
+/** Whether an item is on the Popular shelf, which overlaps the others: a nature rune is on Runes and Popular. */
+// Why: it answers what a shop would stock on day one, which cuts across the shelves rather than sitting beside them.
 export function isPopular(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: Known = {}): boolean {
     return POPULAR_SET.has(rec.name.trim().toLowerCase()) || POPULAR_SHELVES.includes(categoryOf(rec, known));
 }

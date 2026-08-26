@@ -14,8 +14,7 @@ function filesUnder(root: string, ext: string): string[] {
 }
 
 /** Debugnames the content marks as untradeable, either outright or by being a dummy. */
-// Why: the engine defaults every obj to tradeable and only turns it off (ObjType opcode 15, or any dummyitem),
-// Why: so the absence of the field means yes and only an explicit no counts.
+// Why: the engine defaults every obj to tradeable (off only via opcode 15 or a dummyitem), so absence means yes.
 function untradeableNames(text: string): string[] {
     const out: string[] = [];
     let id: string | null = null;

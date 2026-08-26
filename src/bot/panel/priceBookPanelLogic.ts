@@ -52,8 +52,7 @@ function withRows(book: PriceBook, rows: PriceRow[]): PriceBook {
 const SNAPSHOT = new Map(MARKET_PRICES.map(p => [p.id, p.mid]));
 
 /** What a fresh row starts at: what the item was seen trading for, or the game's own value where it was not. */
-// Why: the shop value is what a general store pays, which is nowhere near what players pay each other, so a
-// Why: book seeded from it quotes nonsense until every row has been edited by hand.
+// Why: the shop value is what a general store pays, so a book seeded from it quotes nonsense until hand-edited.
 export function seedMid(id: number, cost: number): number {
     return Math.max(1, Math.trunc(SNAPSHOT.get(id) ?? cost));
 }
