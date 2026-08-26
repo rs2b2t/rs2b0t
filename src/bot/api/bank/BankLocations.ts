@@ -31,8 +31,9 @@ export interface BankObjectAccess {
 export interface BankNpcAccess {
     name: string;
     op: string;
-    /** The dialogue option that opens the bank. */
-    choose: string;
+    // Why: most NPC bankers open a menu that must be clicked, but a few (Zanaris fairies) bank on the op directly with no dialogue, so this is optional.
+    /** The dialogue option that opens the bank, when the banker surfaces one. */
+    choose?: string;
 }
 
 /**

@@ -378,7 +378,8 @@ export const Bank = {
                 }
             }
             for (let guard = 0; guard < 12 && !Bank.isOpen(); guard++) {
-                if (ChatDialog.options().some(o => o.toLowerCase().includes(access.choose.toLowerCase()))) {
+                const want = access.choose?.toLowerCase();
+                if (want && ChatDialog.options().some(o => o.toLowerCase().includes(want))) {
                     await ChatDialog.chooseOption(access.choose);
                 } else if (ChatDialog.canContinue()) {
                     await ChatDialog.continue();
