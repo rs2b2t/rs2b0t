@@ -2487,6 +2487,7 @@ export class Gather implements Task {
             return false;
         }
         this.bot.setStatus(`tick: reclick ${this.bot.actionName()}`);
+        this.logAttempt(`reclick ${this.bot.actionName()} on ${this.bot.targetName()} @ ${live.tile()}`);
         return live.interact(this.bot.actionName());
     }
 
@@ -2509,6 +2510,7 @@ export class Gather implements Task {
                 )
                 .nearest() ?? rock;
         this.bot.setStatus(`tick: reclick ${this.bot.actionName()}`);
+        this.logAttempt(`reclick ${this.bot.actionName()} on ${this.bot.targetName()} @ ${same.tile()}`);
         return same.interact(this.bot.actionName());
     }
 
@@ -2561,6 +2563,7 @@ export class Gather implements Task {
         const spotTile = target.tile();
         if (here0 && Tile.from(here0).distanceTo(spotTile) > 2) {
             this.bot.setStatus(`fish: walking to spot @ ${spotTile}`);
+            this.logAttempt(`path to ${this.bot.targetName()} spot @ ${spotTile} from ${here0}`);
             await Traversal.walkTo(spotTile, { radius: 1, timeoutMs: 20_000 });
             // Re-resolve after walk, hop may have moved.
             const again = this.findFishSpot();
@@ -2592,6 +2595,7 @@ export class Gather implements Task {
         if (needsClick) {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${startTile}`);
             const before = Inventory.used();
+            this.logAttempt(`click ${this.bot.actionName()} on ${this.bot.targetName()} @ ${startTile}`);
             if (!(await target.interact(this.bot.actionName()))) {
                 this.bot.log(`no '${this.bot.actionName()}' op on ${this.bot.targetName()}? ops=[${target.actions().join(', ')}]`);
                 this.activeFishIndex = null;
@@ -2713,6 +2717,7 @@ export class Gather implements Task {
         const CLICK_RANGE = 10;
         if (here && Tile.from(here).distanceTo(tile) > 2) {
             this.bot.setStatus(`gather: walking to ${this.bot.targetName()} @ ${tile}`);
+            this.logAttempt(`path to ${this.bot.targetName()} @ ${tile} from ${here}`);
             const reached = await Traversal.walkTo(tile, {
                 radius: 1,
                 timeoutMs: 45_000,
@@ -2739,6 +2744,7 @@ export class Gather implements Task {
             this.bot.setStatus(`${this.bot.actionName()} ${this.bot.targetName()} at ${tile}`);
             const before = Inventory.used();
             const startPos = Game.tile();
+            this.logAttempt(`click ${this.bot.actionName()} on ${this.bot.targetName()} @ ${tile}`);
             if (!(await target.interact(this.bot.actionName()))) {
                 this.banOnRepeatGatherFail(key, tile);
                 await Execution.delayTicks(2);
@@ -2831,6 +2837,11 @@ export class Gather implements Task {
                 return;
             }
         }
+    }
+
+    // Why: banner each walk/click attempt so live logs show exactly what the bot tried when a gather stalls.
+    private logAttempt(what: string): void {
+        this.bot.log(`==================\nattempting ${what}\n==================`);
     }
 
     // Why: two failed clicks on the same gather tile ban it (reject) so the bot rolls a different tree/rock instead of re-walking to an unreachable tile forever (e.g. Edgeville yew behind a fence).
