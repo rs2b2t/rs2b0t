@@ -5,12 +5,19 @@ import {
     decideBeat,
     Desk,
     freshChatLines,
+    dealLine,
+    dealOf,
+    dealTotals,
     RateLimiter,
+    resolveQuote,
     shouldSettle,
     sideSignature,
     type Intent,
     type Window
 } from '#/bot/scripts/MarketMaker/marketMakerLogic.js';
+import { buildCatalog } from '#/bot/api/market/catalog.js';
+import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
+import type { PriceBook } from '#/bot/api/market/priceBook.js';
 
 const IRON = 440;
 const COINS = 995;
@@ -28,6 +35,7 @@ function windowAt(over: Partial<Window> = {}): Window {
         lastSig: '440x100',
         sawOpen: true,
         accepted: null,
+        waited: 0,
         ...over
     };
 }
@@ -142,7 +150,26 @@ describe('cooldowns punish the staller', () => {
 });
 
 describe('decideBeat', () => {
-    const base = { stillBeatsNeeded: 3, reOfferCap: 12, oweMatched: false, wantMatched: true, oweAnything: true };
+    const base = { stillBeatsNeeded: 3, reOfferCap: 12, waitCap: 25, oweMatched: false, wantMatched: true, oweAnything: true };
+
+    // Why: one customer sitting on an open window blocks every customer behind them, so waiting is capped.
+    test('waiting is given up on once the customer has sat on it long enough', () => {
+        const patient = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ waited: 24 }), wantMatched: false, oweMatched: true });
+        expect(patient.do).toBe('wait');
+
+        const done = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ waited: 25 }), wantMatched: false, oweMatched: true });
+        expect(done).toEqual({ do: 'give-up', reason: 'you left your side up too long' });
+    });
+
+    test('the cap never turns a settleable trade away', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ waited: 999 }), oweMatched: true, wantMatched: true });
+        expect(beat).toEqual({ do: 'accept' });
+    });
+
+    test('the cap does not stop the shop putting its own side up', () => {
+        const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ waited: 999 }), oweMatched: false });
+        expect(beat.do).toBe('offer');
+    });
 
     // Why: any change resets both accepts, so acting on a moving side means neither ever settles.
     test('a side that just moved is always waited on', () => {
@@ -329,5 +356,212 @@ describe('freshChatLines', () => {
 describe('the coin id is never assumed', () => {
     test('sideSignature carries coins like any other id', () => {
         expect(sideSignature(new Map([[COINS, 2200]]))).toBe('995x2200');
+    });
+});
+
+
+function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
+    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
+}
+
+// Why: the strung bow is the equippable one, and that flag is the only thing separating the pair by name.
+const QUOTE_CAT = buildCatalog([
+    rec(440, 'Iron ore'),
+    rec(1333, 'Rune scimitar', { equippable: true }),
+    rec(851, 'Maple longbow', { equippable: true }),
+    rec(62, 'Maple longbow'),
+    rec(853, 'Yew longbow', { equippable: true }),
+    rec(1515, 'Yew logs')
+]);
+
+const QUOTE_BOOK: PriceBook = {
+    name: 'demo',
+    margin: 20,
+    maxTradeValue: 500_000,
+    rows: [
+        { id: 440, mid: 20, cap: 5_000, buying: true, selling: true },
+        { id: 1333, mid: 15_000, cap: 20, buying: true, selling: true },
+        { id: 851, mid: 640, cap: 500, buying: true, selling: true },
+        { id: 62, mid: 320, cap: 500, buying: true, selling: true },
+        { id: 853, mid: 800, cap: 500, buying: true, selling: true },
+        { id: 1515, mid: 320, cap: 2_000, buying: true, selling: false }
+    ]
+};
+
+function quote(query: string, qtyImplied: boolean, side: 'buying' | 'selling' = 'selling') {
+    return resolveQuote({ cat: QUOTE_CAT, book: QUOTE_BOOK, query, side, qtyImplied });
+}
+
+describe('Desk.limitTo', () => {
+    // Why: an order the shop can never fill keeps Restock going back to the bank, and Restock at the bank is
+    // Why: what stopped it banking anything, so cutting the order is what breaks the loop.
+    test('cuts an order down to what actually arrived', () => {
+        desk.remember(intent('alice', 0, { maxQty: 100 }));
+        desk.limitTo('alice', 40);
+        expect(desk.intentFor('alice', 0, 90_000)?.maxQty).toBe(40);
+    });
+
+    test('never raises an order, so nobody gets more than they asked for', () => {
+        desk.remember(intent('alice', 0, { maxQty: 100 }));
+        desk.limitTo('alice', 500);
+        expect(desk.intentFor('alice', 0, 90_000)?.maxQty).toBe(100);
+    });
+
+    test('nothing arriving leaves the order alone, for the miss count to deal with', () => {
+        desk.remember(intent('alice', 0, { maxQty: 100 }));
+        desk.limitTo('alice', 0);
+        expect(desk.intentFor('alice', 0, 90_000)?.maxQty).toBe(100);
+    });
+
+    test('a customer with no order is not a crash', () => {
+        expect(() => desk.limitTo('nobody', 5)).not.toThrow();
+    });
+});
+
+describe('Desk.clear', () => {
+    test('drops intents, cooldowns and the window together', () => {
+        desk.remember(intent('alice'));
+        desk.cool('bob', 10_000);
+        desk.open('carol', 0);
+
+        desk.clear();
+
+        expect(desk.intentFor('alice', 0, 90_000)).toBeNull();
+        expect(desk.onCooldown('bob', 0)).toBe(false);
+        expect(desk.current()).toBeNull();
+        expect(desk.intentCount()).toBe(0);
+    });
+
+    test('clearing an empty desk is not an error', () => {
+        expect(() => desk.clear()).not.toThrow();
+        expect(desk.intentCount()).toBe(0);
+    });
+});
+
+describe('resolveQuote', () => {
+    test('an exact name lands with no count given', () => {
+        expect(quote('rune scimitar', true)).toEqual({ kind: 'hit', id: 1333, name: 'Rune scimitar' });
+    });
+
+    test('the same name lands when the count was given', () => {
+        expect(quote('rune scimitar', false)).toEqual({ kind: 'hit', id: 1333, name: 'Rune scimitar' });
+    });
+
+    // Why: without this every sentence opening with "buy" would draw a reply, and a shop that answers passing chat gets muted.
+    test('ordinary chat with no count is a miss the shop does not answer', () => {
+        expect(quote('me a beer', true)).toEqual({ kind: 'miss', answer: false });
+    });
+
+    test('a named item the shop does not stock is answered when the count was given', () => {
+        expect(quote('dragon claws', false)).toEqual({ kind: 'miss', answer: true });
+    });
+
+    // Why: a partial name is a typo worth answering when a count says the line was meant as a request, and a guess otherwise.
+    test('a partial name only resolves when the count was given', () => {
+        expect(quote('scimitar', false)).toEqual({ kind: 'hit', id: 1333, name: 'Rune scimitar' });
+        expect(quote('scimitar', true)).toEqual({ kind: 'miss', answer: false });
+    });
+
+    test('the bow pair splits on the u suffix with no count given', () => {
+        expect(quote('maple longbow', true)).toEqual({ kind: 'hit', id: 851, name: 'Maple longbow' });
+        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow' });
+    });
+
+    test('a partial name matching several is ambiguous, and only reachable with a count', () => {
+        const target = quote('longbow', false);
+        if (target.kind !== 'ambiguous') {
+            throw new Error(`expected ambiguous, got ${target.kind}`);
+        }
+        expect(target.candidates.map(c => c.id).sort((a, b) => a - b)).toEqual([62, 851, 853]);
+        expect(quote('longbow', true)).toEqual({ kind: 'miss', answer: false });
+    });
+
+    test('a row the shop will not sell is a miss on the selling side', () => {
+        expect(quote('yew logs', true)).toEqual({ kind: 'miss', answer: false });
+        expect(quote('yew logs', true, 'buying')).toEqual({ kind: 'hit', id: 1515, name: 'Yew logs' });
+    });
+
+    test('an item outside the book is a miss on both sides', () => {
+        expect(quote('coins', false)).toEqual({ kind: 'miss', answer: true });
+    });
+});
+
+
+describe('dealOf', () => {
+    const coins = 995;
+
+    test('coins on the shop\'s side means it bought', () => {
+        const deal = dealOf({
+            give: new Map([[coins, 2200]]),
+            get: new Map([[440, 100]]),
+            coinId: coins,
+            customer: 'Elliott',
+            atMs: 1000
+        });
+        expect(deal).toEqual({ atMs: 1000, customer: 'Elliott', kind: 'bought', itemId: 440, count: 100, gp: -2200, mixed: false });
+    });
+
+    test('coins on their side means it sold', () => {
+        const deal = dealOf({
+            give: new Map([[1333, 2]]),
+            get: new Map([[coins, 33000]]),
+            coinId: coins,
+            customer: 'Elliott',
+            atMs: 2000
+        });
+        expect(deal).toEqual({ atMs: 2000, customer: 'Elliott', kind: 'sold', itemId: 1333, count: 2, gp: 33000, mixed: false });
+    });
+
+    test('a mixed pile reports the biggest line and flags the rest', () => {
+        const deal = dealOf({
+            give: new Map([[coins, 5000]]),
+            get: new Map([[440, 100], [1515, 300]]),
+            coinId: coins,
+            customer: 'Elliott',
+            atMs: 3000
+        });
+        expect(deal?.itemId).toBe(1515);
+        expect(deal?.count).toBe(300);
+        expect(deal?.mixed).toBe(true);
+    });
+
+    // Why: a window that settled with coins on both sides and no goods is not a deal worth a line.
+    test('coins for coins is not a deal', () => {
+        expect(dealOf({ give: new Map([[coins, 10]]), get: new Map([[coins, 10]]), coinId: coins, customer: 'a', atMs: 0 })).toBeNull();
+    });
+});
+
+describe('dealTotals', () => {
+    test('nets the money and counts each way', () => {
+        const deals = [
+            { atMs: 1, customer: 'a', kind: 'sold' as const, itemId: 1, count: 1, gp: 500, mixed: false },
+            { atMs: 2, customer: 'b', kind: 'bought' as const, itemId: 2, count: 1, gp: -200, mixed: false },
+            { atMs: 3, customer: 'c', kind: 'sold' as const, itemId: 3, count: 1, gp: 100, mixed: false }
+        ];
+        expect(dealTotals(deals)).toEqual({ count: 3, net: 400, sold: 2, bought: 1 });
+    });
+
+    test('no deals is a zero net, not a gap', () => {
+        expect(dealTotals([])).toEqual({ count: 0, net: 0, sold: 0, bought: 0 });
+    });
+});
+
+describe('dealLine', () => {
+    test('columns line up whatever the name length', () => {
+        const short = dealLine({ clock: '14:32:06', customer: 'Bob', kind: 'sold', count: 100, item: 'Iron ore', gp: 2200, mixed: false });
+        const long = dealLine({ clock: '14:31:41', customer: 'Averylongname', kind: 'bought', count: 20, item: 'Rune scimitar', gp: -13500, mixed: false });
+        // Why: the money column is right-aligned, so it is the ends that line up, not where each number starts.
+        expect(short.length).toBe(long.length);
+        expect(short.endsWith('+2,200')).toBe(true);
+        expect(long.endsWith('-13,500')).toBe(true);
+    });
+
+    test('a mixed pile says so', () => {
+        expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'bought', count: 300, item: 'Yew logs', gp: -5000, mixed: true })).toContain('+more');
+    });
+
+    test('money carries its sign either way', () => {
+        expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'sold', count: 1, item: 'X', gp: 10, mixed: false })).toContain('+10');
+        expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'bought', count: 1, item: 'X', gp: -10, mixed: false })).toContain('-10');
     });
 });

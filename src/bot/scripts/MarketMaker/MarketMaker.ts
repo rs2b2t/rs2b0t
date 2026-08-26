@@ -9,7 +9,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Trade } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { PriceBooks } from '../../api/market/bookStore.js';
-import { liveCatalog, notedId, resolveByName, unnotedId, type Catalog } from '../../api/market/catalog.js';
+import { liveCatalog, notedId, unnotedId, type Catalog } from '../../api/market/catalog.js';
 import {
     CHAT_LIMIT,
     formatAmbiguous,
@@ -22,11 +22,11 @@ import {
 import { Ledger } from '../../api/market/ledger.js';
 import { rowOf, type PriceBook } from '../../api/market/priceBook.js';
 import { resolvePrices, rowValid } from '../../api/market/prices.js';
-import { normaliseOffer, offersMatch } from '../../api/market/driveMarketTrade.js';
+import { normaliseOffer, offerCovers, offersMatch } from '../../api/market/driveMarketTrade.js';
 import { appraise, describeAppraisal, type Appraisal, type DeskState } from '../../api/market/appraise.js';
 import type { OfferItem } from '../../api/market/quote.js';
 import Tile from '../../geometry/Tile.js';
-import { Paint } from '../../paint/Paint.js';
+import { Paint, type PaintFrame } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
@@ -34,10 +34,17 @@ import {
     advertiseDue,
     decideBeat,
     Desk,
+    clockOf,
+    dealLine,
+    dealOf,
+    dealTotals,
+    FREE_SLOT_FLOOR,
     freshChatLines,
     RateLimiter,
+    resolveQuote,
     shouldSettle,
-    sideSignature
+    sideSignature,
+    type Deal
 } from './marketMakerLogic.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
@@ -54,9 +61,19 @@ const CHAT_GAP_MS = 2_000;
 const CHAT_REPEAT_MS = 15_000;
 /** Outbound lines held at once; the oldest is dropped so a flood cannot build a backlog. */
 const CHAT_BACKLOG_CAP = 6;
+/** Bank trips that come back empty before the shop gives up on an order and lets the queue move on. */
+/** Deals kept for the paint. Newest first, and bounded so a long shift cannot grow without limit. */
+const DEAL_LOG_CAP = 250;
+/** Panel pixels held back for the control buttons under a filled list. */
+const FOOTER_H = 26;
+const STOCK_TRIES = 2;
 const COMMANDS_PER_WINDOW = 3;
 const COMMAND_WINDOW_MS = 10_000;
 const COMMAND_PENALTY_MS = 30_000;
+/** Ticks between resets, at the real game's 600ms tick. One customer stuck is worth ten minutes, spam is not. */
+const RESET_EVERY_TICKS = 1000;
+const RESET_EVERY_MS = RESET_EVERY_TICKS * 600;
+
 /** Live chat requests held at once. */
 const INTENT_CAP = 24;
 /** How far the stand tile may sit from the bank it is meant to use. */
@@ -67,6 +84,8 @@ const ADVERTISE_ITEMS = 4;
 const STILL_BEATS = 3;
 /** Times the bot will re-derive its side in one window before giving up. */
 const REOFFER_CAP = 12;
+/** Beats of waiting on a customer before the window goes back. At one beat a tick, this is about 15 seconds. */
+const WAIT_BEATS = 25;
 // Why: the engine shuts the offer screen a tick before it opens the confirm screen, so a bare "not open" read drops a trade that is completing normally.
 const TRADE_GONE_MS = 3_000;
 /** How long to wait for a window we asked for to appear on this client. */
@@ -80,7 +99,7 @@ export const MARKET_MAKER_SETTINGS: SettingsSchema = {
         default: '',
         options: [],
         optionsFrom: 'priceBooks',
-        label: 'Price book',
+        label: 'Order book',
         help: 'edit the prices with the button beside this field'
     },
     spot: {
@@ -159,6 +178,7 @@ export default class MarketMaker extends TaskBot {
 
     private readonly ledger = new Ledger();
     private readonly desk = new Desk(INTENT_CAP);
+    private readonly deals: Deal[] = [];
     private readonly limiter = new RateLimiter(COMMANDS_PER_WINDOW, COMMAND_WINDOW_MS, COMMAND_PENALTY_MS);
 
     private pending: PendingLine[] = [];
@@ -172,6 +192,7 @@ export default class MarketMaker extends TaskBot {
     private lastStrayLog = 0;
 
     private lastAdvertiseAt = 0;
+    private lastResetAt = 0;
     private advertiseCursor = 0;
     private advertCycle = 0;
 
@@ -186,6 +207,8 @@ export default class MarketMaker extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
+        // Why: the obj config unpacks after login, and reading the catalog before it lands reports the coin as missing, which is the same symptom as a genuine cache mismatch.
+        await Execution.delayUntil(() => liveCatalog().items.length > 0, 15_000);
         this.cat = liveCatalog();
         const coin = this.cat.byId.get(COIN_ID);
         if (coin?.name !== COIN_NAME || !coin.stackable) {
@@ -205,8 +228,8 @@ export default class MarketMaker extends TaskBot {
         const bookName = this.settings.str('priceBook');
         this.book = PriceBooks.byName(bookName);
         if (!this.book || this.book.rows.length === 0) {
-            this.log(`price book '${bookName}' is missing or empty — stopping`);
-            ScriptRunner.stop('no price book');
+            this.log(`order book '${bookName}' is missing or empty, stopping`);
+            ScriptRunner.stop('no order book');
             return;
         }
 
@@ -451,12 +474,17 @@ export default class MarketMaker extends TaskBot {
             case 'help':
                 this.explain();
                 return;
+            case 'reset':
+                void this.resetState();
+                return;
             case 'quoteSell':
-                this.wantToBuy(from, cmd.qty, cmd.query);
+                this.wantToBuy(from, cmd.qty, cmd.query, cmd.qtyImplied);
                 return;
             case 'quoteBuy':
                 // Why: selling to the bot needs no words at all, so the command is answered with the shorter path.
-                this.say('Just trade me and put it up. I price what I see.');
+                if (resolveQuote({ cat: this.cat, book: this.activeBook(), query: cmd.query, side: 'buying', qtyImplied: cmd.qtyImplied }).kind !== 'miss' || !cmd.qtyImplied) {
+                    this.say('Just trade me and put it up. I price what I see.');
+                }
                 return;
             case 'none':
         }
@@ -474,6 +502,35 @@ export default class MarketMaker extends TaskBot {
         const row = rowOf(this.activeBook(), want.itemId);
         const each = row ? resolvePrices(this.activeBook(), row).sell : 0;
         this.say(`${formatGp(want.maxQty)} x ${name} = ${formatGp(want.maxQty * each)}gp. Put that up.`);
+    }
+
+    /**
+     * Put the shop back to an empty desk: no window, nothing owed, nobody waiting out a cooldown.
+     * Rate limited hard, since it throws away work in flight.
+     */
+    // Why: the shop can tie itself up in a way no customer can talk it out of, and the alternative to this is
+    // Why: an operator noticing and restarting the script.
+    private async resetState(): Promise<void> {
+        const now = Date.now();
+        const since = now - this.lastResetAt;
+        if (this.lastResetAt > 0 && since < RESET_EVERY_MS) {
+            const mins = Math.ceil((RESET_EVERY_MS - since) / 60_000);
+            this.say(`Already reset. Ask again in ${mins}m.`);
+            return;
+        }
+
+        this.lastResetAt = now;
+        this.log('reset asked for in chat, clearing the desk');
+        this.say('Resetting. Trade me again in a moment.');
+
+        if (Trade.active()) {
+            await Trade.decline();
+        }
+        this.desk.clear();
+        this.tradeRequests.clear();
+        this.tradeClosedAt = null;
+        this.lastTold = '';
+        this.setStatus('reset, open for business');
     }
 
     /** Say how the shop works. */
@@ -500,40 +557,59 @@ export default class MarketMaker extends TaskBot {
         }
     }
 
-    private wantToBuy(from: string, want: number | 'all', query: string): void {
+    private wantToBuy(from: string, want: number | 'all', query: string, qtyImplied: boolean): void {
         const book = this.activeBook();
-        const candidates = resolveByName(this.cat, query).filter(r => {
-            const row = rowOf(book, r.id);
-            return row !== null && row.selling && rowValid(book, row);
-        });
-        if (candidates.length === 0) {
-            this.say(`I don't sell '${query}'.`);
+        const target = resolveQuote({ cat: this.cat, book, query, side: 'selling', qtyImplied });
+        if (target.kind === 'miss') {
+            if (target.answer) {
+                this.say(`I don't sell '${query}'.`);
+            }
             return;
         }
-        if (candidates.length > 1) {
-            this.say(formatAmbiguous(candidates.map(c => ({ name: c.name, id: c.id }))));
+        if (target.kind === 'ambiguous') {
+            this.say(formatAmbiguous(target.candidates));
             return;
         }
 
-        const hit = candidates[0];
+        const hit = target;
         const { sell } = resolvePrices(book, rowOf(book, hit.id)!);
-        const maxQty = want === 'all' ? Math.floor(book.maxTradeValue / sell) : want;
+        const asked = want === 'all' ? Math.floor(book.maxTradeValue / sell) : want;
+        // Why: the bank is the shop's stock and the pack is only what it happens to be carrying, so the quote is sized against both and the difference is a bank trip, not a refusal.
+        const maxQty = Math.min(asked, this.deskState().held(hit.id), Math.floor(book.maxTradeValue / sell));
+        if (maxQty <= 0) {
+            this.say(`I have no ${hit.name} right now.`);
+            return;
+        }
 
         this.desk.remember({ customer: from, itemId: hit.id, maxQty, askedAtMs: Date.now() });
-        this.say(`${formatGp(maxQty)} x ${hit.name} = ${formatGp(maxQty * sell)}gp (${formatGp(sell)}ea). Trade me.`);
+        const carried = this.packCount(hit.id) >= maxQty;
+        const price = `${formatGp(maxQty)} x ${hit.name} = ${formatGp(maxQty * sell)}gp (${formatGp(sell)}ea).`;
+        this.say(`${price} ${carried ? 'Trade me.' : 'Give me a moment.'}`);
     }
 
     // ---- the window ------------------------------------------------------
 
     /** What the bot should have on its own side, given what the customer has on theirs. */
     appraiseNow(customer: string): Appraisal {
+        const theirOffer = Trade.theirOffer() as OfferItem[];
+        let intent = this.desk.intentFor(customer, Date.now(), this.intentTtlMs);
+        if (intent !== null && theirOffer.some(o => o.id !== this.coinId)) {
+            // Why: once the shop has staked the goods it asked to be paid for, it stays a sale and names the
+            // Why: items it will not count. Flipping then would ignore the coins and leave its own side stranded.
+            const mine = normaliseOffer(this.cat, Trade.myOffer() as OfferItem[]);
+            if ((mine.get(intent.itemId) ?? 0) <= 0) {
+                // Why: nothing staked means the request was never acted on, so the goods in front of the shop win.
+                this.desk.forget(customer);
+                intent = null;
+            }
+        }
         return appraise({
             book: this.activeBook(),
             cat: this.cat,
             desk: this.deskState(),
             coinId: this.coinId,
-            theirOffer: Trade.theirOffer() as OfferItem[],
-            intent: this.desk.intentFor(customer, Date.now(), this.intentTtlMs)
+            theirOffer,
+            intent
         });
     }
 
@@ -607,6 +683,11 @@ export default class MarketMaker extends TaskBot {
             this.bought++;
         } else {
             this.sold++;
+        }
+        const deal = dealOf({ give: accepted.give, get: accepted.get, coinId: this.coinId, customer, atMs: Date.now() });
+        if (deal !== null) {
+            this.deals.unshift(deal);
+            this.deals.length = Math.min(this.deals.length, DEAL_LOG_CAP);
         }
         this.desk.forget(customer);
         this.desk.close();
@@ -718,15 +799,91 @@ export default class MarketMaker extends TaskBot {
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7fb3ff' });
         p.title(`MarketMaker — ${this.status}`);
-        const mins = (Date.now() - this.startedAt) / 60_000;
-        const w = this.desk.current();
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Book: ${this.book?.name ?? '-'}`, `Spread: ${this.book?.margin ?? 0}%`);
-        p.row(`Sold: ${this.sold}`, `Bought: ${this.bought}`, `Refused: ${this.refused}`);
-        p.row(`GP in: ${formatGp(this.gpIn)}`, `GP out: ${formatGp(this.gpOut)}`, `Float: ${formatGp(this.packCoins())}`);
-        p.row(`Serving: ${w?.customer ?? 'nobody'}`, `Requests: ${this.desk.intentCount()}`, `Pack: ${Inventory.used()}/28`);
+        switch (p.tabs('marketmaker', ['Deals', 'Summary', 'Stock', 'Book'])) {
+            case 'Summary':
+                this.paintSummary(p);
+                break;
+            case 'Stock':
+                this.paintStock(p);
+                break;
+            case 'Book':
+                this.paintBook(p);
+                break;
+            default:
+                this.paintDeals(p);
+        }
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
+    }
+
+    private paintDeals(p: PaintFrame): void {
+        const lines = this.deals.map(d =>
+            dealLine({
+                clock: clockOf(d.atMs),
+                customer: d.customer,
+                kind: d.kind,
+                count: d.count,
+                item: this.cat.byId.get(d.itemId)?.name ?? `item ${d.itemId}`,
+                gp: d.gp,
+                mixed: d.mixed
+            })
+        );
+        const t = dealTotals(this.deals);
+        p.fill('mm-deals', lines, {
+            reserve: FOOTER_H,
+            footer: `net ${t.net >= 0 ? '+' : ''}${formatGp(t.net)} · float ${formatGp(this.packCoins())}`
+        });
+    }
+
+    private paintSummary(p: PaintFrame): void {
+        const mins = (Date.now() - this.startedAt) / 60_000;
+        const t = dealTotals(this.deals);
+        const w = this.desk.current();
+        p.row(`Runtime: ${fmtDuration(mins)}`, `Book: ${this.book?.name ?? '-'}`, `Spread: ${this.book?.margin ?? 0}%`);
+        p.row(`Sold: ${this.sold}`, `Bought: ${this.bought}`, `Refused: ${this.refused}`);
+        p.row(`GP in: ${formatGp(this.gpIn)}`, `GP out: ${formatGp(this.gpOut)}`, `Net: ${t.net >= 0 ? '+' : ''}${formatGp(t.net)}`);
+        p.row(
+            `Per hour: ${mins > 1 ? `${formatGp(Math.round(t.net / (mins / 60)))}` : '-'}`,
+            `Deals: ${t.count}`,
+            `Serving: ${w?.customer ?? 'nobody'}`
+        );
+        p.gap(2);
+        p.bar('Float', this.float() > 0 ? this.packCoins() / this.float() : 0);
+        p.bar('Pack', Inventory.used() / 28);
+        const rows = this.activeBook().rows.filter(r => rowValid(this.activeBook(), r));
+        const stocked = rows.filter(r => this.ledger.held(r.id) + this.packCount(r.id) > 0).length;
+        p.bar('Stock', rows.length > 0 ? stocked / rows.length : 0);
+    }
+
+    private paintStock(p: PaintFrame): void {
+        const book = this.activeBook();
+        const lines = book.rows
+            .map(r => {
+                const held = this.ledger.held(r.id) + this.packCount(r.id);
+                const full = r.cap > 0 ? Math.min(1, held / r.cap) : 0;
+                const filled = Math.round(full * 5);
+                const name = this.cat.byId.get(r.id)?.name ?? `item ${r.id}`;
+                return { held, text: `${name.padEnd(20).slice(0, 20)} ${'#'.repeat(filled)}${'.'.repeat(5 - filled)} ${formatGp(held)} / ${formatGp(r.cap)}` };
+            })
+            .sort((a, b) => a.held - b.held)
+            .map(r => (r.held === 0 ? { text: r.text, color: '#e05b5b' } : r.text));
+        p.fill('mm-stock', lines, { reserve: FOOTER_H, footer: 'empty rows first' });
+    }
+
+    private paintBook(p: PaintFrame): void {
+        const book = this.activeBook();
+        const lines = book.rows.map(r => {
+            const { buy, sell } = resolvePrices(book, r);
+            const name = this.cat.byId.get(r.id)?.name ?? `item ${r.id}`;
+            const sides = `${r.buying ? 'B' : '-'}${r.selling ? 'S' : '-'}`;
+            const text = `${name.padEnd(20).slice(0, 20)} ${formatGp(buy).padStart(8)} ${formatGp(sell).padStart(8)} ${formatGp(r.cap).padStart(7)}  ${sides}`;
+            return rowValid(book, r) ? text : { text, color: '#e05b5b' };
+        });
+        p.fill('mm-book', lines, {
+            reserve: FOOTER_H,
+            footer: `${book.name} · spread ${book.margin}% · max ${formatGp(book.maxTradeValue)}`
+        });
     }
 }
 
@@ -806,11 +963,13 @@ class ServeWindow implements Task {
             theirSig,
             window: w,
             oweMatched: offersMatch(mine, a.owe),
-            wantMatched: offersMatch(theirs, a.want),
+            wantMatched: offerCovers(theirs, a.want),
             oweAnything: a.owe.size > 0,
             stillBeatsNeeded: STILL_BEATS,
-            reOfferCap: REOFFER_CAP
+            reOfferCap: REOFFER_CAP,
+            waitCap: WAIT_BEATS
         });
+        w.waited = beat.do === 'wait' ? w.waited + 1 : 0;
 
         if (theirSig === w.lastSig) {
             w.stillBeats++;
@@ -877,10 +1036,18 @@ class OpenWindow implements Task {
 
     validate(): boolean {
         // Why: requesting while the bank is still closing opens the window on their client and not on ours, and the bot then owns a window it cannot see.
-        return this.bot.counter().current() === null
-            && this.bot.requests().size > 0
-            && !Trade.active()
-            && reader.modals().main === -1;
+        if (this.bot.counter().current() !== null || this.bot.requests().size === 0 || Trade.active() || reader.modals().main !== -1) {
+            return false;
+        }
+        // Why: this task runs ahead of Restock, so claiming the tick when every request is waiting on a bank trip starves the fetch that would let any of them open.
+        const now = Date.now();
+        return [...this.bot.requests()].some(name => {
+            if (this.bot.blocked(name) || this.bot.counter().onCooldown(name, now)) {
+                return true;
+            }
+            const want = this.bot.counter().intentFor(name, now, this.bot.intentTtl());
+            return want === null || this.bot.packCount(want.itemId) >= want.maxQty;
+        });
     }
 
     async execute(): Promise<void> {
@@ -950,6 +1117,26 @@ class Restock implements Task {
 
         await this.bot.refreshLedger();
         await Bank.close();
+        // Why: the modal reads closed a tick before the engine has settled it, and a trade request sent in that gap opens the window on the customer's client alone. Every purchase runs into it, since fetching the goods puts a bank trip directly in front of opening the window.
+        await Execution.delayTicks(2);
+
+        const got = this.bot.packCount(want.itemId);
+        if (got >= want.maxQty) {
+            this.bot.counter().renew(want.customer, Date.now());
+            this.bot.say(`Got your ${name} ${want.customer}. Trade me.`);
+            return;
+        }
+        if (got > 0) {
+            // Why: the order is cut to what arrived, or Restock keeps going back for the rest and never lets Settle run.
+            this.bot.counter().limitTo(want.customer, got);
+            this.bot.counter().renew(want.customer, Date.now());
+            this.bot.say(`${want.customer}, I could only get ${formatGp(got)} x ${name}. Trade me.`);
+            return;
+        }
+        if (this.bot.counter().missedStock(want.customer, STOCK_TRIES)) {
+            this.bot.say(`${want.customer}, I could not get your ${name}. Ask me again.`);
+            this.bot.counter().forget(want.customer);
+        }
     }
 }
 
@@ -961,7 +1148,10 @@ class Settle implements Task {
         if (Trade.active() || this.bot.counter().current() !== null || !this.bot.bankReady(Date.now())) {
             return false;
         }
-        if (this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
+        // Why: holding an order used to block banking outright, so a pack that filled up could never be emptied:
+        // Why: Restock kept going back for goods with no room to put them, and the shop lived at the bank.
+        const outOfRoom = Inventory.free() <= FREE_SLOT_FLOOR;
+        if (!outOfRoom && this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl()) !== null) {
             return false;
         }
         return shouldSettle(Inventory.free(), this.bot.packCoins(), this.bot.float())
@@ -993,6 +1183,8 @@ class Settle implements Task {
             this.bot.backOffBank(`float ${this.bot.packCoins()}/${this.bot.float()}`);
         }
         await Bank.close();
+        // Why: the modal reads closed a tick before the engine has settled it, and a trade request sent in that gap opens the window on the customer's client alone. Every purchase runs into it, since fetching the goods puts a bank trip directly in front of opening the window.
+        await Execution.delayTicks(2);
     }
 }
 

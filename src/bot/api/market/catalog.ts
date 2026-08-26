@@ -1,4 +1,5 @@
 import { reader, type ObjRecord } from '../../adapter/ClientAdapter.js';
+import { UNTRADEABLE_IDS } from '../../data/untradeable.js';
 
 export interface Catalog {
     byId: Map<number, ObjRecord>;
@@ -15,6 +16,23 @@ function key(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+const UNTRADEABLE = new Set(UNTRADEABLE_IDS);
+
+/** Whether the content lets this obj cross a trade window at all. */
+export function tradeable(id: number): boolean {
+    return !UNTRADEABLE.has(id);
+}
+
+// Why: every piece of ammunition has a poisoned twin, and fire arrows are a lighting step rather than stock,
+// Why: so listing them multiplies the shelf with rows nobody trades in bulk. Poisoned MELEE weapons are not in
+// Why: this, because a dragon dagger(p) is an item people buy on purpose rather than a variant of one.
+const SIDE_VARIANT = /(arrow|bolt|dart|javelin|knife)s?\(p\)$|fire arrows?$|^(un)?lit arrows?$/i;
+
+/** Whether an item is one a shop would carry, rather than a variant of one it already does. */
+export function worthStocking(name: string): boolean {
+    return !SIDE_VARIANT.test(name.trim());
+}
+
 export function buildCatalog(records: readonly ObjRecord[]): Catalog {
     const byId = new Map<number, ObjRecord>();
     const notedOf = new Map<number, number>();
@@ -26,7 +44,9 @@ export function buildCatalog(records: readonly ObjRecord[]): Catalog {
         if (r.certtemplate !== -1 && r.certlink !== -1) {
             notedOf.set(r.certlink, r.id);
             unnotedOf.set(r.id, r.certlink);
-        } else {
+        } else if (r.stackVariant !== true && tradeable(r.id) && worthStocking(r.name)) {
+            // Why: pile-size models and anything the content will not let through a trade window stay reachable
+            // Why: by id, they just are not offered as items to put in a book.
             items.push(r);
         }
     }
@@ -70,7 +90,7 @@ function exactish(cat: Catalog, q: string): ObjRecord[] {
     return cat.items.filter(r => key(r.name) === singular);
 }
 
-export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
+export function resolveByName(cat: Catalog, query: string, opts: { exactOnly?: boolean } = {}): ObjRecord[] {
     const byId = /^#(\d+)$/.exec(query.trim());
     if (byId) {
         const hit = cat.items.find(r => r.id === Number(byId[1]));
@@ -96,6 +116,9 @@ export function resolveByName(cat: Catalog, query: string): ObjRecord[] {
         }
     }
 
+    if (opts.exactOnly) {
+        return [];
+    }
     return preferWorn(cat.items.filter(r => key(r.name).includes(q)), false);
 }
 

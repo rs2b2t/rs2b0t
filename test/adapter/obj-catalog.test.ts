@@ -15,9 +15,24 @@ function stub(entries: Record<number, Partial<ObjType>>): void {
         base.cost = 1;
         base.certlink = -1;
         base.certtemplate = -1;
+        base.countobj = null;
         return Object.assign(base, entries[id] ?? {});
     }) as typeof ObjType.list;
     resetObjCatalog();
+}
+
+/** Re-point the client table without clearing the adapter's cache, to prove it re-reads on its own. */
+function stubKeepingCache(entries: Record<number, Partial<ObjType>>): void {
+    ObjType.numDefinitions = Math.max(...Object.keys(entries).map(Number)) + 1;
+    ObjType.list = ((id: number) => {
+        const base = new ObjType();
+        base.id = id;
+        base.name = null;
+        base.cost = 1;
+        base.certlink = -1;
+        base.certtemplate = -1;
+        return Object.assign(base, entries[id] ?? {});
+    }) as typeof ObjType.list;
 }
 
 afterEach(() => {
@@ -27,6 +42,49 @@ afterEach(() => {
 });
 
 describe('reader.objCatalog', () => {
+    // Why: a stackable's model changes with the size of the pile, and each of those models is its own obj
+    // Why: sharing the base item's name. Left in, "Bronze arrow" turns up five times in one book.
+    test('flags the stack-size models so they are not mistaken for separate items', () => {
+        stub({
+            882: { name: 'Bronze arrow', stackable: true, countobj: Uint16Array.from([883, 884, 0, 0, 0, 0, 0, 0, 0, 0]) },
+            883: { name: 'Bronze arrow', stackable: true },
+            884: { name: 'Bronze arrow', stackable: true },
+            886: { name: 'Steel arrow', stackable: true }
+        });
+
+        const cat = reader.objCatalog();
+        const flagged = new Map(cat.map(r => [r.id, r.stackVariant === true]));
+        expect(flagged.get(882)).toBe(false);
+        expect(flagged.get(883)).toBe(true);
+        expect(flagged.get(884)).toBe(true);
+        expect(flagged.get(886)).toBe(false);
+    });
+
+    // Why: the scan runs against whatever the client has decoded, so before the obj config is unpacked it
+    // Why: comes back empty. Caching that empties every name and every search for the rest of the session.
+    test('an empty scan is not cached, so a later call still gets the real table', () => {
+        ObjType.numDefinitions = 0;
+        ObjType.list = ((): ObjType => {
+            throw new Error('config not unpacked');
+        }) as typeof ObjType.list;
+        resetObjCatalog();
+
+        expect(reader.objCatalog()).toEqual([]);
+
+        stubKeepingCache({ 561: { name: 'Nature rune', cost: 180, stackable: true } });
+        expect(reader.objCatalog().map(r => r.name)).toEqual(['Nature rune']);
+    });
+
+    test('a filled scan is cached, so the table is walked once', () => {
+        stub({ 561: { name: 'Nature rune' } });
+        expect(reader.objCatalog()).toHaveLength(1);
+
+        ObjType.list = (() => {
+            throw new Error('should not be walked again');
+        }) as typeof ObjType.list;
+        expect(reader.objCatalog()).toHaveLength(1);
+    });
+
     test('skips unnamed objs and keeps the cert fields', () => {
         stub({
             440: { name: 'Iron ore', cost: 17, stackable: false },

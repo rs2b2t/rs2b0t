@@ -345,6 +345,8 @@ export interface ObjRecord {
     equippable: boolean;
     certlink: number;
     certtemplate: number;
+    /** One of a stackable's pile-size models, which carries the base item's name and is not a separate item. */
+    stackVariant?: boolean;
 }
 
 let objCatalogCache: ObjRecord[] | null = null;
@@ -983,17 +985,26 @@ export const reader = {
 
     // Why: call after login, since a free world rewrites every members item's name to "Members Object".
     objCatalog(): ObjRecord[] {
-        if (objCatalogCache) {
+        // Why: an empty result means the client has not unpacked the obj config yet, and caching that leaves every
+        // Why: name and every item search empty for the rest of the session, with no way back.
+        if (objCatalogCache && objCatalogCache.length > 0) {
             return objCatalogCache;
         }
 
         const out: ObjRecord[] = [];
+        // Why: a stackable names the objs holding its pile-size models, and every one of them repeats the base name.
+        const piles = new Set<number>();
         for (let id = 0; id < ObjType.numDefinitions; id++) {
             let type: ObjType;
             try {
                 type = ObjType.list(id);
             } catch {
                 break;
+            }
+            for (const pile of type.countobj ?? []) {
+                if (pile > 0) {
+                    piles.add(pile);
+                }
             }
             if (type.name === null) {
                 continue;
@@ -1006,11 +1017,17 @@ export const reader = {
                 members: type.members,
                 equippable: type.manwear !== -1,
                 certlink: type.certlink,
-                certtemplate: type.certtemplate
+                certtemplate: type.certtemplate,
+                stackVariant: false
             });
         }
+        for (const rec of out) {
+            rec.stackVariant = piles.has(rec.id);
+        }
 
-        objCatalogCache = out;
+        if (out.length > 0) {
+            objCatalogCache = out;
+        }
         return out;
     },
 

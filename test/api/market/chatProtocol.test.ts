@@ -38,15 +38,15 @@ describe('parseCount', () => {
 
 describe('parseCommand', () => {
     test('buy is the player buying, so the bot sells', () => {
-        expect(parseCommand('buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore' });
+        expect(parseCommand('buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore', qtyImplied: false });
     });
 
     test('sell is the player selling, so the bot buys', () => {
-        expect(parseCommand('sell 100 iron ore')).toEqual({ kind: 'quoteBuy', qty: 100, query: 'iron ore' });
+        expect(parseCommand('sell 100 iron ore')).toEqual({ kind: 'quoteBuy', qty: 100, query: 'iron ore', qtyImplied: false });
     });
 
     test('case and surrounding whitespace do not matter', () => {
-        expect(parseCommand('  BUY 1k Iron Ore ')).toEqual({ kind: 'quoteSell', qty: 1000, query: 'Iron Ore' });
+        expect(parseCommand('  BUY 1k Iron Ore ')).toEqual({ kind: 'quoteSell', qty: 1000, query: 'Iron Ore', qtyImplied: false });
     });
 
     test('bare list commands', () => {
@@ -72,8 +72,53 @@ describe('parseCommand', () => {
         expect(parseCommand('***')).toEqual({ kind: 'none' });
     });
 
-    test('a keyword with no count is not a command', () => {
-        expect(parseCommand('buy me a beer')).toEqual({ kind: 'none' });
+    // Why: the count is optional, so a line with none of it parses as one of them and the shop decides whether the words name anything it trades.
+    test('a missing count means one of them', () => {
+        expect(parseCommand('buying rune scimitar')).toEqual({
+            kind: 'quoteSell',
+            qty: 1,
+            query: 'rune scimitar',
+            qtyImplied: true
+        });
+        expect(parseCommand('buy rune scimitar')).toEqual({
+            kind: 'quoteSell',
+            qty: 1,
+            query: 'rune scimitar',
+            qtyImplied: true
+        });
+        expect(parseCommand('selling rune scimitar')).toEqual({
+            kind: 'quoteBuy',
+            qty: 1,
+            query: 'rune scimitar',
+            qtyImplied: true
+        });
+    });
+
+    test('a stated count of one is the same request, minus the guess', () => {
+        expect(parseCommand('buying 1 rune scimitar')).toEqual({
+            kind: 'quoteSell',
+            qty: 1,
+            query: 'rune scimitar',
+            qtyImplied: false
+        });
+    });
+
+    test('ordinary chat opening with a keyword still parses, and is flagged as a guess', () => {
+        expect(parseCommand('buy me a beer')).toEqual({
+            kind: 'quoteSell',
+            qty: 1,
+            query: 'me a beer',
+            qtyImplied: true
+        });
+    });
+
+    test('a count of zero is not a count, so the words carry the request', () => {
+        expect(parseCommand('buy 0 iron ore')).toEqual({
+            kind: 'quoteSell',
+            qty: 1,
+            query: '0 iron ore',
+            qtyImplied: true
+        });
     });
 
     test('a keyword with a count but no item is not a command', () => {
@@ -94,7 +139,7 @@ describe('parseCommand', () => {
     });
 
     test('all is carried through as a count', () => {
-        expect(parseCommand('sell all iron ore')).toEqual({ kind: 'quoteBuy', qty: 'all', query: 'iron ore' });
+        expect(parseCommand('sell all iron ore')).toEqual({ kind: 'quoteBuy', qty: 'all', query: 'iron ore', qtyImplied: false });
     });
 
     // Why: this is how a person says it out loud, and a shop that only takes "buy" reads as broken.
@@ -102,9 +147,15 @@ describe('parseCommand', () => {
         expect(parseCommand('buying 1k maple longbows')).toEqual({
             kind: 'quoteSell',
             qty: 1000,
-            query: 'maple longbows'
+            query: 'maple longbows',
+            qtyImplied: false
         });
-        expect(parseCommand('selling 500 iron ore')).toEqual({ kind: 'quoteBuy', qty: 500, query: 'iron ore' });
+        expect(parseCommand('selling 500 iron ore')).toEqual({
+            kind: 'quoteBuy',
+            qty: 500,
+            query: 'iron ore',
+            qtyImplied: false
+        });
     });
 
     test('a bare buying or selling is still the price list', () => {
@@ -116,13 +167,26 @@ describe('parseCommand', () => {
     test('a leading slash is accepted on any command', () => {
         expect(parseCommand('/prices')).toEqual({ kind: 'prices' });
         expect(parseCommand('/help')).toEqual({ kind: 'help' });
-        expect(parseCommand('/buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore' });
+        expect(parseCommand('/buy 100 iron ore')).toEqual({ kind: 'quoteSell', qty: 100, query: 'iron ore', qtyImplied: false });
     });
 
     test('help has a few spellings and they all land', () => {
         for (const word of ['help', 'commands', 'shop']) {
             expect(parseCommand(word)).toEqual({ kind: 'help' });
         }
+    });
+
+    // Why: it is the way out of a shop that has stopped answering, so it has to be one word and hard to mistype.
+    test('reset is a command, by either name', () => {
+        expect(parseCommand('reset')).toEqual({ kind: 'reset' });
+        expect(parseCommand('RESET')).toEqual({ kind: 'reset' });
+        expect(parseCommand('/reset')).toEqual({ kind: 'reset' });
+        expect(parseCommand('unstick')).toEqual({ kind: 'reset' });
+    });
+
+    test('reset with anything after it is ordinary chat', () => {
+        expect(parseCommand('reset please')).toEqual({ kind: 'none' });
+        expect(parseCommand('Resetting. Trade me again in a moment.')).toEqual({ kind: 'none' });
     });
 
     test('a slash on its own is not a command', () => {

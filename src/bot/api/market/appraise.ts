@@ -125,8 +125,15 @@ function sale(
         total,
         lines: [{ id: intent.itemId, name, count: qty, each, value: total }],
         ignored,
-        note: qty < intent.maxQty ? `that is all the ${name} I have` : null
+        note: qty < intent.maxQty ? shortNote(name, desk, intent.itemId) : null
     };
+}
+
+/** Short of what was asked for: the bank still holding some is a different thing from being out. */
+function shortNote(name: string, desk: DeskState, itemId: number): string {
+    return desk.held(itemId) > desk.available(itemId)
+        ? `that is all the ${name} I am carrying`
+        : `that is all the ${name} I have`;
 }
 
 /** They put x up, the book says y, the bot owes x * y. */
@@ -201,5 +208,10 @@ export function describeAppraisal(a: Appraisal): string {
         // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.
         return 'Put items in and I price them as you go. To buy, say what you want first.';
     }
-    return truncateChat(`${parts.join(' ')}${a.kind === 'nothing' ? '' : ` Total ${formatGp(a.total)}gp.`}`);
+    if (a.kind === 'nothing') {
+        return truncateChat(parts.join(' '));
+    }
+    // Why: on a sale the total is what the customer owes, and saying so is the only prompt for the coins.
+    const total = a.kind === 'sell' ? `You owe ${formatGp(a.total)}gp.` : `Total ${formatGp(a.total)}gp.`;
+    return truncateChat(`${parts.join(' ')} ${total}`);
 }

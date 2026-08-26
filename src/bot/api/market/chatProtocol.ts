@@ -1,10 +1,11 @@
 export type Command =
-    | { kind: 'quoteSell'; qty: number | 'all'; query: string }
-    | { kind: 'quoteBuy'; qty: number | 'all'; query: string }
+    | { kind: 'quoteSell'; qty: number | 'all'; query: string; qtyImplied: boolean }
+    | { kind: 'quoteBuy'; qty: number | 'all'; query: string; qtyImplied: boolean }
     | { kind: 'prices' }
     | { kind: 'buying' }
     | { kind: 'selling' }
     | { kind: 'help' }
+    | { kind: 'reset' }
     | { kind: 'none' };
 
 /** 2004 chat input cap. */
@@ -34,7 +35,7 @@ const LISTING = new Set(['list', 'book', 'rates', 'stock', 'prices']);
 // Why: the engine filters every public message before broadcasting it (MessagePublicHandler), and it reads "pric" as an obfuscated slur, so "prices" reaches the shop as "****es" and never parses.
 const CENSORED_PRICES = /^\*+es$/;
 
-// Why: a line only counts as a command when every part parses, so ordinary chat like "buy me a beer" is ignored in silence rather than answered.
+// Why: the keyword has to lead, so ordinary chat is not a command. A line with no count still parses, and the shop checks the name against its book before it answers.
 export function parseCommand(text: string): Command {
     // Why: players reach for a slash out of habit, and refusing it looks like the shop is broken.
     const parts = text.trim().replace(/^\//, '').split(/\s+/).filter(Boolean);
@@ -56,21 +57,27 @@ export function parseCommand(text: string): Command {
         if (head === 'help' || head === 'commands' || head === 'shop') {
             return { kind: 'help' };
         }
+        // Why: a shop that has tied itself up answers nothing else, so the way out has to be one bare word.
+        if (head === 'reset' || head === 'unstick') {
+            return { kind: 'reset' };
+        }
         return NONE;
     }
 
     if (!BUYING.has(head) && !SELLING.has(head)) {
         return NONE;
     }
-    const qty = parseCount(parts[1]);
-    if (qty === null) {
-        return NONE;
-    }
-    const query = parts.slice(2).join(' ');
+    // Why: 'buying rune scimitar' means one of them, so a missing count is a count of one rather than a parse failure.
+    const stated = parseCount(parts[1]);
+    const query = parts.slice(stated === null ? 1 : 2).join(' ');
     if (query.length === 0) {
         return NONE;
     }
-    return BUYING.has(head) ? { kind: 'quoteSell', qty, query } : { kind: 'quoteBuy', qty, query };
+    const qty = stated ?? 1;
+    const qtyImplied = stated === null;
+    return BUYING.has(head)
+        ? { kind: 'quoteSell', qty, query, qtyImplied }
+        : { kind: 'quoteBuy', qty, query, qtyImplied };
 }
 
 /** How to use the shop, in lines that fit the chat limit. */
@@ -78,7 +85,7 @@ export function parseCommand(text: string): Command {
 export const HELP_LINES: readonly string[] = [
     'To SELL to me: trade me and put items in. I price them as you go.',
     "To BUY from me: say 'buying 100 iron ore', then trade me and put up coins.",
-    "Say 'list' for my book, or 'help' for this again."
+    "Say 'list' for my book, 'reset' if I get stuck, or 'help' for this again."
 ];
 
 export function truncateChat(text: string): string {

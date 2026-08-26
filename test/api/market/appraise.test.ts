@@ -251,3 +251,30 @@ describe('describeAppraisal', () => {
         expect(describeAppraisal(a).length).toBeLessThanOrEqual(80);
     });
 });
+
+describe('a sale when the customer puts goods up instead of coins', () => {
+    // Why: the shop has already staked what it is selling, so the goods are named and left alone rather than
+    // Why: turning the window into a purchase that ignores the coins.
+    test('stays a sale, names the goods it will not count, and still wants the coins', () => {
+        const a = look(
+            [{ id: JUNK, name: 'Rune platebody', count: 1 }, { id: COINS, name: 'Coins', count: 500 }],
+            { desk: desk({ have: { [IRON]: 100 } }), intent: { itemId: IRON, maxQty: 100 } }
+        );
+
+        expect(a.kind).toBe('sell');
+        expect(a.owe.get(IRON)).toBe(100);
+        expect(a.want.get(COINS)).toBe(2200);
+        expect(a.ignored.some(i => i.name === 'Rune platebody')).toBe(true);
+    });
+
+    test('the line names what they owe, so the ask for coins is in it', () => {
+        const line = describeAppraisal(look([], { desk: desk({ have: { [IRON]: 100 } }), intent: { itemId: IRON, maxQty: 100 } }));
+        expect(line).toContain('You owe');
+    });
+
+    test('a purchase still reads as a total, since the shop is the one paying', () => {
+        const line = describeAppraisal(look([{ id: IRON, name: 'Iron ore', count: 100 }]));
+        expect(line).toContain('Total');
+        expect(line).not.toContain('You owe');
+    });
+});
