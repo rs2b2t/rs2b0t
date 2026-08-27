@@ -1,4 +1,4 @@
-/** Live BankFletcher proof: knife stays across a bank trip, then stringing raises the strung id.
+/** Live BankFletcher proof: knife stays across a bank trip, stringing raises the strung id, then headless attach.
  *  Why: unstrung and strung share a display name, so the stringing leg counts by id. */
 
 //   ENGINE_DIR=/path/to/engine bun e2e/bankfletcher-live.ts --base http://localhost:8888
@@ -14,6 +14,7 @@ const ENGINE_DIR = process.env.ENGINE_DIR ?? `${homedir()}/Documents/engine`;
 const WEST = { x: 3185, z: 3440, level: 0 };
 const KNIFE_SHOT = 'docs/e2e/bankfletcher-knife.png';
 const STRING_SHOT = 'docs/e2e/bankfletcher-string.png';
+const ARROW_SHOT = 'docs/e2e/bankfletcher-arrows.png';
 const BOW_STRING_ID = 1777;
 const UNSTRUNG_WILLOW_LONG = 58;
 const STRUNG_WILLOW_LONG = 847;
@@ -26,6 +27,9 @@ type Snap = {
     string: number;
     unstrung: number;
     strung: number;
+    feathers: number;
+    shafts: number;
+    headless: number;
     used: number;
 };
 
@@ -53,6 +57,9 @@ async function snap(page: Page): Promise<Snap> {
             string: g.__rs2b0t.Inventory.countById(stringId),
             unstrung: g.__rs2b0t.Inventory.countById(unstrungId),
             strung: g.__rs2b0t.Inventory.countById(strungId),
+            feathers: g.__rs2b0t.Inventory.count('Feather'),
+            shafts: g.__rs2b0t.Inventory.count('Arrow shaft'),
+            headless: g.__rs2b0t.Inventory.count('Headless arrow'),
             used: g.__rs2b0t.Inventory.used()
         };
     }, [BOW_STRING_ID, UNSTRUNG_WILLOW_LONG, STRUNG_WILLOW_LONG] as const);
@@ -162,6 +169,37 @@ try {
     console.log(
         `PASS stringing strung=${stringProof.strung} string=${stringProof.string} `
         + `unstrung=${stringProof.unstrung} screenshot=${STRING_SHOT}`
+    );
+
+    await stopScript(page);
+    await cheatQuiet(page, '~clearinv', 800);
+    await seedGive(page, 'give feather 80', async () => (await snap(page)).feathers >= 80);
+    await seedGive(page, 'give arrow_shaft 80', async () => (await snap(page)).shafts >= 80);
+
+    await setSettings(page, 'BankFletcher', { product: 'Headless arrows' });
+    await startScript(page, 'BankFletcher');
+    console.log('BankFletcher started — headless arrows');
+
+    const arrowDeadline = Date.now() + 45_000;
+    let arrowProof: Snap | null = null;
+    while (Date.now() < arrowDeadline) {
+        const now = await snap(page);
+        if (now.headless > 0 && now.feathers > 0 && now.shafts > 0) {
+            arrowProof = now;
+            break;
+        }
+        if (now.runner !== 'running') {
+            fail(`arrow attach stopped before a headless arrow: ${now.logs.slice(-8).join(' | ')}`);
+        }
+        await page.waitForTimeout(250);
+    }
+    if (!arrowProof) {
+        fail('arrow attach made no headless arrows');
+    }
+    await page.screenshot({ path: ARROW_SHOT, fullPage: true });
+    console.log(
+        `PASS arrows headless=${arrowProof.headless} feathers=${arrowProof.feathers} `
+        + `shafts=${arrowProof.shafts} screenshot=${ARROW_SHOT}`
     );
 } finally {
     client.cleanup();

@@ -84,7 +84,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['BankFletcher'] },
         status: 'unvetted',
         budgetMin: 5,
-        note: 'Varrock West: knife stays through a willow longbow bank trip, then stringing raises strung id 847'
+        note: 'Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
     },
     {
         id: 'baxtorian-rope-369-live',
