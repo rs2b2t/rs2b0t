@@ -288,9 +288,9 @@ Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + ro
 
 ### GreenDragon
 
-Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides
+Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides, sips super attack/strength mid-fight
 
-- Tags: `wilderness`, `dragons`, `hides`
+- Tags: `wilderness`, `dragons`, `hides`, `potions`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
@@ -302,6 +302,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
 | `shield` | string | `"Dragonfire shield"` | Anti-dragon shield — one of: Dragonfire shield |
+| `usePotions` | boolean | `true` | Drink super attack / strength |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Escape below HP% |

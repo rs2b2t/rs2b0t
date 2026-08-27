@@ -178,9 +178,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'GreenDragon',
-    description: 'Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides',
+    description: 'Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides, sips super attack/strength mid-fight',
     category: 'Combat',
-    tags: ['wilderness', 'dragons', 'hides'],
+    tags: ['wilderness', 'dragons', 'hides', 'potions'],
     settingsSchema: GREENDRAGON_SETTINGS,
     create: () => new GreenDragon()
 });

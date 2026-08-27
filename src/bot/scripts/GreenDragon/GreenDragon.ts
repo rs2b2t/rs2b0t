@@ -23,7 +23,8 @@ import { DROP_DB } from '../../data/dropdb.js';
 import { MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { SA_MAX_ENERGY, Special } from './Special.js';
 import { AttackClock, URGENT_HP_FRACTION, shouldHoldEat } from '../../api/combat/eatTiming.js';
-import { buryOneInFight } from '../../api/combat/fightUpkeep.js';
+import { buryOneInFight, swingStartedThisTick } from '../../api/combat/fightUpkeep.js';
+import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { foodForms, isFoodItem, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
@@ -35,8 +36,8 @@ import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { AT_BANK_RADIUS, RETURN_HOLD_MS, escapeNeeded, gearCandidates, gearToKeep, isGrindForeign, packForcesBank, slotFreeingAction, underPlayerAttack, wantsGroundItem, type SlotAction } from './GreenDragonLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { scriptFood } from '../../api/loadout/loadoutPlan.js';
-import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
+import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
+import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
 
 const TARGET = 'Green dragon';
 const DEFAULT_ANCHOR = new Tile(3096, 3814, 0);
@@ -67,6 +68,7 @@ export const SETTINGS: SettingsSchema = {
     spell: { type: 'string', default: 'Fire Strike', options: Object.keys(SPELL_DB), label: 'Autocast spell', group: 'Combat', showIf: SHOW_MAGE },
     runesWithdraw: { type: 'number', default: 150, min: 1, max: 1000, label: 'Casts of runes per bank trip', group: 'Combat', showIf: SHOW_MAGE },
     shield: { type: 'string', default: 'Dragonfire shield', options: ['Dragonfire shield'], label: 'Anti-dragon shield', group: 'Combat', help: 'worn to absorb the dragonfire — required' },
+    usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose mid-fight once the boost decays to within a tenth of the base level; the loadout\'s carry list sets the dose form and how many flasks per trip, otherwise one Super attack(3) and one Super strength(3)' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
@@ -115,6 +117,8 @@ let FOOD_RESERVE = 4;
 let BURY_BONES = false;
 let SOLVE_CLUES = true;
 let VERBOSE = false;
+/** Empty when potions are off, in mage mode, or the loadout and fallback both resolve to nothing. */
+let POTIONS: PotionPlan[] = [];
 /** Everything worn when the script started, kept at the bank and put back on. */
 let TRACKED_GEAR: string[] = [];
 
@@ -141,6 +145,16 @@ function needEat(): boolean {
         heal: foodHealAmount(FOOD_NAME),
         foodCount: 1
     });
+}
+
+/** Flasks of one potion held, counting every dose form. */
+function potionsHeld(plan: PotionPlan): number {
+    return plan.potion.doses.reduce((n, dose) => n + Inventory.count(dose), 0);
+}
+
+/** Every dose form the run carries, so the deposit keeps part-used flasks. */
+function potionDoseNames(): string[] {
+    return POTIONS.flatMap(plan => [...plan.potion.doses]);
 }
 
 function castsLeft(): number {
@@ -234,6 +248,7 @@ function keepNames(): string[] {
     if (TELE_ESCAPE) {
         extra.push(...VARROCK_TELE_RUNES.map(r => r.rune));
     }
+    extra.push(...potionDoseNames());
     return combatKeepNames({ food: FOOD_NAME, style: STYLE, spell: SPELL, extra });
 }
 
@@ -286,6 +301,58 @@ async function freeSlotForLoot(bot: GreenDragon): Promise<boolean> {
     }
     bot.log(`dropping ${food.name} did not free a slot`);
     return false;
+}
+
+async function dropVial(bot: GreenDragon): Promise<boolean> {
+    const vial = Inventory.first(EMPTY_VIAL);
+    if (!vial) {
+        return false;
+    }
+    bot.setStatus(`dropping an empty ${EMPTY_VIAL}`);
+    const before = Inventory.used();
+    if (!(await vial.interact('Drop'))) {
+        return false;
+    }
+    return Execution.delayUntilTicks(() => Inventory.used() < before, 3);
+}
+
+// Why: the sip is gated on the fight loop rather than on standing in the field, because a dose drunk on the walk from Edgeville has half decayed before the first dragon is engaged.
+// Why: one op lands per tick, so the vial and the dose take turns and true means the tick was spent.
+
+/** Drop a drained vial, or drink the one dose that is due, from inside a fight. */
+async function sipUpkeep(bot: GreenDragon): Promise<boolean> {
+    if (POTIONS.length === 0 || swingStartedThisTick()) {
+        return false;
+    }
+    if (await dropVial(bot)) {
+        return true;
+    }
+    const plan = potionToSip({
+        plans: POTIONS,
+        held: potionsHeld,
+        levels: skill => ({ base: Skills.level(skill), effective: Skills.effective(skill) })
+    });
+    if (plan === null) {
+        return false;
+    }
+    const dose = plan.potion.doses.map(name => Inventory.first(name)).find(item => item !== null);
+    if (!dose) {
+        return false;
+    }
+    const skill = plan.potion.skill;
+    const name = dose.name ?? plan.flask;
+    const before = Skills.effective(skill);
+    bot.setStatus(`drinking ${name}`);
+    if (!(await dose.interact('Drink'))) {
+        return false;
+    }
+    if (!(await Execution.delayUntilTicks(() => Skills.effective(skill) > before, 3))) {
+        bot.vlog(`${name} did not take — ${skill} stayed at ${before}`);
+        return false;
+    }
+    bot.countSip();
+    bot.log(`drank ${name} — ${skill} ${before} -> ${Skills.effective(skill)}`);
+    return true;
 }
 
 async function lootOnce(bot: GreenDragon): Promise<boolean> {
@@ -575,6 +642,7 @@ async function withdrawStyleSupplies(bot: GreenDragon): Promise<void> {
         }
         bot.noteSupplyEmpty(castsLeft() < 1);
     }
+    await withdrawPotions(bot);
     if (TELE_ESCAPE) {
         for (const { rune, count } of VARROCK_TELE_RUNES) {
             const target = count * TELE_STOCK;
@@ -584,6 +652,30 @@ async function withdrawStyleSupplies(bot: GreenDragon): Promise<void> {
         }
         if (!hasVarrockRunes()) {
             bot.log('WARNING: bank is short of Varrock-teleport runes — escape falls back to fleeing on foot.');
+        }
+    }
+}
+
+// Why: flasks are counted across every dose form, so a half-used potion carried back from the last trip is not stocked on top of.
+
+/** Top each planned potion up to its flask count. */
+async function withdrawPotions(bot: GreenDragon): Promise<void> {
+    for (const plan of POTIONS) {
+        const start = potionsHeld(plan);
+        for (let guard = 0; guard < 12 && potionsHeld(plan) < plan.want && !Inventory.isFull(); guard++) {
+            const before = potionsHeld(plan);
+            await Bank.withdraw(plan.flask, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => potionsHeld(plan) > before, 2500))) {
+                break;
+            }
+        }
+        const got = potionsHeld(plan) - start;
+        if (got > 0) {
+            bot.log(`withdrew ${got} ${plan.flask}`);
+        } else if (potionsHeld(plan) === 0 && Bank.count(plan.flask) === 0) {
+            bot.warnPotionEmpty(plan.flask);
+        } else if (potionsHeld(plan) < plan.want) {
+            bot.vlog(`short of ${plan.flask}: ${potionsHeld(plan)}/${plan.want} held, pack ${Inventory.used()}/28, bank has ${Bank.count(plan.flask)}`);
         }
     }
 }
@@ -605,6 +697,19 @@ async function withdrawTo(name: string, target: number): Promise<number> {
         }
     }
     return Inventory.count(name) - start;
+}
+
+// Why: a Vial is neither grind kit nor loot, so left in the pack `isGrindForeign` reads it as clue-trail junk and sends the bot to Edgeville every time a flask empties.
+
+/** Catches a vial the fight loop did not, before it can force a bank trip. */
+class DropVial implements Task {
+    constructor(private bot: GreenDragon) {}
+    validate(): boolean {
+        return POTIONS.length > 0 && !underAttack() && Inventory.contains(EMPTY_VIAL);
+    }
+    async execute(): Promise<void> {
+        await dropVial(this.bot);
+    }
 }
 
 class BuryBones implements Task {
@@ -764,6 +869,11 @@ class Fight implements Task {
                 }
             }
             if (Game.inCombat()) {
+                // Why: the dose goes first because it is due once every few minutes while a bone waits without cost, and reaching this branch is itself the "only sip while fighting a dragon" gate.
+                if (await sipUpkeep(this.bot)) {
+                    await Execution.delayTicks(1);
+                    continue;
+                }
                 // Why: burying costs a tick like eating, so spend it in the swing cooldown rather than on the swing.
                 // Why: inline, not a sibling task. A sibling only runs when Fight yields, which spaces burials out.
                 if (BURY_BONES && (await buryOneInFight(BONE_NAME))) {
@@ -799,6 +909,8 @@ export default class GreenDragon extends TaskBot {
 
     private specials = 0;
     private buried = 0;
+    private sips = 0;
+    private readonly potionWarned = new Set<string>();
 
     private readonly startedAt = Date.now();
 
@@ -837,6 +949,10 @@ export default class GreenDragon extends TaskBot {
         BURY_BONES = this.settings.bool('buryBones', false);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
+        // Why: attack and strength boosts do nothing for a spell's damage, so mage runs carry no flasks whatever the panel says.
+        POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true)
+            ? plannedPotions(suppliesOf(selectedLoadout(this.settings)))
+            : [];
         TRACKED_GEAR = Equipment.items().map(i => i.name ?? '').filter(n => n.length > 0);
 
         this.on('chat.message', e => { if (/oh dear.*you are dead/i.test(e.text)) { this.died = true; } });
@@ -858,7 +974,7 @@ export default class GreenDragon extends TaskBot {
 
         await assertAutoRetaliate(this);
 
-        this.log(`GreenDragon — style ${STYLE} w/ ${WEAPON} + ${SHIELD}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (reserve ${FOOD_RESERVE}), escape '${TELE_ESCAPE ? 'Varrock tele' : 'flee to bank'}', clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${BONE_NAME}` : ''}, field ${ANCHOR}, bank ${BANK_TILE}`);
+        this.log(`GreenDragon — style ${STYLE} w/ ${WEAPON} + ${SHIELD}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (reserve ${FOOD_RESERVE}), escape '${TELE_ESCAPE ? 'Varrock tele' : 'flee to bank'}', clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${BONE_NAME}` : ''}, potions ${POTIONS.length > 0 ? POTIONS.map(p => `${p.want}x ${p.flask}`).join(' + ') : 'off'}, field ${ANCHOR}, bank ${BANK_TILE}`);
         this.vlog(`verbose logging on — loot set [${[...LOOT_SET].join(', ')}], common junk ${BANK_COMMON ? 'on' : 'off'}`);
 
         const traced = (name: string, task: Task): Task => new Traced(this, name, task);
@@ -882,6 +998,7 @@ export default class GreenDragon extends TaskBot {
             traced('GearEquip', new GearEquip(this)),
             traced('SetAttackStyle', new SetAttackStyle(this)),
             traced('ArmAutocast', new ArmAutocast(this)),
+            traced('DropVial', new DropVial(this)),
             // Above SolveClue: a trail's bank prep would otherwise deposit the
             // bones we were told to bury.
             traced('BuryBones', new BuryBones(this)),
@@ -948,6 +1065,17 @@ export default class GreenDragon extends TaskBot {
     countSpecial(): void {
         this.specials++;
     }
+    countSip(): void {
+        this.sips++;
+    }
+    /** Once per flask: the grind carries on unboosted rather than stopping. */
+    warnPotionEmpty(flask: string): void {
+        if (this.potionWarned.has(flask)) {
+            return;
+        }
+        this.potionWarned.add(flask);
+        this.log(`WARNING: no '${flask}' in the bank — fighting unboosted. Deposit some, or turn the potion setting off.`);
+    }
     countLoot(name?: string): void {
         this.looted++;
         if (name) {
@@ -988,6 +1116,13 @@ export default class GreenDragon extends TaskBot {
             p.row(`Runtime: ${fmtDuration(mins)}`, `Kills: ${this.killsTotal}`, `Kills/hr: ${mins > 0.5 ? kph : '—'}`);
             p.row(`Style: ${STYLE}`, `Food: ${foodCount()}`, `Trips: ${this.bankTrips}`);
             p.row(`Shield: ${Equipment.contains(SHIELD) ? 'on' : 'OFF!'}`, `Spec: ${USE_SPECIAL ? `${Math.round(Special.energy() / 10)}% (${this.specials})` : 'off'}`, `Freed: ${this.slotsFreed}`);
+            if (POTIONS.length > 0) {
+                const boost = (plan: PotionPlan): string => {
+                    const sk = plan.potion.skill;
+                    return `${plan.potion.short} +${Math.max(0, Skills.effective(sk) - Skills.level(sk))} (${potionsHeld(plan)})`;
+                };
+                p.row(...POTIONS.map(boost), `Sips: ${this.sips}`);
+            }
             p.bar('HP', hpFrac());
         } else if (tab === 'Melee' || tab === 'Support') {
             // Prayer is always shown on Support even at zero gain: seeing it sit
