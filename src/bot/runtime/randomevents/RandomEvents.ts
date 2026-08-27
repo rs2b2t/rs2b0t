@@ -111,10 +111,11 @@ const GIVE_UP_COOLDOWN_MS = 45000; // then ignore that event for this long so th
 const PICK_WAIT_MS = 80_000;
 
 /**
- * Events that teleport the player into their own map square, retried until solved.
- * Why: the script cannot walk out, so resuming it makes the bot fight the solver for the same tiles.
+ * Events the script cannot resume through.
+ * Why: maze/mime trap the player in an event map.
+ * Why: Strange box / Lamp occupy a pack slot and have no Drop — giving up leaves them there forever.
  */
-const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime']);
+const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 
 export function plantStrategy(ops: string[]): 'pick' | 'evade' {
     const canPick = ops.some(a => /pick|take/i.test(a));
@@ -248,13 +249,33 @@ class RandomEventsImpl {
             }
         }
 
-        // Scene may be empty mid-teleport; npcs() can still walk combatCycle stamps.
-        let npcs: ReturnType<typeof reader.npcs>;
         try {
-            npcs = reader.npcs();
+            const scene = this.detectSceneEvents();
+            if (scene) {
+                return scene;
+            }
         } catch {
-            return null;
+            // Scene rebuild / deltime-0: npcs/locs can throw. Inventory-held events still need solving.
         }
+
+        if (handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name)) !== null) {
+            return { kind: 'lost-tool', name: 'lost tool' };
+        }
+
+        if (Inventory.contains('Strange box')) {
+            return { kind: 'box', name: 'strange box' };
+        }
+
+        if (Inventory.contains('Lamp')) {
+            return { kind: 'lamp', name: 'lamp' };
+        }
+
+        return null;
+    }
+
+    private detectSceneEvents(): DetectedEvent | null {
+        // Scene may be empty mid-teleport; npcs() can still walk combatCycle stamps.
+        const npcs = reader.npcs();
 
         for (const npc of npcs) {
             const name = npc.name?.toLowerCase();
@@ -314,18 +335,6 @@ class RandomEventsImpl {
             }
         }
 
-        if (handleLocation(Inventory.items().map(i => i.name), Equipment.items().map(i => i.name)) !== null) {
-            return { kind: 'lost-tool', name: 'lost tool' };
-        }
-
-        if (Inventory.contains('Strange box')) {
-            return { kind: 'box', name: 'strange box' };
-        }
-
-        if (Inventory.contains('Lamp')) {
-            return { kind: 'lamp', name: 'lamp' };
-        }
-
         return null;
     }
 
@@ -359,7 +368,7 @@ class RandomEventsImpl {
         this.attempts.set(sig, n);
         if (n > MAX_ATTEMPTS) {
             if (TRAPPED_KINDS.has(event.kind)) {
-                log(`random event: ${event.name} — attempt ${n}; still inside the event map, so retrying instead of handing back to the script`);
+                log(`random event: ${event.name} — attempt ${n}; still present, so retrying instead of handing back to the script`);
             } else {
                 this.attempts.delete(sig);
                 this.cooldownUntil.set(sig, performance.now() + GIVE_UP_COOLDOWN_MS);

@@ -9,6 +9,12 @@ export interface ArrivalProbe {
     probeable(t: NavPoint): boolean;
 }
 
+/** Walk metric: Chebyshev on the same plane, never "close" across a floor change. */
+export function walkChebyshev(a: NavPoint, b: NavPoint): number {
+    const xz = chebyshev(a, b);
+    return a.level === b.level ? xz : 1_000_000 + xz;
+}
+
 export function isArrived(me: NavPoint, dest: NavPoint, radius: number, probe: ArrivalProbe): boolean {
     if (me.level !== dest.level) {
         return false;

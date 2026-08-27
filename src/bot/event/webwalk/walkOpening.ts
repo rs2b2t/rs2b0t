@@ -2,6 +2,7 @@ import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Reachability } from './geometry/Reachability.js';
+import { isArrived } from './geometry/arrival.js';
 import type Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -32,13 +33,13 @@ export function towardDest(door: WorldTile, here: WorldTile, dest: WorldTile): b
 export async function walkOpening(dest: Tile, radius: number, obstacles: string[], log?: (m: string) => void): Promise<boolean> {
     for (let seg = 0; seg < 8; seg++) {
         const here = Game.tile();
-        if (here && dest.distanceTo(here) <= radius) {
+        if (here && isArrived(here, dest, radius, Reachability.arrivalProbe())) {
             return true;
         }
         // 90s per segment, 15s was too short for long bank legs (Rimmington→Fally).
         await Traversal.walkTo(dest, { radius, timeoutMs: 90_000, log: m => log?.(`  ${m}`) });
         const after = Game.tile();
-        if (after && dest.distanceTo(after) <= radius) {
+        if (after && isArrived(after, dest, radius, Reachability.arrivalProbe())) {
             return true;
         }
 
@@ -82,5 +83,5 @@ export async function walkOpening(dest: Tile, radius: number, obstacles: string[
         }, 4000);
     }
     const here = Game.tile();
-    return here !== null && dest.distanceTo(here) <= radius;
+    return here !== null && isArrived(here, dest, radius, Reachability.arrivalProbe());
 }

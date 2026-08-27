@@ -4,8 +4,7 @@ import { Navigator } from '../../event/webwalk/Navigator.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { WalkExecutor, type WalkOptions } from '../../event/webwalk/WalkExecutor.js';
 import { advance, initialLadderState, judgeProbe, pickUnstickStep, type LadderState, type LastOutcome } from '../../event/webwalk/walkLadder.js';
-import { isArrived } from '../../event/webwalk/geometry/arrival.js';
-import { chebyshev } from '../../event/webwalk/geometry/followMath.js';
+import { isArrived, walkChebyshev } from '../../event/webwalk/geometry/arrival.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { EventSignal } from '../execution/EventSignal.js';
 import { Execution } from '../execution/Execution.js';
@@ -107,7 +106,7 @@ export const Traversal = {
 
         const dist = (): number => {
             const me = reader.worldTile();
-            return me ? chebyshev(me, dest) : Number.POSITIVE_INFINITY;
+            return me ? walkChebyshev(me, dest) : Number.POSITIVE_INFINITY;
         };
         const withinRadius = (): boolean => {
             const me = reader.worldTile();
