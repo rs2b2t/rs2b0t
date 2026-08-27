@@ -17,9 +17,7 @@ export default class Tile implements WorldTile {
 
     distanceTo(other: WorldTile): number {
         const xz = Math.max(Math.abs(this.x - other.x), Math.abs(this.z - other.z));
-        // Why: Chebyshev is the walk metric on one plane. Jiminua's store ladder
-        // (2766,3122,1) is 1 xz-tile from the counter on level 0, and treating that as
-        // "arrived" leaves the walker stranded upstairs.
+        // Why: xz Chebyshev treats Jiminua's lookout (2766,3122,1) as arrived at the store.
         if ((this.level ?? 0) !== (other.level ?? 0)) {
             return 1_000_000 + xz;
         }

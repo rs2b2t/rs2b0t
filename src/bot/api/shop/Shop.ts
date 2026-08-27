@@ -172,10 +172,7 @@ function heldById(id: number): number {
 const USER_OPS_PER_TICK = 5;
 const SHOP_STEPS = [10, 5, 1] as const;
 
-/**
- * One tick's worth of shop ops: up to USER_OPS_PER_TICK clicks whose step sizes sum to at most `remaining`.
- * Why: the engine drops extra user-event packets in the same tick, and selling 25 as 10+10+5 without batching takes three ticks.
- */
+/** Why: the engine drops extra user-event packets, so 25 must sell as 10+10+5 in one tick. */
 export function shopOpBatch(ops: (string | null)[], verb: 'buy' | 'sell', remaining: number): number[] {
     const batch: number[] = [];
     let left = remaining;

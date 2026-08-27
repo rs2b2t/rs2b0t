@@ -171,11 +171,7 @@ export function tradeWindowIsFor(partnerHeader: string | null, clicked: string):
     return partnerHeader.toLowerCase() === clicked.toLowerCase();
 }
 
-/**
- * Who the master should Trade-with.
- * Why: accepting C cancels A's outstanding request; only a request that arrived after the last accept is still live.
- * Why: a second Trade-with click (same person or another) closes the window that just opened.
- */
+/** Why: a second Trade-with click closes the window; only an ask after the last accept is still live. */
 export function masterPickTradeTarget(opts: {
     asked: string | null;
     askedAt: number;
