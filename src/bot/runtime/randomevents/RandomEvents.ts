@@ -113,7 +113,7 @@ const PICK_WAIT_MS = 80_000;
 /**
  * Events the script cannot resume through.
  * Why: maze/mime trap the player in an event map.
- * Why: Strange box / Lamp occupy a pack slot and have no Drop — giving up leaves them there forever.
+ * Why: Strange box / Lamp occupy a pack slot and have no Drop, so giving up leaves them there forever.
  */
 const TRAPPED_KINDS: ReadonlySet<EventKind> = new Set(['maze', 'mime', 'box', 'lamp']);
 

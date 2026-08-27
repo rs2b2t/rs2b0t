@@ -76,7 +76,7 @@ export function offerCount(unnoted: number): number {
 
 const ESSENCE_NAME = 'rune essence';
 const COINS_NAME = 'coins';
-/** Inventory puzzles RandomEvents Open/Rub. They have no Drop — DropLitter must not touch them. */
+/** Inventory puzzles RandomEvents Open/Rub. They have no Drop. DropLitter must not touch them. */
 const EVENT_HELD = new Set(['strange box', 'lamp']);
 
 /** Coins, noted/unnoted essence, talisman; master also keeps the rune it crafts. Nameless slots are litter. */
