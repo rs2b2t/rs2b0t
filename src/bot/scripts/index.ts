@@ -476,9 +476,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'BankFletcher',
-    description: 'Bank-standing fletcher — withdraw logs, knife-fletch the chosen product (arrow shafts / unstrung bow), deposit, repeat',
+    description: 'Bank-standing fletcher — keeps the knife (or bow string), Make-X logs into shafts/unstrung bows, or spam-string unstrung bows and attach arrows',
     category: 'Fletching',
-    tags: ['fletching', 'banking', 'afk'],
+    tags: ['fletching', 'banking', 'afk', 'bows', 'arrows', 'stringing'],
     settingsSchema: BANKFLETCHER_SETTINGS,
     create: () => new BankFletcher()
 });
