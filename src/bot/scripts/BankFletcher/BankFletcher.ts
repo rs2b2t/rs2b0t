@@ -34,10 +34,11 @@ import {
     makeBatchCount,
     matchProduct,
     needsRestock,
-    nextEmptyReads,
+    nextEmptyReadsByKey,
     productNeedsDifferentLog,
     shortBowXpHint,
     shouldStopEmpty,
+    shouldStopNoProgress,
     stockAction,
     stringIsStacked,
     stringPlanFor,
@@ -54,8 +55,7 @@ const FLETCHING_KNIFE = 'Knife';
 const BOOTH = { op: 'Use-quickly' };
 const LIST_WAIT_TICKS = 7;
 const WITHDRAW_CONFIRM_TICKS = 4;
-const BATCH_IDLE_TICKS = 5;
-const MENU_OPEN_TICKS = 5;
+const BATCH_IDLE_TICKS = 12;
 
 export const SETTINGS: SettingsSchema = {
     material: {
@@ -160,7 +160,7 @@ export default class BankFletcher extends TaskBot {
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
-    private emptyReads = 0;
+    private emptyReads: Record<string, number> = {};
 
     private material = 'Logs';
     private product = 'Arrow shafts';
@@ -197,7 +197,7 @@ export default class BankFletcher extends TaskBot {
 
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('fletching');
-        this.emptyReads = 0;
+        this.emptyReads = {};
 
         if (stringing) {
             this.log(`BankFletcher stringing '${stringing.displayName}' (u id ${stringing.unstrungId}) at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
@@ -255,9 +255,9 @@ export default class BankFletcher extends TaskBot {
     bankTile(): Tile { return this.bankStand; }
     boothLocName(): string { return this.boothName; }
     leashRadius(): number { return this.leash; }
-    emptyReadCount(): number { return this.emptyReads; }
-    noteEmpty(action: ReturnType<typeof stockAction>): void {
-        this.emptyReads = nextEmptyReads(this.emptyReads, action);
+    emptyReadCount(key: string): number { return this.emptyReads[key] ?? 0; }
+    noteEmpty(key: string, action: ReturnType<typeof stockAction>): void {
+        this.emptyReads = nextEmptyReadsByKey(this.emptyReads, key, action);
     }
 
     workKind(): WorkKind {
@@ -377,6 +377,7 @@ export default class BankFletcher extends TaskBot {
         return needsRestock({
             kind,
             logCount: this.logCount(),
+            knifeCount: this.knifeCount(),
             input0: this.instantInput0Count(),
             input1: this.instantInput1Count()
         });
@@ -490,10 +491,6 @@ class BankTrip implements Task {
                 this.bot.log('bank window closed — will retry');
                 return;
             }
-            if (state === 'unready' && !arrived) {
-                this.bot.log('bank list has not filled in yet — will retry');
-                return;
-            }
 
             const stringing = this.bot.stringPlan();
             if (stringing) {
@@ -511,7 +508,7 @@ class BankTrip implements Task {
                         hasItem: Boolean(bankItem?.name),
                         waitTimedOut: !arrived
                     });
-                    this.bot.noteEmpty(action);
+                    this.bot.noteEmpty(input, action);
                     if (action === 'ok' && bankItem?.name) {
                         const bankName = bankItem.name;
                         const allOp = withdrawOp(bankItem.ops, 'all') ?? withdrawOp(bankItem.ops, 'any') ?? 'Withdraw-All';
@@ -527,10 +524,10 @@ class BankTrip implements Task {
                         this.bot.log(`no '${input}' in the bank list yet (${action}) — will retry`);
                         return;
                     }
-                    if (shouldStopEmpty(this.bot.emptyReadCount())) {
+                    if (shouldStopEmpty(this.bot.emptyReadCount(input))) {
                         ScriptRunner.stop(`BankFletcher: bank is out of '${input}'`);
                     } else {
-                        this.bot.log(`bank snapshot missed '${input}' (${this.bot.emptyReadCount()}/${EMPTY_READ_LIMIT}) — will retry`);
+                        this.bot.log(`bank snapshot missed '${input}' (${this.bot.emptyReadCount(input)}/${EMPTY_READ_LIMIT}) — will retry`);
                     }
                     return;
                 }
@@ -543,18 +540,19 @@ class BankTrip implements Task {
                 hasItem: Boolean(logItem?.name),
                 waitTimedOut: !arrived
             });
-            this.bot.noteEmpty(logAction);
+            const logKey = this.bot.materialName();
+            this.bot.noteEmpty(logKey, logAction);
             if (logAction !== 'ok' || !logItem?.name) {
                 if (logAction.startsWith('retry')) {
-                    this.bot.log(`'${this.bot.materialName()}' unread (${logAction}) — will retry`);
+                    this.bot.log(`'${logKey}' unread (${logAction}) — will retry`);
                     return;
                 }
-                if (shouldStopEmpty(this.bot.emptyReadCount())) {
-                    ScriptRunner.stop(`BankFletcher: bank is out of '${this.bot.materialName()}' — fletching complete`);
+                if (shouldStopEmpty(this.bot.emptyReadCount(logKey))) {
+                    ScriptRunner.stop(`BankFletcher: bank is out of '${logKey}' — fletching complete`);
                 } else {
                     this.bot.log(
-                        `bank snapshot missed '${this.bot.materialName()}' `
-                        + `(${this.bot.emptyReadCount()}/${EMPTY_READ_LIMIT}) — will retry`
+                        `bank snapshot missed '${logKey}' `
+                        + `(${this.bot.emptyReadCount(logKey)}/${EMPTY_READ_LIMIT}) — will retry`
                     );
                 }
                 return;
@@ -581,6 +579,7 @@ class BankTrip implements Task {
                 const knifeName = knifeBank.name;
                 const knifeOps = knifeBank.ops.filter((o): o is string => o !== null);
                 const oneOp = withdrawOp(knifeOps, '1') ?? withdrawOp(knifeOps, 'any') ?? 'Withdraw-1';
+                this.bot.log(`withdrawing ${knifeName} ('${oneOp}')`);
                 await Bank.withdraw(knifeName, oneOp);
                 await Execution.delayUntilTicks(() => Inventory.contains(knifeName), WITHDRAW_CONFIRM_TICKS);
             }
@@ -613,7 +612,7 @@ class BankTrip implements Task {
                 hasItem: Boolean(stringItem),
                 waitTimedOut
             });
-            this.bot.noteEmpty(action);
+            this.bot.noteEmpty(BOW_STRING, action);
             if (action === 'ok' && stringItem) {
                 if (!(await withdrawExact(stringItem, load.stringExact, () => this.bot.packCountById(plan.stringId), m => this.bot.log(m)))) {
                     return;
@@ -621,11 +620,11 @@ class BankTrip implements Task {
             } else if (action.startsWith('retry')) {
                 this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
                 return;
-            } else if (shouldStopEmpty(this.bot.emptyReadCount())) {
+            } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
                 ScriptRunner.stop(`BankFletcher: bank is out of '${BOW_STRING}'`);
                 return;
             } else {
-                this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount()}/${EMPTY_READ_LIMIT}) — will retry`);
+                this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
                 return;
             }
         }
@@ -636,7 +635,8 @@ class BankTrip implements Task {
             hasItem: Boolean(unstrung),
             waitTimedOut
         });
-        this.bot.noteEmpty(unstrungAction);
+        const unstrungKey = `unstrung:${plan.unstrungId}`;
+        this.bot.noteEmpty(unstrungKey, unstrungAction);
         if (unstrungAction === 'ok' && unstrung) {
             if (!load.unstrungAll || Inventory.isFull()) {
                 return;
@@ -658,12 +658,12 @@ class BankTrip implements Task {
             this.bot.log(`no ${plan.displayName} (u id ${plan.unstrungId}) in the bank list yet (${unstrungAction}) — will retry`);
             return;
         }
-        if (shouldStopEmpty(this.bot.emptyReadCount())) {
+        if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
             ScriptRunner.stop(`BankFletcher: bank is out of unstrung ${plan.displayName}`);
         } else {
             this.bot.log(
                 `bank snapshot missed unstrung ${plan.displayName} `
-                + `(${this.bot.emptyReadCount()}/${EMPTY_READ_LIMIT}) — will retry`
+                + `(${this.bot.emptyReadCount(unstrungKey)}/${EMPTY_READ_LIMIT}) — will retry`
             );
         }
     }
@@ -687,9 +687,9 @@ class Fletch implements Task {
             this.bot.setStatus(`fletching ${this.bot.productName()}`);
             const before = this.bot.logCount();
             if (!(await knife.useOn(log))) { await Execution.delayTicks(1); continue; }
-            await Execution.delayUntilTicks(
+            await Execution.delayUntil(
                 () => ChatDialog.isMakeMenu() || this.bot.logCount() < before || ChatDialog.canContinue(),
-                MENU_OPEN_TICKS
+                8000
             );
             if (ChatDialog.isMakeMenu()) { return; }
         }
@@ -711,11 +711,14 @@ class InstantAttach implements Task {
         const attach = this.bot.attachPlan();
         const perAction = stringing?.perAction ?? attach?.perAction ?? 1;
         this.bot.setStatus(stringing ? `stringing ${stringing.displayName}` : `attaching ${attach?.product ?? 'product'}s`);
+        let noProgress = 0;
         for (let n = 0; n < 80; n++) {
             if (ChatDialog.isOpen()) { return; }
             const want = instantActionsFor(this.bot.instantInput0Count(), this.bot.instantInput1Count(), perAction);
             if (want === 0) { return; }
             const before = this.bot.instantProductCount();
+            const before0 = this.bot.instantInput0Count();
+            const before1 = this.bot.instantInput1Count();
             let sent = 0;
             for (let i = 0; i < want; i++) {
                 const a = this.bot.instantInput0();
@@ -727,8 +730,14 @@ class InstantAttach implements Task {
             const now = this.bot.instantProductCount();
             if (now > before) {
                 this.bot.recordMade(now - before);
-            } else if (sent === 0) {
-                return;
+                noProgress = 0;
+            } else if (this.bot.instantInput0Count() < before0 || this.bot.instantInput1Count() < before1) {
+                noProgress = 0;
+            } else {
+                noProgress++;
+                if (shouldStopNoProgress(noProgress, sent)) {
+                    return;
+                }
             }
         }
     }

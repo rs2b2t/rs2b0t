@@ -27,10 +27,12 @@ import {
     matchProduct,
     needsRestock,
     nextEmptyReads,
+    nextEmptyReadsByKey,
     productKeywords,
     productNeedsDifferentLog,
     shortBowXpHint,
     shouldStopEmpty,
+    shouldStopNoProgress,
     stockAction,
     stringIsStacked,
     stringPlanFor,
@@ -223,9 +225,10 @@ describe('keepNames — knife or bow string stays, attach keeps nothing', () => 
 });
 
 describe('needsRestock / hasFletchWork', () => {
-    test('knife products restock only when the pack has no logs', () => {
-        expect(needsRestock({ kind: 'knife', logCount: 0, input0: 0, input1: 0 })).toBe(true);
-        expect(needsRestock({ kind: 'knife', logCount: 12, input0: 0, input1: 0 })).toBe(false);
+    test('knife products restock when logs or the knife are missing', () => {
+        expect(needsRestock({ kind: 'knife', logCount: 0, knifeCount: 1, input0: 0, input1: 0 })).toBe(true);
+        expect(needsRestock({ kind: 'knife', logCount: 12, knifeCount: 1, input0: 0, input1: 0 })).toBe(false);
+        expect(needsRestock({ kind: 'knife', logCount: 12, knifeCount: 0, input0: 0, input1: 0 })).toBe(true);
     });
 
     test('knife products need both logs and a knife to fletch', () => {
@@ -235,15 +238,15 @@ describe('needsRestock / hasFletchWork', () => {
     });
 
     test('attach restocks when either input is gone', () => {
-        expect(needsRestock({ kind: 'attach', logCount: 0, input0: 0, input1: 80 })).toBe(true);
-        expect(needsRestock({ kind: 'attach', logCount: 0, input0: 80, input1: 0 })).toBe(true);
-        expect(needsRestock({ kind: 'attach', logCount: 0, input0: 80, input1: 80 })).toBe(false);
+        expect(needsRestock({ kind: 'attach', logCount: 0, knifeCount: 0, input0: 0, input1: 80 })).toBe(true);
+        expect(needsRestock({ kind: 'attach', logCount: 0, knifeCount: 0, input0: 80, input1: 0 })).toBe(true);
+        expect(needsRestock({ kind: 'attach', logCount: 0, knifeCount: 0, input0: 80, input1: 80 })).toBe(false);
     });
 
     test('stringing restocks when unstrung or string is gone', () => {
-        expect(needsRestock({ kind: 'string', logCount: 0, input0: 0, input1: 14 })).toBe(true);
-        expect(needsRestock({ kind: 'string', logCount: 0, input0: 80, input1: 0 })).toBe(true);
-        expect(needsRestock({ kind: 'string', logCount: 0, input0: 80, input1: 14 })).toBe(false);
+        expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 0, input1: 14 })).toBe(true);
+        expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 80, input1: 0 })).toBe(true);
+        expect(needsRestock({ kind: 'string', logCount: 0, knifeCount: 0, input0: 80, input1: 14 })).toBe(false);
     });
 });
 
@@ -284,6 +287,26 @@ describe('bank snapshot — a missing name is not an empty bank', () => {
     test('a closed or still-filling window does not increment empty reads', () => {
         expect(nextEmptyReads(1, 'retry-closed')).toBe(1);
         expect(nextEmptyReads(1, 'retry-unready')).toBe(1);
+    });
+
+    test('one input ok does not reset another input empty streak', () => {
+        let reads: Record<string, number> = {};
+        for (let pass = 0; pass < EMPTY_READ_LIMIT; pass++) {
+            reads = nextEmptyReadsByKey(reads, 'Feather', 'ok');
+            reads = nextEmptyReadsByKey(reads, 'Arrow shaft', 'empty-confirmed');
+        }
+        expect(reads['Feather']).toBe(0);
+        expect(reads['Arrow shaft']).toBe(EMPTY_READ_LIMIT);
+        expect(shouldStopEmpty(reads['Arrow shaft'] ?? 0)).toBe(true);
+    });
+});
+
+describe('shouldStopNoProgress', () => {
+    test('zero sent clicks stop immediately, sent-but-rejected clicks stop at the limit', () => {
+        expect(shouldStopNoProgress(1, 0)).toBe(true);
+        expect(shouldStopNoProgress(1, 5)).toBe(false);
+        expect(shouldStopNoProgress(2, 5)).toBe(false);
+        expect(shouldStopNoProgress(3, 5)).toBe(true);
     });
 });
 

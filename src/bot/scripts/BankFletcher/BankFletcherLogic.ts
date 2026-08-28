@@ -9,7 +9,7 @@ export const PRODUCT_OPTIONS = [
 
 export const EMPTY_READ_LIMIT = 3;
 
-/** RS make-x count dialog cap — BankFletcher #177 drains a pack in one click. */
+/** RS make-x count dialog cap. BankFletcher #177 drains a pack in one click. */
 export const MAKE_X_CAP = 30;
 
 // Engine cap: five USER_EVENT packets per player per tick (DartFletcher).
@@ -242,6 +242,7 @@ export function countById(items: readonly { id: number; count: number }[], id: n
     return items.filter(i => i.id === id).reduce((n, i) => n + Math.max(1, i.count), 0);
 }
 
+// Why: OpHeldUHandler checks inv.hasAt(slot), and inv_del eats the lowest slot while inv_add refills it, so the highest slot stays valid through the 5-click burst.
 export function lastItemById<T extends { id: number }>(items: readonly T[], id: number): T | null {
     for (let i = items.length - 1; i >= 0; i--) {
         if (items[i]!.id === id) {
@@ -282,7 +283,7 @@ export function instantActionsFor(input0: number, input1: number, perAction = 1)
 
 /** Inventory is 28 slots. Unstackable pair loadout is half and half. */
 export const PACK_SLOTS = 28;
-/** Rev 274 `bow_string` has no `stackable=yes` — a Withdraw-All fills the pack. */
+/** Rev 274 `bow_string` has no `stackable=yes`. A Withdraw-All fills the pack. */
 export const UNSTACKED_STRING_SLOTS = 14;
 
 export function stringIsStacked(stringCount: number, stringSlots: number): boolean {
@@ -343,13 +344,14 @@ export function keepNames(kind: WorkKind, knife: string): string[] {
 export function needsRestock(opts: {
     kind: WorkKind;
     logCount: number;
+    knifeCount: number;
     input0: number;
     input1: number;
 }): boolean {
     if (opts.kind !== 'knife') {
         return opts.input0 === 0 || opts.input1 === 0;
     }
-    return opts.logCount === 0;
+    return opts.logCount === 0 || opts.knifeCount === 0;
 }
 
 export function hasFletchWork(opts: {
@@ -397,13 +399,28 @@ export function nextEmptyReads(current: number, action: StockAction): number {
     if (action === 'ok') {
         return 0;
     }
-    // A ready list can still be the pre-deposit snapshot — one miss is not enough.
+    // A ready list can still be the pre-deposit snapshot. One miss is not enough.
     if (action === 'empty-confirmed' || action === 'empty-unready') {
         return current + 1;
     }
     return current;
 }
 
+/** One input's `ok` must not zero another input's empty streak. */
+export function nextEmptyReadsByKey(
+    reads: Readonly<Record<string, number>>,
+    key: string,
+    action: StockAction
+): Record<string, number> {
+    return { ...reads, [key]: nextEmptyReads(reads[key] ?? 0, action) };
+}
+
 export function shouldStopEmpty(reads: number): boolean {
     return reads >= EMPTY_READ_LIMIT;
+}
+
+export const NO_PROGRESS_LIMIT = 3;
+
+export function shouldStopNoProgress(noProgress: number, sent: number, limit = NO_PROGRESS_LIMIT): boolean {
+    return sent === 0 || noProgress >= limit;
 }
