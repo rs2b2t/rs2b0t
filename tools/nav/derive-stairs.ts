@@ -127,6 +127,76 @@ function snapWalkable(finder: PathFinder, x: number, z: number, level: number): 
     return fallback;
 }
 
+// Why: the server accepts a Climb from a tile cardinally beside the loc with no wall between the two, the rule `PathFinder.cardinalGoals` already walks a player in on.
+// Why: a staircase blocks its own tiles, so the footprint is read back off the collision rather than the loc config, which carries a size but no rotation on this path.
+const FOOTPRINT_RADIUS = 1;
+const SIDES: readonly [number, number, number][] = [
+    [0, 1, 1 << 2],
+    [1, 0, 1 << 3],
+    [0, -1, 1 << 0],
+    [-1, 0, 1 << 1]
+];
+
+function footprint(finder: PathFinder, p: NavPoint): NavPoint[] {
+    if (finder.walkable(p.x, p.z, p.level)) {
+        return [];
+    }
+    const seen = new Set<string>([`${p.x},${p.z}`]);
+    const solid = [p];
+    const stack = [p];
+    while (stack.length > 0) {
+        const cur = stack.pop()!;
+        for (const [dx, dz] of SIDES) {
+            const nx = cur.x + dx;
+            const nz = cur.z + dz;
+            if (Math.max(Math.abs(nx - p.x), Math.abs(nz - p.z)) > FOOTPRINT_RADIUS) {
+                continue;
+            }
+            if (seen.has(`${nx},${nz}`) || finder.walkable(nx, nz, p.level)) {
+                continue;
+            }
+            seen.add(`${nx},${nz}`);
+            const tile = { x: nx, z: nz, level: p.level };
+            solid.push(tile);
+            stack.push(tile);
+        }
+    }
+    return solid;
+}
+
+/** Tiles the server will accept the Climb from. Empty when the placement is walkable and needs no snap. */
+function operableTiles(finder: PathFinder, p: NavPoint): Set<string> {
+    const tiles = new Set<string>();
+    for (const solid of footprint(finder, p)) {
+        for (const [dx, dz, facingWall] of SIDES) {
+            const cx = solid.x + dx;
+            const cz = solid.z + dz;
+            if (finder.walkable(cx, cz, p.level) && (finder.wallMask(cx, cz, p.level) & facingWall) === 0) {
+                tiles.add(`${cx},${cz}`);
+            }
+        }
+    }
+    return tiles;
+}
+
+// Why: snapWalkable takes the nearest walkable tile and never asks which side of a wall it lies on. Around
+// Why: Falador's eastern houses that is the square west of the staircase, outside the house, so the walker
+// Why: arrived there and clicked a staircase the server would not let it reach, one tile through the wall.
+// Why: Only an anchor with no wall-free approach moves, so every flight that already worked keeps its tile.
+function snapApproach(finder: PathFinder, p: NavPoint, nearest: NavPoint | null): NavPoint | null {
+    const operable = operableTiles(finder, p);
+    if (operable.size === 0 || (nearest && operable.has(`${nearest.x},${nearest.z}`))) {
+        return nearest;
+    }
+    for (const [dx, dz] of SNAP_OFFSETS) {
+        const candidate = { x: p.x + dx, z: p.z + dz, level: p.level };
+        if (operable.has(`${candidate.x},${candidate.z}`) && localComponentSize(finder, candidate) > 1) {
+            return candidate;
+        }
+    }
+    return nearest;
+}
+
 function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: number): { x: number; z: number } | null {
     let fallback: { x: number; z: number } | null = null;
     for (const [dx, dz] of SNAP_OFFSETS) {
@@ -146,24 +216,31 @@ function pivotBoth(finder: PathFinder, x: number, z: number, a: number, b: numbe
 }
 
 function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: TransportEdgeData[]): { edges: TransportEdgeData[]; dropped: number; supersededDropped: number } {
-    const snapped: TransportEdgeData[] = [];
+    // Why: an auto-reverse keeps landing on the plain snap. Nothing in the scripts says where a derived
+    // Why: climb-down drops the player, a stair hop only waits on the level to change, and moving those
+    // Why: landings with the approach sealed off the Yanille and south Falador pockets they were the only
+    // Why: graph edge into.
+    const snapped: { edge: TransportEdgeData; landing: NavPoint }[] = [];
     let dropped = 0;
     for (const e of raw) {
         let f: NavPoint | null;
         let t: NavPoint | null;
+        let landing: NavPoint | null;
         if (e.from.x === e.to.x && e.from.z === e.to.z) {
             const piv = pivotBoth(finder, e.from.x, e.from.z, e.from.level, e.to.level);
             f = piv ? { x: piv.x, z: piv.z, level: e.from.level } : null;
             t = piv ? { x: piv.x, z: piv.z, level: e.to.level } : null;
+            landing = f;
         } else {
-            f = snapWalkable(finder, e.from.x, e.from.z, e.from.level);
+            landing = snapWalkable(finder, e.from.x, e.from.z, e.from.level);
+            f = snapApproach(finder, e.from, landing);
             t = snapWalkable(finder, e.to.x, e.to.z, e.to.level);
         }
-        if (!f || !t) {
+        if (!f || !t || !landing) {
             dropped++;
             continue;
         }
-        snapped.push({ ...e, from: f, to: t });
+        snapped.push({ edge: { ...e, from: f, to: t }, landing });
     }
     const seen = new Set<string>();
     const edges: TransportEdgeData[] = [];
@@ -175,12 +252,12 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: T
             edges.push(e);
         }
     };
-    for (const e of snapped) {
+    for (const { edge: e } of snapped) {
         add({ ...e, kind: edgeKind(e) });
     }
-    for (const e of snapped) {
+    for (const { edge: e, landing } of snapped) {
         if (changesFloor(e) && /-(up|down)/i.test(e.action)) {
-            const reverse: TransportEdgeData = { from: e.to, to: e.from, locName: e.locName, action: reverseAction(e.action), kind: edgeKind(e) };
+            const reverse: TransportEdgeData = { from: e.to, to: landing, locName: e.locName, action: reverseAction(e.action), kind: edgeKind(e) };
             const disabledReason = DISABLED_AUTO_REVERSES.get(key(reverse));
             add(disabledReason ? { ...reverse, disabledReason } : reverse);
         }
@@ -274,7 +351,7 @@ function main(): void {
         packBytes = gunzipSync(packBytes);
     }
     const finder = new PathFinder(packBytes);
-    const dataDir = path.join('src', 'bot', 'nav', 'data');
+    const dataDir = path.join('src', 'bot', 'event', 'webwalk', 'data');
     const curatedTransports = JSON.parse(fs.readFileSync(path.join(dataDir, 'transports.json'), 'utf8')) as TransportEdgeData[];
     const rawCount = edges.length;
     const { edges: finalEdges, dropped, supersededDropped } = snapAndReverse(finder, curatedTransports, edges);
