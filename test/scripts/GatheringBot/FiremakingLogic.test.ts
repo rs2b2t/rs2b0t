@@ -4,6 +4,7 @@ import Tile from '#/bot/geometry/Tile.js';
 import {
     BURN_WEST,
     FIRE_SPOTS,
+    NoLightTiles,
     burnLaneWant,
     expandLocalFirePlot,
     findBurnLane,
@@ -126,5 +127,36 @@ describe('FiremakingLogic', () => {
             }
             plot = n;
         }
+    });
+});
+
+describe('NoLightTiles', () => {
+    test('remembers a refused tile by coordinate', () => {
+        const refused = new NoLightTiles();
+        expect(refused.has({ x: 3253, z: 3428 })).toBe(false);
+        refused.add({ x: 3253, z: 3428 });
+        expect(refused.has({ x: 3253, z: 3428 })).toBe(true);
+        expect(refused.has({ x: 3254, z: 3428 })).toBe(false);
+        expect(refused.size).toBe(1);
+    });
+
+    test('folds refused tiles into the occupied set', () => {
+        const refused = new NoLightTiles();
+        refused.add({ x: 10, z: 20 });
+        const occupied = refused.merge(['1,2']);
+        expect(occupied.has('1,2')).toBe(true);
+        expect(occupied.has('10,20')).toBe(true);
+    });
+
+    test('keeps findBurnLane off a tile the game already refused', () => {
+        const plot = localFirePlot({ x: 100, z: 100, level: 0 }, 2);
+        const walkable = (): boolean => true;
+        const canStep = (): boolean => true;
+        const first = findBurnLane(plot, { x: 100, z: 100, level: 0 }, new Set(), 1, walkable, canStep)!;
+
+        const refused = new NoLightTiles();
+        refused.add(first.start);
+        const second = findBurnLane(plot, { x: 100, z: 100, level: 0 }, refused.merge([]), 1, walkable, canStep)!;
+        expect(tileKey(second.start)).not.toBe(tileKey(first.start));
     });
 });
