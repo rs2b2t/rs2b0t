@@ -467,9 +467,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'CookBot',
-    description: 'Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at a time, bank everything, repeat',
+    description: 'Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest the bank or on a fire you light outside, bank everything, repeat',
     category: 'Cooking',
-    tags: ['catherby', 'cooking', 'banking', 'afk'],
+    tags: ['cooking', 'banking', 'firemaking', 'afk'],
     settingsSchema: COOKBOT_SETTINGS,
     create: () => new CookBot()
 });
