@@ -1943,6 +1943,126 @@
   },
   {
     "from": {
+      "x": 2506,
+      "z": 3011,
+      "level": 0
+    },
+    "to": {
+      "x": 2508,
+      "z": 3011,
+      "level": 0
+    },
+    "locName": "Battlement",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2832,
+    "locX": 2507,
+    "locZ": 3011,
+    "debugName": "ganothbattlement",
+    "options": [
+      "Climb-over"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Watch Tower",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2508,
+      "z": 3011,
+      "level": 0
+    },
+    "to": {
+      "x": 2506,
+      "z": 3011,
+      "level": 0
+    },
+    "locName": "Battlement",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2832,
+    "locX": 2507,
+    "locZ": 3011,
+    "debugName": "ganothbattlement",
+    "options": [
+      "Climb-over"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Watch Tower",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2506,
+      "z": 3012,
+      "level": 0
+    },
+    "to": {
+      "x": 2508,
+      "z": 3012,
+      "level": 0
+    },
+    "locName": "Battlement",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2832,
+    "locX": 2507,
+    "locZ": 3012,
+    "debugName": "ganothbattlement",
+    "options": [
+      "Climb-over"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Watch Tower",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
+      "x": 2508,
+      "z": 3012,
+      "level": 0
+    },
+    "to": {
+      "x": 2506,
+      "z": 3012,
+      "level": 0
+    },
+    "locName": "Battlement",
+    "action": "Climb-over",
+    "kind": "shortcut",
+    "locId": 2832,
+    "locX": 2507,
+    "locZ": 3012,
+    "debugName": "ganothbattlement",
+    "options": [
+      "Climb-over"
+    ],
+    "requires": {
+      "quests": [
+        {
+          "quest": "Watch Tower",
+          "minStatus": "complete"
+        }
+      ]
+    }
+  },
+  {
+    "from": {
       "x": 2531,
       "z": 3026,
       "level": 0
