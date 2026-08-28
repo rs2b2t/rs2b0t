@@ -333,7 +333,7 @@ def main() -> None:
     for script in (args.content / "scripts").rglob("*.rs2"):
         allowed_stair_debugs.update(oploc_re.findall(script.read_text(encoding="utf-8")))
     allowed_stair_debugs.update({"laddertop", "ladder", "laddermiddle", "laddertop_directional", "ladder_directional"})
-    data_dir = args.rs2b0t / "src" / "bot" / "nav" / "data"
+    data_dir = args.rs2b0t / "src" / "bot" / "event" / "webwalk" / "data"
     curated = json.loads((data_dir / "transports.json").read_text(encoding="utf-8"))
     stairs = json.loads((data_dir / "stairEdges.json").read_text(encoding="utf-8"))
 
