@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 60. Categories: 19.
+- Scripts: 61. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -20,7 +20,7 @@
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
-- [Mining](#mining) — 3
+- [Mining](#mining) — 4
 - [Money making](#money-making) — 3
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
@@ -714,6 +714,21 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+
+### WestFaladorMiner
+
+Needs Agility 5 to Climb-over the crumbling / broken wall west of Falador when banking from the mine (one-way into the city). Mines ticked Coal, Iron, Copper, and/or Tin at 2907,3359. Powermine or bank at Falador west. Return to the mine uses the gate. Below Agility 5 the bot walks the long way. Drops beer/kebab; banks gems and caskets. Uses the best pickaxe Mining allows.
+
+- Tags: `mining`, `falador`, `agility 5`, `broken wall`, `crumbling wall`, `coal`, `iron`, `pickaxe`, `bank`, `powermine`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `brokenWall` | string | `"Agility 5 required"` | Broken wall (mine to bank) — one of: Agility 5 required |
+| `mineCoal` | boolean | `true` | Coal |
+| `mineIron` | boolean | `true` | Iron |
+| `mineCopper` | boolean | `false` | Copper |
+| `mineTin` | boolean | `false` | Tin |
+| `handling` | string | `"Bank"` | When inventory is full — one of: Powermine (drop), Bank |
 
 ## Money making
 

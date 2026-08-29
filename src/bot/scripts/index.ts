@@ -61,6 +61,7 @@ import FlaxAIO, { SETTINGS as FLAXAIO_SETTINGS } from './FlaxAIO/flaxaio.js';
 import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
 import CoalTrucks from './CoalTrucks/CoalTrucks.js';
+import WestFaladorMiner, { SETTINGS as WEST_FALADOR_MINER_SETTINGS } from './WestFaladorMiner/WestFaladorMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter/NatureCrafter.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
@@ -330,6 +331,16 @@ ScriptRegistry.register({
     category: 'Mining',
     tags: ['mining', 'coal', 'seers', 'banking'],
     create: () => new CoalTrucks()
+});
+
+ScriptRegistry.register({
+    name: 'WestFaladorMiner',
+    description:
+        'Needs Agility 5 to Climb-over the crumbling / broken wall west of Falador when banking from the mine (one-way into the city). Mines ticked Coal, Iron, Copper, and/or Tin at 2907,3359. Powermine or bank at Falador west. Return to the mine uses the gate. Below Agility 5 the bot walks the long way. Drops beer/kebab; banks gems and caskets. Uses the best pickaxe Mining allows.',
+    category: 'Mining',
+    tags: ['mining', 'falador', 'agility 5', 'broken wall', 'crumbling wall', 'coal', 'iron', 'pickaxe', 'bank', 'powermine'],
+    settingsSchema: WEST_FALADOR_MINER_SETTINGS,
+    create: () => new WestFaladorMiner()
 });
 
 ScriptRegistry.register({
