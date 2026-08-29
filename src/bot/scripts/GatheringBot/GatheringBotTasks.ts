@@ -2268,6 +2268,36 @@ export class Gather implements Task {
             .nearestPreferLocal(LOCAL_MINE_PREFER_RADIUS);
     }
 
+    // Why: surface the blocklist effect on resource selection so a mis-tuned ban does not silently starve the bot of every tile.
+    private logRockSearch(): void {
+        const all = Locs.query()
+            .name(this.bot.targetName())
+            .action(this.bot.actionName())
+            .where(
+                l =>
+                    tileWithinLeash(this.bot, l.tile()) &&
+                    this.bot.matchesRock(l.id) &&
+                    !GAS_ROCK_IDS.has(l.id)
+            )
+            .results();
+        const blocked = all.filter(l => !this.bot.usable(keyOf(l.tile()))).length;
+        this.bot.log(
+            `gather: search '${this.bot.targetName()}' found=${all.length} blocked=${blocked} unblocked=${all.length - blocked}`
+        );
+    }
+
+    // Why: mirror logRockSearch for the fishing case so the same blocklist diagnostics are visible for spots.
+    private logFishSearch(): void {
+        const all = Npcs.query()
+            .name(this.bot.targetName())
+            .where(n => this.fishSpotBaseOk(n) && this.fishSpotInRange(n.tile()))
+            .results();
+        const blocked = all.filter(n => !this.bot.usable(keyOf(n.tile()))).length;
+        this.bot.log(
+            `fish: search '${this.bot.targetName()}' found=${all.length} blocked=${blocked} unblocked=${all.length - blocked}`
+        );
+    }
+
     validate(): boolean {
         // Combat only blocks AFK gather, retaliate tick-manip keeps gathering.
         if (Inventory.isFull() || EventSignal.pending()) {
@@ -2518,6 +2548,7 @@ export class Gather implements Task {
         // Named: nearest matching spot in camp membership. Freeform: player/start hunt.
         // If the spot is far, interact will path; we still walk when beyond a short step.
         const target = this.findFishSpot();
+        this.logFishSearch();
 
         if (!target) {
             this.activeFishIndex = null;
@@ -2614,6 +2645,7 @@ export class Gather implements Task {
             if (this.fishingBroken(index, startTile) && Inventory.used() === before && !Game.animating()) {
                 this.activeFishIndex = null;
                 if (ChatDialog.canContinue()) {
+                    this.bot.log(`fish: BLOCKING ${this.bot.targetName()} @ ${key} (dialogue, no catch)`);
                     this.bot.reject(key);
                 }
                 return;
@@ -2672,6 +2704,7 @@ export class Gather implements Task {
         }
 
         const target = this.findRock();
+        this.logRockSearch();
         if (!target) {
             // Keep-alive when near anchor with no matching loc, surface why we idle.
             if (Game.animating()) {
@@ -2794,6 +2827,7 @@ export class Gather implements Task {
             }
             if (Inventory.used() === before && !Game.animating()) {
                 if (ChatDialog.canContinue()) {
+                    this.bot.log(`gather: BLOCKING ${this.bot.targetName()} @ ${tile} (dialogue, no product)`);
                     this.bot.reject(key);
                 } else {
                     // No chop started and the player is not closing in, ban the tile
@@ -2849,6 +2883,7 @@ export class Gather implements Task {
         const fails = (this.gatherClickFails.get(key) ?? 0) + 1;
         if (fails >= 2) {
             this.gatherClickFails.delete(key);
+            this.bot.log(`gather: BLOCKING ${this.bot.targetName()} @ ${tile} (click failed twice)`);
             this.bot.reject(key);
             this.bot.log(`gather: banned unreachable ${this.bot.targetName()} @ ${tile} (click failed twice)`);
         } else {
