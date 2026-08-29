@@ -26,6 +26,7 @@ import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes/ArdyCakes
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller/ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/ChickenKiller.js';
 import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
+import EntranaChickenKiller, { SETTINGS as ENTRANA_CHICKEN_SETTINGS } from './EntranaChickenKiller/EntranaChickenKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
@@ -120,6 +121,16 @@ ScriptRegistry.register({
     tags: ['lumbridge', 'bones', 'feathers', 'afk'],
     settingsSchema: CHICKEN_SETTINGS,
     create: () => new ChickenKiller()
+});
+
+ScriptRegistry.register({
+    name: 'EntranaChickenKiller',
+    description:
+        'Banks weapons and armour at Draynor, boats to Entrana, opens the chicken-coop gate at 2851,3371, then kills chickens unarmed. Loots feathers in the coop, buries own-kill bones, and drops raw chicken and eggs. Walks to the coop rather than the Port Sarim monks, so the return boat is not boarded.',
+    category: 'Combat',
+    tags: ['entrana', 'chicken', 'feathers', 'bones', 'prayer', 'port sarim', 'melee'],
+    settingsSchema: ENTRANA_CHICKEN_SETTINGS,
+    create: () => new EntranaChickenKiller()
 });
 
 ScriptRegistry.register({

@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 59. Categories: 19.
+- Scripts: 60. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 12
+- [Combat](#combat) — 13
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -254,6 +254,19 @@ Walks to the Al Kharid Duel Arena, pairs with other players, accepts both no-sta
 | `targetAttack` | number (1–99) | `99` | Target Attack level |
 | `targetStrength` | number (1–99) | `99` | Target Strength level |
 | `targetDefence` | number (1–99) | `1` | Target Defence level |
+
+### EntranaChickenKiller
+
+Banks weapons and armour at Draynor, boats to Entrana, opens the chicken-coop gate at 2851,3371, then kills chickens unarmed. Loots feathers in the coop, buries own-kill bones, and drops raw chicken and eggs. Walks to the coop rather than the Port Sarim monks, so the return boat is not boarded.
+
+- Tags: `entrana`, `chicken`, `feathers`, `bones`, `prayer`, `port sarim`, `melee`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rotateStyles` | boolean | `true` | Swap attack styles |
+| `levelsBeforeSwap` | number (1–99) | `5` | Levels before style swap |
+| `meleeStyle` | string | `"attack"` | Melee style — one of: attack, strength, defence |
+| `buryBones` | boolean | `true` | Bury own-kill bones |
 
 ### FireGiant
 
