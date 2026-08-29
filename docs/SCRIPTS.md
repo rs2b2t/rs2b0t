@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 61. Categories: 19.
+- Scripts: 62. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 13
+- [Combat](#combat) — 14
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -409,6 +409,39 @@ Rellekka rock crabs: aggro-stack-kill-reset, loots key halves
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Also bank gems/fruit/beer/kebabs/caskets |
 | `solveClues` | boolean | `true` | Solve easy clues |
+
+### VarrockCastleGuardKiller
+
+Kills Guards in the Varrock Palace courtyard (fountain 3212,3464, ground floor). Banks at Varrock west 3185,3440. Food: Best (Swordfish then Lobster, Tuna, Shrimp) or a named food. Eat-at HP% and panic-exit with no food. Bury bones on by default. Own-kill loot ticks from the Guard drop table. Combat style: random swap after N levels, or always train the lowest melee stat.
+
+- Tags: `varrock`, `castle`, `guard`, `courtyard`, `melee`, `food`, `bank`, `bones`, `loot`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `foodType` | string | `"Best"` | Food — one of: Best, Lobster, Tuna, Swordfish, Shrimp |
+| `foodWithdraw` | number (1–28) | `20` | Amount to bring |
+| `eatAtPercent` | number (1–100) | `50` | Eat at HP % |
+| `panicHpPercent` | number (1–100) | `25` | Panic exit HP % |
+| `styleMode` | string | `"Random swap"` | Combat style — one of: Random swap, Lowest melee |
+| `levelsBeforeSwap` | number (1–99) | `5` | Levels before random swap |
+| `buryBones` | boolean | `true` | Bury bones |
+| `lootIronBolts` | boolean | `true` | Iron Bolts (Members) |
+| `lootSteelArrow` | boolean | `true` | Steel Arrow |
+| `lootBronzeArrow` | boolean | `true` | Bronze Arrow |
+| `lootAirRune` | boolean | `true` | Air Rune |
+| `lootEarthRune` | boolean | `true` | Earth Rune |
+| `lootFireRune` | boolean | `true` | Fire Rune |
+| `lootBloodRune` | boolean | `true` | Blood Rune (Members) |
+| `lootChaosRune` | boolean | `true` | Chaos Rune |
+| `lootNatureRune` | boolean | `true` | Nature Rune |
+| `lootIronDagger` | boolean | `true` | Iron Dagger |
+| `lootBodyTalisman` | boolean | `true` | Body Talisman |
+| `lootGrain` | boolean | `true` | Grain |
+| `lootIronOre` | boolean | `true` | Iron Ore |
+| `lootSeeds` | boolean | `true` | Seeds (Members) |
+| `lootClueMedium` | boolean | `true` | Clue Scroll (medium) (Members) |
+| `lootCoins` | boolean | `true` | Coins |
+| `lootBones` | boolean | `true` | Bones |
 
 ## Cooking
 

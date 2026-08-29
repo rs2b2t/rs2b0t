@@ -9,7 +9,7 @@ export const SCRIPT_NAMES = [
     'HerbloreSecondaries', 'HillGiant', 'LeatherCrafter', 'MarketMaker', 'MossGiant',
     'MuleCrafter', 'NatureCrafter', 'PotionMaker', 'RockCrab', 'RoguesPurse',
     'RuneCrafter', 'ShopBuyout', 'ShopRunner', 'SmelterBot', 'SmithingBot', 'Superheater',
-    'TannerBot', 'ThievingBot', 'VialFiller', 'WalkToBot', 'WestFaladorMiner', 'WildyAgility', 'Alcher'
+    'TannerBot', 'ThievingBot', 'VarrockCastleGuardKiller', 'VialFiller', 'WalkToBot', 'WestFaladorMiner', 'WildyAgility', 'Alcher'
 ] as const;
 
 export type ScriptName = typeof SCRIPT_NAMES[number];

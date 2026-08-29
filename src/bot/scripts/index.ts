@@ -27,6 +27,7 @@ import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidK
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/ChickenKiller.js';
 import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
 import EntranaChickenKiller, { SETTINGS as ENTRANA_CHICKEN_SETTINGS } from './EntranaChickenKiller/EntranaChickenKiller.js';
+import VarrockCastleGuardKiller, { SETTINGS as VARROCK_CASTLE_GUARD_SETTINGS } from './VarrockCastleGuardKiller/VarrockCastleGuardKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
@@ -132,6 +133,16 @@ ScriptRegistry.register({
     tags: ['entrana', 'chicken', 'feathers', 'bones', 'prayer', 'port sarim', 'melee'],
     settingsSchema: ENTRANA_CHICKEN_SETTINGS,
     create: () => new EntranaChickenKiller()
+});
+
+ScriptRegistry.register({
+    name: 'VarrockCastleGuardKiller',
+    description:
+        'Kills Guards in the Varrock Palace courtyard (fountain 3212,3464, ground floor). Banks at Varrock west 3185,3440. Food: Best (Swordfish then Lobster, Tuna, Shrimp) or a named food. Eat-at HP% and panic-exit with no food. Bury bones on by default. Own-kill loot ticks from the Guard drop table. Combat style: random swap after N levels, or always train the lowest melee stat.',
+    category: 'Combat',
+    tags: ['varrock', 'castle', 'guard', 'courtyard', 'melee', 'food', 'bank', 'bones', 'loot'],
+    settingsSchema: VARROCK_CASTLE_GUARD_SETTINGS,
+    create: () => new VarrockCastleGuardKiller()
 });
 
 ScriptRegistry.register({
