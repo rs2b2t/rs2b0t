@@ -48,7 +48,8 @@ export const CASES: readonly Case[] = [
         id: 'banksorter-live',
         harness: 'banksorter-live.ts',
         covers: { scripts: ['BankSorter'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: 'c4b86682',
         budgetMin: 8,
         note: 'seeds a scrambled bank at Varrock West, sorts it cold, then tops it up and re-sorts; passes when both orders are contiguous by category, the incremental pass takes one insert batch, and varp 304 comes back to where it started'
     },
