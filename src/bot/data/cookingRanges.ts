@@ -1,7 +1,8 @@
 import Tile from '../geometry/Tile.js';
+import { COOKING_SURFACE_LOCS } from './cookSurfaceLocs.js';
 
 /**
- * Cooking surface catalog for Fisher cook loops and CookBot: loc types from content `cooking_sources.loc` (category cooking_oven / cooking_fire), world placements scanned from the engine map pack (`debugname=range` → {@link COOKING_RANGE_LOCS}).
+ * Cooking surface catalog for Fisher cook loops: loc types from content `cooking_sources.loc` (category cooking_oven / cooking_fire), world placements generated into {@link COOKING_SURFACE_LOCS} by `bun run gen:cooksurfaces`.
  * Why: fishing camps pin a preferred {@link CookingSurface} only when one is within a useful walk of the pier, and GatheringBot otherwise falls back to live scene Locs.query for Range/Fire.
  */
 
@@ -28,77 +29,12 @@ interface CookingSurface {
 }
 
 /**
- * Auto-curated Range loc SW tiles from the Server map pack (debugname=range); the stand tile defaults to one step south, and forceapproach=east ranges still path.
- * Why: regenerated via the tools/nav map probe, do not hand-edit coords without a re-scan.
+ * Range loc SW tiles, the oven slice of the generated {@link COOKING_SURFACE_LOCS}.
+ * Why: the stand tile defaults to one step south, and forceapproach=east ranges still path.
  */
-export const COOKING_RANGE_LOCS: readonly { x: number; z: number; level: number }[] = [
-    { x: 2445, z: 3188, level: 0 },
-    { x: 2459, z: 3173, level: 0 },
-    { x: 2547, z: 3322, level: 0 },
-    { x: 2549, z: 3098, level: 0 },
-    { x: 2566, z: 3104, level: 0 },
-    { x: 2571, z: 3248, level: 0 },
-    { x: 2578, z: 3198, level: 0 },
-    { x: 2591, z: 3209, level: 0 },
-    { x: 2616, z: 3396, level: 0 },
-    { x: 2617, z: 3317, level: 0 },
-    { x: 2630, z: 4731, level: 0 },
-    { x: 2632, z: 3163, level: 0 },
-    { x: 2636, z: 3170, level: 0 },
-    { x: 2637, z: 3432, level: 0 },
-    { x: 2642, z: 3355, level: 0 },
-    { x: 2648, z: 3297, level: 0 },
-    { x: 2706, z: 3404, level: 0 },
-    { x: 2715, z: 3476, level: 0 },
-    { x: 2733, z: 3582, level: 0 },
-    { x: 2758, z: 4731, level: 0 },
-    { x: 2787, z: 3191, level: 0 },
-    { x: 2814, z: 3161, level: 0 },
-    { x: 2817, z: 3444, level: 0 },
-    { x: 2818, z: 3455, level: 0 },
-    { x: 2822, z: 3351, level: 0 },
-    { x: 2844, z: 3367, level: 0 },
-    { x: 2856, z: 3334, level: 0 },
-    { x: 2917, z: 3318, level: 0 },
-    { x: 2922, z: 9713, level: 0 },
-    { x: 2933, z: 4698, level: 0 },
-    { x: 2967, z: 3331, level: 0 },
-    { x: 2970, z: 3209, level: 0 },
-    { x: 2971, z: 3328, level: 0 },
-    { x: 2988, z: 3365, level: 0 },
-    { x: 3019, z: 3237, level: 0 },
-    { x: 3036, z: 3342, level: 0 },
-    { x: 3036, z: 3708, level: 0 },
-    { x: 3039, z: 3367, level: 0 },
-    { x: 3046, z: 3375, level: 0 },
-    { x: 3052, z: 3356, level: 0 },
-    { x: 3097, z: 3367, level: 0 },
-    { x: 3151, z: 9558, level: 0 },
-    { x: 3156, z: 3410, level: 0 },
-    { x: 3160, z: 3427, level: 0 },
-    { x: 3188, z: 3352, level: 0 },
-    { x: 3219, z: 3388, level: 0 },
-    { x: 3221, z: 3497, level: 0 },
-    { x: 3223, z: 3497, level: 0 },
-    { x: 3229, z: 3401, level: 0 },
-    { x: 3230, z: 3196, level: 0 },
-    { x: 3236, z: 3382, level: 0 },
-    { x: 3237, z: 3403, level: 0 },
-    { x: 3237, z: 3409, level: 0 },
-    { x: 3271, z: 3180, level: 0 },
-    { x: 3280, z: 3929, level: 0 },
-    { x: 3286, z: 3486, level: 0 },
-    { x: 3286, z: 3489, level: 0 },
-    { x: 3292, z: 3202, level: 0 },
-    { x: 3318, z: 3138, level: 0 },
-    { x: 2448, z: 3510, level: 1 },
-    { x: 2482, z: 3479, level: 1 },
-    { x: 2763, z: 3274, level: 1 },
-    { x: 3081, z: 3508, level: 1 },
-    { x: 3143, z: 3452, level: 1 },
-    { x: 3145, z: 3452, level: 1 },
-    { x: 3202, z: 3401, level: 1 },
-];
+export const COOKING_RANGE_LOCS: readonly { x: number; z: number; level: number }[] = COOKING_SURFACE_LOCS
+    .filter(surface => surface.name === 'Range')
+    .map(({ x, z, level }) => ({ x, z, level }));
 
 
 /** Stand one tile south of the loc SW corner (safe default for 1x2 ranges). */

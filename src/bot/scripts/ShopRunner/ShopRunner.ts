@@ -16,7 +16,7 @@ import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { talkThrough } from '../../api/ai/quests/exec/primitives.js';
 import { buyoutPlan } from '../../api/shop/BuyoutLogic.js';
-import { clusterEligible, estimateClusterGp, nextCluster, withdrawFor } from './ShopRunnerRingLogic.js';
+import { clusterEligible, clusterSellsChosen, estimateClusterGp, nextCluster, withdrawFor } from './ShopRunnerRingLogic.js';
 import { SHOP_DB } from '../../data/shopdb.js';
 import { ROUTE } from './ShopRunnerRoute.js';
 import type { AccountView, NavPointLike, Route } from '../../api/shop/types.js';
@@ -84,8 +84,8 @@ export class ShopRunner extends TaskBot {
             return;
         }
         const acct = this.accountView();
-        if (!this.route.clusters.some(c => clusterEligible(c, acct, this.toggles))) {
-            ScriptRunner.stop('[shoprun] no eligible clusters for this account');
+        if (!this.route.clusters.some(c => clusterEligible(c, acct, this.toggles) && clusterSellsChosen(c, SHOP_DB, this.chosen))) {
+            ScriptRunner.stop('[shoprun] no eligible cluster sells the selected items');
             return;
         }
         this.loadState();
@@ -179,7 +179,7 @@ class RunCluster implements Task {
     async execute(): Promise<void> {
         const bot = this.bot;
         const cluster = bot.repeatClusterId === null
-            ? nextCluster(bot.route, bot.lastClusterId, bot.accountView(), bot.toggles)
+            ? nextCluster(bot.route, bot.lastClusterId, bot.accountView(), bot.toggles, bot.chosen, SHOP_DB)
             : bot.route.clusters.find(candidate => candidate.id === bot.repeatClusterId) ?? null;
         if (!cluster) {
             ScriptRunner.stop('[shoprun] no eligible cluster on the ring');

@@ -6,15 +6,9 @@ import { Game } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Skills } from '../../api/skills/Skills.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { reader } from '../../adapter/ClientAdapter.js';
-import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import {
-    CANT_LIGHT,
-    FIRE_LIGHT_TICKS,
-    FIRE_START_TICKS,
-    TINDERBOX,
     burnLaneWant,
     findBurnLane,
     fireReactionTicks,
@@ -26,6 +20,7 @@ import {
     type BurnDir,
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
+import { lightFire } from '../../api/firemaking/LightFire.js';
 
 /** Same face-target filter as GatheringBot.FleeCombat, sticky combatCycle is ignored. */
 function hostileFaceTarget(): boolean {
@@ -160,7 +155,7 @@ class ChopBurnLoad implements Task {
             }
 
             this.bot.setStatus(`burn: ${this.bot.logCount()} ${this.bot.burnLogName()} (lane ${this.bot.burnLaneLeft()})`);
-            const outcome = await this.lightOne();
+            const outcome = await lightFire(this.bot.burnLogName());
             if (outcome === 'lit') {
                 this.bot.recordFire(1);
                 this.bot.setBurnLaneLeft(this.bot.burnLaneLeft() - 1);
@@ -243,40 +238,5 @@ class ChopBurnLoad implements Task {
             }
         }
         return false;
-    }
-
-    private async lightOne(): Promise<'lit' | 'blocked' | 'stalled'> {
-        const logs = Inventory.first(this.bot.burnLogName());
-        const tinder = Inventory.first(TINDERBOX);
-        if (!logs || !tinder) {
-            return 'stalled';
-        }
-        const mark = GameMessages.mark();
-        const xp = Skills.xp('firemaking');
-        const held = this.bot.logCount();
-        const lit = (): boolean => Skills.xp('firemaking') > xp;
-        const blocked = (): boolean => GameMessages.sawSince(mark, CANT_LIGHT);
-
-        // Use tinderbox → logs (same order as working quest/FM paths). Logs→tinderbox is a no-op.
-        if (!(await tinder.useOn(logs))) {
-            return 'stalled';
-        }
-        if (
-            !(await Execution.delayUntilTicks(
-                () => this.bot.logCount() < held || blocked() || Game.animating(),
-                FIRE_START_TICKS
-            ))
-        ) {
-            return 'stalled';
-        }
-        if (
-            !(await Execution.delayUntilTicks(
-                () => lit() || blocked() || EventSignal.pending(),
-                FIRE_LIGHT_TICKS
-            ))
-        ) {
-            return 'stalled';
-        }
-        return blocked() ? 'blocked' : lit() ? 'lit' : 'stalled';
     }
 }

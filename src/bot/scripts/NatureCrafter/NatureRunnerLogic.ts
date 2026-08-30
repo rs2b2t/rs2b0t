@@ -1,6 +1,11 @@
 import Tile from '../../geometry/Tile.js';
 
 export const TRADE_CAP = 25; // max essence offered per trade; the store-visit target
+export const TRADE_ADJACENT = 2; // runner is "here"; the master still only clicks Trade at TRADE_NO_WALK
+export const TRADE_NO_WALK = 1; // OPPLAYER4 walks if farther, and walking cancels the open trade
+export const RUNNER_ASK_MS = 1800; // ~3 ticks: re-ask so a cancelled request is replaced before the master moves on
+/** After the master clicks Trade-with, do not click again. A second click cancels the window. */
+export const MASTER_HANDSHAKE_MS = 3000;
 export const BUY_ONLY_STOCK = 30; // shop stock above which the runner only buys (drain mode)
 export const LOW_COINS = 1000; // coin floor: below it, bank instead of shopping
 export const PICKUP_RANGE = 20; // max tiles to chase a dropped noted stack
@@ -69,6 +74,39 @@ export function offerCount(unnoted: number): number {
     return Math.max(0, Math.min(TRADE_CAP, unnoted));
 }
 
+const ESSENCE_NAME = 'rune essence';
+const COINS_NAME = 'coins';
+/** Inventory puzzles RandomEvents Open/Rub. They have no Drop. DropLitter must not touch them. */
+const EVENT_HELD = new Set(['strange box', 'lamp']);
+
+/** Coins, noted/unnoted essence, talisman; master also keeps the rune it crafts. Nameless slots are litter. */
+export function keepNames(talisman: string, productRune: string | null): string[] {
+    const keep = [ESSENCE_NAME, COINS_NAME, talisman.toLowerCase()];
+    if (productRune) {
+        keep.push(productRune.toLowerCase());
+    }
+    return keep;
+}
+
+export function isEventHeld(name: string | null): boolean {
+    return name != null && EVENT_HELD.has(name.toLowerCase());
+}
+
+export function isLitter(name: string | null, keep: readonly string[]): boolean {
+    if (isEventHeld(name)) {
+        return false;
+    }
+    if (name == null || name.trim() === '') {
+        return true;
+    }
+    const n = name.toLowerCase();
+    return !keep.some(k => k === n);
+}
+
+export function isDroppableLitter(name: string | null, keep: readonly string[], actions: readonly string[]): boolean {
+    return isLitter(name, keep) && actions.some(a => a.toLowerCase() === 'drop');
+}
+
 /** Jungle-spider-safe hop between Jiminua and the nature ruins (#730). */
 export const SPIDER_SAFE = new Tile(2790, 3094, 0);
 
@@ -100,6 +138,87 @@ export function tradeDelivered(beforeUnnoted: number, nowUnnoted: number): boole
     return nowUnnoted < beforeUnnoted;
 }
 
+/**
+ * Walk to the ruins/altar only until the master is in sight.
+ * Why: walkTo(ruins) after a missed trade pulls the runner off the master while essence is still in the pack.
+ */
+export type MasterOfferAction = 'wait' | 'accept' | 'decline';
+
+/**
+ * Master first-screen policy.
+ * Why: declining a blank "Trading With" header after 8 ticks cancelled real runner offers (~6s close in the wall logs).
+ */
+export function masterOfferDecision(opts: {
+    who: string | null;
+    isPartner: boolean;
+    theirEssence: number;
+    runnerWaiting: boolean;
+}): MasterOfferAction {
+    if (opts.who !== null && !opts.isPartner) {
+        return 'decline';
+    }
+    if (opts.theirEssence > 0 && (opts.isPartner || opts.runnerWaiting)) {
+        return 'accept';
+    }
+    return 'wait';
+}
+
+/** True when the open trade header is the player we just clicked (blank header is still that click). */
+export function tradeWindowIsFor(partnerHeader: string | null, clicked: string): boolean {
+    if (partnerHeader === null || partnerHeader.length === 0) {
+        return true;
+    }
+    return partnerHeader.toLowerCase() === clicked.toLowerCase();
+}
+
+/** Why: a second Trade-with click closes the window; only an ask after the last accept is still live. */
+export function masterPickTradeTarget(opts: {
+    asked: string | null;
+    askedAt: number;
+    lastAcceptAt: number;
+    askedInRange: boolean;
+    holdUntil: number;
+    now: number;
+}): string | null {
+    if (opts.now < opts.holdUntil) {
+        return null;
+    }
+    if (!opts.asked || !opts.askedInRange) {
+        return null;
+    }
+    if (opts.askedAt <= opts.lastAcceptAt) {
+        return null;
+    }
+    return opts.asked;
+}
+
+/** Runners re-ask on an interval; clicking every tick cancels the open window and every other runner's request. */
+export function runnerShouldRequestTrade(tradeActive: boolean, lastRequestAt: number, now: number): boolean {
+    if (tradeActive) {
+        return false;
+    }
+    return now - lastRequestAt >= RUNNER_ASK_MS;
+}
+
+export function runnerMayLeaveAltar(tradeActive: boolean, unnoted: number): boolean {
+    return !tradeActive && unnoted === 0;
+}
+
+export function runnerShouldWalkToMeet(
+    masterVisible: boolean,
+    alreadyMeeting: boolean,
+    inTemple: boolean,
+    stayInAltar: boolean
+): boolean {
+    if (stayInAltar && !inTemple) {
+        return true;
+    }
+    if (masterVisible || alreadyMeeting) {
+        return false;
+    }
+    return !inTemple;
+}
+
 export function masterShouldExitTemple(inTemple: boolean, ess: number, stayInAltar: boolean, bankDue: boolean): boolean {
     if (!inTemple || ess > 0) {
         return false;
@@ -107,8 +226,15 @@ export function masterShouldExitTemple(inTemple: boolean, ess: number, stayInAlt
     return !stayInAltar || bankDue;
 }
 
-export function masterShouldEnterAltar(inTemple: boolean, ess: number, stayInAltar: boolean): boolean {
-    return !inTemple && (ess > 0 || stayInAltar);
+export function masterShouldEnterAltar(inTemple: boolean, ess: number, stayInAltar: boolean, bankDue: boolean): boolean {
+    if (inTemple) {
+        return false;
+    }
+    if (ess > 0) {
+        return true;
+    }
+    // Why: stay-in-altar + bankDue used to portal out then talisman straight back in, never reaching the bank.
+    return stayInAltar && !bankDue;
 }
 
 // Short route only. A trade window moves at most TRADE_CAP, so anything carried beyond it

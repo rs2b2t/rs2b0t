@@ -254,6 +254,17 @@ interface LevelSlot {
     wall: Uint8Array | null;
 }
 
+// Why: `wallMask` records a wall on both faces, so a candidate is checked on the side facing the loc.
+const CARDINAL_SIDES: readonly [number, number, number][] = [
+    [0, 1, 1 << 2],
+    [1, 0, 1 << 3],
+    [0, -1, 1 << 0],
+    [-1, 0, 1 << 1]
+];
+
+// Why: two tiles covers a 5x5 placement, and the flood stops there rather than running the length of a wall.
+const FOOTPRINT_RADIUS = 2;
+
 export class PathFinder {
     private readonly slots: (LevelSlot | null)[] = new Array(4 << 16).fill(null);
     readonly mapsquares: number;
@@ -536,25 +547,60 @@ export class PathFinder {
         return goals;
     }
 
-    private cardinalGoals(p: NavPoint): Set<number> {
-        const goals = new Set<number>();
-        if (this.walkable(p.x, p.z, p.level)) {
-            return goals;
+    /** The solid tiles a loc occupies, read back off the collision around one of them. */
+    private blockedFootprint(p: NavPoint): NavPoint[] {
+        const seen = new Set<string>([`${p.x},${p.z}`]);
+        const solid = [p];
+        const stack = [p];
+        while (stack.length > 0) {
+            const cur = stack.pop()!;
+            for (const [dx, dz] of CARDINAL_SIDES) {
+                const nx = cur.x + dx;
+                const nz = cur.z + dz;
+                if (Math.max(Math.abs(nx - p.x), Math.abs(nz - p.z)) > FOOTPRINT_RADIUS) {
+                    continue;
+                }
+                if (seen.has(`${nx},${nz}`) || this.walkable(nx, nz, p.level)) {
+                    continue;
+                }
+                seen.add(`${nx},${nz}`);
+                const tile = { x: nx, z: nz, level: p.level };
+                solid.push(tile);
+                stack.push(tile);
+            }
         }
-        const sides: [number, number, number][] = [
-            [0, 1, 1 << 2],
-            [1, 0, 1 << 3],
-            [0, -1, 1 << 0],
-            [-1, 0, 1 << 1]
-        ];
-        for (const [dx, dz, facingBit] of sides) {
-            const cx = p.x + dx;
-            const cz = p.z + dz;
-            if (this.walkable(cx, cz, p.level) && (this.wallMask(cx, cz, p.level) & facingBit) === 0) {
-                goals.add(nodeId(cx, cz, p.level));
+        return solid;
+    }
+
+    // Why: the flood cannot tell one loc from the next, and Seers' trees stand in a run, so a candidate is
+    // Why: kept only within the placement's own reach; past that it is beside a different tree.
+    private besideAll(tiles: readonly NavPoint[], at: NavPoint): Set<number> {
+        const goals = new Set<number>();
+        for (const t of tiles) {
+            for (const [dx, dz, facingBit] of CARDINAL_SIDES) {
+                const cx = t.x + dx;
+                const cz = t.z + dz;
+                if (Math.max(Math.abs(cx - at.x), Math.abs(cz - at.z)) > FOOTPRINT_RADIUS) {
+                    continue;
+                }
+                if (this.walkable(cx, cz, at.level) && (this.wallMask(cx, cz, at.level) & facingBit) === 0) {
+                    goals.add(nodeId(cx, cz, at.level));
+                }
             }
         }
         return goals;
+    }
+
+    // Why: a loc wider than one tile blocks its own neighbours, so all four beside the placement can be solid
+    // Why: and the seeds come back empty. Seers' 2x2 tree at (2722,3481) is the case, two of its four are its
+    // Why: own body and two are the oak beside it, and goalCandidates then settled for any walkable tile
+    // Why: within five, which the walker rightly refused to call arrival.
+    private cardinalGoals(p: NavPoint): Set<number> {
+        if (this.walkable(p.x, p.z, p.level)) {
+            return new Set<number>();
+        }
+        const beside = this.besideAll([p], p);
+        return beside.size > 0 ? beside : this.besideAll(this.blockedFootprint(p), p);
     }
 
     findPath(
