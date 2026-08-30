@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { COORD_TOOL_SLOTS, TRAIL_FOOD_CAP, casketRewardSlots, trailFoodTarget, weaponNeeded } from '#/bot/api/ai/clues/packPlan.js';
+import { COORD_TOOL_SLOTS, TELEPORT_CASTS, TRAIL_FOOD_CAP, casketRewardSlots, teleportRuneTarget, trailFoodTarget, weaponNeeded } from '#/bot/api/ai/clues/packPlan.js';
 
 const budget = (over: Partial<Parameters<typeof trailFoodTarget>[0]> = {}) => ({
     hostWant: 20,
@@ -57,5 +57,23 @@ describe('casketRewardSlots', () => {
     });
     test('an unrecognised casket still reserves the easy-tier minimum', () => {
         expect(casketRewardSlots('mystery_casket')).toBe(4);
+    });
+});
+
+describe('teleportRuneTarget', () => {
+    test('a trail carries twelve casts of each teleport it can make', () => {
+        expect(TELEPORT_CASTS).toBe(12);
+        // Law + 3 air is one Varrock teleport.
+        expect(teleportRuneTarget(1)).toBe(12);
+        expect(teleportRuneTarget(3)).toBe(36);
+    });
+
+    // Why: runes stack, so tripling the cast budget costs the pack nothing and the food target does not move.
+    test('the bigger budget still leaves the same room for food', () => {
+        expect(trailFoodTarget(budget({ freeSlots: 22 }))).toBe(TRAIL_FOOD_CAP);
+    });
+
+    test('a teleport that burns no runes asks for none', () => {
+        expect(teleportRuneTarget(0)).toBe(0);
     });
 });

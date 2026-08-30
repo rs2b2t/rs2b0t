@@ -8,6 +8,17 @@ import { Prayer } from '#/bot/api/prayer/Prayer.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { crossesTirannwn, walkAcrossTirannwn } from '#/bot/api/ai/clues/tirannwnTravel.js';
+import {
+    KHARAZI_CLUES,
+    MACHETE,
+    RADIMUS_NOTES,
+    crossesKharazi,
+    hasJungleMap,
+    heldAxe,
+    jungleAxe,
+    jungleKeepNames,
+    walkAcrossKharazi
+} from '#/bot/api/ai/clues/kharaziTravel.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { foodHealAmount, shouldEatToUseFood } from '#/bot/api/combat/food.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
@@ -19,7 +30,7 @@ import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { CASKET_IDS, CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { ensureCoordTools, hasAllTrio, hasCoordClueHeld } from '#/bot/api/ai/clues/AcquireTools.js';
 import { SPADE_NAME, trailKit } from '#/bot/api/ai/clues/data/toolAcquire.js';
-import { COORD_TOOL_SLOTS, trailFoodTarget, weaponNeeded } from '#/bot/api/ai/clues/packPlan.js';
+import { COORD_TOOL_SLOTS, teleportRuneTarget, trailFoodTarget, weaponNeeded } from '#/bot/api/ai/clues/packPlan.js';
 import { isTeleportItem, teleportKitFor, type TeleportKit } from '#/bot/api/ai/clues/teleportKit.js';
 import {
     ENTRANA_RESTRICTED_GEAR_RE,
@@ -35,8 +46,6 @@ const ALTAR_RADIUS = 2;
 const ALTAR_WALK_MS = 180_000;
 const ALTAR_RESTORE_MS = 6000;
 const EAT_CONFIRM_TICKS = 2;
-// Enough runes for a few hops per trail without crowding the pack.
-const TELEPORT_CASTS = 4;
 
 export function heldClueLikeId(): number | null {
     const it = Inventory.items().find(i => CLUE_DB[i.id] !== undefined || CASKET_IDS[i.id] !== undefined);
@@ -84,6 +93,10 @@ export interface SolveClueHost {
 export function walkToBank(tile: NavPoint, log: (m: string) => void): Promise<boolean> {
     if (crossesTirannwn(tile)) {
         return walkAcrossTirannwn(tile, 3, log);
+    }
+    // Why: a trail that dug in the Kharazi Jungle has to cut back out before any bank is on the graph at all.
+    if (crossesKharazi(tile)) {
+        return walkAcrossKharazi(tile, 3, log);
     }
     return Traversal.walkResilient(tile, { radius: 3, attempts: 6, timeoutMs: 300_000, log });
 }
@@ -268,6 +281,37 @@ export class SolveClue implements Task {
         }
     }
 
+    /**
+     * Why: `start_chop_jungle` wants a machete, an axe and Radimus's notes, and the bank is the only source.
+     * Why: `~woodcutting_axe_checker` reads the pack and the right hand, never the bank, so the axe has to come out.
+     * Why: without them the trail spends its whole budget swinging at a band that will not open.
+     */
+    private async stockJungleKit(): Promise<void> {
+        const want: string[] = [];
+        if (Inventory.first(MACHETE) === null && !Equipment.contains(MACHETE)) {
+            want.push(MACHETE);
+        }
+        if (heldAxe() === null) {
+            const axe = jungleAxe();
+            if (axe === null) {
+                this.host.log('[clue] no axe in the pack or the bank — the Kharazi band cannot be cut');
+            } else {
+                want.push(axe);
+            }
+        }
+        if (!hasJungleMap()) {
+            want.push(RADIMUS_NOTES);
+        }
+        for (const name of want) {
+            await Bank.withdraw(name, 'Withdraw-1');
+            if (await Execution.delayUntil(() => Inventory.first(name) !== null, 2500)) {
+                this.host.log(`[clue] took ${name} for the Kharazi Jungle`);
+            } else {
+                this.host.log(`[clue] no '${name}' in the bank — the Kharazi dig will abandon`);
+            }
+        }
+    }
+
     private async bankFirst(): Promise<boolean> {
         const here = Game.tile();
         const bank = here ? nearestBank(here) : null;
@@ -322,6 +366,10 @@ export class SolveClue implements Task {
         // Southbound Shantay Pass is baked but consumes a pass (#371). Keep/withdraw
         // one so desert digs (3552/3554) can plan the requires-gated edge.
         const SHANTAY_PASS = 'Shantay pass';
+        // Why: the machete, an axe and Radimus's notes are what `start_chop_jungle` checks, and a bot arriving
+        // Why: from a grind is holding none of them, so they are kept through the deposit and withdrawn below.
+        const jungleClue = scrollId !== null && KHARAZI_CLUES.has(scrollId);
+        const jungleKeep = new Set(jungleClue ? jungleKeepNames().map(n => n.toLowerCase()) : []);
         const isKeep = (name: string): boolean => {
             const n = name.toLowerCase();
             if (entranaStrip && ENTRANA_RESTRICTED_GEAR_RE.test(name)) {
@@ -330,7 +378,7 @@ export class SolveClue implements Task {
             // Why: a bot arriving from a grind holds a grind-sized food load that fills the pack, so food is banked here and comes back capped below.
             return protectedNames.has(n) || n.includes('clue') || n.includes('casket')
                 || n === SPADE_NAME.toLowerCase() || n === 'coins' || n === SHANTAY_PASS.toLowerCase()
-                || coordItems.has(n) || rowItemNames.has(n)
+                || coordItems.has(n) || rowItemNames.has(n) || jungleKeep.has(n)
                 || (!entranaStrip && weapon !== '' && n === weapon)
                 || (keepTeleports && isTeleportItem(name, kit));
         };
@@ -377,6 +425,10 @@ export class SolveClue implements Task {
             } else if (!(await Execution.delayUntil(() => Inventory.count(SHANTAY_PASS) >= 1, 2500))) {
                 this.host.log('[clue] Shantay pass withdraw did not land');
             }
+        }
+
+        if (jungleClue) {
+            await this.stockJungleKit();
         }
 
         const scrollIsCoord = scrollId !== null && CLUE_DB[scrollId]?.needsSextant === true;
@@ -443,7 +495,7 @@ export class SolveClue implements Task {
             return;
         }
         for (const { name, perCast } of kit.runes) {
-            const want = perCast * TELEPORT_CASTS;
+            const want = teleportRuneTarget(perCast);
             for (let guard = 0; guard < 6 && Inventory.count(name) < want && !Inventory.isFull(); guard++) {
                 const short = want - Inventory.count(name);
                 const before = Inventory.count(name);

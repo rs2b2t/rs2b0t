@@ -52,12 +52,36 @@ export function clusterEligible(cluster: RouteCluster, acct: AccountView, toggle
     return true;
 }
 
-export function nextCluster(route: Route, lastId: string | null, acct: AccountView, toggles: Record<string, boolean>): RouteCluster | null {
+/** Why: Mage Arena (and every other stop) was still walked when the selection was only vials. */
+export function clusterSellsChosen(cluster: RouteCluster, db: Record<string, ShopRecord>, chosen: ReadonlySet<string>): boolean {
+    for (const shop of cluster.shops) {
+        const rec = db[shop.shopId];
+        if (!rec) {
+            continue;
+        }
+        for (const buy of shop.buys) {
+            const item = rec.items.find(i => i.obj === buy.obj);
+            if (item && chosen.has(item.name.toLowerCase())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+export function nextCluster(
+    route: Route,
+    lastId: string | null,
+    acct: AccountView,
+    toggles: Record<string, boolean>,
+    chosen: ReadonlySet<string>,
+    db: Record<string, ShopRecord>
+): RouteCluster | null {
     const ids = route.ring;
     const start = lastId === null ? 0 : (ids.indexOf(lastId) + 1) % ids.length;
     for (let i = 0; i < ids.length; i++) {
         const cluster = route.clusters.find(c => c.id === ids[(start + i) % ids.length]);
-        if (cluster && clusterEligible(cluster, acct, toggles)) {
+        if (cluster && clusterEligible(cluster, acct, toggles) && clusterSellsChosen(cluster, db, chosen)) {
             return cluster;
         }
     }
