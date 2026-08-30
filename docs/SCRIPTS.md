@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 59. Categories: 19.
+- Scripts: 60. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -29,6 +29,7 @@
 - [Smithing](#smithing) — 3
 - [Thieving](#thieving) — 3
 - [Treasure Trails](#treasure-trails) — 1
+- [Utility](#utility) — 1
 - [Woodcutting](#woodcutting) — 2
 
 ## Agility
@@ -980,6 +981,20 @@ Solves the easy clue scroll (or opens the casket) in your pack — banks everyth
 | `foodWithdraw` | number (1–27) | `8` | Food to withdraw |
 | `restorePrayer` | boolean | `true` | Top up prayer between trails |
 | `useTeleports` | boolean | `true` | Use teleports |
+
+## Utility
+
+### BankSorter
+
+Walks to a bank and rewrites the slot order into categories, coins first and junk last, then stops. Optionally reports, and drops, quest items a finished quest no longer needs
+
+- Tags: `bank`, `sort`, `tidy`, `quest`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `sortBank` | boolean | `true` | Sort the bank |
+| `reportQuestJunk` | boolean | `true` | Report obsolete quest items |
+| `dropQuestJunk` | boolean | `false` | Drop what the report found |
 
 ## Woodcutting
 
