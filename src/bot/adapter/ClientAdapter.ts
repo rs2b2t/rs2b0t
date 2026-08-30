@@ -1610,6 +1610,40 @@ export const actions = {
         return true;
     },
 
+    // Why: mirrors the drag handler at Client.ts:2420 so the reader and the local model agree before the server echo lands.
+    dragInvSlot(comId: number, from: number, to: number, mode: 0 | 1): boolean {
+        if (!raw || !raw.out || from === to) {
+            return false;
+        }
+
+        const com = IfType.list[comId];
+        const size = com?.linkObjType?.length ?? 0;
+        if (!com?.linkObjType || !com.linkObjNumber || size === 0) {
+            return false;
+        }
+        if (from < 0 || to < 0 || from >= size || to >= size || com.linkObjType[from] <= 0) {
+            return false;
+        }
+
+        if (mode === 1) {
+            let src = from;
+            while (src !== to) {
+                const next = src > to ? src - 1 : src + 1;
+                com.swapSlots(src, next);
+                src = next;
+            }
+        } else {
+            com.swapSlots(from, to);
+        }
+
+        raw.out.p1Enc(ClientProt.INV_BUTTOND);
+        raw.out.p2(comId);
+        raw.out.p2(from);
+        raw.out.p2(to);
+        raw.out.p1(mode);
+        return true;
+    },
+
     // Why: mirrors the client's own MESSAGE_PUBLIC write (Client.ts, chat input handler), colour 0 and effect 0 since the bot never uses chat effects.
     sayPublic(text: string): boolean {
         const message = text.trim().slice(0, PUBLIC_CHAT_LIMIT);
