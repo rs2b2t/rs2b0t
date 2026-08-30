@@ -6,8 +6,7 @@ import type { CookSurfaceKind, CookSurfaceLoc } from './cookSurfaceTypes.js';
 import { cookSurfaceForFishCamp, rangeStandFromLoc } from './cookingRanges.js';
 
 /**
- * Pairs a bank with the cook surface nearest to it, for CookBot's Range mode.
- * Fire mode ignores the surface and lights its own, so a bank with none still earns a row.
+ * Pairs a bank with the cook surface nearest to it, for CookBot's Range mode. Fire mode lights its own, so a bank with no surface still earns a row.
  * @see api/cooking/CookLocations.ts for the table bound to the live bank list.
  */
 
