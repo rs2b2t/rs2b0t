@@ -45,6 +45,14 @@ export const CASES: readonly Case[] = [
         note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
     },
     {
+        id: 'banksorter-live',
+        harness: 'banksorter-live.ts',
+        covers: { scripts: ['BankSorter'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'seeds a scrambled bank at Varrock West, sorts it cold, then tops it up and re-sorts; passes when both orders are contiguous by category, the incremental pass takes one insert batch, and varp 304 comes back to where it started'
+    },
+    {
         id: 'ardyfighter-restock-loop-live',
         harness: 'ardyfighter-restock-loop-live.ts',
         covers: { scripts: ['ArdyFighter'] },
