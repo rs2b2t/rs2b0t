@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- API singletons are monkey-patched
-   to exercise the executor without a live client. */
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { actions, reader, type InvItemSnapshot, type ObjRecord } from '#/bot/adapter/ClientAdapter.js';
