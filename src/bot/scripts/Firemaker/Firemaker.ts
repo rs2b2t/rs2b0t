@@ -11,15 +11,12 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import {
-    CANT_LIGHT,
-    FIRE_LIGHT_TICKS,
     FIRE_SPOTS,
-    FIRE_START_TICKS,
     LOG_LEVELS,
+    NoLightTiles,
     TINDERBOX,
     burnLaneWant,
     findBurnLane,
@@ -30,6 +27,7 @@ import {
     tileKey,
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
+import { lightFire } from '../../api/firemaking/LightFire.js';
 import { exactTool, hasAllTools, toolKeepNames, toolRestockPlan, type ToolReq } from '../../api/acquisition/Tools.js';
 
 export { FIRE_SPOTS, LOG_LEVELS } from '../../api/firemaking/Firemaking.js';
@@ -54,6 +52,7 @@ export default class Firemaker extends LoopingBot {
     private spotName = 'Varrock East';
     private logName = 'Logs';
 
+    private readonly noLight = new NoLightTiles();
     private lane = 0;
     private fires = 0;
     private trips = 0;
@@ -142,7 +141,7 @@ export default class Firemaker extends LoopingBot {
     }
 
     private occupied(): Set<string> {
-        return new Set(reader.locs().map(l => tileKey(l.tile)));
+        return this.noLight.merge(reader.locs().map(l => tileKey(l.tile)));
     }
 
     private async gotoLane(): Promise<boolean> {
@@ -157,7 +156,8 @@ export default class Firemaker extends LoopingBot {
                 (a, b) => Reachability.canStep(a, b)
             );
             if (!found) {
-                this.log(`no clear ground left in the ${this.spotName} plot — waiting for fires to burn out`);
+                const refused = this.noLight.size > 0 ? ` (${this.noLight.size} tiles refused a light)` : '';
+                this.log(`no clear ground left in the ${this.spotName} plot${refused} — waiting for fires to burn out`);
                 this.setStatus('waiting for a clear lane');
                 await Execution.delayTicks(25);
                 continue;
@@ -189,41 +189,6 @@ export default class Firemaker extends LoopingBot {
         return false;
     }
 
-    private async lightOne(): Promise<'lit' | 'blocked' | 'stalled'> {
-        const logs = Inventory.first(this.logName);
-        const tinder = Inventory.first(TINDERBOX);
-        if (!logs || !tinder) {
-            return 'stalled';
-        }
-        const mark = GameMessages.mark();
-        const xp = Skills.xp('firemaking');
-        const held = this.logsLeft();
-        const lit = (): boolean => Skills.xp('firemaking') > xp;
-        const blocked = (): boolean => GameMessages.sawSince(mark, CANT_LIGHT);
-
-        // Use tinderbox → logs (same order as working quest/FM paths). Logs→tinderbox is a no-op.
-        if (!(await tinder.useOn(logs))) {
-            return 'stalled';
-        }
-        if (
-            !(await Execution.delayUntilTicks(
-                () => this.logsLeft() < held || blocked() || Game.animating(),
-                FIRE_START_TICKS
-            ))
-        ) {
-            return 'stalled';
-        }
-        if (
-            !(await Execution.delayUntilTicks(
-                () => lit() || blocked() || EventSignal.pending(),
-                FIRE_LIGHT_TICKS
-            ))
-        ) {
-            return 'stalled';
-        }
-        return blocked() ? 'blocked' : lit() ? 'lit' : 'stalled';
-    }
-
     private async burnLeg(): Promise<void> {
         let stalls = 0;
         while (this.logsLeft() > 0) {
@@ -234,7 +199,7 @@ export default class Firemaker extends LoopingBot {
                 return;
             }
             this.setStatus(`burning ${this.logsLeft()} ${this.logName} (lane ${this.lane})`);
-            const outcome = await this.lightOne();
+            const outcome = await lightFire(this.logName);
             if (outcome === 'lit') {
                 this.fires++;
                 this.lane--;
@@ -244,6 +209,10 @@ export default class Firemaker extends LoopingBot {
             }
             this.lane = 0;
             if (outcome === 'blocked') {
+                const at = Game.tile();
+                if (at) {
+                    this.noLight.add(at);
+                }
                 continue;
             }
             if (++stalls >= 3) {

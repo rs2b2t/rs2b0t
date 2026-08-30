@@ -88,6 +88,14 @@ export const CASES: readonly Case[] = [
         note: 'spawns two Chickens and two Rats, drops guam and marrentill, then proves both names die, the avoided guam stays down, and an explicit Cake setting beats a pack of trout'
     },
     {
+        id: 'bankfletcher-live',
+        harness: 'bankfletcher-live.ts',
+        covers: { scripts: ['BankFletcher'] },
+        status: 'unvetted',
+        budgetMin: 5,
+        note: 'Varrock West: knife stays through a willow longbow bank trip, stringing raises strung id 847, headless attach climbs'
+    },
+    {
         id: 'baxtorian-rope-369-live',
         harness: 'baxtorian-rope-369-live.ts',
         covers: { subsystems: ['world'] },

@@ -179,9 +179,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'GreenDragon',
-    description: 'Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides',
+    description: 'Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides, sips super attack/strength mid-fight',
     category: 'Combat',
-    tags: ['wilderness', 'dragons', 'hides'],
+    tags: ['wilderness', 'dragons', 'hides', 'potions'],
     settingsSchema: GREENDRAGON_SETTINGS,
     create: () => new GreenDragon()
 });
@@ -468,18 +468,18 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'CookBot',
-    description: 'Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at a time, bank everything, repeat',
+    description: 'Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest the bank or on a fire you light outside, bank everything, repeat',
     category: 'Cooking',
-    tags: ['catherby', 'cooking', 'banking', 'afk'],
+    tags: ['cooking', 'banking', 'firemaking', 'afk'],
     settingsSchema: COOKBOT_SETTINGS,
     create: () => new CookBot()
 });
 
 ScriptRegistry.register({
     name: 'BankFletcher',
-    description: 'Bank-standing fletcher — withdraw logs, knife-fletch the chosen product (arrow shafts / unstrung bow), deposit, repeat',
+    description: 'Bank-standing fletcher — keeps the knife (or bow string), Make-X logs into shafts/unstrung bows, or spam-string unstrung bows and attach arrows',
     category: 'Fletching',
-    tags: ['fletching', 'banking', 'afk'],
+    tags: ['fletching', 'banking', 'afk', 'bows', 'arrows', 'stringing'],
     settingsSchema: BANKFLETCHER_SETTINGS,
     create: () => new BankFletcher()
 });
