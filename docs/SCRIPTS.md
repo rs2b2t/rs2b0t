@@ -288,9 +288,9 @@ Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + ro
 
 ### GreenDragon
 
-Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides
+Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks bones + hides, sips super attack/strength mid-fight
 
-- Tags: `wilderness`, `dragons`, `hides`
+- Tags: `wilderness`, `dragons`, `hides`, `potions`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
@@ -302,6 +302,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
 | `shield` | string | `"Dragonfire shield"` | Anti-dragon shield — one of: Dragonfire shield |
+| `usePotions` | boolean | `true` | Drink super attack / strength |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Escape below HP% |
@@ -401,19 +402,23 @@ Rellekka rock crabs: aggro-stack-kill-reset, loots key halves
 
 ### CookBot
 
-Catherby cook loop — withdraw raw fish, cross to the range, cook it all one at a time, bank everything, repeat
+Bank cook loop — withdraw raw fish, cook it one at a time on the range nearest the bank or on a fire you light outside, bank everything, repeat
 
-- Tags: `catherby`, `cooking`, `banking`, `afk`
+- Tags: `cooking`, `banking`, `firemaking`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `fish` | string | `"Raw salmon"` | Raw fish to cook (contains) |
-| `bankStand` | tile | `{"x":2809,"z":3441,"level":0}` | Bank stand tile (x,z) |
-| `rangeStand` | tile | `{"x":2817,"z":3443,"level":0}` | Range stand tile (x,z) |
-| `rangeName` | string | `"Range"` | Range loc name |
+| `location` | string | `"Catherby"` | Where to cook — one of: Auto, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Fishing Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena, Custom |
+| `surface` | string | `"Range"` | Cook on — one of: Range, Fire |
+| `logType` | string | `"Logs"` | Logs to burn (Fire only) — one of: Logs, Oak logs, Willow logs, Maple logs, Yew logs, Magic logs |
+| `firePlotRadius` | number (2–16) | `8` | Fire ground search radius (Fire only) |
+| `bankStand` | tile | `{"x":2809,"z":3441,"level":0}` | Bank stand tile (Custom only) |
+| `rangeStand` | tile | `{"x":2817,"z":3443,"level":0}` | Range stand tile (Custom only) |
+| `rangeName` | string | `"Range"` | Range loc name (Custom only) |
 | `bankBooth` | string | `"Bank booth"` | Bank booth loc name |
 | `obstacle` | string | `"door, gate"` | Openable obstacles (contains) |
-| `leashRadius` | number (2–20) | `8` | Range search radius (tiles) |
+| `leashRadius` | number (2–20) | `8` | Cook surface search radius (tiles) |
 
 ## Crafting
 

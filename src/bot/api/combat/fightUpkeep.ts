@@ -11,9 +11,9 @@ const clock = new AttackClock();
 
 /**
  * True on the tick our swing animation began.
- * Why: anything that costs a tick, such as eating or burying, must skip that one tick and spend the cooldown instead, or it stalls an attack.
+ * Why: anything that costs a tick, such as eating, burying or drinking a dose, must skip that one tick and spend the cooldown instead, or it stalls an attack.
  */
-function swingStartedThisTick(): boolean {
+export function swingStartedThisTick(): boolean {
     clock.observe(reader.selfAnim(), BotHost.tickCount);
     return clock.attackedThisTick(BotHost.tickCount);
 }

@@ -1,15 +1,18 @@
 // Live GreenDragon proof: [base]. Case 1, a hard clue on the ground with a pack full of lobsters: spend food for the slot, take the clue by obj id, hand to SolveClue, leave the wilderness, open a bank.
 // Case 2, clues off and teleported off the field: the bot walks itself back. Proven on a short hop rather than a full trail, which is slow and flakes on the known nav-island destinations.
+// Potion cases: a pack of flasks in empty wilderness stays sealed, and the dose only lands once a dragon is engaged.
 
 //   bun e2e/greendragon-test.ts [http://localhost:8888]
-import { boot, bringUpOffIsland, cheatQuiet, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
+import { boot, bringUpOffIsland, cheatQuiet, deployIsolatedClient, fail, launchBrowser, login, positionalArgs, setSettings } from './lib/harness.js';
 import type { Page } from 'playwright-core';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8888');
 const base = args[0];
+// Why: `public/bot` is shared, so a concurrent session's deploy would land inside this run's boot window and the assertions below would grade their branch.
+const client = deployIsolatedClient(`gd${Date.now().toString(36).slice(-6)}`);
 
 const ANCHOR = { x: 3096, z: 3814 };
-/** Quiet low wilderness for the slot-freeing case.
+/** Quiet low wilderness, used wherever a case needs the bot out of combat.
  *  Why: in the dragon field, damage lets the hp-driven Eat task (which outranks FreeSlot) free the slot incidentally, so FreeSlot never decides and the assertion flakes. */
 const QUIET_FIELD = { x: 3096, z: 3560 };
 const WILDY_MIN_Z = 3520;
@@ -24,6 +27,10 @@ const SHIELD = 1540;
 const SPADE = 952;
 const HARD_CLUE = 2723; // trail_clue_hard_sextant001
 const DRAGON_BONES = 536;
+const SUPER_ATTACK_3 = 145;
+const SUPER_ATTACK_1 = 149;
+const SUPER_STRENGTH_3 = 157;
+const EMPTY_VIAL = 229;
 /** Mirrors TRAIL_FOOD_CAP in src/bot/api/ai/clues/packPlan.ts. */
 const TRAIL_FOOD_CAP = 10;
 
@@ -166,7 +173,7 @@ async function startBot(page: Page): Promise<void> {
 
 async function prepare(page: Page, user: string, at: { x: number; z: number }): Promise<void> {
     page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    await page.goto(`${base}/bot.html`);
+    await page.goto(`${base}${client.page}`);
     await boot(page);
     if (!(await login(page, user))) {
         fail(`login failed for ${user}`);
@@ -519,17 +526,219 @@ async function caseFleeAndRecover(page: Page, user: string): Promise<void> {
     console.log('PASS 2/2 — walked back to the field and resumed');
 }
 
+/** Standing in the wilderness with flasks in the pack is not a reason to drink one. */
+async function casePotionHold(page: Page, user: string): Promise<void> {
+    await prepare(page, user, QUIET_FIELD);
+    await setSettings(page, 'GreenDragon', {
+        solveClues: false,
+        buryBones: false,
+        usePotions: true,
+        logDetail: 'Verbose',
+        anchorTile: `${QUIET_FIELD.x},${QUIET_FIELD.z},0`,
+        bankTile: `${QUIET_FIELD.x},${QUIET_FIELD.z},0`
+    });
+    await give(page, 'rune_scimitar', SCIMITAR, 1);
+    await give(page, 'antidragonbreathshield', SHIELD, 1);
+    await give(page, 'lobster', LOBSTER, 5);
+    await give(page, '3dose2attack', SUPER_ATTACK_3, 1);
+    await give(page, '3dose2strength', SUPER_STRENGTH_3, 1);
+    await equip(page, SCIMITAR, 'Wield', 'Rune scimitar');
+    await equip(page, SHIELD, 'Wear', 'Dragonfire shield');
+
+    const base = await page.evaluate(() => {
+        const g = (globalThis as never as Api).__rs2b0t;
+        return { attack: g.Skills.level('attack'), strength: g.Skills.level('strength') };
+    });
+    console.log(`parked in empty wilderness at (${QUIET_FIELD.x},${QUIET_FIELD.z}) with both flasks, attack ${base.attack}, strength ${base.strength}`);
+
+    await startBot(page);
+    console.log('GreenDragon started (potions on, no dragons in reach)');
+    await page.waitForTimeout(60_000);
+    await dump(page, 'after a minute with nothing to fight', 20);
+
+    const after = await page.evaluate(() => {
+        const g = (globalThis as never as Api).__rs2b0t;
+        return {
+            attack: g.Skills.effective('attack'),
+            strength: g.Skills.effective('strength'),
+            flasks: g.Inventory.count('Super attack(3)') + g.Inventory.count('Super strength(3)')
+        };
+    });
+    const drank = (await logLines(page)).filter(l => l.startsWith('drank '));
+    if (drank.length > 0) {
+        fail(`sipped without a dragon to fight: ${JSON.stringify(drank)}`);
+    }
+    if (after.attack > base.attack || after.strength > base.strength) {
+        fail(`boosted without drinking anything? attack ${base.attack}->${after.attack}, strength ${base.strength}->${after.strength}`);
+    }
+    if (after.flasks !== 2) {
+        fail(`expected both three-dose flasks untouched, ${after.flasks} left`);
+    }
+    console.log('PASS — a minute in the wilderness, both flasks full and neither skill boosted');
+}
+
+/** The dose lands mid-fight, and the drained flask does not squat a slot. */
+async function casePotionSip(page: Page, user: string): Promise<void> {
+    await prepare(page, user, ANCHOR);
+    await setSettings(page, 'GreenDragon', {
+        solveClues: false,
+        buryBones: false,
+        usePotions: true,
+        logDetail: 'Verbose',
+        anchorTile: `${ANCHOR.x},${ANCHOR.z},0`
+    });
+    await give(page, 'rune_scimitar', SCIMITAR, 1);
+    await give(page, 'antidragonbreathshield', SHIELD, 1);
+    await give(page, 'lobster', LOBSTER, 10);
+    // A one-dose attack flask empties on the first sip, which is what puts a Vial in the pack to drop.
+    await give(page, '1dose2attack', SUPER_ATTACK_1, 1);
+    await give(page, '3dose2strength', SUPER_STRENGTH_3, 1);
+    await equip(page, SCIMITAR, 'Wield', 'Rune scimitar');
+    await equip(page, SHIELD, 'Wear', 'Dragonfire shield');
+
+    const base = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Skills.level('attack'));
+    console.log(`at the dragon field with Super attack(1) + Super strength(3), attack base ${base}`);
+
+    await startBot(page);
+    console.log('GreenDragon started (potions on, dragons in reach)');
+
+    const boosted = await page
+        .waitForFunction(
+            () => {
+                const g = (globalThis as never as Api).__rs2b0t;
+                return g.Skills.effective('attack') > g.Skills.level('attack');
+            },
+            undefined,
+            { timeout: 300_000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    await dump(page, 'after the sip leg', 25);
+    if (!boosted) {
+        fail('never drank the super attack dose while fighting');
+    }
+    const boost = await page.evaluate(() => {
+        const g = (globalThis as never as Api).__rs2b0t;
+        return `${g.Skills.effective('attack')}/${g.Skills.level('attack')}`;
+    });
+    console.log(`PASS 1/3 — attack boosted to ${boost}`);
+
+    // Why: the boost lands mid-`delayUntilTicks`, a beat before the line that reports it, so the log line is waited for rather than sampled the moment the level moves.
+    const reported = await page
+        .waitForFunction(
+            () => ((globalThis as never as Api).rs2b0t.runner.ctx?.log ?? []).some(l => l.msg.startsWith('drank ')),
+            undefined,
+            { timeout: 15_000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    const lines = await logLines(page);
+    if (!reported) {
+        fail(`attack was boosted but nothing logged a sip: ${JSON.stringify(lines.slice(-15))}`);
+    }
+    // Why: the ordering anchor is the Fight hand-over, not the "attacking green dragon" line, because a dragon that strikes first puts the bot in combat through auto-retaliate and that line never runs.
+    const engaged = lines.findIndex(l => l === '-> Fight');
+    const sipped = lines.findIndex(l => l.startsWith('drank '));
+    if (engaged < 0 || engaged > sipped) {
+        fail(`the sip did not come from inside a dragon fight (Fight hand-over at ${engaged}, drink at ${sipped}): ${JSON.stringify(lines.slice(-15))}`);
+    }
+    console.log(`PASS 2/3 — ${lines[sipped]}, and Fight took over at line ${engaged} before it`);
+
+    const vialGone = await page
+        .waitForFunction(
+            id => !(globalThis as never as Api).__rs2b0t.reader.inventory().some(i => i.id === id),
+            EMPTY_VIAL,
+            { timeout: 60_000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    await dump(page, 'after the vial leg', 15);
+    if (!vialGone) {
+        fail('the drained Vial is still in the pack — it will force a bank trip every time a flask empties');
+    }
+    console.log('PASS 3/3 — the drained Vial was dropped');
+}
+
+/** The bank trip keeps the flask it is holding and tops the missing one up. */
+async function casePotionRestock(page: Page, user: string): Promise<void> {
+    await prepare(page, user, { x: 3094, z: 3493 });
+    await setSettings(page, 'GreenDragon', {
+        solveClues: false,
+        buryBones: false,
+        usePotions: true,
+        logDetail: 'Verbose',
+        bankTile: '3094,3493,0',
+        anchorTile: '3094,3493,0'
+    });
+    await give(page, 'rune_scimitar', SCIMITAR, 1);
+    await give(page, 'antidragonbreathshield', SHIELD, 1);
+    await equip(page, SCIMITAR, 'Wield', 'Rune scimitar');
+    await equip(page, SHIELD, 'Wear', 'Dragonfire shield');
+    // Attack is already held and strength is not, so one trip has to prove both halves: keep what is carried, draw what is missing.
+    await give(page, '3dose2attack', SUPER_ATTACK_3, 1);
+    await cheatQuiet(page, '~bank_f2p', 2500);
+    await cheatQuiet(page, '~bankitem 3dose2attack 5', 1500);
+    await cheatQuiet(page, '~bankitem 3dose2strength 5', 1500);
+    // No food in the pack is what makes the bank run validate on the first pass.
+    await give(page, 'dragon_bones', DRAGON_BONES, 20);
+
+    const before = await page.evaluate(() => {
+        const g = (globalThis as never as Api).__rs2b0t;
+        return { attack: g.Inventory.count('Super attack(3)'), strength: g.Inventory.count('Super strength(3)') };
+    });
+    if (before.attack !== 1 || before.strength !== 0) {
+        fail(`seed is wrong: holding ${before.attack} attack and ${before.strength} strength flasks, wanted 1 and 0`);
+    }
+    console.log('at the Edgeville bank holding 1 Super attack(3), none of strength, 5 of each banked');
+
+    await startBot(page);
+    console.log('GreenDragon started (bank run due, potions on)');
+
+    const stocked = await page
+        .waitForFunction(
+            () => {
+                const g = (globalThis as never as Api).__rs2b0t;
+                return g.Inventory.count('Super attack(3)') === 1 && g.Inventory.count('Super strength(3)') === 1;
+            },
+            undefined,
+            { timeout: 240_000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    await dump(page, 'after the restock leg', 30);
+    if (!stocked) {
+        const held = await page.evaluate(() => {
+            const g = (globalThis as never as Api).__rs2b0t;
+            return { attack: g.Inventory.count('Super attack(3)'), strength: g.Inventory.count('Super strength(3)') };
+        });
+        fail(`bank trip left ${held.attack} attack and ${held.strength} strength flasks, wanted one of each`);
+    }
+    console.log('PASS 1/2 — kept the flask it carried in and drew the one it lacked');
+
+    const lines = await logLines(page);
+    if (!lines.some(l => l === 'withdrew 1 Super strength(3)')) {
+        fail(`no withdrawal line for the missing flask: ${JSON.stringify(lines.filter(l => l.startsWith('withdrew')))}`);
+    }
+    if (lines.some(l => l.includes('Super attack(3)') && l.startsWith('withdrew'))) {
+        fail('topped up a flask it was already carrying — the held-flask count is not being read');
+    }
+    console.log('PASS 2/2 — withdrew only the missing flask, and the carried one survived the deposit');
+}
+
 const browser = await launchBrowser();
 const stamp = Date.now().toString(36).slice(-5);
 let failed = false;
-// GD_CASE=clue|regain|bury runs a single case while iterating.
+// GD_CASE=clue|regain|bury|hold|sip|restock runs a single case while iterating.
 const only = process.env.GD_CASE ?? '';
 for (const [name, tag, run] of ([
     ['clue hand-over', 'c', caseClueHandover],
     ['regain control', 'r', caseRegainControl],
     ['bury bones', 'b', caseBuryBones],
     ['deposit control', 'd', caseDepositControl],
-    ['flee recover', 'f', caseFleeAndRecover]
+    ['flee recover', 'f', caseFleeAndRecover],
+    ['potion hold', 'h', casePotionHold],
+    ['potion sip', 'p', casePotionSip],
+    ['potion restock', 'k', casePotionRestock]
 ] as const).filter(([n]) => only === '' || n.includes(only))) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const user = `gd${tag}${stamp}`;
@@ -552,6 +761,7 @@ for (const [name, tag, run] of ([
     }
 }
 await browser.close();
+client.cleanup();
 if (failed) {
     process.exit(1);
 }

@@ -60,7 +60,7 @@ export const Shop = {
                 break;
             }
 
-            const batch = buyBatch(it.ops, n - bought);
+            const batch = shopOpBatch(it.ops, 'buy', n - bought);
             if (batch.length === 0) {
                 break;
             }
@@ -95,7 +95,7 @@ export const Shop = {
                 break;
             }
 
-            const batch = buyBatch(it.ops, n - bought);
+            const batch = shopOpBatch(it.ops, 'buy', n - bought);
             if (batch.length === 0) {
                 break;
             }
@@ -127,14 +127,17 @@ export const Shop = {
                 break;
             }
 
-            const opIndex = stepOpIndex(it.ops, 'Sell', n - sold);
-            if (opIndex === -1) {
+            const batch = shopOpBatch(it.ops, 'sell', n - sold);
+            if (batch.length === 0) {
                 break;
             }
 
             const before = countHeld(name);
-            await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
+            for (const opIndex of batch) {
+                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
+            }
             await Execution.delayUntil(() => countHeld(name) !== before, 3000);
+            await Execution.delayTicks(1);
             const gone = before - countHeld(name);
             if (gone <= 0) {
                 break;
@@ -167,28 +170,20 @@ function heldById(id: number): number {
 // The engine processes at most this many user-event packets per player tick
 // (ClientGameProtCategory USER_EVENT), extra ops in a tick are dropped.
 const USER_OPS_PER_TICK = 5;
-const BUY_STEPS = [10, 5, 1] as const;
+const SHOP_STEPS = [10, 5, 1] as const;
 
-/**
- * One tick's worth of buy ops: up to USER_OPS_PER_TICK op indexes whose step sizes sum to at most `remaining`, largest steps first.
- * Why: a full batch then moves 50 items per tick instead of one op per tick.
- */
-function buyBatch(ops: (string | null)[], remaining: number): number[] {
+/** Why: the engine drops extra user-event packets, so 25 must sell as 10+10+5 in one tick. */
+export function shopOpBatch(ops: (string | null)[], verb: 'buy' | 'sell', remaining: number): number[] {
     const batch: number[] = [];
     let left = remaining;
     while (batch.length < USER_OPS_PER_TICK && left > 0) {
-        const step = BUY_STEPS.find(size => size <= left
-            && ops.some(o => o?.toLowerCase() === `buy ${size}`));
+        const step = SHOP_STEPS.find(size => size <= left
+            && ops.some(o => o?.toLowerCase() === `${verb} ${size}`));
         if (step === undefined) {
             break;
         }
-        batch.push(ops.findIndex(o => o?.toLowerCase() === `buy ${step}`));
+        batch.push(ops.findIndex(o => o?.toLowerCase() === `${verb} ${step}`));
         left -= step;
     }
     return batch;
-}
-
-function stepOpIndex(ops: (string | null)[], verb: 'Buy' | 'Sell', remaining: number): number {
-    const step = remaining >= 10 ? `${verb} 10` : remaining >= 5 ? `${verb} 5` : `${verb} 1`;
-    return ops.findIndex(o => o?.toLowerCase() === step.toLowerCase());
 }

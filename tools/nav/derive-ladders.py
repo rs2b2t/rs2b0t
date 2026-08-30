@@ -616,7 +616,7 @@ def main() -> None:
                         reason = reason or "The scripted destination has no walkable tile within two squares in this collision pack."
                     generated.append(make_edge(config, placement, action, source, target, reason))
 
-    data_dir = args.rs2b0t / "src" / "bot" / "nav" / "data"
+    data_dir = args.rs2b0t / "src" / "bot" / "event" / "webwalk" / "data"
     transport_path = data_dir / "transports.json"
     stair_path = data_dir / "stairEdges.json"
     transports = [edge for edge in json.loads(transport_path.read_text(encoding="utf-8")) if not legacy_ladder_edge(edge, ladder_ids, ladder_debugs)]

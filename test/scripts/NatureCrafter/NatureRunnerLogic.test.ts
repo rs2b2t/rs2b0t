@@ -1,6 +1,33 @@
 import { expect, test, describe } from 'bun:test';
 
-import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, TRADE_CAP, BUY_ONLY_STOCK, LOW_COINS, MIN_COIN_TARGET, SPIDER_SAFE, spiderSafeVia, tradeDelivered, masterShouldExitTemple, masterShouldEnterAltar } from '#/bot/scripts/NatureCrafter/NatureRunnerLogic.js';
+import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, TRADE_CAP, TRADE_ADJACENT, TRADE_NO_WALK, RUNNER_ASK_MS, MASTER_HANDSHAKE_MS, BUY_ONLY_STOCK, LOW_COINS, MIN_COIN_TARGET, SPIDER_SAFE, spiderSafeVia, tradeDelivered, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isLitter, isEventHeld, isDroppableLitter, runnerShouldRequestTrade } from '#/bot/scripts/NatureCrafter/NatureRunnerLogic.js';
+
+describe('litter keep-list', () => {
+    const runnerKeep = keepNames('Nature talisman', null);
+    const masterKeep = keepNames('Nature talisman', 'Nature rune');
+    test('runners keep coins, essence and the talisman', () => {
+        expect(isLitter('Coins', runnerKeep)).toBe(false);
+        expect(isLitter('Rune essence', runnerKeep)).toBe(false);
+        expect(isLitter('Nature talisman', runnerKeep)).toBe(false);
+        expect(isLitter('Nature rune', runnerKeep)).toBe(true);
+        expect(isLitter(null, runnerKeep)).toBe(true);
+    });
+    test('master also keeps the runes it crafts', () => {
+        expect(isLitter('Nature rune', masterKeep)).toBe(false);
+        expect(isLitter('Kebab', masterKeep)).toBe(true);
+    });
+    test('Strange box and Lamp belong to RandomEvents, not DropLitter', () => {
+        expect(isEventHeld('Strange box')).toBe(true);
+        expect(isEventHeld('Lamp')).toBe(true);
+        expect(isLitter('Strange box', runnerKeep)).toBe(false);
+        expect(isLitter('Lamp', masterKeep)).toBe(false);
+        expect(isDroppableLitter('Strange box', runnerKeep, ['Open'])).toBe(false);
+        expect(isDroppableLitter('Strange box', runnerKeep, ['Drop'])).toBe(false);
+        expect(isDroppableLitter('Kebab', masterKeep, ['Drop'])).toBe(true);
+        expect(isDroppableLitter('Kebab', masterKeep, ['Eat'])).toBe(false);
+        expect(isDroppableLitter('Coins', runnerKeep, ['Drop'])).toBe(false);
+    });
+});
 
 describe('planStoreStep (one store action per pass, re-planned against live stock)', () => {
     test('holding the full trade cap = done, regardless of stock', () => {
@@ -136,6 +163,99 @@ describe('tradeDelivered', () => {
     });
 });
 
+describe('runnerShouldWalkToMeet', () => {
+    test('walks to the ruins until the master is in sight', () => {
+        expect(runnerShouldWalkToMeet(false, false, false, false)).toBe(true);
+    });
+    test('stands once the master is visible, even if a trade request missed', () => {
+        expect(runnerShouldWalkToMeet(true, false, false, false)).toBe(false);
+        expect(runnerShouldWalkToMeet(false, true, false, false)).toBe(false);
+    });
+    test('does not leave the altar to re-path to the ruins', () => {
+        expect(runnerShouldWalkToMeet(false, false, true, false)).toBe(false);
+    });
+    test('still enters the altar when stay-in-altar is on', () => {
+        expect(runnerShouldWalkToMeet(false, false, false, true)).toBe(true);
+        expect(TRADE_ADJACENT).toBe(2);
+        expect(TRADE_NO_WALK).toBe(1);
+        expect(RUNNER_ASK_MS).toBe(1800);
+    });
+});
+
+describe('masterPickTradeTarget', () => {
+    const idle = { holdUntil: 0, now: 100 };
+    test('answers the runner who asked after the last accept', () => {
+        expect(masterPickTradeTarget({ asked: 'mith full', askedAt: 20, lastAcceptAt: 10, askedInRange: true, ...idle })).toBe('mith full');
+    });
+    test('ignores an ask from before the last accept — that request was cancelled', () => {
+        expect(masterPickTradeTarget({ asked: 'mith full', askedAt: 10, lastAcceptAt: 20, askedInRange: true, ...idle })).toBeNull();
+    });
+    test('does not click someone else while the asker is still walking in', () => {
+        expect(masterPickTradeTarget({ asked: 'mith full', askedAt: 20, lastAcceptAt: 10, askedInRange: false, ...idle })).toBeNull();
+    });
+    test('does not click the nearest body when nobody has a live ask', () => {
+        expect(masterPickTradeTarget({ asked: null, askedAt: 0, lastAcceptAt: 0, askedInRange: false, ...idle })).toBeNull();
+    });
+    test('does not re-click during the handshake hold — that cancels the window', () => {
+        expect(masterPickTradeTarget({
+            asked: 'mith chain', askedAt: 50, lastAcceptAt: 10, askedInRange: true,
+            holdUntil: 40, now: 30
+        })).toBeNull();
+        expect(masterPickTradeTarget({
+            asked: 'mith chain', askedAt: 50, lastAcceptAt: 10, askedInRange: true,
+            holdUntil: 40, now: 40
+        })).toBe('mith chain');
+        expect(MASTER_HANDSHAKE_MS).toBe(3000);
+    });
+});
+
+describe('runnerShouldRequestTrade', () => {
+    test('does not click while the window is open', () => {
+        expect(runnerShouldRequestTrade(true, 0, 10_000)).toBe(false);
+    });
+    test('re-asks only after RUNNER_ASK_MS', () => {
+        expect(runnerShouldRequestTrade(false, 1000, 1000 + RUNNER_ASK_MS - 1)).toBe(false);
+        expect(runnerShouldRequestTrade(false, 1000, 1000 + RUNNER_ASK_MS)).toBe(true);
+    });
+});
+
+describe('tradeWindowIsFor', () => {
+    test('a blank header still counts as the click we just made', () => {
+        expect(tradeWindowIsFor(null, 'Mith Dart')).toBe(true);
+    });
+    test('a window with someone else is not the click', () => {
+        expect(tradeWindowIsFor('Mith Scim', 'Mith Dart')).toBe(false);
+        expect(tradeWindowIsFor('Mith Dart', 'Mith Dart')).toBe(true);
+    });
+});
+
+describe('runnerMayLeaveAltar', () => {
+    test('does not portal while the trade window is open', () => {
+        expect(runnerMayLeaveAltar(true, 0)).toBe(false);
+    });
+    test('portals when the pack has no unnoted essence and the window is closed', () => {
+        expect(runnerMayLeaveAltar(false, 0)).toBe(true);
+        expect(runnerMayLeaveAltar(false, 25)).toBe(false);
+    });
+});
+
+describe('masterOfferDecision', () => {
+    const base = { who: 'Iron Square', isPartner: true, theirEssence: 25, runnerWaiting: true };
+    test('accepts a named partner offering essence', () => {
+        expect(masterOfferDecision(base)).toBe('accept');
+    });
+    test('does not decline a blank header — prod lags the name past 8 ticks', () => {
+        expect(masterOfferDecision({ who: null, isPartner: false, theirEssence: 25, runnerWaiting: false })).toBe('wait');
+        expect(masterOfferDecision({ who: null, isPartner: false, theirEssence: 25, runnerWaiting: true })).toBe('accept');
+    });
+    test('declines a named stranger', () => {
+        expect(masterOfferDecision({ ...base, who: 'Random', isPartner: false, runnerWaiting: false })).toBe('decline');
+    });
+    test('waits until essence is on their offer', () => {
+        expect(masterOfferDecision({ ...base, theirEssence: 0 })).toBe('wait');
+    });
+});
+
 describe('spiderSafeVia', () => {
     const store = { x: 2767, z: 3122 };
     const ruins = { x: 2865, z: 3022 };
@@ -166,9 +286,13 @@ describe('stay-in-altar master gates', () => {
     });
 
     test('enters empty-handed when staying so it can wait inside', () => {
-        expect(masterShouldEnterAltar(false, 0, true)).toBe(true);
-        expect(masterShouldEnterAltar(false, 0, false)).toBe(false);
-        expect(masterShouldEnterAltar(false, 10, false)).toBe(true);
-        expect(masterShouldEnterAltar(true, 10, true)).toBe(false);
+        expect(masterShouldEnterAltar(false, 0, true, false)).toBe(true);
+        expect(masterShouldEnterAltar(false, 0, false, false)).toBe(false);
+        expect(masterShouldEnterAltar(false, 10, false, false)).toBe(true);
+        expect(masterShouldEnterAltar(true, 10, true, false)).toBe(false);
+    });
+    test('does not re-enter empty-handed when a bank trip is due', () => {
+        expect(masterShouldEnterAltar(false, 0, true, true)).toBe(false);
+        expect(masterShouldEnterAltar(false, 10, true, true)).toBe(true);
     });
 });

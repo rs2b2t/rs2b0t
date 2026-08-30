@@ -16,7 +16,12 @@ export default class Tile implements WorldTile {
     }
 
     distanceTo(other: WorldTile): number {
-        return Math.max(Math.abs(this.x - other.x), Math.abs(this.z - other.z));
+        const xz = Math.max(Math.abs(this.x - other.x), Math.abs(this.z - other.z));
+        // Why: xz Chebyshev treats Jiminua's lookout (2766,3122,1) as arrived at the store.
+        if ((this.level ?? 0) !== (other.level ?? 0)) {
+            return 1_000_000 + xz;
+        }
+        return xz;
     }
 
     translate(dx: number, dz: number): Tile {

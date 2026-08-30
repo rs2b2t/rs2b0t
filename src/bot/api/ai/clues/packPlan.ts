@@ -12,6 +12,17 @@ export const TRAIL_FOOD_CAP = 10;
 /** Sextant + watch + chart, fetched after banking when the bank had none. */
 export const COORD_TOOL_SLOTS = 3;
 
+// Why: runes stack, so a bigger cast budget costs the pack no extra slot, and a trail that runs dry
+// Why: mid-route walks the rest of the map on foot, which is what four casts kept doing.
+
+/** Casts of each catalogued teleport a trail carries runes for. */
+export const TELEPORT_CASTS = 12;
+
+/** Runes to hold for a teleport that burns `perCast` of them. */
+export function teleportRuneTarget(perCast: number): number {
+    return perCast * TELEPORT_CASTS;
+}
+
 interface TrailFoodBudget {
     /** What the host would take for its own grind. */
     hostWant: number;

@@ -267,3 +267,38 @@ export function fireReactionTicks(): number {
 export function shouldBurnFullLoad(mode: BurnMode, inventoryFull: boolean, logCount: number, hasTinderbox: boolean): boolean {
     return mode === 'chop-then-burn' && inventoryFull && logCount > 0 && hasTinderbox;
 }
+
+/** What one light attempt did. */
+export type LightOutcome = 'lit' | 'blocked' | 'stalled';
+
+// Why: findBurnLane ranks on locs and walkability alone, neither of which knows the game refused a tile, so a refused tile stays the best candidate and the script walks back to it forever.
+
+/** Tiles that answered {@link CANT_LIGHT} this session. */
+export class NoLightTiles {
+    private readonly refused = new Set<string>();
+
+    add(tile: { x: number; z: number }): void {
+        this.refused.add(tileKey(tile));
+    }
+
+    has(tile: { x: number; z: number }): boolean {
+        return this.refused.has(tileKey(tile));
+    }
+
+    get size(): number {
+        return this.refused.size;
+    }
+
+    /** `occupied` for findBurnLane, with the refused tiles folded in. */
+    merge(occupied: Iterable<string>): Set<string> {
+        const all = new Set(occupied);
+        for (const key of this.refused) {
+            all.add(key);
+        }
+        return all;
+    }
+
+    clear(): void {
+        this.refused.clear();
+    }
+}

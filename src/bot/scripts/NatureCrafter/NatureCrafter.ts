@@ -1,4 +1,5 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import { BotHost } from '../../runtime/BotHost.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
@@ -20,7 +21,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { type SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneType, LOW_COINS, STORE_PASSES, TRADE_CAP, PICKUP_RANGE, SPIDER_SAFE, spiderSafeVia, tradeDelivered, masterShouldExitTemple, masterShouldEnterAltar } from './NatureRunnerLogic.js';
+import { planStoreStep, offerCount, coinTargetFor, shortRouteWithdraw, RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneType, LOW_COINS, STORE_PASSES, TRADE_CAP, TRADE_ADJACENT, PICKUP_RANGE, SPIDER_SAFE, spiderSafeVia, runnerShouldWalkToMeet, runnerMayLeaveAltar, masterPickTradeTarget, masterOfferDecision, tradeWindowIsFor, masterShouldExitTemple, masterShouldEnterAltar, keepNames, isDroppableLitter, MASTER_HANDSHAKE_MS, runnerShouldRequestTrade } from './NatureRunnerLogic.js';
 
 const ESSENCE = 'Rune essence';
 const ESSENCE_ID = 1436; // blankrune (unnoted essence); the bank-note variant has a different id
@@ -29,7 +30,8 @@ const ALTAR = { name: 'Altar', op: 'Craft-rune' };
 const PORTAL = { name: 'Portal', op: 'Use' };
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const TEMPLE_Z = 4000; // altar temples sit at z ~4800; the overworld is < 4000
-const RUNNER_RANGE = 2; // tiles; only trade an adjacent runner (OPPLAYER4 walks you to them)
+const TRADEREQ_CHAT = 4; // Client.addChat(4, 'wishes to trade with you.', player)
+const TRADE_REQ_TEXT = /wishes to trade with you/i;
 const COINS = 'Coins';
 const LADDER = 'Ladder';
 const CLIMB_UP = 'Climb-up';
@@ -64,6 +66,17 @@ function unnotedEssence(): number {
     return Inventory.items().filter(i => i.id === ESSENCE_ID).reduce((s, i) => s + i.count, 0);
 }
 
+function offerEss(items: { name: string | null; count: number }[]): number {
+    return items
+        .filter(o => (o.name ?? '').toLowerCase() === ESSENCE.toLowerCase())
+        .reduce((s, o) => s + Math.max(1, o.count), 0);
+}
+
+function tradeSnap(): string {
+    const screen = Trade.onConfirmScreen() ? 'confirm' : Trade.onOfferScreen() ? 'offer' : Trade.active() ? 'open' : 'closed';
+    return `${screen} with=${Trade.partner() ?? '-'} mine=${offerEss(Trade.myOffer())} theirs=${offerEss(Trade.theirOffer())} unnoted=${unnotedEssence()}`;
+}
+
 export default class NatureCrafter extends TaskBot {
     override loopDelay = 600;
 
@@ -80,6 +93,11 @@ export default class NatureCrafter extends TaskBot {
     private crafted = 0;
     private received = 0;
     private trades = 0;
+    private lastRequester: string | null = null;
+    private lastAskAt = 0;
+    private lastAcceptAt = 0;
+    private handshakeHoldUntil = 0;
+    private loadDelivered = false;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -114,8 +132,9 @@ export default class NatureCrafter extends TaskBot {
             const route = this.conf.unnote ? `via the bank + ship + ${this.conf.unnote.npc}` : 'straight from the bank (unnoted)';
             this.log(`NatureCrafter runner starting — ferrying essence for ${this.rune} to [${this.partners.join(', ')}] ${route}${this.stayInAltar ? ', staying in the altar' : ''}`);
             this.add(
-                new ContinueDialog(),
                 new DriveTrade(this),
+                new ContinueDialog(),
+                new DropLitter(this, false),
                 new GoBankPark(this),
                 // the note legs only exist on the long route; the short one carries unnoted essence
                 ...(this.conf.unnote ? [new PickupNotedEssence(this)] : []),
@@ -131,15 +150,26 @@ export default class NatureCrafter extends TaskBot {
             this.log(`NatureCrafter: Runecrafting ${this.conf.level} required for ${this.rune} (have ${Skills.level('runecraft')}) — stopping.`);
             throw new Error('NatureCrafter: runecrafting level too low');
         }
+        this.on('chat.message', e => {
+            if (e.type === TRADEREQ_CHAT && e.username && TRADE_REQ_TEXT.test(e.text) && this.isPartner(e.username)) {
+                const stale = this.lastAskAt <= this.lastAcceptAt;
+                if (this.lastRequester?.toLowerCase() !== e.username.toLowerCase() || stale) {
+                    this.say(`trade-ask from ${e.username}`);
+                }
+                this.lastRequester = e.username;
+                this.lastAskAt = Date.now();
+            }
+        });
         this.log(`NatureCrafter master starting — ${this.rune} at ${this.conf.ruins}, accepting essence from [${this.partners.join(', ')}], ${this.bankMs > 0 ? `banking everything every ${Math.round(this.bankMs / 60_000)}min` : 'never banking'}${this.stayInAltar ? ', staying in the altar' : ''}`);
         this.add(
-            new ContinueDialog(),
             new HandleOpenTrade(this),
+            new ContinueDialog(),
+            new DropLitter(this, true),
             new CraftNatures(this),
-            new ExitTemple(this),
-            new EnterAltar(this),
-            new BankEverything(this),
             new AcceptRunner(this),
+            new ExitTemple(this),
+            new BankEverything(this),
+            new EnterAltar(this),
             new WaitForRunner(this)
         );
     }
@@ -169,7 +199,16 @@ export default class NatureCrafter extends TaskBot {
         p.end();
     }
 
+    say(msg: string): void {
+        this.log(`${this.mode === 'Runner' ? 'runner' : 'master'}: ${msg}`);
+    }
+    setTradeHot(on: boolean): void {
+        this.loopCadence = on ? { kind: 'frame' } : null;
+    }
     cfg(): RuneType { return this.conf; }
+    keepList(keepProductRune: boolean): string[] {
+        return keepNames(this.conf.talisman, keepProductRune ? this.conf.rune : null);
+    }
     // the client is never told whether an obj is tradeable or bankable (ObjType has no such
     // field. It is server-side only), so the only way to know is to try and watch it refuse
     setStatus(s: string): void { this.status = s; }
@@ -186,9 +225,34 @@ export default class NatureCrafter extends TaskBot {
         return name !== null && this.partners.some(p => p.toLowerCase() === name.toLowerCase());
     }
     partnerNames(): string[] { return this.partners; }
-    countDelivery(essence: number): void { this.trades++; this.received += essence; }
-    nearestRunner(): Player | null {
-        return Players.query().name(...this.partners).within(RUNNER_RANGE).nearest();
+    countDelivery(essence: number): void { this.trades++; this.received += essence; this.loadDelivered = true; }
+    loadWasDelivered(): boolean { return this.loadDelivered; }
+    clearLoadDelivered(): void { this.loadDelivered = false; }
+    nearestPartner(): Player | null {
+        return Players.query().name(...this.partners).nearest();
+    }
+    adjacentRunner(): Player | null {
+        return Players.query().name(...this.partners).within(TRADE_ADJACENT).nearest();
+    }
+    runnerNamed(name: string, range: number): Player | null {
+        return Players.query().name(name).within(range).nearest();
+    }
+    pendingRequester(): string | null { return this.lastRequester; }
+    markHandshakeStarted(): void {
+        this.lastAcceptAt = Date.now();
+        this.handshakeHoldUntil = Date.now() + MASTER_HANDSHAKE_MS;
+    }
+    tradeTarget(): string | null {
+        const asked = this.lastRequester;
+        const askedHere = asked !== null && this.runnerNamed(asked, TRADE_ADJACENT) !== null;
+        return masterPickTradeTarget({
+            asked,
+            askedAt: this.lastAskAt,
+            lastAcceptAt: this.lastAcceptAt,
+            askedInRange: askedHere,
+            holdUntil: this.handshakeHoldUntil,
+            now: Date.now()
+        });
     }
 
     async walkTo(dest: Tile, radius = 2): Promise<void> {
@@ -205,68 +269,117 @@ export default class NatureCrafter extends TaskBot {
     }
 }
 
-// master: the talisman, the runes it crafts and the essence it works on are the only things it
-// should ever hold. Anything else is random-event litter (banked on the timer trip).
-class HandleOpenTrade implements Task {
-    private partnerWait = 0;
-    constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return Trade.active(); }
+class DropLitter implements Task {
+    constructor(private bot: NatureCrafter, private keepProductRune: boolean) {}
+    private droppable() {
+        const keep = this.bot.keepList(this.keepProductRune);
+        return Inventory.items().filter(i => isDroppableLitter(i.name, keep, i.actions()));
+    }
+    validate(): boolean {
+        return !Trade.active() && !Shop.isOpen() && !Bank.isOpen() && this.droppable().length > 0;
+    }
     async execute(): Promise<void> {
+        this.bot.setStatus('dropping random-event junk');
+        for (let guard = 0; guard < 28; guard++) {
+            const item = this.droppable()[0];
+            if (!item) {
+                break;
+            }
+            this.bot.say(`dropping ${item.name ?? `item#${item.id}`}`);
+            const before = Inventory.used();
+            if (!(await item.interact('Drop'))) {
+                await Execution.delayTicks(1);
+                return;
+            }
+            await Execution.delayUntil(() => Inventory.used() < before, 3000);
+        }
+    }
+}
+
+// master: the talisman, the runes it crafts and the essence it works on are the only things it
+// should ever hold. Anything else is random-event litter.
+class HandleOpenTrade implements Task {
+    private lastWait = '';
+    private awaitingConfirm = false;
+    constructor(private bot: NatureCrafter) {}
+    validate(): boolean {
+        const on = Trade.active() || this.awaitingConfirm;
+        if (!on) {
+            this.bot.setTradeHot(false);
+        }
+        return on;
+    }
+    async execute(): Promise<void> {
+        this.bot.setTradeHot(true);
         if (Trade.onConfirmScreen()) {
+            this.awaitingConfirm = true;
             this.bot.setStatus('confirming the essence trade');
+            this.bot.say(`confirm-accept ${tradeSnap()}`);
             const before = essCount();
             await Trade.accept();
-            if (await Execution.delayUntil(() => !Trade.active(), 3000) && essCount() > before) {
+            if (!Trade.active() && essCount() > before) {
                 this.bot.countTrade(essCount() - before);
-                this.bot.log(`received ${essCount() - before} essence`);
+                this.bot.say(`received ${essCount() - before} essence ${tradeSnap()}`);
+                this.awaitingConfirm = false;
             }
-            this.partnerWait = 0;
             return;
         }
-
-        // Header can lag several ticks after the modal opens, do not treat blank as stranger.
-        const who = Trade.partner();
-        if (who === null) {
-            this.partnerWait++;
-            this.bot.setStatus('reading trade partner');
-            if (this.partnerWait > 8) {
-                this.bot.log('trade partner name never appeared — declining stuck modal');
-                await Trade.decline();
-                this.partnerWait = 0;
+        if (Trade.onOfferScreen()) {
+            await this.driveOfferScreen();
+            return;
+        }
+        if (this.awaitingConfirm) {
+            const got = essCount();
+            if (got > 0) {
+                this.bot.countTrade(got);
+                this.bot.say(`received ${got} essence ${tradeSnap()}`);
             } else {
-                await Execution.delayTicks(1);
+                this.bot.say(`handshake dropped ${tradeSnap()}`);
             }
-            return;
+            this.awaitingConfirm = false;
         }
-        this.partnerWait = 0;
-        if (!this.bot.isPartner(who)) {
+    }
+
+    private async driveOfferScreen(): Promise<boolean> {
+        const who = Trade.partner();
+        const theirEssence = offerEss(Trade.theirOffer());
+        const decision = masterOfferDecision({
+            who,
+            isPartner: this.bot.isPartner(who),
+            theirEssence,
+            runnerWaiting: this.bot.pendingRequester() !== null || this.bot.adjacentRunner() !== null
+        });
+        if (decision === 'decline') {
             this.bot.setStatus(`declining trade from ${who}`);
-            this.bot.log(`declining a trade from '${who}' — not a configured runner`);
+            this.bot.say(`decline stranger ${tradeSnap()}`);
             await Trade.decline();
-            return;
+            this.awaitingConfirm = false;
+            return false;
         }
-        // Why: only precious items on our own offer justify a refusal.
-        // Why: declining any non-empty myOffer kills legitimate air and nature receives when the offer UI still holds leftover slots or litter.
+        if (decision === 'wait') {
+            this.bot.setStatus(who ? `waiting for ${who} to offer essence` : 'reading trade partner');
+            const key = `${who}:${theirEssence}:${this.bot.pendingRequester() ?? ''}`;
+            if (key !== this.lastWait) {
+                this.lastWait = key;
+                this.bot.say(`offer-wait ${tradeSnap()} asked=${this.bot.pendingRequester() ?? '-'}`);
+            }
+            await Execution.delayTicks(1);
+            return false;
+        }
         const offered = Trade.myOffer();
         const precious = [this.bot.cfg().talisman, this.bot.cfg().rune, ESSENCE].map(n => n.toLowerCase());
         if (offered.some(o => precious.includes((o.name ?? '').toLowerCase()))) {
-            this.bot.log(
-                `safety: ${offered.map(o => o.name).join(', ')} in MY offer includes talisman/runes/essence — declining`
-            );
+            this.bot.say(`decline safety mine=[${offered.map(o => o.name).join(',')}] ${tradeSnap()}`);
             await Trade.decline();
-            return;
+            this.awaitingConfirm = false;
+            return false;
         }
-
-        const theirEssence = Trade.theirOffer()
-            .filter(o => (o.name ?? '').toLowerCase() === ESSENCE.toLowerCase())
-            .reduce((s, o) => s + Math.max(1, o.count), 0);
-        if (theirEssence <= 0) {
-            this.bot.setStatus(`waiting for ${who} to offer essence`);
-            await Execution.delayTicks(1);
-            return;
-        }
-        this.bot.setStatus(`accepting ${theirEssence} essence from ${who}`);
+        this.lastWait = '';
+        this.awaitingConfirm = true;
+        this.bot.setStatus(`accepting ${theirEssence} essence from ${who ?? 'runner'}`);
+        this.bot.say(`offer-accept ${theirEssence} ess ${tradeSnap()}`);
         await Trade.accept();
+        return true;
     }
 }
 
@@ -296,6 +409,9 @@ class ExitTemple implements Task {
         return masterShouldExitTemple(inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
     }
     async execute(): Promise<void> {
+        if (this.bot.bankTripDue()) {
+            this.bot.log('taking the portal — bank trip due');
+        }
         await portalOut(this.bot);
     }
 }
@@ -303,7 +419,9 @@ class ExitTemple implements Task {
 class EnterAltar implements Task {
     private fails = 0;
     constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return masterShouldEnterAltar(inTemple(), essCount(), this.bot.stayInsideAltar()); }
+    validate(): boolean {
+        return masterShouldEnterAltar(inTemple(), essCount(), this.bot.stayInsideAltar(), this.bot.bankTripDue());
+    }
     async execute(): Promise<void> {
         this.bot.setStatus(essCount() > 0 ? 'entering the altar to craft' : 'entering the altar to wait');
         if (await enterAltar(this.bot)) {
@@ -350,19 +468,39 @@ class BankEverything implements Task {
 }
 
 class AcceptRunner implements Task {
+    private nextClickAt = 0;
     constructor(private bot: NatureCrafter) {}
     validate(): boolean {
-        // no rune-count guard, task order lets the bank trip preempt when its timer is due
-        return essCount() === 0 && !Trade.active() && this.bot.nearestRunner() !== null
+        return essCount() === 0 && !Trade.active()
+            && Date.now() >= this.nextClickAt
+            && this.bot.tradeTarget() !== null
             && (this.bot.stayInsideAltar() || !inTemple());
     }
     async execute(): Promise<void> {
-        const runner = this.bot.nearestRunner();
-        if (!runner) { return; }
-        this.bot.setStatus(`accepting ${runner.name}'s trade`);
-        this.bot.log(`runner '${runner.name}' is here — accepting the trade`);
-        await Trade.request(runner.name ?? '');
-        await Execution.delayUntil(() => Trade.active(), 4000);
+        const name = this.bot.tradeTarget();
+        if (!name) { return; }
+        const asked = this.bot.pendingRequester();
+        const nearest = this.bot.adjacentRunner();
+        this.bot.setStatus(`accepting ${name}'s trade`);
+        this.bot.say(`Trade-with '${name}' asked=${asked ?? '-'} nearest=${nearest?.name ?? '-'} d=${this.bot.runnerNamed(name, 20)?.distance() ?? '-'} ${tradeSnap()}`);
+        this.nextClickAt = Date.now() + MASTER_HANDSHAKE_MS;
+        this.bot.markHandshakeStarted();
+        await Trade.request(name);
+        await Execution.delayTicks(1);
+        if (Trade.active() && !tradeWindowIsFor(Trade.partner(), name)) {
+            this.nextClickAt = Date.now() + 3000;
+            this.bot.say(`window is with someone else wanted=${name} ${tradeSnap()}`);
+            return;
+        }
+        const opened = await Execution.delayUntil(
+            () => Trade.active() && tradeWindowIsFor(Trade.partner(), name),
+            4000
+        );
+        if (opened) {
+            this.bot.say(`window opened ${tradeSnap()}`);
+        } else {
+            this.bot.say(`window did not open ${tradeSnap()}`);
+        }
     }
 }
 
@@ -370,14 +508,24 @@ class WaitForRunner implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean { return essCount() === 0 && (this.bot.stayInsideAltar() || !inTemple()); }
     async execute(): Promise<void> {
+        if (this.bot.nearestPartner() !== null || this.bot.pendingRequester() !== null) {
+            this.bot.setStatus('runner in sight — standing for the trade');
+            await Execution.delayTicks(1);
+            return;
+        }
         if (this.bot.stayInsideAltar() && inTemple()) {
             this.bot.setStatus('waiting for a runner in the altar');
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
             return;
         }
         this.bot.setStatus('waiting for a runner at the ruins');
-        await this.bot.walkTo(this.bot.cfg().ruins, 1);
-        await Execution.delayTicks(2);
+        const here = Game.tile();
+        const ruins = this.bot.cfg().ruins;
+        if (here && ruins.distanceTo(here) > 1) {
+            await Traversal.walkResilient(ruins, { radius: 1, attempts: 1, timeoutMs: 8_000, log: m => this.bot.log(`  ${m}`) });
+            return;
+        }
+        await Execution.delayTicks(1);
     }
 }
 
@@ -432,63 +580,91 @@ async function openUnnoteShop(name: string): Promise<boolean> {
     return Shop.isOpen();
 }
 
-// owns the loop while a trade modal is open, never moves (movement/combat closes it)
+// owns the loop while a trade modal is open, and until the pack settles after it closes
 class DriveTrade implements Task {
     private pending = 0;
     private beforeUnnoted = 0;
+    private settling = false;
+    private settleFromTick = -1;
     constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return Trade.active(); }
+    validate(): boolean {
+        const on = Trade.active() || this.settling;
+        if (!on) {
+            this.bot.setTradeHot(false);
+        }
+        return on;
+    }
     async execute(): Promise<void> {
+        this.bot.setTradeHot(true);
+        if (Trade.onConfirmScreen()) {
+            this.settling = true;
+            this.settleFromTick = -1;
+            this.bot.setStatus('confirming the trade');
+            this.bot.say(`confirm-accept ${tradeSnap()}`);
+            await Trade.accept();
+            return;
+        }
         if (Trade.onOfferScreen()) {
             if (Trade.myOffer().length === 0) {
                 const held = unnotedEssence();
                 const n = offerCount(held);
                 if (n <= 0) {
-                    // nothing to give, but the master may be handing random-event litter back
                     if (Trade.theirOffer().length > 0) {
                         this.bot.setStatus('taking items back from the master');
                         await Trade.accept();
-                    } else {
-                        await Execution.delayTicks(1);
                     }
                     return;
                 }
                 this.pending = n;
                 this.beforeUnnoted = held;
+                this.settling = true;
+                this.settleFromTick = -1;
                 this.bot.setStatus('offering essence');
+                this.bot.say(`offering ${n} ess ${tradeSnap()}`);
                 if (held <= TRADE_CAP) {
-                    this.bot.log(`trade open — offering ${n} essence`);
                     await Trade.offerAll(ESSENCE, i => i.id === ESSENCE_ID);
                 } else {
-                    this.bot.log(`holding ${held} unnoted — offering the ${n} cap`);
                     await Trade.offer(ESSENCE, n, i => i.id === ESSENCE_ID);
                 }
-            } else {
-                this.bot.setStatus('accepting the offer');
-                await Trade.accept();
+                return;
             }
+            this.bot.setStatus('accepting the offer');
+            this.bot.say(`offer-accept ${tradeSnap()}`);
+            await Trade.accept();
             return;
         }
-        if (Trade.onConfirmScreen()) {
-            this.bot.setStatus('confirming the trade');
-            const before = this.beforeUnnoted;
-            await Trade.accept();
-            // Why: the modal can close a beat before the pack updates, and UnNoteEssence then walks to the store with unnoted ess still in it (#730).
-            const settled = await Execution.delayUntil(
-                () => !Trade.active() && (this.pending <= 0 || tradeDelivered(before, unnotedEssence())),
-                4000
-            );
-            if (!Trade.active() && this.pending > 0) {
-                const delivered = before - unnotedEssence();
-                if (delivered > 0) {
-                    this.bot.countDelivery(delivered);
-                    this.bot.log(`delivered ${delivered} essence to the master`);
-                } else if (!settled) {
-                    this.bot.log('trade closed but unnoted essence did not leave the pack — retrying the delivery');
-                }
-                this.pending = 0;
-            }
+        if (this.settling) {
+            this.finishSettle();
         }
+    }
+
+    private finishSettle(): void {
+        const now = unnotedEssence();
+        if (now > 0) {
+            this.bot.say(`trade bounced ess back pending=${this.pending} before=${this.beforeUnnoted} ${tradeSnap()}`);
+            this.pending = 0;
+            this.settling = false;
+            this.beforeUnnoted = 0;
+            this.settleFromTick = -1;
+            this.bot.setTradeHot(false);
+            return;
+        }
+        if (this.settleFromTick < 0) {
+            this.settleFromTick = BotHost.tickCount;
+            return;
+        }
+        if (BotHost.tickCount - this.settleFromTick < 2) {
+            return;
+        }
+        if (this.pending > 0) {
+            this.bot.countDelivery(this.beforeUnnoted);
+            this.bot.say(`delivered ${this.beforeUnnoted} ess ${tradeSnap()}`);
+        }
+        this.pending = 0;
+        this.settling = false;
+        this.beforeUnnoted = 0;
+        this.settleFromTick = -1;
+        this.bot.setTradeHot(false);
     }
 }
 
@@ -518,7 +694,9 @@ class PickupNotedEssence implements Task {
     private fails = 0;
     private blockedUntil = 0;
     constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return !Trade.active() && Date.now() >= this.blockedUntil && groundNotedEss() !== null; }
+    validate(): boolean {
+        return !inTemple() && unnotedEssence() === 0 && !Trade.active() && Date.now() >= this.blockedUntil && groundNotedEss() !== null;
+    }
     async execute(): Promise<void> {
         const drop = groundNotedEss();
         if (!drop) {
@@ -547,8 +725,17 @@ class PickupNotedEssence implements Task {
 }
 
 class DeliverEssence implements Task {
+    private meeting = false;
+    private lastReqKey = '';
+    private lastReqAt = 0;
     constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return unnotedEssence() > 0 && !Trade.active(); }
+    validate(): boolean {
+        if (unnotedEssence() === 0) {
+            this.meeting = false;
+            return false;
+        }
+        return !Trade.active();
+    }
     async execute(): Promise<void> {
         const masterName = this.bot.partnerNames()[0];
         if (this.bot.stayInsideAltar() && !inTemple()) {
@@ -558,30 +745,50 @@ class DeliverEssence implements Task {
             }
             return;
         }
-        if (!inTemple()) {
+        const master = this.bot.nearestPartner();
+        if (master) {
+            this.meeting = true;
+        }
+        if (runnerShouldWalkToMeet(master !== null, this.meeting, inTemple(), this.bot.stayInsideAltar())) {
             this.bot.setStatus(`walking to ${masterName}`);
             await this.bot.walkTo(this.bot.cfg().ruins, 2);
+            return;
         }
-        const master = Players.query().name(...this.bot.partnerNames()).nearest();
         if (!master) {
-            this.bot.log(`${inTemple() ? 'in the altar' : 'at the ruins'} — waiting for the master '${masterName}' to be here`);
-            await Execution.delayTicks(2);
+            this.bot.setStatus(`waiting for ${masterName} — holding the essence`);
+            await Execution.delayTicks(1);
+            return;
+        }
+        if (!runnerShouldRequestTrade(Trade.active(), this.lastReqAt, Date.now())) {
+            await Execution.delayTicks(1);
             return;
         }
         this.bot.setStatus(`requesting a trade with ${master.name}`);
-        this.bot.log(`requesting a trade to hand ${unnotedEssence()} essence to ${master.name}`);
+        const key = `${master.name}:${master.distance()}:${unnotedEssence()}`;
+        if (key !== this.lastReqKey || Date.now() - this.lastReqAt > 8000) {
+            this.lastReqKey = key;
+            this.bot.say(`Trade-with '${master.name}' d=${master.distance()} ${tradeSnap()}`);
+        }
+        this.lastReqAt = Date.now();
         await Trade.request(master.name ?? '');
-        await Execution.delayUntil(() => Trade.active(), 4000);
+        if (Trade.active()) {
+            this.bot.setTradeHot(true);
+            return;
+        }
+        await Execution.delayTicks(1);
     }
 }
 
 class ExitAltarForRestock implements Task {
     constructor(private bot: NatureCrafter) {}
     validate(): boolean {
-        return this.bot.stayInsideAltar() && inTemple() && unnotedEssence() === 0 && !Trade.active();
+        return this.bot.stayInsideAltar() && inTemple()
+            && runnerMayLeaveAltar(Trade.active(), unnotedEssence());
     }
     async execute(): Promise<void> {
+        this.bot.say(`leaving altar after delivery ${tradeSnap()}`);
         await portalOut(this.bot);
+        this.bot.clearLoadDelivered();
     }
 }
 
@@ -592,7 +799,10 @@ function shopEssStock(): number {
 class UnNoteEssence implements Task {
     private lastShakeAt = 0;
     constructor(private bot: NatureCrafter) {}
-    validate(): boolean { return this.bot.cfg().unnote !== null && notedEssence() > 0 && unnotedEssence() === 0 && Inventory.count(COINS) >= LOW_COINS; }
+    validate(): boolean {
+        return this.bot.cfg().unnote !== null && !inTemple() && !Trade.active()
+            && notedEssence() > 0 && unnotedEssence() === 0 && Inventory.count(COINS) >= LOW_COINS;
+    }
     async execute(): Promise<void> {
         const store = this.bot.cfg().unnote;
         if (!store) {

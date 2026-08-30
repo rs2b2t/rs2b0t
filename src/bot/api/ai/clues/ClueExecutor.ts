@@ -30,6 +30,7 @@ import type { ClueRow, ClueStep } from '#/bot/api/ai/clues/types.js';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { talkThrough } from '#/bot/api/ai/quests/exec/primitives.js';
 import { crossesTirannwn, walkAcrossTirannwn } from '#/bot/api/ai/clues/tirannwnTravel.js';
+import { KHARAZI_CLUES, crossesKharazi, jungleKitMissing, walkAcrossKharazi } from '#/bot/api/ai/clues/kharaziTravel.js';
 import { Reach } from '#/bot/api/walking/Reach.js';
 import { WalkExecutor } from '#/bot/event/webwalk/WalkExecutor.js';
 
@@ -126,6 +127,9 @@ const gateItemsTried = new Set<string>();
 async function walkLeg(dest: NavPoint, log: (m: string) => void, radius = ARRIVE_RADIUS): Promise<boolean> {
     if (crossesTirannwn(dest)) {
         return walkAcrossTirannwn(dest, radius, log);
+    }
+    if (crossesKharazi(dest)) {
+        return walkAcrossKharazi(dest, radius, log);
     }
     if (await Traversal.walkResilient(dest, walkOpts(log, radius))) {
         return true;
@@ -525,6 +529,14 @@ function blockReason(step: ClueStep): string | null {
     const extras = ((step as ClueRow).items ?? []).filter(n => !Inventory.first(n));
     if (extras.length > 0) {
         return `needs ${extras.join('+')} (not held)`;
+    }
+    // Why: `start_chop_jungle` answers a missing machete, axe or map with a message box rather than a refusal
+    // Why: the walker can see, so the leg would swing at the band for its whole budget and report no progress.
+    if (step.type !== 'open-casket' && KHARAZI_CLUES.has(step.id)) {
+        const short = jungleKitMissing();
+        if (short.length > 0) {
+            return `Kharazi jungle needs ${short.join('+')}`;
+        }
     }
     return null;
 }

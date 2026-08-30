@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { NavPoint } from '#/bot/event/webwalk/PathFinder.js';
-import { isArrived, type ArrivalProbe } from '#/bot/event/webwalk/geometry/arrival.js';
+import { isArrived, walkChebyshev, type ArrivalProbe } from '#/bot/event/webwalk/geometry/arrival.js';
 
 function probe(opts: { canReach?: boolean; walkable?: boolean; canReachAdjacent?: boolean; probeable?: boolean }): ArrivalProbe & { asked: string[] } {
     const asked: string[] = [];
@@ -57,6 +57,13 @@ describe('isArrived', () => {
         const p = probe({ canReach: true, walkable: true });
         expect(isArrived(me, { x: 10, z: 10, level: 1 }, 2, p)).toBe(false);
         expect(p.asked).toEqual([]);
+    });
+
+    test('Jiminua ladder upstairs is not within store radius on xz alone', () => {
+        const upstairs = { x: 2766, z: 3122, level: 1 };
+        const store = { x: 2767, z: 3122, level: 0 };
+        expect(walkChebyshev(upstairs, store)).toBeGreaterThan(3);
+        expect(isArrived(upstairs, store, 3, probe({ canReach: true, walkable: true }))).toBe(false);
     });
 
     test('radius 0 on the exact tile + reachable → arrived', () => {

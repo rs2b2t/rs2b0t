@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buyoutCostFromBaseline, clusterEligible, estimateClusterGp, nextCluster, withdrawFor } from '#/bot/scripts/ShopRunner/ShopRunnerRingLogic.js';
+import { buyoutCostFromBaseline, clusterEligible, clusterSellsChosen, estimateClusterGp, nextCluster, withdrawFor } from '#/bot/scripts/ShopRunner/ShopRunnerRingLogic.js';
 import { ROUTE } from '#/bot/scripts/ShopRunner/ShopRunnerRoute.js';
 import { SHOP_DB } from '#/bot/data/shopdb.js';
 import type { AccountView } from '#/bot/api/shop/types.js';
@@ -27,13 +27,25 @@ describe('nextCluster', () => {
     test('advances the ring in order and wraps', () => {
         const a = acct({ fishing: 99, ranged: 99, magic: 99 });
         const t = { mageArena: true };
-        expect(nextCluster(ROUTE, null, a, t)?.id).toBe('varrock');
-        expect(nextCluster(ROUTE, 'varrock', a, t)?.id).toBe('portsarim');
-        expect(nextCluster(ROUTE, 'magearena', a, t)?.id).toBe('varrock');
+        expect(nextCluster(ROUTE, null, a, t, ALL, SHOP_DB)?.id).toBe('varrock');
+        expect(nextCluster(ROUTE, 'varrock', a, t, ALL, SHOP_DB)?.id).toBe('portsarim');
+        expect(nextCluster(ROUTE, 'magearena', a, t, ALL, SHOP_DB)?.id).toBe('varrock');
     });
     test('skips ineligible clusters', () => {
         const fresh = acct({ fishing: 1, ranged: 1, magic: 1 });
-        expect(nextCluster(ROUTE, 'catherby', fresh, {})?.id).toBe('ardougne');
+        expect(nextCluster(ROUTE, 'catherby', fresh, {}, ALL, SHOP_DB)?.id).toBe('ardougne');
+    });
+    test('skips Mage Arena (and every other stop) when only vials are selected (#743)', () => {
+        const a = acct({ fishing: 99, ranged: 99, magic: 99 });
+        const t = { mageArena: true };
+        const vials = new Set(['vial', 'vial of water']);
+        expect(clusterSellsChosen(ROUTE.clusters.find(c => c.id === 'magearena')!, SHOP_DB, vials)).toBe(false);
+        expect(clusterSellsChosen(ROUTE.clusters.find(c => c.id === 'taverley')!, SHOP_DB, vials)).toBe(true);
+        expect(clusterSellsChosen(ROUTE.clusters.find(c => c.id === 'ardougne')!, SHOP_DB, vials)).toBe(true);
+        expect(nextCluster(ROUTE, null, a, t, vials, SHOP_DB)?.id).toBe('taverley');
+        expect(nextCluster(ROUTE, 'taverley', a, t, vials, SHOP_DB)?.id).toBe('ardougne');
+        expect(nextCluster(ROUTE, 'ardougne', a, t, vials, SHOP_DB)?.id).toBe('taverley');
+        expect(nextCluster(ROUTE, 'magicguild', a, t, vials, SHOP_DB)?.id).toBe('taverley');
     });
 });
 
