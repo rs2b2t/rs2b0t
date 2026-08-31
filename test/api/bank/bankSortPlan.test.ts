@@ -185,3 +185,91 @@ describe('planBankSort', () => {
         expect(replay(ids, forced)).toEqual(forced.layout);
     });
 });
+
+describe('planBankSort ranks within a category', () => {
+    /** Costs run opposite to the wanted order everywhere, so any layout below is rank winning over price. */
+    function tiered(rows: readonly [number, string, number][]): SortableItem[] {
+        return rows.map(([id, name, cost], slot) => ({ slot, id, name, cost }));
+    }
+
+    const layoutOf = (rows: readonly [number, string, number][]): string[] => {
+        const items = tiered(rows);
+        const byId = new Map(items.map(i => [i.id, i.name!]));
+        return planBankSort(items).layout.map(id => byId.get(id)!);
+    };
+
+    test('ores and bars run copper to rune, cheapest first, against the price tiebreak', () => {
+        expect(layoutOf([
+            [451, 'Runite ore', 20_000],
+            [2349, 'Bronze bar', 8],
+            [436, 'Copper ore', 3],
+            [453, 'Coal', 45],
+            [2363, 'Runite bar', 40_000],
+            [440, 'Iron ore', 17]
+        ])).toEqual(['Copper ore', 'Iron ore', 'Coal', 'Runite ore', 'Bronze bar', 'Runite bar']);
+    });
+
+    test('weapons run dragon to bronze while ores run copper to rune in the same bank', () => {
+        expect(layoutOf([
+            [1277, 'Bronze sword', 26],
+            [436, 'Copper ore', 3],
+            [1215, 'Dragon dagger', 30_000],
+            [451, 'Runite ore', 20_000],
+            [1333, 'Rune scimitar', 15_000]
+        ])).toEqual(['Dragon dagger', 'Rune scimitar', 'Bronze sword', 'Copper ore', 'Runite ore']);
+    });
+
+    test('keys sit with the cut dragonstone, and cut gems come before uncut', () => {
+        expect(layoutOf([
+            [1631, 'Uncut dragonstone', 20_000],
+            [1607, 'Sapphire', 250],
+            [1615, 'Dragonstone', 22_000],
+            [989, 'Crystal key', 1],
+            [1623, 'Uncut sapphire', 200]
+        ])).toEqual(['Crystal key', 'Dragonstone', 'Sapphire', 'Uncut dragonstone', 'Uncut sapphire']);
+    });
+
+    test('runes run combat, utility, then elemental, cheap fire rune last', () => {
+        expect(layoutOf([
+            [556, 'Air rune', 4],
+            [563, 'Law rune', 240],
+            [565, 'Blood rune', 400],
+            [554, 'Fire rune', 4],
+            [558, 'Mind rune', 3]
+        ])).toEqual(['Blood rune', 'Mind rune', 'Law rune', 'Air rune', 'Fire rune']);
+    });
+
+    test('logs run in woodcutting order and arrows run rune to bronze', () => {
+        expect(layoutOf([
+            [1513, 'Magic logs', 1000],
+            [1511, 'Logs', 4],
+            [1515, 'Yew logs', 400]
+        ])).toEqual(['Logs', 'Yew logs', 'Magic logs']);
+
+        expect(layoutOf([
+            [882, 'Bronze arrow', 1],
+            [892, 'Rune arrow', 260],
+            [886, 'Steel arrow', 12]
+        ])).toEqual(['Rune arrow', 'Steel arrow', 'Bronze arrow']);
+    });
+
+    test('herbs run in identify order, unidentified ones behind the clean ones', () => {
+        // Why: asserted on ids, because every unidentified herb reads back as the same "Herb".
+        expect(planBankSort(tiered([
+            [219, 'Herb', 1],
+            [269, 'Torstol', 6000],
+            [249, 'Guam leaf', 10],
+            [199, 'Herb', 1],
+            [257, 'Ranarr weed', 4000]
+        ])).layout).toEqual([249, 257, 269, 199, 219]);
+    });
+
+    test('an item the rank table does not name falls behind the ones it does, then sorts on price', () => {
+        expect(layoutOf([
+            [1305, 'Dragon longsword', 100_000],
+            [4151, 'Abyssal whip', 2_000_000],
+            [1307, 'Granite maul', 1500],
+            [1333, 'Rune scimitar', 15_000]
+        ])).toEqual(['Dragon longsword', 'Rune scimitar', 'Abyssal whip', 'Granite maul']);
+    });
+});

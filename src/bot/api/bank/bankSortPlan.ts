@@ -1,3 +1,4 @@
+import { rankWithin } from './bankSortRank.js';
 import { CATEGORY_ORDER, categoryOf, isUnmatched, type BankCategory, type SortableItem } from './bankSortRules.js';
 
 export type BankSortMode = 'swap' | 'insert';
@@ -120,13 +121,19 @@ function planInserts(targetOf: readonly number[]): BankMove[] {
 
 /** Requires dense slots 0..n-1, which the server guarantees by compacting the bank on open. */
 export function planBankSort(items: readonly SortableItem[], opts: PlanOptions = {}): BankSortPlan {
-    const rankOf = (item: SortableItem): number =>
-        CATEGORY_ORDER.indexOf(opts.overrides?.get(item.id) ?? categoryOf(item));
+    const categoryFor = (item: SortableItem): BankCategory =>
+        opts.overrides?.get(item.id) ?? categoryOf(item);
 
     const compare = (a: SortableItem, b: SortableItem): number => {
-        const byCategory = rankOf(a) - rankOf(b);
+        const catA = categoryFor(a);
+        const catB = categoryFor(b);
+        const byCategory = CATEGORY_ORDER.indexOf(catA) - CATEGORY_ORDER.indexOf(catB);
         if (byCategory !== 0) {
             return byCategory;
+        }
+        const byRank = rankWithin(catA, a) - rankWithin(catB, b);
+        if (byRank !== 0) {
+            return byRank;
         }
         if (a.cost !== b.cost) {
             return b.cost - a.cost;
