@@ -467,7 +467,7 @@ export class PathFinder {
         list.push({ to, cost, transport, requires, kind, teleportId });
     }
 
-    // Why: a walkable tile with no exit expands nothing, so snapping onto one reports the whole map unreachable; the Shilo log's midpoint is such a tile and the walker stands on it mid-crossing.
+    // Why: a walkable tile with no exit expands nothing, so snapping onto one reports every destination unreachable; the Shilo log's midpoint is such a tile and the walker stands on it mid-crossing.
     snapWalkable(p: NavPoint, radius: number): NavPoint | null {
         let stranded: NavPoint | null = null;
         const usable = (x: number, z: number): NavPoint | null => {

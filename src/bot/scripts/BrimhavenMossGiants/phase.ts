@@ -44,7 +44,7 @@ export function decidePhase(bot: BrimhavenMossGiants): Phase {
             }
             return Phase.Travel;
         case Phase.Fight:
-            // Drops on the ground (just killed one) -> go clear them.
+            // Drops on the ground (a kill landed) -> go clear them.
             return findLoot() !== null ? Phase.Loot : Phase.Fight;
         case Phase.Loot:
             // Ground cleared -> bury bones (if any) then back to fighting.

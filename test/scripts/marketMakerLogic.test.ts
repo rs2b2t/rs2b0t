@@ -197,7 +197,7 @@ describe('decideBeat', () => {
         expect(beat).toEqual({ do: 'accept' });
     });
 
-    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the whole window.
+    // Why: each re-offer costs clicks and resets both accepts, so a patient toggler could waste the window.
     test('past the re-offer cap it gives up rather than keep paying', () => {
         const beat = decideBeat({ ...base, theirSig: '440x100', window: windowAt({ reOffers: 12 }) });
         expect(beat.do).toBe('give-up');

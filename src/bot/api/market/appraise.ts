@@ -162,7 +162,7 @@ function purchase(
         }
     }
 
-    // Why: paying for part of a stack means picking which units and the window has no way to say so, so a thin purse drops entire lines, dearest first.
+    // Why: paying for part of a stack means picking which units and the window has no way to say so, so a thin purse drops lines outright, dearest first.
     const ceiling = Math.min(desk.purse, book.maxTradeValue);
     lines.sort((a, b) => b.value - a.value);
     const afford: ValuedLine[] = [];

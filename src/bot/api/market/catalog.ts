@@ -46,7 +46,7 @@ export function buildCatalog(records: readonly ObjRecord[]): Catalog {
             unnotedOf.set(r.id, r.certlink);
         } else if (r.stackVariant !== true && tradeable(r.id) && worthStocking(r.name)) {
             // Why: pile-size models and anything the content will not let through a trade window stay reachable
-            // Why: by id, they just are not offered as items to put in a book.
+            // Why: by id, they are not offered as items to put in a book.
             items.push(r);
         }
     }

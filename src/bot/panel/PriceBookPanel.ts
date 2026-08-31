@@ -377,7 +377,7 @@ export class PriceBookPanel {
         return bar;
     }
 
-    /** Every item the client knows, by shelf, so a whole shelf goes in at once. */
+    /** Every item the client knows, by shelf, so a shelf goes in at once. */
     private browser(book: PriceBook, cat: Catalog): HTMLElement {
         const box = el('div', 'rs2b0t-loadout-picker');
         const all = shelves(cat);

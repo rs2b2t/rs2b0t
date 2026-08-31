@@ -2,7 +2,7 @@
  *
  *  The bug: ScriptRunner.resume() cleared ctx.loopInFlight while the parked loop was still alive, so the
  *  scheduler launched a second body into the same WalkExecutor singleton and the two walks interleaved.
- *  Oracle: loopCount rises by exactly one per loop body, so a resume that spawns a second body reads as +2. */
+ *  Oracle: loopCount rises by one per loop body, so a resume that spawns a second body reads as +2. */
 
 //   bun e2e/resume-loop-concurrency-live.ts [base] [minutes]
 import { deployIsolatedClient, launchBrowser, positionalArgs } from './lib/harness.js';

@@ -113,7 +113,7 @@ export const OBS_TILE = {
     // Why: `furnace1` is `forceapproach=east` placed at angle 2, so the only legal side is west in world space, the furnace spans (2601-2603,3310-3312).
     FURNACE: new Tile(2600, 3310, 0),
     // Why: Catherby rather than the Fishing Guild range, whose stand sits inside the fence and reports `no path`, and rather than Yanille's, which is 629 tiles from the seaweed shore against Catherby's 284 and then doubles back past Ardougne.
-    // Why: the pair comes from `CATHERBY_RANGE` so the stand cannot drift from the one the cook loops already walk, `useOnLocFrom` stands on it exactly, and a wrong side is dropped in silence.
+    // Why: the pair comes from `CATHERBY_RANGE` so the stand cannot drift from the one the cook loops already walk, `useOnLocFrom` stands on that tile, and a wrong side is dropped in silence.
     RANGE_LOC: CATHERBY_RANGE.loc,
     RANGE_STAND: CATHERBY_RANGE.stand,
 

@@ -13,7 +13,7 @@ const BASE = process.env.BASE ?? 'http://localhost:8890';
 /** Fixed, so the shop's bank and its takings survive a restart. */
 const SHOP = process.env.SHOP ?? 'seersmarket';
 const SPOT = { x: 2725, z: 3491, level: 0 } as const;
-/** The real game's tick. The local sim ships at 300ms, which makes the shop feel twice as quick as it is. */
+/** The live game's tick. The local sim ships at 300ms, which makes the shop feel twice as quick as it is. */
 const TICK_MS = Number(process.env.TICK_MS) || 600;
 
 interface Stock {

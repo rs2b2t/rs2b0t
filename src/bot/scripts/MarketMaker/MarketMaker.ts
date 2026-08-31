@@ -70,7 +70,7 @@ const STOCK_TRIES = 2;
 const COMMANDS_PER_WINDOW = 3;
 const COMMAND_WINDOW_MS = 10_000;
 const COMMAND_PENALTY_MS = 30_000;
-/** Ticks between resets, at the real game's 600ms tick. One customer stuck is worth ten minutes, spam is not. */
+/** Ticks between resets, at the live game's 600ms tick. One customer stuck is worth ten minutes, spam is not. */
 const RESET_EVERY_TICKS = 1000;
 const RESET_EVERY_MS = RESET_EVERY_TICKS * 600;
 
@@ -1166,7 +1166,7 @@ class Settle implements Task {
             await Bank.depositAllMatching(() => true, m => this.bot.log(m));
         }
 
-        // Why: read the float off the live bank rather than the ledger, which is stale exactly when a trip has gone wrong.
+        // Why: read the float off the live bank rather than the ledger, which goes stale when a trip has gone wrong.
         const short = this.bot.float() - this.bot.packCoins();
         const inBank = Bank.countById(this.bot.coins());
         if (short > 0 && inBank > 0) {

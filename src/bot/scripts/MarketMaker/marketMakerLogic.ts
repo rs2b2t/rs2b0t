@@ -312,7 +312,7 @@ export type QuoteTarget =
     | { kind: 'hit'; id: number; name: string };
 
 /** Resolve a customer's words against the side of the book they are asking about. */
-// Why: an implied count means the line may be ordinary chat opening with "buy", so it has to name an item exactly, and a miss goes unanswered instead of quoting back at every passing sentence.
+// Why: an implied count means the line may be ordinary chat opening with "buy", so it has to name an item outright, and a miss goes unanswered instead of quoting back at every passing sentence.
 export function resolveQuote(input: {
     cat: Catalog;
     book: PriceBook;
