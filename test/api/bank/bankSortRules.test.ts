@@ -33,6 +33,29 @@ describe('categoryOf', () => {
         expect(categoryOf(item(1163, 'Rune full helm'))).toBe('armour');
     });
 
+    test('an unidentified herb is a herb, even though every one of them is named Herb', () => {
+        expect(categoryOf(item(199, 'Herb'))).toBe('herbs');
+        expect(isUnmatched(item(199, 'Herb'))).toBe(false);
+        expect(categoryOf(item(3049, 'Herb'))).toBe('herbs');
+    });
+
+    test('the herbs the table used to miss', () => {
+        for (const name of ['Lantadyme', 'Snapdragon', 'Snake weed', 'Ardrigal', 'Sito foil', 'Volencia moss', 'Rogues purse']) {
+            expect({ name, category: categoryOf(item(1, name)) }).toEqual({ name, category: 'herbs' });
+        }
+    });
+
+    test('keys that open a dragonstone chest file with the gems', () => {
+        expect(categoryOf(item(985, 'Half of a key'))).toBe('oresBarsGems');
+        expect(categoryOf(item(989, 'Crystal key'))).toBe('oresBarsGems');
+        expect(isUnmatched(item(989, 'Crystal key'))).toBe(false);
+    });
+
+    test('a quest key is still junk, not a gem', () => {
+        expect(categoryOf(item(432, 'Chest key'))).toBe('junk');
+        expect(categoryOf(item(1590, 'Dusty key'))).toBe('junk');
+    });
+
     test('food, potions and herbs', () => {
         expect(categoryOf(item(385, 'Shark'))).toBe('food');
         expect(categoryOf(item(379, 'Lobster'))).toBe('food');
@@ -40,6 +63,52 @@ describe('categoryOf', () => {
         expect(categoryOf(item(229, 'Vial'))).toBe('potions');
         expect(categoryOf(item(207, 'Grimy ranarr weed'))).toBe('herbs');
         expect(categoryOf(item(261, 'Clean ranarr weed'))).toBe('herbs');
+    });
+
+    test('a swordfish is food, not a sword', () => {
+        expect(categoryOf(item(371, 'Swordfish'))).toBe('food');
+        expect(categoryOf(item(373, 'Raw swordfish'))).toBe('food');
+        expect(categoryOf(item(1289, 'Rune longsword'))).toBe('weapons');
+        expect(categoryOf(item(1319, 'Rune 2h sword'))).toBe('weapons');
+    });
+
+    test('every dosed potion in the game files as a potion', () => {
+        const bases = [
+            'Super attack', 'Super strength', 'Super defence', 'Super energy', 'Super restore',
+            'Attack potion', 'Strength potion', 'Defence potion', 'Ranging potion', 'Magic potion',
+            'Prayer potion', 'Restore potion', 'Zamorak potion', 'Antipoison', 'Superantipoison',
+            'Antifire potion', 'Energy potion', 'Agility potion', 'Fishing potion'
+        ];
+        const strays = bases.flatMap(base => [4, 3, 2, 1]
+            .map(dose => `${base}(${dose})`)
+            .filter(name => categoryOf(item(1, name)) !== 'potions'));
+        expect(strays).toEqual([]);
+    });
+
+    test('every cooked fish files as food', () => {
+        const fish = [
+            'Manta ray', 'Shark', 'Swordfish', 'Bass', 'Lobster', 'Tuna', 'Salmon',
+            'Pike', 'Cod', 'Trout', 'Mackerel', 'Herring', 'Sardine', 'Anchovies', 'Shrimps'
+        ];
+        const strays = fish.filter(name => categoryOf(item(1, name)) !== 'food');
+        expect(strays).toEqual([]);
+    });
+
+    test('staves file apart from weapons', () => {
+        for (const name of ['Staff', 'Magic staff', 'Staff of air', 'Battlestaff', 'Fire battlestaff', 'Mystic fire staff', 'Staff of iban']) {
+            expect({ name, category: categoryOf(item(1, name)) }).toEqual({ name, category: 'staves' });
+        }
+        expect(categoryOf(item(1333, 'Rune scimitar'))).toBe('weapons');
+    });
+
+    test('dragonhide files apart from melee armour, raw hide stays a supply', () => {
+        for (const name of ['Dragonhide body', 'Dragonhide chaps', 'Dragon vambraces', 'Studded body', 'Leather body', 'Coif']) {
+            expect({ name, category: categoryOf(item(1, name)) }).toEqual({ name, category: 'rangedArmour' });
+        }
+        expect(categoryOf(item(1127, 'Rune platebody'))).toBe('armour');
+        expect(categoryOf(item(1747, 'Dragonhide'))).toBe('supplies');
+        expect(categoryOf(item(1741, 'Leather'))).toBe('supplies');
+        expect(categoryOf(item(1743, 'Hard leather'))).toBe('supplies');
     });
 
     test('materials, logs, supplies and tools', () => {
@@ -65,8 +134,8 @@ describe('categoryOf', () => {
     });
 
     test('hide armour is armour, raw hide is a supply', () => {
-        expect(categoryOf(item(1129, 'Leather body'))).toBe('armour');
-        expect(categoryOf(item(1095, 'Leather chaps'))).toBe('armour');
+        expect(categoryOf(item(1129, 'Leather body'))).toBe('rangedArmour');
+        expect(categoryOf(item(1095, 'Leather chaps'))).toBe('rangedArmour');
         expect(categoryOf(item(1741, 'Cowhide'))).toBe('supplies');
     });
 
@@ -117,7 +186,7 @@ describe('categoryOf', () => {
 
     test('CATEGORY_ORDER lists every category exactly once, coins first and junk last', () => {
         expect(new Set(CATEGORY_ORDER).size).toBe(CATEGORY_ORDER.length);
-        expect(CATEGORY_ORDER.length).toBe(17);
+        expect(CATEGORY_ORDER.length).toBe(19);
         expect(CATEGORY_ORDER[0]).toBe('coins');
         expect(CATEGORY_ORDER[CATEGORY_ORDER.length - 1]).toBe('junk');
     });
