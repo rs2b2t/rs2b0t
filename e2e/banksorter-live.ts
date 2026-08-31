@@ -1,4 +1,4 @@
-/** Live BankSorter harness: proves the cold sort and the incremental re-sort against a real bank.
+/** Live BankSorter harness: proves the cold sort and the incremental re-sort against a bank on a running engine.
  *  Why: base :8890, because :8888 has no `bankitem` debugproc and the seed silently banks nothing.
  *  Why: `~bankitem` ADDS rather than sets, so every run wipes with `~clearbank` before seeding. */
 
@@ -14,6 +14,7 @@ import {
     teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
+import { rankWithin } from '../src/bot/api/bank/bankSortRank.js';
 import { CATEGORY_ORDER, categoryOf } from '../src/bot/api/bank/bankSortRules.js';
 
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
@@ -27,17 +28,47 @@ interface BankedRow {
     cost: number;
 }
 
+// Why: one unidentified herb only. Every one of them reads back as "Herb", and the seed verify counts by name.
 const COLD_SEED: BankSeedItem[] = [
     { debugName: 'bones', displayName: 'Bones', qty: 20 },
     { debugName: 'shark', displayName: 'Shark', qty: 30 },
-    { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 },
-    { debugName: 'iron_ore', displayName: 'Iron ore', qty: 50 },
+    { debugName: 'swordfish', displayName: 'Swordfish', qty: 20 },
+    { debugName: '4dose2strength', displayName: 'Super strength(4)', qty: 4 },
+    { debugName: '4dose1attack', displayName: 'Attack potion(4)', qty: 4 },
+    { debugName: '1dose1attack', displayName: 'Attack potion(1)', qty: 2 },
+    { debugName: 'lobster', displayName: 'Lobster', qty: 40 },
     { debugName: 'coins', displayName: 'Coins', qty: 500_000 },
     { debugName: 'rune_chainbody', displayName: 'Rune chainbody', qty: 1 },
-    { debugName: 'lawrune', displayName: 'Law rune', qty: 200 },
-    { debugName: 'logs', displayName: 'Logs', qty: 100 },
+    { debugName: 'bronze_platebody', displayName: 'Bronze platebody', qty: 1 },
+    { debugName: 'black_dragonhide_body', displayName: 'Dragonhide body', qty: 1 },
+    { debugName: 'studded_body', displayName: 'Studded body', qty: 1 },
+    { debugName: 'leather_armour', displayName: 'Leather body', qty: 1 },
     { debugName: 'feather', displayName: 'Feather', qty: 500 },
-    { debugName: 'lobster', displayName: 'Lobster', qty: 40 }
+    { debugName: 'deathrune', displayName: 'Death rune', qty: 100 },
+    { debugName: 'lawrune', displayName: 'Law rune', qty: 200 },
+    { debugName: 'firerune', displayName: 'Fire rune', qty: 400 },
+    { debugName: 'rune_arrow', displayName: 'Rune arrow', qty: 250 },
+    { debugName: 'rune_arrowheads', displayName: 'Rune arrowtips', qty: 40 },
+    { debugName: 'bronze_arrowheads', displayName: 'Bronze arrowtips', qty: 90 },
+    { debugName: 'fire_battlestaff', displayName: 'Fire battlestaff', qty: 1 },
+    { debugName: 'staff_of_air', displayName: 'Staff of air', qty: 1 },
+    { debugName: 'bronze_scimitar', displayName: 'Bronze scimitar', qty: 1 },
+    { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 },
+    { debugName: 'magic_longbow', displayName: 'Magic longbow', qty: 1 },
+    { debugName: 'shortbow', displayName: 'Shortbow', qty: 1 },
+    { debugName: 'unidentified_guam', displayName: 'Herb', qty: 5 },
+    { debugName: 'ranarr_weed', displayName: 'Ranarr weed', qty: 8 },
+    { debugName: 'torstol', displayName: 'Torstol', qty: 3 },
+    { debugName: 'copper_ore', displayName: 'Copper ore', qty: 60 },
+    { debugName: 'iron_ore', displayName: 'Iron ore', qty: 50 },
+    { debugName: 'coal', displayName: 'Coal', qty: 70 },
+    { debugName: 'runite_ore', displayName: 'Runite ore', qty: 2 },
+    { debugName: 'mithril_bar', displayName: 'Mithril bar', qty: 12 },
+    { debugName: 'crystal_key', displayName: 'Crystal key', qty: 1 },
+    { debugName: 'dragonstone', displayName: 'Dragonstone', qty: 1 },
+    { debugName: 'uncut_sapphire', displayName: 'Uncut sapphire', qty: 6 },
+    { debugName: 'logs', displayName: 'Logs', qty: 100 },
+    { debugName: 'yew_logs', displayName: 'Yew logs', qty: 25 }
 ];
 
 const TOPUP_SEED: BankSeedItem[] = [
@@ -55,15 +86,24 @@ function assertSorted(rows: readonly BankedRow[], seeded: readonly string[]): vo
     }
 
     let previous = -1;
+    let previousWithin = -1;
     let previousName = '';
     for (const row of rows) {
-        const rank = CATEGORY_ORDER.indexOf(categoryOf(row));
+        const category = categoryOf(row);
+        const rank = CATEGORY_ORDER.indexOf(category);
+        const within = rankWithin(category, row);
         if (rank < previous) {
             throw new Error(
-                `slot ${row.slot} "${row.name}" is ${CATEGORY_ORDER[rank]} after "${previousName}" (${CATEGORY_ORDER[previous]})`
+                `slot ${row.slot} "${row.name}" is ${category} after "${previousName}" (${CATEGORY_ORDER[previous]})`
+            );
+        }
+        if (rank === previous && within < previousWithin) {
+            throw new Error(
+                `slot ${row.slot} "${row.name}" ranks ${within} in ${category}, behind "${previousName}" at ${previousWithin}`
             );
         }
         previous = rank;
+        previousWithin = within;
         previousName = row.name ?? '?';
     }
 
