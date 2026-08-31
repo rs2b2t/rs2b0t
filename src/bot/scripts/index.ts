@@ -26,6 +26,8 @@ import ArdyCakes, { SETTINGS as ARDYCAKES_SETTINGS } from './ArdyCakes/ArdyCakes
 import ChaosDruidKiller, { SETTINGS as CHAOSDRUID_SETTINGS } from './ChaosDruidKiller/ChaosDruidKiller.js';
 import ChickenKiller, { SETTINGS as CHICKEN_SETTINGS } from './ChickenKiller/ChickenKiller.js';
 import CowKiller, { SETTINGS as COWKILLER_SETTINGS } from './ChickenKiller/CowKiller.js';
+import EntranaChickenKiller, { SETTINGS as ENTRANA_CHICKEN_SETTINGS } from './EntranaChickenKiller/EntranaChickenKiller.js';
+import VarrockCastleGuardKiller, { SETTINGS as VARROCK_CASTLE_GUARD_SETTINGS } from './VarrockCastleGuardKiller/VarrockCastleGuardKiller.js';
 import ClueSolver, { SETTINGS as CLUESOLVER_SETTINGS } from './ClueSolver/ClueSolver.js';
 import CookBot, { SETTINGS as COOKBOT_SETTINGS } from './CookBot/CookBot.js';
 import GatheringBot, { GATHERING_SETTINGS } from './GatheringBot/GatheringBot.js';
@@ -60,6 +62,7 @@ import FlaxAIO, { SETTINGS as FLAXAIO_SETTINGS } from './FlaxAIO/flaxaio.js';
 import GemCutter, { GEM_CUTTER_SETTINGS } from './GemCutter/GemCutter.js';
 import EssMiner, { SETTINGS as ESSMINER_SETTINGS } from './EssMiner/EssMiner.js';
 import CoalTrucks from './CoalTrucks/CoalTrucks.js';
+import WestFaladorMiner, { SETTINGS as WEST_FALADOR_MINER_SETTINGS } from './WestFaladorMiner/WestFaladorMiner.js';
 import RuneCrafter, { SETTINGS as RUNECRAFTER_SETTINGS } from './RuneCrafter/RuneCrafter.js';
 import NatureCrafter, { SETTINGS as NATURECRAFTER_SETTINGS } from './NatureCrafter/NatureCrafter.js';
 import MuleCrafter, { SETTINGS as MULECRAFTER_SETTINGS } from './MuleCrafter/MuleCrafter.js';
@@ -120,6 +123,26 @@ ScriptRegistry.register({
     tags: ['lumbridge', 'bones', 'feathers', 'afk'],
     settingsSchema: CHICKEN_SETTINGS,
     create: () => new ChickenKiller()
+});
+
+ScriptRegistry.register({
+    name: 'EntranaChickenKiller',
+    description:
+        'Banks weapons and armour at Draynor, boats to Entrana, opens the chicken-coop gate at 2851,3371, then kills chickens unarmed. Loots feathers in the coop, buries own-kill bones, and drops raw chicken and eggs. Walks to the coop rather than the Port Sarim monks, so the return boat is not boarded.',
+    category: 'Combat',
+    tags: ['entrana', 'chicken', 'feathers', 'bones', 'prayer', 'port sarim', 'melee'],
+    settingsSchema: ENTRANA_CHICKEN_SETTINGS,
+    create: () => new EntranaChickenKiller()
+});
+
+ScriptRegistry.register({
+    name: 'VarrockCastleGuardKiller',
+    description:
+        'Kills Guards in the Varrock Palace courtyard (fountain 3212,3464, ground floor). Banks at Varrock west 3185,3440. Food: Best (Swordfish then Lobster, Tuna, Shrimp) or a named food. Eat-at HP% and panic-exit with no food. Bury bones on by default. Own-kill loot ticks from the Guard drop table. Combat style: random swap after N levels, or always train the lowest melee stat.',
+    category: 'Combat',
+    tags: ['varrock', 'castle', 'guard', 'courtyard', 'melee', 'food', 'bank', 'bones', 'loot'],
+    settingsSchema: VARROCK_CASTLE_GUARD_SETTINGS,
+    create: () => new VarrockCastleGuardKiller()
 });
 
 ScriptRegistry.register({
@@ -319,6 +342,16 @@ ScriptRegistry.register({
     category: 'Mining',
     tags: ['mining', 'coal', 'seers', 'banking'],
     create: () => new CoalTrucks()
+});
+
+ScriptRegistry.register({
+    name: 'WestFaladorMiner',
+    description:
+        'Needs Agility 5 to Climb-over the crumbling / broken wall west of Falador when banking from the mine (one-way into the city). Mines ticked Coal, Iron, Copper, and/or Tin at 2907,3359. Powermine or bank at Falador west. Return to the mine uses the gate. Below Agility 5 the bot walks the long way. Drops beer/kebab; banks gems and caskets. Uses the best pickaxe Mining allows.',
+    category: 'Mining',
+    tags: ['mining', 'falador', 'agility 5', 'broken wall', 'crumbling wall', 'coal', 'iron', 'pickaxe', 'bank', 'powermine'],
+    settingsSchema: WEST_FALADOR_MINER_SETTINGS,
+    create: () => new WestFaladorMiner()
 });
 
 ScriptRegistry.register({

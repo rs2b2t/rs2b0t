@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 59. Categories: 19.
+- Scripts: 62. Categories: 19.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 12
+- [Combat](#combat) — 14
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -20,7 +20,7 @@
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
-- [Mining](#mining) — 3
+- [Mining](#mining) — 4
 - [Money making](#money-making) — 3
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
@@ -255,6 +255,19 @@ Walks to the Al Kharid Duel Arena, pairs with other players, accepts both no-sta
 | `targetStrength` | number (1–99) | `99` | Target Strength level |
 | `targetDefence` | number (1–99) | `1` | Target Defence level |
 
+### EntranaChickenKiller
+
+Banks weapons and armour at Draynor, boats to Entrana, opens the chicken-coop gate at 2851,3371, then kills chickens unarmed. Loots feathers in the coop, buries own-kill bones, and drops raw chicken and eggs. Walks to the coop rather than the Port Sarim monks, so the return boat is not boarded.
+
+- Tags: `entrana`, `chicken`, `feathers`, `bones`, `prayer`, `port sarim`, `melee`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `rotateStyles` | boolean | `true` | Swap attack styles |
+| `levelsBeforeSwap` | number (1–99) | `5` | Levels before style swap |
+| `meleeStyle` | string | `"attack"` | Melee style — one of: attack, strength, defence |
+| `buryBones` | boolean | `true` | Bury own-kill bones |
+
 ### FireGiant
 
 Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + rope + Glarial's amulet, rides the barrel out to bank
@@ -397,6 +410,39 @@ Rellekka rock crabs: aggro-stack-kill-reset, loots key halves
 | `bankEveryMinutes` | number (1–120) | `10` | Bank every N minutes |
 | `bankCommonJunk` | boolean | `true` | Also bank gems/fruit/beer/kebabs/caskets |
 | `solveClues` | boolean | `true` | Solve easy clues |
+
+### VarrockCastleGuardKiller
+
+Kills Guards in the Varrock Palace courtyard (fountain 3212,3464, ground floor). Banks at Varrock west 3185,3440. Food: Best (Swordfish then Lobster, Tuna, Shrimp) or a named food. Eat-at HP% and panic-exit with no food. Bury bones on by default. Own-kill loot ticks from the Guard drop table. Combat style: random swap after N levels, or always train the lowest melee stat.
+
+- Tags: `varrock`, `castle`, `guard`, `courtyard`, `melee`, `food`, `bank`, `bones`, `loot`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `foodType` | string | `"Best"` | Food — one of: Best, Lobster, Tuna, Swordfish, Shrimp |
+| `foodWithdraw` | number (1–28) | `20` | Amount to bring |
+| `eatAtPercent` | number (1–100) | `50` | Eat at HP % |
+| `panicHpPercent` | number (1–100) | `25` | Panic exit HP % |
+| `styleMode` | string | `"Random swap"` | Combat style — one of: Random swap, Lowest melee |
+| `levelsBeforeSwap` | number (1–99) | `5` | Levels before random swap |
+| `buryBones` | boolean | `true` | Bury bones |
+| `lootIronBolts` | boolean | `true` | Iron Bolts (Members) |
+| `lootSteelArrow` | boolean | `true` | Steel Arrow |
+| `lootBronzeArrow` | boolean | `true` | Bronze Arrow |
+| `lootAirRune` | boolean | `true` | Air Rune |
+| `lootEarthRune` | boolean | `true` | Earth Rune |
+| `lootFireRune` | boolean | `true` | Fire Rune |
+| `lootBloodRune` | boolean | `true` | Blood Rune (Members) |
+| `lootChaosRune` | boolean | `true` | Chaos Rune |
+| `lootNatureRune` | boolean | `true` | Nature Rune |
+| `lootIronDagger` | boolean | `true` | Iron Dagger |
+| `lootBodyTalisman` | boolean | `true` | Body Talisman |
+| `lootGrain` | boolean | `true` | Grain |
+| `lootIronOre` | boolean | `true` | Iron Ore |
+| `lootSeeds` | boolean | `true` | Seeds (Members) |
+| `lootClueMedium` | boolean | `true` | Clue Scroll (medium) (Members) |
+| `lootCoins` | boolean | `true` | Coins |
+| `lootBones` | boolean | `true` | Bones |
 
 ## Cooking
 
@@ -706,6 +752,21 @@ Mines the selected rock types, then banks the ore at the nearest bank or drops i
 | `forgetfulBank` | boolean | `false` | Forgetful bank exits |
 | `purgePackOnStart` | boolean | `true` | Bank junk on start |
 | `packJunk` | string | `"Bank"` | Event junk while gathering — one of: Bank, Drop, Off |
+
+### WestFaladorMiner
+
+Needs Agility 5 to Climb-over the crumbling / broken wall west of Falador when banking from the mine (one-way into the city). Mines ticked Coal, Iron, Copper, and/or Tin at 2907,3359. Powermine or bank at Falador west. Return to the mine uses the gate. Below Agility 5 the bot walks the long way. Drops beer/kebab; banks gems and caskets. Uses the best pickaxe Mining allows.
+
+- Tags: `mining`, `falador`, `agility 5`, `broken wall`, `crumbling wall`, `coal`, `iron`, `pickaxe`, `bank`, `powermine`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `brokenWall` | string | `"Agility 5 required"` | Broken wall (mine to bank) — one of: Agility 5 required |
+| `mineCoal` | boolean | `true` | Coal |
+| `mineIron` | boolean | `true` | Iron |
+| `mineCopper` | boolean | `false` | Copper |
+| `mineTin` | boolean | `false` | Tin |
+| `handling` | string | `"Bank"` | When inventory is full — one of: Powermine (drop), Bank |
 
 ## Money making
 
