@@ -226,6 +226,7 @@ export default class AutoFighter extends TaskBot {
     private xpAtStart = 0;
     private combatXpLast = 0;
     private combatXpGainAt = 0;
+    private lastEatAt = 0;
     died = false;
 
     override async onStart(): Promise<void> {
@@ -299,7 +300,10 @@ export default class AutoFighter extends TaskBot {
                 if (food) {
                     const before = Skills.effective('hitpoints');
                     if (await food.interact('Eat')) {
-                        await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+                        const healed = await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+                        if (healed) {
+                            this.markAte();
+                        }
                     }
                 }
             }
@@ -406,6 +410,12 @@ export default class AutoFighter extends TaskBot {
     combatStalled(ms: number): boolean {
         return Date.now() - this.combatXpGainAt > ms;
     }
+    markAte(): void {
+        this.lastEatAt = Date.now();
+    }
+    ateSince(lastReattackAt: number): boolean {
+        return this.lastEatAt > lastReattackAt && Date.now() - this.lastEatAt < 10_000;
+    }
 }
 
 class CombatXpWatch implements Task {
@@ -502,6 +512,7 @@ class EatFood implements Task {
             await Execution.delayUntil(() => Skills.effective('hitpoints') > before || foodCount() === 0, 3000);
             if (Skills.effective('hitpoints') > before) {
                 this.bot.countEat();
+                this.bot.markAte();
             }
         }
     }
@@ -839,6 +850,11 @@ class Fight implements Task {
     validate(): boolean {
         if (needEat() || Skills.hpFraction() < PANIC_AT) {
             return false;
+        }
+        // Why: eating interrupts the attack animation; the status flips to "eating X" and the fight loop exits.
+        // Why: re-click the same target immediately after healing instead of waiting for the 10s stall window, even if Game.inCombat() flickers false.
+        if (this.bot.ateSince(this.lastReattackAt) && Date.now() - this.lastReattackAt > 2_000) {
+            return (this.currentTarget() ?? this.findTarget()) !== null;
         }
         // start a fresh fight when idle
         if (!Game.inCombat()) {
