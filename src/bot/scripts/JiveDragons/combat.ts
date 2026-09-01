@@ -35,6 +35,9 @@ const ATTACK = 'Attack';
 const FIELD_RADIUS = 10;
 const APPROACH_RADIUS = 12;
 
+// Why: Npc.distance() measures to the centre of a multi-tile footprint, so a size-4 dragon reads 2 at its north and east faces and 3 at its south and west, never the 1 attackRangeFor('melee') asks for.
+const MELEE_CENTRE_REACH = 3;
+
 const FIGHT_MS = 120_000;
 const FIGHT_PASSES = 600;
 const LEASH_MS = 12_000;
@@ -90,6 +93,11 @@ function usesSafespot(style: Style): boolean {
 // Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is derived adjacent to all three adult footprints and a click from it moves nobody.
 function holdsAnchor(_style: Style): boolean {
     return true;
+}
+
+/** How far a target may read and still be reachable without the server walking us. */
+function reachFor(style: Style): number {
+    return style === 'melee' ? MELEE_CENTRE_REACH : attackRangeFor(style);
 }
 
 function spotName(style: Style, index: number): string {
@@ -212,7 +220,7 @@ export class Fight implements Task {
                 await this.idle();
                 return;
             }
-            if (holdsAnchor(style) && target.distance() > attackRangeFor(style)) {
+            if (holdsAnchor(style) && target.distance() > reachFor(style)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, now + LEASH_SKIP_MS);
                 }
@@ -343,7 +351,7 @@ export class Fight implements Task {
                 return true;
             }
             const dragon = this.field(FIELD_RADIUS).find(n => n.index === idx);
-            if (!dragon || dragon.distance() <= attackRangeFor(style)) {
+            if (!dragon || dragon.distance() <= reachFor(style)) {
                 return true;
             }
             await this.idle();
