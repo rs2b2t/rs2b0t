@@ -569,7 +569,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Alcher',
-    description: 'High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat',
+    description: 'High alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next',
     category: 'Magic',
     tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
     settingsSchema: ALCHER_SETTINGS,

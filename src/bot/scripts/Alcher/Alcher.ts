@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
-import { Inventory } from '../../api/inventory/Inventory.js';
+import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -10,7 +10,19 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { nearestBank } from '../../api/bank/BankLocations.js';
+import { liveCatalog } from '../../api/market/catalog.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
+import { etaHours, levelProgress } from '../../paint/levelProgress.js';
+import {
+    ALCH_OPTIONS,
+    ALCH_OPTION_LABELS,
+    DEFAULT_ALCH_ITEMS,
+    fmtGp,
+    nextAlchTarget,
+    selectedAlchItems,
+    type AlchItem
+} from './AlcherLogic.js';
+import type Tile from '../../geometry/Tile.js';
 
 const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
@@ -21,13 +33,27 @@ const NATURE_RUNE = 'Nature rune';
 const ALCHEMY_REQUIRED = 55;
 /** Each cast resolves over about 5 ticks, so wait before clicking the next note. */
 const ALCH_TICKS = 5;
+/** Past this from the resolved bank, an evade has carried us out of booth range and we walk back. */
+const BANK_LEASH = 8;
+
+const ACCENT = '#ffb347';
+const GOOD = '#7fe08a';
+const COOL = '#7fb3ff';
+const WARN = '#e8c35b';
+const BAD = '#ff6b6b';
+const DIM = '#8a919a';
 
 export const ALCHER_SETTINGS: SettingsSchema = {
-    item: {
-        type: 'string',
-        default: 'Rune platebody',
-        label: 'Item to alch',
-        help: 'withdrawn from the bank as notes (note mode) and alched by name'
+    items: {
+        type: 'string[]',
+        default: DEFAULT_ALCH_ITEMS,
+        options: ALCH_OPTIONS,
+        optionLabels: ALCH_OPTION_LABELS,
+        label: 'Items to alch',
+        help:
+            'ticked items are drained richest first: the bot withdraws one as notes, alchs it until '
+            + 'the bank is out, then moves to the next. Chips show the alch value each. Leave every '
+            + 'chip clear to run the defaults.'
     },
     alchs: {
         type: 'number',
@@ -42,23 +68,34 @@ export const ALCHER_SETTINGS: SettingsSchema = {
 export default class Alcher extends TaskBot {
     override loopDelay = 400;
 
-    private item = 'Rune platebody';
+    private selected: AlchItem[] = [];
+    /** Keys a loaded bank has confirmed it holds none of. */
+    private empty = new Set<string>();
     private alchs = 27;
 
     // Why: the bank access is resolved once; every trip only opens the booth.
     private bankAccess: { name: string; op: string } = BOOTH;
+    private bankTile: Tile | null = null;
+    private bankName = 'the bank';
 
     private trips = 0;
+    private alched = 0;
+    private gp = 0;
     private status = 'starting';
+    private statusColor = DIM;
     private startedAt = Date.now();
     private xpAtStart = 0;
-    /** Notes of the alch item left in the bank, refreshed each restock. */
-    private alchsInBank = 0;
+    /** Bank stock per item key, refreshed on every restock. */
+    private stock = new Map<string, number>();
+    /** Noted id per item key, so a note-mode withdraw knows what to wait for. */
+    private noted = new Map<string, number>();
+    private events = 0;
+    private lastEvent: string | null = null;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        this.item = this.settings.str('item', 'Rune platebody');
+        this.selected = selectedAlchItems(this.settings.list('items', DEFAULT_ALCH_ITEMS));
         this.alchs = this.settings.num('alchs', 27);
 
         if (Skills.level('magic') < ALCHEMY_REQUIRED) {
@@ -70,11 +107,21 @@ export default class Alcher extends TaskBot {
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('magic');
 
-        this.log(`Alcher — ${ALCH_SPELL} on ${this.item} (${this.alchs} per trip), keeping ${NATURE_RUNE}s`);
+        this.log(`Alcher — ${ALCH_SPELL} on ${this.selected.length} item(s), richest first: ${this.selected.map(i => i.label).join(', ')}`);
         if (!(await this.resolveBank())) {
             return;
         }
         this.add(new EnsureGear(this), new Restock(this), new Alch(this));
+    }
+
+    override async loop(): Promise<number | void> {
+        this.sampleEvent();
+        if (this.targets().length === 0 && !this.packAlchable()) {
+            this.log('the bank is out of every selected item — stopping');
+            ScriptRunner.stop('the bank is out of every selected item');
+            return;
+        }
+        return super.loop();
     }
 
     // Why: resolve the nearest bank once and walk to it; later trips reuse bankAccess.
@@ -90,13 +137,15 @@ export default class Alcher extends TaskBot {
             return false;
         }
         this.bankAccess = bank.access ?? BOOTH;
+        this.bankTile = bank.tile;
+        this.bankName = bank.name;
         this.log(`banking at ${bank.name} (${this.bankAccess.name} / ${this.bankAccess.op})`);
 
         const near = bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
         if (near) {
             return true;
         }
-        this.setStatus(`walking to ${bank.name}`);
+        this.setStatus(`walking to ${bank.name}`, WARN);
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) }))) {
             this.log('walk to the bank failed — stopping');
             ScriptRunner.stop('walk to the bank failed');
@@ -105,65 +154,198 @@ export default class Alcher extends TaskBot {
         return true;
     }
 
+    override recoveryAnchor(): Tile | null {
+        return this.bankTile;
+    }
+
     // Why: once at the bank the scene lookup picks the closest booth/chest, so no stored stand is needed.
+    // Why: an event evade can carry us past booth range, so a failed open walks back to the resolved tile.
     async openBank(): Promise<boolean> {
         if (Bank.isOpen()) {
             return true;
         }
-        this.setStatus('opening bank');
-        this.log(`opening ${this.bankAccess.name} (${this.bankAccess.op})`);
-        if (!(await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`)))) {
+        this.setStatus('opening bank', COOL);
+        if (await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`))) {
+            return true;
+        }
+        const here = Game.tile();
+        const strayed = this.bankTile !== null
+            && here !== null
+            && (here.level !== this.bankTile.level || this.bankTile.distanceTo(here) > BANK_LEASH);
+        if (!strayed) {
             this.log('could not open the bank — retrying');
             return false;
         }
-        this.log('bank open');
-        return true;
+        this.setStatus(`walking back to ${this.bankName}`, WARN);
+        this.log(`drifted off the bank stand — walking back to ${this.bankName}`);
+        await Traversal.walkResilient(this.bankTile!, { radius: 3, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
+        return false;
     }
 
-    setStatus(s: string): void {
+    setStatus(s: string, color = DIM): void {
         this.status = s;
+        this.statusColor = color;
     }
-    itemName(): string {
-        return this.item;
+    items(): AlchItem[] {
+        return this.selected;
+    }
+    /** Selected items the bank has not been confirmed out of, richest first. */
+    targets(): AlchItem[] {
+        return this.selected.filter(i => !this.empty.has(i.key));
+    }
+    target(): AlchItem | null {
+        return nextAlchTarget(this.selected, this.empty);
+    }
+    isEmpty(item: AlchItem): boolean {
+        return this.empty.has(item.key);
+    }
+    markEmpty(item: AlchItem): void {
+        this.empty.add(item.key);
+        this.stock.set(item.key, 0);
+        this.log(`the bank is out of ${item.label} — moving on`);
     }
     alchTarget(): number {
         return this.alchs;
     }
+
+    // Why: the paint asks for this on the first frame, before the obj catalogue has been scanned, so a miss falls back to the unnoted id and is retried rather than cached.
+    /** The noted id an item lands as in note mode. */
+    notedId(item: AlchItem): number {
+        const hit = this.noted.get(item.key);
+        if (hit !== undefined) {
+            return hit;
+        }
+        const id = liveCatalog().notedOf.get(item.id);
+        if (id === undefined) {
+            return item.id;
+        }
+        this.noted.set(item.key, id);
+        return id;
+    }
+    notesHeld(item: AlchItem): number {
+        return Inventory.countById(this.notedId(item));
+    }
+    /** Every selected item's notes in the pack, so the rune top-up covers all of them. */
+    notesInPack(): number {
+        return this.selected.reduce((sum, item) => sum + this.notesHeld(item), 0);
+    }
+    /** The richest selected item with notes in the pack, whether or not the bank still has it. */
+    packAlchable(): AlchItem | null {
+        return this.selected.find(item => this.notesHeld(item) > 0) ?? null;
+    }
+    noteInPack(item: AlchItem): InvItem | null {
+        const id = this.notedId(item);
+        return Inventory.items().find(i => i.id === id) ?? null;
+    }
     /** Whether the pack can fund one cast: a note to alch and a nature rune. */
     canAlchOne(): boolean {
-        return Inventory.count(this.item) > 0 && Inventory.count(NATURE_RUNE) > 0;
+        return this.packAlchable() !== null && Inventory.count(NATURE_RUNE) > 0;
     }
-    /** Alchs still left in the bank (refreshed on every restock). */
-    bankAlchs(): number {
-        return this.alchsInBank;
+
+    bankStock(item: AlchItem): number {
+        return this.stock.get(item.key) ?? 0;
     }
-    setBankAlchs(n: number): void {
-        this.alchsInBank = n;
+    setBankStock(item: AlchItem, n: number): void {
+        this.stock.set(item.key, n);
+    }
+    /** Alchs the bank still holds across every item still in play. */
+    fuel(): number {
+        return this.targets().reduce((sum, item) => sum + this.bankStock(item), 0);
     }
     countTrip(): void {
         this.trips++;
     }
+    countAlch(item: AlchItem, n: number): void {
+        this.alched += n;
+        this.gp += n * item.alchValue;
+    }
+
+    // Why: Supervisor already labels the event it took the loop over for, so the paint reads that
+    // Why: rather than paying for a detect scan of its own.
+    private sampleEvent(): void {
+        const now = ScriptRunner.ctx?.activeEvent ?? null;
+        if (now !== null && this.lastEvent === null) {
+            this.events++;
+        }
+        this.lastEvent = now;
+    }
+
+    private minutes(): number {
+        return (Date.now() - this.startedAt) / 60_000;
+    }
+    private perHour(n: number): number {
+        const mins = this.minutes();
+        return mins < 0.5 ? 0 : (n / mins) * 60;
+    }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
-        const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#7fb3ff' });
-        p.title(`Alcher — ${this.status}`);
-        const mins = (Date.now() - this.startedAt) / 60_000;
-        p.row(`Runtime: ${fmtDuration(mins)}`, `Alches in bank: ${this.bankAlchs()}`, `Magic XP/hr: ${this.xpPerHour()}`);
-        p.row(`Magic: ${Skills.level('magic')}`, `Runes: ${Inventory.count(NATURE_RUNE)}/${this.alchs}`, `Bank trips: ${this.trips}`);
-        p.row(`Notes: ${Inventory.count(this.item)}/${this.alchs}`, `Coins: ${Inventory.count('Coins').toLocaleString()}`, `Pack: ${Inventory.used()}`);
-        p.bar('Pack', Inventory.used() / 28);
+        this.sampleEvent();
+        const event = ScriptRunner.ctx?.activeEvent ?? null;
+        const p = Paint.begin(ctx, { dock: 'chatbox', accent: event ? BAD : ACCENT });
+        const target = this.target();
+        p.title(`Alcher — ${event ? `⚡ ${event}` : (target?.label ?? 'out of stock')}`);
+
+        const mins = this.minutes();
+        const tab = p.tabs('alch', ['Run', 'Stock', 'Magic']);
+
+        if (tab === 'Run') {
+            const alchHr = this.perHour(this.alched);
+            p.cells([
+                { text: `Runtime ${fmtDuration(mins)}` },
+                { text: `Alchs ${this.alched.toLocaleString()}`, color: GOOD },
+                { text: `Alch/hr ${alchHr > 0 ? Math.round(alchHr).toLocaleString() : '—'}` }
+            ]);
+            p.cells([
+                { text: `Profit ${fmtGp(this.gp)}`, color: ACCENT },
+                { text: `gp/hr ${alchHr > 0 ? fmtGp(this.perHour(this.gp)) : '—'}`, color: ACCENT },
+                { text: `Trips ${this.trips}` }
+            ]);
+            const fuel = this.fuel();
+            const fuelMins = alchHr > 0 ? (fuel / alchHr) * 60 : 0;
+            p.cells([
+                { text: `Notes ${this.notesInPack().toLocaleString()}` },
+                { text: `Runes ${Inventory.count(NATURE_RUNE).toLocaleString()}`, color: Inventory.count(NATURE_RUNE) > 0 ? undefined : BAD },
+                { text: `Fuel ${fuelMins > 0 ? fmtDuration(fuelMins) : '—'}` }
+            ]);
+            // Why: the chatbox dock is 150px, which is title + tabs + three rows + one bar + status + the buttons. A second bar pushes Pause/Stop off the panel.
+            p.bar('HP', Skills.hpFraction());
+            p.cells([
+                { text: `▸ ${this.status}`, color: event ? BAD : this.statusColor, weight: 2 },
+                { text: `events ${this.events}`, color: this.events > 0 ? WARN : DIM }
+            ]);
+        } else if (tab === 'Stock') {
+            const active = this.target();
+            const row = (alch: string, label: string, pack: string, bank: string): string =>
+                `${alch.padStart(6)}  ${label.padEnd(19)}${pack.padStart(5)} ${bank.padStart(7)}`;
+            const rows = this.items().map(item => ({
+                text: row(String(item.alchValue), item.label, String(this.notesHeld(item)), String(this.bankStock(item))),
+                color: this.isEmpty(item) ? DIM : item.key === active?.key ? ACCENT : undefined
+            }));
+            p.text(row('alch', 'item', 'pack', 'bank'), DIM);
+            p.fill('alchstock', rows, {
+                reserve: 26,
+                footer: `${this.targets().length}/${this.items().length} in play · ${this.fuel().toLocaleString()} alchs banked · ${fmtGp(this.targets().reduce((sum, i) => sum + this.bankStock(i) * i.alchValue, 0))}`
+            });
+        } else {
+            const gained = Skills.xp('magic') - this.xpAtStart;
+            const prog = levelProgress(Skills.level('magic'), Skills.xp('magic'));
+            const rate = this.perHour(gained);
+            const eta = etaHours(prog.remaining, rate);
+            p.bar(`Magic ${prog.level}`, prog.fraction);
+            p.cells([
+                { text: `${prog.remaining.toLocaleString()} to ${Math.min(99, prog.level + 1)}` },
+                { text: `${rate > 0 ? `${(rate / 1000).toFixed(1)}k` : '—'}/hr`, color: GOOD },
+                { text: eta === null ? 'eta —' : `eta ${fmtDuration(eta * 60)}` }
+            ]);
+            p.cells([
+                { text: `Session +${gained.toLocaleString()}`, color: GOOD },
+                { text: `Total ${Skills.xp('magic').toLocaleString()}` }
+            ]);
+            p.text(`${this.alched.toLocaleString()} casts · ${fmtGp(this.gp)} · ${fmtGp(this.alched > 0 ? this.gp / this.alched : 0)} per cast`, DIM);
+        }
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
-    }
-
-    private xpPerHour(): string {
-        const mins = (Date.now() - this.startedAt) / 60_000;
-        if (mins < 0.5) {
-            return '—';
-        }
-        const xp = Skills.xp('magic') - this.xpAtStart;
-        return `${((xp / mins) * 60 / 1000).toFixed(1)}k`;
     }
 }
 
@@ -194,7 +376,7 @@ class EnsureGear implements Task {
             this.bot.log('bank would not close — retrying');
             return;
         }
-        this.bot.setStatus(`wielding ${FIRE_STAFF}`);
+        this.bot.setStatus(`wielding ${FIRE_STAFF}`, WARN);
         if (!(await Equipment.equip(FIRE_STAFF))) {
             this.bot.log(`could not wield ${FIRE_STAFF} — stopping`);
             ScriptRunner.stop(`could not wield ${FIRE_STAFF}`);
@@ -205,7 +387,9 @@ class EnsureGear implements Task {
     }
 }
 
-// Why: restock deposits coins/junk (notes are consumed by alching, so nothing accumulates except coins), flips the bank to note mode and withdraws one trip's notes + nature runes, then closes.
+// Why: restock keeps the runes and any notes still worth alching, then tops the pack up from the
+// Why: richest item the bank still holds. Items the bank is out of are marked so the next trip
+// Why: drops to the item below them.
 class Restock implements Task {
     constructor(private bot: Alcher) {}
 
@@ -219,11 +403,14 @@ class Restock implements Task {
             return;
         }
 
-        // Why: clear coins and whatever random events left in the pack; the nature-rune stack stays so a short bank stock never starts from scratch.
-        this.bot.setStatus('restocking');
+        // Why: clear coins and whatever random events left in the pack; the nature runes and any
+        // Why: notes still to alch stay, so a short bank stock never starts from scratch.
+        this.bot.setStatus('restocking', COOL);
+        const keep = new Set(this.bot.items().map(item => this.bot.notedId(item)));
         if (Inventory.used() > 0) {
             const before = Inventory.used();
-            await Bank.depositAllMatching(name => name.toLowerCase() !== NATURE_RUNE.toLowerCase());
+            const runes = NATURE_RUNE.toLowerCase();
+            await Bank.depositAllMatching((name, id) => name.toLowerCase() !== runes && !keep.has(id));
             await Execution.delayTicks(1);
             const cleared = before - Inventory.used();
             if (cleared > 0) {
@@ -231,40 +418,55 @@ class Restock implements Task {
             }
         }
 
-        // Why: note mode makes the by-name withdraw return the item as notes, which a single cast alchs in full. The bank resets to item mode on open, so set it after opening.
+        // Why: note mode makes the withdraw return the item as notes, which a single cast alchs in full. The bank resets to item mode on open, so set it after opening.
         await Bank.setNoteMode(true);
 
-        const want = this.bot.alchTarget();
+        if (!Bank.ready()) {
+            // Why: a zero count only proves the bank is out once the bank has said what it holds; before that it is a list still in flight.
+            this.bot.log('bank item list not loaded yet — retrying restock');
+            await Execution.delayUntil(() => Bank.ready(), 5000);
+            return;
+        }
 
-        if (Inventory.count(this.bot.itemName()) < want) {
-            const before = Inventory.count(this.bot.itemName());
-            const ok = await this.withdraw(this.bot.itemName(), want - before);
-            const got = Inventory.count(this.bot.itemName()) - before;
-            this.bot.log(`withdrew ${got} ${this.bot.itemName()} (noted)`);
-            if (!ok || got === 0) {
-                // Why: a zero withdraw only proves the bank is out once the bank has said what it holds; before that it is a list still in flight.
-                if (!Bank.ready()) {
-                    this.bot.log('bank item list not loaded yet — retrying restock');
-                    return;
-                }
-                this.bot.log(`no ${this.bot.itemName()} in the bank — stopping`);
-                ScriptRunner.stop(`no ${this.bot.itemName()} in the bank`);
-                return;
+        // Why: the loaded snapshot reading zero is what proves an item gone, so a withdraw that
+        // Why: fails for a transient reason (backpack not ready, no count dialog) is retried
+        // Why: instead of retiring an item the bank still holds.
+        for (const item of this.bot.targets()) {
+            const stock = Bank.countById(item.id);
+            this.bot.setBankStock(item, stock);
+            if (stock === 0) {
+                this.bot.markEmpty(item);
             }
         }
-        this.bot.setBankAlchs(Bank.count(this.bot.itemName()));
 
-        const haveRunes = Inventory.count(NATURE_RUNE);
-        if (haveRunes < want) {
+        const target = this.bot.target();
+        if (!target) {
+            this.bot.log('the bank is out of every selected item — stopping');
+            ScriptRunner.stop('the bank is out of every selected item');
+            return;
+        }
+
+        const want = this.bot.alchTarget();
+        const held = this.bot.notesHeld(target);
+        if (held < want) {
+            await Bank.withdrawXById(target.id, want - held, this.bot.notedId(target));
+            const got = this.bot.notesHeld(target) - held;
+            if (got === 0) {
+                this.bot.log(`withdraw of ${target.label} landed nothing against ${this.bot.bankStock(target)} banked — retrying`);
+                return;
+            }
+            this.bot.log(`withdrew ${got} ${target.label} (noted, ${target.alchValue}gp each)`);
+        }
+
+        const needRunes = this.bot.notesInPack() - Inventory.count(NATURE_RUNE);
+        if (needRunes > 0) {
             const before = Inventory.count(NATURE_RUNE);
-            const ok = await this.withdraw(NATURE_RUNE, want - haveRunes);
+            const ok = await Bank.withdrawX(NATURE_RUNE, needRunes);
             const got = Inventory.count(NATURE_RUNE) - before;
-            this.bot.log(`withdrew ${got} ${NATURE_RUNE}s`);
+            if (got > 0) {
+                this.bot.log(`withdrew ${got} ${NATURE_RUNE}s`);
+            }
             if (!ok || got === 0) {
-                if (!Bank.ready()) {
-                    this.bot.log('bank item list not loaded yet — retrying restock');
-                    return;
-                }
                 this.bot.log(`no ${NATURE_RUNE}s in the bank — stopping`);
                 ScriptRunner.stop(`no ${NATURE_RUNE}s in the bank`);
                 return;
@@ -277,20 +479,13 @@ class Restock implements Task {
         }
 
         this.bot.countTrip();
-        this.bot.log(`restocked: ${Inventory.count(this.bot.itemName())} ${this.bot.itemName()} notes + ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s`);
-    }
-
-    // Why: withdraw by name once the bank has said what it holds. Reading it earlier returns zero and looks like an empty bank, which is the false "no item in the bank" stop on a cold start.
-    private async withdraw(name: string, count: number): Promise<boolean> {
-        if (!Bank.ready()) {
-            this.bot.log(`waiting for the bank item list (${name})`);
-            await Execution.delayUntil(() => Bank.ready(), 5000);
-        }
-        return Bank.withdrawX(name, count);
+        this.bot.log(`restocked: ${this.bot.notesHeld(target)} ${target.label} notes + ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s`);
     }
 }
 
-// Why: cast High Level Alchemy on a note once every ~5 ticks (a cast resolves in 5 ticks). Stops when either the notes or the runes run out, so a short pack sends us back to Restock instead of spamming a runeless cast.
+// Why: one cast per call. Supervisor.intercept only runs between loop iterations, so the old
+// Why: while loop held the loop for all 27 casts of a trip and gave random events no point to
+// Why: break in; the bot alched on through swarms and dwarves until it died.
 class Alch implements Task {
     constructor(private bot: Alcher) {}
 
@@ -302,27 +497,32 @@ class Alch implements Task {
     }
 
     async execute(): Promise<void> {
-        this.bot.setStatus(`${ALCH_SPELL} on ${this.bot.itemName()}`);
+        const target = this.bot.packAlchable();
+        if (!target) {
+            return;
+        }
+        this.bot.setStatus(`alching ${target.label}`, GOOD);
 
         if (!(await Game.openSideTab(MAGIC_TAB))) {
             this.bot.log('could not open the magic tab — retrying');
             return;
         }
 
-        while (this.bot.canAlchOne()) {
-            const left = Inventory.count(this.bot.itemName());
-            this.bot.log(`alching ${this.bot.itemName()} (${left} left, ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s)`);
-            const note = Inventory.first(this.bot.itemName());
-            if (!note) {
-                break;
-            }
-            if (!(await Game.castOnItem(ALCH_SPELL, note))) {
-                this.bot.log('cast-on-item was rejected — retrying');
-                await Execution.delayTicks(1);
-                continue;
-            }
-            // Why: one cast per 5 ticks keeps every click on a fresh note and never leaves the targeting cursor armed for the next restock click.
-            await Execution.delayTicks(ALCH_TICKS);
+        const note = this.bot.noteInPack(target);
+        if (!note) {
+            return;
+        }
+        const before = this.bot.notesHeld(target);
+        if (!(await Game.castOnItem(ALCH_SPELL, note))) {
+            this.bot.log('cast-on-item was rejected — retrying');
+            await Execution.delayTicks(1);
+            return;
+        }
+        // Why: one cast per 5 ticks keeps every click on a fresh note and never leaves the targeting cursor armed for the next restock click.
+        await Execution.delayTicks(ALCH_TICKS);
+        const burned = before - this.bot.notesHeld(target);
+        if (burned > 0) {
+            this.bot.countAlch(target, burned);
         }
     }
 }

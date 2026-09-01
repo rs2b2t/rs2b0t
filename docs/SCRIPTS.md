@@ -659,13 +659,13 @@ Automated teleportation with intelligent banking and safety features
 
 ### Alcher
 
-High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat
+High alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next
 
 - Tags: `magic`, `high alchemy`, `alchemy`, `banking`, `noted`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `item` | string | `"Rune platebody"` | Item to alch |
+| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Rune platebody (39,000), Rune 2h sword (38,400), Rune platelegs (38,400), Rune kiteshield (32,640), Rune chainbody (30,000), Rune sq shield (23,040), Rune full helm (21,120), Rune scimitar (15,360), Air battlestaff (9,300), Earth battlestaff (9,300), Fire battlestaff (9,300), Water battlestaff (9,300), Black d'hide body (8,088), Adamant platebody (7,680), Red d'hide body (6,738), Blue d'hide body (5,616), Green d'hide body (4,680), Battlestaff (4,200), Adamant 2h sword (3,840), Adamant platelegs (3,840), Black d'hide chaps (3,732), Adamant kiteshield (3,264), Mithril platebody (3,120), Red d'hide chaps (3,108), Blue d'hide chaps (2,592), Green d'hide chaps (2,340), Black platebody (2,304), Mithril 2h sword (1,560), Mithril platelegs (1,560), Magic longbow (1,536), Mithril kiteshield (1,326), Steel platebody (1,200), Yew longbow (768), Steel 2h sword (600), Steel platelegs (600), Maple longbow (384) |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
 
 ## Mining
