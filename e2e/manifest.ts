@@ -374,6 +374,16 @@ export const CASES: readonly Case[] = [
         note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, coins ignored and named, and a cooldown after walking out'
     },
     {
+        id: 'marketmaker-aliases-live',
+        harness: 'marketmaker-aliases-live.ts',
+        covers: { scripts: ['MarketMaker'] },
+        status: 'vetted',
+        provenAt: 'f4e6d57c',
+        budgetMin: 14,
+        env: { BUDGET_S: '900' },
+        note: 'the names the content repeats: a list carrying only stock, a repeated name answered with its colours, and a colour and a key half each resolving to the one obj the customer named'
+    },
+    {
         id: 'marketmaker-short-float-live',
         harness: 'marketmaker-short-float-live.ts',
         covers: { scripts: ['MarketMaker'] },
