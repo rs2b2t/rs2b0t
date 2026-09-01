@@ -31,8 +31,10 @@ const FIRE_STAFF = 'Staff of fire';
 const NATURE_RUNE = 'Nature rune';
 /** High Level Alchemy unlocks at 55 Magic. */
 const ALCHEMY_REQUIRED = 55;
-/** Each cast resolves over about 5 ticks, so wait before clicking the next note. */
+// Why: the cast's p_delay(3) leaves the player delayed through tick+4's packet decode and the engine bins an op it decodes while delayed, so the server takes one cast per 5 ticks and no faster.
 const ALCH_TICKS = 5;
+/** Ticks to give the note before a cast counts as binned. */
+const ALCH_LAND_TICKS = 2;
 /** Past this from the resolved bank, an evade has carried us out of booth range and we walk back. */
 const BANK_LEASH = 8;
 
@@ -91,6 +93,8 @@ export default class Alcher extends TaskBot {
     private noted = new Map<string, number>();
     private events = 0;
     private lastEvent: string | null = null;
+    /** The tick the last cast was clicked on; every later op is paced off it. */
+    private castTick = -ALCH_TICKS;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -164,6 +168,7 @@ export default class Alcher extends TaskBot {
         if (Bank.isOpen()) {
             return true;
         }
+        await this.settleCast();
         this.setStatus('opening bank', COOL);
         if (await Bank.openNearest(this.bankAccess.name, this.bankAccess.op, m => this.log(`  ${m}`))) {
             return true;
@@ -180,6 +185,17 @@ export default class Alcher extends TaskBot {
         this.log(`drifted off the bank stand — walking back to ${this.bankName}`);
         await Traversal.walkResilient(this.bankTile!, { radius: 3, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
         return false;
+    }
+
+    noteCast(): void {
+        this.castTick = Game.tick();
+    }
+    // Why: the engine drops any op it decodes while the player is delayed, so a booth click sent inside the cast's own delay is binned and the open sits out its 8s window before retrying.
+    async settleCast(): Promise<void> {
+        const since = Game.tick() - this.castTick;
+        if (since < ALCH_TICKS) {
+            await Execution.delayTicks(ALCH_TICKS - since);
+        }
     }
 
     setStatus(s: string, color = DIM): void {
@@ -503,6 +519,9 @@ class Alch implements Task {
         }
         this.bot.setStatus(`alching ${target.label}`, GOOD);
 
+        // Why: waiting the cast out at the END of the call put the loop's own 400ms gap between the delay expiring and the next click, which sent it most of a tick late and let a hiccup carry it into the tick before the one it was aimed at, where the engine bins it. Waiting the remainder here sends every click on the tick.
+        await this.bot.settleCast();
+
         if (!(await Game.openSideTab(MAGIC_TAB))) {
             this.bot.log('could not open the magic tab — retrying');
             return;
@@ -518,11 +537,12 @@ class Alch implements Task {
             await Execution.delayTicks(1);
             return;
         }
-        // Why: one cast per 5 ticks keeps every click on a fresh note and never leaves the targeting cursor armed for the next restock click.
-        await Execution.delayTicks(ALCH_TICKS);
-        const burned = before - this.bot.notesHeld(target);
-        if (burned > 0) {
-            this.bot.countAlch(target, burned);
+        this.bot.noteCast();
+
+        if (!(await Execution.delayUntilTicks(() => this.bot.notesHeld(target) < before, ALCH_LAND_TICKS))) {
+            this.bot.log(`the cast on ${target.label} landed nothing — retrying`);
+            return;
         }
+        this.bot.countAlch(target, before - this.bot.notesHeld(target));
     }
 }
