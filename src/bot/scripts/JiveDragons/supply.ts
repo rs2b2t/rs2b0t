@@ -133,7 +133,7 @@ function locById(id: number, within = 5): Loc | null {
 // Why: Sustain is call-driven, so a wait that stands still in hostile ground never eats unless it pumps the hook itself.
 
 /** Wait for `cond`, feeding the sustain hook every tick. */
-async function waitFed(cond: () => boolean, ms: number): Promise<boolean> {
+export async function waitFed(cond: () => boolean, ms: number): Promise<boolean> {
     const deadline = performance.now() + ms;
     while (performance.now() < deadline) {
         if (cond()) {
