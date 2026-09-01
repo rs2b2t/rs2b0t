@@ -308,7 +308,7 @@ export async function bankPace(log?: (m: string) => void): Promise<void> {
 }
 
 /**
- * Wait for bank item list after open. Counts stay 0 until loaded, without a
+ * Wait for bank item list after open. Counts stay 0 until it arrives, without a
  * human pause this looks like an instant open→scan→close.
  */
 export async function waitBankReady(log?: (m: string) => void): Promise<boolean> {
@@ -317,7 +317,7 @@ export async function waitBankReady(log?: (m: string) => void): Promise<boolean>
     }
     await bankPace(log);
     // ~7 ticks for bank table load
-    await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 7);
+    await Execution.delayUntilTicks(() => Bank.ready() || !Bank.isOpen(), 7);
     if (!Bank.isOpen()) {
         return false;
     }
