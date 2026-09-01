@@ -135,7 +135,7 @@ function needEat(): boolean {
         hp: Skills.effective('hitpoints'),
         maxHp: Skills.level('hitpoints'),
         heal: foodHealAmount(FOOD_NAME),
-        foodCount: 1
+        foodCount: foodCount()
     });
 }
 
@@ -159,7 +159,7 @@ function needStyleSupplies(): boolean {
 
 /** Every setting bankRoutine reads. */
 function bankOpts(): BankOpts {
-    return { withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO };
+    return { withdrawFood: true, runeCasts: RUNE_CASTS, runeBuffer: RUNE_BUFFER, ammo: AMMO_WITHDRAW, escapeStock: ESCAPE_STOCK, healTo: HEAL_TO, potions: POTIONS };
 }
 
 // Why: bankRoutine returns void and countBankTrip fires only where it runs to the end, so the counter moving is what separates an empty bank from a walk that never got there.
@@ -339,13 +339,14 @@ class Eat implements Task {
 
 class GearEquip implements Task {
     private fails = 0;
+    private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     private missing(): string | null {
         const wear = STYLE === 'melee' ? [SHIELD, WEAPON] : [WEAPON, STYLE === 'range' ? AMMO : ''];
         return wear.find(n => n !== '' && !Equipment.contains(n) && Inventory.first(n) !== null) ?? null;
     }
     validate(): boolean {
-        return this.fails < 5 && this.missing() !== null;
+        return Date.now() >= this.retryAt && this.missing() !== null;
     }
     async execute(): Promise<void> {
         const item = this.missing();
@@ -356,8 +357,12 @@ class GearEquip implements Task {
         if (await Equipment.equip(item)) {
             this.bot.log(`equipped ${item}`);
             this.fails = 0;
-        } else {
-            this.fails++;
+            return;
+        }
+        if (++this.fails >= ASSERT_BATCH) {
+            this.fails = 0;
+            this.retryAt = Date.now() + ASSERT_RETRY_MS;
+            this.bot.log(`could not equip ${item}. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -449,7 +454,7 @@ class SipPotion implements Task {
 class PanicBank implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return !this.bot.parked && hpFrac() < PANIC_HP && !hasFood();
+        return !this.bot.parked && !this.bot.bankKnownEmpty() && hpFrac() < PANIC_HP && !hasFood();
     }
     async execute(): Promise<void> {
         if (EventSignal.pending()) {
@@ -803,12 +808,16 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         this.bankTrips++;
     }
 
-    // Why: a trip that came back empty means the bank is out, and repeating it loops the run between Falador and the lair. A full pack still forces the next trip, which is where the latch clears.
+    // Why: a completed trip with no food is the one state the run cannot fix from inside, so it stops at the booth instead of walking back unable to heal.
+    // Why: a supply latch is survivable by comparison, and a full pack forces the next trip, which is where that one clears.
 
     /** What the last bank trip came back with. */
     noteTrip(food: boolean, supplies: boolean): void {
         this.bankEmpty = !food;
         this.supplyEmpty = !supplies;
+        if (!food) {
+            this.parkFor(`no '${FOOD_NAME}' left in the bank after a full trip. The run stopped at the booth rather than walk back to the dragons with no way to heal. Deposit food, or point the loadout at food the bank has, and restart.`);
+        }
     }
     bankKnownEmpty(): boolean {
         return this.bankEmpty;

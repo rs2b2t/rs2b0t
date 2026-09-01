@@ -1,7 +1,7 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
 import { Execution } from '../execution/Execution.js';
 
-/** specwep.rs2: %sa_energy, 0–1000, +100 every 50 ticks. */
+/** specwep.rs2: %sa_energy, 0 to 1000, +100 every 50 ticks. */
 const SA_ENERGY_VARP = 300;
 /** %sa_attack, set by the spec bar, cleared by set_sa_vars once the hit lands. */
 const SA_ARMED_VARP = 301;
@@ -53,7 +53,7 @@ const SPEC_COST = new Map<string, number>([
 
 /** Weapon special attacks. */
 export const Special = {
-    /** 0–1000. */
+    /** 0 to 1000. */
     energy(): number {
         return reader.varp(SA_ENERGY_VARP);
     },

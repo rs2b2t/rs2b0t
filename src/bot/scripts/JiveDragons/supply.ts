@@ -1,6 +1,7 @@
 import { driveDialog } from '../../api/ai/quests/exec/primitives.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { depositAllExcept } from '../../api/bank/bankRules.js';
+import type { PotionPlan } from '../../api/combat/boostPotions.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodCount as foodCountIn, foodForms } from '../../api/combat/food.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
@@ -48,6 +49,8 @@ export interface BankOpts {
     escapeStock?: number;
     /** Fraction of max hp to eat back to before walking in. */
     healTo?: number;
+    /** Boost flasks to top up, empty for a run that carries none. */
+    potions?: PotionPlan[];
 }
 
 export interface EscapeSpell {
@@ -289,6 +292,7 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
     await withdrawGear(h);
     await withdrawStyleSupplies(h, opts);
     await withdrawEscapeRunes(h, site, opts);
+    await withdrawPotions(h, opts);
     // Why: Equipment.equip shuts the bank to get the backpack ops back, so every withdrawal has to land before anything is worn.
     await equipGear(h);
     if (await healUp(h, opts.healTo ?? HEAL_TO) && opts.withdrawFood && await openSiteBank(h, site)) {
@@ -398,6 +402,32 @@ async function withdrawEscapeRunes(h: JiveHost, site: DragonSite, opts: BankOpts
     const why = escapeShortfall(esc);
     if (why !== null) {
         h.log(`WARNING: the ${esc.label} cannot be cast (${why}). The next trip walks out through the gate.`);
+    }
+}
+
+function potionsHeld(plan: PotionPlan): number {
+    return plan.potion.doses.reduce((n, dose) => n + Inventory.count(dose), 0);
+}
+
+// Why: a flask is counted across every dose form, so a part-used one carried back from the last trip is topped up rather than stocked on top of.
+
+/** Top each planned boost up to its flask count. */
+async function withdrawPotions(h: JiveHost, opts: BankOpts): Promise<void> {
+    for (const plan of opts.potions ?? []) {
+        const start = potionsHeld(plan);
+        for (let guard = 0; guard < 12 && potionsHeld(plan) < plan.want && !Inventory.isFull(); guard++) {
+            const before = potionsHeld(plan);
+            await Bank.withdraw(plan.flask, 'Withdraw-1');
+            if (!(await Execution.delayUntil(() => potionsHeld(plan) > before, 2500))) {
+                break;
+            }
+        }
+        const got = potionsHeld(plan) - start;
+        if (got > 0) {
+            h.log(`withdrew ${got} ${plan.flask}`);
+        } else if (potionsHeld(plan) === 0) {
+            h.log(`WARNING: no '${plan.flask}' in the bank. Fighting unboosted.`);
+        }
     }
 }
 
