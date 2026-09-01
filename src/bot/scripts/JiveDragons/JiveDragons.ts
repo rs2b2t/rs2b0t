@@ -5,6 +5,7 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
+import { Special } from '../../api/combat/Special.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -60,6 +61,7 @@ export const SETTINGS: SettingsSchema = {
     rangeStyle: { type: 'string', default: 'rapid', options: RANGE_STYLE_OPTIONS, label: 'Ranged style', group: 'Combat', showIf: SHOW_RANGE },
     ammo: { type: 'string', default: 'Iron arrow', options: ARROWS, label: 'Ammo', group: 'Combat', showIf: SHOW_RANGE },
     ammoWithdraw: { type: 'number', default: 500, min: 1, max: 5000, label: 'Ammo per bank trip', group: 'Combat', showIf: SHOW_RANGE },
+    useSpecial: { type: 'boolean', default: true, label: 'Use special attacks', group: 'Combat', showIf: SHOW_MELEE, help: 'arms the spec bar for the attack that opens each kill, whenever the energy is there and the wielded weapon has a special (dragon dagger, dragon longsword and the rest). A weapon with none is left alone' },
     usePotions: { type: 'boolean', default: true, label: 'Drink super attack / strength', group: 'Combat', showIf: SHOW_MELEE, help: 'sips a dose once the boost decays to within a tenth of the base level. The loadout carry list sets the dose form and the count per trip, otherwise one Super attack(3) and one Super strength(3)' },
 
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
@@ -107,6 +109,7 @@ let HEAL_TO = 0.9;
 let LOOT_SET = new Set<string>();
 let BANK_COMMON = true;
 let VERBOSE = false;
+let USE_SPECIAL = true;
 /** Empty in mage and range mode: an attack or strength boost does nothing for a spell or a bow. */
 let POTIONS: PotionPlan[] = [];
 
@@ -583,6 +586,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     keyState: KeyState = 'fetch';
     buried = 0;
     sips = 0;
+    specials = 0;
     parked = false;
     parkReason = '';
     died = false;
@@ -590,7 +594,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
 
     private bankEmpty = false;
     private supplyEmpty = false;
-    private solveClue: SolveClue | undefined;
+    solveClue: SolveClue | undefined;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
@@ -628,6 +632,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
+        USE_SPECIAL = this.settings.bool('useSpecial', true);
         POTIONS = STYLE === 'melee' && this.settings.bool('usePotions', true)
             ? plannedPotions(suppliesOf(selectedLoadout(this.settings)))
             : [];
@@ -753,6 +758,19 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     eatOnce(): Promise<boolean> {
         return eatOnce(this);
+    }
+    /** Mage and range never reach a dragon to spend it on, and a weapon with no specwep param has no bar to click. */
+    async armSpecial(): Promise<void> {
+        if (!USE_SPECIAL || STYLE !== 'melee' || Special.armed()) {
+            return;
+        }
+        if (!Special.ready(WEAPON) || !Equipment.contains(WEAPON)) {
+            return;
+        }
+        if (await Special.arm()) {
+            this.specials++;
+            this.vlog(`special armed (${Special.energy()} energy left)`);
+        }
     }
     buryBones(): boolean {
         return BURY_BONES;

@@ -21,7 +21,7 @@ import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLo
 import { SPELL_DB } from '../../data/spelldb.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
-import { SA_MAX_ENERGY, Special } from './Special.js';
+import { SA_MAX_ENERGY, Special } from '../../api/combat/Special.js';
 import { AttackClock, URGENT_HP_FRACTION, shouldHoldEat } from '../../api/combat/eatTiming.js';
 import { buryOneInFight, swingStartedThisTick } from '../../api/combat/fightUpkeep.js';
 import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';

@@ -28,6 +28,8 @@ export interface CombatHost extends JiveHost {
     boneName(): string;
     safespotIndex(): number;
     setSafespotIndex(n: number): void;
+    /** Arm the spec bar before the next attack. Optional: a host without one never specials. */
+    armSpecial?(): Promise<void>;
 }
 
 const ATTACK = 'Attack';
@@ -368,6 +370,8 @@ export class Fight implements Task {
         } else {
             this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (d=${target.distance()})`);
         }
+        // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.
+        await this.host.armSpecial?.();
         if (!(await target.interact(ATTACK))) {
             this.skip.set(target.index, performance.now() + REFUSED_SKIP_MS);
             this.host.log(`${name} ${target.index} refused the attack click. Skipping it for ${REFUSED_SKIP_MS / 1000}s.`);
