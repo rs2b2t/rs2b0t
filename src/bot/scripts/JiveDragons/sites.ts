@@ -33,8 +33,18 @@ export interface DragonSite {
     inArea(t: AreaPoint | null): boolean;
 }
 
-// Why: the entrance corridor runs up the same z band as the lair with a strip of rock between, so a radius reads the way in as the way through.
-const LAIR = { minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816 };
+interface Box {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+    level: number;
+}
+
+const inBox = (b: Box) => (t: AreaPoint | null): boolean =>
+    t !== null && t.level === b.level
+    && t.x >= b.minX && t.x <= b.maxX
+    && t.z >= b.minZ && t.z <= b.maxZ;
 
 export const TAVERLEY_BLUE: DragonSite = {
     key: 'taverley-blue',
@@ -49,11 +59,8 @@ export const TAVERLEY_BLUE: DragonSite = {
     bank: new Tile(2946, 3369, 0),
     escapeTeleportId: 'falador',
     walkOut: new Tile(2884, 3398, 0),
-    inArea(t) {
-        return t !== null && t.level === 0
-            && t.x >= LAIR.minX && t.x <= LAIR.maxX
-            && t.z >= LAIR.minZ && t.z <= LAIR.maxZ;
-    }
+    // Why: the entrance corridor runs up the same z band as the lair with a strip of rock between, so a radius reads the way in as the way through.
+    inArea: inBox({ minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 })
 };
 
 export const DRAGON_SITES: Record<string, DragonSite> = { [TAVERLEY_BLUE.key]: TAVERLEY_BLUE };

@@ -23,6 +23,12 @@ describe('DRAGON_SITES', () => {
         expect([s.gate!.outside.x, s.gate!.outside.z]).toEqual([2924, 9803]);
         expect([s.gate!.inside.x, s.gate!.inside.z]).toEqual([2923, 9803]);
         expect(s.keyItem).toEqual({ name: 'Dusty key', id: 1590 });
+        expect([s.bank.x, s.bank.z, s.bank.level]).toEqual([2946, 3369, 0]);
+        expect([s.walkOut.x, s.walkOut.z, s.walkOut.level]).toEqual([2884, 3398, 0]);
+        expect(s.escapeTeleportId).toBe('falador');
+        expect(s.target).toBe('Blue dragon');
+        expect(s.bones).toBe('Dragon bones');
+        expect(s.safespots.every(t => t.level === 0)).toBe(true);
     });
 
     test('the escape teleport names a catalog entry, it does not copy one', () => {
@@ -38,5 +44,21 @@ describe('DRAGON_SITES', () => {
         expect(s.inArea({ x: 2924, z: 9803, level: 0 })).toBe(false);
         expect(s.inArea({ x: 2901, z: 3809, level: 0 })).toBe(false);
         expect(s.inArea(null)).toBe(false);
+    });
+
+    test('every edge of the lair box is pinned from both sides', () => {
+        const s = DRAGON_SITES['taverley-blue']!;
+        expect(s.inArea({ x: 2888, z: 9800, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2887, z: 9800, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2923, z: 9800, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2924, z: 9800, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2900, z: 9769, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2900, z: 9768, level: 0 })).toBe(false);
+        expect(s.inArea({ x: 2900, z: 9816, level: 0 })).toBe(true);
+        expect(s.inArea({ x: 2900, z: 9817, level: 0 })).toBe(false);
+    });
+
+    test('a tile on another plane is outside the lair', () => {
+        expect(DRAGON_SITES['taverley-blue']!.inArea({ x: 2901, z: 9809, level: 1 })).toBe(false);
     });
 });
