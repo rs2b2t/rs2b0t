@@ -10,7 +10,9 @@ import Model from '#/client/dash3d/Model.js';
 import type ModelSource from '#/client/dash3d/ModelSource.js';
 import { ClientProt } from '#/client/io/ClientProt.js';
 import { ServerProt } from '#/client/io/ServerProt.js';
+import WordFilter from '#/client/wordfilter/WordFilter.js';
 import WordPack from '#/client/wordfilter/WordPack.js';
+import JString from '#/client/datastruct/JString.js';
 
 import { SELF_TEST, type RawClient } from './RawClient.js';
 
@@ -325,6 +327,9 @@ export function setPacketListener(cb: ((ptype: number) => void) | null): void {
 
 /** The client's own chat input cap. */
 const PUBLIC_CHAT_LIMIT = 80;
+/** Chat type 2 is a plain player line, and 150 client ticks is how long the client holds its own bubble up. */
+const PUBLIC_CHAT_TYPE = 2;
+const CHAT_BUBBLE_TICKS = 150;
 
 // tradeconfirm inv components; the engine picks the *_LARGE pair once a side offers 14 or more items.
 const TRADE_CONFIRM_MINE_SMALL = 3542; // tradeconfirm:inv1
@@ -1658,6 +1663,17 @@ export const actions = {
         raw.out.p1(0);
         WordPack.pack(raw.out, message);
         raw.out.psize1(raw.out.pos - start);
+
+        // Why: the server never sends a public line back to whoever said it, so the client echoes its own as it writes the packet. Without this the operator watches a shop that looks mute while everyone else reads it.
+        const player = raw.localPlayer;
+        if (player && player.name) {
+            const shown = WordFilter.filter(JString.toSentenceCase(message));
+            player.chatMessage = shown;
+            player.chatColour = 0;
+            player.chatEffect = 0;
+            player.chatTimer = CHAT_BUBBLE_TICKS;
+            raw.addChat(PUBLIC_CHAT_TYPE, shown, player.name);
+        }
         return true;
     },
 
