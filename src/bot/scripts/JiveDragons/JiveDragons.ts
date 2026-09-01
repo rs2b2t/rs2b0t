@@ -1,5 +1,6 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { SolveClue } from '../../api/ai/clues/SolveClue.js';
+import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';
@@ -23,8 +24,11 @@ import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import type Tile from '../../geometry/Tile.js';
+import { jiveFrame } from '../../paint/jive.js';
+import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
+import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, WalkToSpot, type CombatHost } from './combat.js';
+import { Fight, HoldSafespot, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keyStatus, meleeShieldGate, wantsDrop, type Style } from './logic.js';
 import { SITE_OPTIONS, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
 import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
@@ -39,6 +43,16 @@ const LOOT_WAIT_MS = 4000;
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 const PARK_TICKS = 10;
+
+// Why: the panel body holds seven rows and the byline owns the eighth, so the drop list and the park reason are budgeted against the tallest section.
+const LOOT_SHOWN = 6;
+const PARK_ROWS = 2;
+const PARK_FG = '#e0705a';
+
+/** Cells laid out two across, the shape statGrid draws. */
+function inPairs<T>(cells: T[]): T[][] {
+    return Array.from({ length: Math.ceil(cells.length / 2) }, (_, i) => cells.slice(i * 2, i * 2 + 2));
+}
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -851,5 +865,68 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             edge(i, 4 + i);
         }
         ctx.restore();
+    }
+
+    override onPaint(ctx: CanvasRenderingContext2D): void {
+        this.outlineTarget(ctx);
+        const { frame: p, page, section } = jiveFrame(ctx, {
+            script: 'JiveDragons',
+            status: this.status,
+            pages: ['Statistics', 'Options'],
+            sections: SOLVE_CLUES ? ['Overview', 'Combat', 'Loot', 'Clue'] : ['Overview', 'Combat', 'Loot']
+        });
+        const mins = (Date.now() - this.startedAt) / 60_000;
+
+        if (page === 'Options') {
+            // Why: the site name runs past a half-width cell, so it takes a row of its own.
+            p.statGrid([[{ text: `Site: ${SITE.label}` }]], 1);
+            p.statGrid([
+                [{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }],
+                [{ text: `Food: ${FOOD_NAME}` }, { text: `Escape: ${ESCAPE_LABEL}` }],
+                [{ text: `Bury bones: ${BURY_BONES ? 'on' : 'off'}` }, { text: `Clues: ${SOLVE_CLUES ? 'on' : 'off'}` }]
+            ]);
+        } else if (section === 'Overview') {
+            p.statGrid([
+                [{ text: `Runtime: ${fmtDuration(mins)}` }, { text: `Kills: ${this.killsTotal}` }],
+                [{ text: `Kills/hr: ${mins > 0.5 ? Math.round((this.killsTotal / mins) * 60) : 'n/a'}` }, { text: `Trips: ${this.bankTrips}` }],
+                [{ text: `Spot: ${anchorFor(SITE, STYLE, this.safespotIdx)}` }, { text: `Key: ${this.keyState}` }]
+            ]);
+            p.bar('HP', this.hpFraction());
+        } else if (section === 'Combat') {
+            const supply = STYLE === 'mage' ? `Casts: ${castsLeft()}`
+                : STYLE === 'range' ? `Ammo: ${ammoLeft()}`
+                    : `Shield: ${Equipment.contains(SHIELD) ? 'on' : 'off!'}`;
+            const spec = USE_SPECIAL && STYLE === 'melee' ? `${Math.round(Special.energy() / 10)}% (${this.specials})` : 'off';
+            const boost = (plan: PotionPlan): { text: string } => {
+                const sk = plan.potion.skill;
+                return { text: `${plan.potion.short} +${Math.max(0, Skills.effective(sk) - Skills.level(sk))} (${potionsHeld(plan)})` };
+            };
+            p.statGrid([
+                [{ text: `Style: ${STYLE}` }, { text: `Weapon: ${WEAPON}` }],
+                [{ text: supply }, { text: `Spec: ${spec}` }],
+                [{ text: `Food: ${foodCount()}` }, { text: `Sips: ${this.sips}` }],
+                ...(POTIONS.length > 0 ? [POTIONS.map(boost)] : [])
+            ]);
+        } else if (section === 'Loot') {
+            // Why: a p.list would draw from the panel edge and paint over the rail labels, so the drops go through the grid like every other row.
+            const top = [...this.lootCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, LOOT_SHOWN)
+                .map(([name, n]) => ({ text: `${n}x ${name}` }));
+            p.statGrid([[{ text: `Looted: ${this.looted}` }, { text: `Buried: ${this.buried}` }], ...inPairs(top)]);
+        } else if (section === 'Clue') {
+            p.statGrid([[{ text: `Solved: ${this.cluesSolved}` }, { text: `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}` }]]);
+            paintClueProgress(p, 'no clue in progress, grinding');
+        }
+
+        if (this.parked) {
+            const lines = wrapText(this.parkReason, p.cols(), 2);
+            for (const [i, line] of lines.slice(0, PARK_ROWS).entries()) {
+                p.text(i === PARK_ROWS - 1 && lines.length > PARK_ROWS ? `${line}…` : line, PARK_FG);
+            }
+        }
+        p.gap();
+        ScriptRunner.paintControls(p);
+        p.end();
     }
 }
