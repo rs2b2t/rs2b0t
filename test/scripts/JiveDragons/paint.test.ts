@@ -18,8 +18,16 @@ interface Drawn {
     y: number;
 }
 
-function recorder(): { ctx: CanvasRenderingContext2D; drawn: Drawn[] } {
+interface Box {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+function recorder(): { ctx: CanvasRenderingContext2D; drawn: Drawn[]; boxes: Box[] } {
     const drawn: Drawn[] = [];
+    const boxes: Box[] = [];
     const ctx = {
         font: '',
         textBaseline: '',
@@ -33,14 +41,23 @@ function recorder(): { ctx: CanvasRenderingContext2D; drawn: Drawn[] } {
         moveTo: () => {},
         lineTo: () => {},
         stroke: () => {},
-        fillRect: () => {},
-        strokeRect: () => {},
+        fillRect(x: number, y: number, w: number, h: number) {
+            boxes.push({ x, y, w, h });
+        },
+        strokeRect(x: number, y: number, w: number, h: number) {
+            boxes.push({ x, y, w, h });
+        },
         measureText: (t: string) => ({ width: t.length * CHAR_W }),
         fillText(t: string, x: number, y: number) {
             drawn.push({ text: t, x, y });
         }
     };
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, drawn };
+    return { ctx: ctx as unknown as CanvasRenderingContext2D, drawn, boxes };
+}
+
+/** Every rect that spills past the panel, a button under the bottom border included. */
+function spills(boxes: Box[]): Box[] {
+    return boxes.filter(b => b.x < PANEL.x || b.y < PANEL.y || b.x + b.w > PANEL.x + PANEL.w || b.y + b.h > PANEL.y + PANEL.h);
 }
 
 /** Which body rows the panel painted on, numbered from 1 under the title strip. */
@@ -50,11 +67,11 @@ function bodyRows(drawn: Drawn[]): number[] {
         .map(d => (d.y - ROW_1) / LINE + 1);
 }
 
-function paintSection(section: string, page = 'Statistics'): Drawn[] {
+function paintSection(section: string, page = 'Statistics'): { drawn: Drawn[]; boxes: Box[] } {
     paintState.reset();
     paintState.set('strip:jive:JiveDragons', page);
     paintState.set('rail:jive:JiveDragons', section);
-    const { ctx, drawn } = recorder();
+    const { ctx, drawn, boxes } = recorder();
     const bot = new JiveDragons();
     bot.parked = true;
     bot.parkReason = PARK_REASON;
@@ -62,7 +79,7 @@ function paintSection(section: string, page = 'Statistics'): Drawn[] {
         bot.lootCounts.set(name, n);
     }
     bot.onPaint!(ctx);
-    return drawn;
+    return { drawn, boxes };
 }
 
 describe('JiveDragons paint', () => {
@@ -86,21 +103,27 @@ describe('JiveDragons paint', () => {
     });
 
     test('every rail label fits the eight-character rail', () => {
-        const drawn = paintSection('Overview');
-        const texts = drawn.map(d => d.text);
+        const texts = paintSection('Overview').drawn.map(d => d.text);
         for (const name of ['Overview', 'Combat', 'Loot', 'Clue']) {
             expect(name.length).toBeLessThanOrEqual(8);
             expect(texts).toContain(name);
         }
     });
 
-    test('no section, parked and full, paints past the seventh body row', () => {
+    test('no section, parked and full, paints past the sixth body row', () => {
         const worst: Record<string, number> = {};
         for (const section of ['Overview', 'Combat', 'Loot', 'Clue']) {
-            worst[section] = Math.max(...bodyRows(paintSection(section)));
+            worst[section] = Math.max(...bodyRows(paintSection(section).drawn));
         }
-        worst.Options = Math.max(...bodyRows(paintSection('Overview', 'Options')));
-        expect(Object.entries(worst).filter(([, row]) => row < 1 || row > 7)).toEqual([]);
+        worst.Options = Math.max(...bodyRows(paintSection('Overview', 'Options').drawn));
+        expect(Object.entries(worst).filter(([, row]) => row < 1 || row > 6)).toEqual([]);
+    });
+
+    test('no section draws a widget outside the panel', () => {
+        for (const section of ['Overview', 'Combat', 'Loot', 'Clue']) {
+            expect(spills(paintSection(section).boxes)).toEqual([]);
+        }
+        expect(spills(paintSection('Overview', 'Options').boxes)).toEqual([]);
     });
 });
 
@@ -126,9 +149,10 @@ describe('JiveDragons paint, mid-clue', () => {
         ClueExecutor.current = null;
     });
 
-    test('the Clue section with a trail running and a park reason stays inside the body', () => {
-        const drawn = paintSection('Clue');
+    test('the Clue section with a trail running and a park reason stays inside the panel', () => {
+        const { drawn, boxes } = paintSection('Clue');
         expect(drawn.map(d => d.text).join('|')).toContain('hard clue');
-        expect(Math.max(...bodyRows(drawn))).toBeLessThanOrEqual(7);
+        expect(Math.max(...bodyRows(drawn))).toBeLessThanOrEqual(6);
+        expect(spills(boxes)).toEqual([]);
     });
 });

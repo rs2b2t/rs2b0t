@@ -44,10 +44,12 @@ const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 const PARK_TICKS = 10;
 
-// Why: the panel body holds seven rows and the byline owns the eighth, so the drop list and the park reason are budgeted against the tallest section.
+// Why: the byline owns the row under the body and the controls need the one above it, so the drop list and the park reason are budgeted against the tallest section.
 const LOOT_SHOWN = 6;
 const PARK_ROWS = 2;
 const PARK_FG = '#e0705a';
+/** The gap and the button row that follow every section. */
+const CONTROL_ROWS = 2;
 
 /** Cells laid out two across, the shape statGrid draws. */
 function inPairs<T>(cells: T[]): T[][] {
@@ -920,9 +922,11 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         }
 
         if (this.parked) {
+            // Why: the controls are drawn after this, so the reason takes only the rows that still leave them inside the panel.
+            const room = Math.max(0, Math.min(PARK_ROWS, p.rowsLeft() - CONTROL_ROWS));
             const lines = wrapText(this.parkReason, p.cols(), 2);
-            for (const [i, line] of lines.slice(0, PARK_ROWS).entries()) {
-                p.text(i === PARK_ROWS - 1 && lines.length > PARK_ROWS ? `${line}…` : line, PARK_FG);
+            for (const [i, line] of lines.slice(0, room).entries()) {
+                p.text(i === room - 1 && lines.length > room ? `${line}…` : line, PARK_FG);
             }
         }
         p.gap();

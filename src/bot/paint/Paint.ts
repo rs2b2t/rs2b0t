@@ -109,7 +109,7 @@ export class PaintFrame {
 
         const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
         this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
-        this.ctx.fillText(this.collapsed ? '+' : '–', toggle.x + 7, toggle.y + r.h / 2 + 1);
+        this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, toggle.y + r.h / 2 + 1);
         this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
         if (paintState.consumeClick('paint:toggle')) {
             this.collapsed = !this.collapsed;
@@ -166,6 +166,11 @@ export class PaintFrame {
     /** Columns of monospace text the panel fits between its gutters. */
     cols(): number {
         return paintCols(this.panel.w - this.bodyX + PAD, PAD, this.charW);
+    }
+
+    /** Rows still clear of the panel's bottom edge. */
+    rowsLeft(): number {
+        return Math.max(0, Math.floor((this.panel.y + this.panel.h - this.cursorY) / LINE));
     }
 
     text(line: string, color?: string): void {
@@ -262,7 +267,7 @@ export class PaintFrame {
         if (this.collapsed) {
             return 0;
         }
-        return this.list(id, lines, this.rowsLeft(lines.length, opts), opts);
+        return this.list(id, lines, this.fillRows(lines.length, opts), opts);
     }
 
     /** A `fill` laid `columns` across, reading left to right; the wheel moves a full row. */
@@ -272,7 +277,7 @@ export class PaintFrame {
         }
         const cols = Math.max(1, Math.trunc(columns));
         const total = gridRows(lines.length, cols);
-        const rows = this.rowsLeft(total, opts);
+        const rows = this.fillRows(total, opts);
         const key = `list:${id}`;
         const focus = opts.focus !== undefined && opts.focus >= 0 ? Math.floor(opts.focus / cols) : -1;
         const scroll = this.scrollFor(key, total, rows, focus);
@@ -311,7 +316,7 @@ export class PaintFrame {
     }
 
     /** Rows of the remaining panel height a filling list may use, less its counter row. */
-    private rowsLeft(total: number, opts: PaintFillOptions): number {
+    private fillRows(total: number, opts: PaintFillOptions): number {
         const bottom = this.panel.y + this.panel.h - (opts.reserve ?? 0);
         const avail = Math.floor((bottom - this.cursorY) / LINE);
         // The counter and any footer share one row, so a list needing either shows one fewer.
@@ -356,7 +361,7 @@ export class PaintFrame {
             this.ctx.fillStyle = this.accent;
             this.ctx.fillRect(this.panel.x + this.panel.w - 5, top + progress * (h - thumbH), 3, thumbH);
         }
-        const counter = from > 0 ? `${from}–${to} of ${total}` : '';
+        const counter = from > 0 ? `${from} to ${to} of ${total}` : '';
         const text = [counter, footer].filter(Boolean).join(' · ');
         if (text.length > 0) {
             this.ctx.fillStyle = FG_DIM;
@@ -575,7 +580,7 @@ export class PaintFrame {
         if (this.collapsed) {
             return;
         }
-        const slots = statColumns(this.panel.w, RAIL_W, PAD, columns);
+        const slots = statColumns(this.panel.w, this.bodyX - PAD, PAD, columns);
         for (const row of rows) {
             row.forEach((cell, i) => {
                 const slot = slots[i];
