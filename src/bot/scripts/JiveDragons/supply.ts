@@ -459,7 +459,8 @@ export async function withdrawTo(name: string, target: number): Promise<number> 
     return Inventory.count(name) - start;
 }
 
-function inCell(): boolean {
+/** Standing inside Velrak's cell, which is a dead end. */
+export function inCell(): boolean {
     const me = Game.tile();
     return me !== null && me.level === 0
         && me.x >= CELL.minX && me.x <= CELL.maxX
@@ -536,7 +537,8 @@ async function unlockCell(h: JiveHost): Promise<boolean> {
     return true;
 }
 
-async function leaveCell(h: JiveHost): Promise<boolean> {
+/** Open the cell door from the inside. True when the run is back in the corridor. */
+export async function leaveCell(h: JiveHost): Promise<boolean> {
     if (!inCell()) {
         return true;
     }
