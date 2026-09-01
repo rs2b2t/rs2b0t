@@ -333,8 +333,8 @@ export default class MarketMaker extends TaskBot {
         return this.coinFloat;
     }
 
-    /** Coins the shop is short of its float that the bank can actually supply. */
-    // Why: the bank coin count only moves on a settle trip, and refreshLedger runs at the end of each one with the bank still open, so this is accurate exactly when Settle asks.
+    /** Coins the shop is short of its float that the bank can supply. */
+    // Why: the bank coin count only moves on a settle trip, and refreshLedger runs at the end of each one with the bank still open, so this is accurate at the moment Settle asks.
     floatShort(): number {
         return floatShortfall(this.packCoins(), this.ledger.held(this.coinId), this.coinFloat);
     }

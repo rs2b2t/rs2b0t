@@ -372,7 +372,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         budgetMin: 6,
         env: { WATCH_S: '90' },
-        provenAt: 'd342f8c6',
+        provenAt: '974e867e',
         note: 'a bank holding less than the coin float: one trip and open for business, rather than banking and re-withdrawing the same stack every loop'
     },
     {

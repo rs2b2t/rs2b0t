@@ -148,7 +148,7 @@ try {
     const carried = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Inventory.countById(995));
     console.log(`shortfloat: ${trips} bank trip(s), open for business on ${openFor} of ${WATCH_S * 2} looks, carrying ${carried}gp`);
 
-    // Why: one trip is right — it banks the goods and takes what coins there are. Anything more is the loop.
+    // Why: one trip is right. It banks the goods and takes what coins there are, and anything more is the loop.
     if (trips > 1) {
         fail(`shortfloat: the shop made ${trips} bank trips in ${WATCH_S}s, so it is still looping on a float it cannot reach`);
     }
