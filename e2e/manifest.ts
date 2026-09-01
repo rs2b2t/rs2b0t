@@ -376,6 +376,16 @@ export const CASES: readonly Case[] = [
         note: 'a bank holding less than the coin float: one trip and open for business, rather than banking and re-withdrawing the same stack every loop'
     },
     {
+        id: 'marketmaker-upkeep-live',
+        harness: 'marketmaker-upkeep-live.ts',
+        covers: { scripts: ['MarketMaker'], subsystems: ['panel'] },
+        status: 'vetted',
+        budgetMin: 20,
+        env: { IDLE_MIN: '12' },
+        provenAt: '77b9d5f7',
+        note: 'a shop left standing past the 10min wedge with no stall-guard restart, its own chat read back off its own client, and the order book filtered and edited without losing the scroll or the caret'
+    },
+    {
         id: 'gatheringbot-mule-pair-test',
         harness: 'gatheringbot-mule-pair-test.ts',
         covers: { scripts: ['GatheringBot'] },
