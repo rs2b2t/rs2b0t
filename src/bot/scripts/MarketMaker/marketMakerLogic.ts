@@ -1,6 +1,7 @@
 import type { SellIntent } from '../../api/market/appraise.js';
-import { resolveByName, type Catalog } from '../../api/market/catalog.js';
-import { rowOf, type PriceBook } from '../../api/market/priceBook.js';
+import { displayName, resolveByName, type Catalog } from '../../api/market/catalog.js';
+import type { Candidate } from '../../api/market/chatProtocol.js';
+import { rowOf, type PriceBook, type PriceRow } from '../../api/market/priceBook.js';
 import { rowValid } from '../../api/market/prices.js';
 
 /** A chat request naming what the customer wants to buy. Carries no price and no reservation. */
@@ -320,7 +321,7 @@ export class RateLimiter {
 /** What a quote request names, before any reply is composed. */
 export type QuoteTarget =
     | { kind: 'miss'; answer: boolean }
-    | { kind: 'ambiguous'; candidates: { id: number; name: string }[] }
+    | { kind: 'ambiguous'; candidates: Candidate[] }
     | { kind: 'hit'; id: number; name: string };
 
 /** Resolve a customer's words against the side of the book they are asking about. */
@@ -341,11 +342,37 @@ export function resolveQuote(input: {
         return { kind: 'miss', answer: !qtyImplied };
     }
     if (candidates.length > 1) {
-        return { kind: 'ambiguous', candidates: candidates.map(c => ({ id: c.id, name: c.name })) };
+        return {
+            kind: 'ambiguous',
+            candidates: candidates.map(c => ({
+                id: c.id,
+                name: displayName(cat, c.id),
+                base: c.name,
+                word: cat.aliases.get(c.id)?.words[0] ?? null
+            }))
+        };
     }
-    return { kind: 'hit', id: candidates[0].id, name: candidates[0].name };
+    return { kind: 'hit', id: candidates[0].id, name: displayName(cat, candidates[0].id) };
 }
 
+
+/** Which rows a listing command reads out, and why the answer came back empty. */
+// Why: a row the shop holds none of is not a quote worth sending a customer to, and an empty book is a different problem from an empty shelf, since only one of them fixes itself.
+export function listedRows(input: {
+    book: PriceBook;
+    side: 'both' | 'buy' | 'sell';
+    stocked: (id: number) => number;
+}): { rows: PriceRow[]; empty: 'no-book' | 'no-stock' | null } {
+    const { book, side, stocked } = input;
+    const listed = book.rows.filter(
+        r => rowValid(book, r) && (side === 'buy' ? r.buying : side === 'sell' ? r.selling : r.buying || r.selling)
+    );
+    const rows = listed.filter(r => stocked(r.id) > 0);
+    if (rows.length > 0) {
+        return { rows, empty: null };
+    }
+    return { rows, empty: listed.length === 0 ? 'no-book' : 'no-stock' };
+}
 
 /** One settled trade, kept so the paint can show what the shop has been doing. */
 export interface Deal {

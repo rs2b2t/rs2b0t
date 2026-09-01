@@ -9,7 +9,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Trade } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { PriceBooks } from '../../api/market/bookStore.js';
-import { liveCatalog, notedId, unnotedId, type Catalog } from '../../api/market/catalog.js';
+import { displayName, liveCatalog, notedId, unnotedId, type Catalog } from '../../api/market/catalog.js';
 import {
     CHAT_LIMIT,
     formatAmbiguous,
@@ -42,6 +42,7 @@ import {
     floatShortfall,
     FREE_SLOT_FLOOR,
     freshChatLines,
+    listedRows,
     RateLimiter,
     resolveQuote,
     shouldSettle,
@@ -81,7 +82,8 @@ const RESET_EVERY_MS = RESET_EVERY_TICKS * 600;
 const INTENT_CAP = 24;
 /** How far the stand tile may sit from the bank it is meant to use. */
 const BANK_REACH = 12;
-const SPOT_LEASH = 3;
+// Why: Recover walks back with radius 1, so a leash under that never reads as arrived and the shop paces for ever.
+const SPOT_LEASH = 1;
 const ADVERTISE_ITEMS = 4;
 /** Beats a customer's side must sit still before the bot touches its own. */
 const STILL_BEATS = 3;
@@ -109,7 +111,7 @@ export const MARKET_MAKER_SETTINGS: SettingsSchema = {
         type: 'tile',
         default: new Tile(2725, 3491, 0),
         label: 'Stand tile (x,z)',
-        help: 'must be within a few tiles of a bank booth; defaults to Seers bank'
+        help: 'where the shop stands between trades; defaults to the middle of the Seers bank floor'
     },
     advertiseSeconds: {
         type: 'number',
@@ -169,7 +171,7 @@ export default class MarketMaker extends TaskBot {
     override loopDelay = 600;
 
     private book: PriceBook | null = null;
-    private cat: Catalog = { byId: new Map(), notedOf: new Map(), unnotedOf: new Map(), items: [] };
+    private cat: Catalog = { byId: new Map(), notedOf: new Map(), unnotedOf: new Map(), items: [], aliases: new Map() };
     private readonly coinId = COIN_ID;
     private spot = new Tile(2725, 3491, 0);
     private windowMs = 90_000;
@@ -450,6 +452,12 @@ export default class MarketMaker extends TaskBot {
         return Inventory.countById(id) + (noted === null ? 0 : Inventory.countById(noted));
     }
 
+    /** Everything the shop could put on the table, whether it is carrying it or would fetch it. */
+    // Why: this is the number wantToBuy sizes a quote against, so anything the list advertises can be sold.
+    stocked(id: number): number {
+        return this.ledger.held(id) + this.packCount(id);
+    }
+
     packCoins(): number {
         return Inventory.countById(this.coinId);
     }
@@ -525,7 +533,7 @@ export default class MarketMaker extends TaskBot {
             this.say('Put items in and I price them as you go. To buy, say what you want first.');
             return;
         }
-        const name = this.cat.byId.get(want.itemId)?.name ?? 'that';
+        const name = displayName(this.cat, want.itemId);
         const row = rowOf(this.activeBook(), want.itemId);
         const each = row ? resolvePrices(this.activeBook(), row).sell : 0;
         this.say(`${formatGp(want.maxQty)} x ${name} = ${formatGp(want.maxQty * each)}gp. Put that up.`);
@@ -563,18 +571,18 @@ export default class MarketMaker extends TaskBot {
         }
     }
 
+    /** The book, cut to what the shop is holding. */
     private listPrices(side: 'both' | 'buy' | 'sell'): void {
         const book = this.activeBook();
-        const entries = book.rows
-            .filter(r => rowValid(book, r) && (side === 'buy' ? r.buying : side === 'sell' ? r.selling : r.buying || r.selling))
-            .map(r => {
-                const { buy, sell } = resolvePrices(book, r);
-                return { name: this.cat.byId.get(r.id)?.name ?? `item ${r.id}`, buy, sell };
-            });
-        if (entries.length === 0) {
-            this.say('Nothing listed right now.');
+        const { rows, empty } = listedRows({ book, side, stocked: id => this.stocked(id) });
+        if (empty !== null) {
+            this.say(empty === 'no-book' ? 'Nothing listed right now.' : 'I am out of stock right now.');
             return;
         }
+        const entries = rows.map(r => {
+            const { buy, sell } = resolvePrices(book, r);
+            return { name: displayName(this.cat, r.id), buy, sell };
+        });
         for (const line of formatPriceList(entries, side)) {
             this.say(line);
         }
@@ -650,7 +658,7 @@ export default class MarketMaker extends TaskBot {
     async putUp(owe: ReadonlyMap<number, number>): Promise<boolean> {
         await Trade.removeAll();
         for (const [id, want] of owe) {
-            const name = this.cat.byId.get(id)?.name;
+            const name = displayName(this.cat, id);
             if (name === undefined) {
                 return false;
             }
@@ -799,7 +807,7 @@ export default class MarketMaker extends TaskBot {
 
         const entries = slice.map(r => {
             const { buy, sell } = resolvePrices(book, r);
-            return { name: this.cat.byId.get(r.id)?.name ?? `item ${r.id}`, buy, sell };
+            return { name: displayName(this.cat, r.id), buy, sell };
         });
         // Why: a price list alone never tells a passer-by how to trade at all, so every other line is the how-to.
         this.advertCycle++;
@@ -847,7 +855,7 @@ export default class MarketMaker extends TaskBot {
                 customer: d.customer,
                 kind: d.kind,
                 count: d.count,
-                item: this.cat.byId.get(d.itemId)?.name ?? `item ${d.itemId}`,
+                item: displayName(this.cat, d.itemId),
                 gp: d.gp,
                 mixed: d.mixed
             })
@@ -875,7 +883,7 @@ export default class MarketMaker extends TaskBot {
         p.bar('Float', this.float() > 0 ? this.packCoins() / this.float() : 0);
         p.bar('Pack', Inventory.used() / 28);
         const rows = this.activeBook().rows.filter(r => rowValid(this.activeBook(), r));
-        const stocked = rows.filter(r => this.ledger.held(r.id) + this.packCount(r.id) > 0).length;
+        const stocked = rows.filter(r => this.stocked(r.id) > 0).length;
         p.bar('Stock', rows.length > 0 ? stocked / rows.length : 0);
     }
 
@@ -883,10 +891,10 @@ export default class MarketMaker extends TaskBot {
         const book = this.activeBook();
         const lines = book.rows
             .map(r => {
-                const held = this.ledger.held(r.id) + this.packCount(r.id);
+                const held = this.stocked(r.id);
                 const full = r.cap > 0 ? Math.min(1, held / r.cap) : 0;
                 const filled = Math.round(full * 5);
-                const name = this.cat.byId.get(r.id)?.name ?? `item ${r.id}`;
+                const name = displayName(this.cat, r.id);
                 return { held, text: `${name.padEnd(20).slice(0, 20)} ${'#'.repeat(filled)}${'.'.repeat(5 - filled)} ${formatGp(held)} / ${formatGp(r.cap)}` };
             })
             .sort((a, b) => a.held - b.held)
@@ -898,7 +906,7 @@ export default class MarketMaker extends TaskBot {
         const book = this.activeBook();
         const lines = book.rows.map(r => {
             const { buy, sell } = resolvePrices(book, r);
-            const name = this.cat.byId.get(r.id)?.name ?? `item ${r.id}`;
+            const name = displayName(this.cat, r.id);
             const sides = `${r.buying ? 'B' : '-'}${r.selling ? 'S' : '-'}`;
             const text = `${name.padEnd(20).slice(0, 20)} ${formatGp(buy).padStart(8)} ${formatGp(sell).padStart(8)} ${formatGp(r.cap).padStart(7)}  ${sides}`;
             return rowValid(book, r) ? text : { text, color: '#e05b5b' };
@@ -1079,7 +1087,7 @@ class OpenWindow implements Task {
             // Why: opening before the goods are in the pack strands the window, because Restock cannot run while one is open and the bot then owes nothing until the deadline.
             const want = this.bot.counter().intentFor(name, now, this.bot.intentTtl());
             if (want !== null && this.bot.packCount(want.itemId) < want.maxQty) {
-                const what = this.bot.catalog().byId.get(want.itemId)?.name ?? 'that';
+                const what = displayName(this.bot.catalog(), want.itemId);
                 this.bot.say(`Fetching your ${what}, one moment.`);
                 continue;
             }
@@ -1115,7 +1123,7 @@ class Restock implements Task {
 
     async execute(): Promise<void> {
         const want = this.bot.counter().nextIntent(Date.now(), this.bot.intentTtl())!;
-        const name = this.bot.catalog().byId.get(want.itemId)?.name ?? String(want.itemId);
+        const name = displayName(this.bot.catalog(), want.itemId);
         this.bot.setStatus(`fetching ${name} for ${want.customer}`);
 
         if (!(await Banking.open({ stand: this.bot.standTile(), boothName: BOOTH.name, boothOp: BOOTH.op, log: m => this.bot.log(m) }))) {

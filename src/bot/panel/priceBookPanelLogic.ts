@@ -1,5 +1,5 @@
 import { isPopular, shelfOf, type Category } from '../api/market/categories.js';
-import { searchCatalog, type Catalog } from '../api/market/catalog.js';
+import { displayName, searchCatalog, type Catalog } from '../api/market/catalog.js';
 import { rowOf, type PriceBook, type PriceRow } from '../api/market/priceBook.js';
 import { MARKET_PRICES } from '../data/marketprices.js';
 import { resolvePrices, rowValid } from '../api/market/prices.js';
@@ -29,7 +29,7 @@ export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
         const item = cat.byId.get(row.id);
         return {
             id: row.id,
-            name: item?.name ?? `item ${row.id}`,
+            name: item ? displayName(cat, row.id) : `item ${row.id}`,
             category: item ? shelfOf(item) : 'Other',
             popular: item ? isPopular(item) : false,
             mid: row.mid,
@@ -115,7 +115,7 @@ export function pickerRows(
 ): { id: number; name: string; cost: number; added: boolean }[] {
     return searchCatalog(cat, query, 60).map(r => ({
         id: r.id,
-        name: r.name,
+        name: displayName(cat, r.id),
         cost: r.cost,
         added: rowOf(book, r.id) !== null
     }));
