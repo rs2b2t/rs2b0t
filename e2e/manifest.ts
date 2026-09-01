@@ -369,9 +369,10 @@ export const CASES: readonly Case[] = [
         id: 'marketmaker-short-float-live',
         harness: 'marketmaker-short-float-live.ts',
         covers: { scripts: ['MarketMaker'] },
-        status: 'unvetted',
+        status: 'vetted',
         budgetMin: 6,
         env: { WATCH_S: '90' },
+        provenAt: 'd342f8c6',
         note: 'a bank holding less than the coin float: one trip and open for business, rather than banking and re-withdrawing the same stack every loop'
     },
     {
