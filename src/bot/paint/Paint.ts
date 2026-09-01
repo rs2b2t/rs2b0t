@@ -6,7 +6,10 @@ import {
     listScroll,
     paintCols,
     paintState,
+    railRows,
     resolveDock,
+    statColumns,
+    stripSegments,
     wrapText,
     type Dock,
     type Rect,
@@ -57,6 +60,8 @@ const LINE = 16;
 const TITLE_H = 20;
 const TAB_H = 18;
 const BUTTON_H = 16;
+const RAIL_W = 72;
+const STATUS_FG = '#6fe08b';
 
 const BG = 'rgba(12, 12, 14, 0.88)';
 const BG_TITLE = 'rgba(28, 28, 34, 0.95)';
@@ -456,6 +461,139 @@ export class PaintFrame {
 
         this.cursorY += BUTTON_H + 4;
         return picked;
+    }
+
+    /**
+     * Title row of tabs, a live status and a brand. Returns the active tab and
+     * replaces `title()` for a branded panel.
+     */
+    strip(id: string, tabs: string[], status: string, brand: string): string {
+        const { x, w } = this.panel;
+        const r = { x, y: this.cursorY, w, h: TITLE_H };
+        this.collapsed = paintState.get('paint:collapsed', '0') === '1';
+
+        this.ctx.fillStyle = BG_TITLE;
+        this.ctx.fillRect(r.x, r.y, r.w, r.h);
+        this.ctx.strokeStyle = BORDER;
+        this.ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+
+        let active = paintState.get(`strip:${id}`, tabs[0] ?? '');
+        if (!tabs.includes(active)) {
+            active = tabs[0] ?? '';
+        }
+        const mid = r.y + r.h / 2 + 1;
+        const widths = tabs.map(name => this.ctx.measureText(name).width + 14);
+        const seg = stripSegments(r.w, widths, this.ctx.measureText(brand).width + 8, PAD);
+
+        tabs.forEach((name, i) => {
+            const slot = seg.tabs[i]!;
+            const box = { x: r.x + slot.x, y: r.y + 2, w: slot.w, h: r.h - 4 };
+            const isActive = name === active;
+            this.ctx.fillStyle = isActive ? BG_WIDGET_HOT : paintState.isHovered(box) ? BG_WIDGET : 'transparent';
+            this.ctx.fillRect(box.x, box.y, box.w, box.h);
+            this.ctx.font = FONT_BOLD;
+            this.ctx.fillStyle = isActive ? this.accent : FG_DIM;
+            this.ctx.fillText(name, box.x + 7, mid);
+            this.ctx.font = FONT;
+            const regionId = `strip:${id}:${name}`;
+            this.regions.push({ id: regionId, ...box, kind: 'widget' });
+            if (paintState.consumeClick(regionId)) {
+                active = name;
+                paintState.set(`strip:${id}`, name);
+            }
+        });
+
+        const room = Math.max(0, Math.floor(seg.status.w / this.charW) - 1);
+        this.ctx.fillStyle = STATUS_FG;
+        this.ctx.fillText(clipText(status, room), r.x + seg.status.x, mid);
+        this.ctx.font = FONT_BOLD;
+        this.ctx.fillStyle = this.accent;
+        this.ctx.fillText(brand, r.x + seg.brand.x, mid);
+        this.ctx.font = FONT;
+
+        const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
+        this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
+        if (paintState.consumeClick('paint:toggle')) {
+            this.collapsed = !this.collapsed;
+            paintState.set('paint:collapsed', this.collapsed ? '1' : '0');
+        }
+
+        this.cursorY = r.y + r.h;
+        if (!this.collapsed) {
+            this.regions.push({ id: 'paint:panel', ...this.panel, kind: 'panel' });
+            this.ctx.fillStyle = BG;
+            this.ctx.fillRect(this.panel.x, this.cursorY, this.panel.w, this.panel.y + this.panel.h - this.cursorY);
+            this.ctx.strokeStyle = BORDER;
+            this.ctx.strokeRect(this.panel.x + 0.5, this.cursorY + 0.5, this.panel.w - 1, this.panel.y + this.panel.h - this.cursorY - 1);
+        } else {
+            this.regions.push({ id: 'paint:panel', x: this.panel.x, y: this.panel.y, w: this.panel.w, h: TITLE_H, kind: 'panel' });
+        }
+        return active;
+    }
+
+    /** Vertical sub-tab column down the panel's left edge. Returns the active entry. */
+    rail(id: string, names: string[]): string {
+        const key = `rail:${id}`;
+        if (this.collapsed || names.length === 0) {
+            return paintState.get(key, names[0] ?? '');
+        }
+        let active = paintState.get(key, names[0]!);
+        if (!names.includes(active)) {
+            active = names[0]!;
+        }
+        const top = this.cursorY;
+        const bodyH = this.panel.y + this.panel.h - top - LINE;
+        for (const [i, row] of railRows(bodyH, names.length).entries()) {
+            const name = names[i]!;
+            const box = { x: this.panel.x + 2, y: top + row.y, w: RAIL_W - 4, h: row.h };
+            const isActive = name === active;
+            this.ctx.fillStyle = isActive ? BG_WIDGET_HOT : paintState.isHovered(box) ? BG_WIDGET : 'transparent';
+            this.ctx.fillRect(box.x, box.y, box.w, box.h);
+            if (isActive) {
+                this.ctx.fillStyle = this.accent;
+                this.ctx.fillRect(box.x, box.y, 2, box.h);
+            }
+            this.ctx.fillStyle = isActive ? '#fff' : FG_DIM;
+            this.ctx.fillText(clipText(name, Math.floor((RAIL_W - 12) / this.charW)), box.x + 6, box.y + box.h / 2 + 1);
+            const regionId = `${key}:${name}`;
+            this.regions.push({ id: regionId, ...box, kind: 'widget' });
+            if (paintState.consumeClick(regionId)) {
+                active = name;
+                paintState.set(key, name);
+            }
+        }
+        return active;
+    }
+
+    /** Rows of cells laid out right of the rail. */
+    statGrid(rows: PaintCell[][], columns = 2): void {
+        if (this.collapsed) {
+            return;
+        }
+        const slots = statColumns(this.panel.w, RAIL_W, PAD, columns);
+        for (const row of rows) {
+            row.forEach((cell, i) => {
+                const slot = slots[i];
+                if (!slot) {
+                    return;
+                }
+                const room = Math.max(0, Math.floor(slot.w / this.charW) - 1);
+                this.ctx.fillStyle = cell.color ?? FG;
+                this.ctx.fillText(clipText(cell.text, room), this.panel.x + slot.x, this.cursorY + LINE / 2 + 1);
+            });
+            this.cursorY += LINE;
+        }
+    }
+
+    /** Right-aligned byline on the panel's last row. */
+    footer(text: string): void {
+        if (this.collapsed) {
+            return;
+        }
+        const y = this.panel.y + this.panel.h - LINE / 2 - 1;
+        const w = this.ctx.measureText(text).width;
+        this.ctx.fillStyle = FG_DIM;
+        this.ctx.fillText(text, this.panel.x + this.panel.w - PAD - w, y);
     }
 
     gap(px = 6): void {
