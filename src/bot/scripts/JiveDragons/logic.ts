@@ -29,10 +29,10 @@ export function nextSafespot(s: LadderState): number {
 }
 
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
-const ATTACK_RANGE: Record<string, number> = { melee: 1, range: 7, mage: 10 };
+const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 
-export function attackRangeFor(style: string): number {
-    return ATTACK_RANGE[style] ?? 1;
+export function attackRangeFor(style: Style): number {
+    return ATTACK_RANGE[style];
 }
 
 // Why: dragonfire is 5 through the shield and 30 without, rising to 50 when the attack roll beats the defence roll.
