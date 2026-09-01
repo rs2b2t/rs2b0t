@@ -29,6 +29,7 @@ import Tile from '../../geometry/Tile.js';
 import { Paint, type PaintFrame } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
+import { Supervisor } from '../../runtime/Supervisor.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import {
     advertiseDue,
@@ -268,6 +269,9 @@ export default class MarketMaker extends TaskBot {
     override async loop(): Promise<number | void> {
         this.pumpChat();
         this.drainChat();
+        if (this.onStation()) {
+            Supervisor.noteProgress();
+        }
         return super.loop();
     }
 
@@ -311,6 +315,16 @@ export default class MarketMaker extends TaskBot {
 
     standTile(): Tile {
         return this.spot;
+    }
+
+    /** Where the shop belongs: on its stand tile, with nothing in the way. */
+    // Why: standing open is the work, and it makes no xp drop and no change of tile, so the supervisor's wedge check restarts a healthy shop every ten minutes unless this says otherwise.
+    onStation(): boolean {
+        if (Trade.active()) {
+            return true;
+        }
+        const here = Game.tile();
+        return reader.modals().main === -1 && (here === null || Tile.from(here).distanceTo(this.spot) <= SPOT_LEASH);
     }
 
     counter(): Desk {
@@ -905,12 +919,7 @@ class Recover implements Task {
     constructor(private readonly bot: MarketMaker) {}
 
     validate(): boolean {
-        if (Trade.active()) {
-            return false;
-        }
-        const modals = reader.modals();
-        const here = Game.tile();
-        return modals.main !== -1 || (here !== null && Tile.from(here).distanceTo(this.bot.standTile()) > SPOT_LEASH);
+        return !this.bot.onStation();
     }
 
     async execute(): Promise<void> {
