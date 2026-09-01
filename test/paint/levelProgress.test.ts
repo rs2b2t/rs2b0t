@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { etaHours, levelProgress, xpAtLevel } from '#/bot/scripts/GreenDragon/levelProgress.js';
+import { etaHours, levelProgress, xpAtLevel } from '#/bot/paint/levelProgress.js';
 
 describe('xpAtLevel', () => {
     // Pinned against the published curve, a generated table is only trustworthy

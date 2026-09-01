@@ -14,7 +14,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { fmtDuration, fmtXpHr, paintSkillShort } from '../../paint/paintLogic.js';
-import { etaHours, levelProgress } from './levelProgress.js';
+import { etaHours, levelProgress } from '../../paint/levelProgress.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
