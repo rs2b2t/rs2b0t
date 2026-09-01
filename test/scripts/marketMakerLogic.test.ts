@@ -5,6 +5,7 @@ import {
     decideBeat,
     Desk,
     freshChatLines,
+    listedRows,
     dealLine,
     dealOf,
     dealTotals,
@@ -508,7 +509,7 @@ describe('resolveQuote', () => {
 
     test('the bow pair splits on the u suffix with no count given', () => {
         expect(quote('maple longbow', true)).toEqual({ kind: 'hit', id: 851, name: 'Maple longbow' });
-        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow' });
+        expect(quote('maple longbow u', true)).toEqual({ kind: 'hit', id: 62, name: 'Maple longbow (u)' });
     });
 
     test('a partial name matching several is ambiguous, and only reachable with a count', () => {
@@ -607,5 +608,49 @@ describe('dealLine', () => {
     test('money carries its sign either way', () => {
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'sold', count: 1, item: 'X', gp: 10, mixed: false })).toContain('+10');
         expect(dealLine({ clock: '00:00:00', customer: 'a', kind: 'bought', count: 1, item: 'X', gp: -10, mixed: false })).toContain('-10');
+    });
+});
+
+describe('listedRows', () => {
+    const BOOK: PriceBook = {
+        name: 'shelf',
+        margin: 20,
+        maxTradeValue: 500_000,
+        rows: [
+            { id: 440, mid: 20, cap: 5_000, buying: true, selling: true },
+            { id: 1515, mid: 320, cap: 2_000, buying: true, selling: false },
+            { id: 851, mid: 640, cap: 500, buying: false, selling: true }
+        ]
+    };
+    const rows = (side: 'both' | 'buy' | 'sell', stock: Record<number, number>) =>
+        listedRows({ book: BOOK, side, stocked: id => stock[id] ?? 0 });
+
+    test('a row the shop holds none of is not listed', () => {
+        expect(rows('both', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+    });
+
+    // Why: the operator chose to gate the buy side too, so the shop stops advertising what it wants while empty.
+    test('the gate applies to the buy side as well as the sell side', () => {
+        expect(rows('buy', { 440: 900 }).rows.map(r => r.id)).toEqual([440]);
+        expect(rows('buy', { 1515: 12 }).rows.map(r => r.id)).toEqual([1515]);
+        expect(rows('buy', {}).rows).toEqual([]);
+    });
+
+    test('each side still filters on which way the row trades', () => {
+        const stock = { 440: 900, 1515: 12, 851: 3 };
+        expect(rows('buy', stock).rows.map(r => r.id)).toEqual([440, 1515]);
+        expect(rows('sell', stock).rows.map(r => r.id)).toEqual([440, 851]);
+        expect(rows('both', stock).rows.map(r => r.id)).toEqual([440, 1515, 851]);
+    });
+
+    // Why: a shop that has sold out reads as broken unless it says so, and the two causes need different answers.
+    test('an empty book and an empty shelf are told apart', () => {
+        expect(rows('both', {}).empty).toBe('no-stock');
+        expect(listedRows({ book: { ...BOOK, rows: [] }, side: 'both', stocked: () => 0 }).empty).toBe('no-book');
+        expect(rows('both', { 440: 1 }).empty).toBeNull();
+    });
+
+    test('bank stock counts, so a row the shop would fetch is still listed', () => {
+        expect(rows('sell', { 851: 40 }).rows.map(r => r.id)).toEqual([851]);
     });
 });

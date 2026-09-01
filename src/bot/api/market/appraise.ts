@@ -1,4 +1,4 @@
-import { unnotedId, type Catalog } from './catalog.js';
+import { displayName, unnotedId, type Catalog } from './catalog.js';
 import { rowOf, type PriceBook } from './priceBook.js';
 import { resolvePrices, rowValid } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
@@ -48,7 +48,7 @@ function fold(cat: Catalog, items: readonly OfferItem[], coinId: number) {
             continue;
         }
         const id = unnotedId(cat, item.id);
-        const name = cat.byId.get(id)?.name ?? item.name ?? `item ${id}`;
+        const name = cat.byId.has(id) ? displayName(cat, id) : (item.name ?? `item ${id}`);
         goods.set(id, { name, count: (goods.get(id)?.count ?? 0) + units });
     }
     return { goods, coins };
@@ -103,7 +103,7 @@ function sale(
     coins: number,
     ignored: Ignored
 ): Appraisal {
-    const name = cat.byId.get(intent.itemId)?.name ?? `item ${intent.itemId}`;
+    const name = displayName(cat, intent.itemId);
     const each = priceOf(book, intent.itemId, 'selling');
     if (each === null) {
         return nothing(ignored, `I don't sell ${name} any more`);
