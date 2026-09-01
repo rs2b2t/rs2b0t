@@ -38,6 +38,7 @@ import {
     dealLine,
     dealOf,
     dealTotals,
+    floatShortfall,
     FREE_SLOT_FLOOR,
     freshChatLines,
     RateLimiter,
@@ -330,6 +331,12 @@ export default class MarketMaker extends TaskBot {
 
     float(): number {
         return this.coinFloat;
+    }
+
+    /** Coins the shop is short of its float that the bank can actually supply. */
+    // Why: the bank coin count only moves on a settle trip, and refreshLedger runs at the end of each one with the bank still open, so this is accurate exactly when Settle asks.
+    floatShort(): number {
+        return floatShortfall(this.packCoins(), this.ledger.held(this.coinId), this.coinFloat);
     }
 
     /** A modal the bot did not mean to have open is worth saying out loud, once in a while. */
@@ -1151,7 +1158,7 @@ class Settle implements Task {
             return false;
         }
         return shouldSettle(Inventory.free(), this.bot.packCoins(), this.bot.float())
-            || this.bot.packCoins() < this.bot.float();
+            || this.bot.floatShort() > 0;
     }
 
     async execute(): Promise<void> {

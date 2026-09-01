@@ -10,6 +10,7 @@ import {
     dealTotals,
     RateLimiter,
     resolveQuote,
+    floatShortfall,
     shouldSettle,
     sideSignature,
     type Intent,
@@ -308,6 +309,28 @@ describe('shouldSettle', () => {
 
     test('false otherwise', () => {
         expect(shouldSettle(20, 1_000, 50_000)).toBe(false);
+    });
+});
+
+// Why: Settle used to ask for the raw float, and a bank that could not fill it left that true on every loop, so the shop stood at the booth banking and re-withdrawing one stack instead of trading.
+describe('floatShortfall', () => {
+    test('the gap to the float when the bank can cover it', () => {
+        expect(floatShortfall(0, 500_000, 200_000)).toBe(200_000);
+        expect(floatShortfall(50_000, 500_000, 200_000)).toBe(150_000);
+    });
+
+    test('nothing to fetch once the pack is at the float', () => {
+        expect(floatShortfall(200_000, 500_000, 200_000)).toBe(0);
+        expect(floatShortfall(260_000, 500_000, 200_000)).toBe(0);
+    });
+
+    test('a bank short of the float is asked only for what it has', () => {
+        expect(floatShortfall(0, 50_000, 200_000)).toBe(50_000);
+    });
+
+    test('nothing left to fetch, so the trip is not worth making again', () => {
+        expect(floatShortfall(50_000, 0, 200_000)).toBe(0);
+        expect(floatShortfall(0, 0, 200_000)).toBe(0);
     });
 });
 

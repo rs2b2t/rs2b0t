@@ -366,6 +366,15 @@ export const CASES: readonly Case[] = [
         note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, coins ignored and named, and a cooldown after walking out'
     },
     {
+        id: 'marketmaker-short-float-live',
+        harness: 'marketmaker-short-float-live.ts',
+        covers: { scripts: ['MarketMaker'] },
+        status: 'unvetted',
+        budgetMin: 6,
+        env: { WATCH_S: '90' },
+        note: 'a bank holding less than the coin float: one trip and open for business, rather than banking and re-withdrawing the same stack every loop'
+    },
+    {
         id: 'gatheringbot-mule-pair-test',
         harness: 'gatheringbot-mule-pair-test.ts',
         covers: { scripts: ['GatheringBot'] },
