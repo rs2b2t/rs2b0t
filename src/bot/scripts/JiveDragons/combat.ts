@@ -87,6 +87,15 @@ function usesSafespot(style: Style): boolean {
     return style !== 'melee';
 }
 
+// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is derived adjacent to all three adult footprints and a click from it moves nobody.
+function holdsAnchor(_style: Style): boolean {
+    return true;
+}
+
+function spotName(style: Style, index: number): string {
+    return usesSafespot(style) ? `safespot ${index}` : 'the melee anchor';
+}
+
 function label(site: DragonSite): string {
     return site.target.toLowerCase();
 }
@@ -132,7 +141,7 @@ export class Fight implements Task {
         if (!this.site.inArea(Game.tile()) || this.host.hpFraction() < this.host.panicHp()) {
             return false;
         }
-        if (usesSafespot(this.host.style()) && !atTile(this.anchor())) {
+        if (holdsAnchor(this.host.style()) && !atTile(this.anchor())) {
             return false;
         }
         return this.field(FIELD_RADIUS).length > 0 || this.blindDue();
@@ -156,9 +165,9 @@ export class Fight implements Task {
             if (EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
                 return;
             }
-            if (this.host.needEat()) {
-                await this.host.eatOnce();
-                continue;
+            // Why: an eat that never lands means an empty pack, and looping on it burns every pass without pumping Sustain or reaching the panic check below.
+            if (this.host.needEat() && !(await this.host.eatOnce())) {
+                return;
             }
             if (this.host.hpFraction() < this.host.panicHp()) {
                 return;
@@ -171,7 +180,7 @@ export class Fight implements Task {
                 continue;
             }
             this.settleKill(name);
-            if (usesSafespot(style) && !atTile(this.anchor()) && !(await this.walkBack())) {
+            if (holdsAnchor(style) && !atTile(this.anchor()) && !(await this.walkBack())) {
                 return;
             }
 
@@ -203,7 +212,7 @@ export class Fight implements Task {
                 await this.idle();
                 return;
             }
-            if (usesSafespot(style) && target.distance() > attackRangeFor(style)) {
+            if (holdsAnchor(style) && target.distance() > attackRangeFor(style)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, now + LEASH_SKIP_MS);
                 }
@@ -212,9 +221,9 @@ export class Fight implements Task {
             if (!(await this.engage(target, name))) {
                 continue;
             }
-            if (usesSafespot(style) && !atTile(this.anchor())) {
+            if (holdsAnchor(style) && !atTile(this.anchor())) {
                 this.skip.set(target.index, performance.now() + PULL_SKIP_MS);
-                this.host.log(`${name} ${target.index} pulled us off the safespot. Skipping it for ${PULL_SKIP_MS / 1000}s.`);
+                this.host.log(`${name} ${target.index} pulled us off ${spotName(style, this.host.safespotIndex())}. Skipping it for ${PULL_SKIP_MS / 1000}s.`);
                 this.clearTarget();
             }
         }
@@ -295,7 +304,8 @@ export class Fight implements Task {
         if (atTile(spot)) {
             return true;
         }
-        this.host.setStatus(`returning to safespot ${this.host.safespotIndex()}`);
+        const where = spotName(this.host.style(), this.host.safespotIndex());
+        this.host.setStatus(`returning to ${where}`);
         for (let i = 0; i < HOP_ATTEMPTS && !atTile(spot) && !EventSignal.pending(); i++) {
             await DirectNavigator.walk(spot);
             if (await waitFed(() => atTile(spot), HOP_MS)) {
@@ -305,7 +315,7 @@ export class Fight implements Task {
         if (atTile(spot)) {
             return true;
         }
-        this.host.log(`could not stand on safespot ${this.host.safespotIndex()} at ${spot}. Handing back to the walk-back task.`);
+        this.host.log(`could not stand on ${where} at ${spot}. Handing back to the walk-back task.`);
         return false;
     }
 
@@ -323,9 +333,8 @@ export class Fight implements Task {
             if (EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
                 return true;
             }
-            if (this.host.needEat()) {
-                await this.host.eatOnce();
-                continue;
+            if (this.host.needEat() && !(await this.host.eatOnce())) {
+                return true;
             }
             if (this.host.hpFraction() < this.host.panicHp() || (await this.ladder()) !== 'held') {
                 return true;
@@ -360,7 +369,7 @@ export class Fight implements Task {
         this.setTarget(target.index);
         this.engagedAt = performance.now();
         this.engagedHealth = -1;
-        await waitFed(() => (usesSafespot(style) && !atTile(this.anchor())) || this.field(FIELD_RADIUS).length === 0, ENGAGE_SETTLE_MS);
+        await waitFed(() => (holdsAnchor(style) && !atTile(this.anchor())) || this.field(FIELD_RADIUS).length === 0, ENGAGE_SETTLE_MS);
         return true;
     }
 
@@ -382,23 +391,23 @@ export class HoldSafespot implements Task {
 
     validate(): boolean {
         return this.site.inArea(Game.tile())
-            && usesSafespot(this.host.style())
             && !atTile(this.spot())
             && this.host.hpFraction() >= this.host.panicHp();
     }
 
     async execute(): Promise<void> {
+        const style = this.host.style();
         const index = this.host.safespotIndex();
         const spot = this.spot();
-        this.host.setStatus(`returning to safespot ${index}`);
+        this.host.setStatus(`returning to ${spotName(style, index)}`);
         await Traversal.walkResilient(spot, { radius: 0, attempts: 4, timeoutMs: RETURN_MS, log: m => this.host.log(`  ${m}`) });
         if (atTile(spot)) {
             return;
         }
         // Why: an occupied or unreachable tile would otherwise be retried forever, and the next tile in the ladder is a working fight spot.
         const spots = this.site.safespots.length;
-        const next = spots > 1 ? (index + 1) % spots : index;
-        this.host.log(`safespot ${index} at ${spot} could not be reached${next === index ? '' : `. Rotating to ${next}`}.`);
+        const next = usesSafespot(style) && spots > 1 ? (index + 1) % spots : index;
+        this.host.log(`${spotName(style, index)} at ${spot} could not be reached${next === index ? '' : `. Rotating to ${next}`}.`);
         this.host.setSafespotIndex(next);
     }
 
@@ -412,7 +421,10 @@ export class WalkToSpot implements Task {
 
     validate(): boolean {
         const here = Game.tile();
-        return here !== null && this.site.inArea(here) && this.anchor().distanceTo(here) > APPROACH_RADIUS;
+        return here !== null
+            && this.site.inArea(here)
+            && this.host.hpFraction() >= this.host.panicHp()
+            && this.anchor().distanceTo(here) > APPROACH_RADIUS;
     }
 
     async execute(): Promise<void> {
@@ -425,10 +437,10 @@ export class WalkToSpot implements Task {
             }
         }
         const spot = this.anchor();
-        const exact = usesSafespot(this.host.style());
-        await Traversal.walkResilient(spot, { radius: exact ? 0 : 3, attempts: 5, timeoutMs: APPROACH_MS, log });
-        if (exact && !atTile(spot)) {
-            this.host.log(`the walk in stopped short of safespot ${this.host.safespotIndex()} at ${spot}. Closing the gap from the walk-back task.`);
+        const style = this.host.style();
+        await Traversal.walkResilient(spot, { radius: 0, attempts: 5, timeoutMs: APPROACH_MS, log });
+        if (!atTile(spot)) {
+            this.host.log(`the walk in stopped short of ${spotName(style, this.host.safespotIndex())} at ${spot}. Closing the gap from the walk-back task.`);
         }
     }
 
