@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Paint } from '#/bot/paint/Paint.js';
+import { JIVE_BYLINE, jiveFrame } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 
 const PANEL = resolveDock('chatbox');
@@ -127,5 +128,41 @@ describe('footer', () => {
         const line = drawn.find(d => d.text === 'by jive')!;
         expect(line.x + 'by jive'.length * CHAR_W).toBeLessThanOrEqual(PANEL.x + PANEL.w);
         expect(line.x).toBeGreaterThan(PANEL.x + PANEL.w / 2);
+    });
+});
+
+describe('jiveFrame', () => {
+    beforeEach(() => paintState.reset());
+
+    test('composes the strip, the rail and the byline in one call', () => {
+        const { ctx, drawn } = recorder();
+        const out = jiveFrame(ctx, {
+            script: 'JiveDragons',
+            status: 'holding the safespot',
+            pages: ['Statistics', 'Options'],
+            sections: ['Overview', 'Combat']
+        });
+        out.frame.end();
+        const texts = drawn.map(d => d.text);
+        expect(texts).toContain('JiveDragons');
+        expect(texts).toContain('Overview');
+        expect(texts).toContain(JIVE_BYLINE);
+        expect(out.page).toBe('Statistics');
+        expect(out.section).toBe('Overview');
+    });
+
+    test('the Options page shows no rail, so section comes back empty', () => {
+        paintState.set('strip:jive:JiveDragons', 'Options');
+        const { ctx, drawn } = recorder();
+        const out = jiveFrame(ctx, {
+            script: 'JiveDragons',
+            status: '',
+            pages: ['Statistics', 'Options'],
+            sections: ['Overview', 'Combat']
+        });
+        out.frame.end();
+        expect(out.page).toBe('Options');
+        expect(out.section).toBe('');
+        expect(drawn.map(d => d.text)).not.toContain('Overview');
     });
 });
