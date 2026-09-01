@@ -74,6 +74,8 @@ const BORDER = 'rgba(90, 90, 100, 0.8)';
 export class PaintFrame {
     private readonly regions: Region[] = [];
     private cursorY: number;
+    /** Left inset for body rows, widened by the rail so nothing paints over it. */
+    private bodyX = PAD;
     private readonly accent: string;
     private readonly panel: Rect;
     private collapsed = false;
@@ -163,7 +165,7 @@ export class PaintFrame {
 
     /** Columns of monospace text the panel fits between its gutters. */
     cols(): number {
-        return paintCols(this.panel.w, PAD, this.charW);
+        return paintCols(this.panel.w - this.bodyX + PAD, PAD, this.charW);
     }
 
     text(line: string, color?: string): void {
@@ -171,7 +173,7 @@ export class PaintFrame {
             return;
         }
         this.ctx.fillStyle = color ?? FG;
-        this.ctx.fillText(clipText(line, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        this.ctx.fillText(clipText(line, this.cols()), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
         this.cursorY += LINE;
     }
 
@@ -184,8 +186,8 @@ export class PaintFrame {
         if (this.collapsed || cells.length === 0) {
             return;
         }
-        const widths = cellWidths(this.panel.w - PAD * 2, cells.map(c => c.weight ?? 1));
-        let x = this.panel.x + PAD;
+        const widths = cellWidths(this.panel.w - PAD - this.bodyX, cells.map(c => c.weight ?? 1));
+        let x = this.panel.x + this.bodyX;
         cells.forEach((cell, i) => {
             const w = widths[i] ?? 0;
             // One character of gutter, so a clipped column never touches the next.
@@ -204,7 +206,7 @@ export class PaintFrame {
         }
         for (const line of wrapText(text, this.cols(), indent)) {
             this.ctx.fillStyle = color ?? FG;
-            this.ctx.fillText(line, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(line, this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
     }
@@ -236,7 +238,7 @@ export class PaintFrame {
         for (const line of lines.slice(scroll.offset, scroll.offset + rows)) {
             const entry = entryOf(line);
             this.ctx.fillStyle = entry.color ?? o.color ?? FG;
-            this.ctx.fillText(clipText(entry.text, room), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(clipText(entry.text, room), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
         this.chrome(
@@ -358,7 +360,7 @@ export class PaintFrame {
         const text = [counter, footer].filter(Boolean).join(' · ');
         if (text.length > 0) {
             this.ctx.fillStyle = FG_DIM;
-            this.ctx.fillText(clipText(text, this.cols()), this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+            this.ctx.fillText(clipText(text, this.cols()), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
     }
@@ -369,11 +371,11 @@ export class PaintFrame {
         }
         const f = Math.max(0, Math.min(1, fraction));
         const labelW = 48;
-        const barX = this.panel.x + PAD + labelW;
-        const barW = this.panel.w - PAD * 2 - labelW - 42;
+        const barX = this.panel.x + this.bodyX + labelW;
+        const barW = this.panel.w - PAD - this.bodyX - labelW - 42;
         const barY = this.cursorY + 3;
         this.ctx.fillStyle = FG;
-        this.ctx.fillText(label, this.panel.x + PAD, this.cursorY + LINE / 2 + 1);
+        this.ctx.fillText(label, this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
         this.ctx.fillStyle = 'rgba(255,255,255,0.12)';
         this.ctx.fillRect(barX, barY, barW, LINE - 6);
         this.ctx.fillStyle = color ?? (f < 0.35 ? '#e05b5b' : f < 0.65 ? '#e8c35b' : '#69c86b');
@@ -387,7 +389,7 @@ export class PaintFrame {
         if (this.collapsed || items.length === 0) {
             return null;
         }
-        let bx = this.panel.x + PAD;
+        let bx = this.panel.x + this.bodyX;
         let clicked: string | null = null;
         for (const item of items) {
             const w = this.ctx.measureText(item.label).width + 18;
@@ -409,7 +411,7 @@ export class PaintFrame {
         }
         const text = `${label}: ${current} ▸`;
         const w = this.ctx.measureText(text).width + 14;
-        const r = { x: this.panel.x + PAD, y: this.cursorY + 2, w, h: BUTTON_H };
+        const r = { x: this.panel.x + this.bodyX, y: this.cursorY + 2, w, h: BUTTON_H };
         this.drawButton(r, text);
         this.regions.push({ id: `sel:${id}`, ...r, kind: 'widget' });
         this.cursorY += BUTTON_H + 4;
@@ -428,7 +430,7 @@ export class PaintFrame {
             return null;
         }
         const y = this.cursorY + 2;
-        let x = this.panel.x + PAD;
+        let x = this.panel.x + this.bodyX;
         let picked: string | null = null;
 
         const prevW = this.ctx.measureText('◀').width + 14;
@@ -443,7 +445,7 @@ export class PaintFrame {
         const mid = `${label}: ${current}`;
         const midW = Math.min(
             this.ctx.measureText(mid).width + 14,
-            this.panel.w - PAD * 2 - prevW - 40
+            this.panel.w - PAD - this.bodyX - prevW - 40
         );
         const midR = { x, y, w: Math.max(midW, 40), h: BUTTON_H };
         this.drawButton(midR, mid);
@@ -544,6 +546,7 @@ export class PaintFrame {
             active = names[0]!;
         }
         const top = this.cursorY;
+        this.bodyX = RAIL_W + PAD;
         const bodyH = this.panel.y + this.panel.h - top - LINE;
         for (const [i, row] of railRows(bodyH, names.length).entries()) {
             const name = names[i]!;

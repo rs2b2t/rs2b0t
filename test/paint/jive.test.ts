@@ -5,6 +5,8 @@ import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 
 const PANEL = resolveDock('chatbox');
 const CHAR_W = 7;
+const RAIL_W = 72;
+const PAD = 8;
 
 interface Drawn {
     text: string;
@@ -164,5 +166,45 @@ describe('jiveFrame', () => {
         expect(out.page).toBe('Options');
         expect(out.section).toBe('');
         expect(drawn.map(d => d.text)).not.toContain('Overview');
+    });
+});
+
+describe('rail inset', () => {
+    beforeEach(() => paintState.reset());
+
+    test('body rows start right of the rail once one is drawn', () => {
+        const { ctx, drawn } = recorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.strip('jd', ['Statistics'], '', 'JiveDragons');
+        p.rail('jdr', ['Overview', 'Combat']);
+        p.text('holding the safespot');
+        p.bar('HP', 0.5);
+        p.buttons([{ id: 'stop', label: 'Stop' }]);
+        p.end();
+        for (const label of ['holding the safespot', 'HP', 'Stop']) {
+            expect(drawn.find(d => d.text === label)!.x).toBeGreaterThanOrEqual(PANEL.x + RAIL_W);
+        }
+    });
+
+    test('a clipped line stops at the panel edge, not past it', () => {
+        const { ctx, drawn } = recorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.strip('jd', ['Statistics'], '', 'JiveDragons');
+        p.rail('jdr', ['Overview']);
+        p.text('x'.repeat(200));
+        p.end();
+        const line = drawn.find(d => d.text.startsWith('xxx'))!;
+        expect(line.x + line.text.length * CHAR_W).toBeLessThanOrEqual(PANEL.x + PANEL.w);
+    });
+
+    test('a frame with no rail keeps the old left margin', () => {
+        const { ctx, drawn } = recorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.title('GreenDragon');
+        p.text('kills: 4');
+        p.bar('HP', 0.5);
+        p.end();
+        expect(drawn.find(d => d.text === 'kills: 4')!.x).toBe(PANEL.x + PAD);
+        expect(drawn.find(d => d.text === 'HP')!.x).toBe(PANEL.x + PAD);
     });
 });
