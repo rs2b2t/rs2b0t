@@ -12,6 +12,7 @@ import {
     resolveQuote,
     floatShortfall,
     shouldSettle,
+    tradeIsStalled,
     sideSignature,
     type Intent,
     type Window
@@ -331,6 +332,26 @@ describe('floatShortfall', () => {
     test('nothing left to fetch, so the trip is not worth making again', () => {
         expect(floatShortfall(50_000, 0, 200_000)).toBe(0);
         expect(floatShortfall(0, 0, 200_000)).toBe(0);
+    });
+});
+
+// Why: the shop reports standing still as progress so the wedge check does not restart a healthy stall, and a trade window is part of that. ServeWindow outranks Listen and only Listen calls dropExpired, so the engagement timeout cannot fire while the window is open: without this a customer who opens the confirm screen and walks away holds the shop for ever and nothing rescues it.
+describe('tradeIsStalled', () => {
+    test('no trade is not a stalled one', () => {
+        expect(tradeIsStalled(false, false, false)).toBe(false);
+        expect(tradeIsStalled(false, true, true)).toBe(false);
+    });
+
+    test('a live window inside its deadline is the shop working', () => {
+        expect(tradeIsStalled(true, true, false)).toBe(false);
+    });
+
+    test('past the deadline, nobody is advancing it', () => {
+        expect(tradeIsStalled(true, true, true)).toBe(true);
+    });
+
+    test('a trade the desk has let go of is orphaned', () => {
+        expect(tradeIsStalled(true, false, false)).toBe(true);
     });
 });
 

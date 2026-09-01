@@ -130,8 +130,8 @@ function loose(text: string): string {
 }
 
 /** Shortest query that may match on its letters alone. */
-// Why: two letters in order appear in most of the catalogue, so a short query that sprays is worse than one that finds nothing.
-const SUBSEQUENCE_FLOOR = 3;
+// Why: measured over the 132-item price snapshot, three letters in order still spray: 'ore' took 22 names including Zamorak monk's robe, and 'aro' took 16. Four cuts those to 4 and 0 while keeping 'rnplt' on the Rune plates.
+const SUBSEQUENCE_FLOOR = 4;
 
 function subsequence(haystack: string, needle: string): boolean {
     let at = 0;

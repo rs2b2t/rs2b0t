@@ -209,15 +209,18 @@ describe('matchesFilter', () => {
         expect(matchesFilter('Rune platebody', 'rune legs')).toBe(false);
     });
 
-    test('the letters in order are enough, so initials find the item', () => {
+    test('the letters in order are enough', () => {
         expect(matchesFilter('Rune platebody', 'rnplt')).toBe(true);
-        expect(matchesFilter('Yew longbow', 'ylb')).toBe(true);
-        expect(matchesFilter('Iron ore', 'ino')).toBe(true);
+        expect(matchesFilter('Rune platelegs', 'rnplt')).toBe(true);
+        expect(matchesFilter('Adamantite ore', 'adore')).toBe(true);
     });
 
-    // Why: two letters as a subsequence match most of the catalogue, so a short query stays a substring.
-    test('two letters do not spray', () => {
+    // Why: measured over the price snapshot, three letters in order took 'ore' to 22 names and 'aro' to 16, so anything shorter than four is a substring match only.
+    test('a short query does not spray on its letters', () => {
         expect(matchesFilter('Rune platebody', 'rb')).toBe(false);
+        expect(matchesFilter('Yew longbow', 'ylb')).toBe(false);
+        expect(matchesFilter("Zamorak monk's robe", 'ore')).toBe(false);
+        expect(matchesFilter('Iron ore', 'ore')).toBe(true);
         expect(matchesFilter('Rune platebody', 'ru')).toBe(true);
     });
 

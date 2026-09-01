@@ -23,7 +23,7 @@ const ADVERTISE_S = 30;
 const BOOK = 'upkeep';
 const BANK_COINS = 2_000_000;
 /** Enough rows that the table scrolls well past its 46vh box, and enough shared words that the filter has work to do. */
-// Why: the panel draws a real item icon per row, and ObjType.getSprite builds the model the first time it is asked, so a freshly booted client pays for every row at once and the whole book stalls the page under software GL.
+// Why: the panel draws an item icon per row, and ObjType.getSprite builds the model the first time it is asked, so a freshly booted client pays for every row at once and a full book stalls the page under software GL.
 const BOOK_ROWS = Number(process.env.BOOK_ROWS) || 40;
 /** A window rather than the head of the list, so the two Rune plates the fuzzy query aims at are in the book. */
 const ROWS = MARKET_PRICES.slice(50, 50 + BOOK_ROWS);
@@ -206,7 +206,7 @@ try {
     console.log('upkeep: editing a row far down a scrolled table');
     await page.fill('[data-role=book-filter]', '');
     await page.waitForTimeout(400);
-    // Why: the panel fills item icons in over several passes and a row without one is shorter, so measuring before they land reads a table with a fraction of its real height.
+    // Why: the panel fills item icons in over several passes and a row without one is shorter, so measuring before they land reads a table at a fraction of its length.
     let settled = -1;
     for (let probe = 0; probe < 20; probe++) {
         const height = await page.evaluate(
@@ -309,10 +309,11 @@ try {
     await page.screenshot({ path: 'docs/e2e/marketmaker-hears-itself.png' });
 
     // ---- the stall guard --------------------------------------------------
-    if (IDLE_MIN === 0) {
-        console.log('upkeep: IDLE_MIN=0, skipping the wedge watch');
-    }
-    console.log(`upkeep: standing the shop still for ${IDLE_MIN}min, past the 10min wedge`);
+    console.log(
+        IDLE_MIN === 0
+            ? 'upkeep: IDLE_MIN=0, skipping the wedge watch'
+            : `upkeep: standing the shop still for ${IDLE_MIN}min, past the 10min wedge`
+    );
     const deadline = Date.now() + IDLE_MIN * 60_000;
     let loops = 0;
     while (Date.now() < deadline) {

@@ -45,6 +45,7 @@ import {
     RateLimiter,
     resolveQuote,
     shouldSettle,
+    tradeIsStalled,
     sideSignature,
     type Deal
 } from './marketMakerLogic.js';
@@ -269,7 +270,7 @@ export default class MarketMaker extends TaskBot {
     override async loop(): Promise<number | void> {
         this.pumpChat();
         this.drainChat();
-        if (this.onStation()) {
+        if (this.onStation() && !this.tradeStalled()) {
             Supervisor.noteProgress();
         }
         return super.loop();
@@ -325,6 +326,11 @@ export default class MarketMaker extends TaskBot {
         }
         const here = Game.tile();
         return reader.modals().main === -1 && (here === null || Tile.from(here).distanceTo(this.spot) <= SPOT_LEASH);
+    }
+
+    /** A window nobody is advancing, which must not read as the shop doing its job. */
+    tradeStalled(): boolean {
+        return tradeIsStalled(Trade.active(), this.desk.current() !== null, this.desk.expired(Date.now(), this.windowMs));
     }
 
     counter(): Desk {

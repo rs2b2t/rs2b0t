@@ -382,7 +382,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         budgetMin: 20,
         env: { IDLE_MIN: '12' },
-        provenAt: '77b9d5f7',
+        provenAt: 'f8a624c9',
         note: 'a shop left standing past the 10min wedge with no stall-guard restart, its own chat read back off its own client, and the order book filtered and edited without losing the scroll or the caret'
     },
     {

@@ -242,6 +242,12 @@ export function advertiseDue(lastMs: number, nowMs: number, everySeconds: number
     return everySeconds > 0 && nowMs - lastMs >= everySeconds * 1000;
 }
 
+/** A trade window that is not advancing: gone from the desk, or past the engagement timeout. */
+// Why: ServeWindow outranks Listen and only Listen calls dropExpired, so the engagement timeout cannot fire while the window is open. A customer who opens the confirm screen and walks away holds Trade.active() forever, and without this the shop would report that as progress and never be rescued.
+export function tradeIsStalled(tradeActive: boolean, hasWindow: boolean, windowExpired: boolean): boolean {
+    return tradeActive && (!hasWindow || windowExpired);
+}
+
 export function shouldSettle(freeSlots: number, packCoins: number, coinFloor: number): boolean {
     return freeSlots <= FREE_SLOT_FLOOR || packCoins > coinFloor;
 }

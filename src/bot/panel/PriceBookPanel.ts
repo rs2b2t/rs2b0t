@@ -138,9 +138,10 @@ export class PriceBookPanel {
             const cat = liveCatalog();
             const all = displayRows(book, cat);
             const shown = viewRows(all, this.shelf, this.sort.key, this.sort.dir, this.filter);
+            const onShelf = viewRows(all, this.shelf, this.sort.key, this.sort.dir);
             this.window.appendChild(this.bookFields(book));
             this.window.appendChild(this.shelfBar(all));
-            this.window.appendChild(this.filterBar(shown.length, all.length));
+            this.window.appendChild(this.filterBar(shown.length, onShelf.length));
             this.window.appendChild(this.table(book, shown));
             this.window.appendChild(this.addBar());
             if (this.adding) {
@@ -396,7 +397,8 @@ export class PriceBookPanel {
         });
         bar.appendChild(box);
 
-        if (this.filter.trim().length > 0) {
+        // Why: a query of only punctuation reduces to nothing and narrows nothing, so it gets no count and no clear button.
+        if (shown !== total) {
             const count = el('span', 'rs2b0t-pricebook-filter-count');
             count.textContent = `${shown} of ${total}`;
             bar.appendChild(count);
