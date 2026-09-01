@@ -1,11 +1,12 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
-import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory, InvItem } from '../../api/inventory/Inventory.js';
 import { Bank, withdrawOp } from '../../api/bank/Bank.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
+import { nearestBank } from '../../api/bank/BankLocations.js';
+import { Traversal } from '../../api/walking/Traversal.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -50,7 +51,6 @@ import {
 } from './BankFletcherLogic.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 
-const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const FLETCHING_KNIFE = 'Knife';
 const BOOTH = { op: 'Use-quickly' };
 const LIST_WAIT_TICKS = 7;
@@ -72,9 +72,7 @@ export const SETTINGS: SettingsSchema = {
         label: 'Fletch product',
         help: 'knife products open the make-menu; string products attach Bow string onto the unstrung bow for this log type; arrow products attach item-on-item (material/knife ignored)'
     },
-    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'stand adjacent to a bank booth — start the bot here' },
-    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
-    leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Booth search radius (tiles)' }
+    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' }
 };
 
 async function withdrawStack(item: InvItemSnapshot, log: (m: string) => void): Promise<boolean> {
@@ -164,18 +162,14 @@ export default class BankFletcher extends TaskBot {
 
     private material = 'Logs';
     private product = 'Arrow shafts';
-    private bankStand = DEFAULT_BANK_STAND;
     private boothName = 'Bank booth';
-    private leash = 6;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         this.material = this.settings.str('material', 'Logs');
         this.product = this.settings.str('product', 'Arrow shafts');
-        this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
-        this.leash = this.settings.num('leashRadius', 6);
 
         const kind = this.workKind();
         const attach = attachPlanFor(this.product);
@@ -200,11 +194,11 @@ export default class BankFletcher extends TaskBot {
         this.emptyReads = {};
 
         if (stringing) {
-            this.log(`BankFletcher stringing '${stringing.displayName}' (u id ${stringing.unstrungId}) at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+            this.log(`BankFletcher stringing '${stringing.displayName}' (u id ${stringing.unstrungId})`);
         } else if (attach) {
-            this.log(`BankFletcher attaching '${attach.inputs[0]}' onto '${attach.inputs[1]}' → ${attach.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+            this.log(`BankFletcher attaching '${attach.inputs[0]}' onto '${attach.inputs[1]}' → ${attach.product}`);
         } else {
-            this.log(`BankFletcher fletching '${this.material}' → ${this.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+            this.log(`BankFletcher fletching '${this.material}' → ${this.product}`);
         }
         this.add(new ContinueDialog(), new FletchDialog(this), new BankTrip(this), new InstantAttach(this), new Fletch(this));
     }
@@ -252,9 +246,7 @@ export default class BankFletcher extends TaskBot {
     productName(): string { return this.product; }
     materialName(): string { return this.material; }
     knifeName(): string { return FLETCHING_KNIFE; }
-    bankTile(): Tile { return this.bankStand; }
     boothLocName(): string { return this.boothName; }
-    leashRadius(): number { return this.leash; }
     emptyReadCount(key: string): number { return this.emptyReads[key] ?? 0; }
     noteEmpty(key: string, action: ReturnType<typeof stockAction>): void {
         this.emptyReads = nextEmptyReadsByKey(this.emptyReads, key, action);
@@ -460,11 +452,31 @@ class BankTrip implements Task {
         return this.bot.mustRestock();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('banking');
-        const opened = (await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            this.bot.log('could not open the bank — will retry');
+        const here = Game.tile();
+        const bank = here ? nearestBank(here) : null;
+        if (!bank) {
+            this.bot.log('no reachable bank');
+            return;
+        }
+        this.bot.setStatus(`banking at ${bank.name}`);
+        const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
+        if (!near) {
+            if (!(await Traversal.walkResilient(bank.tile, {
+                radius: 3,
+                attempts: 4,
+                timeoutMs: 180_000,
+                log: m => this.bot.log(`  ${m}`)
+            }))) {
+                this.bot.log('walk to the bank failed — retrying');
+                return;
+            }
+        }
+        const access = bank.access ?? { name: this.bot.boothLocName(), op: BOOTH.op };
+        // Why: GemCutter uses nearestBank + walkResilient + openNearestAccess so a booth
+        // Why: underfoot wins and a failed open stays put and retries, instead of trekking
+        // Why: to the Varrock West preset.
+        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+            this.bot.log('could not open the bank — retrying');
             return;
         }
         try {
