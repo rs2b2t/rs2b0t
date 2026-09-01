@@ -45,6 +45,14 @@ export const CASES: readonly Case[] = [
         note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
     },
     {
+        id: 'alcher-swarm-drain-live',
+        harness: 'alcher-swarm-drain-live.ts',
+        covers: { scripts: ['Alcher'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'two ticked items at Varrock West, rune chainbodies over yew longbows, with macro_swarm spawned mid-alch; passes when the event interrupts the cast loop and is evaded, then the drain retires the chainbodies and moves on to the longbows'
+    },
+    {
         id: 'banksorter-live',
         harness: 'banksorter-live.ts',
         covers: { scripts: ['BankSorter'] },
