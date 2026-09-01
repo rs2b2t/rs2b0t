@@ -235,7 +235,8 @@ export const Bank = {
         );
     },
 
-    async withdrawXById(id: number, count: number): Promise<boolean> {
+    // Why: in note mode the pack receives the noted obj, whose id is not the bank slot's, so `landsAsId` says what to watch for; without it the wait times out on a withdraw that worked.
+    async withdrawXById(id: number, count: number, landsAsId: number = id): Promise<boolean> {
         if (count <= 0) {
             return true;
         }
@@ -243,7 +244,7 @@ export const Bank = {
             return false;
         }
         const invCount = (): number => backpackSnapshots()
-            .filter(item => item.id === id)
+            .filter(item => item.id === landsAsId)
             .reduce((sum, item) => sum + item.count, 0);
         const item = reader.bankItems().find(i => i.id === id);
         const xOp = item?.ops.find((o): o is string => o !== null && /withdraw[\s-]*x/i.test(o));
