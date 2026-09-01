@@ -242,8 +242,8 @@ class Restock implements Task {
             const got = Inventory.count(this.bot.itemName()) - before;
             this.bot.log(`withdrew ${got} ${this.bot.itemName()} (noted)`);
             if (!ok || got === 0) {
-                // Why: an empty read here can mean the bank list has not loaded yet, since it fills a beat after the component appears. Retry rather than conclude the bank is out.
-                if (!Bank.loaded()) {
+                // Why: a zero withdraw only proves the bank is out once the bank has said what it holds; before that it is a list still in flight.
+                if (!Bank.ready()) {
                     this.bot.log('bank item list not loaded yet — retrying restock');
                     return;
                 }
@@ -261,7 +261,7 @@ class Restock implements Task {
             const got = Inventory.count(NATURE_RUNE) - before;
             this.bot.log(`withdrew ${got} ${NATURE_RUNE}s`);
             if (!ok || got === 0) {
-                if (!Bank.loaded()) {
+                if (!Bank.ready()) {
                     this.bot.log('bank item list not loaded yet — retrying restock');
                     return;
                 }
@@ -280,11 +280,11 @@ class Restock implements Task {
         this.bot.log(`restocked: ${Inventory.count(this.bot.itemName())} ${this.bot.itemName()} notes + ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s`);
     }
 
-    // Why: withdraw by name once the bank's main item list has loaded. Reading it earlier returns zero and looks like an empty bank, which is the false "no item in the bank" stop on a cold start.
+    // Why: withdraw by name once the bank has said what it holds. Reading it earlier returns zero and looks like an empty bank, which is the false "no item in the bank" stop on a cold start.
     private async withdraw(name: string, count: number): Promise<boolean> {
-        if (!Bank.loaded()) {
+        if (!Bank.ready()) {
             this.bot.log(`waiting for the bank item list (${name})`);
-            await Execution.delayUntil(() => Bank.loaded(), 5000);
+            await Execution.delayUntil(() => Bank.ready(), 5000);
         }
         return Bank.withdrawX(name, count);
     }
