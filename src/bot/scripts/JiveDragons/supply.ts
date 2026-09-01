@@ -63,6 +63,7 @@ const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 
 const JAIL_DOOR = new Tile(2931, 9690, 0);
+const JAIL_KEY = 'Jail key';
 const JAIL_KEY_ID = 1591;
 const JAIL_DOOR_LOC = 2631;
 const JAILER = 'Jailer';
@@ -129,6 +130,21 @@ function locById(id: number, within = 5): Loc | null {
     return Locs.query().where(l => l.id === id).within(within).nearest();
 }
 
+// Why: Sustain is call-driven, so a wait that stands still in hostile ground never eats unless it pumps the hook itself.
+
+/** Wait for `cond`, feeding the sustain hook every tick. */
+async function waitFed(cond: () => boolean, ms: number): Promise<boolean> {
+    const deadline = performance.now() + ms;
+    while (performance.now() < deadline) {
+        if (cond()) {
+            return true;
+        }
+        await Sustain.run();
+        await Execution.delayTicks(1);
+    }
+    return cond();
+}
+
 async function walkNear(dest: Tile, radius: number, log: (m: string) => void): Promise<boolean> {
     const me = Game.tile();
     if (me !== null && dest.distanceTo(me) <= radius) {
@@ -189,7 +205,7 @@ export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean>
     let why = escapeShortfall(esc);
     for (let i = 0; why === null && i < 3 && site.inArea(Game.tile()); i++) {
         h.setStatus(`teleporting to ${esc.label}`);
-        if (await Game.teleport(site.escapeTeleportId) && await Execution.delayUntil(() => !site.inArea(Game.tile()), DOOR_MS)) {
+        if (await Game.teleport(site.escapeTeleportId) && await waitFed(() => !site.inArea(Game.tile()), DOOR_MS)) {
             h.log(`teleported out to ${esc.label}`);
             return true;
         }
@@ -211,9 +227,10 @@ async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
         return !site.inArea(Game.tile());
     }
     h.setStatus('walking back to the dungeon gate');
+    // Why: the inside stand is the one gap in the lair wall, so requiring it would seal the bot in whenever a player or an npc parks on it.
     if (!(await walkExact(gate.inside, say(h)))) {
-        h.log('could not stand on the inside of the gate. Retrying.');
-        return false;
+        h.log('the inside of the gate is occupied. Opening it from wherever the walk stopped.');
+        await walkNear(gate.inside, 2, say(h));
     }
     await Execution.delayTicks(2);
     const door = locById(gate.locId);
@@ -221,7 +238,7 @@ async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
         h.log('the gate is not in the scene yet. Retrying.');
         return false;
     }
-    if (!(await Execution.delayUntil(() => !site.inArea(Game.tile()), DOOR_MS))) {
+    if (!(await waitFed(() => !site.inArea(Game.tile()), DOOR_MS))) {
         h.log('the gate did not let us out. Retrying.');
         return false;
     }
@@ -230,7 +247,7 @@ async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
 }
 
 function keepNames(h: JiveHost, site: DragonSite): string[] {
-    const extra = [SHIELD, ...escapeRunesFor(site.escapeTeleportId).runes.map(r => r.rune), ...h.keepExtra()];
+    const extra = [SHIELD, JAIL_KEY, ...escapeRunesFor(site.escapeTeleportId).runes.map(r => r.rune), ...h.keepExtra()];
     if (site.keyItem !== null) {
         extra.push(site.keyItem.name);
     }
@@ -277,6 +294,7 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
     if (await healUp(h, opts.healTo ?? HEAL_TO) && opts.withdrawFood && await openSiteBank(h, site)) {
         await withdrawFoodTo(h);
     }
+    await Bank.close();
     h.countBankTrip();
     h.setStatus('restocked, heading back to the dragons');
 }
@@ -329,7 +347,7 @@ async function withdrawGear(h: JiveHost): Promise<void> {
     } else {
         await needOne(h, h.weaponName());
     }
-    // Why: Bank.count reads the last snapshot, which is empty before the first open, so the park decision is only sound once the bank is up.
+    // Why: reader.bankItems() is empty whenever the bank modal is shut, so a count of zero only carries a fact with the bank open.
     const gate = meleeShieldGate(h.style(), Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
     if (gate !== null) {
         h.parkFor(gate);
@@ -461,7 +479,7 @@ async function takeJailKey(h: JiveHost): Promise<boolean> {
             await Traversal.walkResilient(drop.tile(), { radius: 1, attempts: 2, timeoutMs: 30_000, log: say(h) });
         }
         const again = GroundItems.query().where(g => g.id === JAIL_KEY_ID).within(12).nearest();
-        if (again && await again.interact('Take') && await Execution.delayUntil(() => Inventory.countById(JAIL_KEY_ID) > 0, DOOR_MS)) {
+        if (again && await again.interact('Take') && await waitFed(() => Inventory.countById(JAIL_KEY_ID) > 0, DOOR_MS)) {
             return true;
         }
     }
@@ -511,7 +529,7 @@ async function unlockCell(h: JiveHost): Promise<boolean> {
     if (!(await key.useOn(door))) {
         return false;
     }
-    if (!(await Execution.delayUntil(() => inCell(), DOOR_MS))) {
+    if (!(await waitFed(() => inCell(), DOOR_MS))) {
         h.log('the cell door did not let us in. Retrying.');
         return false;
     }
@@ -528,7 +546,7 @@ async function leaveCell(h: JiveHost): Promise<boolean> {
         h.log('no cell door to open from the inside. Retrying.');
         return false;
     }
-    return Execution.delayUntil(() => !inCell(), DOOR_MS);
+    return waitFed(() => !inCell(), DOOR_MS);
 }
 
 // Why: Velrak has no wanderrange, so he drifts around a cell whose walls make that a walk, and the shared talk primitives answer an out-of-reach npc by opening the door in front of it, which here is the cell door.
@@ -550,7 +568,7 @@ async function talkInCell(h: JiveHost): Promise<boolean> {
         h.log(`${VELRAK} refused the talk. Retrying.`);
         return false;
     }
-    if (!(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), DOOR_MS))) {
+    if (!(await waitFed(() => ChatDialog.isOpen() || ChatDialog.canContinue(), DOOR_MS))) {
         h.log(`${VELRAK} never opened a dialogue. Retrying.`);
         return false;
     }
@@ -596,24 +614,28 @@ export async function acquireKey(h: JiveHost, site: DragonSite): Promise<KeyStat
     if (site.inArea(Game.tile()) && !(await leaveLair(h, site))) {
         return state();
     }
-    // Why: Bank.countById reads the last snapshot, so a key sitting in an unopened bank looks like no key at all and would cost a needless Jailer kill.
     h.setStatus(`fetching the ${item.name}`);
-    if (await openSiteBank(h, site)) {
-        // Why: the fetch needs a free slot for the key and walks into a fight, so the load goes in the bank first either way.
-        await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
-        const fromBank = await withdrawKey(h, site);
-        if (!fromBank) {
-            await withdrawFoodTo(h);
-        }
-        await Bank.close();
-        if (fromBank) {
-            h.log(`took the ${item.name} out of the bank`);
-            return state();
-        }
+    // Why: reader.bankItems() is empty whenever the bank modal is shut, so a key sitting in the bank reads as no key at all and would cost a needless Jailer kill.
+    // Why: the fetch also needs a free slot for the key and walks into a fight, so a bank stop that never happened is a reason to stop rather than press on.
+    if (!(await openSiteBank(h, site))) {
+        return state();
+    }
+    await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
+    const fromBank = await withdrawKey(h, site);
+    if (!fromBank) {
+        await withdrawFoodTo(h);
+    }
+    await Bank.close();
+    if (fromBank) {
+        h.log(`took the ${item.name} out of the bank`);
+        return state();
     }
     h.setStatus(`fetching the ${item.name} from Velrak`);
-    if (await fetchFromVelrak(h, item.id)) {
-        h.log(`Velrak handed over the ${item.name}`);
+    // Why: the jail key is already earned and kept, so a failure inside the cell is retried here rather than paid for with another walk and another kill.
+    for (let attempt = 0; attempt < 3 && state() !== 'held' && !EventSignal.pending(); attempt++) {
+        if (await fetchFromVelrak(h, item.id)) {
+            h.log(`Velrak handed over the ${item.name}`);
+        }
     }
     return state();
 }
