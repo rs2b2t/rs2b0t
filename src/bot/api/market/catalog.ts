@@ -77,8 +77,15 @@ const SYNONYMS = new Map<string, string>(
 );
 
 /** What the shop calls an obj, which is the plain name until the content repeats it. */
+// Why: for speaking and painting only. Anything that clicks an item needs clientName, not this.
 export function displayName(cat: Catalog, id: number): string {
     return cat.aliases.get(id)?.label ?? cat.byId.get(id)?.name ?? `item ${id}`;
+}
+
+/** What the client itself calls an obj, which is the only name a click can be aimed by. */
+// Why: Trade.offer filters the pack on the client's own name, so the shop's label finds no slot and the bot stakes nothing; undefined rather than a placeholder, so a caller refuses instead of clicking.
+export function clientName(cat: Catalog, id: number): string | undefined {
+    return cat.byId.get(id)?.name;
 }
 
 export function buildCatalog(records: readonly ObjRecord[]): Catalog {

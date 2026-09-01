@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
     buildCatalog,
+    clientName,
     displayName,
     notedId,
     resolveByName,
@@ -239,5 +240,25 @@ describe('resolveByName with aliases', () => {
     test('an alias label is searchable from the panel', () => {
         expect(searchCatalog(ALIAS_CAT, 'loop half').map(r => r.id)).toEqual([987]);
         expect(searchCatalog(ALIAS_CAT, 'dhide body').map(r => r.id).sort((a, b) => a - b)).toEqual([1135, 2499, 2501, 2503]);
+    });
+});
+
+// Why: Trade.offer and every other click-by-name path filters the client's own pack on its own name, so
+// Why: handing it the shop's label finds no slot at all and the bot silently owes goods it cannot put up.
+describe('clientName', () => {
+    test('is what the client calls the obj, whatever the shop calls it', () => {
+        expect(clientName(ALIAS_CAT, 1751)).toBe('Dragonhide');
+        expect(displayName(ALIAS_CAT, 1751)).toBe('Blue dragonhide');
+        expect(clientName(ALIAS_CAT, 987)).toBe('Half of a key');
+        expect(displayName(ALIAS_CAT, 987)).toBe('Loop half of key');
+    });
+
+    test('is undefined for an id the client never sent, so a caller refuses rather than clicks', () => {
+        expect(clientName(ALIAS_CAT, 9999)).toBeUndefined();
+    });
+
+    test('an unaliased obj reads the same either way', () => {
+        expect(clientName(ALIAS_CAT, 440)).toBe('Iron ore');
+        expect(displayName(ALIAS_CAT, 440)).toBe('Iron ore');
     });
 });

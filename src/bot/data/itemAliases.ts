@@ -1,11 +1,7 @@
 import type { ItemAlias } from '../api/market/aliasTypes.js';
 
-/**
- * Words for objs whose debugname carries nothing a customer would type.
- * @see tools/items/gen-namecollisions.ts, which derives the rest
- */
-// Why: the 2004 content gives four hides one name and splits them only by id, so loop, tooth and green
-// Why: are player vocabulary that exists in no file the bot can read. They have to be written down once.
+/** Words for objs whose debugname carries nothing a customer would type. @see tools/items/gen-namecollisions.ts */
+// Why: the content gives four hides one name and splits them by id alone, so loop, tooth and green are player vocabulary that exists in no file the bot can read.
 export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
     // Crystal key halves. Both objs carry the same name and the same desc, differing only in model.
     // Why: the one place either word appears in the content is a comment on the casket drop in memberfish.rs2.

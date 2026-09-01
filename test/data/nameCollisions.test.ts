@@ -20,8 +20,7 @@ function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord
 }
 
 /** A catalog holding one collision group, so resolution can be asked about it in isolation. */
-// Why: the strung half of a bow or amulet pair is the one with a wear model, and preferWorn splits the pair
-// Why: on that flag, so a fixture that drops it tests a client the shop never talks to.
+// Why: the strung half of a bow or amulet pair is the one with a wear model and preferWorn splits on that flag, so a fixture that drops it tests a client the shop never talks to.
 function catalogOf(groupName: string) {
     const group = SHOP_VISIBLE.find(g => g.name === groupName);
     if (!group) {

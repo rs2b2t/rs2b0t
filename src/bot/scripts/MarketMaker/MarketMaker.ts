@@ -9,7 +9,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Trade } from '../../api/trade/Trade.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { PriceBooks } from '../../api/market/bookStore.js';
-import { displayName, liveCatalog, notedId, unnotedId, type Catalog } from '../../api/market/catalog.js';
+import { clientName, displayName, liveCatalog, notedId, unnotedId, type Catalog } from '../../api/market/catalog.js';
 import {
     CHAT_LIMIT,
     formatAmbiguous,
@@ -658,7 +658,8 @@ export default class MarketMaker extends TaskBot {
     async putUp(owe: ReadonlyMap<number, number>): Promise<boolean> {
         await Trade.removeAll();
         for (const [id, want] of owe) {
-            const name = displayName(this.cat, id);
+            // Why: this name aims a click at the pack, so it is the client's own, never the shop's label.
+            const name = clientName(this.cat, id);
             if (name === undefined) {
                 return false;
             }
