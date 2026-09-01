@@ -35,6 +35,21 @@ const ICON_FILL_MS = 500;
 const ICON_FILL_TRIES = 12;
 const PICKER_LIMIT = 60;
 
+/** What survives a re-render: where each list was scrolled to, and which box the operator was typing in. */
+interface Held {
+    scroll: Map<string, number>;
+    focus: { at: string; start: number | null; end: number | null } | null;
+}
+
+function fieldPath(node: Element): string | null {
+    const role = node instanceof HTMLElement ? node.dataset.role : undefined;
+    if (role === undefined) {
+        return null;
+    }
+    const row = node.closest<HTMLElement>('[data-item]');
+    return row ? `[data-item="${row.dataset.item}"] [data-role="${role}"]` : `[data-role="${role}"]`;
+}
+
 /**
  * Editor for the player's named order books.
  * Why: every mutation goes through the store and re-renders, so no in-memory copy can drift from what is saved.
@@ -45,6 +60,7 @@ export class PriceBookPanel {
 
     private selected: string | null = null;
     private query = '';
+    private filter = '';
     private adding = false;
     private browsing = false;
     private shelf: Category | 'All' = 'All';
@@ -57,6 +73,7 @@ export class PriceBookPanel {
         this.root.style.display = 'none';
         // Why: the Edit… button opens this from inside the params modal, which shares z-index 1000.
         this.root.style.zIndex = '1001';
+        this.window.dataset.scroll = 'panel';
         this.root.appendChild(this.window);
         this.root.addEventListener('click', e => {
             if (e.target === this.root) {
@@ -75,6 +92,7 @@ export class PriceBookPanel {
         this.browsing = false;
         this.renaming = false;
         this.query = '';
+        this.filter = '';
         this.iconTries = 0;
         this.render();
     }
@@ -110,25 +128,70 @@ export class PriceBookPanel {
         this.render();
     }
 
+    // Why: every edit commits through the store and rebuilds the panel, which threw away the scroll position and the caret, so a change to the eightieth row sent the operator back to the first.
     private render(): void {
+        const held = this.hold();
         this.window.replaceChildren();
         this.window.appendChild(this.header());
         const book = this.current();
         if (book) {
+            const cat = liveCatalog();
+            const all = displayRows(book, cat);
+            const shown = viewRows(all, this.shelf, this.sort.key, this.sort.dir, this.filter);
             this.window.appendChild(this.bookFields(book));
-            this.window.appendChild(this.shelfBar(book, liveCatalog()));
-            this.window.appendChild(this.table(book, liveCatalog()));
+            this.window.appendChild(this.shelfBar(all));
+            this.window.appendChild(this.filterBar(shown.length, all.length));
+            this.window.appendChild(this.table(book, shown));
             this.window.appendChild(this.addBar());
             if (this.adding) {
-                this.window.appendChild(this.picker(book, liveCatalog()));
+                this.window.appendChild(this.picker(book, cat));
             }
             if (this.browsing) {
-                this.window.appendChild(this.browser(book, liveCatalog()));
+                this.window.appendChild(this.browser(book, cat));
             }
         }
+        this.release(held);
         if (this.fillIcons() > 0) {
             this.scheduleIconFill();
         }
+    }
+
+    private hold(): Held {
+        const scroll = new Map<string, number>();
+        for (const box of this.scrollers()) {
+            scroll.set(box.dataset.scroll!, box.scrollTop);
+        }
+
+        const active = document.activeElement;
+        const at = active && this.window.contains(active) ? fieldPath(active) : null;
+        const typing = active instanceof HTMLInputElement && active.type === 'text' ? active : null;
+        return {
+            scroll,
+            focus: at === null ? null : { at, start: typing?.selectionStart ?? null, end: typing?.selectionEnd ?? null }
+        };
+    }
+
+    private release(held: Held): void {
+        const node = held.focus === null ? null : this.window.querySelector<HTMLElement>(held.focus.at);
+        if (node !== null) {
+            node.focus();
+            if (node instanceof HTMLInputElement && node.type === 'text' && held.focus!.start !== null) {
+                node.setSelectionRange(held.focus!.start, held.focus!.end);
+            }
+        }
+
+        // Why: focusing a field scrolls it into view, and it does that against a layout the rebuilt rows have not had yet, which lands the table near the top. The offset goes back after the focus so it is the one that wins.
+        for (const box of this.scrollers()) {
+            const was = held.scroll.get(box.dataset.scroll!);
+            if (was !== undefined) {
+                box.scrollTop = was;
+            }
+        }
+    }
+
+    /** The panel body plus every list inside it that has its own bar. */
+    private scrollers(): HTMLElement[] {
+        return [this.window, ...Array.from(this.window.querySelectorAll<HTMLElement>('[data-scroll]'))];
     }
 
     private header(): HTMLElement {
@@ -294,13 +357,13 @@ export class PriceBookPanel {
         return wrap;
     }
 
-    private table(book: PriceBook, cat: Catalog): HTMLElement {
+    private table(book: PriceBook, rows: readonly DisplayRow[]): HTMLElement {
         const table = el('div', 'rs2b0t-pricebook-table');
+        table.dataset.scroll = 'table';
         table.appendChild(this.headRow());
-        const rows = viewRows(displayRows(book, cat), this.shelf, this.sort.key, this.sort.dir);
         if (rows.length === 0) {
             const empty = el('div', 'rs2b0t-pricebook-empty');
-            empty.textContent = this.shelf === 'All' ? 'No items yet. Add some below.' : `Nothing on the ${this.shelf} shelf yet.`;
+            empty.textContent = this.emptyNote();
             table.appendChild(empty);
             return table;
         }
@@ -308,6 +371,41 @@ export class PriceBookPanel {
             table.appendChild(this.itemRow(book, row));
         }
         return table;
+    }
+
+    private emptyNote(): string {
+        const typed = this.filter.trim();
+        if (typed.length > 0) {
+            return `Nothing matches '${typed}'.`;
+        }
+        return this.shelf === 'All' ? 'No items yet. Add some below.' : `Nothing on the ${this.shelf} shelf yet.`;
+    }
+
+    /** Narrows what the table shows without touching the book. */
+    private filterBar(shown: number, total: number): HTMLElement {
+        const bar = el('div', 'rs2b0t-pricebook-filterbar');
+
+        const box = el('input', 'rs2b0t-input rs2b0t-pricebook-filter');
+        box.type = 'text';
+        box.dataset.role = 'book-filter';
+        box.placeholder = 'filter the book…';
+        box.value = this.filter;
+        box.addEventListener('input', () => {
+            this.filter = box.value;
+            this.render();
+        });
+        bar.appendChild(box);
+
+        if (this.filter.trim().length > 0) {
+            const count = el('span', 'rs2b0t-pricebook-filter-count');
+            count.textContent = `${shown} of ${total}`;
+            bar.appendChild(count);
+            bar.appendChild(this.action('clear-filter', '✕', () => {
+                this.filter = '';
+                this.render();
+            }));
+        }
+        return bar;
     }
 
     private headRow(): HTMLElement {
@@ -345,9 +443,8 @@ export class PriceBookPanel {
     }
 
     /** Which shelf the table is showing, and how many rows the book carries from it. */
-    private shelfBar(book: PriceBook, cat: Catalog): HTMLElement {
+    private shelfBar(rows: readonly DisplayRow[]): HTMLElement {
         const bar = el('div', 'rs2b0t-pricebook-shelfbar');
-        const rows = displayRows(book, cat);
         const counts = new Map<string, number>();
         for (const row of rows) {
             counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
@@ -387,6 +484,7 @@ export class PriceBookPanel {
         box.appendChild(note);
 
         const list = el('div', 'rs2b0t-pricebook-shelves');
+        list.dataset.scroll = 'shelves';
         for (const name of CATEGORIES) {
             const items = all.get(name) ?? [];
             if (items.length === 0) {
@@ -506,11 +604,11 @@ export class PriceBookPanel {
         search.addEventListener('input', () => {
             this.query = search.value;
             this.render();
-            (this.root.querySelector('[data-role=item-search]') as HTMLInputElement | null)?.focus();
         });
         box.appendChild(search);
 
         const results = el('div', 'rs2b0t-loadout-results');
+        results.dataset.scroll = 'picker';
         for (const hit of pickerRows(book, cat, this.query).slice(0, PICKER_LIMIT)) {
             const line = el('div', 'rs2b0t-loadout-result');
             line.dataset.item = String(hit.id);

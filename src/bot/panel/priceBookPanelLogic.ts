@@ -124,12 +124,46 @@ export function pickerRows(
 export type SortKey = 'name' | 'category' | 'buy' | 'sell' | 'cap';
 export type SortDir = 'asc' | 'desc';
 
+/** Letters and digits, with everything else a gap, so an apostrophe is not something you have to type. */
+function loose(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Shortest query that may match on its letters alone. */
+// Why: two letters in order appear in most of the catalogue, so a short query that sprays is worse than one that finds nothing.
+const SUBSEQUENCE_FLOOR = 3;
+
+function subsequence(haystack: string, needle: string): boolean {
+    let at = 0;
+    for (const ch of needle) {
+        at = haystack.indexOf(ch, at) + 1;
+        if (at === 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Every word typed has to land, as a substring or as letters in order. */
+export function matchesFilter(name: string, query: string): boolean {
+    const q = loose(query);
+    if (q.length === 0) {
+        return true;
+    }
+    const spaced = loose(name);
+    const packed = spaced.replace(/ /g, '');
+    return q.split(' ').every(term =>
+        spaced.includes(term) || (term.length >= SUBSEQUENCE_FLOOR && subsequence(packed, term))
+    );
+}
+
 /** The book as the table shows it: one shelf or all of them, in the operator's chosen order. */
 // Why: sorting a copy leaves the book's own order alone, so what is saved never depends on how it was last looked at.
-export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir): DisplayRow[] {
-    const kept = shelf === 'All'
+export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir, query = ''): DisplayRow[] {
+    const onShelf = shelf === 'All'
         ? [...rows]
         : rows.filter(r => (shelf === 'Popular' ? r.popular : r.category === shelf));
+    const kept = onShelf.filter(r => matchesFilter(r.name, query));
     const sign = dir === 'asc' ? 1 : -1;
     return kept.sort((a, b) => {
         if (key === 'name') {

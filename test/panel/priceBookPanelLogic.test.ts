@@ -16,6 +16,7 @@ import {
     seedMid,
     setMaxTradeValue,
     toggleSide,
+    matchesFilter,
     viewRows,
     type DisplayRow
 } from '#/bot/panel/priceBookPanelLogic.js';
@@ -188,6 +189,52 @@ describe('viewRows', () => {
 
     test('a shelf with nothing on it is empty, not everything', () => {
         expect(viewRows(VIEW, 'Potions', 'name', 'asc')).toEqual([]);
+    });
+});
+
+describe('matchesFilter', () => {
+    test('no query keeps everything', () => {
+        expect(matchesFilter('Rune platebody', '')).toBe(true);
+        expect(matchesFilter('Rune platebody', '   ')).toBe(true);
+    });
+
+    test('a plain substring, in any case', () => {
+        expect(matchesFilter('Iron ore', 'iron')).toBe(true);
+        expect(matchesFilter('Iron ore', 'IRON')).toBe(true);
+        expect(matchesFilter('Iron ore', 'dragon')).toBe(false);
+    });
+
+    test('every word has to land, in whatever order they are typed', () => {
+        expect(matchesFilter('Rune platebody', 'body rune')).toBe(true);
+        expect(matchesFilter('Rune platebody', 'rune legs')).toBe(false);
+    });
+
+    test('the letters in order are enough, so initials find the item', () => {
+        expect(matchesFilter('Rune platebody', 'rnplt')).toBe(true);
+        expect(matchesFilter('Yew longbow', 'ylb')).toBe(true);
+        expect(matchesFilter('Iron ore', 'ino')).toBe(true);
+    });
+
+    // Why: two letters as a subsequence match most of the catalogue, so a short query stays a substring.
+    test('two letters do not spray', () => {
+        expect(matchesFilter('Rune platebody', 'rb')).toBe(false);
+        expect(matchesFilter('Rune platebody', 'ru')).toBe(true);
+    });
+
+    test('punctuation in the name is not something you have to type', () => {
+        expect(matchesFilter("Zamorak monk's robe", 'monks robe')).toBe(true);
+    });
+});
+
+describe('viewRows filtering', () => {
+    test('narrows to what matches, and keeps the shelf', () => {
+        expect(viewRows(VIEW, 'All', 'name', 'asc', 'iron').map(r => r.name)).toEqual(['Iron ore']);
+        expect(viewRows(VIEW, 'All', 'name', 'asc', 'ore').map(r => r.name)).toEqual(['Iron ore']);
+        expect(viewRows(VIEW, 'Ores', 'name', 'asc', 'yew')).toEqual([]);
+    });
+
+    test('no query is the same list as before', () => {
+        expect(viewRows(VIEW, 'All', 'name', 'asc', '')).toEqual(viewRows(VIEW, 'All', 'name', 'asc'));
     });
 });
 
