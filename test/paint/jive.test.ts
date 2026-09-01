@@ -56,6 +56,16 @@ describe('strip', () => {
         expect(second.strip('jd', ['Statistics', 'Options'], '', 'JiveDragons')).toBe('Options');
         second.end();
     });
+
+    test('draws the collapse glyph and keeps the brand clear of it', () => {
+        const { ctx, drawn } = recorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.strip('jd', ['Statistics', 'Options'], '', 'JiveDragons');
+        p.end();
+        expect(drawn.map(d => d.text)).toContain('-');
+        const brand = drawn.find(d => d.text === 'JiveDragons')!;
+        expect(brand.x + brand.text.length * CHAR_W).toBeLessThanOrEqual(PANEL.x + PANEL.w - 20);
+    });
 });
 
 describe('rail', () => {

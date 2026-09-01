@@ -483,7 +483,7 @@ export class PaintFrame {
         }
         const mid = r.y + r.h / 2 + 1;
         const widths = tabs.map(name => this.ctx.measureText(name).width + 14);
-        const seg = stripSegments(r.w, widths, this.ctx.measureText(brand).width + 8, PAD);
+        const seg = stripSegments(r.w, widths, this.ctx.measureText(brand).width + PAD + TITLE_H, PAD);
 
         tabs.forEach((name, i) => {
             const slot = seg.tabs[i]!;
@@ -512,6 +512,8 @@ export class PaintFrame {
         this.ctx.font = FONT;
 
         const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
+        this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
+        this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, mid);
         this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
         if (paintState.consumeClick('paint:toggle')) {
             this.collapsed = !this.collapsed;
