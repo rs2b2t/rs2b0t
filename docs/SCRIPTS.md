@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 60. Categories: 20.
+- Scripts: 61. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 12
+- [Combat](#combat) — 13
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -333,6 +333,45 @@ Edgeville dungeon hill giants — enters through the public trapdoor and banks l
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
 | `buryBones` | boolean | `false` | Bury big bones |
 | `lootSlots` | number (1–27) | `14` | Bank after this many loot slots |
+
+### JiveDragons
+
+Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee with the Dragonfire shield. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
+
+- Tags: `taverley`, `dragons`, `safespot`, `members`, `banking`, `clues`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p) |
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
+| `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
+| `useSpecial` | boolean | `true` | Use special attacks |
+| `usePotions` | boolean | `true` | Drink super attack / strength |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant full helm","Adamantite ore","Chaos talisman","Coins","Dragon bones","Dragon spear","Dragonhide","Fire rune","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune javelin","Rune spear","Shield left half","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamantite ore, Bass, Chaos talisman, Coins, Dragon bones, Dragon spear, Dragonhide, Fire rune, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune javelin, Rune spear, Shield left half, Steel battleaxe, Steel platelegs, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `buryBones` | boolean | `false` | Bury dragon bones |
+| `solveClues` | boolean | `true` | Solve clue drops |
+| `site` | string | `"taverley-blue"` | Dragon site — one of: taverley-blue |
+| `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
+| `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |
+| `meleeTile` | tile | `{"x":2902,"z":9805,"level":0}` | Melee anchor tile |
+| `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
 
 ### MossGiant
 
