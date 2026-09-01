@@ -81,6 +81,7 @@ describe('wantsDrop', () => {
 
     test('clues are matched by id, since every hard trail displays the same name', () => {
         expect(isClueObj(2722)).toBe(true);
+        expect(isClueObj(2714)).toBe(true);
         expect(isClueObj(995)).toBe(false);
         expect(wantsDrop({ id: 2722, name: 'Clue scroll' }, filter)).toBe(false);
         expect(wantsDrop({ id: 2722, name: 'Clue scroll' }, { ...filter, solveClues: true })).toBe(true);
