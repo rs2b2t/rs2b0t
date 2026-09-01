@@ -1,5 +1,6 @@
 import { actions, reader } from '../../adapter/ClientAdapter.js';
-import { Execution } from '../../api/execution/Execution.js';
+import { Equipment } from '../equipment/Equipment.js';
+import { Execution } from '../execution/Execution.js';
 
 /** specwep.rs2: %sa_energy, 0–1000, +100 every 50 ticks. */
 const SA_ENERGY_VARP = 300;
@@ -8,6 +9,8 @@ const SA_ARMED_VARP = 301;
 export const SA_MAX_ENERGY = 1000;
 
 const ARM_CONFIRM_TICKS = 2;
+/** Worn right hand. */
+const WEAPON_SLOT = 3;
 
 // Why: the wielded weapon decides which combat interface the tab shows.
 // Why: the spec bars sit in their own block (7462, 7487, … spacing 25) with no fixed offset from the interface root, so the bar is looked up rather than computed.
@@ -61,6 +64,11 @@ export const Special = {
     /** Armed and waiting to be spent on the next attack. */
     armed(): boolean {
         return reader.varp(SA_ARMED_VARP) === 1;
+    },
+
+    /** The wielded weapon's name, or '' with empty hands. */
+    wielded(): string {
+        return Equipment.items().find(i => i.slot === WEAPON_SLOT)?.name ?? '';
     },
 
     /** Energy this weapon's special costs, or null if it has none. */

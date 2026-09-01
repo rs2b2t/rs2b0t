@@ -56,6 +56,16 @@ export function assertAutoRetaliateOn(on: boolean): void {
     }
 }
 
+/** A weapon with a special is in hand and specials are turned on. Spells never spec. */
+export function specialAvailable(enabled: boolean, style: string, cost: number | null): boolean {
+    return enabled && style !== 'mage' && cost !== null;
+}
+
+/** Arm when the wielded weapon's special is affordable and the last one has already been spent. */
+export function shouldArmSpecial(enabled: boolean, style: string, cost: number | null, energy: number, armed: boolean): boolean {
+    return specialAvailable(enabled, style, cost) && !armed && energy >= (cost ?? 0);
+}
+
 export function shouldBuryRegularBones(state: BoneBurialState): boolean {
     // A full backpack is deliberately not a blocker: burying creates the slot
     // needed to pick up the next drop.
