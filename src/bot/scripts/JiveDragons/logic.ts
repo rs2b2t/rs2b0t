@@ -67,6 +67,21 @@ export function nearestSpot(from: Spot, spots: readonly Spot[]): number {
     return best;
 }
 
+export interface RetreatAim {
+    /** The index a failed attempt rotated to, or null when this retreat is a fresh one. */
+    rotated: number | null;
+    from: Spot;
+    spots: readonly Spot[];
+}
+
+// Why: a retry that recomputes the nearest spot from the tile it never left picks the spot it just failed on, so a rotation only sticks by being carried into the next attempt.
+
+/** Which safespot a retreat walks at, and which one it tries if that one cannot be reached. */
+export function retreatAim(a: RetreatAim): { index: number; next: number } {
+    const index = a.rotated ?? nearestSpot(a.from, a.spots);
+    return { index, next: a.spots.length > 0 ? (index + 1) % a.spots.length : index };
+}
+
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
 const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 

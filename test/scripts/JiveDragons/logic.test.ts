@@ -7,6 +7,7 @@ import {
     meleeShieldGate,
     nearestSpot,
     nextSafespot,
+    retreatAim,
     retreatDue,
     wantsDrop
 } from '#/bot/scripts/JiveDragons/logic.js';
@@ -87,6 +88,29 @@ describe('nearestSpot', () => {
 
     test('standing on one picks that one', () => {
         expect(nearestSpot(spots[1]!, spots)).toBe(1);
+    });
+});
+
+describe('retreatAim', () => {
+    const spots = [{ x: 2901, z: 9809 }, { x: 2900, z: 9809 }, { x: 2901, z: 9810 }];
+    const anchor = { x: 2900, z: 9808 };
+
+    test('a fresh retreat runs at the nearest spot and names the one after it', () => {
+        expect(retreatAim({ rotated: null, from: anchor, spots })).toEqual({ index: 0, next: 1 });
+    });
+
+    test('a retry from the same tile keeps the rotation rather than picking the failed spot again', () => {
+        expect(nearestSpot(anchor, spots)).toBe(0);
+        expect(retreatAim({ rotated: 1, from: anchor, spots })).toEqual({ index: 1, next: 2 });
+        expect(retreatAim({ rotated: 2, from: anchor, spots })).toEqual({ index: 2, next: 0 });
+    });
+
+    test('spot 0 is a rotation like any other, not an absent one', () => {
+        expect(retreatAim({ rotated: 0, from: { x: 2896, z: 9809 }, spots })).toEqual({ index: 0, next: 1 });
+    });
+
+    test('a one-spot site has nowhere to rotate to', () => {
+        expect(retreatAim({ rotated: null, from: anchor, spots: spots.slice(0, 1) })).toEqual({ index: 0, next: 0 });
     });
 });
 

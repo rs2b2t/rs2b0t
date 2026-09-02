@@ -10,7 +10,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, attackRangeFor, nearestSpot, nextSafespot, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, attackRangeFor, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -432,6 +432,7 @@ export class Fight implements Task {
 /** Walk out of the fire and heal on a safespot rather than where the bot stands. */
 export class Retreat implements Task {
     private retryAt = 0;
+    private rotated: number | null = null;
 
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
@@ -444,7 +445,8 @@ export class Retreat implements Task {
         if (here === null) {
             return;
         }
-        const index = nearestSpot(here, this.site.safespots);
+        const { index, next } = retreatAim({ rotated: this.rotated, from: here, spots: this.site.safespots });
+        this.rotated = null;
         const spot = this.site.safespots[index]!;
         // Why: the ladder reads this to pick the fight tile, so the run resumes on the tile it ran to rather than walking back out to the old one.
         this.host.setSafespotIndex(index);
@@ -464,8 +466,8 @@ export class Retreat implements Task {
             return;
         }
         // Why: this task outranks Eat, so a tile a dragon body or another player is sitting on would hold the loop with no bite taken, and the next tile in the ladder is a working fight spot.
-        const next = (index + 1) % this.site.safespots.length;
         this.host.setSafespotIndex(next);
+        this.rotated = next;
         this.retryAt = Date.now() + RETREAT_RETRY_MS;
         this.host.log(`could not reach safespot ${index} at ${spot}. Eating where we stand and trying ${next} in ${RETREAT_RETRY_MS / 1000}s.`);
     }
