@@ -526,11 +526,22 @@ async function takeJailKey(h: JiveHost): Promise<boolean> {
 
 // Why: the Jailer has no huntmode so he never opens the fight, and nothing polls Sustain for a loop that stands and swings.
 
+/** His respawn is 100 ticks, and a run that starts right after another killed him waits it out. */
+const JAILER_RESPAWN_MS = 75_000;
+
+const nearestJailer = (): Npc | null => Npcs.query().name(JAILER).action('Attack').within(14).nearest();
+
 async function killJailer(h: JiveHost): Promise<boolean> {
-    const jailer = Npcs.query().name(JAILER).action('Attack').within(14).nearest();
+    let jailer = nearestJailer();
     if (!jailer) {
-        h.log(`no ${JAILER} in the prison corridor. Waiting out his 100-tick respawn.`);
-        await Execution.delayTicks(5);
+        h.setStatus(`waiting for the ${JAILER} to respawn`);
+        h.log(`no ${JAILER} in the prison corridor. Waiting out his respawn where we stand.`);
+        if (!(await waitFed(() => nearestJailer() !== null, JAILER_RESPAWN_MS))) {
+            return false;
+        }
+        jailer = nearestJailer();
+    }
+    if (!jailer) {
         return false;
     }
     const index = jailer.index;
