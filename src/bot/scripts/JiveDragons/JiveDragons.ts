@@ -30,7 +30,7 @@ import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
-import { keyStatus, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
+import { keyStatus, lootHalts, meleeShieldGate, siteTileOf, wantsDrop, type Style } from './logic.js';
 import { SITE_OPTIONS, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
 import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
 
@@ -298,10 +298,14 @@ async function lootOnce(bot: JiveDragons): Promise<boolean> {
     return false;
 }
 
+function tooHurtToLoot(): boolean {
+    return lootHalts({ hpFrac: hpFrac(), panicHp: PANIC_HP, retreatHp: RETREAT_HP });
+}
+
 /** Clear the drop pile in one pass rather than one item per task hop. */
 async function lootBurst(bot: JiveDragons): Promise<void> {
     for (let i = 0; i < LOOT_BURST_MAX; i++) {
-        if (EventSignal.pending() || bot.died || Inventory.isFull() || needEat() || findLoot() === null) {
+        if (EventSignal.pending() || bot.died || Inventory.isFull() || needEat() || tooHurtToLoot() || findLoot() === null) {
             return;
         }
         await lootOnce(bot);
@@ -561,7 +565,7 @@ class BankRun implements Task {
 class LootCorpse implements Task {
     constructor(private readonly bot: JiveDragons) {}
     validate(): boolean {
-        return hpFrac() >= PANIC_HP && !Inventory.isFull() && findLoot() !== null;
+        return !tooHurtToLoot() && !Inventory.isFull() && findLoot() !== null;
     }
     async execute(): Promise<void> {
         await lootBurst(this.bot);

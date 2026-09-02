@@ -7,6 +7,7 @@ import {
     gapTo,
     holdDue,
     isClueObj,
+    lootHalts,
     keyStatus,
     meleeShieldGate,
     nearestSpot,
@@ -276,5 +277,18 @@ describe('sightings', () => {
         s = noteSighting(s, { x: 2858, z: 9780 }, 2800);
         expect(settled(s, 2800, 1200)).toBe(false);
         expect(settled(s, 4000, 1200)).toBe(true);
+    });
+});
+
+describe('lootHalts', () => {
+    // Why: a loot burst checked only whether it needed to eat, which an empty pack never does, and the fifth demon run kept picking arrows off a demon's feet from 64 hp down to 10.
+    test('under the retreat line the burst stops, on it the burst runs', () => {
+        expect(lootHalts({ hpFrac: 0.49, panicHp: 0.3, retreatHp: 0.5 })).toBe(true);
+        expect(lootHalts({ hpFrac: 0.5, panicHp: 0.3, retreatHp: 0.5 })).toBe(false);
+    });
+
+    test('with the retreat off, the panic line is the floor', () => {
+        expect(lootHalts({ hpFrac: 0.4, panicHp: 0.3, retreatHp: 0 })).toBe(false);
+        expect(lootHalts({ hpFrac: 0.29, panicHp: 0.3, retreatHp: 0 })).toBe(true);
     });
 });

@@ -51,6 +51,19 @@ export function retreatDue(s: RetreatState): boolean {
     return !s.hasFood || s.hpFrac < s.retreatHp;
 }
 
+export interface LootState {
+    hpFrac: number;
+    panicHp: number;
+    retreatHp: number;
+}
+
+// Why: a loot burst that checked only whether it needed to eat, which an empty pack never does, kept picking arrows off a demon's feet from 64 hp down to 10.
+
+/** Whether the run is too hurt to keep walking the drop pile, so the retreat or the bank run gets the loop. */
+export function lootHalts(s: LootState): boolean {
+    return s.hpFrac < s.panicHp || (s.retreatHp > 0 && s.hpFrac < s.retreatHp);
+}
+
 export interface HoldState {
     onSafespot: boolean;
     hasFood: boolean;
