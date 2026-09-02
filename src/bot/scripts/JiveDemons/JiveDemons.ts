@@ -11,6 +11,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
+import { Npcs } from '../../api/npcs/Npcs.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
 import { Autocast } from '../../api/magic/Autocast.js';
@@ -29,6 +30,7 @@ import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } 
 import { keyStatus, siteTileOf, wantsDrop, type Style } from '../JiveDragons/logic.js';
 import type { DragonSite } from '../JiveDragons/sites.js';
 import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from '../JiveDragons/supply.js';
+import { LOOT_GUARD, guarded } from './logic.js';
 import { SITE_OPTIONS, TAVERLEY_BLACK_DEMON, siteFor } from './sites.js';
 
 const LOOT_RADIUS = 10;
@@ -194,8 +196,9 @@ function lootFilter() {
 
 function findLoot(): GroundItem | null {
     const now = performance.now();
+    const demons = Npcs.query().name(SITE.target).within(LOOT_RADIUS + LOOT_GUARD).results().map(n => ({ tile: n.tile(), size: n.size }));
     return GroundItems.query()
-        .where(g => SITE.inArea(g.tile()) && (lootSkip.get(lootKey(g)) ?? 0) < now && wantsDrop({ id: g.id, name: g.name }, lootFilter()))
+        .where(g => SITE.inArea(g.tile()) && (lootSkip.get(lootKey(g)) ?? 0) < now && !guarded(g.tile(), demons) && wantsDrop({ id: g.id, name: g.name }, lootFilter()))
         .within(LOOT_RADIUS)
         .nearest();
 }
