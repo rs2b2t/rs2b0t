@@ -11,7 +11,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, bodyOrigin, holdDue, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, attackRangeFor, bodyOrigin, gapTo, holdDue, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -273,7 +273,7 @@ export class Fight implements Task {
                 await this.idle();
                 return;
             }
-            if (holdsAnchor(style) && target.distance() > reachFor(style)) {
+            if (holdsAnchor(style) && !this.inReach(target)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, now + LEASH_SKIP_MS);
                 }
@@ -296,6 +296,11 @@ export class Fight implements Task {
 
     private field(radius: number): Npc[] {
         return adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
+    }
+
+    /** Whether an Attack click from the anchor lands without the server walking the bot closer. */
+    private inReach(n: Npc): boolean {
+        return gapTo(this.anchor(), n.tile(), n.size) <= attackRangeFor(this.host.style());
     }
 
     private setTarget(idx: number): void {
@@ -344,7 +349,7 @@ export class Fight implements Task {
             return 'held';
         }
         const index = this.host.safespotIndex();
-        if (this.field(reachFor(style)).length > 0) {
+        if (this.field(FIELD_RADIUS).some(n => this.inReach(n))) {
             this.blindSince = performance.now();
         }
         const blindMs = performance.now() - this.blindSince;
@@ -388,7 +393,6 @@ export class Fight implements Task {
 
     /** Hold the tile while the dragon closes. False means it never did. */
     private async leash(idx: number): Promise<boolean> {
-        const style = this.host.style();
         const name = label(this.site);
         this.host.setStatus(`waiting for ${name} ${idx} to close`);
         // Why: the outline follows what the loop waits on while `engaged` stays with the dragon we clicked Attack on, so a leash that ends in someone else's kill cannot score one.
@@ -408,7 +412,7 @@ export class Fight implements Task {
                 return true;
             }
             const dragon = this.field(FIELD_RADIUS).find(n => n.index === idx);
-            if (!dragon || dragon.distance() <= reachFor(style)) {
+            if (!dragon || this.inReach(dragon)) {
                 return true;
             }
             await this.idle();
@@ -423,7 +427,7 @@ export class Fight implements Task {
         if (target.index === this.engaged) {
             this.host.log(`${name} ${target.index} stalled. Re-issuing the attack.`);
         } else {
-            this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (d=${target.distance()})`);
+            this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
         }
         // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.
         await this.host.armSpecial?.();

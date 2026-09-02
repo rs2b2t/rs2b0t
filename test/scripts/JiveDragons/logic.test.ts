@@ -3,13 +3,13 @@ import {
     SAFESPOT_BLIND_MS,
     attackRangeFor,
     bodyOrigin,
+    gapTo,
     holdDue,
     isClueObj,
     keyStatus,
     meleeShieldGate,
     nearestSpot,
     nextSafespot,
-    reachFor,
     retreatAim,
     retreatDue,
     wantsDrop
@@ -162,16 +162,26 @@ describe('attackRangeFor', () => {
     });
 });
 
-describe('reachFor', () => {
-    test('a size-4 body reports its centre, so every style reads two past the true gap', () => {
-        expect(reachFor('melee')).toBe(3);
-        expect(reachFor('range')).toBe(9);
-        expect(reachFor('mage')).toBe(12);
+describe('gapTo', () => {
+    // Why: the engine measures range between the closest tiles of the two footprints, and the client reports a body at its centre tile.
+    test('a size-3 body reported nine tiles off has its near face eight away, past a bow', () => {
+        expect(gapTo({ x: 2856, z: 9786 }, { x: 2858, z: 9777 }, 3)).toBe(8);
+        expect(gapTo({ x: 2856, z: 9786 }, { x: 2858, z: 9777 }, 3)).toBeGreaterThan(attackRangeFor('range'));
     });
 
-    test('the correction is the same for every style, with melee no longer the only one carrying it', () => {
-        expect(reachFor('range') - attackRangeFor('range')).toBe(reachFor('melee') - attackRangeFor('melee'));
-        expect(reachFor('mage') - attackRangeFor('mage')).toBe(reachFor('melee') - attackRangeFor('melee'));
+    test('a size-4 dragon reads two closer on its north and east faces and three on its south and west', () => {
+        expect(gapTo({ x: 2901, z: 9809 }, { x: 2899, z: 9804 }, 4)).toBe(4);
+        expect(gapTo({ x: 2895, z: 9800 }, { x: 2899, z: 9804 }, 4)).toBe(2);
+    });
+
+    test('a tile beside or inside the footprint reads as adjacent or zero', () => {
+        expect(gapTo({ x: 2900, z: 9808 }, { x: 2899, z: 9804 }, 4)).toBe(3);
+        expect(gapTo({ x: 2898, z: 9806 }, { x: 2899, z: 9804 }, 4)).toBe(1);
+        expect(gapTo({ x: 2898, z: 9803 }, { x: 2899, z: 9804 }, 4)).toBe(0);
+    });
+
+    test('a size-1 body is plain Chebyshev', () => {
+        expect(gapTo({ x: 10, z: 10 }, { x: 13, z: 8 }, 1)).toBe(3);
     });
 });
 
