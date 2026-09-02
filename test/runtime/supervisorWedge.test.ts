@@ -6,6 +6,7 @@ mock.module('#/client/3rdparty/tinymidipcm.js', () => ({ playMidi: (): void => {
 const { RandomEvents } = await import('#/bot/runtime/randomevents/RandomEvents.js');
 const { ScriptContext } = await import('#/bot/runtime/ScriptContext.js');
 const { Supervisor } = await import('#/bot/runtime/Supervisor.js');
+const { Execution } = await import('#/bot/api/execution/Execution.js');
 const { AbstractBot } = await import('#/bot/api/bot/Bot.js');
 
 const WEDGE_MS = 10 * 60_000;
@@ -40,7 +41,7 @@ describe('Supervisor wedge', () => {
         expect(Supervisor.intercept(ctx, new Stall())?.label).toBe('watchdog recovery');
     });
 
-    test('noteProgress holds the wedge off for a bot doing work it cannot see', () => {
+    test('Execution.noteProgress holds the wedge off for stationary work', () => {
         RandomEvents.detect = (): null => null;
         at(2_000_000);
         Supervisor.resetProgress();
@@ -48,7 +49,7 @@ describe('Supervisor wedge', () => {
 
         for (let t = 2_000_000; t <= 2_000_000 + WEDGE_MS * 3; t += WEDGE_MS / 2) {
             at(t);
-            Supervisor.noteProgress();
+            Execution.noteProgress();
             expect(Supervisor.intercept(ctx, new Stall())).toBeNull();
         }
 

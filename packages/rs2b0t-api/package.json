@@ -4,6 +4,6 @@
     "description": "Typed script-authoring API for the rs2b0t bot client (runtime shim over globalThis.__rs2b0t)",
     "type": "module",
     "main": "index.js",
-    "types": "index.d.ts",
+    "types": "execution.d.ts",
     "license": "MIT"
 }

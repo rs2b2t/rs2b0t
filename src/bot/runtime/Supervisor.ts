@@ -1,6 +1,6 @@
 import { reader, type WorldTile } from '../adapter/ClientAdapter.js';
 import type { AbstractBot } from '../api/bot/Bot.js';
-import { Execution } from '../api/execution/Execution.js';
+import { Execution, executionLastReportedProgressAt } from '../api/execution/Execution.js';
 import { RandomEvents } from './randomevents/RandomEvents.js';
 import { Traversal } from '../api/walking/Traversal.js';
 import { bus } from '../api/events/EventBus.js';
@@ -31,13 +31,17 @@ class SupervisorImpl {
         this.lastRecoveryAt = 0;
     }
 
-    /** Work the wedge check cannot see, reported by the script doing it. */
-    // Why: the only progress read here is an xp drop or a change of tile, so a script that stands on one tile and trades makes neither and a quiet hour reads as a wedge.
+    /** Work the wedge check cannot see, reported by in-tree runtime code. */
     noteProgress(): void {
         this.lastProgressAt = performance.now();
     }
 
     private sampleProgress(): void {
+        const reportedAt = executionLastReportedProgressAt();
+        if (reportedAt > this.lastProgressAt) {
+            this.lastProgressAt = reportedAt;
+        }
+
         const t = reader.worldTile();
         if (t && (!this.lastTile || t.x !== this.lastTile.x || t.z !== this.lastTile.z || t.level !== this.lastTile.level)) {
             this.lastTile = t;
