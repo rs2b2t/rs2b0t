@@ -68,6 +68,8 @@ const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 
 const JAIL_DOOR = new Tile(2931, 9690, 0);
+/** The cell side of the door, where it lands you on the way in. */
+const JAIL_DOOR_INSIDE = new Tile(2931, 9689, 0);
 const JAIL_KEY = 'Jail key';
 const JAIL_KEY_ID = 1591;
 const JAIL_DOOR_LOC = 2631;
@@ -572,10 +574,17 @@ async function unlockCell(h: JiveHost): Promise<boolean> {
     return true;
 }
 
+// Why: the talk ends wherever Velrak drifted, and 8 of the cell's 33 tiles are further from the door than locById searches, so a query taken from there reads it as absent forever.
+
 /** Open the cell door from the inside. True when the run is back in the corridor. */
 export async function leaveCell(h: JiveHost): Promise<boolean> {
     if (!inCell()) {
         return true;
+    }
+    h.setStatus('walking back to the cell door');
+    if (!(await walkExact(JAIL_DOOR_INSIDE, say(h)))) {
+        h.log('the inside of the cell door is occupied. Opening it from wherever the walk stopped.');
+        await walkNear(JAIL_DOOR_INSIDE, 2, say(h));
     }
     await Execution.delayTicks(2);
     const door = locById(JAIL_DOOR_LOC);
@@ -583,7 +592,11 @@ export async function leaveCell(h: JiveHost): Promise<boolean> {
         h.log('no cell door to open from the inside. Retrying.');
         return false;
     }
-    return waitFed(() => !inCell(), DOOR_MS);
+    if (!(await waitFed(() => !inCell(), DOOR_MS))) {
+        h.log('the cell door did not let us out. Retrying.');
+        return false;
+    }
+    return true;
 }
 
 // Why: Velrak has no wanderrange, so he drifts around a cell whose walls make that a walk, and the shared talk primitives answer an out-of-reach npc by opening the door in front of it, which here is the cell door.
