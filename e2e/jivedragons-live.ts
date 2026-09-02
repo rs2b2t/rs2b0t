@@ -116,7 +116,7 @@ interface Kit {
     settings: Record<string, string | number | boolean>;
 }
 
-// Why: LEVELS gives 85 Ranged, 80 Magic and 75 Defence, so black d'hide and the wizard set are what a character at those levels would actually be wearing. The engine has no mystic robes, checked against the content pack, so the wizard set is the top of what it can wear.
+// Why: LEVELS gives 85 Ranged, 80 Magic and 75 Defence, so black d'hide and the wizard set are what a character at those levels would be wearing. The engine has no mystic robes, checked against the content pack, so the wizard set is the top of what it can wear.
 const RANGE_WORN: readonly (readonly [string, string])[] = [
     ['coif', 'Coif'],
     ['black_dragonhide_body', 'Dragonhide body'],
