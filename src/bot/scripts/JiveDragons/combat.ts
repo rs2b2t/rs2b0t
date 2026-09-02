@@ -10,7 +10,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, holdDue, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -137,12 +137,16 @@ function stillThere(site: DragonSite, idx: number): boolean {
     return Npcs.all().some(n => n.index === idx && n.name === site.target);
 }
 
+function onAnySafespot(site: DragonSite): boolean {
+    return site.safespots.some(spot => atTile(spot));
+}
+
 /** Whether to break off and heal on a safespot rather than where the bot stands. */
 function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
     const here = Game.tile();
     return here !== null && retreatDue({
         inLair: site.inArea(here),
-        onSafespot: site.safespots.some(spot => atTile(spot)),
+        onSafespot: onAnySafespot(site),
         hpFrac: host.hpFraction(),
         retreatHp: host.retreatHp(),
         hasFood: host.hasFood(),
@@ -442,7 +446,7 @@ export class Fight implements Task {
 
 // Why: this sits above Eat in the task list, since Eat validates until hp reaches healTo and would otherwise hold the loop for every bite of a heal the dragonfire outpaces.
 
-/** Walk out of the fire and heal on a safespot rather than where the bot stands. */
+/** Walk out of the fire onto a safespot, which is where the heal or the walk to the bank then starts. */
 export class Retreat implements Task {
     private retryAt = 0;
     private rotated: number | null = null;
@@ -464,14 +468,15 @@ export class Retreat implements Task {
         // Why: the ladder reads this to pick the fight tile, so the run resumes on the tile it ran to rather than walking back out to the old one.
         this.host.setSafespotIndex(index);
         this.host.setStatus(`retreating to safespot ${index}`);
-        this.host.log(`retreating to safespot ${index} at ${spot} from ${here} at ${Math.round(this.host.hpFraction() * 100)}% hp`);
+        this.host.log(`retreating to safespot ${index} at ${spot} from ${here} at ${Math.round(this.host.hpFraction() * 100)}% hp${this.host.hasFood() ? '' : ' with an empty pack'}`);
         // Why: the walk goes out before the bite so the run eats while it moves, since eatOnce waits up to 3s on the heal and every one of those spent still is another breath taken.
+        // Why: the supervisor pauses the whole script for the length of a random event, so yielding before the first hop leaves the bot in the fire for all of it. One click goes out, then the loop hands over.
         for (let i = 0; i < RETREAT_HOPS && !atTile(spot); i++) {
-            if (EventSignal.pending() || this.host.died) {
+            if (this.host.died) {
                 return;
             }
             await DirectNavigator.walk(spot);
-            if (await waitFed(() => atTile(spot), RETREAT_HOP_MS)) {
+            if (await waitFed(() => atTile(spot), RETREAT_HOP_MS) || EventSignal.pending()) {
                 return;
             }
         }
@@ -482,7 +487,7 @@ export class Retreat implements Task {
         this.host.setSafespotIndex(next);
         this.rotated = next;
         this.retryAt = Date.now() + RETREAT_RETRY_MS;
-        this.host.log(`could not reach safespot ${index} at ${spot}. Eating where we stand and trying ${next} in ${RETREAT_RETRY_MS / 1000}s.`);
+        this.host.log(`could not reach safespot ${index} at ${spot}. ${this.host.hasFood() ? 'Eating where we stand' : 'Handing to the bank run'} and trying ${next} in ${RETREAT_RETRY_MS / 1000}s.`);
     }
 }
 
@@ -492,6 +497,7 @@ export class HoldSafespot implements Task {
     validate(): boolean {
         return this.site.inArea(Game.tile())
             && !atTile(this.spot())
+            && holdDue({ onSafespot: onAnySafespot(this.site), hasFood: this.host.hasFood() })
             && this.host.hpFraction() >= this.host.panicHp();
     }
 

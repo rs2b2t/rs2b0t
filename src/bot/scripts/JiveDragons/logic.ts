@@ -39,11 +39,26 @@ export interface RetreatState {
 }
 
 // Why: eating in dragonfire is a race the bot loses, so the walk out of the fire outranks the bite.
-// Why: an empty pack is left to the bank run, because a retreat that cannot heal only makes melee step off its anchor and back forever.
+// Why: with no food hp only falls, so there is no threshold left to wait on, and the free immune tile is where the walk to the bank should start.
 
-/** Whether to break off and heal on a safespot instead of where the bot stands. */
+/** Whether to break off and stand on a safespot rather than hold the tile the bot is on. */
 export function retreatDue(s: RetreatState): boolean {
-    return s.inLair && s.spots > 0 && !s.onSafespot && s.hasFood && s.hpFrac < s.retreatHp;
+    if (!s.inLair || s.spots <= 0 || s.onSafespot || s.retreatHp <= 0) {
+        return false;
+    }
+    return !s.hasFood || s.hpFrac < s.retreatHp;
+}
+
+export interface HoldState {
+    onSafespot: boolean;
+    hasFood: boolean;
+}
+
+// Why: this and retreatDue pull opposite ways, so a foodless melee run with both open to it steps off the safespot and back forever.
+
+/** Whether the walk back to the fight tile may run. */
+export function holdDue(s: HoldState): boolean {
+    return s.hasFood || !s.onSafespot;
 }
 
 export interface Spot {

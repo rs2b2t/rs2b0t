@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
     SAFESPOT_BLIND_MS,
     attackRangeFor,
+    holdDue,
     isClueObj,
     keyStatus,
     meleeShieldGate,
@@ -54,17 +55,38 @@ describe('retreatDue', () => {
         expect(retreatDue({ ...hurt, hpFrac: 0.49 })).toBe(true);
     });
 
-    test('a 0 setting turns it off at every hp', () => {
+    test('a 0 setting turns it off at every hp, and with an empty pack too', () => {
         expect(retreatDue({ ...hurt, hpFrac: 0.01, retreatHp: 0 })).toBe(false);
+        expect(retreatDue({ ...hurt, hpFrac: 0.01, retreatHp: 0, hasFood: false })).toBe(false);
     });
 
-    test('an empty pack is the bank run to make, not a walk that cannot heal', () => {
-        expect(retreatDue({ ...hurt, hasFood: false })).toBe(false);
+    test('an empty pack walks out of the fire at any hp, since nothing heals in the lair', () => {
+        expect(retreatDue({ ...hurt, hasFood: false, hpFrac: 0.99 })).toBe(true);
+        expect(retreatDue({ ...hurt, hasFood: false, hpFrac: 0.05 })).toBe(true);
+    });
+
+    test('an empty pack on the safespot has arrived, so the bank run gets the loop', () => {
+        expect(retreatDue({ ...hurt, hasFood: false, onSafespot: true, hpFrac: 0.99 })).toBe(false);
     });
 
     test('outside the lair, and at a site with no safespots, there is nowhere to run to', () => {
         expect(retreatDue({ ...hurt, inLair: false })).toBe(false);
         expect(retreatDue({ ...hurt, spots: 0 })).toBe(false);
+    });
+});
+
+describe('holdDue', () => {
+    test('a stocked run walks back to the fight tile wherever it is standing', () => {
+        expect(holdDue({ onSafespot: true, hasFood: true })).toBe(true);
+        expect(holdDue({ onSafespot: false, hasFood: true })).toBe(true);
+    });
+
+    test('an empty pack on a safespot stays put, so melee cannot shuttle to its anchor and back', () => {
+        expect(holdDue({ onSafespot: true, hasFood: false })).toBe(false);
+    });
+
+    test('an empty pack off every safespot still walks, since the retreat is the walk', () => {
+        expect(holdDue({ onSafespot: false, hasFood: false })).toBe(true);
     });
 });
 
