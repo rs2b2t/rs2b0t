@@ -89,6 +89,8 @@ const STARVE_WAIT_MS = 180_000;
 const STARVE_BANK_MS = 900_000;
 /** How long after the harness sends its own ~hit a drop of that size is the harness rather than a breath. */
 const HARNESS_HIT_GRACE_MS = 2500;
+/** The substring acquireKey logs once it has read the bank and found no key there. */
+const BANK_READ_LINE = 'in the bank or in the pack';
 
 const PROOF_PATH = 'out/jivedragons-proof.json';
 const SHOT_PATH = 'out/jivedragons-live.png';
@@ -306,6 +308,7 @@ const printed = new Set<string>();
 let last: Sample | null = null;
 let finalSample: Sample | null = null;
 let bankOpens = 0;
+let bankReads = 0;
 let jailerFights = 0;
 let jailKeyPickups = 0;
 let deaths = 0;
@@ -384,6 +387,7 @@ try {
             printed.add(key);
             console.log(`${stamp()} [${line.level}] ${line.msg.slice(0, 300)}`);
             if (/^engaging blue dragon /i.test(line.msg)) { engagingLines++; }
+            if (line.msg.includes(BANK_READ_LINE)) { bankReads++; }
             if (/Walking out through the gate instead/i.test(line.msg)) { walkOutSaid = true; }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
         }
@@ -443,16 +447,19 @@ try {
         }
 
         // Why: killJailer is skipped whenever the Jail key is already held, so a Jail key arriving twice is what a per-retry re-kill looks like from out here, and the status transition alone would miss a retry that never changed it.
+        // Why: Bank.isOpen() is sampled every 750ms and the booth the harness starts on opens and shuts inside one interval, so the bank stop is proved by the line acquireKey logs rather than by a counted transition.
         if (s.dusty > 0 && !met['key']) {
-            const cost = `${jailerFights} Jailer fight(s), ${jailKeyPickups} Jail key pickup(s), ${bankOpens} bank stop(s)`;
+            const cost = `${jailerFights} Jailer fight(s), ${jailKeyPickups} Jail key pickup(s), ${bankReads} bank read line(s), ${bankOpens} sampled bank open(s)`;
             mark('key', `holding the Dusty key after ${cost}, keyState=${s.keyState}`);
             if (args.dusty && jailerFights === 0 && jailKeyPickups === 0) { mark('bankedkey', 'the banked key cost no Jailer kill'); }
             if (args.dusty && (jailerFights > 0 || jailKeyPickups > 0)) { fail(`a banked Dusty key still cost ${cost}`); }
-            if (!args.dusty && jailerFights === 1 && jailKeyPickups === 1 && bankOpens === 1) {
-                mark('coldkey', 'the cold key cost one Jailer fight and one bank stop');
-            }
-            if (!args.dusty && (jailerFights !== 1 || jailKeyPickups !== 1 || bankOpens !== 1)) {
-                fail(`a cold key cost ${cost}, expected one of each`);
+            if (!args.dusty) {
+                const wrong: string[] = [];
+                if (jailerFights !== 1) { wrong.push(`${jailerFights} Jailer fight(s), expected 1`); }
+                if (jailKeyPickups !== 1) { wrong.push(`${jailKeyPickups} Jail key pickup(s), expected 1`); }
+                if (bankReads < 1) { wrong.push(`no log line containing '${BANK_READ_LINE}', expected the bank read that comes before the fetch`); }
+                if (wrong.length > 0) { fail(`a cold key run went wrong on ${wrong.length} clause(s): ${wrong.join('; ')}. Observed ${cost}`); }
+                mark('coldkey', `the cold key cost one Jailer fight and one Jail key pickup, after ${bankReads} bank read(s) that found no key`);
             }
         }
         if (inLair(s.tile)) { mark('gate', `inside the lair at ${s.tile?.x},${s.tile?.z}`); }
@@ -544,7 +551,7 @@ try {
         fixture: { levels: LEVELS, pack: kit.pack, bank: bankSeed, settings: kit.settings, start: BANK },
         assertions: met,
         required,
-        counters: { kills: final.kills, bankTrips: final.trips, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted },
+        counters: { kills: final.kills, bankTrips: final.trips, bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted },
         safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
         melee: { anchor: MELEE_ANCHOR, maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
         walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
@@ -574,7 +581,7 @@ try {
             error: String(error),
             elapsedMs: Date.now() - t0,
             assertions: met,
-            counters: { bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls },
+            counters: { bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls },
             safespot: { heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
             melee: { maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
             walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
