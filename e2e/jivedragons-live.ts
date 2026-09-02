@@ -98,6 +98,8 @@ const SPOT_MS = 300_000;
 const KILL_MS = 480_000;
 const BANK_MS = 900_000;
 const SOAK_MS = 120_000;
+/** How long a hard trail can take before the milestones behind it are judged late. */
+const CLUE_DETOUR_MS = 900_000;
 const STARVE_WAIT_MS = 180_000;
 const STARVE_BANK_MS = 900_000;
 /** How long after the harness sends its own ~hit a drop of that size is the harness rather than a breath. */
@@ -143,6 +145,13 @@ const COMMON_BANK: BankSeedItem[] = [
     { debugName: 'waterrune', displayName: 'Water rune', qty: 200 }
 ];
 
+// Why: the first bank stop the run makes is the key check, which is not the full bank routine, so nothing stocks escape runes before the first trip and the first exit always walks. A teleport run is handed the cast up front so its first exit is the one under test; a walk run is still given none, which is what makes the gate walk-out its own proof.
+const ESCAPE_RUNES: readonly (readonly [string, string, number])[] = [
+    ['airrune', 'Air rune', 30],
+    ['waterrune', 'Water rune', 10],
+    ['lawrune', 'Law rune', 10]
+];
+
 // Why: the solver names what it is missing before it walks, and on the first clue run it named all of these. A hard trail chains, and the leg after the first was a coordinate clue it abandoned for want of a sextant.
 const CLUE_TOOLS: BankSeedItem[] = [
     { debugName: 'spade', displayName: 'Spade', qty: 1 },
@@ -181,7 +190,8 @@ function kitFor(style: Style): Kit {
     };
 }
 
-const kit = kitFor(args.style);
+const base = kitFor(args.style);
+const kit: Kit = args.leave === 'teleport' ? { ...base, pack: [...base.pack, ...ESCAPE_RUNES] } : base;
 // Why: the melee weapon is seeded into the bank alone, so the run only ever holds it by withdrawing it, which is what the wielded assertion is there to catch.
 const WIELDED = String(kit.settings['weapon'] ?? kit.settings['bow'] ?? kit.settings['staff'] ?? '');
 const bankSeed: BankSeedItem[] = [
@@ -482,7 +492,9 @@ try {
     const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY };
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
-    const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
+    // Why: SolveClue sits above AcquireKey in the task order, so a run holding a scroll walks the trail before it ever goes for the key. That is the right order and it costs the key leg a trail's worth of clock, which the budget has to allow rather than call late.
+    const clueDetour = args.clue ? CLUE_DETOUR_MS : 0;
+    const chain: [string, number][] = [['key', KEY_MS + clueDetour], ['gate', GATE_MS + clueDetour], [spotAssert, SPOT_MS + clueDetour], ['kill', KILL_MS + clueDetour], ['banktrip', BANK_MS + clueDetour]];
     // Why: melee passed a full run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
     const exitAssert = args.leave === 'walk' ? 'walkout' : 'teleport';
     const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
