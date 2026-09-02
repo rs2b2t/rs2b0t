@@ -1,7 +1,7 @@
-/** Live proof for JiveDragons at the Taverley Dungeon blue dragons: --style --minutes --dusty --tick --no-starve.
+/** Live proof for JiveDragons at the Taverley Dungeon blue dragons: --style --minutes --dusty --clue --leave --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--no-starve]
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--clue] [--leave teleport|walk] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -13,6 +13,12 @@ import { cheatQuiet, clearChatDialogs, mainlandAccount, seedItemsToBank, startSc
 type Style = 'melee' | 'mage' | 'range';
 const STYLES: Style[] = ['melee', 'mage', 'range'];
 
+type Leave = 'teleport' | 'walk';
+const LEAVES: Leave[] = ['teleport', 'walk'];
+
+/** A hard map clue: the tier blue dragons drop, and one dig rather than a trail no run is long enough to finish. */
+const CLUE = { debug: 'trail_clue_hard_map001', id: 2722 };
+
 interface Args {
     base: string;
     user: string;
@@ -22,6 +28,8 @@ interface Args {
     dusty: boolean;
     starve: boolean;
     deploy: boolean;
+    leave: Leave;
+    clue: boolean;
 }
 
 function fail(msg: string): never {
@@ -37,13 +45,16 @@ function parse(argv: readonly string[]): Args {
         tickMs: 0,
         dusty: false,
         starve: true,
-        deploy: true
+        deploy: true,
+        leave: 'teleport',
+        clue: false
     };
     for (let i = 0; i < argv.length; i++) {
         const flag = argv[i];
         if (flag === '--no-deploy') { out.deploy = false; continue; }
         if (flag === '--no-starve') { out.starve = false; continue; }
         if (flag === '--dusty') { out.dusty = true; continue; }
+        if (flag === '--clue') { out.clue = true; continue; }
         const value = argv[++i];
         if (value === undefined) { break; }
         if (flag === '--base') { out.base = value; }
@@ -51,7 +62,9 @@ function parse(argv: readonly string[]): Args {
         else if (flag === '--style') { out.style = value as Style; }
         else if (flag === '--minutes') { out.minutes = Number(value); }
         else if (flag === '--tick') { out.tickMs = Number(value); }
+        else if (flag === '--leave') { out.leave = value as Leave; }
     }
+    if (!LEAVES.includes(out.leave)) { fail(`--leave takes ${LEAVES.join(', ')}, got '${out.leave}'`); }
     if (!STYLES.includes(out.style)) { fail(`--style takes ${STYLES.join(', ')}, got '${out.style}'`); }
     if (!Number.isFinite(out.minutes) || out.minutes <= 0) { fail(`--minutes takes a positive number, got '${out.minutes}'`); }
     return out;
@@ -131,9 +144,9 @@ const COMMON_BANK: BankSeedItem[] = [
 ];
 
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
-// Why: it starts with no escape runes and the loot list names no rune, so the first exit out of the lair is the gate walk-out assertion 9 is about rather than a teleport paid for with a looted Law rune.
+// Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
-    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: 'taverley-blue', teleStock: 2, buryBones: false, solveClues: false, bankCommonJunk: false, loot: LOOT.join(', '), logDetail: 'Verbose', usePotions: false };
+    const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: 'taverley-blue', teleStock: 2, buryBones: false, solveClues: args.clue, bankCommonJunk: false, loot: LOOT.join(', '), logDetail: 'Verbose', usePotions: false, leaveVia: args.leave };
     if (style === 'melee') {
         return {
             pack: [['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
@@ -200,6 +213,7 @@ interface Sample {
     kills: number;
     trips: number;
     looted: number;
+    cluesSolved: number;
     keyState: string;
     spotIdx: number;
     bankOpen: boolean;
@@ -252,6 +266,7 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             kills: num('killsTotal'),
             trips: num('bankTrips'),
             looted: num('looted'),
+            cluesSolved: num('cluesSolved'),
             keyState: String(bot?.keyState ?? ''),
             spotIdx: num('safespotIdx'),
             bankOpen: a.Bank.isOpen(),
@@ -301,6 +316,14 @@ async function seedWorn(page: Page): Promise<void> {
         if (!on) { fail(`${display} was in the pack and would not go on`); }
     }
     if (kit.worn.length > 0) { console.log(`worn: ${kit.worn.map(([, display]) => display).join(', ')}`); }
+}
+
+// Why: a blue dragon drops a hard clue rarely enough that no run of this length can wait for one, so the run is handed one and asked to prove it does something with it.
+async function seedClue(page: Page): Promise<void> {
+    await command(page, `give ${CLUE.debug} 1`);
+    const held = await page.evaluate(id => (globalThis as never as Api).__rs2b0t.Inventory.countById(id), CLUE.id);
+    if (held < 1) { fail(`could not give '${CLUE.debug}', so the clue case cannot start`); }
+    console.log(`clue seeded: ${CLUE.debug}`);
 }
 
 async function setLevels(page: Page): Promise<void> {
@@ -432,6 +455,7 @@ try {
     await seedPack(page);
     await setLevels(page);
     await seedWorn(page);
+    if (args.clue) { await seedClue(page); }
     await clearChatDialogs(page, 'seed dialog(s)');
     if (!(await teleTo(page, BANK, 6, 30_000))) { fail(`could not stand at the Falador bank (${BANK.x},${BANK.z})`); }
 
@@ -444,7 +468,10 @@ try {
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
     // Why: melee passed a full run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
-    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
+    const exitAssert = args.leave === 'walk' ? 'walkout' : 'teleport';
+    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', exitAssert, 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
+    // Why: the trail is what the clue case is for, and a run that picks a scroll up and never starts it would otherwise pass on the pickup alone.
+    if (args.clue) { required.push('clue', 'cluedone'); }
     if (args.style !== 'melee') { required.push('hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
@@ -472,6 +499,7 @@ try {
             if (/^looted Rune arrow$/i.test(line.msg)) { arrowLoots++; mark('arrows', 'the arrows it fired came home'); }
             if (line.msg.includes(BANK_READ_LINE)) { bankReads++; }
             if (/Walking out through the gate instead/i.test(line.msg)) { walkOutSaid = true; }
+            if (/^teleported out to /i.test(line.msg)) { mark('teleport', line.msg); }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
         }
 
@@ -551,6 +579,8 @@ try {
         if (WIELDED !== '' && s.worn.includes(WIELDED)) { mark('wielded', `${WIELDED} is worn`); }
         if (s.kills > 0 && met['wielded'] === undefined) { fail(`a kill landed with no ${WIELDED} worn, only ${s.worn.filter(w => w !== '?').join('/') || 'nothing'}`); }
         if (s.looted > 0) { mark('loot', `${s.looted} pickup(s) reached the pack after ${s.kills} kill(s)`); }
+        if (args.clue && /clue/i.test(s.status)) { mark('clue', `the trail started, status '${s.status}'`); }
+        if (args.clue && s.cluesSolved > 0) { mark('cluedone', `${s.cluesSolved} clue(s) solved`); }
         if (s.kills > 0) {
             if (tripsAtKill < 0) { tripsAtKill = s.trips; }
             mark('kill', `${s.kills} blue dragon(s) down`);
