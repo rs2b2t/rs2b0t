@@ -61,6 +61,9 @@ const HOP_MS = 2000;
 const RETURN_MS = 60_000;
 const APPROACH_MS = 120_000;
 
+/** A gap this long between two of Fight's own polls is time the bot spent somewhere other than the tile. */
+const HOLD_GAP_MS = 10_000;
+
 const RETREAT_HOPS = 4;
 const RETREAT_HOP_MS = 3000;
 const RETREAT_RETRY_MS = 5000;
@@ -161,19 +164,33 @@ export class Fight implements Task {
     private engagedAt = 0;
     private engagedHealth = -1;
     private lastHp = -1;
-    private blindSince = performance.now();
+    private blindSince = 0;
+    private polledAt = 0;
     private readonly skip = new Map<number, number>();
 
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
     validate(): boolean {
+        const onSpot = atTile(this.anchor());
+        this.watch(onSpot);
         if (!this.site.inArea(Game.tile()) || this.host.hpFraction() < this.host.panicHp()) {
             return false;
         }
-        if (holdsAnchor(this.host.style()) && !atTile(this.anchor())) {
+        if (holdsAnchor(this.host.style()) && !onSpot) {
             return false;
         }
         return this.field(FIELD_RADIUS).length > 0 || this.blindDue();
+    }
+
+    // Why: the blind clock belongs to the tile the bot is standing on, and this task is skipped whenever anything above it runs, so a long gap between polls is time spent walking in, looting or banking rather than time the tile showed nothing.
+
+    /** Stamp the poll, restarting the blind clock unless the bot has been on the tile the whole way. */
+    private watch(onSpot: boolean): void {
+        const now = performance.now();
+        if (!onSpot || now - this.polledAt > HOLD_GAP_MS) {
+            this.blindSince = now;
+        }
+        this.polledAt = now;
     }
 
     // Why: the ladder only turns inside execute(), so a spot that sees nothing at all would never rotate if an empty field kept the task from running.
@@ -189,6 +206,8 @@ export class Fight implements Task {
         const style = this.host.style();
         const name = label(this.site);
         this.host.setStatus(`fighting ${name}s`);
+        // Why: hp lost between two calls was lost looting or walking, so only two readings taken inside one call say anything about the tile.
+        this.lastHp = -1;
         const deadline = performance.now() + FIGHT_MS;
         for (let pass = 0; pass < FIGHT_PASSES && performance.now() < deadline; pass++) {
             if (EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
@@ -312,8 +331,9 @@ export class Fight implements Task {
         const style = this.host.style();
         const hp = Skills.effective('hitpoints');
         const onSpot = atTile(this.anchor());
+        this.watch(onSpot);
         const hurt = onSpot && this.lastHp >= 0 && hp < this.lastHp;
-        this.lastHp = hp;
+        this.lastHp = onSpot ? hp : -1;
         if (!usesSafespot(style)) {
             return 'held';
         }
