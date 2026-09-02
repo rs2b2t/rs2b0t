@@ -42,7 +42,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         provenAt: 'd00d66de',
         budgetMin: 12,
-        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
+        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
     },
     {
         id: 'alcher-swarm-drain-live',
