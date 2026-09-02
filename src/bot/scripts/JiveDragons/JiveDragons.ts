@@ -19,6 +19,7 @@ import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
 import { Autocast } from '../../api/magic/Autocast.js';
 import { Skills } from '../../api/skills/Skills.js';
+import { Sustain } from '../../api/sustain/Sustain.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
@@ -28,7 +29,7 @@ import { jiveFrame } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { Fight, HoldSafespot, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
+import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keyStatus, meleeShieldGate, wantsDrop, type Style } from './logic.js';
 import { SITE_OPTIONS, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
 import { acquireKey, bankRoutine, enterLair, escapeRunesFor, inCell, leaveCell, type BankOpts, type KeyState } from './supply.js';
@@ -83,6 +84,7 @@ export const SETTINGS: SettingsSchema = {
     loadout: { ...LOADOUT_SETTING, group: 'Food & healing' },
     foodWithdraw: { type: 'number', default: 20, min: 1, max: 27, label: 'Food to withdraw per bank run', group: 'Food & healing' },
     panicHp: { type: 'number', default: 30, min: 1, max: 98, label: 'Panic-to-bank below HP%', group: 'Food & healing', help: 'out of food and this low, the run leaves the lair for the bank' },
+    retreatHp: { type: 'number', default: 50, min: 0, max: 99, label: 'Retreat to a safespot below HP%', group: 'Food & healing', help: 'off the safespot and this hurt, the run walks back to the nearest one and heals there. Eating in dragonfire loses the race, so this outranks the bite. 0 turns it off' },
     foodReserve: { type: 'number', default: 4, min: 0, max: 27, label: 'Food kept back from slot-freeing', group: 'Food & healing', help: 'a full pack spends food to make room for loot instead of banking, never below this many' },
     healTo: { type: 'number', default: 90, min: 10, max: 100, label: 'Heal to HP% before heading back', group: 'Food & healing', help: 'the walk in is long, so the trip eats up at the booth and tops the food back up after' },
 
@@ -117,6 +119,7 @@ let BURY_BONES = false;
 let SOLVE_CLUES = true;
 
 let PANIC_HP = 0.3;
+let RETREAT_HP = 0.5;
 let RUNE_CASTS = 150;
 let RUNE_BUFFER = 300;
 let AMMO_WITHDRAW = 500;
@@ -646,6 +649,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         SOLVE_CLUES = this.settings.bool('solveClues', true);
 
         PANIC_HP = this.settings.num('panicHp', 30) / 100;
+        RETREAT_HP = this.settings.num('retreatHp', 50) / 100;
         RUNE_CASTS = this.settings.num('runesWithdraw', 150);
         RUNE_BUFFER = this.settings.num('runeBuffer', 300);
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
@@ -691,8 +695,15 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             this.parkFor(gate);
         }
 
-        this.log(`JiveDragons: ${SITE.label}, style ${STYLE}${WEAPON === '' ? '' : ` w/ ${WEAPON}`}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (panic<${Math.round(PANIC_HP * 100)}%), escape ${ESCAPE_LABEL}, clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${SITE.bones}` : ''}, bank ${SITE.bank}`);
+        this.log(`JiveDragons: ${SITE.label}, style ${STYLE}${WEAPON === '' ? '' : ` w/ ${WEAPON}`}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (retreat<${Math.round(RETREAT_HP * 100)}%, panic<${Math.round(PANIC_HP * 100)}%), escape ${ESCAPE_LABEL}, clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${SITE.bones}` : ''}, bank ${SITE.bank}`);
         this.vlog(`safespots [${SITE.safespots.join(' ')}], melee anchor ${SITE.meleeAnchor}, loot [${[...LOOT_SET].join(', ')}]`);
+
+        // Why: waitFed, Fight.idle and every walkResilient in this script pump Sustain, and with no hook set all of them stood in dragonfire without taking a bite.
+        Sustain.set(async () => {
+            if (needEat()) {
+                await eatOnce(this);
+            }
+        });
 
         this.add(
             new Parked(this),
@@ -710,6 +721,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                     this.died = false;
                 }
             }),
+            new Retreat(this, SITE),
             new Eat(this),
             new GearEquip(this),
             new SetAttackStyle(this),
@@ -783,6 +795,12 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     panicHp(): number {
         return PANIC_HP;
+    }
+    retreatHp(): number {
+        return RETREAT_HP;
+    }
+    hasFood(): boolean {
+        return hasFood();
     }
     needEat(): boolean {
         return needEat();

@@ -10,7 +10,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, attackRangeFor, nextSafespot, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, attackRangeFor, nearestSpot, nextSafespot, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -22,6 +22,8 @@ export interface CombatHost extends JiveHost {
     countBurial(): void;
     hpFraction(): number;
     panicHp(): number;
+    retreatHp(): number;
+    hasFood(): boolean;
     needEat(): boolean;
     eatOnce(): Promise<boolean>;
     buryBones(): boolean;
@@ -58,6 +60,10 @@ const HOP_ATTEMPTS = 4;
 const HOP_MS = 2000;
 const RETURN_MS = 60_000;
 const APPROACH_MS = 120_000;
+
+const RETREAT_HOPS = 4;
+const RETREAT_HOP_MS = 3000;
+const RETREAT_RETRY_MS = 5000;
 
 /** Whether the ladder ran, and whether the bot is back on a tile it can fight from. */
 type Step = 'held' | 'moved' | 'stuck';
@@ -395,6 +401,58 @@ export class Fight implements Task {
             return;
         }
         await Execution.delayTicks(1);
+    }
+}
+
+// Why: this sits above Eat in the task list, since Eat validates until hp reaches healTo and would otherwise hold the loop for every bite of a heal the dragonfire outpaces.
+
+/** Walk out of the fire and heal on a safespot rather than where the bot stands. */
+export class Retreat implements Task {
+    private retryAt = 0;
+
+    constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
+
+    validate(): boolean {
+        const here = Game.tile();
+        return here !== null && Date.now() >= this.retryAt && retreatDue({
+            inLair: this.site.inArea(here),
+            onSafespot: this.site.safespots.some(spot => atTile(spot)),
+            hpFrac: this.host.hpFraction(),
+            retreatHp: this.host.retreatHp(),
+            hasFood: this.host.hasFood(),
+            spots: this.site.safespots.length
+        });
+    }
+
+    async execute(): Promise<void> {
+        const here = Game.tile();
+        if (here === null) {
+            return;
+        }
+        const index = nearestSpot(here, this.site.safespots);
+        const spot = this.site.safespots[index]!;
+        // Why: the ladder reads this to pick the fight tile, so the run resumes on the tile it ran to rather than walking back out to the old one.
+        this.host.setSafespotIndex(index);
+        this.host.setStatus(`retreating to safespot ${index}`);
+        this.host.log(`retreating to safespot ${index} at ${spot} from ${here} at ${Math.round(this.host.hpFraction() * 100)}% hp`);
+        // Why: the walk goes out before the bite so the run eats while it moves, since eatOnce waits up to 3s on the heal and every one of those spent still is another breath taken.
+        for (let i = 0; i < RETREAT_HOPS && !atTile(spot); i++) {
+            if (EventSignal.pending() || this.host.died) {
+                return;
+            }
+            await DirectNavigator.walk(spot);
+            if (await waitFed(() => atTile(spot), RETREAT_HOP_MS)) {
+                return;
+            }
+        }
+        if (atTile(spot)) {
+            return;
+        }
+        // Why: this task outranks Eat, so a tile a dragon body or another player is sitting on would hold the loop with no bite taken, and the next tile in the ladder is a working fight spot.
+        const next = (index + 1) % this.site.safespots.length;
+        this.host.setSafespotIndex(next);
+        this.retryAt = Date.now() + RETREAT_RETRY_MS;
+        this.host.log(`could not reach safespot ${index} at ${spot}. Eating where we stand and trying ${next} in ${RETREAT_RETRY_MS / 1000}s.`);
     }
 }
 

@@ -358,6 +358,7 @@ Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee w
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
 | `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
 | `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
 | `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
 | `loot` | string[] | `["Adamant full helm","Adamantite ore","Chaos talisman","Dragon bones","Dragon spear","Dragonhide","Fire rune","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune javelin","Rune spear","Shield left half","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamantite ore, Bass, Chaos talisman, Coins, Dragon bones, Dragon spear, Dragonhide, Fire rune, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune javelin, Rune spear, Shield left half, Steel battleaxe, Steel platelegs, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |

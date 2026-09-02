@@ -5,7 +5,9 @@ import {
     isClueObj,
     keyStatus,
     meleeShieldGate,
+    nearestSpot,
     nextSafespot,
+    retreatDue,
     wantsDrop
 } from '#/bot/scripts/JiveDragons/logic.js';
 
@@ -31,6 +33,60 @@ describe('nextSafespot', () => {
 
     test('a single-tile site never rotates', () => {
         expect(nextSafespot({ ...base, spots: 1, hurt: true })).toBe(0);
+    });
+});
+
+describe('retreatDue', () => {
+    const hurt = { inLair: true, onSafespot: false, hpFrac: 0.42, retreatHp: 0.5, hasFood: true, spots: 3 };
+
+    test('off the safespot and under the line, the run walks out of the fire', () => {
+        expect(retreatDue(hurt)).toBe(true);
+    });
+
+    test('the tile the run already stands on is the one it would walk to', () => {
+        expect(retreatDue({ ...hurt, onSafespot: true })).toBe(false);
+    });
+
+    test('the line is exclusive, so a run sitting on it keeps fighting', () => {
+        expect(retreatDue({ ...hurt, hpFrac: 0.5 })).toBe(false);
+        expect(retreatDue({ ...hurt, hpFrac: 0.49 })).toBe(true);
+    });
+
+    test('a 0 setting turns it off at every hp', () => {
+        expect(retreatDue({ ...hurt, hpFrac: 0.01, retreatHp: 0 })).toBe(false);
+    });
+
+    test('an empty pack is the bank run to make, not a walk that cannot heal', () => {
+        expect(retreatDue({ ...hurt, hasFood: false })).toBe(false);
+    });
+
+    test('outside the lair, and at a site with no safespots, there is nowhere to run to', () => {
+        expect(retreatDue({ ...hurt, inLair: false })).toBe(false);
+        expect(retreatDue({ ...hurt, spots: 0 })).toBe(false);
+    });
+});
+
+describe('nearestSpot', () => {
+    const spots = [{ x: 2901, z: 9809 }, { x: 2900, z: 9809 }, { x: 2901, z: 9810 }];
+
+    test('the tile the live run died on is six tiles from the spot it picks', () => {
+        expect(nearestSpot({ x: 2898, z: 9803 }, spots)).toBe(0);
+    });
+
+    test('a tile west of the ladder picks the western spot', () => {
+        expect(nearestSpot({ x: 2896, z: 9809 }, spots)).toBe(1);
+    });
+
+    test('distance is Chebyshev, so a diagonal counts as one step', () => {
+        expect(nearestSpot({ x: 2902, z: 9811 }, spots)).toBe(2);
+    });
+
+    test('a tie goes to the earlier spot', () => {
+        expect(nearestSpot({ x: 2900, z: 9810 }, spots)).toBe(0);
+    });
+
+    test('standing on one picks that one', () => {
+        expect(nearestSpot(spots[1]!, spots)).toBe(1);
     });
 });
 

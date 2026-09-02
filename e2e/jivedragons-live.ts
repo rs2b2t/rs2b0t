@@ -405,7 +405,7 @@ try {
         if (s.bankOpen && !(last?.bankOpen ?? false)) { bankOpens++; }
         if (/fighting the Jailer/i.test(s.status) && !/fighting the Jailer/i.test(last?.status ?? '')) { jailerFights++; }
         if (s.jailKey > 0 && (last?.jailKey ?? 0) === 0) { jailKeyPickups++; }
-        if (s.died && !(last?.died ?? false)) { deaths++; console.log(`${stamp()} DIED at ${s.tile?.x},${s.tile?.z} with ${s.hp}/${s.maxHp} hp`); }
+        if (s.died && !(last?.died ?? false)) { deaths++; fail(`the bot died at ${s.tile?.x},${s.tile?.z}, on ${last?.hp ?? s.hp}/${s.maxHp} hp the poll before`); }
         if (/waiting for blue dragon \d+ to close/i.test(s.status)) { waitingPolls++; }
 
         if (last !== null) {

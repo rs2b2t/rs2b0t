@@ -28,6 +28,45 @@ export function nextSafespot(s: LadderState): number {
     return (s.index + 1) % s.spots;
 }
 
+export interface RetreatState {
+    inLair: boolean;
+    /** Standing on one of the site's safespots right now. */
+    onSafespot: boolean;
+    hpFrac: number;
+    retreatHp: number;
+    hasFood: boolean;
+    spots: number;
+}
+
+// Why: eating in dragonfire is a race the bot loses, so the walk out of the fire outranks the bite.
+// Why: an empty pack is left to the bank run, because a retreat that cannot heal only makes melee step off its anchor and back forever.
+
+/** Whether to break off and heal on a safespot instead of where the bot stands. */
+export function retreatDue(s: RetreatState): boolean {
+    return s.inLair && s.spots > 0 && !s.onSafespot && s.hasFood && s.hpFrac < s.retreatHp;
+}
+
+export interface Spot {
+    x: number;
+    z: number;
+}
+
+// Why: nothing in the walker returns a path cost, only a reachable yes or no, and the spots sit within a few tiles of each other where Chebyshev and a real path agree.
+
+/** Index of the safespot fewest tiles away, ties going to the earlier one. */
+export function nearestSpot(from: Spot, spots: readonly Spot[]): number {
+    let best = 0;
+    let bestDist = Infinity;
+    for (const [i, spot] of spots.entries()) {
+        const dist = Math.max(Math.abs(spot.x - from.x), Math.abs(spot.z - from.z));
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = i;
+        }
+    }
+    return best;
+}
+
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
 const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 
