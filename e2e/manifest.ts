@@ -334,7 +334,7 @@ export const CASES: readonly Case[] = [
         covers: { scripts: ['JiveDragons'] },
         status: 'vetted',
         budgetMin: 25,
-        provenAt: 'dd304de3'
+        provenAt: 'e4ec531a'
     },
     {
         id: 'fishing-contest-244-live',
