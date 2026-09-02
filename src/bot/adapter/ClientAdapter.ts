@@ -386,6 +386,20 @@ export const reader = {
         };
     },
 
+    // Why: `worldTile` reads the sprite, which walks 4px a frame and so reaches a tile a tick after the server put the player there (two on a 300ms sim); the route head is the tile the server holds.
+    /** The tile the server holds the player on. */
+    serverTile(): WorldTile | null {
+        if (!raw || !raw.localPlayer) {
+            return null;
+        }
+
+        return {
+            x: raw.mapBuildBaseX + raw.localPlayer.routeX[0]!,
+            z: raw.mapBuildBaseZ + raw.localPlayer.routeZ[0]!,
+            level: raw.minusedlevel
+        };
+    },
+
     /**
      * Hint-arrow tile (type 2–6), or null when no tile hint is active.
      * Used by Brimhaven Agility Arena for the active ticket pillar.

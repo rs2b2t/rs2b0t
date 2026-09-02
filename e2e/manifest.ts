@@ -974,6 +974,14 @@ export const CASES: readonly Case[] = [
         note: 'Varrock West bank → anvil → bank on a 54-bar Platebody load; the remainder the bot cannot smith has to send it back'
     },
     {
+        id: 'smithingbot-doors-live',
+        harness: 'smithingbot-doors-live.ts',
+        covers: { scripts: ['SmithingBot'], subsystems: ['nav'] },
+        status: 'unvetted',
+        budgetMin: 12,
+        note: "Falador east bank into Doric's hut, the harness shuts the door, then back out; passes when both steps through the opened door leave on the tick the leaf swings"
+    },
+    {
         id: 'superheater-smelt-live',
         harness: 'superheater-smelt-live.ts',
         covers: { scripts: ['Superheater'] },

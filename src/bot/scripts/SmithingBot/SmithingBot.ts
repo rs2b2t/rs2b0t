@@ -9,7 +9,7 @@ import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Locs } from '../../api/locs/Locs.js';
-import { walkOpening } from '../../event/webwalk/walkOpening.js';
+import { walkOpening, type WalkOpeningOptions } from '../../event/webwalk/walkOpening.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -20,6 +20,8 @@ const BOOTH = { op: 'Use-quickly' };
 const HAMMER = 'Hammer';
 const ANVIL = 'Anvil';
 const OPENABLE_OBSTACLES = ['door', 'gate'];
+// Why: the step through a door goes out on the frame its leaf swings, so the crossing lands the tick after the open instead of one tick later.
+const DOORS: WalkOpeningOptions = { doorStepTicks: 0 };
 const BAR_OPTIONS = ['Bronze', 'Iron', 'Steel', 'Mithril', 'Adamant', 'Rune'];
 
 const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword', 'Axe', 'Mace', 'Warhammer', 'Battleaxe', 'Chainbody', 'Platelegs', 'Plateskirt', 'Platebody', 'Med helm', 'Full helm', 'Sq shield', 'Kiteshield', 'Nails', 'Dart tip', 'Arrowtips', 'Knife', 'Wire', 'Claws'];
@@ -158,7 +160,7 @@ class BankTrip implements Task {
     validate(): boolean { return this.bot.barCount() < this.bot.barsNeededForProduct(); }
     async execute(): Promise<void> {
         this.bot.setStatus('banking');
-        await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
+        await walkOpening(this.bot.bankTile(), 0, this.bot.obstacleList(), m => this.bot.log(m), DOORS);
         if (!(await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — will retry');
             return;
@@ -205,7 +207,7 @@ class Smith implements Task {
         const here = Game.tile();
         if (!here || this.bot.anvilTile().distanceTo(here) > 1 || !anvil()) {
             this.bot.setStatus('walking to the anvil');
-            await walkOpening(this.bot.anvilTile(), 0, this.bot.obstacleList(), m => this.bot.log(m));
+            await walkOpening(this.bot.anvilTile(), 0, this.bot.obstacleList(), m => this.bot.log(m), DOORS);
         }
         if (!this.bot.hammerItem()) {
             this.bot.log('no hammer in the pack — idling (need a hammer to smith)');
