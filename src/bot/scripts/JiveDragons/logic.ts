@@ -92,6 +92,29 @@ export function bodyOrigin(tile: Spot, size: number): Spot {
     return { x: tile.x - back, z: tile.z - back };
 }
 
+export interface Sighting {
+    x: number;
+    z: number;
+    /** When the body was first seen on this tile. */
+    since: number;
+    at: number;
+}
+
+// Why: a wandering body steps a tile a tick, and a click sent at one on the move lands after it has left the range, so the server walks the bot after it.
+
+/** Where a body was last seen, keeping `since` while it holds its tile. */
+export function noteSighting(prev: Sighting | undefined, tile: Spot, now: number): Sighting {
+    if (prev !== undefined && prev.x === tile.x && prev.z === tile.z) {
+        return { ...prev, at: now };
+    }
+    return { x: tile.x, z: tile.z, since: now, at: now };
+}
+
+/** Whether the body has held its tile for `ms`. */
+export function settled(s: Sighting | undefined, now: number, ms: number): boolean {
+    return s !== undefined && now - s.since >= ms;
+}
+
 export interface RetreatAim {
     /** The index a failed attempt rotated to, or null when this retreat is a fresh one. */
     rotated: number | null;

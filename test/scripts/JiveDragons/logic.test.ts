@@ -11,8 +11,10 @@ import {
     meleeShieldGate,
     nearestSpot,
     nextSafespot,
+    noteSighting,
     retreatAim,
     retreatDue,
+    settled,
     wantsDrop
 } from '#/bot/scripts/JiveDragons/logic.js';
 
@@ -246,5 +248,33 @@ describe('bodyOrigin', () => {
     test('a size-1 or size-2 body reads from its reported tile or one below it', () => {
         expect(bodyOrigin({ x: 10, z: 10 }, 1)).toEqual({ x: 10, z: 10 });
         expect(bodyOrigin({ x: 10, z: 10 }, 2)).toEqual({ x: 9, z: 9 });
+    });
+});
+
+describe('sightings', () => {
+    // Why: a wandering body steps a tile a tick, and the fourth demon run was walked off the tile by the two clicks it sent at bodies still on the move.
+    const here = { x: 2857, z: 9780 };
+
+    test('a body just sighted has not settled', () => {
+        const s = noteSighting(undefined, here, 1000);
+        expect(settled(s, 1000, 1200)).toBe(false);
+        expect(settled(undefined, 5000, 1200)).toBe(false);
+    });
+
+    test('a body holding its tile settles once the window has passed', () => {
+        let s = noteSighting(undefined, here, 1000);
+        s = noteSighting(s, here, 1600);
+        expect(settled(s, 1600, 1200)).toBe(false);
+        s = noteSighting(s, here, 2200);
+        expect(settled(s, 2200, 1200)).toBe(true);
+    });
+
+    test('a step restarts the window', () => {
+        let s = noteSighting(undefined, here, 1000);
+        s = noteSighting(s, here, 2200);
+        expect(settled(s, 2200, 1200)).toBe(true);
+        s = noteSighting(s, { x: 2858, z: 9780 }, 2800);
+        expect(settled(s, 2800, 1200)).toBe(false);
+        expect(settled(s, 4000, 1200)).toBe(true);
     });
 });

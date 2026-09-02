@@ -11,7 +11,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -61,6 +61,9 @@ const APPROACH_MS = 120_000;
 
 /** A gap this long between two of Fight's own polls is time the bot spent somewhere other than the tile. */
 const HOLD_GAP_MS = 10_000;
+
+/** How long a body must hold its tile before a safespot style clicks it. */
+const SETTLE_MS = 1200;
 
 const RETREAT_HOPS = 4;
 const RETREAT_HOP_MS = 3000;
@@ -172,6 +175,7 @@ export class Fight implements Task {
     private blindSince = 0;
     private polledAt = 0;
     private readonly skip = new Map<number, number>();
+    private readonly seen = new Map<number, Sighting>();
 
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
@@ -246,6 +250,9 @@ export class Fight implements Task {
             }
 
             const field = this.field(FIELD_RADIUS);
+            for (const n of field) {
+                this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
+            }
             const live = this.engaged === null ? undefined : field.find(n => n.index === this.engaged);
             if (live && live.targetsAnotherPlayer()) {
                 this.host.log(`${name} ${live.index} was taken by another player. Finding another.`);
@@ -267,7 +274,7 @@ export class Fight implements Task {
 
             const now = performance.now();
             const target = field
-                .filter(n => (this.skip.get(n.index) ?? 0) < now)
+                .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
                 .sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
                 await this.idle();
