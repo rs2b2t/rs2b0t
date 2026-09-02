@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
     SAFESPOT_BLIND_MS,
     attackRangeFor,
+    bodyOrigin,
     holdDue,
     isClueObj,
     keyStatus,
@@ -210,5 +211,18 @@ describe('wantsDrop', () => {
 
     test('an unnamed ground item is never wanted', () => {
         expect(wantsDrop({ id: 4, name: null }, filter)).toBe(false);
+    });
+});
+
+describe('bodyOrigin', () => {
+    // Why: the client reports an npc at the tile under the centre of its footprint, and the engine measures sight to the south-west corner.
+    test('a size-3 body starts one tile south-west of the reported tile, a size-4 body two', () => {
+        expect(bodyOrigin({ x: 2860, z: 9782 }, 3)).toEqual({ x: 2859, z: 9781 });
+        expect(bodyOrigin({ x: 2899, z: 9804 }, 4)).toEqual({ x: 2897, z: 9802 });
+    });
+
+    test('a size-1 or size-2 body reads from its reported tile or one below it', () => {
+        expect(bodyOrigin({ x: 10, z: 10 }, 1)).toEqual({ x: 10, z: 10 });
+        expect(bodyOrigin({ x: 10, z: 10 }, 2)).toEqual({ x: 9, z: 9 });
     });
 });

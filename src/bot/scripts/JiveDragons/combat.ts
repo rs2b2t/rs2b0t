@@ -9,8 +9,9 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, holdDue, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, holdDue, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -116,15 +117,23 @@ function atTile(t: Tile): boolean {
     return here !== null && here.x === t.x && here.z === t.z && here.level === t.level;
 }
 
+// Why: the server walks an Attack click until it has line of sight, and a safespot sees a body in only some of the places it wanders, so a target the tile cannot see is a walk off the tile.
+
+/** Whether an Attack click from `spot` at this body fires without the server walking closer. */
+function sightedFrom(spot: Tile, n: Npc): boolean {
+    const o = bodyOrigin(n.tile(), n.size);
+    return Reachability.lineOfSight(spot, { x: o.x, z: o.z, level: spot.level }, n.size);
+}
+
 // Why: the query name match is exact, so 'Baby blue dragon' never matches 'Blue dragon' and the babies stay untargeted.
 
-/** Adults inside `radius` that no other player is fighting. `ours` is exempt. */
-function adultsNear(site: DragonSite, ours: number | null, radius: number): Npc[] {
+/** Adults inside `radius` that no other player is fighting and that `from` can see. `ours` is exempt from the fight check. */
+function adultsNear(site: DragonSite, ours: number | null, radius: number, from: Tile | null): Npc[] {
     return Npcs.query()
         .name(site.target)
         .action(ATTACK)
         .within(radius)
-        .where(n => site.inArea(n.tile()) && !takenByAnother({
+        .where(n => site.inArea(n.tile()) && (from === null || sightedFrom(from, n)) && !takenByAnother({
             isOurs: n.index === ours,
             inCombat: n.inCombat,
             targetsMe: n.targetsMe(),
@@ -286,7 +295,7 @@ export class Fight implements Task {
     }
 
     private field(radius: number): Npc[] {
-        return adultsNear(this.site, this.engaged, radius);
+        return adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
     }
 
     private setTarget(idx: number): void {

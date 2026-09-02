@@ -84,6 +84,14 @@ export function nearestSpot(from: Spot, spots: readonly Spot[]): number {
     return best;
 }
 
+// Why: the client reports an npc at the tile under the centre of its footprint, and the engine measures sight to the south-west corner.
+
+/** The south-west tile of a body the client reports at its centre. */
+export function bodyOrigin(tile: Spot, size: number): Spot {
+    const back = size >> 1;
+    return { x: tile.x - back, z: tile.z - back };
+}
+
 export interface RetreatAim {
     /** The index a failed attempt rotated to, or null when this retreat is a fresh one. */
     rotated: number | null;

@@ -231,6 +231,8 @@ export interface NpcSnapshot {
     anim: number;
     name: string | null;
     level: number;
+    /** Tiles along each side of the footprint. */
+    size: number;
     tile: WorldTile;
     distance: number;
     ops: (string | null)[];
@@ -843,6 +845,7 @@ export const reader = {
                 anim: npc.primaryAnim,
                 name: npc.type?.name ?? null,
                 level: npc.type?.vislevel ?? -1,
+                size: npc.type?.size ?? 1,
                 tile: { x, z, level: raw.minusedlevel },
                 distance: Math.max(Math.abs(x - px), Math.abs(z - pz)),
                 ops: npc.type?.op ?? [],
