@@ -1,7 +1,7 @@
 /** Two-account MarketMaker e2e at Seers bank, against the window-is-the-transaction model.
- *  Five legs: a sale driven by coins in the window, a mixed pile bought with no chat at all, a live
- *  re-price when the customer adds more mid-trade, coins ignored and named, and the cooldown that
- *  follows walking out. Quotes and appraisals travel over public chat, and the shop pays out in notes. */
+ *  Six legs: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price
+ *  mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and the cooldown
+ *  after walking out. Quotes and appraisals travel over public chat, and the shop pays out in notes. */
 
 // Usage:
 //   HEADED=1 bun e2e/marketmaker-pair-live.ts
@@ -31,12 +31,15 @@ const IRON_NOTE = 441;
 const YEW = 1515;
 const YEW_NOTE = 1516;
 const COINS = 995;
+const CAP = 100_000;
+/** Worth 115,200gp at the buy price, so the pile clears the cap. */
+const CAP_YEWS = 400;
 
 /** 20% spread: iron 18/22, yew 288/352. */
 const BOOK = JSON.stringify([{
     name: 'e2e',
     margin: 20,
-    maxTradeValue: 100_000,
+    maxTradeValue: CAP,
     rows: [
         { id: IRON, mid: 20, cap: 4_000, buying: true, selling: true },
         { id: YEW, mid: 320, cap: 2_000, buying: true, selling: true }
@@ -225,18 +228,34 @@ async function dump(makerPage: Page, custPage: Page, label: string): Promise<str
     ].join('\n');
 }
 
+/** Game messages (no sender) in the chat buffer that match. */
+async function countGameLines(page: Page, re: RegExp): Promise<number> {
+    return page.evaluate(source => {
+        const want = new RegExp(source, 'i');
+        return (globalThis as never as Abi).__rs2b0t.reader.chat(20).filter(l => l.type === 0 && want.test(l.text)).length;
+    }, re.source);
+}
+
 /** Request until the window opens; the engine refuses while the maker is at the bank. */
+// Why: a "Trade with" click clears the pending action, which closes a window that opened the same tick, so a request that went through is waited out and only a refused one is repeated.
 async function openTrade(page: Page, label: string): Promise<boolean> {
-    for (let attempt = 0; attempt < 14; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const busyBefore = await countGameLines(page, /busy at the moment/);
         await page.evaluate(m => (globalThis as never as Abi).__rs2b0t.Trade.request(m), MAKER);
-        for (let probe = 0; probe < 15; probe++) {
+        const deadline = Date.now() + 40_000;
+        while (Date.now() < deadline) {
             if (await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.onOfferScreen())) {
                 const partner = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.myOffer().length);
                 console.log(`${at()} ${label}: window open (request ${attempt + 1}, my slots ${partner})`);
                 return true;
             }
+            if ((await countGameLines(page, /busy at the moment/)) > busyBefore) {
+                console.log(`${at()} ${label}: the maker is busy, asking again shortly`);
+                break;
+            }
             await page.waitForTimeout(400);
         }
+        await page.waitForTimeout(3_000);
     }
     console.log(`${at()} ${label}: the window never opened`);
     return false;
@@ -336,7 +355,7 @@ try {
     await cheatQuiet(custPage, '~clearinv');
     await cheatQuiet(custPage, 'give coins 100000');
     await cheatQuiet(custPage, 'give cert_iron_ore 500');
-    await cheatQuiet(custPage, 'give cert_yew_logs 100');
+    await cheatQuiet(custPage, 'give cert_yew_logs 500');
     await teleArrive(custPage, SPOT);
 
     if (!(await makerPage.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('MarketMaker'))))) {
@@ -448,11 +467,45 @@ try {
     results.push(`re-priced ${50 * IRON_BUY} to ${100 * IRON_BUY}gp when the customer added more, and still settled`);
     console.log(`${at()} PASS leg 3: ${results[2]}`);
 
-    // ---- leg 4: coins on their side are ignored, and named ----------------
+    // ---- leg 4: a pile over the trade cap is bid at the cap, and the shop says the max ----
+    if (Date.now() > deadline) {
+        fail('out of budget before the cap leg');
+    }
+    const yew3 = await yewCount(custPage);
+    const gp3 = await countById(custPage, COINS);
+    const mark4 = await chatMark(custPage);
+
+    if (!(await openTrade(custPage, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, 'cap leg: the window never opened'));
+    }
+    await offerItem(custPage, { name: 'Yew logs', id: YEW_NOTE, qty: CAP_YEWS });
+
+    if (!(await waitBotSide(custPage, s => coinsOn(s) === CAP, 45_000, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, `cap leg: the maker never put up the ${CAP}gp cap for a ${CAP_YEWS * YEW_BUY}gp pile`));
+    }
+    // Why: public chat is lowercased on the wire, so the match is case-blind.
+    const capLine = await waitForMakerLine(custPage, /max i can offer is 100,000gp per trade/i, 20_000, mark4);
+    if (capLine === null) {
+        fail(await dump(makerPage, custPage, 'cap leg: the maker never said what the max is'));
+    }
+    await custPage.screenshot({ path: 'docs/e2e/marketmaker-cap-bid.png' });
+    if (!(await settle(custPage, 'over the cap'))) {
+        fail(await dump(makerPage, custPage, 'cap leg: the trade never completed'));
+    }
+    await custPage.waitForTimeout(2500);
+    const capPaid = (await countById(custPage, COINS)) - gp3;
+    const yewGone = yew3 - (await yewCount(custPage));
+    if (capPaid !== CAP || yewGone !== CAP_YEWS) {
+        fail(await dump(makerPage, custPage, `cap leg: expected +${CAP}gp for ${CAP_YEWS} yew logs, got +${capPaid}gp for ${yewGone}`));
+    }
+    results.push(`bid the ${CAP}gp cap for a ${CAP_YEWS * YEW_BUY}gp pile of ${CAP_YEWS} yew logs, said '${capLine}', and settled`);
+    console.log(`${at()} PASS leg 4: ${results[3]}`);
+
+    // ---- leg 5: coins on their side are ignored, and named ----------------
     if (Date.now() > deadline) {
         fail('out of budget before the ignored-coins leg');
     }
-    const mark4 = await chatMark(custPage);
+    const mark5 = await chatMark(custPage);
     if (!(await openTrade(custPage, 'ignored coins'))) {
         fail(await dump(makerPage, custPage, 'coins leg: the window never opened'));
     }
@@ -462,26 +515,26 @@ try {
     if (!(await waitBotSide(custPage, s => coinsOn(s) === 10 * IRON_BUY, 45_000, 'ignored coins'))) {
         fail(await dump(makerPage, custPage, `coins leg: the maker did not offer ${10 * IRON_BUY}gp for the ore alone`));
     }
-    if ((await waitForMakerLine(custPage, /not counted/i, 20_000, mark4)) === null) {
+    if ((await waitForMakerLine(custPage, /not counted/i, 20_000, mark5)) === null) {
         fail(await dump(makerPage, custPage, 'coins leg: the maker never said the coins were not counted'));
     }
     await custPage.evaluate(() => (globalThis as never as Abi).__rs2b0t.Trade.decline());
     await custPage.waitForTimeout(4000);
     results.push('ignored coins in a purchase and said so before accepting');
-    console.log(`${at()} PASS leg 4: ${results[3]}`);
+    console.log(`${at()} PASS leg 5: ${results[4]}`);
 
-    // ---- leg 5: walking away costs the walker, not the shop ---------------
+    // ---- leg 6: walking away costs the walker, not the shop ---------------
     if (Date.now() > deadline) {
         fail('out of budget before the cooldown leg');
     }
     await custPage.waitForTimeout(8_000);
-    const mark5 = await chatMark(custPage);
+    const mark6 = await chatMark(custPage);
     await say(custPage, 'buy 100 iron ore');
-    if ((await waitForMakerLine(custPage, /trade me/i, 12_000, mark5)) !== null) {
+    if ((await waitForMakerLine(custPage, /trade me/i, 12_000, mark6)) !== null) {
         fail(await dump(makerPage, custPage, 'cooldown leg: the maker answered someone who just walked out of a trade'));
     }
     results.push(`ignored a customer for ${COOLDOWN_S}s after they walked out mid-trade`);
-    console.log(`${at()} PASS leg 5: ${results[4]}`);
+    console.log(`${at()} PASS leg 6: ${results[5]}`);
 
     console.log(`PASS: ${results.join(', ')}`);
     process.exit(0);
