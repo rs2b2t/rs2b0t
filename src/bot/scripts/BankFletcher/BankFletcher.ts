@@ -1,11 +1,12 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
-import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory, InvItem } from '../../api/inventory/Inventory.js';
 import { Bank, withdrawOp } from '../../api/bank/Bank.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
+import { nearestBank } from '../../api/bank/BankLocations.js';
+import { Traversal } from '../../api/walking/Traversal.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -45,12 +46,12 @@ import {
     stringWithdrawPlan,
     workKind,
     type AttachPlan,
+    type FletchMode,
     type StringPlan,
     type WorkKind
 } from './BankFletcherLogic.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 
-const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const FLETCHING_KNIFE = 'Knife';
 const BOOTH = { op: 'Use-quickly' };
 const LIST_WAIT_TICKS = 7;
@@ -58,6 +59,14 @@ const WITHDRAW_CONFIRM_TICKS = 4;
 const BATCH_IDLE_TICKS = 12;
 
 export const SETTINGS: SettingsSchema = {
+    mode: {
+        type: 'string',
+        default: 'cut',
+        options: ['cut', 'string', 'cut+string'],
+        optionLabels: { cut: 'cut logs/fletch arrows', string: 'string', 'cut+string': 'cut+string' },
+        label: 'Fletch mode',
+        help: 'cut logs/fletch arrows fletches logs with the knife, string attaches bow string to unstrung bows, cut+string does both in one trip — logs → unstrung → strung (log type selects the bow wood, product selects the bow for cut+string/string: Long bow etc. means String long bow)'
+    },
     material: {
         type: 'string',
         default: 'Logs',
@@ -72,9 +81,7 @@ export const SETTINGS: SettingsSchema = {
         label: 'Fletch product',
         help: 'knife products open the make-menu; string products attach Bow string onto the unstrung bow for this log type; arrow products attach item-on-item (material/knife ignored)'
     },
-    bankStand: { type: 'tile', default: DEFAULT_BANK_STAND, label: 'Bank stand tile (x,z)', help: 'stand adjacent to a bank booth — start the bot here' },
-    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' },
-    leashRadius: { type: 'number', default: 6, min: 2, max: 20, label: 'Booth search radius (tiles)' }
+    bankBooth: { type: 'string', default: 'Bank booth', label: 'Bank booth loc name' }
 };
 
 async function withdrawStack(item: InvItemSnapshot, log: (m: string) => void): Promise<boolean> {
@@ -164,47 +171,72 @@ export default class BankFletcher extends TaskBot {
 
     private material = 'Logs';
     private product = 'Arrow shafts';
-    private bankStand = DEFAULT_BANK_STAND;
+    private mode: 'cut' | 'string' | 'cut+string' = 'cut';
     private boothName = 'Bank booth';
-    private leash = 6;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
         this.material = this.settings.str('material', 'Logs');
         this.product = this.settings.str('product', 'Arrow shafts');
-        this.bankStand = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
+        this.mode = this.settings.str('mode', 'cut') as FletchMode;
+        if (!['cut', 'string', 'cut+string'].includes(this.mode)) {
+            this.mode = 'cut';
+        }
         this.boothName = this.settings.str('bankBooth', 'Bank booth');
-        this.leash = this.settings.num('leashRadius', 6);
 
         const kind = this.workKind();
         const attach = attachPlanFor(this.product);
-        const stringing = stringPlanFor(this.product, this.material);
+        const rawStringing = stringPlanFor(this.product, this.material);
+        const stringing = (this.mode === 'cut+string' || this.mode === 'string') && !rawStringing
+            ? stringPlanFor(`String ${this.product}`, this.material)
+            : rawStringing;
         const knifeLevel = knifeProductLevel(this.product, this.material);
         const need = attach?.level ?? stringing?.level ?? knifeLevel;
         if (need !== null && need !== undefined && Skills.level('fletching') < need) {
             this.log(`BankFletcher: Fletching ${need} required for ${this.product} (have ${Skills.level('fletching')}) — stopping.`);
             throw new Error('BankFletcher: fletching level too low for the chosen product');
         }
+        // Why: mode gates the product family so cut does not try to string and string does not try to cut.
+        const naturalKind = workKind(this.product);
+        if (this.mode === 'cut' && naturalKind !== 'knife') {
+            // Why: cut mode with Long bow/Short bow is fine — the user means Short bow/Long bow as knife products, not string.
+            // Why: only block attach/string products in cut mode.
+            if (naturalKind === 'string' || naturalKind === 'attach') {
+                this.log(`BankFletcher: mode 'cut' needs a knife product (Short/Long bow, Arrow shafts), not '${this.product}' — stopping.`);
+                throw new Error('BankFletcher: cut mode needs a knife product');
+            }
+        }
+        if (this.mode === 'string' && naturalKind === 'knife' && !stringing) {
+            // Why: Short bow/Long bow in string mode maps to String short/long bow via the mode-aware stringing plan above.
+            // Why: only block if no stringing plan exists for this product+material.
+            this.log(`BankFletcher: mode 'string' needs a string/attach product, not '${this.product}' — stopping.`);
+            throw new Error('BankFletcher: string mode needs a string/attach product');
+        }
         if (kind === 'string' && !stringing) {
             this.log(`BankFletcher: Stringing '${this.product}' needs a known log type, not '${this.material}' — stopping.`);
             throw new Error('BankFletcher: stringing needs a known log type');
+        }
+        if (kind === 'cut+string' && !stringing) {
+            this.log(`BankFletcher: cut+string '${this.product}' needs a known log type, not '${this.material}' — stopping.`);
+            throw new Error('BankFletcher: cut+string needs a known log type');
         }
         if (kind === 'knife' && productNeedsDifferentLog(this.product, this.material)) {
             this.log(`BankFletcher: Arrow shafts fletch only from regular Logs, not '${this.material}' — pick Logs or a bow product. Stopping.`);
             throw new Error('BankFletcher: arrow shafts require regular Logs');
         }
-
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('fletching');
         this.emptyReads = {};
 
-        if (stringing) {
-            this.log(`BankFletcher stringing '${stringing.displayName}' (u id ${stringing.unstrungId}) at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+        if (kind === 'cut+string' && stringing) {
+            this.log(`BankFletcher cut+string '${stringing.displayName}' — ${this.material} → unstrung (u id ${stringing.unstrungId}) → strung`);
+        } else if (stringing) {
+            this.log(`BankFletcher stringing '${stringing.displayName}' (u id ${stringing.unstrungId})`);
         } else if (attach) {
-            this.log(`BankFletcher attaching '${attach.inputs[0]}' onto '${attach.inputs[1]}' → ${attach.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+            this.log(`BankFletcher attaching '${attach.inputs[0]}' onto '${attach.inputs[1]}' → ${attach.product}`);
         } else {
-            this.log(`BankFletcher fletching '${this.material}' → ${this.product} at ${this.bankStand} (booth '${this.boothName}', r${this.leash})`);
+            this.log(`BankFletcher fletching '${this.material}' → ${this.product}`);
         }
         this.add(new ContinueDialog(), new FletchDialog(this), new BankTrip(this), new InstantAttach(this), new Fletch(this));
     }
@@ -252,16 +284,28 @@ export default class BankFletcher extends TaskBot {
     productName(): string { return this.product; }
     materialName(): string { return this.material; }
     knifeName(): string { return FLETCHING_KNIFE; }
-    bankTile(): Tile { return this.bankStand; }
     boothLocName(): string { return this.boothName; }
-    leashRadius(): number { return this.leash; }
     emptyReadCount(key: string): number { return this.emptyReads[key] ?? 0; }
     noteEmpty(key: string, action: ReturnType<typeof stockAction>): void {
         this.emptyReads = nextEmptyReadsByKey(this.emptyReads, key, action);
     }
 
     workKind(): WorkKind {
+        if (this.mode === 'cut+string') {
+            return 'cut+string';
+        }
+        if (this.mode === 'cut') {
+            return 'knife';
+        }
+        if (this.mode === 'string') {
+            const k = workKind(this.product);
+            return k === 'knife' ? 'string' : k;
+        }
         return workKind(this.product);
+    }
+
+    fletchMode(): FletchMode {
+        return this.mode;
     }
 
     attachPlan(): AttachPlan | null {
@@ -269,7 +313,15 @@ export default class BankFletcher extends TaskBot {
     }
 
     stringPlan(): StringPlan | null {
-        return stringPlanFor(this.product, this.material);
+        const raw = stringPlanFor(this.product, this.material);
+        if (raw) {
+            return raw;
+        }
+        // Why: cut+string and string modes allow "Short bow"/"Long bow" to mean "String short/long bow" so the product stays Long bow etc.
+        if (this.mode === 'cut+string' || this.mode === 'string') {
+            return stringPlanFor(`String ${this.product}`, this.material);
+        }
+        return null;
     }
 
     keepList(): string[] {
@@ -386,7 +438,10 @@ export default class BankFletcher extends TaskBot {
 
 class FletchDialog implements Task {
     constructor(private bot: BankFletcher) {}
-    validate(): boolean { return this.bot.workKind() === 'knife' && ChatDialog.isMakeMenu(); }
+    validate(): boolean {
+        const k = this.bot.workKind();
+        return (k === 'knife' || k === 'cut+string') && ChatDialog.isMakeMenu();
+    }
     async execute(): Promise<void> {
         this.bot.setStatus('choosing product');
         const products = ChatDialog.makeProducts();
@@ -460,11 +515,31 @@ class BankTrip implements Task {
         return this.bot.mustRestock();
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('banking');
-        const opened = (await Bank.openBooth(this.bot.bankTile(), this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)))
-            || (await Bank.openNearest(this.bot.boothLocName(), BOOTH.op, m => this.bot.log(`  ${m}`)));
-        if (!opened) {
-            this.bot.log('could not open the bank — will retry');
+        const here = Game.tile();
+        const bank = here ? nearestBank(here) : null;
+        if (!bank) {
+            this.bot.log('no reachable bank');
+            return;
+        }
+        this.bot.setStatus(`banking at ${bank.name}`);
+        const near = here !== null && bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
+        if (!near) {
+            if (!(await Traversal.walkResilient(bank.tile, {
+                radius: 3,
+                attempts: 4,
+                timeoutMs: 180_000,
+                log: m => this.bot.log(`  ${m}`)
+            }))) {
+                this.bot.log('walk to the bank failed — retrying');
+                return;
+            }
+        }
+        const access = bank.access ?? { name: this.bot.boothLocName(), op: BOOTH.op };
+        // Why: GemCutter uses nearestBank + walkResilient + openNearestAccess so a booth
+        // Why: underfoot wins and a failed open stays put and retries, instead of trekking
+        // Why: to the Varrock West preset.
+        if (!(await Bank.openNearestAccess(access, m => this.bot.log(`  ${m}`)))) {
+            this.bot.log('could not open the bank — retrying');
             return;
         }
         try {
@@ -489,6 +564,11 @@ class BankTrip implements Task {
             const state = bankListState(Bank.isOpen(), Bank.loaded());
             if (state === 'closed') {
                 this.bot.log('bank window closed — will retry');
+                return;
+            }
+
+            if (this.bot.fletchMode() === 'cut+string' && stringingEarly) {
+                await this.withdrawCutString(stringingEarly, !arrived);
                 return;
             }
 
@@ -667,12 +747,149 @@ class BankTrip implements Task {
             );
         }
     }
+
+    private async withdrawCutString(plan: StringPlan, waitTimedOut: boolean): Promise<void> {
+        const listState = () => bankListState(Bank.isOpen(), Bank.loaded());
+        // Why: cut+string is cut-first like FlaxAIO pick before spin — exhaust logs via the knife, bank the unstrung, then string.
+        // Why: cut=cut keeps the knife, string=string deposits it. For cut+string we literally run the cut script first and then the string script,
+        // Why: so the string phase must not re-withdraw the knife and must deposit it if it is still held.
+
+        // Why: cut first — if the bank still has logs, fill the pack with logs and fletch them into unstrung; the unstrung are banked and strung later.
+        const logItem = Bank.items().find(i => logNameMatches(i.name, this.bot.materialName()));
+        const logAction = stockAction({
+            state: listState(),
+            hasItem: Boolean(logItem?.name),
+            waitTimedOut
+        });
+        const logKey = this.bot.materialName();
+        this.bot.noteEmpty(logKey, logAction);
+        if (logAction === 'ok' && logItem?.name) {
+            // Cut phase — needs the knife like pure cut mode.
+            if (this.bot.knifeCount() === 0) {
+                const knifeBank = exactName(Bank.items(), this.bot.knifeName());
+                const knifeAction = stockAction({
+                    state: listState(),
+                    hasItem: Boolean(knifeBank?.name),
+                    waitTimedOut
+                });
+                const knifeKey = this.bot.knifeName();
+                this.bot.noteEmpty(knifeKey, knifeAction);
+                if (knifeAction !== 'ok' || !knifeBank?.name) {
+                    if (knifeAction.startsWith('retry')) {
+                        this.bot.log('knife unread in the bank list — will retry');
+                        return;
+                    }
+                    this.bot.log('No Knife in bank or inventory.');
+                    ScriptRunner.stop('BankFletcher: no Knife in bank or inventory');
+                    return;
+                }
+                const knifeOps = knifeBank.ops.filter((o): o is string => o !== null);
+                const oneOp = withdrawOp(knifeOps, '1') ?? withdrawOp(knifeOps, 'any') ?? 'Withdraw-1';
+                this.bot.log(`withdrawing ${knifeBank.name} ('${oneOp}')`);
+                await Bank.withdraw(knifeBank.name!, oneOp);
+                await Execution.delayUntilTicks(() => Inventory.contains(knifeBank.name!), WITHDRAW_CONFIRM_TICKS);
+                if (this.bot.knifeCount() === 0) {
+                    return;
+                }
+            }
+            const logName = logItem.name;
+            this.bot.log(`withdrawing ${logName} (cut phase)`);
+            if (!(await Bank.withdrawLoad(logName))) {
+                this.bot.log(`could not withdraw ${logName} — will retry`);
+            }
+            return;
+        }
+        if (logAction.startsWith('retry')) {
+            this.bot.log(`'${logKey}' unread (${logAction}) — will retry`);
+            return;
+        }
+        // Why: logs look empty — don't stop the whole bot in cut+string, fall through to the stringing phase and let its empty checks decide.
+        if (logAction === 'empty-confirmed' || logAction === 'empty-unready') {
+            this.bot.log(`no '${logKey}' left for cutting — switching to stringing phase`);
+        }
+
+        // Why: stringing is item-on-item and the knife would waste a slot — cut=cut keeps the knife, string=string deposits it,
+        // Why: cut+string is literally cut then string, so when falling through to string withdraw we deposit the knife first.
+        if (this.bot.knifeCount() > 0) {
+            const knifeName = this.bot.knifeName();
+            this.bot.log(`cut+string string phase — depositing ${knifeName} to free a slot`);
+            await Bank.depositAllMatching((name) => name.trim().toLowerCase() === knifeName.trim().toLowerCase(), m => this.bot.log(`  ${m}`));
+            await Execution.delayTicks(1);
+        }
+
+        // String phase: withdraw bow string + unstrung (like withdrawStringing but without re-checking logs).
+        const stringSlots = (): number => Inventory.items().filter(i => i.id === plan.stringId).length;
+        const stacked = stringIsStacked(this.bot.packCountById(plan.stringId), stringSlots());
+        const load = stringWithdrawPlan(stringSlots(), stacked);
+        if (load.stringExact > 0) {
+            const stringItem = Bank.items().find(i => i.id === plan.stringId) ?? exactName(Bank.items(), BOW_STRING);
+            const action = stockAction({
+                state: listState(),
+                hasItem: Boolean(stringItem),
+                waitTimedOut
+            });
+            this.bot.noteEmpty(BOW_STRING, action);
+            if (action === 'ok' && stringItem) {
+                if (!(await withdrawExact(stringItem, load.stringExact, () => this.bot.packCountById(plan.stringId), m => this.bot.log(m)))) {
+                    return;
+                }
+            } else if (action.startsWith('retry')) {
+                this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
+                return;
+            } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
+                ScriptRunner.stop(`BankFletcher: bank is out of '${BOW_STRING}'`);
+                return;
+            } else {
+                this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
+                return;
+            }
+        }
+
+        const unstrung = Bank.items().find(i => i.id === plan.unstrungId);
+        const unstrungAction = stockAction({
+            state: listState(),
+            hasItem: Boolean(unstrung),
+            waitTimedOut
+        });
+        const unstrungKey = `unstrung:${plan.unstrungId}`;
+        this.bot.noteEmpty(unstrungKey, unstrungAction);
+        if (unstrungAction === 'ok' && unstrung) {
+            if (!load.unstrungAll || Inventory.isFull()) {
+                return;
+            }
+            const before = this.bot.packCountById(plan.unstrungId);
+            if (!(await withdrawStack(unstrung, m => this.bot.log(m)))) {
+                return;
+            }
+            await Execution.delayUntilTicks(
+                () =>
+                    this.bot.packCountById(plan.unstrungId) > before
+                    || Inventory.isFull()
+                    || !Bank.items().some(i => i.id === plan.unstrungId),
+                WITHDRAW_CONFIRM_TICKS
+            );
+            return;
+        }
+        if (unstrungAction.startsWith('retry')) {
+            this.bot.log(`no ${plan.displayName} (u id ${plan.unstrungId}) in the bank list yet (${unstrungAction}) — will retry`);
+            return;
+        }
+        if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
+            ScriptRunner.stop(`BankFletcher: bank is out of unstrung ${plan.displayName} — cut+string complete`);
+        } else {
+            this.bot.log(
+                `bank snapshot missed unstrung ${plan.displayName} `
+                + `(${this.bot.emptyReadCount(unstrungKey)}/${EMPTY_READ_LIMIT}) — will retry`
+            );
+        }
+    }
 }
 
 class Fletch implements Task {
     constructor(private bot: BankFletcher) {}
     validate(): boolean {
-        return this.bot.workKind() === 'knife'
+        const k = this.bot.workKind();
+        return (k === 'knife' || k === 'cut+string')
             && this.bot.logCount() > 0
             && this.bot.knifeCount() > 0
             && !ChatDialog.isOpen()
@@ -700,6 +917,14 @@ class InstantAttach implements Task {
     constructor(private bot: BankFletcher) {}
     validate(): boolean {
         const kind = this.bot.workKind();
+        if (kind === 'cut+string') {
+            // Why: cut first like FlaxAIO pick before spin — only string when no logs left to fletch.
+            return this.bot.logCount() === 0
+                && this.bot.instantInput0Count() > 0
+                && this.bot.instantInput1Count() > 0
+                && !ChatDialog.isOpen()
+                && !Bank.isOpen();
+        }
         return (kind === 'attach' || kind === 'string')
             && this.bot.instantInput0Count() > 0
             && this.bot.instantInput1Count() > 0
