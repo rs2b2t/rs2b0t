@@ -85,8 +85,18 @@ export function retreatAim(a: RetreatAim): { index: number; next: number } {
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
 const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 
+/** How much further than the true gap a size-4 body reads, worst case. */
+const CENTRE_PAD = 2;
+
 export function attackRangeFor(style: Style): number {
     return ATTACK_RANGE[style];
+}
+
+// Why: Npc.distance() measures to the centre of a multi-tile footprint, so a size-4 dragon reads 2 at its north and east faces and 3 at its south and west, and a body at true bow range 7 reads 9.
+
+/** How far a target may read and still be in range without the server walking the bot to it. */
+export function reachFor(style: Style): number {
+    return attackRangeFor(style) + CENTRE_PAD;
 }
 
 // Why: dragonfire is 5 through the shield and 30 without, rising to 50 when the attack roll beats the defence roll.

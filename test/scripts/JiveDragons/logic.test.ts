@@ -7,6 +7,7 @@ import {
     meleeShieldGate,
     nearestSpot,
     nextSafespot,
+    reachFor,
     retreatAim,
     retreatDue,
     wantsDrop
@@ -135,6 +136,19 @@ describe('attackRangeFor', () => {
         expect(attackRangeFor('melee')).toBe(1);
         expect(attackRangeFor('range')).toBe(7);
         expect(attackRangeFor('mage')).toBe(10);
+    });
+});
+
+describe('reachFor', () => {
+    test('a size-4 body reports its centre, so every style reads two past the true gap', () => {
+        expect(reachFor('melee')).toBe(3);
+        expect(reachFor('range')).toBe(9);
+        expect(reachFor('mage')).toBe(12);
+    });
+
+    test('the correction is the same for every style, with melee no longer the only one carrying it', () => {
+        expect(reachFor('range') - attackRangeFor('range')).toBe(reachFor('melee') - attackRangeFor('melee'));
+        expect(reachFor('mage') - attackRangeFor('mage')).toBe(reachFor('melee') - attackRangeFor('melee'));
     });
 });
 

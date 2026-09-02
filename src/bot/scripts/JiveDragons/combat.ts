@@ -10,7 +10,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, attackRangeFor, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, attackRangeFor, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -38,9 +38,6 @@ const ATTACK = 'Attack';
 
 const FIELD_RADIUS = 10;
 const APPROACH_RADIUS = 12;
-
-// Why: Npc.distance() measures to the centre of a multi-tile footprint, so a size-4 dragon reads 2 at its north and east faces and 3 at its south and west, never the 1 attackRangeFor('melee') asks for.
-const MELEE_CENTRE_REACH = 3;
 
 const FIGHT_MS = 120_000;
 const FIGHT_PASSES = 600;
@@ -104,11 +101,6 @@ function usesSafespot(style: Style): boolean {
 // Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, and the leash pulls a dragon in rather than the bot walking out. A click that does walk us off it is caught below and the dragon skipped.
 function holdsAnchor(_style: Style): boolean {
     return true;
-}
-
-/** How far a target may read and still be reachable without the server walking us. */
-function reachFor(style: Style): number {
-    return style === 'melee' ? MELEE_CENTRE_REACH : attackRangeFor(style);
 }
 
 function spotName(style: Style, index: number): string {
