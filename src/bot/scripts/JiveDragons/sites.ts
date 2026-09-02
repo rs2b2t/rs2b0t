@@ -63,6 +63,8 @@ export const TAVERLEY_BLUE: DragonSite = {
     inArea: inBox({ minX: 2888, maxX: 2923, minZ: 9769, maxZ: 9816, level: 0 })
 };
 
+// Why: a second site is an entry here plus four code changes, none of which this table can carry. supply.ts hard-codes Velrak's jail from JAIL_DOOR through fetchFromVelrak and DragonSite has no field saying where a key comes from. JiveDragons.ts builds the loot options from DROP_DB[TAVERLEY_BLUE.target] at module load, because a SettingDef's options are a fixed string[] with no hook onto another key's value. The safespot1..3 panel keys only reach the first three tiles of safespots. Those tile keys are shared by every site rather than namespaced per site, so a tile moved for one site moves for all of them.
+
 export const DRAGON_SITES: Record<string, DragonSite> = { [TAVERLEY_BLUE.key]: TAVERLEY_BLUE };
 
 export const SITE_OPTIONS: string[] = Object.keys(DRAGON_SITES);

@@ -24,11 +24,11 @@ import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
-import type Tile from '../../geometry/Tile.js';
+import Tile from '../../geometry/Tile.js';
 import { jiveFrame } from '../../paint/jive.js';
 import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
-import type { SettingsSchema } from '../../runtime/Settings.js';
+import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from './combat.js';
 import { keyStatus, meleeShieldGate, wantsDrop, type Style } from './logic.js';
 import { SITE_OPTIONS, TAVERLEY_BLUE, siteFor, type DragonSite } from './sites.js';
@@ -104,6 +104,21 @@ export const SETTINGS: SettingsSchema = {
     teleStock: { type: 'number', default: 2, min: 0, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
     logDetail: { type: 'string', default: 'Normal', options: ['Normal', 'Verbose'], label: 'Log detail', group: 'Diagnostics', help: 'Verbose adds the loot, slot-freeing and key-state traces' }
 };
+
+/** The panel keys the safespot ladder is offered through. A site with more tiles keeps the rest of its own. */
+const SPOT_KEYS = ['safespot1', 'safespot2', 'safespot3'];
+
+// Why: SettingsStore.resolve fills every key with the schema default, so an untouched tile setting reads back as Taverley's tile and would beat the tile the chosen site carries.
+
+/** The site's own tile, unless the panel setting has been moved off its schema default. */
+export function siteTile(bag: SettingsBag, key: string | undefined, site: Tile): Tile {
+    const def = key === undefined ? undefined : SETTINGS[key]?.default;
+    if (key === undefined || !(def instanceof Tile)) {
+        return site;
+    }
+    const set = bag.tile(key, site);
+    return set.equals(def) ? site : set;
+}
 
 let SITE: DragonSite = TAVERLEY_BLUE;
 let STYLE: Style = 'range';
@@ -628,11 +643,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         const base = siteFor(this.settings.str('site', 'taverley-blue'));
         SITE = {
             ...base,
-            safespots: ['safespot1', 'safespot2', 'safespot3']
-                .map((key, i) => (base.safespots[i] === undefined ? null : this.settings.tile(key, base.safespots[i])))
-                .filter((t): t is Tile => t !== null),
-            meleeAnchor: this.settings.tile('meleeTile', base.meleeAnchor),
-            bank: this.settings.tile('bankTile', base.bank)
+            safespots: base.safespots.map((spot, i) => siteTile(this.settings, SPOT_KEYS[i], spot)),
+            meleeAnchor: siteTile(this.settings, 'meleeTile', base.meleeAnchor),
+            bank: siteTile(this.settings, 'bankTile', base.bank)
         };
         STYLE = this.settings.str('combatStyle', 'range') as Style;
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
