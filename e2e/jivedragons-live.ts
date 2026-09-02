@@ -101,7 +101,7 @@ interface Kit {
     settings: Record<string, string | number | boolean>;
 }
 
-const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncut emerald', 'Uncut sapphire', 'Coins'];
+const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncut emerald', 'Uncut sapphire'];
 
 const COMMON_BANK: BankSeedItem[] = [
     { debugName: FOOD.debug, displayName: FOOD.name, qty: 400 },
@@ -315,6 +315,8 @@ let deaths = 0;
 let bothEndsDrops = 0;
 let harnessCredit = 0;
 let engagingLines = 0;
+let coinLoots = 0;
+let arrowLoots = 0;
 let waitingPolls = 0;
 let safespotMs = 0;
 let lairMs = 0;
@@ -371,6 +373,8 @@ try {
     const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', args.dusty ? 'bankedkey' : 'coldkey'];
     if (args.style !== 'melee') { required.push('hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }
+    // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
+    if (args.style === 'range') { required.push('arrows'); }
     if (args.starve) { required.push('starvebank'); }
 
     const deadline = t0 + args.minutes * 60_000;
@@ -387,6 +391,8 @@ try {
             printed.add(key);
             console.log(`${stamp()} [${line.level}] ${line.msg.slice(0, 300)}`);
             if (/^engaging blue dragon /i.test(line.msg)) { engagingLines++; }
+            if (/^looted Coins$/i.test(line.msg)) { coinLoots++; }
+            if (/^looted Rune arrow$/i.test(line.msg)) { arrowLoots++; mark('arrows', 'the arrows it fired came home'); }
             if (line.msg.includes(BANK_READ_LINE)) { bankReads++; }
             if (/Walking out through the gate instead/i.test(line.msg)) { walkOutSaid = true; }
             if (/^out of the dragon lair/i.test(line.msg)) { outOfLairSaid = true; }
@@ -405,8 +411,9 @@ try {
         if (last !== null) {
             const step = s.at - last.at;
             if (inLair(s.tile)) { lairMs += step; }
-            // Why: a safespot with nothing in the scene to breathe on it proves nothing, so the soak clock only runs with an adult up.
-            if (onSafespot(s.tile) && s.adults > 0) { safespotMs += step; }
+            // Why: a safespot with nothing in the scene to breathe on it proves nothing, and a sample that moved was only partly on the tile, so the soak clock runs on the stretches that held one safespot with an adult up.
+            const parked = last.tile !== null && onSafespot(s.tile) && samePoint(s.tile, last.tile);
+            if (parked && s.adults > 0) { safespotMs += step; }
             if (s.hp < last.hp) {
                 const fell = last.hp - s.hp;
                 // Why: the ~hit takes off the damage it was given, one tick after the send, so it explains that many hp once and no more, and anything above it in the same poll is a breath the cheat cannot account for.
@@ -421,11 +428,10 @@ try {
                 };
                 hpDrops.push(drop);
                 if (drop.bothEnds) { bothEndsDrops++; }
-                // Why: an either-end drop with an adult in the scene is a breath that landed on the tile and was walked off before the next poll, which the both-ends rule alone would file as ordinary movement.
-                // Why: melee is exempt because its anchor borders safespot 1, so a hit taken in transit would fail a run for a tile melee never stands on by design.
-                if (guardsSafespot && drop.unexplained > 0 && (drop.bothEnds || (drop.eitherEnd && s.adults > 0))) {
+                // Why: only a safespot at both ends says the tile failed; either-end fires on every hit taken walking off to loot or to bank, which the run has to do, and nothing in the sample tells that apart from a breath that landed on the tile.
+                if (guardsSafespot && drop.unexplained > 0 && drop.bothEnds) {
                     violations.push(drop);
-                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.bothEnds ? 'both ends' : 'one end'}, ${drop.unexplained} hp the harness cannot account for)`);
+                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.unexplained} hp the harness cannot account for)`);
                 }
                 if (drop.harness) { console.log(`${stamp()} the harness's own ~hit accounts for ${explained} of the ${fell} hp drop at ${s.tile?.x},${s.tile?.z}, leaving ${drop.unexplained}`); }
             }
@@ -532,8 +538,11 @@ try {
     const babyLine = [...babyRoll.entries()].map(([index, roll]) => `${index} nearest ${roll.nearest} over ${roll.seen} poll(s), ${roll.onAnchor} of them on the anchor`).join('; ') || 'none';
     console.log(`ANCHOR: furthest ${maxAnchorDist} tile(s) from ${MELEE_ANCHOR.x},${MELEE_ANCHOR.z} inside the lair, stood on it for ${anchorHeldPolls} poll(s)`);
     console.log(`BABIES facing us: ${babyLine}`);
-    console.log(`HP: ${hpDrops.length} drop(s), ${bothEndsDrops} with a safespot at both ends, ${violations.length} counted as violations, ${Math.round(safespotMs / 1000)}s on a safespot with an adult up of ${Math.round(lairMs / 1000)}s in the lair`);
+    const oneEndDrops = hpDrops.filter(d => d.eitherEnd && !d.bothEnds).length;
+    console.log(`HP: ${hpDrops.length} drop(s), ${bothEndsDrops} with a safespot at both ends, ${oneEndDrops} taken walking on or off one, ${violations.length} counted as violations, ${Math.round(safespotMs / 1000)}s parked on a safespot with an adult up of ${Math.round(lairMs / 1000)}s in the lair`);
+    console.log(`LOOT: ${final.looted} pickup(s), ${arrowLoots} of them Rune arrow, ${coinLoots} of them Coins`);
     if (violations.length > 0) { fail(`hp fell ${violations.length} time(s) while standing on a safespot: ${JSON.stringify(violations)}`); }
+    if (coinLoots > 0) { fail(`it picked up Coins ${coinLoots} time(s) off a loot list that does not name them`); }
     if (missing.length > 0) { fail(`the budget ran out with these unproven: ${missing.join(', ')} (status '${final.status}' at ${final.tile?.x},${final.tile?.z})`); }
     if (pageErrors.length > 0) { fail(`${pageErrors.length} browser page error(s): ${pageErrors.join('\n')}`); }
 
@@ -551,8 +560,8 @@ try {
         fixture: { levels: LEVELS, pack: kit.pack, bank: bankSeed, settings: kit.settings, start: BANK },
         assertions: met,
         required,
-        counters: { kills: final.kills, bankTrips: final.trips, bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted },
-        safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
+        counters: { kills: final.kills, bankTrips: final.trips, bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted, arrowLoots, coinLoots },
+        safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, oneEndDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
         melee: { anchor: MELEE_ANCHOR, maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
         walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
         starve,
@@ -581,7 +590,7 @@ try {
             error: String(error),
             elapsedMs: Date.now() - t0,
             assertions: met,
-            counters: { bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls },
+            counters: { bankReads, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, arrowLoots, coinLoots },
             safespot: { heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
             melee: { maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
             walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
