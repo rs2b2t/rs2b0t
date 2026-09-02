@@ -97,9 +97,29 @@ const SHOT_PATH = 'out/jivedragons-live.png';
 
 interface Kit {
     pack: readonly (readonly [string, string, number])[];
+    /** Armour to give and wear before the run, as [debug name, display name]. The script only ever equips a weapon, ammo and the melee shield, so anything else has to go on here or it never goes on at all. */
+    worn: readonly (readonly [string, string])[];
     bank: readonly BankSeedItem[];
     settings: Record<string, string | number | boolean>;
 }
+
+// Why: LEVELS gives 85 Ranged, 80 Magic and 75 Defence, so black d'hide and the wizard set are what a character at those levels would actually be wearing. The engine has no mystic robes, checked against the content pack, so the wizard set is the top of what it can wear.
+const RANGE_WORN: readonly (readonly [string, string])[] = [
+    ['coif', 'Coif'],
+    ['black_dragonhide_body', 'Dragonhide body'],
+    ['black_dragonhide_chaps', 'Dragonhide chaps'],
+    ['black_dragon_vambraces', 'Dragon vambraces'],
+    ['leather_boots', 'Leather boots'],
+    ['amulet_of_glory', 'Amulet of glory']
+];
+
+const MAGE_WORN: readonly (readonly [string, string])[] = [
+    ['bluewizhat', 'Wizards hat'],
+    ['wizards_robe', 'Wizards robe'],
+    ['blue_skirt', 'Blue skirt'],
+    ['leather_boots', 'Leather boots'],
+    ['amulet_of_magic', 'Amulet of magic']
+];
 
 const LOOT = ['Dragon bones', 'Dragonhide', 'Uncut diamond', 'Uncut ruby', 'Uncut emerald', 'Uncut sapphire'];
 
@@ -117,19 +137,23 @@ function kitFor(style: Style): Kit {
     if (style === 'melee') {
         return {
             pack: [['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
+            worn: [],
             bank: [...COMMON_BANK, { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 }, { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }],
             settings: { ...common, combatStyle: 'melee', meleeStyle: 'strength', weapon: 'Rune scimitar', useSpecial: true }
         };
     }
+    // Why: Fire Wave needs 75 Magic against the 80 the character has, and the Mystic fire staff pays the fire runes, so a cast costs one blood and five air rather than the four fire and three air a level 35 Fire Bolt was spending.
     if (style === 'mage') {
         return {
-            pack: [['staff_of_fire', 'Staff of fire', 1], ['airrune', 'Air rune', 600], ['chaosrune', 'Chaos rune', 300], [FOOD.debug, FOOD.name, PACK_FOOD]],
-            bank: [...COMMON_BANK, { debugName: 'staff_of_fire', displayName: 'Staff of fire', qty: 1 }, { debugName: 'chaosrune', displayName: 'Chaos rune', qty: 5000 }],
-            settings: { ...common, combatStyle: 'mage', staff: 'Staff of fire', spell: 'Fire Bolt', runesWithdraw: 150, runeBuffer: 300 }
+            pack: [['mystic_fire_staff', 'Mystic fire staff', 1], ['airrune', 'Air rune', 750], ['bloodrune', 'Blood rune', 150], [FOOD.debug, FOOD.name, PACK_FOOD]],
+            worn: MAGE_WORN,
+            bank: [...COMMON_BANK, { debugName: 'mystic_fire_staff', displayName: 'Mystic fire staff', qty: 1 }, { debugName: 'bloodrune', displayName: 'Blood rune', qty: 5000 }],
+            settings: { ...common, combatStyle: 'mage', staff: 'Mystic fire staff', spell: 'Fire Wave', runesWithdraw: 150, runeBuffer: 300 }
         };
     }
     return {
         pack: [['magic_shortbow', 'Magic shortbow', 1], ['rune_arrow', 'Rune arrow', 500], [FOOD.debug, FOOD.name, PACK_FOOD]],
+        worn: RANGE_WORN,
         bank: [...COMMON_BANK, { debugName: 'magic_shortbow', displayName: 'Magic shortbow', qty: 1 }, { debugName: 'rune_arrow', displayName: 'Rune arrow', qty: 5000 }],
         settings: { ...common, combatStyle: 'range', bow: 'Magic shortbow', ammo: 'Rune arrow', rangeStyle: 'rapid', ammoWithdraw: 500 }
     };
@@ -194,7 +218,7 @@ interface Probe { dustyId: number; jailKeyId: number; food: string; law: string;
 interface Api {
     __rs2b0t: {
         Bank: { isOpen(): boolean };
-        Equipment: { items(): { name: string | null }[] };
+        Equipment: { items(): { name: string | null }[]; contains(name: string): boolean; equip(name: string): Promise<boolean> };
         Game: { tile(): Point | null };
         Inventory: { count(name: string): number; countById(id: number): number };
         Npcs: { all(): { name: string | null; index: number; distance(): number; targetsMe(): boolean }[] };
@@ -261,6 +285,22 @@ async function seedPack(page: Page): Promise<void> {
         if (held < qty) { fail(`could not seed ${qty} ${display} into the pack, got ${held}`); }
     }
     console.log(`pack seeded: ${kit.pack.map(([, display, qty]) => `${qty}x ${display}`).join(', ')}`);
+}
+
+// Why: this runs after setLevels, because black d'hide wants 70 Ranged and a character still at level 1 refuses it, which would read as a wrong item name rather than a wrong order.
+async function seedWorn(page: Page): Promise<void> {
+    for (const [debug, display] of kit.worn) {
+        await command(page, `give ${debug} 1`);
+        if ((await heldCount(page, display)) < 1) { fail(`could not give '${debug}', so the name is wrong for this engine`); }
+        let on = false;
+        for (let attempt = 0; attempt < 4 && !on; attempt++) {
+            await page.evaluate(n => (globalThis as never as Api).__rs2b0t.Equipment.equip(n), display);
+            await page.waitForTimeout(600);
+            on = await page.evaluate(n => (globalThis as never as Api).__rs2b0t.Equipment.contains(n), display);
+        }
+        if (!on) { fail(`${display} was in the pack and would not go on`); }
+    }
+    if (kit.worn.length > 0) { console.log(`worn: ${kit.worn.map(([, display]) => display).join(', ')}`); }
 }
 
 async function setLevels(page: Page): Promise<void> {
@@ -335,11 +375,41 @@ let proofWritten = false;
 
 const t0 = Date.now();
 const stamp = (): string => `[${Math.round((Date.now() - t0) / 1000)}s]`;
+
+// Why: everything this harness knows went to a console nobody watching the browser can see, so a deliberate step like the starve read as the bot being mugged. The overlay puts the checklist and the current act on the page, where both a HEADED watch and the screenshot pick it up.
+let overlayNote = '';
+const noteOverlay = (text: string): void => {
+    overlayNote = text;
+    console.log(`${stamp()} ${text}`);
+};
+
 const mark = (id: string, note: string): void => {
     if (met[id]) { return; }
     met[id] = { atMs: Date.now() - t0, note };
     console.log(`${stamp()} PASS(${id}) ${note}`);
 };
+
+async function installOverlay(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        const box = document.createElement('div');
+        box.id = 'jd-overlay';
+        box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99999;font:12px/1.45 monospace;'
+            + 'background:rgba(8,12,10,.86);color:#cfe8d8;padding:10px 12px;border:1px solid #2f6b4a;'
+            + 'border-radius:6px;max-width:340px;pointer-events:none;white-space:pre-wrap';
+        box.textContent = 'JiveDragons proof: starting';
+        document.body.appendChild(box);
+    });
+}
+
+async function drawOverlay(page: Page, required: readonly string[], elapsed: number, status: string): Promise<void> {
+    const lines = required.map(id => `${met[id] ? '[x]' : '[ ]'} ${id}${met[id] ? ` ${Math.round(met[id]!.atMs / 1000)}s` : ''}`);
+    const head = `JiveDragons proof, ${args.style}${args.dusty ? ' + banked key' : ''}  ${Math.round(elapsed / 1000)}s/${args.minutes * 60}s`;
+    const body = `${head}\n${'-'.repeat(34)}\n${lines.join('\n')}\n${'-'.repeat(34)}\nbot: ${status}${overlayNote === '' ? '' : `\n>> ${overlayNote}`}`;
+    await page.evaluate(text => {
+        const box = document.getElementById('jd-overlay');
+        if (box !== null) { box.textContent = text; }
+    }, body).catch(() => {});
+}
 
 try {
     page.on('pageerror', error => {
@@ -361,6 +431,7 @@ try {
     await seedItemsToBank(page, bankSeed, BANK);
     await seedPack(page);
     await setLevels(page);
+    await seedWorn(page);
     await clearChatDialogs(page, 'seed dialog(s)');
     if (!(await teleTo(page, BANK, 6, 30_000))) { fail(`could not stand at the Falador bank (${BANK.x},${BANK.z})`); }
 
@@ -383,10 +454,13 @@ try {
     const deadline = t0 + args.minutes * 60_000;
     let lastState = 0;
 
+    await installOverlay(page);
+
     while (Date.now() < deadline) {
         const s = await sample(page, probe);
         finalSample = s;
         const elapsed = Date.now() - t0;
+        await drawOverlay(page, required, elapsed, s.status);
 
         for (const line of s.logs) {
             const key = `${line.time}|${line.msg}`;
@@ -500,7 +574,7 @@ try {
             const clean = args.style === 'melee' || (!onSafespot(s.tile) && !onSafespot(last?.tile ?? null));
             if (inLair(s.tile) && !s.bankOpen && (clean || Date.now() - starveDue > STARVE_WAIT_MS)) {
                 starve = { at: elapsed, hitAt: null, hp: s.hp, maxHp: s.maxHp, food: s.food, law: s.law, damage: null, hitTile: s.tile, tripsBefore: s.trips };
-                console.log(`${stamp()} STARVE: emptying the pack (food ${s.food}, Law rune ${s.law}) at ${s.tile?.x},${s.tile?.z}`);
+                noteOverlay(`STARVE TEST, on purpose: taking all ${s.food} food and hitting for ${LOBSTER_HEAL * 3}. The bot should bank, not die.`);
                 await command(page, '~clearinv inv', 0);
                 await command(page, 'give dusty_key 1', 0);
                 const want = Math.round(s.maxHp * 0.55);
