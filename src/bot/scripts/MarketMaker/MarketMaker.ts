@@ -323,7 +323,8 @@ export default class MarketMaker extends TaskBot {
     /** Where the shop belongs: on its stand tile, with nothing in the way. */
     // Why: standing open is the work, and it makes no xp drop and no change of tile, so the supervisor's wedge check restarts a healthy shop every ten minutes unless this says otherwise.
     onStation(): boolean {
-        if (Trade.active()) {
+        // Why: the offer screen shuts a tick before the confirm screen opens, and a shop that stepped off its leash to send its own request read that tick as off-station and walked out of its own trade.
+        if (Trade.active() || this.desk.current() !== null) {
             return true;
         }
         const here = Game.tile();
