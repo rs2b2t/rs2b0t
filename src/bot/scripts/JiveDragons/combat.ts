@@ -10,7 +10,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, attackRangeFor, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -330,7 +330,7 @@ export class Fight implements Task {
             return 'held';
         }
         const index = this.host.safespotIndex();
-        if (this.field(attackRangeFor(style)).length > 0) {
+        if (this.field(reachFor(style)).length > 0) {
             this.blindSince = performance.now();
         }
         const blindMs = performance.now() - this.blindSince;
