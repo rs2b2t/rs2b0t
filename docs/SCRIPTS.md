@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 60. Categories: 20.
+- Scripts: 61. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
@@ -19,7 +19,7 @@
 - [Fishing](#fishing) — 1
 - [Fletching](#fletching) — 2
 - [Herblore](#herblore) — 5
-- [Magic](#magic) — 2
+- [Magic](#magic) — 3
 - [Mining](#mining) — 3
 - [Money making](#money-making) — 3
 - [Navigation](#navigation) — 2
@@ -668,6 +668,12 @@ High alchemy loop — tick the items to alch and the bot drains them richest fir
 |---|---|---|---|
 | `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Rune platebody (39,000), Rune 2h sword (38,400), Rune platelegs (38,400), Rune kiteshield (32,640), Rune chainbody (30,000), Rune sq shield (23,040), Rune full helm (21,120), Rune scimitar (15,360), Air battlestaff (9,300), Earth battlestaff (9,300), Fire battlestaff (9,300), Water battlestaff (9,300), Black d'hide body (8,088), Adamant platebody (7,680), Red d'hide body (6,738), Blue d'hide body (5,616), Green d'hide body (4,680), Battlestaff (4,200), Adamant 2h sword (3,840), Adamant platelegs (3,840), Black d'hide chaps (3,732), Adamant kiteshield (3,264), Mithril platebody (3,120), Red d'hide chaps (3,108), Blue d'hide chaps (2,592), Green d'hide chaps (2,340), Black platebody (2,304), Mithril 2h sword (1,560), Mithril platelegs (1,560), Magic longbow (1,536), Mithril kiteshield (1,326), Steel platebody (1,200), Yew longbow (768), Steel 2h sword (600), Steel platelegs (600), Maple longbow (384) |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
+
+### EntranaDramenSpirit
+
+Walks to Entrana, talks to the Cave monk, climbs the dungeon ladder, farms a Bronze axe from Zombies, then Wind Strikes the Dramen Tree Spirit from 2859,9731. Withdraws every Air and Mind rune from the bank first and stops if either stack is below 200.
+
+- Tags: `magic`, `wind-strike`, `entrana`, `lost-city`, `dramen`, `tree-spirit`, `safespot`
 
 ## Mining
 

@@ -45,6 +45,7 @@ import BrimhavenAgility, { BRIMHAVEN_AGILITY_SETTINGS } from './BrimhavenAgility
 import SmelterBot, { SETTINGS as SMELTER_SETTINGS } from './SmelterBot/SmelterBot.js';
 import Superheater, { SUPERHEATER_SETTINGS } from './Superheater/Superheater.js';
 import Alcher, { ALCHER_SETTINGS } from './Alcher/Alcher.js';
+import EntranaDramenSpirit from './EntranaDramenSpirit/EntranaDramenSpirit.js';
 import HillGiant, { HILL_GIANT_SETTINGS } from './HillGiant/HillGiant.js';
 import TannerBot, { TANNER_SETTINGS } from './TannerBot/TannerBot.js';
 import VialFiller, { VIAL_FILLER_SETTINGS } from './VialFiller/VialFiller.js';
@@ -574,6 +575,15 @@ ScriptRegistry.register({
     tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
     settingsSchema: ALCHER_SETTINGS,
     create: () => new Alcher()
+});
+
+ScriptRegistry.register({
+    name: 'EntranaDramenSpirit',
+    description:
+        'Walks to Entrana, talks to the Cave monk, climbs the dungeon ladder, farms a Bronze axe from Zombies, then Wind Strikes the Dramen Tree Spirit from 2859,9731. Withdraws every Air and Mind rune from the bank first and stops if either stack is below 200.',
+    category: 'Magic',
+    tags: ['magic', 'wind-strike', 'entrana', 'lost-city', 'dramen', 'tree-spirit', 'safespot'],
+    create: () => new EntranaDramenSpirit()
 });
 
 ScriptRegistry.register({
