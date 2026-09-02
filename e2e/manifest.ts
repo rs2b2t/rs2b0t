@@ -977,7 +977,8 @@ export const CASES: readonly Case[] = [
         id: 'smithingbot-doors-live',
         harness: 'smithingbot-doors-live.ts',
         covers: { scripts: ['SmithingBot'], subsystems: ['nav'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: 'ca329ff5',
         budgetMin: 12,
         note: "Falador east bank into Doric's hut, the harness shuts the door, then back out; passes when both steps through the opened door leave on the tick the leaf swings"
     },
