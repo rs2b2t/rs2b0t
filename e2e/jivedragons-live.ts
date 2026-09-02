@@ -1,9 +1,7 @@
 /** Live proof for JiveDragons at the Taverley Dungeon blue dragons: --style --minutes --dusty --tick --no-starve.
  *  Why: supply.ts and combat.ts carry no unit tests because every function in them drives a live client, so this run is the only proof either of them works. */
 
-//   HEADED=1 bun e2e/jivedragons-live.ts --style range --minutes 25 --tick 200
-//   HEADED=1 bun e2e/jivedragons-live.ts --style melee --minutes 25 --tick 200
-//   HEADED=1 bun e2e/jivedragons-live.ts --dusty --minutes 15 --tick 200
+// Usage: HEADED=1 bun e2e/jivedragons-live.ts [--base url] [--style melee|mage|range] [--minutes n] [--tick ms] [--dusty] [--no-starve]
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 
@@ -89,6 +87,8 @@ const BANK_MS = 900_000;
 const SOAK_MS = 120_000;
 const STARVE_WAIT_MS = 180_000;
 const STARVE_BANK_MS = 900_000;
+/** How long after the harness sends its own ~hit a drop of that size is the harness rather than a breath. */
+const HARNESS_HIT_GRACE_MS = 2500;
 
 const PROOF_PATH = 'out/jivedragons-proof.json';
 const SHOT_PATH = 'out/jivedragons-live.png';
@@ -234,7 +234,7 @@ function sample(page: Page, probe: Probe): Promise<Sample> {
             worn: a.Equipment.items().map(i => i.name ?? '?'),
             adults: npcs.filter(n => n.name === p.target).length,
             babies: npcs.filter(n => n.name === p.baby).map(n => ({ index: n.index, dist: n.distance(), aims: n.targetsMe() })),
-            logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-120).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
+            logs: (g.rs2b0t.runner.ctx?.log ?? []).slice(-500).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
         };
     }, probe);
 }
@@ -288,8 +288,8 @@ const tag = `jd${Date.now().toString(36).slice(-6)}`;
 const client = args.deploy ? deployIsolatedClient(tag) : { page: '/bot.html', cleanup: (): void => {} };
 const bundleUrl = `${args.base}${args.deploy ? `/bot/${tag}/botclient.js` : '/bot/botclient.js'}`;
 
-interface HpDrop { at: number; from: number; to: number; tile: Point | null; was: Point | null; onSpot: boolean }
-interface StarveRecord { at: number; hp: number; maxHp: number; food: number; law: number; damage: number | null; hitTile: Point | null; tripsBefore: number }
+interface HpDrop { at: number; from: number; to: number; adults: number; tile: Point | null; was: Point | null; bothEnds: boolean; eitherEnd: boolean; harness: boolean }
+interface StarveRecord { at: number; hitAt: number | null; hp: number; maxHp: number; food: number; law: number; damage: number | null; hitTile: Point | null; tripsBefore: number }
 
 await mkdir('out', { recursive: true });
 const bundleSha256 = await attestBundle(bundleUrl).catch((error: unknown) => { client.cleanup(); throw error; });
@@ -309,6 +309,8 @@ let bankOpens = 0;
 let jailerFights = 0;
 let jailKeyPickups = 0;
 let deaths = 0;
+let bothEndsDrops = 0;
+const guardsSafespot = args.style !== 'melee';
 let engagingLines = 0;
 let waitingPolls = 0;
 let safespotMs = 0;
@@ -398,14 +400,27 @@ try {
         if (last !== null) {
             const step = s.at - last.at;
             if (inLair(s.tile)) { lairMs += step; }
-            if (onSafespot(s.tile)) { safespotMs += step; }
+            // Why: a safespot with nothing in the scene to breathe on it proves nothing, so the soak clock only runs with an adult up.
+            if (onSafespot(s.tile) && s.adults > 0) { safespotMs += step; }
             if (s.hp < last.hp) {
-                const drop: HpDrop = { at: elapsed, from: last.hp, to: s.hp, tile: s.tile, was: last.tile, onSpot: onSafespot(s.tile) && onSafespot(last.tile) };
+                const fell = last.hp - s.hp;
+                const grace = starve !== null && starve.hitAt !== null && starve.damage !== null
+                    && elapsed - starve.hitAt <= HARNESS_HIT_GRACE_MS && fell >= starve.damage;
+                const drop: HpDrop = {
+                    at: elapsed, from: last.hp, to: s.hp, adults: s.adults, tile: s.tile, was: last.tile,
+                    bothEnds: onSafespot(s.tile) && onSafespot(last.tile),
+                    eitherEnd: onSafespot(s.tile) || onSafespot(last.tile),
+                    harness: grace
+                };
                 hpDrops.push(drop);
-                if (drop.onSpot) {
+                if (drop.bothEnds) { bothEndsDrops++; }
+                // Why: an either-end drop with an adult in the scene is a breath that landed on the tile and was walked off before the next poll, which the both-ends rule alone would file as ordinary movement.
+                // Why: melee is exempt because its anchor borders safespot 1, so a hit taken in transit would fail a run for a tile melee never stands on by design.
+                if (guardsSafespot && !drop.harness && (drop.bothEnds || (drop.eitherEnd && s.adults > 0))) {
                     violations.push(drop);
-                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${s.tile?.x},${s.tile?.z}`);
+                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.bothEnds ? 'both ends' : 'one end'})`);
                 }
+                if (drop.harness) { console.log(`${stamp()} the ${fell} hp drop at ${s.tile?.x},${s.tile?.z} is the harness's own ~hit, not a breath`); }
             }
         }
 
@@ -454,15 +469,15 @@ try {
         if (tripsAtWalkOut >= 0 && s.trips > tripsAtWalkOut) {
             mark('walkout', `the gate walk-out landed outside the lair at ${walkOutTile?.x},${walkOutTile?.z} with no teleport, and trip ${s.trips} completed`);
         }
-        if (args.style !== 'melee' && violations.length === 0 && safespotMs >= SOAK_MS) {
-            mark('hpheld', `no hp lost across ${Math.round(safespotMs / 1000)}s standing on a safespot`);
+        if (guardsSafespot && violations.length === 0 && safespotMs >= SOAK_MS) {
+            mark('hpheld', `no hp lost across ${Math.round(safespotMs / 1000)}s standing on a safespot with an adult up`);
         }
 
         if (args.starve && starve === null && met['kill'] && lairMs >= SOAK_MS) {
             if (starveDue === 0) { starveDue = Date.now(); }
             const clean = args.style === 'melee' || (!onSafespot(s.tile) && !onSafespot(last?.tile ?? null));
             if (inLair(s.tile) && !s.bankOpen && (clean || Date.now() - starveDue > STARVE_WAIT_MS)) {
-                starve = { at: elapsed, hp: s.hp, maxHp: s.maxHp, food: s.food, law: s.law, damage: null, hitTile: s.tile, tripsBefore: s.trips };
+                starve = { at: elapsed, hitAt: null, hp: s.hp, maxHp: s.maxHp, food: s.food, law: s.law, damage: null, hitTile: s.tile, tripsBefore: s.trips };
                 console.log(`${stamp()} STARVE: emptying the pack (food ${s.food}, Law rune ${s.law}) at ${s.tile?.x},${s.tile?.z}`);
                 await command(page, '~clearinv inv', 0);
                 await command(page, 'give dusty_key 1', 0);
@@ -471,6 +486,7 @@ try {
                 if (clean && damage >= LOBSTER_HEAL + 1 && want > Math.ceil((s.maxHp * PANIC_PCT) / 100)) {
                     await command(page, `~hit ${damage}`, 0);
                     starve.damage = damage;
+                    starve.hitAt = Date.now() - t0;
                 }
             }
         }
@@ -505,7 +521,7 @@ try {
     const babyLine = [...babyRoll.entries()].map(([index, roll]) => `${index} nearest ${roll.nearest} over ${roll.seen} poll(s), ${roll.onAnchor} of them on the anchor`).join('; ') || 'none';
     console.log(`ANCHOR: furthest ${maxAnchorDist} tile(s) from ${MELEE_ANCHOR.x},${MELEE_ANCHOR.z} inside the lair, stood on it for ${anchorHeldPolls} poll(s)`);
     console.log(`BABIES facing us: ${babyLine}`);
-    console.log(`HP: ${hpDrops.length} drop(s), ${violations.length} of them across a safespot, ${Math.round(safespotMs / 1000)}s on a safespot of ${Math.round(lairMs / 1000)}s in the lair`);
+    console.log(`HP: ${hpDrops.length} drop(s), ${bothEndsDrops} with a safespot at both ends, ${violations.length} counted as violations, ${Math.round(safespotMs / 1000)}s on a safespot with an adult up of ${Math.round(lairMs / 1000)}s in the lair`);
     if (violations.length > 0) { fail(`hp fell ${violations.length} time(s) while standing on a safespot: ${JSON.stringify(violations)}`); }
     if (missing.length > 0) { fail(`the budget ran out with these unproven: ${missing.join(', ')} (status '${final.status}' at ${final.tile?.x},${final.tile?.z})`); }
     if (pageErrors.length > 0) { fail(`${pageErrors.length} browser page error(s): ${pageErrors.join('\n')}`); }
@@ -525,7 +541,7 @@ try {
         assertions: met,
         required,
         counters: { kills: final.kills, bankTrips: final.trips, bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls, looted: final.looted },
-        safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, hpDrops: hpDrops.slice(-300), violations },
+        safespot: { spots: SAFESPOTS, heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
         melee: { anchor: MELEE_ANCHOR, maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
         walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
         starve,
@@ -555,7 +571,7 @@ try {
             elapsedMs: Date.now() - t0,
             assertions: met,
             counters: { bankOpens, jailerFights, jailKeyPickups, deaths, engagingLines, waitingPolls },
-            safespot: { heldMs: safespotMs, lairMs, drops: hpDrops.length, hpDrops: hpDrops.slice(-300), violations },
+            safespot: { heldMs: safespotMs, lairMs, drops: hpDrops.length, bothEndsDrops, violations: violations.length, hpDrops: hpDrops.slice(-300), violationDrops: violations },
             melee: { maxAnchorDist, anchorHeldPolls, babyTargets: [...babyRoll.entries()].map(([index, roll]) => ({ index, ...roll })) },
             walkOut: { sawTeleportRefused: walkOutSaid, sawGateExit: outOfLairSaid, endedOutside: walkOutTile, tripsAtWalkOut },
             starve,
