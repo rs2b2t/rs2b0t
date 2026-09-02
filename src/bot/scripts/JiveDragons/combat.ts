@@ -92,7 +92,7 @@ function usesSafespot(style: Style): boolean {
     return style !== 'melee';
 }
 
-// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, so a click from it moves nobody.
+// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, and the leash pulls a dragon in rather than the bot walking out. A click that does walk us off it is caught below and the dragon skipped.
 function holdsAnchor(_style: Style): boolean {
     return true;
 }

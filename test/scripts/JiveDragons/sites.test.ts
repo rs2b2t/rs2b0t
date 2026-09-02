@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { DRAGON_SITES, SITE_OPTIONS, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
+import { derive, inputsPresent } from '../../../tools/nav/jive-dragon-safespots.js';
 
 describe('DRAGON_SITES', () => {
     test('Taverley blue is the only entry and every option resolves', () => {
@@ -40,12 +41,6 @@ describe('DRAGON_SITES', () => {
         }
     });
 
-    test('the derivation tool that produced these tiles is checked in', async () => {
-        const src = await Bun.file('tools/nav/jive-dragon-safespots.ts').text();
-        expect(src).toContain('2897, z: 9797');
-        expect(src).toContain('DRAGON_SITES');
-    });
-
     test('the escape teleport names a catalog entry, it does not copy one', () => {
         const s = DRAGON_SITES['taverley-blue']!;
         expect(SPELL_TELEPORTS.some(t => t.teleportId === s.escapeTeleportId)).toBe(true);
@@ -76,4 +71,16 @@ describe('DRAGON_SITES', () => {
     test('a tile on another plane is outside the lair', () => {
         expect(DRAGON_SITES['taverley-blue']!.inArea({ x: 2901, z: 9809, level: 1 })).toBe(false);
     });
+});
+
+// Why: the derivation needs out/collision.lcnav.gz and the rs2b2t-content maps, and CI carries neither.
+describe.skipIf(!inputsPresent())('the checked-in derivation (pack-gated)', () => {
+    test('the tool still lands on the tiles DRAGON_SITES carries', () => {
+        const site = DRAGON_SITES['taverley-blue']!;
+        const derived = derive();
+        expect([derived.anchor.x, derived.anchor.z]).toEqual([site.meleeAnchor.x, site.meleeAnchor.z]);
+        const flanking = derived.flanking.map(t => `${t.x},${t.z}`).sort();
+        expect(flanking).toEqual(site.safespots.map(t => `${t.x},${t.z}`).sort());
+        expect(derived.spawns.filter(s => s.adult).map(s => [s.x, s.z])).toEqual([[2897, 9797], [2899, 9802], [2904, 9802]]);
+    }, 60_000);
 });

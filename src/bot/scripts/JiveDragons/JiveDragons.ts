@@ -96,7 +96,7 @@ export const SETTINGS: SettingsSchema = {
     safespot1: { type: 'tile', default: TAVERLEY_BLUE.safespots[0], label: 'Safespot 1', group: 'Location', showIf: SHOW_SAFESPOT, help: 'derived off the collision pack as melee-proof with line of sight on an adult' },
     safespot2: { type: 'tile', default: TAVERLEY_BLUE.safespots[1], label: 'Safespot 2', group: 'Location', showIf: SHOW_SAFESPOT, help: 'the ladder rotates here when a hit lands, or when nothing is in range for 20s' },
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
-    meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach, so an attack click from it moves nobody' },
+    meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach; a dragon further out gets leashed in' },
     bankTile: { type: 'tile', default: TAVERLEY_BLUE.bank, label: 'Bank stand tile', group: 'Location' },
     teleStock: { type: 'number', default: 2, min: 0, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
     logDetail: { type: 'string', default: 'Normal', options: ['Normal', 'Verbose'], label: 'Log detail', group: 'Diagnostics', help: 'Verbose adds the loot, slot-freeing and key-state traces' }
