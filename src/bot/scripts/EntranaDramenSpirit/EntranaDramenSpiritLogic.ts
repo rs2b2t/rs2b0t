@@ -149,7 +149,7 @@ export function pickCaveMonkOption(options: readonly string[]): string | null {
 }
 
 /**
- * After the monk warns us, Climb-down on loc 2408 is what actually leaves the surface.
+ * After the monk warns us, Climb-down on loc 2408 is what leaves the surface.
  * Why: the loc action opens dialogue first (`entranaladdertop` has no movement destination), so agree, then climb.
  */
 export function nextDescendAction(opts: { underground: boolean; dialogOpen: boolean; warned: boolean }): DescendAction {
