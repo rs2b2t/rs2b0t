@@ -714,7 +714,7 @@ export class QuestEngine implements Task {
     }
 
     private refreshBankCounts(acceptSettledEmpty = false): void {
-        if (!Bank.isOpen() || (!Bank.loaded() && !acceptSettledEmpty)) {
+        if (!Bank.isOpen() || (!Bank.ready() && !acceptSettledEmpty)) {
             return;
         }
         const next = new Map<string, number>();

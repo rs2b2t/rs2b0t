@@ -105,6 +105,54 @@ describe('Bank exact-ID helpers', () => {
         expect(inventory[0]?.count).toBe(2);
         expect(Bank.countById(293)).toBe(1);
     });
+
+    test('note mode lands a different id, which landsAsId waits on', async () => {
+        const NOTED = 299;
+        let bankItems = [item(298, 5, 0)];
+        let inventory: InvItemSnapshot[] = [];
+
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankItems = () => bankItems;
+        (reader as any).bankSideItems = () => inventory;
+        (reader as any).inventory = () => inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        (Input as any).invButton = () => true;
+        (actions as any).answerCountDialog = (count: number) => {
+            inventory = [{ ...item(NOTED, count, 0), comId: 3214 }];
+            bankItems = [item(298, 5 - count, 0)];
+            return true;
+        };
+
+        expect(await Bank.withdrawXById(298, 2, NOTED)).toBe(true);
+        expect(inventory[0]?.id).toBe(NOTED);
+    });
+
+    test('without landsAsId the same note-mode withdraw reports failure', async () => {
+        let bankItems = [item(298, 5, 0)];
+        let inventory: InvItemSnapshot[] = [];
+
+        (reader as any).bankComId = () => 5382;
+        (reader as any).bankItems = () => bankItems;
+        (reader as any).bankSideItems = () => inventory;
+        (reader as any).inventory = () => inventory;
+        (reader as any).inventorySize = () => 28;
+        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+        (reader as any).countDialogOpen = () => true;
+        (Execution as any).delayTicks = async () => {};
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        (Input as any).invButton = () => true;
+        (actions as any).answerCountDialog = (count: number) => {
+            inventory = [{ ...item(299, count, 0), comId: 3214 }];
+            bankItems = [item(298, 5 - count, 0)];
+            return true;
+        };
+
+        expect(await Bank.withdrawXById(298, 2)).toBe(false);
+    });
 });
 
 describe('Bank named Withdraw-X', () => {

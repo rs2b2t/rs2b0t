@@ -142,7 +142,7 @@ function loadFinder(): PathFinder {
     return built;
 }
 
-// Why: the whole feature rests on the band being the only thing in the way, so both halves are pinned: the
+// Why: the feature rests on the band being the only thing in the way, so both halves are pinned: the
 // Why: pack cannot route in, and once the chop has landed the ordinary walker reaches every dig.
 describe.skipIf(!HAS_COLLISION_PACK)('the band is the only thing sealing the digs', () => {
     test('no dig routes from Karamja, and every one routes from the far side of the band', () => {

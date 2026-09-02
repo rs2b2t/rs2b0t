@@ -1,5 +1,5 @@
 import { isPopular, shelfOf, type Category } from '../api/market/categories.js';
-import { searchCatalog, type Catalog } from '../api/market/catalog.js';
+import { displayName, searchCatalog, type Catalog } from '../api/market/catalog.js';
 import { rowOf, type PriceBook, type PriceRow } from '../api/market/priceBook.js';
 import { MARKET_PRICES } from '../data/marketprices.js';
 import { resolvePrices, rowValid } from '../api/market/prices.js';
@@ -29,7 +29,7 @@ export function displayRows(book: PriceBook, cat: Catalog): DisplayRow[] {
         const item = cat.byId.get(row.id);
         return {
             id: row.id,
-            name: item?.name ?? `item ${row.id}`,
+            name: item ? displayName(cat, row.id) : `item ${row.id}`,
             category: item ? shelfOf(item) : 'Other',
             popular: item ? isPopular(item) : false,
             mid: row.mid,
@@ -115,7 +115,7 @@ export function pickerRows(
 ): { id: number; name: string; cost: number; added: boolean }[] {
     return searchCatalog(cat, query, 60).map(r => ({
         id: r.id,
-        name: r.name,
+        name: displayName(cat, r.id),
         cost: r.cost,
         added: rowOf(book, r.id) !== null
     }));
@@ -124,12 +124,46 @@ export function pickerRows(
 export type SortKey = 'name' | 'category' | 'buy' | 'sell' | 'cap';
 export type SortDir = 'asc' | 'desc';
 
+/** Letters and digits, with everything else a gap, so an apostrophe is not something you have to type. */
+function loose(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Shortest query that may match on its letters alone. */
+// Why: measured over the 132-item price snapshot, three letters in order still spray: 'ore' took 22 names including Zamorak monk's robe, and 'aro' took 16. Four cuts those to 4 and 0 while keeping 'rnplt' on the Rune plates.
+const SUBSEQUENCE_FLOOR = 4;
+
+function subsequence(haystack: string, needle: string): boolean {
+    let at = 0;
+    for (const ch of needle) {
+        at = haystack.indexOf(ch, at) + 1;
+        if (at === 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Every word typed has to land, as a substring or as letters in order. */
+export function matchesFilter(name: string, query: string): boolean {
+    const q = loose(query);
+    if (q.length === 0) {
+        return true;
+    }
+    const spaced = loose(name);
+    const packed = spaced.replace(/ /g, '');
+    return q.split(' ').every(term =>
+        spaced.includes(term) || (term.length >= SUBSEQUENCE_FLOOR && subsequence(packed, term))
+    );
+}
+
 /** The book as the table shows it: one shelf or all of them, in the operator's chosen order. */
 // Why: sorting a copy leaves the book's own order alone, so what is saved never depends on how it was last looked at.
-export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir): DisplayRow[] {
-    const kept = shelf === 'All'
+export function viewRows(rows: readonly DisplayRow[], shelf: Category | 'All', key: SortKey, dir: SortDir, query = ''): DisplayRow[] {
+    const onShelf = shelf === 'All'
         ? [...rows]
         : rows.filter(r => (shelf === 'Popular' ? r.popular : r.category === shelf));
+    const kept = onShelf.filter(r => matchesFilter(r.name, query));
     const sign = dir === 'asc' ? 1 : -1;
     return kept.sort((a, b) => {
         if (key === 'name') {

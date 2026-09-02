@@ -14,6 +14,7 @@ const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 const AL_KHARID_BANK = { x: 3269, z: 3167, level: 0 };
 /** Chainbody, not platebody: the house rule for every bank seed. */
 const ALCH_ITEM = 'Rune chainbody';
+const ALCH_KEY = 'rune_chainbody';
 const ALCHS_PER_TRIP = 10;
 const BANKED_STOCK = 30;
 /** The poll can miss the peak by a cast or two, so require a stack rather than the exact trip size. */
@@ -58,7 +59,7 @@ try {
         fail(`could not reach the Varrock West bank stand (${VARROCK_WEST_BANK.x},${VARROCK_WEST_BANK.z})`);
     }
 
-    await setSettings(page, 'Alcher', { item: ALCH_ITEM, alchs: ALCHS_PER_TRIP });
+    await setSettings(page, 'Alcher', { items: ALCH_KEY, alchs: ALCHS_PER_TRIP });
 
     const magicBefore = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Skills.xp('magic'));
     await page.evaluate(() => {

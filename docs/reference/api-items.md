@@ -55,7 +55,11 @@ use `Bank.*` once the interface is open.
 
 ```ts
 Bank.isOpen(): boolean
-Bank.loaded(): boolean                    // item list populated (wait after open/deposit)
+Bank.ready(): boolean                     // the bank has said what it holds, empty included
+Bank.waitReady(timeoutMs?, log?): Promise<boolean>
+Bank.snapshotGeneration(): number         // take before a deposit
+Bank.waitSnapshotAfter(gen, timeoutMs?): Promise<boolean>  // wait for the list that follows
+Bank.loaded(): boolean                    // item list is non-empty; false for an empty bank
 Bank.setNoteMode(on: boolean): Promise<void>
 Bank.items(): BankItemSnapshot[]          // { slot, id, name, count, ops, comId }
 Bank.count(name: string): number          // exact name, case-insensitive
@@ -79,9 +83,13 @@ withdrawOp(ops, amount: 'all' | '10' | '5' | '1' | 'x' | 'any'): string | null
 
 **Gotchas**
 
-- `isOpen` only means the bank component exists. After open (and after every
-  deposit) wait for `Bank.loaded()` before trusting `count()` / `items()`,
-  until then counts read as 0.
+- `Bank.open*` already waits for the item list, so `count()` / `items()` are
+  good on the next line.
+- After a deposit `ready()` is already true and will not block. Take
+  `snapshotGeneration()` before the deposit and wait on `waitSnapshotAfter(gen)`.
+- Test emptiness with `ready()`, never `loaded()`. `loaded()` is "the list is
+  non-empty", so an empty bank never satisfies it and a still-loading bank is
+  indistinguishable from a drained one.
 - `withdraw`/`deposit`/`count` match names in full (case-insensitive).
   `op` is the context-menu label; use `withdrawOp(item.ops, 'all')` rather than
   hard-coding `'Withdraw-All'`.
@@ -90,7 +98,6 @@ withdrawOp(ops, amount: 'all' | '10' | '5' | '1' | 'x' | 'any'): string | null
 
 ```ts
 if (!(await Banking.open({ stand: bankTile }))) return;
-await Execution.delayUntil(() => Bank.loaded(), 3000);
 await Bank.depositAllMatching(depositAllExcept(['Harpoon', 'Fishing bait']));
 await Bank.withdrawLoad('Fishing bait');
 await Bank.withdrawX('Feather', 100);

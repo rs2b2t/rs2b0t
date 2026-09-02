@@ -177,7 +177,7 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
         // 1) grab a stack we can eat from + carry.
         await topUpFood(bot);
         // 2) the bank must be closed to eat, so close, heal up (so we don't arrive low and burn
-        //    the whole stack at once), then reopen to top off again.
+        //    the stack in one sitting), then reopen to top off again.
         if (Skills.effective('hitpoints') < Skills.level('hitpoints') && (await Bank.close())) {
             await healAtBank(bot);
             if (!(await Bank.openNearest('Bank booth', 'Use-quickly', m => bot.log(`  ${m}`)))) {

@@ -23,7 +23,7 @@ engine facts rather than quest ones. Fifteen more came out of the runs themselve
   `Input.castOnLoc` and `Game.castOnLoc` are the same `TGT_BUTTON` + `TGT_LOC` pair
   `castOnNpc` already used for npcs; without them the leg is not expressible.
 - **Two gates advertise Open and answer something else.** The outer ancient gate replies
-  "You push on the doors, they're really shut" to every Open from the entering side and
+  "You push on the doors" to every Open from the entering side and
   yields only to a *Search* with a lockpick; the inner one raises a brute-strength prompt
   and a roll. Both were baked into `doors.json`, so the pathfinder routed straight at them
   and the walker looped a tile short. They belong in `SCRIPT_REFUSED`, with the last tile a
@@ -38,8 +38,8 @@ engine facts rather than quest ones. Fifteen more came out of the runs themselve
 - **Planting the seed before the sacred water is collected always destroys it.** The soil
   rolls `stat_random(herblore, 40, 243) = false | %legendsquest < ^legends_sacred_water_collected`,
   so between germinating at stage 13 and bottling the source at stage 25 every attempt
-  withers a seed and Ungadulu only hands out three. The journal reads "I just need to plant
-  them now", which is the state, not the instruction.
+  withers a seed and Ungadulu only hands out three. The journal says to plant them
+  now, which is the state, not the instruction.
 - **Five loc stages in a row expire fifty-one ticks after they grow.** Sapling, adult,
   felled, trimmed and carved each `loc_change` back to a rotten twin on a timer, so
   planting, watering, felling, trimming, carving and lifting cannot be six `decide()`

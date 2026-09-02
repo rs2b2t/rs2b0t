@@ -168,7 +168,7 @@ export function nails(snap: QuestSnapshot): QuestStep {
     if (fromNails) {
         return fromNails;
     }
-    // Why: `smithNails` reads steel in the pack alone, so banked bars were mined past, two to a bar, and hammering them skips the whole ore chain.
+    // Why: `smithNails` reads steel in the pack alone, so banked bars were mined past, two to a bar, and hammering them skips the ore chain.
     const bars = Math.ceil(need / 2);
     if (heldId(snap, HD_ID.STEEL_BAR) < bars) {
         const fromSteel = fromBank(snap, HD_ID.STEEL_BAR, 'Steel bar', bars - heldId(snap, HD_ID.STEEL_BAR));

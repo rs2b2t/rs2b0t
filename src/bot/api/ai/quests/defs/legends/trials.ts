@@ -34,7 +34,7 @@ function locById(id: number, within = 10, op?: string): Loc | null {
     return (op ? query.action(op) : query).nearest();
 }
 
-// Why: the outer and inner gates are both out of `doors.json`, as one answers Open with "they're really shut" and the other with a brute-strength prompt, so the crossing after the open is a scene step the pathfinder never sees.
+// Why: the outer and inner gates are both out of `doors.json`, as one answers Open with a refusal and the other with a brute-strength prompt, so the crossing after the open is a scene step the pathfinder never sees.
 
 /** Walk the last tile through a gate the module has opened. */
 async function stepThrough(to: Tile, want: LegendsPocket, log: (m: string) => void, quiet = false): Promise<boolean> {
@@ -119,7 +119,7 @@ const PICK_ATTEMPTS = 10;
 const PICK_MISSED = /fail to pick the lock/;
 const FORCE_MISSED = /run out of steam/;
 
-// Why: only Search with a lockpick opens the outer gate, and it rolls against thieving each time; Open answers "You push on the doors, they're really shut" from the entering side for ever.
+// Why: only Search with a lockpick opens the outer gate, and it rolls against thieving each time; Open answers "You push on the doors" from the entering side for ever.
 
 /** Pick the outer ancient gate and step through it. */
 export async function openOuterGate(log: (m: string) => void): Promise<boolean> {

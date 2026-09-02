@@ -95,7 +95,7 @@ test('deposit keepIds preserves one exact object while same-named objects are de
 });
 
 // Why: `Bank.withdrawX` takes its count ON TOP of the pack, so asking for `estGp` over a float draws the estimate twice, 50k plus the guild's 60k estimate walked 110k into the jungle.
-// Why: and `estGp` estimates the counter's whole list, so requiring all of it before every purchase sent the run back to the bank after each one.
+// Why: and `estGp` estimates the counter's full list, so requiring all of it before every purchase sent the run back to the bank after each one.
 test('a buy step with a purse above the floor makes no bank trip at all', async () => {
     bankOpens();
     noWalk();

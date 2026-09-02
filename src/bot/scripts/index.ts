@@ -52,6 +52,7 @@ import LeatherCrafter, { CRAFTER_SETTINGS } from './LeatherCrafter/LeatherCrafte
 import Firemaker, { FIREMAKER_SETTINGS } from './Firemaker/Firemaker.js';
 import SmithingBot, { SETTINGS as SMITHING_SETTINGS } from './SmithingBot/SmithingBot.js';
 import BankFletcher, { SETTINGS as BANKFLETCHER_SETTINGS } from './BankFletcher/BankFletcher.js';
+import BankSorter, { BANKSORTER_SETTINGS } from './BankSorter/BankSorter.js';
 import DartFletcher, { DART_FLETCHER_SETTINGS } from './DartFletcher/DartFletcher.js';
 import BoneBurier, { BONE_BURIER_SETTINGS } from './BoneBurier/BoneBurier.js';
 import FlaxPicker, { SETTINGS as FLAXPICKER_SETTINGS } from './FlaxPicker/FlaxPicker.js';
@@ -484,6 +485,15 @@ ScriptRegistry.register({
 });
 
 ScriptRegistry.register({
+    name: 'BankSorter',
+    description: 'Walks to a bank and rewrites the slot order into categories, coins first and junk last, then stops. Optionally reports, and drops, quest items a finished quest no longer needs',
+    category: 'Utility',
+    tags: ['bank', 'sort', 'tidy', 'quest'],
+    settingsSchema: BANKSORTER_SETTINGS,
+    create: () => new BankSorter()
+});
+
+ScriptRegistry.register({
     name: 'DartFletcher',
     description: 'Spam-attaches feathers to stackable dart tips at the five-action-per-tick server ceiling; runs anywhere until either input stack is empty',
     category: 'Fletching',
@@ -559,7 +569,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'Alcher',
-    description: 'High alchemy loop — withdraw the chosen item from the bank as notes, cast High Level Alchemy (fire staff + nature runes) on the stack to alch it in full, bank the coins, repeat',
+    description: 'High alchemy loop — tick the items to alch and the bot drains them richest first, withdrawing each as notes and casting High Level Alchemy (fire staff + nature runes) until the bank is out, then moving to the next',
     category: 'Magic',
     tags: ['magic', 'high alchemy', 'alchemy', 'banking', 'noted'],
     settingsSchema: ALCHER_SETTINGS,
