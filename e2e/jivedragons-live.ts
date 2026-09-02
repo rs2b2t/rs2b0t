@@ -372,7 +372,8 @@ try {
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
-    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', 'wielded', args.dusty ? 'bankedkey' : 'coldkey'];
+    // Why: melee passed a whole run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
+    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
     if (args.style !== 'melee') { required.push('hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
@@ -475,6 +476,7 @@ try {
         if (samePoint(s.tile, MELEE_ANCHOR)) { mark('meleeanchor', `standing exactly on the melee anchor at ${MELEE_ANCHOR.x},${MELEE_ANCHOR.z}`); }
         if (WIELDED !== '' && s.worn.includes(WIELDED)) { mark('wielded', `${WIELDED} is worn`); }
         if (s.kills > 0 && met['wielded'] === undefined) { fail(`a kill landed with no ${WIELDED} worn, only ${s.worn.filter(w => w !== '?').join('/') || 'nothing'}`); }
+        if (s.looted > 0) { mark('loot', `${s.looted} pickup(s) reached the pack after ${s.kills} kill(s)`); }
         if (s.kills > 0) {
             if (tripsAtKill < 0) { tripsAtKill = s.trips; }
             mark('kill', `${s.kills} blue dragon(s) down`);
