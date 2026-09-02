@@ -210,8 +210,8 @@ export class Fight implements Task {
                 return;
             }
             // Why: eating in dragonfire loses the race, so the fight hands the loop back at the retreat line the same way the task order puts Retreat above Eat.
-            // Why: needEat gates it because a retreat the bot would not eat at the end of walks off the anchor and back forever.
-            if (this.host.needEat() && retreatNeeded(this.host, this.site)) {
+            // Why: needEat is false with an empty pack, so gating on it alone kept a foodless fight running for the 5s that killed a live run; it now guards only the case it was written for, a fed retreat that would not eat at the end and shuttles.
+            if ((!this.host.hasFood() || this.host.needEat()) && retreatNeeded(this.host, this.site)) {
                 return;
             }
             // Why: an eat that never lands means an empty pack, and looping on it burns every pass without pumping Sustain or reaching the panic check below.
@@ -468,7 +468,7 @@ export class Retreat implements Task {
         // Why: the ladder reads this to pick the fight tile, so the run resumes on the tile it ran to rather than walking back out to the old one.
         this.host.setSafespotIndex(index);
         this.host.setStatus(`retreating to safespot ${index}`);
-        this.host.log(`retreating to safespot ${index} at ${spot} from ${here} at ${Math.round(this.host.hpFraction() * 100)}% hp${this.host.hasFood() ? '' : ' with an empty pack'}`);
+        this.host.log(`retreating to safespot ${index} at ${spot} from ${here.x},${here.z} at ${Math.round(this.host.hpFraction() * 100)}% hp${this.host.hasFood() ? '' : ' with an empty pack'}`);
         // Why: the walk goes out before the bite so the run eats while it moves, since eatOnce waits up to 3s on the heal and every one of those spent still is another breath taken.
         // Why: the supervisor pauses the whole script for the length of a random event, so yielding before the first hop leaves the bot in the fire for all of it. One click goes out, then the loop hands over.
         for (let i = 0; i < RETREAT_HOPS && !atTile(spot); i++) {
