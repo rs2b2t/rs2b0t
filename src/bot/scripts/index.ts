@@ -37,6 +37,7 @@ import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from 
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
 import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
+import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
@@ -203,6 +204,15 @@ ScriptRegistry.register({
     tags: ['taverley', 'dragons', 'safespot', 'members', 'banking', 'clues'],
     settingsSchema: JIVEDRAGONS_SETTINGS,
     create: () => new JiveDragons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveDemons',
+    description: 'Taverley Dungeon black demons: mage or range from a derived safespot in the pocket past the blue dragons. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.',
+    category: 'Combat',
+    tags: ['taverley', 'demons', 'safespot', 'members', 'banking'],
+    settingsSchema: JIVEDEMONS_SETTINGS,
+    create: () => new JiveDemons()
 });
 
 ScriptRegistry.register({

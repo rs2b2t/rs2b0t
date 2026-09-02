@@ -33,7 +33,7 @@ export interface DragonSite {
     inArea(t: AreaPoint | null): boolean;
 }
 
-interface Box {
+export interface Box {
     minX: number;
     maxX: number;
     minZ: number;
@@ -41,7 +41,7 @@ interface Box {
     level: number;
 }
 
-const inBox = (b: Box) => (t: AreaPoint | null): boolean =>
+export const inBox = (b: Box) => (t: AreaPoint | null): boolean =>
     t !== null && t.level === b.level
     && t.x >= b.minX && t.x <= b.maxX
     && t.z >= b.minZ && t.z <= b.maxZ;

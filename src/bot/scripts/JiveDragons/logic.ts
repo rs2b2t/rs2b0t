@@ -1,5 +1,7 @@
 import { matchesCommonBankLoot } from '../../api/bank/bankRules.js';
 import { CASKET_IDS, CLUE_DB } from '../../api/ai/clues/data/cluedb.js';
+import Tile from '../../geometry/Tile.js';
+import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 
 export type Style = 'melee' | 'mage' | 'range';
 
@@ -162,4 +164,16 @@ export function keyStatus(held: number, banked: number): 'held' | 'bank' | 'fetc
         return 'held';
     }
     return banked > 0 ? 'bank' : 'fetch';
+}
+
+// Why: SettingsStore.resolve fills every key with the schema default, so an untouched tile setting reads back as the schema's tile and would beat the tile the chosen site carries.
+
+/** The site's own tile, unless the panel setting has been moved off its schema default. */
+export function siteTileOf(schema: SettingsSchema, bag: SettingsBag, key: string | undefined, site: Tile): Tile {
+    const def = key === undefined ? undefined : schema[key]?.default;
+    if (key === undefined || !(def instanceof Tile)) {
+        return site;
+    }
+    const set = bag.tile(key, site);
+    return set.equals(def) ? site : set;
 }

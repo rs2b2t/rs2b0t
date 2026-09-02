@@ -1,7 +1,7 @@
-/** Derive the Taverley blue dragon safespots and melee anchor, which feed DRAGON_SITES in scripts/JiveDragons/sites.ts.
- *  Why: walkable is not reachable and a size-4 body slides six tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
+/** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons and scripts/JiveDemons.
+ *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
-//   bun tools/nav/jive-dragon-safespots.ts [--content ~/code/rs2b2t-content]
+//   bun tools/nav/jive-safespots.ts [--target blue|demon] [--content ~/code/rs2b2t-content]
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -16,16 +16,30 @@ const argVal = (flag: string): string | undefined => {
 export const PACK = 'out/collision.lcnav.gz';
 export const MAPS = path.join(argVal('--content') ?? process.env.CONTENT_DIR ?? path.join(homedir(), 'code', 'rs2b2t-content'), 'maps');
 
-/** The map squares the lair box spans. m45_152 holds the three babies south of z 9792. */
-const SQUARES = ['m45_153', 'm45_152'];
-const BLUE_DRAGON = 55;
-const BABY_BLUE = 52;
-
 const LEVEL = 0;
-// Why: maxrange is what the engine clamps npc movement with, and the answer moves with it: at the wanderrange of 4 the winning anchor is (2903, 9806), which borders two adult spawns instead of one.
-const MAXRANGE = 6;
 const CAST_RANGE = 10;
 const GATE_INSIDE = { x: 2923, z: 9803 };
+const LADDER_BOTTOM = { x: 2884, z: 9798 };
+
+export interface Target {
+    /** The map squares the spawns are read from. */
+    squares: string[];
+    adult: { id: number; size: number };
+    baby: { id: number; size: number } | null;
+    /** What the engine clamps the npc's movement with. */
+    maxrange: number;
+    /** The tile the site region floods from. */
+    inside: { x: number; z: number };
+    /** A tile on the wrong side of the gate, whose region a site area must stay out of. */
+    outside: { x: number; z: number };
+}
+
+// Why: m45_152 holds the three babies south of z 9792.
+// Why: the answer moves with maxrange: at the wanderrange of 4 the winning anchor is (2903, 9806), which borders two adult spawns instead of one.
+export const BLUE_DRAGON: Target = { squares: ['m45_153', 'm45_152'], adult: { id: 55, size: 4 }, baby: { id: 52, size: 2 }, maxrange: 6, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
+export const BLACK_DEMON: Target = { squares: ['m44_152'], adult: { id: 84, size: 3 }, baby: null, maxrange: 9, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
+
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -68,20 +82,22 @@ export interface Derivation {
     bodies: number;
     adultBodies: number;
     reachable: Set<string>;
+    /** Every tile the ladder side of the gate reaches, none of which a site area may hold. */
+    outside: Set<string>;
     safespots: Safespot[];
     anchors: Anchor[];
     anchor: Anchor;
     flanking: Safespot[];
 }
 
-export function inputsPresent(maps = MAPS): boolean {
-    return fs.existsSync(PACK) && SQUARES.every(s => fs.existsSync(path.join(maps, `${s}.jm2`)));
+export function inputsPresent(target = BLUE_DRAGON, maps = MAPS): boolean {
+    return fs.existsSync(PACK) && target.squares.every(s => fs.existsSync(path.join(maps, `${s}.jm2`)));
 }
 
-/** Read the blue dragon spawns straight out of the .jm2 NPC sections, so a moved dragon shows up as a moved tile. */
-export function readSpawns(maps = MAPS): Spawn[] {
+/** Read the spawns straight out of the .jm2 NPC sections, so a moved npc shows up as a moved tile. */
+export function readSpawns(target = BLUE_DRAGON, maps = MAPS): Spawn[] {
     const spawns: Spawn[] = [];
-    for (const square of SQUARES) {
+    for (const square of target.squares) {
         const file = path.join(maps, `${square}.jm2`);
         const parts = /^m(\d+)_(\d+)$/.exec(square);
         if (!parts) throw new Error(`cannot read a map square origin out of ${square}`);
@@ -96,18 +112,18 @@ export function readSpawns(maps = MAPS): Spawn[] {
             const row = section ? /^(\d+) (\d+) (\d+): (\d+)\b/.exec(line.trim()) : null;
             if (!row || row[1] !== String(LEVEL)) continue;
             const id = Number(row[4]);
-            if (id !== BLUE_DRAGON && id !== BABY_BLUE) continue;
-            const adult = id === BLUE_DRAGON;
-            spawns.push({ x: ox + Number(row[2]), z: oz + Number(row[3]), size: adult ? 4 : 2, adult });
+            const adult = id === target.adult.id;
+            if (!adult && id !== target.baby?.id) continue;
+            spawns.push({ x: ox + Number(row[2]), z: oz + Number(row[3]), size: adult ? target.adult.size : target.baby!.size, adult });
         }
         if (!found) throw new Error(`${file} has no '==== NPC ====' section`);
     }
-    if (!spawns.some(s => s.adult)) throw new Error(`no npc ${BLUE_DRAGON} spawns in ${SQUARES.join(', ')}; check ${maps}`);
+    if (!spawns.some(s => s.adult)) throw new Error(`no npc ${target.adult.id} spawns in ${target.squares.join(', ')}; check ${maps}`);
     spawns.sort((a, b) => Number(b.adult) - Number(a.adult) || a.x - b.x || a.z - b.z);
     return spawns;
 }
 
-export function derive(packPath = PACK, maps = MAPS): Derivation {
+export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Derivation {
     let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
     const finder = new PathFinder(bytes);
@@ -155,7 +171,7 @@ export function derive(packPath = PACK, maps = MAPS): Derivation {
             }
             for (let dir = 0; dir < 4; dir++) {
                 const nx = o.x + DX[dir]!, nz = o.z + DZ[dir]!;
-                if (seen.has(key(nx, nz)) || cheb(nx, nz, spawn.x, spawn.z) > MAXRANGE) continue;
+                if (seen.has(key(nx, nz)) || cheb(nx, nz, spawn.x, spawn.z) > target.maxrange) continue;
                 if (!canSlide(o.x, o.z, spawn.size, dir) || !fits(nx, nz, spawn.size)) continue;
                 seen.add(key(nx, nz));
                 queue.push({ x: nx, z: nz });
@@ -220,7 +236,7 @@ export function derive(packPath = PACK, maps = MAPS): Derivation {
         return true;
     };
 
-    const spawns = readSpawns(maps);
+    const spawns = readSpawns(target, maps);
     const wanders = spawns.map(wander);
     const adults = wanders.filter(w => w.spawn.adult);
     const allBody = new Set<string>();
@@ -235,21 +251,29 @@ export function derive(packPath = PACK, maps = MAPS): Derivation {
         for (const t of w.threat) (w.spawn.adult ? adultThreat : babyThreat).add(t);
     }
 
-    if (!walk(GATE_INSIDE.x, GATE_INSIDE.z)) {
-        throw new Error(`the gate's inside tile (${GATE_INSIDE.x}, ${GATE_INSIDE.z}) is not walkable in ${packPath}`);
-    }
-    const reachable = new Set<string>([key(GATE_INSIDE.x, GATE_INSIDE.z)]);
-    const stack = [GATE_INSIDE];
-    while (stack.length > 0) {
-        const t = stack.pop()!;
-        const mask = exit(t.x, t.z);
-        for (let dir = 0; dir < 8; dir++) {
-            if ((mask & (1 << dir)) === 0) continue;
-            const nx = t.x + DX[dir]!, nz = t.z + DZ[dir]!;
-            if (reachable.has(key(nx, nz))) continue;
-            reachable.add(key(nx, nz));
-            stack.push({ x: nx, z: nz });
+    const flood = (from: { x: number; z: number }, what: string): Set<string> => {
+        if (!walk(from.x, from.z)) {
+            throw new Error(`${what} (${from.x}, ${from.z}) is not walkable in ${packPath}`);
         }
+        const seen = new Set<string>([key(from.x, from.z)]);
+        const stack = [from];
+        while (stack.length > 0) {
+            const t = stack.pop()!;
+            const mask = exit(t.x, t.z);
+            for (let dir = 0; dir < 8; dir++) {
+                if ((mask & (1 << dir)) === 0) continue;
+                const nx = t.x + DX[dir]!, nz = t.z + DZ[dir]!;
+                if (seen.has(key(nx, nz))) continue;
+                seen.add(key(nx, nz));
+                stack.push({ x: nx, z: nz });
+            }
+        }
+        return seen;
+    };
+    const reachable = flood(target.inside, "the gate's inside tile");
+    const outside = flood(target.outside, 'the ladder-side tile');
+    if (outside.has(key(target.inside.x, target.inside.z))) {
+        throw new Error(`the gate at (${target.inside.x}, ${target.inside.z}) is open in ${packPath}, so the two sides of it cannot be told apart`);
     }
     const safespots: Safespot[] = [];
     for (const k of reachable) {
@@ -290,16 +314,19 @@ export function derive(packPath = PACK, maps = MAPS): Derivation {
     if (flanking.length === 0) {
         throw new Error(`no safespot within 2 of the anchor (${anchor.x}, ${anchor.z})`);
     }
-    return { spawns, wanders, bodies: allBody.size, adultBodies: adultBody.size, reachable, safespots, anchors, anchor, flanking };
+    return { spawns, wanders, bodies: allBody.size, adultBodies: adultBody.size, reachable, outside, safespots, anchors, anchor, flanking };
 }
 
 if (import.meta.main) {
-    const d = derive();
+    const name = argVal('--target') ?? 'blue';
+    const target = TARGETS[name];
+    if (!target) throw new Error(`--target takes ${Object.keys(TARGETS).join(', ')}, got '${name}'`);
+    const d = derive(target);
     for (const w of d.wanders) {
         console.log(`${w.spawn.adult ? 'adult' : 'baby '} spawn (${w.spawn.x}, ${w.spawn.z}) size ${w.spawn.size}: ${w.placements} placements, ${w.body.size} body tiles, ${w.threat.size} tiles it can hit`);
     }
     console.log(`bodies ${d.bodies} (${d.adultBodies} adult)`);
-    console.log(`${d.reachable.size} tiles reachable from the gate's inside tile (${GATE_INSIDE.x}, ${GATE_INSIDE.z})`);
+    console.log(`${d.reachable.size} tiles reachable from the gate's inside tile (${target.inside.x}, ${target.inside.z}), ${d.outside.size} on the ladder side`);
     console.log(`${d.safespots.length} safespots: reachable, off every body, out of every threat set, and looking at an adult inside ${CAST_RANGE}`);
     for (const s of d.safespots.slice(0, 12)) console.log(`  (${s.x}, ${s.z})  sees an adult ${s.range} away`);
     const adultSpawns = d.spawns.filter(s => s.adult).length;

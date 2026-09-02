@@ -307,7 +307,7 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
     }
     await Bank.close();
     h.countBankTrip();
-    h.setStatus('restocked, heading back to the dragons');
+    h.setStatus(`restocked, heading back to the ${site.target.toLowerCase()}s`);
 }
 
 async function withdrawFoodTo(h: JiveHost): Promise<void> {
