@@ -62,8 +62,8 @@ const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 const SHOW_SAFESPOT = { key: 'combatStyle', anyOf: ['mage', 'range'] };
 
 const DROPS: string[] = DROP_DB[TAVERLEY_BLUE.target] ?? [];
-// Why: Bass is food the run never eats, so a slot spent on it is a slot the hides do not get.
-const DEFAULT_LOOT = DROPS.filter(n => n.toLowerCase() !== 'bass');
+// Why: Bass is food the run never eats and a coin pile is 11 to 440, so both spend a walk off the safespot that the hides pay for better.
+const DEFAULT_LOOT = DROPS.filter(n => !['bass', 'coins'].includes(n.toLowerCase()));
 
 export const SETTINGS: SettingsSchema = {
     combatStyle: { type: 'string', default: 'range', options: ['melee', 'mage', 'range'], label: 'Combat style', help: 'mage and range fight from a tile no dragon can path to. Melee stands in the dragonfire and needs the Dragonfire shield' },
@@ -86,7 +86,7 @@ export const SETTINGS: SettingsSchema = {
     foodReserve: { type: 'number', default: 4, min: 0, max: 27, label: 'Food kept back from slot-freeing', group: 'Food & healing', help: 'a full pack spends food to make room for loot instead of banking, never below this many' },
     healTo: { type: 'number', default: 90, min: 10, max: 100, label: 'Heal to HP% before heading back', group: 'Food & healing', help: 'the walk in is long, so the trip eats up at the booth and tops the food back up after' },
 
-    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the blue dragon table. Everything picked up is banked' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'the blue dragon table. Everything picked up is banked. Bass and Coins start unticked because neither pays for the walk off the safespot' },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: 'bury Dragon bones for Prayer xp instead of banking them (always looted when on). They are the best drop here, so this trades gold for xp' },
 
@@ -98,6 +98,7 @@ export const SETTINGS: SettingsSchema = {
     safespot3: { type: 'tile', default: TAVERLEY_BLUE.safespots[2], label: 'Safespot 3', group: 'Location', showIf: SHOW_SAFESPOT },
     meleeTile: { type: 'tile', default: TAVERLEY_BLUE.meleeAnchor, label: 'Melee anchor tile', group: 'Location', showIf: SHOW_MELEE, help: 'derived bordering an adult body no baby can reach; a dragon further out gets leashed in' },
     bankTile: { type: 'tile', default: TAVERLEY_BLUE.bank, label: 'Bank stand tile', group: 'Location' },
+    leaveVia: { type: 'string', default: 'teleport', options: ['teleport', 'walk'], optionLabels: { teleport: 'Falador teleport', walk: 'Walk out through the gate' }, label: 'Leave the lair by', group: 'Location', help: 'the teleport falls back to the gate walk when the runes or the magic level are short. Every other spell teleport lands further from the Falador West bank, so none is offered' },
     teleStock: { type: 'number', default: 2, min: 0, max: 10, label: 'Spare escape casts', group: 'Location', help: 'casts carried on top of the one needed to leave' },
     logDetail: { type: 'string', default: 'Normal', options: ['Normal', 'Verbose'], label: 'Log detail', group: 'Diagnostics', help: 'Verbose adds the loot, slot-freeing and key-state traces' }
 };
@@ -111,6 +112,7 @@ let SPELL = 'Fire Strike';
 let AMMO = 'Iron arrow';
 let FOOD_NAME = 'Lobster';
 let ESCAPE_LABEL = escapeRunesFor(TAVERLEY_BLUE.escapeTeleportId).label;
+let LEAVE_WALK = false;
 let BURY_BONES = false;
 let SOLVE_CLUES = true;
 
@@ -638,7 +640,8 @@ export default class JiveDragons extends TaskBot implements CombatHost {
             : STYLE === 'range' ? this.settings.str('bow', 'Maple shortbow')
                 : this.settings.str('weapon', 'Rune scimitar');
         FOOD_NAME = scriptFood(this.settings, 'Lobster');
-        ESCAPE_LABEL = escapeRunesFor(SITE.escapeTeleportId).label;
+        LEAVE_WALK = this.settings.str('leaveVia', 'teleport') === 'walk';
+        ESCAPE_LABEL = LEAVE_WALK ? 'walk out' : escapeRunesFor(SITE.escapeTeleportId).label;
         BURY_BONES = this.settings.bool('buryBones', false);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
 
@@ -651,6 +654,10 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         ESCAPE_STOCK = this.settings.num('teleStock', 2);
         HEAL_TO = this.settings.num('healTo', 90) / 100;
         LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        // Why: fired arrows land where the dragon dies and sit on no drop table, so the 500 a trip withdraws come home only if the loot set names them.
+        if (STYLE === 'range') {
+            LOOT_SET.add(AMMO.toLowerCase());
+        }
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
         USE_SPECIAL = this.settings.bool('useSpecial', true);
@@ -767,6 +774,9 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     keepExtra(): string[] {
         return potionDoseNames();
+    }
+    leaveByWalk(): boolean {
+        return LEAVE_WALK;
     }
     hpFraction(): number {
         return hpFrac();

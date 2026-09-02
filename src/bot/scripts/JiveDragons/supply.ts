@@ -36,6 +36,8 @@ export interface JiveHost {
     ammoName(): string;
     spellName(): string;
     keepExtra(): string[];
+    /** Walk out through the gate rather than casting the escape teleport. */
+    leaveByWalk(): boolean;
 }
 
 export interface BankOpts {
@@ -203,6 +205,9 @@ export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean>
 export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (!site.inArea(Game.tile())) {
         return true;
+    }
+    if (h.leaveByWalk()) {
+        return walkOutOfLair(h, site);
     }
     const esc = escapeRunesFor(site.escapeTeleportId);
     let why = escapeShortfall(esc);
