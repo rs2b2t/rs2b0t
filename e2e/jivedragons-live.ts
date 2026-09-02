@@ -288,7 +288,7 @@ const tag = `jd${Date.now().toString(36).slice(-6)}`;
 const client = args.deploy ? deployIsolatedClient(tag) : { page: '/bot.html', cleanup: (): void => {} };
 const bundleUrl = `${args.base}${args.deploy ? `/bot/${tag}/botclient.js` : '/bot/botclient.js'}`;
 
-interface HpDrop { at: number; from: number; to: number; adults: number; tile: Point | null; was: Point | null; bothEnds: boolean; eitherEnd: boolean; harness: boolean }
+interface HpDrop { at: number; from: number; to: number; adults: number; tile: Point | null; was: Point | null; bothEnds: boolean; eitherEnd: boolean; harness: boolean; explained: number; unexplained: number }
 interface StarveRecord { at: number; hitAt: number | null; hp: number; maxHp: number; food: number; law: number; damage: number | null; hitTile: Point | null; tripsBefore: number }
 
 await mkdir('out', { recursive: true });
@@ -310,7 +310,7 @@ let jailerFights = 0;
 let jailKeyPickups = 0;
 let deaths = 0;
 let bothEndsDrops = 0;
-const guardsSafespot = args.style !== 'melee';
+let harnessCredit = 0;
 let engagingLines = 0;
 let waitingPolls = 0;
 let safespotMs = 0;
@@ -362,6 +362,7 @@ try {
     console.log(`JiveDragons started; watching the key, the gate, ${args.style === 'melee' ? 'the melee anchor' : `the safespot at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`}, a kill and a bank trip`);
 
     const probe: Probe = { dustyId: DUSTY_ID, jailKeyId: JAIL_KEY_ID, food: FOOD.name, law: 'Law rune', target: TARGET, baby: BABY };
+    const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
     const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', args.dusty ? 'bankedkey' : 'coldkey'];
@@ -404,23 +405,25 @@ try {
             if (onSafespot(s.tile) && s.adults > 0) { safespotMs += step; }
             if (s.hp < last.hp) {
                 const fell = last.hp - s.hp;
-                const grace = starve !== null && starve.hitAt !== null && starve.damage !== null
-                    && elapsed - starve.hitAt <= HARNESS_HIT_GRACE_MS && fell >= starve.damage;
+                // Why: the ~hit takes off the damage it was given, one tick after the send, so it explains that many hp once and no more, and anything above it in the same poll is a breath the cheat cannot account for.
+                const inGrace = starve !== null && starve.hitAt !== null && elapsed - starve.hitAt <= HARNESS_HIT_GRACE_MS;
+                const explained = inGrace ? Math.min(fell, harnessCredit) : 0;
+                harnessCredit -= explained;
                 const drop: HpDrop = {
                     at: elapsed, from: last.hp, to: s.hp, adults: s.adults, tile: s.tile, was: last.tile,
                     bothEnds: onSafespot(s.tile) && onSafespot(last.tile),
                     eitherEnd: onSafespot(s.tile) || onSafespot(last.tile),
-                    harness: grace
+                    harness: explained > 0, explained, unexplained: fell - explained
                 };
                 hpDrops.push(drop);
                 if (drop.bothEnds) { bothEndsDrops++; }
                 // Why: an either-end drop with an adult in the scene is a breath that landed on the tile and was walked off before the next poll, which the both-ends rule alone would file as ordinary movement.
                 // Why: melee is exempt because its anchor borders safespot 1, so a hit taken in transit would fail a run for a tile melee never stands on by design.
-                if (guardsSafespot && !drop.harness && (drop.bothEnds || (drop.eitherEnd && s.adults > 0))) {
+                if (guardsSafespot && drop.unexplained > 0 && (drop.bothEnds || (drop.eitherEnd && s.adults > 0))) {
                     violations.push(drop);
-                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.bothEnds ? 'both ends' : 'one end'})`);
+                    console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.bothEnds ? 'both ends' : 'one end'}, ${drop.unexplained} hp the harness cannot account for)`);
                 }
-                if (drop.harness) { console.log(`${stamp()} the ${fell} hp drop at ${s.tile?.x},${s.tile?.z} is the harness's own ~hit, not a breath`); }
+                if (drop.harness) { console.log(`${stamp()} the harness's own ~hit accounts for ${explained} of the ${fell} hp drop at ${s.tile?.x},${s.tile?.z}, leaving ${drop.unexplained}`); }
             }
         }
 
@@ -487,6 +490,7 @@ try {
                     await command(page, `~hit ${damage}`, 0);
                     starve.damage = damage;
                     starve.hitAt = Date.now() - t0;
+                    harnessCredit = damage;
                 }
             }
         }
