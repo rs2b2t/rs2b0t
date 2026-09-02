@@ -368,7 +368,7 @@ Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee w
 | `safespot1` | tile | `{"x":2901,"z":9809,"level":0}` | Safespot 1 |
 | `safespot2` | tile | `{"x":2900,"z":9809,"level":0}` | Safespot 2 |
 | `safespot3` | tile | `{"x":2901,"z":9810,"level":0}` | Safespot 3 |
-| `meleeTile` | tile | `{"x":2902,"z":9805,"level":0}` | Melee anchor tile |
+| `meleeTile` | tile | `{"x":2900,"z":9808,"level":0}` | Melee anchor tile |
 | `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
 | `teleStock` | number (0–10) | `2` | Spare escape casts |
 | `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |

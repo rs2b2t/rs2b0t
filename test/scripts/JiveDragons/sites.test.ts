@@ -17,7 +17,7 @@ describe('DRAGON_SITES', () => {
     test('the derived tiles match what the collision probe produced', () => {
         const s = DRAGON_SITES['taverley-blue']!;
         expect(s.safespots.map(t => [t.x, t.z])).toEqual([[2901, 9809], [2900, 9809], [2901, 9810]]);
-        expect([s.meleeAnchor.x, s.meleeAnchor.z]).toEqual([2902, 9805]);
+        expect([s.meleeAnchor.x, s.meleeAnchor.z]).toEqual([2900, 9808]);
         expect(s.approach.map(t => [t.x, t.z])).toEqual([[2911, 9809]]);
         expect(s.gate).toMatchObject({ locId: 2623, op: 'Open' });
         expect([s.gate!.outside.x, s.gate!.outside.z]).toEqual([2924, 9803]);
@@ -29,6 +29,21 @@ describe('DRAGON_SITES', () => {
         expect(s.target).toBe('Blue dragon');
         expect(s.bones).toBe('Dragon bones');
         expect(s.safespots.every(t => t.level === 0)).toBe(true);
+    });
+
+    test('the melee anchor stands outside every adult spawn footprint', () => {
+        const s = DRAGON_SITES['taverley-blue']!;
+        const spawns = [[2897, 9797], [2899, 9802], [2904, 9802]];
+        for (const [x, z] of spawns) {
+            const inside = s.meleeAnchor.x >= x! && s.meleeAnchor.x <= x! + 3 && s.meleeAnchor.z >= z! && s.meleeAnchor.z <= z! + 3;
+            expect(inside).toBe(false);
+        }
+    });
+
+    test('the derivation tool that produced these tiles is checked in', async () => {
+        const src = await Bun.file('tools/nav/jive-dragon-safespots.ts').text();
+        expect(src).toContain('2897, z: 9797');
+        expect(src).toContain('DRAGON_SITES');
     });
 
     test('the escape teleport names a catalog entry, it does not copy one', () => {

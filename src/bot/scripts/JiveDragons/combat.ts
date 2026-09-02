@@ -92,7 +92,7 @@ function usesSafespot(style: Style): boolean {
     return style !== 'melee';
 }
 
-// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is derived adjacent to all three adult footprints and a click from it moves nobody.
+// Why: only the ladder is safespot-only. Every style fights from a fixed tile, melee included, since the anchor is the tile bordering the most adult body tiles that no baby can reach, so a click from it moves nobody.
 function holdsAnchor(_style: Style): boolean {
     return true;
 }
