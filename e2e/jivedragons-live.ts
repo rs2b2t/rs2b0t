@@ -538,7 +538,8 @@ try {
         if (s.bankOpen && !(last?.bankOpen ?? false)) { bankOpens++; }
         if (/fighting the Jailer/i.test(s.status) && !/fighting the Jailer/i.test(last?.status ?? '')) { jailerFights++; }
         if (s.jailKey > 0 && (last?.jailKey ?? 0) === 0) { jailKeyPickups++; }
-        if (s.died && !(last?.died ?? false)) { deaths++; fail(`the bot died at ${s.tile?.x},${s.tile?.z}, on ${last?.hp ?? s.hp}/${s.maxHp} hp the poll before`); }
+        // Why: the sample that first reads died is taken after the respawn, so its tile is Lumbridge and naming it sends the reader to the wrong end of the map. The tile that matters is the one the poll before was standing on.
+        if (s.died && !(last?.died ?? false)) { deaths++; fail(`the bot died at ${last?.tile?.x},${last?.tile?.z} on ${last?.hp ?? s.hp}/${s.maxHp} hp, and woke at ${s.tile?.x},${s.tile?.z}`); }
         if (/waiting for blue dragon \d+ to close/i.test(s.status)) { waitingPolls++; }
 
         if (last !== null) {
@@ -635,6 +636,12 @@ try {
                 noteOverlay(`STARVE TEST, on purpose: taking all ${s.food} food and hitting for ${LOBSTER_HEAL * 3}. The bot should bank, not die.`);
                 await command(page, '~clearinv inv', 0);
                 await command(page, 'give dusty_key 1', 0);
+                // Why: the clear takes the pack, not the food, and it was taking the escape runes with it. The starve is about having no food, so the cast the exit under test needs goes back the same way the key does.
+                if (args.leave === 'teleport') {
+                    for (const [debug, , qty] of ESCAPE_RUNES) {
+                        await command(page, `give ${debug} ${qty}`, 0);
+                    }
+                }
                 const want = Math.round(s.maxHp * 0.55);
                 const damage = s.hp - want;
                 if (clean && damage >= LOBSTER_HEAL + 1 && want > Math.ceil((s.maxHp * PANIC_PCT) / 100)) {
