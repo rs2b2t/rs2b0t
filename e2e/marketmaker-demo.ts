@@ -146,7 +146,7 @@ ${rows}
     trade it something junk    valued at nothing, and it says so
     buy 10 maple longbow       the strung one
     buy 10 maple longbow u     the unstrung one, and the same for every bow
-    offer more than ${gp(MAX_TRADE)}gp    over the per-trade cap, so it takes what fits
+    offer more than ${gp(MAX_TRADE)}gp    over the per-trade cap, so it bids the cap and says so
     dump 9999 lobster on it    past its cap, so it takes what it can and says so
     open a trade, then close   it drops you and ignores you for 15 seconds
 

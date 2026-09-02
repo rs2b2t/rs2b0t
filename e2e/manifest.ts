@@ -87,6 +87,14 @@ export const CASES: readonly Case[] = [
         note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
     },
     {
+        id: 'autofighter-special-live',
+        harness: 'autofighter-special-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'a dragon dagger on a full bar: %sa_energy has to fall with specials on and stay at 1000 with the setting off'
+    },
+    {
         id: 'autofighter-targets-loot-live',
         harness: 'autofighter-targets-loot-live.ts',
         covers: { scripts: ['AutoFighter'] },
@@ -376,10 +384,10 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: '55e047c3',
-        budgetMin: 16,
+        provenAt: '02ca7734',
+        budgetMin: 17,
         env: { BUDGET_S: '900' },
-        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, coins ignored and named, and a cooldown after walking out'
+        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
     },
     {
         id: 'marketmaker-aliases-live',

@@ -128,6 +128,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `leashRadius` | number (2–30) | `8` | Leash radius (tiles) |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `useSpecial` | boolean | `true` | Use special attacks |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
