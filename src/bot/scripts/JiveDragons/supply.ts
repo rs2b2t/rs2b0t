@@ -355,9 +355,8 @@ async function needOne(h: JiveHost, name: string): Promise<void> {
 async function withdrawGear(h: JiveHost): Promise<void> {
     if (h.style() === 'melee') {
         await needOne(h, SHIELD);
-    } else {
-        await needOne(h, h.weaponName());
     }
+    await needOne(h, h.weaponName());
     // Why: reader.bankItems() is empty whenever the bank modal is shut, so a count of zero only carries a fact with the bank open.
     const gate = meleeShieldGate(h.style(), Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
     if (gate !== null) {
@@ -366,7 +365,7 @@ async function withdrawGear(h: JiveHost): Promise<void> {
 }
 
 async function equipGear(h: JiveHost): Promise<void> {
-    const wear = h.style() === 'melee' ? [SHIELD] : [h.weaponName(), h.style() === 'range' ? h.ammoName() : ''];
+    const wear = h.style() === 'melee' ? [SHIELD, h.weaponName()] : [h.weaponName(), h.style() === 'range' ? h.ammoName() : ''];
     for (const name of wear) {
         if (name !== '' && !Equipment.contains(name) && Inventory.first(name) !== null && await Equipment.equip(name)) {
             h.log(`wearing ${name}`);
@@ -672,10 +671,13 @@ export async function acquireKey(h: JiveHost, site: DragonSite): Promise<KeyStat
     }
     await Bank.depositAllMatching(depositAllExcept(keepNames(h, site)), say(h));
     const fromBank = await withdrawKey(h, site);
+    // Why: this leg walks into the Jailer fight and on into the lair, so the gear leaves the booth with the key rather than waiting for a bank run that only comes after the first kill.
+    await withdrawGear(h);
     if (!fromBank) {
         await withdrawFoodTo(h);
     }
     await Bank.close();
+    await equipGear(h);
     if (fromBank) {
         h.log(`took the ${item.name} out of the bank`);
         return state();

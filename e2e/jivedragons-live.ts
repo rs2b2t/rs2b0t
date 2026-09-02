@@ -116,7 +116,7 @@ function kitFor(style: Style): Kit {
     const common = { foodWithdraw: PACK_FOOD, panicHp: PANIC_PCT, foodReserve: 4, healTo: 90, site: 'taverley-blue', teleStock: 2, buryBones: false, solveClues: false, bankCommonJunk: false, loot: LOOT.join(', '), logDetail: 'Verbose', usePotions: false };
     if (style === 'melee') {
         return {
-            pack: [['rune_scimitar', 'Rune scimitar', 1], ['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
+            pack: [['antidragonbreathshield', 'Dragonfire shield', 1], [FOOD.debug, FOOD.name, PACK_FOOD]],
             bank: [...COMMON_BANK, { debugName: 'rune_scimitar', displayName: 'Rune scimitar', qty: 1 }, { debugName: 'antidragonbreathshield', displayName: 'Dragonfire shield', qty: 1 }],
             settings: { ...common, combatStyle: 'melee', meleeStyle: 'strength', weapon: 'Rune scimitar', useSpecial: true }
         };
@@ -136,6 +136,8 @@ function kitFor(style: Style): Kit {
 }
 
 const kit = kitFor(args.style);
+// Why: the melee weapon is seeded into the bank alone, so the run only ever holds it by withdrawing it, which is what the wielded assertion is there to catch.
+const WIELDED = String(kit.settings['weapon'] ?? kit.settings['bow'] ?? kit.settings['staff'] ?? '');
 const bankSeed: BankSeedItem[] = args.dusty
     ? [...kit.bank, { debugName: 'dusty_key', displayName: 'Dusty key', qty: 1 }]
     : [...kit.bank];
@@ -370,7 +372,7 @@ try {
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
-    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', args.dusty ? 'bankedkey' : 'coldkey'];
+    const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', 'wielded', args.dusty ? 'bankedkey' : 'coldkey'];
     if (args.style !== 'melee') { required.push('hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }
     // Why: only the bow leaves anything of its own on the floor, so the arrows-come-home claim is a range claim.
@@ -471,6 +473,8 @@ try {
         if (inLair(s.tile)) { mark('gate', `inside the lair at ${s.tile?.x},${s.tile?.z}`); }
         if (samePoint(s.tile, SAFESPOTS[0])) { mark('safespot', `standing exactly on safespot 0 at ${SAFESPOTS[0].x},${SAFESPOTS[0].z}`); }
         if (samePoint(s.tile, MELEE_ANCHOR)) { mark('meleeanchor', `standing exactly on the melee anchor at ${MELEE_ANCHOR.x},${MELEE_ANCHOR.z}`); }
+        if (WIELDED !== '' && s.worn.includes(WIELDED)) { mark('wielded', `${WIELDED} is worn`); }
+        if (s.kills > 0 && met['wielded'] === undefined) { fail(`a kill landed with no ${WIELDED} worn, only ${s.worn.filter(w => w !== '?').join('/') || 'nothing'}`); }
         if (s.kills > 0) {
             if (tripsAtKill < 0) { tripsAtKill = s.trips; }
             mark('kill', `${s.kills} blue dragon(s) down`);
