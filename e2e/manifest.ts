@@ -874,8 +874,9 @@ export const CASES: readonly Case[] = [
         id: 'rangingguild-live',
         harness: 'rangingguild-live.ts',
         covers: { scripts: ['RangingGuild'] },
-        status: 'unvetted',
-        budgetMin: 15
+        status: 'vetted',
+        budgetMin: 15,
+        provenAt: '03024497'
     },
     {
         id: 'relogin-test',
