@@ -142,6 +142,19 @@ function stillThere(site: DragonSite, idx: number): boolean {
     return Npcs.all().some(n => n.index === idx && n.name === site.target);
 }
 
+/** Whether to break off and heal on a safespot rather than where the bot stands. */
+function retreatNeeded(host: CombatHost, site: DragonSite): boolean {
+    const here = Game.tile();
+    return here !== null && retreatDue({
+        inLair: site.inArea(here),
+        onSafespot: site.safespots.some(spot => atTile(spot)),
+        hpFrac: host.hpFraction(),
+        retreatHp: host.retreatHp(),
+        hasFood: host.hasFood(),
+        spots: site.safespots.length
+    });
+}
+
 export class Fight implements Task {
     private engaged: number | null = null;
     private seenAt = 0;
@@ -181,6 +194,10 @@ export class Fight implements Task {
             if (EventSignal.pending() || this.host.died || ChatDialog.canContinue()) {
                 return;
             }
+            // Why: eating in dragonfire loses the race, so the fight hands the loop back at the retreat line the same way the task order puts Retreat above Eat.
+            if (retreatNeeded(this.host, this.site)) {
+                return;
+            }
             // Why: an eat that never lands means an empty pack, and looping on it burns every pass without pumping Sustain or reaching the panic check below.
             if (this.host.needEat() && !(await this.host.eatOnce())) {
                 return;
@@ -195,7 +212,10 @@ export class Fight implements Task {
             if (step === 'moved') {
                 continue;
             }
-            this.settleKill(name);
+            // Why: the drop rots in the two minutes this loop may hold, and LootCorpse, BuryBones and SolveClue all sit below Fight in the list, so a kill ends the call and the next pass picks up the next dragon.
+            if (this.settleKill(name)) {
+                return;
+            }
             if (holdsAnchor(style) && !atTile(this.anchor()) && !(await this.walkBack())) {
                 return;
             }
@@ -267,19 +287,22 @@ export class Fight implements Task {
 
     // Why: a target index that vanished while the loop was away at the bank is a respawn rather than a kill, so a vanish only counts near the last sighting.
 
-    private settleKill(name: string): void {
+    /** True when the engaged dragon went down on this pass. */
+    private settleKill(name: string): boolean {
         if (this.engaged === null) {
-            return;
+            return false;
         }
         if (stillThere(this.site, this.engaged)) {
             this.seenAt = performance.now();
-            return;
+            return false;
         }
-        if (performance.now() - this.seenAt < KILL_GRACE_MS) {
+        const killed = performance.now() - this.seenAt < KILL_GRACE_MS;
+        if (killed) {
             this.host.countKill();
             this.host.log(`${name} ${this.engaged} down`);
         }
         this.clearTarget();
+        return killed;
     }
 
     // Why: the safespots are derived as melee-proof, so a hit landing there means the derivation missed an angle and a blind stretch means a dragon body is parked across it.
@@ -413,15 +436,7 @@ export class Retreat implements Task {
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
     validate(): boolean {
-        const here = Game.tile();
-        return here !== null && Date.now() >= this.retryAt && retreatDue({
-            inLair: this.site.inArea(here),
-            onSafespot: this.site.safespots.some(spot => atTile(spot)),
-            hpFrac: this.host.hpFraction(),
-            retreatHp: this.host.retreatHp(),
-            hasFood: this.host.hasFood(),
-            spots: this.site.safespots.length
-        });
+        return Date.now() >= this.retryAt && retreatNeeded(this.host, this.site);
     }
 
     async execute(): Promise<void> {
