@@ -19,10 +19,16 @@ describe('GatherCamp membership', () => {
         expect(resourceWithinCamp(72, 80)).toBe(true);
     });
 
-    test('effectiveGatherLeash Auto vs named floor', () => {
+    test('effectiveGatherLeash freeform vs named floor', () => {
+        expect(effectiveGatherLeash(12, 'Use Closest')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Start Position')).toBe(12);
+        expect(effectiveGatherLeash(12, 'Use Custom Position')).toBe(12);
         expect(effectiveGatherLeash(12, 'Auto')).toBe(12);
         expect(effectiveGatherLeash(10, 'Catherby')).toBe(NAMED_CAMP_LEASH_FLOOR);
         expect(isAutoLocation(' auto ')).toBe(true);
+        expect(isAutoLocation('Use Closest')).toBe(true);
+        expect(isAutoLocation('Use Start Position')).toBe(true);
+        expect(isAutoLocation('Use Custom Position')).toBe(true);
         expect(isAutoLocation('Dwarven Mine')).toBe(false);
     });
 
