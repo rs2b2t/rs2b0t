@@ -143,6 +143,15 @@ const COMMON_BANK: BankSeedItem[] = [
     { debugName: 'waterrune', displayName: 'Water rune', qty: 200 }
 ];
 
+// Why: the solver names what it is missing before it walks, and on the first clue run it named all of these. A hard trail chains, and the leg after the first was a coordinate clue it abandoned for want of a sextant.
+const CLUE_TOOLS: BankSeedItem[] = [
+    { debugName: 'spade', displayName: 'Spade', qty: 1 },
+    { debugName: 'trail_sextant', displayName: 'Sextant', qty: 1 },
+    { debugName: 'trail_watch', displayName: 'Watch', qty: 1 },
+    { debugName: 'trail_chart', displayName: 'Chart', qty: 1 },
+    { debugName: 'coins', displayName: 'Coins', qty: 10_000 }
+];
+
 // Why: the pack starts stocked so the first task is the key leg rather than a restock, which is what makes "one bank stop for a cold key" a number worth counting.
 // Why: leaveVia and solveClues both follow the flags rather than sitting on a fixed value, because the script ships with teleport and clues ON and the harness used to pin both to the opposite, so the shipped defaults were the two settings no run ever exercised.
 function kitFor(style: Style): Kit {
@@ -175,9 +184,11 @@ function kitFor(style: Style): Kit {
 const kit = kitFor(args.style);
 // Why: the melee weapon is seeded into the bank alone, so the run only ever holds it by withdrawing it, which is what the wielded assertion is there to catch.
 const WIELDED = String(kit.settings['weapon'] ?? kit.settings['bow'] ?? kit.settings['staff'] ?? '');
-const bankSeed: BankSeedItem[] = args.dusty
-    ? [...kit.bank, { debugName: 'dusty_key', displayName: 'Dusty key', qty: 1 }]
-    : [...kit.bank];
+const bankSeed: BankSeedItem[] = [
+    ...kit.bank,
+    ...(args.dusty ? [{ debugName: 'dusty_key', displayName: 'Dusty key', qty: 1 }] : []),
+    ...(args.clue ? CLUE_TOOLS : [])
+];
 
 function inLair(t: Point | null): boolean {
     return t !== null && t.level === LAIR.level && t.x >= LAIR.minX && t.x <= LAIR.maxX && t.z >= LAIR.minZ && t.z <= LAIR.maxZ;
@@ -189,6 +200,11 @@ function samePoint(a: Point | null, b: Point): boolean {
 
 function onSafespot(t: Point | null): boolean {
     return SAFESPOTS.some(spot => samePoint(t, spot));
+}
+
+// Why: at --tick 200 a 750ms poll spans nearly four game ticks, which is far enough to walk off the tile, take a breath in the open, loot and be back before the next sample. A safespot at both ends stopped meaning the run never left, so the status has to say it was holding as well.
+function holding(status: string): boolean {
+    return !/looting|returning|walking|retreating|banking|clue|panick/i.test(status);
 }
 
 function chebyshev(a: Point, b: Point): number {
@@ -517,7 +533,7 @@ try {
             const step = s.at - last.at;
             if (inLair(s.tile)) { lairMs += step; }
             // Why: a safespot with nothing in the scene to breathe on it proves nothing, and a sample that moved was only partly on the tile, so the soak clock runs on the stretches that held one safespot with an adult up.
-            const parked = last.tile !== null && onSafespot(s.tile) && samePoint(s.tile, last.tile);
+            const parked = last.tile !== null && onSafespot(s.tile) && samePoint(s.tile, last.tile) && holding(s.status) && holding(last.status);
             if (parked && s.adults > 0) { safespotMs += step; }
             if (s.hp < last.hp) {
                 const fell = last.hp - s.hp;
@@ -534,7 +550,7 @@ try {
                 hpDrops.push(drop);
                 if (drop.bothEnds) { bothEndsDrops++; }
                 // Why: only a safespot at both ends says the tile failed; either-end fires on every hit taken walking off to loot or to bank, which the run has to do, and nothing in the sample tells that apart from a breath that landed on the tile.
-                if (guardsSafespot && drop.unexplained > 0 && drop.bothEnds) {
+                if (guardsSafespot && drop.unexplained > 0 && drop.bothEnds && holding(s.status) && holding(last.status)) {
                     violations.push(drop);
                     console.log(`${stamp()} HP FELL ON A SAFESPOT: ${last.hp} to ${s.hp} at ${last.tile?.x},${last.tile?.z} then ${s.tile?.x},${s.tile?.z} with ${s.adults} adult(s) up (${drop.unexplained} hp the harness cannot account for)`);
                 }
