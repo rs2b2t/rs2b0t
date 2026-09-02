@@ -206,7 +206,8 @@ export class Fight implements Task {
                 return;
             }
             // Why: eating in dragonfire loses the race, so the fight hands the loop back at the retreat line the same way the task order puts Retreat above Eat.
-            if (retreatNeeded(this.host, this.site)) {
+            // Why: needEat gates it because a retreat the bot would not eat at the end of walks off the anchor and back forever.
+            if (this.host.needEat() && retreatNeeded(this.host, this.site)) {
                 return;
             }
             // Why: an eat that never lands means an empty pack, and looping on it burns every pass without pumping Sustain or reaching the panic check below.
