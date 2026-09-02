@@ -89,13 +89,7 @@ export function boothFields(loc: GatheringLocation | null | undefined): {
     };
 }
 
-/**
- * Resolve a location setting against a skill table:
- * - Use Closest → nearest preset by straight-line distance to spot (no map-square gate)
- * - Use Start Position → null (freeform: start tile as camp anchor)
- * - Use Custom Position → null (freeform: custom tile as camp anchor)
- * - Named preset → case-insensitive match
- */
+/** Resolve location setting: Use Closest = nearest by distance, Start/Custom = freeform null, named = case-insensitive. */
 export function resolveGatheringLocation<T extends GatheringLocation>(
     setting: string,
     startTile: WorldTile,
