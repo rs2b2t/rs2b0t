@@ -61,18 +61,47 @@ const FODDER: { obj: string; label?: string }[] = [
 
 export const ALCH_FODDER_OBJS: readonly string[] = FODDER.map(f => f.obj);
 
+/** The chip that pulls in whatever the custom field names. */
+export const CUSTOM_ALCH_KEY = 'custom';
+
+const richestFirst = (a: AlchItem, b: AlchItem): number => b.alchValue - a.alchValue || a.label.localeCompare(b.label);
+
 export const ALCH_ITEMS: readonly AlchItem[] = FODDER
     .flatMap(({ obj, label }) => {
         const rec = ITEM_DB.find(r => r.obj === obj);
         return rec ? [{ key: obj, id: rec.id, name: rec.name, label: label ?? rec.name, alchValue: Math.floor(rec.cost * ALCH_RATE) }] : [];
     })
-    .sort((a, b) => b.alchValue - a.alchValue || a.label.localeCompare(b.label));
+    .sort(richestFirst);
 
-export const ALCH_OPTIONS: string[] = ALCH_ITEMS.map(i => i.key);
+export const ALCH_OPTIONS: string[] = [CUSTOM_ALCH_KEY, ...ALCH_ITEMS.map(i => i.key)];
 
-export const ALCH_OPTION_LABELS: Record<string, string> = Object.fromEntries(
-    ALCH_ITEMS.map(i => [i.key, `${i.label} (${i.alchValue.toLocaleString()})`])
-);
+export const ALCH_OPTION_LABELS: Record<string, string> = {
+    [CUSTOM_ALCH_KEY]: 'Custom item (named below)',
+    ...Object.fromEntries(ALCH_ITEMS.map(i => [i.key, `${i.label} (${i.alchValue.toLocaleString()})`]))
+};
+
+function fold(s: string): string {
+    return s.trim().toLowerCase().replace(/[\s_]+/g, ' ');
+}
+
+// Why: the field takes the obj name or the client name, and several items share a client name, so the obj name is the precise form and the first database match settles the rest.
+/** The item the custom field names, or null when the database has no such item. */
+export function customAlchItem(text: string): AlchItem | null {
+    const wanted = fold(text);
+    if (wanted === '') {
+        return null;
+    }
+    const known = ALCH_ITEMS.find(i => fold(i.key) === wanted || fold(i.label) === wanted);
+    if (known) {
+        return known;
+    }
+    const rec = ITEM_DB.find(r => fold(r.obj) === wanted) ?? ITEM_DB.find(r => fold(r.name) === wanted);
+    if (!rec) {
+        return null;
+    }
+    return ALCH_ITEMS.find(i => i.id === rec.id)
+        ?? { key: rec.obj, id: rec.id, name: rec.name, label: rec.name, alchValue: Math.floor(rec.cost * ALCH_RATE) };
+}
 
 /** Yew and magic longbows, steel platebodies and the dragonhide armour. */
 export const DEFAULT_ALCH_ITEMS: string[] = [
@@ -94,12 +123,20 @@ export function alchItem(key: string): AlchItem | null {
     return ALCH_ITEMS.find(i => i.key === wanted) ?? null;
 }
 
-// Why: the chip control emits option order rather than click order, so table order is the drain priority.
-/** The ticked items, richest first. */
-export function selectedAlchItems(keys: readonly string[]): AlchItem[] {
+// Why: the chip control emits option order rather than click order, so table order is the drain priority; with the custom chip ticked an unresolved name selects nothing, so a typo stops the run instead of alching the defaults.
+/** The ticked items plus the custom one, richest first. */
+export function selectedAlchItems(keys: readonly string[], customText = ''): AlchItem[] {
     const wanted = new Set(keys.map(k => k.trim().toLowerCase()));
     const picked = ALCH_ITEMS.filter(i => wanted.has(i.key));
-    return picked.length > 0 ? picked : ALCH_ITEMS.filter(i => DEFAULT_ALCH_ITEMS.includes(i.key));
+    if (!wanted.has(CUSTOM_ALCH_KEY)) {
+        return picked.length > 0 ? picked : ALCH_ITEMS.filter(i => DEFAULT_ALCH_ITEMS.includes(i.key));
+    }
+    const custom = customAlchItem(customText);
+    if (custom && !picked.includes(custom)) {
+        picked.push(custom);
+        picked.sort(richestFirst);
+    }
+    return picked;
 }
 
 /** The richest selected item the bank has not run out of. */

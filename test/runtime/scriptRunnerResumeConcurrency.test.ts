@@ -50,7 +50,11 @@ async function frame(): Promise<void> {
 
 afterEach(async () => {
     ScriptRunner.stop('test teardown');
-    await settle();
+    wedged?.release?.();
+    wedged = null;
+    for (let i = 0; i < 10 && ScriptRunner.state === 'stopping'; i++) {
+        await settle();
+    }
     reader.attached = original.attached;
     reader.ingame = original.ingame;
     reader.sceneState = original.sceneState;
@@ -86,18 +90,24 @@ test('a resume does not start a second loop on top of the one still parked', asy
 /** Parks on a promise the scheduler does not own, so no waiter is registered (#580). */
 class WedgedLoopBot extends LoopingBot {
     entries = 0;
+    release: (() => void) | null = null;
 
     override async loop(): Promise<void> {
         this.entries++;
-        await new Promise<void>(() => {});
+        await new Promise<void>(resolve => {
+            this.release = resolve;
+        });
     }
 }
+
+let wedged: WedgedLoopBot | null = null;
 
 // Why: #580, nothing wakes a loop the scheduler has no waiter for, so a resume has to
 // abandon it or the pump never launches another iteration again.
 test('a resume still frees a loop wedged on a promise the scheduler does not own', async () => {
     stubIngame();
     const bot = new WedgedLoopBot();
+    wedged = bot;
     ScriptRunner.start({
         name: 'Wedged loop probe',
         description: 'resume deadlock regression fixture',

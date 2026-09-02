@@ -114,6 +114,7 @@ export const Bank = {
             && reader.bankSnapshotGeneration() > generation;
     },
 
+    /** @internal */
     normalBackpackSnapshot(): BackpackItem[] | null {
         if (Bank.isOpen() || reader.inventorySize() !== 28 || !reader.inventorySnapshotReady()) {
             return null;
@@ -121,6 +122,7 @@ export const Bank = {
         return reader.inventory().map(({ slot, id, name, count }) => ({ slot, id, name, count }));
     },
 
+    /** @internal */
     async backpackReady(
         expected: readonly BackpackItem[],
         log?: (msg: string) => void
@@ -377,7 +379,7 @@ export const Bank = {
     },
 
     /**
-     * Open a bank that lives behind a conversation rather than a booth.
+     * @internal Open a bank that lives behind a conversation rather than a booth.
      * Why: Gundai chats, offers two options, and only runs `@openbank` once the right one is picked, so this drives the dialogue rather than waiting on a single op.
      */
     async openNpcAccess(access: BankNpcAccess, log?: (msg: string) => void): Promise<boolean> {

@@ -7,6 +7,7 @@
 ```ts
 FISHING_METHODS / resolveFishMethod / FISHING_METHOD_OPTIONS
 gearKeepNames / hasFishingGear / missingFishingGear / fishingRestockPlan
+ALL_FISHING_GEAR_NAMES / gearLabel(method)
 spotMatchesMethod(actions, method) / WHIRLPOOL_IDS
 
 ROCK_TYPES: Record<oreName, locIds[]>
@@ -40,6 +41,7 @@ ARDOUGNE_PICKPOCKET_TARGETS   // Guard / Knight / Paladin / Hero
 
 ```ts
 COW_LOCATIONS / resolveCowLocation / nearestCowLocation / COW_LOCATION_OPTIONS
+isCowFieldLootTile(anchor, leashRadius, tile)   // same level and within leashRadius of the camp anchor
 needsTollCoins / shouldBootstrapTollCoins / AL_KHARID_BANK / TOLL_COIN_TARGET
 
 RUNES: Record<string, RuneRoute>   // rune, talisman, level, bank name, ruins tile

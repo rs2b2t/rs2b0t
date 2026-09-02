@@ -36,10 +36,7 @@ export default class EntityQuery<E extends QueryableEntity> {
         private readonly wrap: (s: EntitySnapView) => E
     ) {}
 
-    /**
-     * Snapshot-first query: common filters run before `wrap`.
-     * `S` must expose name/actions/tile/distance (LocSnapshot etc. already do).
-     */
+    /** @internal Snapshot-first query: common filters run before `wrap`. `S` must expose name/actions/tile/distance (LocSnapshot etc. already do). */
     static fromSnapshots<S extends EntitySnapView, E extends QueryableEntity>(
         supply: () => readonly S[],
         wrap: (s: S) => E

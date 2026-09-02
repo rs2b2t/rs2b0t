@@ -80,6 +80,11 @@ checks `apiVersion`, and re-exports the members. It throws immediately if the bu
 is loaded outside the client, or against a client whose ABI version it was not built
 for.
 
+`bun run check:api-contract` (also `test/tools/api-contract.test.ts`) compares the
+members of that `abi` object with `index.d.ts` over every name `index.js` re-exports,
+so a runtime member the declaration lacks fails CI. A `@internal` JSDoc tag keeps a
+member off the contract.
+
 This is why [`bot.bundle.ts`](../../bot.bundle.ts) runs **no terser pass and therefore no
 property mangling**: `__rs2b0t`'s property names are a public contract that
 externally-compiled bundles are linked against. Bun's own minifier shortens locals but

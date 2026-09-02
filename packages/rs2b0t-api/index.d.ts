@@ -84,6 +84,12 @@ export const Execution: {
 
 export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence';
 
+/** One combat mode the equipped weapon offers, with the label its interface shows. */
+export interface CombatModeLabel {
+    mode: number;
+    label: string;
+}
+
 export interface CombatStyleResolution {
     /** Style requested by the script. */
     requested: MeleeCombatStyle;
@@ -140,6 +146,21 @@ export const Game: {
      * then falls back to its 2004 component ID. Success confirms dispatch, not arrival.
      */
     teleport(name: string): Promise<boolean>;
+    /** Cast a targeted spell at a piece of scenery. */
+    castOnLoc(spell: string, loc: Loc): Promise<boolean>;
+    /** Cast a targeted spell at a pack item (the `TGT_HELD` action Superheat Item needs). */
+    castOnItem(spell: string, item: InvItem): Promise<boolean>;
+    /** The scene is built and takes input; menu and walk packets sent before this is true are dropped or retried. */
+    sceneReady(): boolean;
+    /** Raw client scene build state: 0 idle/loading, 1 building, 2 ready. */
+    sceneState(): number;
+    /** Every combat mode the equipped weapon offers, with its interface label; null before the tab loads. */
+    combatStyles(): readonly CombatModeLabel[] | null;
+    autoRetaliateOn(): boolean;
+    /** Toggle auto-retaliate; true means the click was dispatched. */
+    setAutoRetaliate(on: boolean): boolean;
+    /** The local player's combat target is another player. */
+    attackedByPlayer(): boolean;
 };
 
 // ---- entities + queries ----
@@ -168,6 +189,7 @@ export interface Locatable {
  */
 export class Npc implements Interactable, Locatable {
     readonly name: string | null;
+    readonly id: number;
     readonly level: number;
     readonly index: number;
     readonly inCombat: boolean;
@@ -176,6 +198,10 @@ export class Npc implements Interactable, Locatable {
     distance(): number;
     actions(): string[];
     valid(): boolean;
+    /** This NPC's combat target is the local player. */
+    targetsMe(): boolean;
+    /** This NPC's combat target is another player. */
+    targetsAnotherPlayer(): boolean;
     interact(action: string): boolean | Promise<boolean>;
 }
 
@@ -185,10 +211,14 @@ export class Npc implements Interactable, Locatable {
  */
 export class Player implements Locatable {
     readonly name: string | null;
+    /** Slot in the client's player list. */
+    readonly index: number;
     readonly inCombat: boolean;
     tile(): Tile;
     distance(): number;
     actions(): string[];
+    /** This player's combat target is the local player. */
+    targetsMe(): boolean;
 }
 
 /**
@@ -239,11 +269,15 @@ export class EntityQuery<E extends QueryableEntity> {
     action(action: string): this;
     /** Within `dist` tiles of the local player. */
     within(dist: number): this;
+    /** Within `dist` tiles of an arbitrary tile (a camp pin, booth stand or furnace). */
+    withinOf(origin: WorldTile, dist: number): this;
     /** Within a rectangle (inclusive). */
     inside(area: { minX: number; maxX: number; minZ: number; maxZ: number }): this;
     where(pred: (e: E) => boolean): this;
     results(): E[];
     nearest(): E | null;
+    /** Nearest to the player, considering only results within `preferRadius` when any exist. */
+    nearestPreferLocal(preferRadius: number): E | null;
     first(): E | null;
     exists(): boolean;
     count(): number;
@@ -311,6 +345,10 @@ export const Inventory: {
     /** Occupied slots. */
     used(): number;
     isFull(): boolean;
+    /** Total quantity by object id, for items that share a display name. */
+    countById(id: number): number;
+    /** Empty slots; 0 until the pack interface has loaded. */
+    free(): number;
 };
 
 /**
@@ -385,18 +423,34 @@ export const Bank: {
      * `count()` reads 0, which is indistinguishable from an empty bank.
      */
     loaded(): boolean;
+    /** `loaded()`, or an open bank whose snapshot has landed; the form `waitReady` resolves on, since an empty bank never satisfies `loaded()`. */
+    ready(): boolean;
+    /** Wait for the item list the open packet promises. */
+    waitReady(timeoutMs?: number, log?: (msg: string) => void): Promise<boolean>;
+    /** The bank-side view has been captured since the bank opened. */
+    snapshotReady(): boolean;
+    /** Counter that rises with every bank snapshot; pair with `waitSnapshotAfter`. */
+    snapshotGeneration(): number;
+    /** Resolve once a snapshot newer than `generation` has landed. */
+    waitSnapshotAfter(generation: number, timeoutMs?: number): Promise<boolean>;
     /** Toggle note/item withdraw mode (resets to Item when the bank opens). */
     setNoteMode(on: boolean): Promise<void>;
     items(): BankItemSnapshot[];
     /** Exact name match (case-insensitive). */
     count(name: string): number;
+    /** Count by object id, for stock whose display name is shared. */
+    countById(id: number): number;
     /**
      * Withdraw by context-menu op label (default `'Withdraw-1'`).
      * Prefer `withdrawOp(item.ops, 'all'|'10'|'5'|'1'|'x'|'any')` for the real label.
      */
     withdraw(name: string, op?: string): boolean | Promise<boolean>;
+    /** `withdraw` by object id (default op `'Withdraw-1'`). */
+    withdrawById(id: number, op?: string): boolean | Promise<boolean>;
     /** Withdraw-X + count dialog for an exact quantity. */
     withdrawX(name: string, count: number): Promise<boolean>;
+    /** `withdrawX` by object id; in note mode `landsAsId` names the noted obj the pack receives. */
+    withdrawXById(id: number, count: number, landsAsId?: number): Promise<boolean>;
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
     withdrawLoad(name: string): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
@@ -431,6 +485,8 @@ export const Bank: {
         access: BankObjectAccess,
         log?: (msg: string) => void
     ): Promise<boolean>;
+    /** Close the bank modal so inventory ops (Wield, Use, Bury, ...) hit the backpack again. */
+    close(timeoutMs?: number): Promise<boolean>;
 };
 
 // ---- high-level banking (prefer this over raw Bank.open*) ----
@@ -570,6 +626,8 @@ export const Shop: {
     stock(): { name: string; count: number; slot: number }[];
     /** Buy up to `n` of `name`; resolves the units actually bought. */
     buy(name: string, n: number): Promise<number>;
+    /** `buy` by exact object id, for stock whose display name is shared. */
+    buyById(id: number, n: number): Promise<number>;
     /** Sell up to `n` of `name`; resolves the units actually sold. */
     sell(name: string, n: number): Promise<number>;
     close(): Promise<void>;
@@ -592,6 +650,8 @@ export const Quests: {
     status(name: string): QuestStatus;
     /** Quest points shown on the tab. */
     points(): number;
+    /** Open a quest's journal in the main modal and return its lines; prefer item or message oracles when they prove progress. */
+    journal(name: string): Promise<string[]>;
 };
 
 /**
@@ -623,6 +683,18 @@ export const ChatDialog: {
      * (or the first). Never opens the Make-X count dialog.
      */
     makeOne(match?: string): Promise<boolean>;
+    /** The lines currently rendered in the chat modal, including the NPC's. */
+    texts(): string[];
+    /** Click Make-X for the product whose name contains `match` and type `count`; waits for the count dialog to open and close. */
+    makeX(match: string, count: number): Promise<boolean>;
+    /** A main-modal make panel (the fletching/smithing kind) is open. */
+    isMainMakePanel(): boolean;
+    /** Product names on the open main-modal make panel. */
+    mainMakeProducts(): string[];
+    /** On the main-modal panel, click `op` (default its first op) for the product whose name contains `match`; resolves when the modal changes. */
+    makeFromPanel(match: string, op?: string): Promise<boolean>;
+    /** On the main-modal panel, pick the largest Make op for the product whose name contains `match`. */
+    makeFromPanelMax(match: string): Promise<boolean>;
 };
 
 export interface TradeItem {
@@ -658,6 +730,8 @@ export const Trade: {
         n: number,
         pick?: (i: { count: number; id: number; slot: number }) => boolean
     ): Promise<boolean>;
+    /** Take everything back off your own side. */
+    removeAll(): Promise<boolean>;
     /** Accept the current offer or confirm screen. */
     accept(): Promise<boolean>;
     decline(): Promise<void>;
@@ -775,6 +849,10 @@ export const Traversal: {
     preload(): void;
     /** Path tiles left in the active walk (overlay/progress display). */
     remaining(): number;
+    /** Teleport hops may be injected into walks (Global navTeleports); the planner only uses hops the inventory can pay for. */
+    teleportsEnabled(): boolean;
+    /** Ask the active walk to re-plan on its next step instead of waiting for a stall. */
+    requestRepath(reason?: string): void;
 };
 
 /**
@@ -837,6 +915,12 @@ export interface SettingsBag {
     raw(): Record<string, unknown>;
 }
 
+/** How the runner schedules the next `loop()` after one finishes. */
+export type LoopCadence =
+    | { kind: 'frame' }
+    | { kind: 'server-tick'; ticks?: number }
+    | { kind: 'time'; ms: number };
+
 /**
  * Base class for every bot. Usually extended via `LoopingBot`, `TaskBot`, or
  * `TreeBot` rather than directly.
@@ -845,6 +929,8 @@ export interface SettingsBag {
 export abstract class AbstractBot {
     /** Wall-clock ms between loop() iterations when loop() returns void. */
     loopDelay: number;
+    /** When set, overrides the cadence derived from `loopDelay`. */
+    loopCadence: LoopCadence | null;
     /** Resolved parameters for this run; read e.g. this.settings.bool('x'). */
     readonly settings: SettingsBag;
     onStart?(): void | Promise<void>;
@@ -872,9 +958,10 @@ export abstract class AbstractBot {
     log(msg: string): void;
     /**
      * Subscribe to a game event for this run (auto-removed on stop/crash).
-     * Callbacks fire mid-frame — set flags, log; do real work in loop().
+     * Callbacks fire mid-frame: set flags, log; do real work in loop().
+     * Public so a task can subscribe on behalf of the bot it serves.
      */
-    protected on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
+    on<K extends keyof EventMap>(event: K, cb: (payload: EventMap[K]) => void): void;
 }
 
 /**
@@ -919,10 +1006,6 @@ export function hasAll(needs: ItemNeed[]): boolean;
 export class AcquireTask implements Task {
     constructor(bot: AbstractBot, needs: ItemNeed[]);
     validate(): boolean;
-    /** Dropdown choices when type is 'string' (or multi-select for 'string[]'). */
-    options?: string[];
-    /** Panel group heading for related settings. */
-    group?: string;
     execute(): Promise<void>;
 }
 

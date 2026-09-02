@@ -15,6 +15,13 @@ ChatDialog.chooseOption(match?: string): Promise<boolean>  // contains match, or
 ChatDialog.isMakeMenu(): boolean           // "What would you like to make?"
 ChatDialog.makeProducts(): string[]
 ChatDialog.make(match?: string): Promise<boolean>  // contains match at the largest fixed qty
+ChatDialog.makeOne(match?: string): Promise<boolean>   // Make-1, never opens the count dialog
+ChatDialog.makeX(match: string, count: number): Promise<boolean>  // Make-X, waits for the count dialog to open and close
+ChatDialog.texts(): string[]               // every line in the modal, the NPC's included
+ChatDialog.isMainMakePanel(): boolean      // main-modal make panel (fletching, smithing)
+ChatDialog.mainMakeProducts(): string[]
+ChatDialog.makeFromPanel(match: string, op?: string): Promise<boolean>   // op defaults to the first
+ChatDialog.makeFromPanelMax(match: string): Promise<boolean>             // the largest Make op
 ```
 
 ## Shop
@@ -24,6 +31,7 @@ Shop.isOpen(): boolean
 Shop.open(npcName: string): Promise<boolean>   // must already be near the NPC
 Shop.stock(): { name; count; slot }[]
 Shop.buy(name: string, n: number): Promise<number>   // units actually bought
+Shop.buyById(id: number, n: number): Promise<number>   // when two items share a display name
 Shop.sell(name: string, n: number): Promise<number>
 Shop.close(): Promise<void>
 ```
@@ -44,6 +52,7 @@ Trade.theirOffer(): TradeItem[]
 Trade.request(playerName: string): Promise<boolean>
 Trade.offerAll(itemName, pick?): Promise<boolean>
 Trade.offer(itemName, n, pick?): Promise<boolean>   // Offer-X exact qty
+Trade.removeAll(): Promise<boolean>     // take everything back off your own side
 Trade.accept(): Promise<boolean>
 Trade.decline(): Promise<void>
 ```

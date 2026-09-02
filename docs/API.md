@@ -3,7 +3,8 @@
 # Scripting API
 
 `@rs2b0t/api` is the surface external scripts compile against. It reads the ABI the
-client installs at `globalThis.__rs2b0t` and throws if the versions do not match.
+client installs at `globalThis.__rs2b0t` and throws if `apiVersion` is not the one it
+was built for.
 
 ## Pages
 

@@ -5,8 +5,10 @@ import {
     ALCH_ITEMS,
     ALCH_OPTIONS,
     ALCH_OPTION_LABELS,
+    CUSTOM_ALCH_KEY,
     DEFAULT_ALCH_ITEMS,
     alchItem,
+    customAlchItem,
     fmtGp,
     nextAlchTarget,
     selectedAlchItems
@@ -68,6 +70,45 @@ describe('labels disambiguate what the client name does not', () => {
     });
 });
 
+describe('the custom chip', () => {
+    test('is the first option and says where its item comes from', () => {
+        expect(ALCH_OPTIONS[0]).toBe(CUSTOM_ALCH_KEY);
+        expect(ALCH_OPTION_LABELS[CUSTOM_ALCH_KEY]).toBe('Custom item (named below)');
+        expect(ALCH_ITEMS.some(i => i.key === CUSTOM_ALCH_KEY)).toBe(false);
+    });
+
+    test('resolves a display name from the item database at 60% of shop cost', () => {
+        expect(customAlchItem('Iron platebody')).toEqual({
+            key: 'iron_platebody',
+            id: 1115,
+            name: 'Iron platebody',
+            label: 'Iron platebody',
+            alchValue: 336
+        });
+    });
+
+    test('accepts the obj name, any case, with stray spaces', () => {
+        expect(customAlchItem(' IRON_PLATEBODY ')?.id).toBe(1115);
+        expect(customAlchItem('iron  platebody')?.id).toBe(1115);
+    });
+
+    test('a name already in the fodder table resolves to that entry, label and all', () => {
+        expect(customAlchItem("Black d'hide body")).toBe(alchItem('black_dragonhide_body'));
+        expect(customAlchItem('rune_chainbody')).toBe(alchItem('rune_chainbody'));
+    });
+
+    test('a client name several items share goes to the obj spelled the same way', () => {
+        expect(customAlchItem('Dragonhide body')?.key).toBe('dragonhide_body');
+        expect(customAlchItem('Dragonhide chaps')?.key).toBe('dragonhide_chaps');
+    });
+
+    test('an unknown or blank name is null', () => {
+        expect(customAlchItem('nonsense')).toBeNull();
+        expect(customAlchItem('')).toBeNull();
+        expect(customAlchItem('   ')).toBeNull();
+    });
+});
+
 describe('defaults', () => {
     test('every default is a real option', () => {
         for (const key of DEFAULT_ALCH_ITEMS) {
@@ -104,6 +145,30 @@ describe('selectedAlchItems', () => {
 
     test('a selection of nothing but junk falls back to the defaults', () => {
         expect(selectedAlchItems(['nonsense']).map(i => i.key).sort()).toEqual([...DEFAULT_ALCH_ITEMS].sort());
+    });
+
+    test('the custom chip adds the named item, slotted by value with the rest', () => {
+        const picked = selectedAlchItems([CUSTOM_ALCH_KEY, 'yew_longbow', 'magic_longbow'], 'Rune platebody');
+        expect(picked.map(i => i.key)).toEqual(['rune_platebody', 'magic_longbow', 'yew_longbow']);
+    });
+
+    test('an item outside the fodder table drains last when it is the cheapest', () => {
+        const picked = selectedAlchItems([CUSTOM_ALCH_KEY, 'maple_longbow'], 'Iron platebody');
+        expect(picked.map(i => i.key)).toEqual(['maple_longbow', 'iron_platebody']);
+    });
+
+    test('a custom item that is also ticked as a chip is listed once', () => {
+        expect(selectedAlchItems([CUSTOM_ALCH_KEY, 'yew_longbow'], 'Yew longbow').map(i => i.key)).toEqual(['yew_longbow']);
+    });
+
+    test('the custom chip alone with a name the database lacks selects nothing, never the defaults', () => {
+        expect(selectedAlchItems([CUSTOM_ALCH_KEY], 'nonsense')).toEqual([]);
+        expect(selectedAlchItems([CUSTOM_ALCH_KEY], '')).toEqual([]);
+    });
+
+    test('the custom name is ignored while its chip is clear', () => {
+        expect(selectedAlchItems(['yew_longbow'], 'Rune platebody').map(i => i.key)).toEqual(['yew_longbow']);
+        expect(selectedAlchItems([], 'Rune platebody').map(i => i.key).sort()).toEqual([...DEFAULT_ALCH_ITEMS].sort());
     });
 });
 
