@@ -11,7 +11,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, attackRangeFor, bodyOrigin, gapTo, holdDue, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, nextSafespot, retreatAim, retreatDue, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -300,7 +300,7 @@ export class Fight implements Task {
 
     /** Whether an Attack click from the anchor lands without the server walking the bot closer. */
     private inReach(n: Npc): boolean {
-        return gapTo(this.anchor(), n.tile(), n.size) <= attackRangeFor(this.host.style());
+        return gapTo(this.anchor(), n.tile(), n.size) <= engageRangeFor(this.host.style());
     }
 
     private setTarget(idx: number): void {

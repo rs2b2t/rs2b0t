@@ -3,6 +3,7 @@ import {
     SAFESPOT_BLIND_MS,
     attackRangeFor,
     bodyOrigin,
+    engageRangeFor,
     gapTo,
     holdDue,
     isClueObj,
@@ -159,6 +160,17 @@ describe('attackRangeFor', () => {
         expect(attackRangeFor('melee')).toBe(1);
         expect(attackRangeFor('range')).toBe(7);
         expect(attackRangeFor('mage')).toBe(10);
+    });
+});
+
+describe('engageRangeFor', () => {
+    test('a safespot style clicks one tile inside its range, since a body on the edge is one wander step from out of it', () => {
+        expect(engageRangeFor('range')).toBe(6);
+        expect(engageRangeFor('mage')).toBe(9);
+    });
+
+    test('melee has no edge to keep off, the leash brings the body to the anchor', () => {
+        expect(engageRangeFor('melee')).toBe(1);
     });
 });
 

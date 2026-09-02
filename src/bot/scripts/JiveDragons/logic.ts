@@ -114,6 +114,13 @@ export function attackRangeFor(style: Style): number {
     return ATTACK_RANGE[style];
 }
 
+// Why: a body on the last tile of the range is one wander step from out of it by the time the click lands, and the third demon run was walked off the tile that way at gap 7.
+
+/** How far a body may stand for the click to be sent. */
+export function engageRangeFor(style: Style): number {
+    return style === 'melee' ? ATTACK_RANGE.melee : ATTACK_RANGE[style] - 1;
+}
+
 // Why: the engine measures range between the closest tiles of the two footprints, and Npc.distance() measures to the centre of one, so a size-4 dragon read 2 at its north and east faces and 3 at its south and west, and a size-3 demon read 1 past its near face.
 
 /** The gap the server measures from `from` to a body the client reports at `tile`. */
