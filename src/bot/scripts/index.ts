@@ -37,6 +37,7 @@ import BrimhavenMossGiants, { SETTINGS as BRIMHAVEN_MOSS_GIANTS_SETTINGS } from 
 import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/GreenDragon.js';
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
+import RangingGuild, { RANGING_GUILD_SETTINGS } from './RangingGuild/RangingGuild.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
 import DoorOpener, { SETTINGS as DOOROPENER_SETTINGS } from './DoorOpener/DoorOpener.js';
@@ -157,6 +158,15 @@ ScriptRegistry.register({
     tags: ['rellekka', 'keys', 'afk'],
     settingsSchema: ROCKCRAB_SETTINGS,
     create: () => new RockCrab()
+});
+
+ScriptRegistry.register({
+    name: 'RangingGuild',
+    description: 'Plays the Ranging Guild archery competition for tickets and trades every 2000 for 50 rune arrows. Pays the judge 200 coins a round, shoots the ten arrows from behind the haystacks, banks at Seers for coins and the best bow',
+    category: 'Money making',
+    tags: ['ranging guild', 'minigame', 'archery', 'tickets', 'rune arrows', 'seers', 'afk'],
+    settingsSchema: RANGING_GUILD_SETTINGS,
+    create: () => new RangingGuild()
 });
 
 ScriptRegistry.register({
