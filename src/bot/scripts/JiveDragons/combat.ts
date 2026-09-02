@@ -180,7 +180,7 @@ export class Fight implements Task {
 
     // Why: the blind clock belongs to the tile the bot is standing on, and this task is skipped whenever anything above it runs, so a long gap between polls is time spent walking in, looting or banking rather than time the tile showed nothing.
 
-    /** Stamp the poll, restarting the blind clock unless the bot has been on the tile the whole way. */
+    /** Stamp the poll, restarting the blind clock unless the bot has been on the tile since the last poll. */
     private watch(onSpot: boolean): void {
         const now = performance.now();
         if (!onSpot || now - this.polledAt > HOLD_GAP_MS) {
@@ -470,7 +470,7 @@ export class Retreat implements Task {
         this.host.setStatus(`retreating to safespot ${index}`);
         this.host.log(`retreating to safespot ${index} at ${spot} from ${here.x},${here.z} at ${Math.round(this.host.hpFraction() * 100)}% hp${this.host.hasFood() ? '' : ' with an empty pack'}`);
         // Why: the walk goes out before the bite so the run eats while it moves, since eatOnce waits up to 3s on the heal and every one of those spent still is another breath taken.
-        // Why: the supervisor pauses the whole script for the length of a random event, so yielding before the first hop leaves the bot in the fire for all of it. One click goes out, then the loop hands over.
+        // Why: the supervisor pauses the script for the length of a random event, so yielding before the first hop leaves the bot in the fire for all of it. One click goes out, then the loop hands over.
         for (let i = 0; i < RETREAT_HOPS && !atTile(spot); i++) {
             if (this.host.died) {
                 return;

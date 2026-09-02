@@ -372,7 +372,7 @@ try {
     const guardsSafespot = args.style !== 'melee';
     const spotAssert = args.style === 'melee' ? 'meleeanchor' : 'safespot';
     const chain: [string, number][] = [['key', KEY_MS], ['gate', GATE_MS], [spotAssert, SPOT_MS], ['kill', KILL_MS], ['banktrip', BANK_MS]];
-    // Why: melee passed a whole run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
+    // Why: melee passed a full run on 2 kills and 0 pickups, because a kill did not end the fight call and the drops rotted inside it, so every style now has to bring something home.
     const required = ['key', 'gate', spotAssert, 'kill', 'banktrip', 'walkout', 'wielded', 'loot', args.dusty ? 'bankedkey' : 'coldkey'];
     if (args.style !== 'melee') { required.push('hpheld'); }
     if (args.style === 'melee') { required.push('meleekills'); }

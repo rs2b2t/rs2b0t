@@ -66,7 +66,7 @@ export interface Spot {
     z: number;
 }
 
-// Why: nothing in the walker returns a path cost, only a reachable yes or no, and the spots sit within a few tiles of each other where Chebyshev and a real path agree.
+// Why: nothing in the walker returns a path cost, only a reachable yes or no, and the spots sit within a few tiles of each other where Chebyshev and a walked path agree.
 
 /** Index of the safespot fewest tiles away, ties going to the earlier one. */
 export function nearestSpot(from: Spot, spots: readonly Spot[]): number {
@@ -89,7 +89,7 @@ export interface RetreatAim {
     spots: readonly Spot[];
 }
 
-// Why: a retry that recomputes the nearest spot from the tile it never left picks the spot it just failed on, so a rotation only sticks by being carried into the next attempt.
+// Why: a retry that recomputes the nearest spot from the tile it never left picks the spot that failed, so a rotation only sticks by being carried into the next attempt.
 
 /** Which safespot a retreat walks at, and which one it tries if that one cannot be reached. */
 export function retreatAim(a: RetreatAim): { index: number; next: number } {
