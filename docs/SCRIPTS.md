@@ -21,7 +21,7 @@
 - [Herblore](#herblore) — 5
 - [Magic](#magic) — 2
 - [Mining](#mining) — 3
-- [Money making](#money-making) — 3
+- [Money making](#money-making) — 4
 - [Navigation](#navigation) — 2
 - [Prayer](#prayer) — 1
 - [Quest](#quest) — 3
@@ -769,6 +769,16 @@ Player shop — stands at a bank, buys and sells the items in an order book, quo
 | `cooldownSeconds` | number (0–3600) | `15` | Cooldown after a failed trade (s) |
 | `coinFloat` | number (0–100000000) | `200000` | Coins to carry (float) |
 | `blacklist` | string[] | `[]` | Refuse these names |
+
+### RangingGuild
+
+Plays the Ranging Guild archery competition for tickets and trades every 2000 for 50 rune arrows. Pays the judge 200 coins a round, shoots the ten arrows from behind the haystacks, banks at Seers for coins and the best bow
+
+- Tags: `ranging guild`, `minigame`, `archery`, `tickets`, `rune arrows`, `seers`, `afk`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `coinsPerTrip` | number (200–1000000) | `10000` | Coins per bank trip |
 
 ### ShopBuyout
 
