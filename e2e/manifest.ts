@@ -264,6 +264,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'dragon-slayer-resume-live',
+        harness: 'dragon-slayer-resume-live.ts',
+        covers: { scripts: ['AIOQuester'] },
+        status: 'vetted',
+        provenAt: '9fb7d961',
+        args: ['--stage', '8', '--until', '9', '--minutes', '15'],
+        budgetMin: 18,
+        note: "resumes Dragon Slayer with the map already in Ned's hands and an empty pack; fails on any shopping line and passes once the ship has sailed"
+    },
+    {
         id: 'dragonslayer-solo-test',
         harness: 'dragonslayer-solo-test.ts',
         covers: { scripts: ['AIOQuester'] },
