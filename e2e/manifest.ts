@@ -962,7 +962,8 @@ export const CASES: readonly Case[] = [
         id: 'shopbuyout-fernahei-live',
         harness: 'shopbuyout-fernahei-live.ts',
         covers: { scripts: ['ShopBuyout'] },
-        status: 'unvetted',
+        status: 'vetted',
+        provenAt: '683f264f',
         budgetMin: 8,
         note: 'Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei\'s counter and feathers land in the pack'
     },
