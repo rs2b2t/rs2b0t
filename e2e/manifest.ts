@@ -353,6 +353,13 @@ export const CASES: readonly Case[] = [
         provenAt: '9ff4ff8b'
     },
     {
+        id: 'jivekbd-live',
+        harness: 'jivekbd-live.ts',
+        covers: { scripts: ['JiveKBD'] },
+        status: 'unvetted',
+        budgetMin: 45
+    },
+    {
         id: 'fishing-contest-244-live',
         harness: 'fishing-contest-244-live.ts',
         covers: { scripts: ['AIOQuester'] },

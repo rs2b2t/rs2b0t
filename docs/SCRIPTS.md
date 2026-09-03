@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 62. Categories: 20.
+- Scripts: 63. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 14
+- [Combat](#combat) — 15
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -407,6 +407,34 @@ Taverley Dungeon blue dragons: mage or range from a derived safespot, or melee w
 | `meleeTile` | tile | `{"x":2900,"z":9808,"level":0}` | Melee anchor tile |
 | `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
 | `leaveVia` | string | `"teleport"` | Leave the lair by — one of: Falador teleport, Walk out through the gate |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
+
+### JiveKBD
+
+King Black Dragon with magic from the alcove beside the lair exit lever, wearing the Dragonfire shield against the far fire. Walks the wilderness from Edgeville to the Lava Maze ladder, drinks a Superantipoison before the lever spiders, and teleports to Varrock to bank.
+
+- Tags: `kbd`, `dragon`, `safespot`, `wilderness`, `members`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `dosesWithdraw` | number (1–4) | `1` | Superantipoison flasks per trip |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant axe","Adamant javelin","Adamant platebody","Adamantite bar","Air rune","Amulet of strength","Blood rune","Bronze arrow","Chaos talisman","Coal","Coins","Death rune","Dragon bones","Dragon med helm","Dragon spear","Dragonhide","Dragonstone","Fire rune","Half of a key","Iron arrow","Iron ore","Law rune","Mithril battleaxe","Nature rune","Nature talisman","Oyster pearls","Rune 2h sword","Rune arrow","Rune axe","Rune battleaxe","Rune javelin","Rune kiteshield","Rune longsword","Rune spear","Rune sq shield","Runite bar","Shark","Shield left half","Silver ore","Steel arrow","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Yew logs"]` | Loot to pick up (drop table) — one of: Adamant axe, Adamant javelin, Adamant platebody, Adamantite bar, Air rune, Amulet of strength, Blood rune, Bronze arrow, Chaos talisman, Coal, Coins, Death rune, Dragon bones, Dragon med helm, Dragon spear, Dragonhide, Dragonstone, Fire rune, Half of a key, Iron arrow, Iron ore, Law rune, Mithril battleaxe, Nature rune, Nature talisman, Oyster pearls, Rune 2h sword, Rune arrow, Rune axe, Rune battleaxe, Rune javelin, Rune kiteshield, Rune longsword, Rune spear, Rune sq shield, Runite bar, Shark, Shield left half, Silver ore, Steel arrow, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Yew logs |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `site` | string | `"kbd-lair"` | Lair — one of: kbd-lair |
+| `safespot1` | tile | `{"x":2717,"z":9801,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2716,"z":9801,"level":0}` | Safespot 2 |
+| `bankTile` | tile | `{"x":3094,"z":3493,"level":0}` | Bank stand tile |
 | `teleStock` | number (0–10) | `2` | Spare escape casts |
 | `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
 

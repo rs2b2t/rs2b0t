@@ -38,6 +38,7 @@ import GreenDragon, { SETTINGS as GREENDRAGON_SETTINGS } from './GreenDragon/Gre
 import FireGiant, { SETTINGS as FIREGIANT_SETTINGS } from './FireGiant/FireGiant.js';
 import JiveDragons, { SETTINGS as JIVEDRAGONS_SETTINGS } from './JiveDragons/JiveDragons.js';
 import JiveDemons, { SETTINGS as JIVEDEMONS_SETTINGS } from './JiveDemons/JiveDemons.js';
+import JiveKBD, { SETTINGS as JIVEKBD_SETTINGS } from './JiveKBD/JiveKBD.js';
 import RockCrab, { SETTINGS as ROCKCRAB_SETTINGS } from './RockCrab/RockCrab.js';
 import ThievingBot, { SETTINGS as THIEVING_SETTINGS } from './ThievingBot/ThievingBot.js';
 import WalkToBot, { WALKTO_SETTINGS } from './WalkToBot/WalkToBot.js';
@@ -213,6 +214,15 @@ ScriptRegistry.register({
     tags: ['taverley', 'demons', 'safespot', 'members', 'banking'],
     settingsSchema: JIVEDEMONS_SETTINGS,
     create: () => new JiveDemons()
+});
+
+ScriptRegistry.register({
+    name: 'JiveKBD',
+    description: 'King Black Dragon with magic from the alcove beside the lair exit lever, wearing the Dragonfire shield against the far fire. Walks the wilderness from Edgeville to the Lava Maze ladder, drinks a Superantipoison before the lever spiders, and teleports to Varrock to bank.',
+    category: 'Combat',
+    tags: ['kbd', 'dragon', 'safespot', 'wilderness', 'members', 'banking'],
+    settingsSchema: JIVEKBD_SETTINGS,
+    create: () => new JiveKBD()
 });
 
 ScriptRegistry.register({

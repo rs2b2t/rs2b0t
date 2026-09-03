@@ -40,6 +40,15 @@ export interface JiveHost {
     leaveByWalk(): boolean;
 }
 
+export interface FlaskPlan {
+    /** The dose form the bank run draws. */
+    flask: string;
+    /** Every dose form, so a part-used flask still counts as one in the pack. */
+    doses: readonly string[];
+    /** Flasks to carry per trip. */
+    want: number;
+}
+
 export interface BankOpts {
     withdrawFood: boolean;
     /** Casts of spell runes to withdraw. */
@@ -53,6 +62,12 @@ export interface BankOpts {
     healTo?: number;
     /** Boost flasks to top up, empty for a run that carries none. */
     potions?: PotionPlan[];
+    /** Dose families topped up by count, antipoison and the like. */
+    flasks?: FlaskPlan[];
+    /** Gear worn every trip on top of the weapon and the ammo. */
+    wear?: string[];
+    /** How the trip leaves the lair; leaveLair when absent. */
+    leave?: (h: JiveHost, site: DragonSite) => Promise<boolean>;
 }
 
 export interface EscapeSpell {
@@ -63,7 +78,7 @@ export interface EscapeSpell {
 
 export type KeyState = 'held' | 'bank' | 'fetch';
 
-const SHIELD = 'Dragonfire shield';
+export const SHIELD = 'Dragonfire shield';
 const BOOTH = 'Bank booth';
 const BOOTH_OP = 'Use-quickly';
 
@@ -203,6 +218,22 @@ export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean>
     return true;
 }
 
+/** Cast the escape teleport, up to three times. Null once outside the lair, else why the cast will not fire. */
+export async function teleportOut(h: JiveHost, site: DragonSite): Promise<string | null> {
+    const esc = escapeRunesFor(site.escapeTeleportId);
+    let why = escapeShortfall(esc);
+    for (let i = 0; why === null && i < 3 && site.inArea(Game.tile()); i++) {
+        h.setStatus(`teleporting to ${esc.label}`);
+        if (await Game.teleport(site.escapeTeleportId) && await waitFed(() => !site.inArea(Game.tile()), DOOR_MS)) {
+            h.log(`teleported out to ${esc.label}`);
+            return null;
+        }
+        await Execution.delayTicks(3);
+        why = escapeShortfall(esc);
+    }
+    return site.inArea(Game.tile()) ? (why ?? 'the cast never landed') : null;
+}
+
 /** Teleport out of the lair, or walk out through the gate when the cast will not fire. */
 export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (!site.inArea(Game.tile())) {
@@ -211,21 +242,11 @@ export async function leaveLair(h: JiveHost, site: DragonSite): Promise<boolean>
     if (h.leaveByWalk()) {
         return walkOutOfLair(h, site);
     }
-    const esc = escapeRunesFor(site.escapeTeleportId);
-    let why = escapeShortfall(esc);
-    for (let i = 0; why === null && i < 3 && site.inArea(Game.tile()); i++) {
-        h.setStatus(`teleporting to ${esc.label}`);
-        if (await Game.teleport(site.escapeTeleportId) && await waitFed(() => !site.inArea(Game.tile()), DOOR_MS)) {
-            h.log(`teleported out to ${esc.label}`);
-            return true;
-        }
-        await Execution.delayTicks(3);
-        why = escapeShortfall(esc);
-    }
-    if (!site.inArea(Game.tile())) {
+    const why = await teleportOut(h, site);
+    if (why === null) {
         return true;
     }
-    h.log(`the ${esc.label} will not fire (${why ?? 'the cast never landed'}). Walking out through the gate instead.`);
+    h.log(`the ${escapeRunesFor(site.escapeTeleportId).label} will not fire (${why}). Walking out through the gate instead.`);
     return walkOutOfLair(h, site);
 }
 
@@ -285,7 +306,7 @@ async function openSiteBank(h: JiveHost, site: DragonSite): Promise<boolean> {
 
 /** Bank the load, restock, heal, and end the trip ready for the next one. */
 export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts): Promise<void> {
-    if (!(await leaveLair(h, site))) {
+    if (!(await (opts.leave ?? leaveLair)(h, site))) {
         return;
     }
     if (!(await openSiteBank(h, site))) {
@@ -296,12 +317,12 @@ export async function bankRoutine(h: JiveHost, site: DragonSite, opts: BankOpts)
         await withdrawFoodTo(h);
     }
     await withdrawKey(h, site);
-    await withdrawGear(h);
+    await withdrawGear(h, opts.wear);
     await withdrawStyleSupplies(h, opts);
     await withdrawEscapeRunes(h, site, opts);
-    await withdrawPotions(h, opts);
+    await withdrawFlasks(h, [...(opts.potions ?? []).map(asFlask), ...(opts.flasks ?? [])]);
     // Why: Equipment.equip shuts the bank to get the backpack ops back, so every withdrawal has to land before anything is worn.
-    await equipGear(h);
+    await equipGear(h, opts.wear);
     if (await healUp(h, opts.healTo ?? HEAL_TO) && opts.withdrawFood && await openSiteBank(h, site)) {
         await withdrawFoodTo(h);
     }
@@ -352,11 +373,14 @@ async function needOne(h: JiveHost, name: string): Promise<void> {
     }
 }
 
-async function withdrawGear(h: JiveHost): Promise<void> {
+async function withdrawGear(h: JiveHost, wear: readonly string[] = []): Promise<void> {
     if (h.style() === 'melee') {
         await needOne(h, SHIELD);
     }
     await needOne(h, h.weaponName());
+    for (const name of wear) {
+        await needOne(h, name);
+    }
     // Why: reader.bankItems() is empty whenever the bank modal is shut, so a count of zero only carries a fact with the bank open.
     const gate = meleeShieldGate(h.style(), Equipment.contains(SHIELD) || Inventory.count(SHIELD) > 0 || Bank.count(SHIELD) > 0);
     if (gate !== null) {
@@ -364,8 +388,8 @@ async function withdrawGear(h: JiveHost): Promise<void> {
     }
 }
 
-async function equipGear(h: JiveHost): Promise<void> {
-    const wear = h.style() === 'melee' ? [SHIELD, h.weaponName()] : [h.weaponName(), h.style() === 'range' ? h.ammoName() : ''];
+async function equipGear(h: JiveHost, extra: readonly string[] = []): Promise<void> {
+    const wear = [...(h.style() === 'melee' ? [SHIELD, h.weaponName()] : [h.weaponName(), h.style() === 'range' ? h.ammoName() : '']), ...extra];
     for (const name of wear) {
         if (name !== '' && !Equipment.contains(name) && Inventory.first(name) !== null && await Equipment.equip(name)) {
             h.log(`wearing ${name}`);
@@ -411,28 +435,32 @@ async function withdrawEscapeRunes(h: JiveHost, site: DragonSite, opts: BankOpts
     }
 }
 
-function potionsHeld(plan: PotionPlan): number {
-    return plan.potion.doses.reduce((n, dose) => n + Inventory.count(dose), 0);
+function asFlask(plan: PotionPlan): FlaskPlan {
+    return { flask: plan.flask, doses: plan.potion.doses, want: plan.want };
+}
+
+function flasksHeld(plan: FlaskPlan): number {
+    return plan.doses.reduce((n, dose) => n + Inventory.count(dose), 0);
 }
 
 // Why: a flask is counted across every dose form, so a part-used one carried back from the last trip is topped up rather than stocked on top of.
 
-/** Top each planned boost up to its flask count. */
-async function withdrawPotions(h: JiveHost, opts: BankOpts): Promise<void> {
-    for (const plan of opts.potions ?? []) {
-        const start = potionsHeld(plan);
-        for (let guard = 0; guard < 12 && potionsHeld(plan) < plan.want && !Inventory.isFull(); guard++) {
-            const before = potionsHeld(plan);
+/** Top each dose family up to its flask count. */
+async function withdrawFlasks(h: JiveHost, plans: readonly FlaskPlan[]): Promise<void> {
+    for (const plan of plans) {
+        const start = flasksHeld(plan);
+        for (let guard = 0; guard < 12 && flasksHeld(plan) < plan.want && !Inventory.isFull(); guard++) {
+            const before = flasksHeld(plan);
             await Bank.withdraw(plan.flask, 'Withdraw-1');
-            if (!(await Execution.delayUntil(() => potionsHeld(plan) > before, 2500))) {
+            if (!(await Execution.delayUntil(() => flasksHeld(plan) > before, 2500))) {
                 break;
             }
         }
-        const got = potionsHeld(plan) - start;
+        const got = flasksHeld(plan) - start;
         if (got > 0) {
             h.log(`withdrew ${got} ${plan.flask}`);
-        } else if (potionsHeld(plan) === 0) {
-            h.log(`WARNING: no '${plan.flask}' in the bank. Fighting unboosted.`);
+        } else if (flasksHeld(plan) === 0) {
+            h.log(`WARNING: no '${plan.flask}' in the bank. The trip goes without.`);
         }
     }
 }

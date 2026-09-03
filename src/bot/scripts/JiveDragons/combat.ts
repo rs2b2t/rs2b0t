@@ -11,7 +11,7 @@ import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, hurtOnSpot, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -64,6 +64,8 @@ const HOLD_GAP_MS = 10_000;
 
 /** How long a body must hold its tile before a safespot style clicks it. */
 const SETTLE_MS = 1200;
+/** A stalled target is re-clicked every few seconds, so only one line in this many says so. */
+const REISSUE_LOG_EVERY = 10;
 
 const RETREAT_HOPS = 4;
 const RETREAT_HOP_MS = 3000;
@@ -174,6 +176,7 @@ export class Fight implements Task {
     private lastHp = -1;
     private blindSince = 0;
     private polledAt = 0;
+    private reissues = 0;
     private readonly skip = new Map<number, number>();
     private readonly seen = new Map<number, Sighting>();
 
@@ -225,6 +228,10 @@ export class Fight implements Task {
             // Why: eating in dragonfire loses the race, so the fight hands the loop back at the retreat line the same way the task order puts Retreat above Eat.
             // Why: needEat is false with an empty pack, so gating on it alone kept a foodless fight running for the 5s that killed a live run; it now guards only the case it was written for, a fed retreat that would not eat at the end and shuttles.
             if ((!this.host.hasFood() || this.host.needEat()) && retreatNeeded(this.host, this.site)) {
+                return;
+            }
+            // Why: on a site that breathes at the tile an empty pack is hp draining with nothing to stop it, so the fight hands back at once and the bank run above it fires with the hp still there.
+            if (this.site.rangedThreat === true && !this.host.hasFood()) {
                 return;
             }
             // Why: an eat that never lands means an empty pack, and looping on it burns every pass without pumping Sustain or reaching the panic check below.
@@ -318,6 +325,7 @@ export class Fight implements Task {
 
     private clearTarget(): void {
         this.engaged = null;
+        this.reissues = 0;
         this.host.targetIdx = null;
         this.engagedHealth = -1;
     }
@@ -350,7 +358,7 @@ export class Fight implements Task {
         const hp = Skills.effective('hitpoints');
         const onSpot = atTile(this.anchor());
         this.watch(onSpot);
-        const hurt = onSpot && this.lastHp >= 0 && hp < this.lastHp;
+        const hurt = hurtOnSpot({ rangedThreat: this.site.rangedThreat === true, onSpot, lastHp: this.lastHp, hp });
         this.lastHp = onSpot ? hp : -1;
         if (!usesSafespot(style)) {
             return 'held';
@@ -431,9 +439,14 @@ export class Fight implements Task {
     /** Send the attack and watch for the drag off the safespot. False means the click was refused. */
     private async engage(target: Npc, name: string): Promise<boolean> {
         const style = this.host.style();
+        // Why: a target whose defence roll dwarfs the attack roll shows no health change for minutes, so the re-click runs every few seconds and the line would crowd out everything else.
         if (target.index === this.engaged) {
-            this.host.log(`${name} ${target.index} stalled. Re-issuing the attack.`);
+            this.reissues++;
+            if (this.reissues === 1 || this.reissues % REISSUE_LOG_EVERY === 0) {
+                this.host.log(`${name} ${target.index} stalled. Re-issuing the attack (${this.reissues} so far).`);
+            }
         } else {
+            this.reissues = 0;
             this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
         }
         // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.

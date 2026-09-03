@@ -1,7 +1,7 @@
-/** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons and scripts/JiveDemons.
+/** Derive the safespots and melee anchor of a Jive grind site, which feed sites.ts under scripts/JiveDragons, scripts/JiveDemons and scripts/JiveKBD.
  *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
-//   bun tools/nav/jive-safespots.ts [--target blue|demon] [--content ~/code/rs2b2t-content]
+//   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--content ~/code/rs2b2t-content]
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -25,7 +25,8 @@ export interface Target {
     /** The map squares the spawns are read from. */
     squares: string[];
     adult: { id: number; size: number };
-    baby: { id: number; size: number } | null;
+    /** A smaller body whose reach the safespots also avoid; `maxrange` falls back to the adult's. */
+    baby: { id: number; size: number; maxrange?: number } | null;
     /** What the engine clamps the npc's movement with. */
     maxrange: number;
     /** The tile the site region floods from. */
@@ -38,8 +39,10 @@ export interface Target {
 // Why: the answer moves with maxrange: at the wanderrange of 4 the winning anchor is (2903, 9806), which borders two adult spawns instead of one.
 export const BLUE_DRAGON: Target = { squares: ['m45_153', 'm45_152'], adult: { id: 55, size: 4 }, baby: { id: 52, size: 2 }, maxrange: 6, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
 export const BLACK_DEMON: Target = { squares: ['m44_152'], adult: { id: 84, size: 3 }, baby: null, maxrange: 9, inside: GATE_INSIDE, outside: LADDER_BOTTOM };
+// Why: the lair's own spiders are ice spiders, wander 10 and clamped at 12; the poison spiders sit in the dungeon by the in-lever, outside this square.
+export const KING_BLACK_DRAGON: Target = { squares: ['m42_153'], adult: { id: 50, size: 5 }, baby: { id: 64, size: 1, maxrange: 12 }, maxrange: 20, inside: { x: 2717, z: 9802 }, outside: { x: 3067, z: 10254 } };
 
-export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON };
+export const TARGETS: Record<string, Target> = { blue: BLUE_DRAGON, demon: BLACK_DEMON, kbd: KING_BLACK_DRAGON };
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ = [1, 0, -1, 0, 1, -1, -1, 1];
@@ -155,6 +158,7 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
 
     /** Every footprint origin the npc can reach inside `maxrange`, then the tiles it covers and the tiles it can hit from them. */
     const wander = (spawn: Spawn): Wander => {
+        const reach = spawn.adult ? target.maxrange : (target.baby?.maxrange ?? target.maxrange);
         const seen = new Set<string>();
         const body = new Set<string>();
         const queue: { x: number; z: number }[] = [];
@@ -171,7 +175,7 @@ export function derive(target = BLUE_DRAGON, packPath = PACK, maps = MAPS): Deri
             }
             for (let dir = 0; dir < 4; dir++) {
                 const nx = o.x + DX[dir]!, nz = o.z + DZ[dir]!;
-                if (seen.has(key(nx, nz)) || cheb(nx, nz, spawn.x, spawn.z) > target.maxrange) continue;
+                if (seen.has(key(nx, nz)) || cheb(nx, nz, spawn.x, spawn.z) > reach) continue;
                 if (!canSlide(o.x, o.z, spawn.size, dir) || !fits(nx, nz, spawn.size)) continue;
                 seen.add(key(nx, nz));
                 queue.push({ x: nx, z: nz });

@@ -5,6 +5,8 @@ import { join } from 'node:path';
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-content');
 const OUT = 'src/bot/data/dropdb.ts';
 const DROP_DIR = join(CONTENT, 'scripts', 'drop tables', 'scripts');
+// Why: the King Black Dragon's table is an ai_queue3 block inside its area script, not a file under drop tables.
+const AREA_DIR = join(CONTENT, 'scripts', 'areas');
 
 function filesUnder(root: string, ext: string): string[] {
     return (readdirSync(root, { recursive: true }) as string[])
@@ -43,7 +45,7 @@ interface Block {
 
 function loadBlocks(): Map<string, Block> {
     const blocks = new Map<string, Block>();
-    for (const f of filesUnder(DROP_DIR, '.rs2')) {
+    for (const f of [...filesUnder(DROP_DIR, '.rs2'), ...filesUnder(AREA_DIR, '.rs2')]) {
         let cur: Block | null = null;
         const lines: string[] = [];
         const flush = (): void => { if (cur) { cur.body = lines.join('\n'); blocks.set(`${cur.type}:${cur.name}`, cur); lines.length = 0; } };
