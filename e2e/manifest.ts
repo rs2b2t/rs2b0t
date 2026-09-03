@@ -959,6 +959,14 @@ export const CASES: readonly Case[] = [
         documentedIn: 'docs/reference/quest-harness-recipes-2.md'
     },
     {
+        id: 'shopbuyout-fernahei-live',
+        harness: 'shopbuyout-fernahei-live.ts',
+        covers: { scripts: ['ShopBuyout'] },
+        status: 'unvetted',
+        budgetMin: 8,
+        note: 'Shilo Village marked complete and 1000gp banked; passes when the teller hands over the coins, the bot stands at Fernahei\'s counter and feathers land in the pack'
+    },
+    {
         id: 'smelter-swarm-422-live',
         harness: 'smelter-swarm-422-live.ts',
         covers: { scripts: ['SmelterBot'] },
