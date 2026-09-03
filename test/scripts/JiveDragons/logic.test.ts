@@ -2,15 +2,20 @@ import { describe, expect, test } from 'bun:test';
 import {
     SAFESPOT_BLIND_MS,
     attackRangeFor,
+    bodyOrigin,
+    engageRangeFor,
+    gapTo,
     holdDue,
     isClueObj,
+    lootHalts,
     keyStatus,
     meleeShieldGate,
     nearestSpot,
     nextSafespot,
-    reachFor,
+    noteSighting,
     retreatAim,
     retreatDue,
+    settled,
     wantsDrop
 } from '#/bot/scripts/JiveDragons/logic.js';
 
@@ -161,16 +166,37 @@ describe('attackRangeFor', () => {
     });
 });
 
-describe('reachFor', () => {
-    test('a size-4 body reports its centre, so every style reads two past the true gap', () => {
-        expect(reachFor('melee')).toBe(3);
-        expect(reachFor('range')).toBe(9);
-        expect(reachFor('mage')).toBe(12);
+describe('engageRangeFor', () => {
+    test('a safespot style clicks one tile inside its range, since a body on the edge is one wander step from out of it', () => {
+        expect(engageRangeFor('range')).toBe(6);
+        expect(engageRangeFor('mage')).toBe(9);
     });
 
-    test('the correction is the same for every style, with melee no longer the only one carrying it', () => {
-        expect(reachFor('range') - attackRangeFor('range')).toBe(reachFor('melee') - attackRangeFor('melee'));
-        expect(reachFor('mage') - attackRangeFor('mage')).toBe(reachFor('melee') - attackRangeFor('melee'));
+    test('melee has no edge to keep off, the leash brings the body to the anchor', () => {
+        expect(engageRangeFor('melee')).toBe(1);
+    });
+});
+
+describe('gapTo', () => {
+    // Why: the engine measures range between the closest tiles of the two footprints, and the client reports a body at its centre tile.
+    test('a size-3 body reported nine tiles off has its near face eight away, past a bow', () => {
+        expect(gapTo({ x: 2856, z: 9786 }, { x: 2858, z: 9777 }, 3)).toBe(8);
+        expect(gapTo({ x: 2856, z: 9786 }, { x: 2858, z: 9777 }, 3)).toBeGreaterThan(attackRangeFor('range'));
+    });
+
+    test('a size-4 dragon reads two closer on its north and east faces and three on its south and west', () => {
+        expect(gapTo({ x: 2901, z: 9809 }, { x: 2899, z: 9804 }, 4)).toBe(4);
+        expect(gapTo({ x: 2895, z: 9800 }, { x: 2899, z: 9804 }, 4)).toBe(2);
+    });
+
+    test('a tile beside or inside the footprint reads as adjacent or zero', () => {
+        expect(gapTo({ x: 2900, z: 9808 }, { x: 2899, z: 9804 }, 4)).toBe(3);
+        expect(gapTo({ x: 2898, z: 9806 }, { x: 2899, z: 9804 }, 4)).toBe(1);
+        expect(gapTo({ x: 2898, z: 9803 }, { x: 2899, z: 9804 }, 4)).toBe(0);
+    });
+
+    test('a size-1 body is plain Chebyshev', () => {
+        expect(gapTo({ x: 10, z: 10 }, { x: 13, z: 8 }, 1)).toBe(3);
     });
 });
 
@@ -210,5 +236,59 @@ describe('wantsDrop', () => {
 
     test('an unnamed ground item is never wanted', () => {
         expect(wantsDrop({ id: 4, name: null }, filter)).toBe(false);
+    });
+});
+
+describe('bodyOrigin', () => {
+    // Why: the client reports an npc at the tile under the centre of its footprint, and the engine measures sight to the south-west corner.
+    test('a size-3 body starts one tile south-west of the reported tile, a size-4 body two', () => {
+        expect(bodyOrigin({ x: 2860, z: 9782 }, 3)).toEqual({ x: 2859, z: 9781 });
+        expect(bodyOrigin({ x: 2899, z: 9804 }, 4)).toEqual({ x: 2897, z: 9802 });
+    });
+
+    test('a size-1 or size-2 body reads from its reported tile or one below it', () => {
+        expect(bodyOrigin({ x: 10, z: 10 }, 1)).toEqual({ x: 10, z: 10 });
+        expect(bodyOrigin({ x: 10, z: 10 }, 2)).toEqual({ x: 9, z: 9 });
+    });
+});
+
+describe('sightings', () => {
+    // Why: a wandering body steps a tile a tick, and the fourth demon run was walked off the tile by the two clicks it sent at bodies still on the move.
+    const here = { x: 2857, z: 9780 };
+
+    test('a body just sighted has not settled', () => {
+        const s = noteSighting(undefined, here, 1000);
+        expect(settled(s, 1000, 1200)).toBe(false);
+        expect(settled(undefined, 5000, 1200)).toBe(false);
+    });
+
+    test('a body holding its tile settles once the window has passed', () => {
+        let s = noteSighting(undefined, here, 1000);
+        s = noteSighting(s, here, 1600);
+        expect(settled(s, 1600, 1200)).toBe(false);
+        s = noteSighting(s, here, 2200);
+        expect(settled(s, 2200, 1200)).toBe(true);
+    });
+
+    test('a step restarts the window', () => {
+        let s = noteSighting(undefined, here, 1000);
+        s = noteSighting(s, here, 2200);
+        expect(settled(s, 2200, 1200)).toBe(true);
+        s = noteSighting(s, { x: 2858, z: 9780 }, 2800);
+        expect(settled(s, 2800, 1200)).toBe(false);
+        expect(settled(s, 4000, 1200)).toBe(true);
+    });
+});
+
+describe('lootHalts', () => {
+    // Why: a loot burst checked only whether it needed to eat, which an empty pack never does, and the fifth demon run kept picking arrows off a demon's feet from 64 hp down to 10.
+    test('under the retreat line the burst stops, on it the burst runs', () => {
+        expect(lootHalts({ hpFrac: 0.49, panicHp: 0.3, retreatHp: 0.5 })).toBe(true);
+        expect(lootHalts({ hpFrac: 0.5, panicHp: 0.3, retreatHp: 0.5 })).toBe(false);
+    });
+
+    test('with the retreat off, the panic line is the floor', () => {
+        expect(lootHalts({ hpFrac: 0.4, panicHp: 0.3, retreatHp: 0 })).toBe(false);
+        expect(lootHalts({ hpFrac: 0.29, panicHp: 0.3, retreatHp: 0 })).toBe(true);
     });
 });

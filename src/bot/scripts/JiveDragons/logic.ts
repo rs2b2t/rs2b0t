@@ -1,5 +1,7 @@
 import { matchesCommonBankLoot } from '../../api/bank/bankRules.js';
 import { CASKET_IDS, CLUE_DB } from '../../api/ai/clues/data/cluedb.js';
+import Tile from '../../geometry/Tile.js';
+import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 
 export type Style = 'melee' | 'mage' | 'range';
 
@@ -49,6 +51,19 @@ export function retreatDue(s: RetreatState): boolean {
     return !s.hasFood || s.hpFrac < s.retreatHp;
 }
 
+export interface LootState {
+    hpFrac: number;
+    panicHp: number;
+    retreatHp: number;
+}
+
+// Why: a loot burst that checked only whether it needed to eat, which an empty pack never does, kept picking arrows off a demon's feet from 64 hp down to 10.
+
+/** Whether the run is too hurt to keep walking the drop pile, so the retreat or the bank run gets the loop. */
+export function lootHalts(s: LootState): boolean {
+    return s.hpFrac < s.panicHp || (s.retreatHp > 0 && s.hpFrac < s.retreatHp);
+}
+
 export interface HoldState {
     onSafespot: boolean;
     hasFood: boolean;
@@ -82,6 +97,37 @@ export function nearestSpot(from: Spot, spots: readonly Spot[]): number {
     return best;
 }
 
+// Why: the client reports an npc at the tile under the centre of its footprint, and the engine measures sight to the south-west corner.
+
+/** The south-west tile of a body the client reports at its centre. */
+export function bodyOrigin(tile: Spot, size: number): Spot {
+    const back = size >> 1;
+    return { x: tile.x - back, z: tile.z - back };
+}
+
+export interface Sighting {
+    x: number;
+    z: number;
+    /** When the body was first seen on this tile. */
+    since: number;
+    at: number;
+}
+
+// Why: a wandering body steps a tile a tick, and a click sent at one on the move lands after it has left the range, so the server walks the bot after it.
+
+/** Where a body was last seen, keeping `since` while it holds its tile. */
+export function noteSighting(prev: Sighting | undefined, tile: Spot, now: number): Sighting {
+    if (prev !== undefined && prev.x === tile.x && prev.z === tile.z) {
+        return { ...prev, at: now };
+    }
+    return { x: tile.x, z: tile.z, since: now, at: now };
+}
+
+/** Whether the body has held its tile for `ms`. */
+export function settled(s: Sighting | undefined, now: number, ms: number): boolean {
+    return s !== undefined && now - s.since >= ms;
+}
+
 export interface RetreatAim {
     /** The index a failed attempt rotated to, or null when this retreat is a fresh one. */
     rotated: number | null;
@@ -100,18 +146,25 @@ export function retreatAim(a: RetreatAim): { index: number; next: number } {
 // Why: clicking Attack beyond weapon range makes the server walk you into range, which steps off the safespot.
 const ATTACK_RANGE: Record<Style, number> = { melee: 1, range: 7, mage: 10 };
 
-/** How much further than the true gap a size-4 body reads, worst case. */
-const CENTRE_PAD = 2;
-
 export function attackRangeFor(style: Style): number {
     return ATTACK_RANGE[style];
 }
 
-// Why: Npc.distance() measures to the centre of a multi-tile footprint, so a size-4 dragon reads 2 at its north and east faces and 3 at its south and west, and a body at true bow range 7 reads 9.
+// Why: a body on the last tile of the range is one wander step from out of it by the time the click lands, and the third demon run was walked off the tile that way at gap 7.
 
-/** How far a target may read and still be in range without the server walking the bot to it. */
-export function reachFor(style: Style): number {
-    return attackRangeFor(style) + CENTRE_PAD;
+/** How far a body may stand for the click to be sent. */
+export function engageRangeFor(style: Style): number {
+    return style === 'melee' ? ATTACK_RANGE.melee : ATTACK_RANGE[style] - 1;
+}
+
+// Why: the engine measures range between the closest tiles of the two footprints, and Npc.distance() measures to the centre of one, so a size-4 dragon read 2 at its north and east faces and 3 at its south and west, and a size-3 demon read 1 past its near face.
+
+/** The gap the server measures from `from` to a body the client reports at `tile`. */
+export function gapTo(from: Spot, tile: Spot, size: number): number {
+    const o = bodyOrigin(tile, size);
+    const dx = Math.max(o.x - from.x, from.x - (o.x + size - 1), 0);
+    const dz = Math.max(o.z - from.z, from.z - (o.z + size - 1), 0);
+    return Math.max(dx, dz);
 }
 
 // Why: dragonfire is 5 through the shield and 30 without, rising to 50 when the attack roll beats the defence roll.
@@ -162,4 +215,16 @@ export function keyStatus(held: number, banked: number): 'held' | 'bank' | 'fetc
         return 'held';
     }
     return banked > 0 ? 'bank' : 'fetch';
+}
+
+// Why: SettingsStore.resolve fills every key with the schema default, so an untouched tile setting reads back as the schema's tile and would beat the tile the chosen site carries.
+
+/** The site's own tile, unless the panel setting has been moved off its schema default. */
+export function siteTileOf(schema: SettingsSchema, bag: SettingsBag, key: string | undefined, site: Tile): Tile {
+    const def = key === undefined ? undefined : schema[key]?.default;
+    if (key === undefined || !(def instanceof Tile)) {
+        return site;
+    }
+    const set = bag.tile(key, site);
+    return set.equals(def) ? site : set;
 }

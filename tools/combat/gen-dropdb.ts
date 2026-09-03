@@ -63,9 +63,13 @@ function loadBlocks(): Map<string, Block> {
 
 const objNames = loadConfigNames('.obj');
 const deathDrops = new Map<string, string>();
+const categories = new Map<string, string[]>();
 const npcNames = loadConfigNames('.npc', (cur, line) => {
     if (line.startsWith('param=death_drop,')) {
         deathDrops.set(cur, line.slice('param=death_drop,'.length).split(',')[0].trim());
+    } else if (line.startsWith('category=')) {
+        const cat = line.slice('category='.length).trim();
+        categories.set(cat, [...(categories.get(cat) ?? []), cur]);
     }
 });
 const blocks = loadBlocks();
@@ -100,21 +104,30 @@ function itemsIn(key: string, deathDrop: string | undefined, seen: Set<string>):
 
 function generate(): string {
     const byDisplay = new Map<string, Set<string>>();
+    // Why: a block named _x is the table for every npc whose config says category=x, and the engine runs an npc's own block instead of it, so the category table only lands where no own block exists.
+    const npcsOf = (block: Block): string[] => {
+        if (!block.name.startsWith('_')) {
+            return npcNames.has(block.name) ? [block.name] : [];
+        }
+        return (categories.get(block.name.slice(1)) ?? []).filter(npc => npcNames.has(npc) && !blocks.has(`${block.type}:${npc}`));
+    };
     for (const block of blocks.values()) {
-        if (!/^ai_queue/.test(block.type) || !npcNames.has(block.name)) {
+        if (!/^ai_queue/.test(block.type)) {
             continue;
         }
-        const items = itemsIn(`${block.type}:${block.name}`, deathDrops.get(block.name), new Set());
-        if (items.size === 0) {
-            continue;
+        for (const npc of npcsOf(block)) {
+            const items = itemsIn(`${block.type}:${block.name}`, deathDrops.get(npc), new Set());
+            if (items.size === 0) {
+                continue;
+            }
+            const display = npcNames.get(npc)!;
+            const set = byDisplay.get(display) ?? new Set<string>();
+            for (const it of items) {
+                const name = objNames.get(it);
+                if (name) { set.add(name); }
+            }
+            byDisplay.set(display, set);
         }
-        const display = npcNames.get(block.name)!;
-        const set = byDisplay.get(display) ?? new Set<string>();
-        for (const it of items) {
-            const name = objNames.get(it);
-            if (name) { set.add(name); }
-        }
-        byDisplay.set(display, set);
     }
 
     const rows = [...byDisplay.entries()]

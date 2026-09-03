@@ -5,14 +5,14 @@
 
 # Bundled scripts
 
-- Scripts: 61. Categories: 20.
+- Scripts: 62. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
 ## Contents
 
 - [Agility](#agility) — 4
-- [Combat](#combat) — 13
+- [Combat](#combat) — 14
 - [Cooking](#cooking) — 1
 - [Crafting](#crafting) — 7
 - [Firemaking](#firemaking) — 1
@@ -334,6 +334,40 @@ Edgeville dungeon hill giants — enters through the public trapdoor and banks l
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
 | `buryBones` | boolean | `false` | Bury big bones |
 | `lootSlots` | number (1–27) | `14` | Bank after this many loot slots |
+
+### JiveDemons
+
+Taverley Dungeon black demons: mage or range from a derived safespot in the pocket past the blue dragons. Opens the dusty-key gate, fetching the key off Velrak when the bank has none.
+
+- Tags: `taverley`, `demons`, `safespot`, `members`, `banking`
+
+| Setting | Type | Default | Notes |
+|---|---|---|---|
+| `combatStyle` | string | `"range"` | Combat style — one of: range, mage |
+| `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
+| `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
+| `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
+| `runeBuffer` | number (0–2000) | `300` | Spare runes per type |
+| `bow` | string | `"Maple shortbow"` | Bow — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow |
+| `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
+| `ammo` | string | `"Iron arrow"` | Ammo — one of: Bronze arrow, Iron arrow, Steel arrow, Mithril arrow, Adamant arrow, Rune arrow, Dragon arrow |
+| `ammoWithdraw` | number (1–5000) | `500` | Ammo per bank trip |
+| `loadout` | string | `""` | Loadout — one of:  |
+| `foodWithdraw` | number (1–27) | `20` | Food to withdraw per bank run |
+| `panicHp` | number (1–98) | `30` | Panic-to-bank below HP% |
+| `retreatHp` | number (0–99) | `50` | Retreat to a safespot below HP% |
+| `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
+| `healTo` | number (10–100) | `90` | Heal to HP% before heading back |
+| `loot` | string[] | `["Adamant javelin","Adamantite bar","Air rune","Black axe","Black sword","Blood rune","Chaos rune","Chaos talisman","Coins","Death rune","Defence potion(3)","Dragon med helm","Dragon spear","Dragonstone","Fire rune","Half of a key","Herb","Law rune","Lobster","Mithril kiteshield","Nature rune","Nature talisman","Rune 2h sword","Rune arrow","Rune battleaxe","Rune chainbody","Rune javelin","Rune kiteshield","Rune med helm","Rune spear","Rune sq shield","Runite bar","Shield left half","Silver ore","Steel arrow","Steel battleaxe","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire"]` | Loot to pick up (drop table) — one of: Adamant javelin, Adamantite bar, Air rune, Ashes, Black axe, Black sword, Blood rune, Chaos rune, Chaos talisman, Coins, Death rune, Defence potion(3), Dragon med helm, Dragon spear, Dragonstone, Fire rune, Half of a key, Herb, Law rune, Lobster, Mithril kiteshield, Nature rune, Nature talisman, Rune 2h sword, Rune arrow, Rune battleaxe, Rune chainbody, Rune javelin, Rune kiteshield, Rune med helm, Rune spear, Rune sq shield, Runite bar, Shield left half, Silver ore, Steel arrow, Steel battleaxe, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire |
+| `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
+| `site` | string | `"taverley-black-demon"` | Demon site — one of: taverley-black-demon |
+| `safespot1` | tile | `{"x":2856,"z":9786,"level":0}` | Safespot 1 |
+| `safespot2` | tile | `{"x":2857,"z":9786,"level":0}` | Safespot 2 |
+| `safespot3` | tile | `{"x":2855,"z":9786,"level":0}` | Safespot 3 |
+| `bankTile` | tile | `{"x":2946,"z":3369,"level":0}` | Bank stand tile |
+| `leaveVia` | string | `"teleport"` | Leave the dungeon by — one of: Falador teleport, Walk out through the gate |
+| `teleStock` | number (0–10) | `2` | Spare escape casts |
+| `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
 
 ### JiveDragons
 

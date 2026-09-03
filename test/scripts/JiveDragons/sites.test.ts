@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { DRAGON_SITES, SITE_OPTIONS, siteFor } from '#/bot/scripts/JiveDragons/sites.js';
 import { SPELL_TELEPORTS } from '#/bot/event/webwalk/teleportCatalog.js';
-import { derive, inputsPresent } from '../../../tools/nav/jive-dragon-safespots.js';
+import { derive, inputsPresent } from '../../../tools/nav/jive-safespots.js';
 
 describe('DRAGON_SITES', () => {
     test('Taverley blue is the only entry and every option resolves', () => {

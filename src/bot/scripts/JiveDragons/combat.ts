@@ -9,8 +9,9 @@ import { Sustain } from '../../api/sustain/Sustain.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
+import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
-import { SAFESPOT_BLIND_MS, holdDue, nextSafespot, reachFor, retreatAim, retreatDue, type Style } from './logic.js';
+import { SAFESPOT_BLIND_MS, bodyOrigin, engageRangeFor, gapTo, holdDue, nextSafespot, noteSighting, retreatAim, retreatDue, settled, type Sighting, type Style } from './logic.js';
 import type { DragonSite } from './sites.js';
 import { waitFed, type JiveHost } from './supply.js';
 
@@ -60,6 +61,9 @@ const APPROACH_MS = 120_000;
 
 /** A gap this long between two of Fight's own polls is time the bot spent somewhere other than the tile. */
 const HOLD_GAP_MS = 10_000;
+
+/** How long a body must hold its tile before a safespot style clicks it. */
+const SETTLE_MS = 1200;
 
 const RETREAT_HOPS = 4;
 const RETREAT_HOP_MS = 3000;
@@ -116,15 +120,23 @@ function atTile(t: Tile): boolean {
     return here !== null && here.x === t.x && here.z === t.z && here.level === t.level;
 }
 
+// Why: the server walks an Attack click until it has line of sight, and a safespot sees a body in only some of the places it wanders, so a target the tile cannot see is a walk off the tile.
+
+/** Whether an Attack click from `spot` at this body fires without the server walking closer. */
+function sightedFrom(spot: Tile, n: Npc): boolean {
+    const o = bodyOrigin(n.tile(), n.size);
+    return Reachability.lineOfSight(spot, { x: o.x, z: o.z, level: spot.level }, n.size);
+}
+
 // Why: the query name match is exact, so 'Baby blue dragon' never matches 'Blue dragon' and the babies stay untargeted.
 
-/** Adults inside `radius` that no other player is fighting. `ours` is exempt. */
-function adultsNear(site: DragonSite, ours: number | null, radius: number): Npc[] {
+/** Adults inside `radius` that no other player is fighting and that `from` can see. `ours` is exempt from the fight check. */
+function adultsNear(site: DragonSite, ours: number | null, radius: number, from: Tile | null): Npc[] {
     return Npcs.query()
         .name(site.target)
         .action(ATTACK)
         .within(radius)
-        .where(n => site.inArea(n.tile()) && !takenByAnother({
+        .where(n => site.inArea(n.tile()) && (from === null || sightedFrom(from, n)) && !takenByAnother({
             isOurs: n.index === ours,
             inCombat: n.inCombat,
             targetsMe: n.targetsMe(),
@@ -163,6 +175,7 @@ export class Fight implements Task {
     private blindSince = 0;
     private polledAt = 0;
     private readonly skip = new Map<number, number>();
+    private readonly seen = new Map<number, Sighting>();
 
     constructor(private readonly host: CombatHost, private readonly site: DragonSite) {}
 
@@ -237,6 +250,9 @@ export class Fight implements Task {
             }
 
             const field = this.field(FIELD_RADIUS);
+            for (const n of field) {
+                this.seen.set(n.index, noteSighting(this.seen.get(n.index), n.tile(), performance.now()));
+            }
             const live = this.engaged === null ? undefined : field.find(n => n.index === this.engaged);
             if (live && live.targetsAnotherPlayer()) {
                 this.host.log(`${name} ${live.index} was taken by another player. Finding another.`);
@@ -258,13 +274,13 @@ export class Fight implements Task {
 
             const now = performance.now();
             const target = field
-                .filter(n => (this.skip.get(n.index) ?? 0) < now)
+                .filter(n => (this.skip.get(n.index) ?? 0) < now && (!usesSafespot(style) || settled(this.seen.get(n.index), now, SETTLE_MS)))
                 .sort((a, b) => a.distance() - b.distance())[0];
             if (!target) {
                 await this.idle();
                 return;
             }
-            if (holdsAnchor(style) && target.distance() > reachFor(style)) {
+            if (holdsAnchor(style) && !this.inReach(target)) {
                 if (!(await this.leash(target.index))) {
                     this.skip.set(target.index, now + LEASH_SKIP_MS);
                 }
@@ -286,7 +302,12 @@ export class Fight implements Task {
     }
 
     private field(radius: number): Npc[] {
-        return adultsNear(this.site, this.engaged, radius);
+        return adultsNear(this.site, this.engaged, radius, usesSafespot(this.host.style()) ? this.anchor() : null);
+    }
+
+    /** Whether an Attack click from the anchor lands without the server walking the bot closer. */
+    private inReach(n: Npc): boolean {
+        return gapTo(this.anchor(), n.tile(), n.size) <= engageRangeFor(this.host.style());
     }
 
     private setTarget(idx: number): void {
@@ -335,7 +356,7 @@ export class Fight implements Task {
             return 'held';
         }
         const index = this.host.safespotIndex();
-        if (this.field(reachFor(style)).length > 0) {
+        if (this.field(FIELD_RADIUS).some(n => this.inReach(n))) {
             this.blindSince = performance.now();
         }
         const blindMs = performance.now() - this.blindSince;
@@ -379,7 +400,6 @@ export class Fight implements Task {
 
     /** Hold the tile while the dragon closes. False means it never did. */
     private async leash(idx: number): Promise<boolean> {
-        const style = this.host.style();
         const name = label(this.site);
         this.host.setStatus(`waiting for ${name} ${idx} to close`);
         // Why: the outline follows what the loop waits on while `engaged` stays with the dragon we clicked Attack on, so a leash that ends in someone else's kill cannot score one.
@@ -399,7 +419,7 @@ export class Fight implements Task {
                 return true;
             }
             const dragon = this.field(FIELD_RADIUS).find(n => n.index === idx);
-            if (!dragon || dragon.distance() <= reachFor(style)) {
+            if (!dragon || this.inReach(dragon)) {
                 return true;
             }
             await this.idle();
@@ -414,7 +434,7 @@ export class Fight implements Task {
         if (target.index === this.engaged) {
             this.host.log(`${name} ${target.index} stalled. Re-issuing the attack.`);
         } else {
-            this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (d=${target.distance()})`);
+            this.host.log(`engaging ${name} ${target.index} at ${target.tile()} (gap ${gapTo(this.anchor(), target.tile(), target.size)})`);
         }
         // Why: arming is one-shot and the next attack spends it, so the bar is clicked against the swing that is about to go out rather than on an idle tick that may never attack.
         await this.host.armSpecial?.();
