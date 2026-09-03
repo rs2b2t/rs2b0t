@@ -2,7 +2,7 @@
  *  Why: every function in RangingGuild.ts drives a live client, so this run is the only proof the round, the payout and the ticket shop work. */
 
 // Usage: HEADED=1 bun e2e/rangingguild-live.ts [--base url] [--phase round|redeem|full] [--minutes n] [--tick ms] [--no-deploy]
-import { deployIsolatedClient, fail, launchBrowser, setSettings, stopScript } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, requireSim, setSettings, stopScript } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, relog, seedItemsToBank, startScript, teleTo } from './tutorial/harness.js';
 
 type Phase = 'round' | 'redeem' | 'full';
@@ -76,6 +76,7 @@ interface Snapshot {
     logs: { time: number; level: string; msg: string }[];
 }
 
+await requireSim(args.base);
 const client = args.deploy ? deployIsolatedClient(`rg${Date.now().toString(36).slice(-6)}`) : null;
 const browser = await launchBrowser();
 try {
@@ -155,6 +156,10 @@ try {
     const first = await read();
     console.log(`seeded phase=${args.phase} pos=${fmt(first.pos)} tickets=${first.tickets} coins=${first.coins} xp=${first.xp}`);
 
+    // Why: live, a Ranged level-up page between shots blocked every judge talk until the twelve-failure stop; `advancestat` (not `setstat`, which is silent) puts that page up before the first talk, and the round only proceeds if the script clicks through it.
+    if (!(await cheatQuiet(page, `advancestat ranged ${RANGED + 1}`, 1200))) {
+        fail('could not raise the ranged level for the level-up page');
+    }
     await startScript(page, 'RangingGuild');
     console.log('started RangingGuild, watching');
 
@@ -170,6 +175,7 @@ try {
     let shots = 0;
     let rounds = 0;
     let buys = 0;
+    let judgeMisses = 0;
     let reachedGuild = false;
     let stopReason = '';
     let bankedArrowsAfterBuy = false;
@@ -194,6 +200,7 @@ try {
             if (/^shot \d+\/10:/.test(line.msg)) { shots++; }
             if (/^round \d+: scored/.test(line.msg)) { rounds++; }
             if (/^bought \d+ rune arrows/.test(line.msg)) { buys++; }
+            if (/could not talk to the judge/.test(line.msg)) { judgeMisses++; }
             const stopped = /^stopping\b.*?(RangingGuild: .*)$/.exec(line.msg);
             if (stopped) { stopReason = stopped[1]; }
         }
@@ -229,6 +236,9 @@ try {
     console.log(`final: pos=${fmt(last.pos)} countMax=${countMax} scoreMax=${scoreMax} ticketsMax=${ticketsMax} runeMax=${runeMax} shots=${shots} rounds=${rounds} buys=${buys} xp=+${gained} stop='${stopReason}'`);
 
     // Why: the count sits at 11 for the tick between the last shot and the payout, so a 2s poll misses it and the reset plus the ticket gain are the proof of a round.
+    if (judgeMisses > 0) {
+        fail(`${judgeMisses} judge talk(s) failed, so the level-up page was not clicked through: ${last.logs.slice(-6).map(l => l.msg).join(' | ')}`);
+    }
     if (args.phase === 'round') {
         if (!sawReset) {
             fail('the judge never reset the round, the payout did not happen');

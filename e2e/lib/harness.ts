@@ -9,6 +9,29 @@ export function fail(msg: string): never {
     process.exit(1);
 }
 
+const SIM_PROBE_MS = 5000;
+
+// Why: a wrong port (`:889` for `:8890`) used to cost a deploy and answer with a Playwright stack trace from the first page load.
+/** Why nothing answers at `base`, or null when the sim serves its client page. */
+export async function simUnreachable(base: string, page = '/bot.html'): Promise<string | null> {
+    const url = `${base}${page}`;
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(SIM_PROBE_MS) });
+        return res.ok ? null : `${url} answered ${res.status}, so this is not a sim serving the bot client`;
+    } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        return `nothing answered at ${url} (${why}); the local sims are :8890 (~/code/rs2b2t-engine) and :8888 (~/code/lostcity-dev/engine)`;
+    }
+}
+
+/** Stop before deploying when `base` is not a running sim. */
+export async function requireSim(base: string): Promise<void> {
+    const why = await simUnreachable(base);
+    if (why !== null) {
+        fail(why);
+    }
+}
+
 export interface IsolatedClient {
     /** Page to open, e.g. `/bot-fa7k2j.html`. */
     page: string;

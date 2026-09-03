@@ -1,5 +1,7 @@
 import type { Page } from 'playwright-core';
 
+import { simUnreachable } from '../lib/harness.js';
+
 type Rs2b0t = {
     rs2b0t: {
         client: {
@@ -94,6 +96,10 @@ async function waitIngame(page: Page, timeoutMs: number, label: string): Promise
 
 // Why: `clientPage` is how a run opts into its own copy of the client (`deployIsolatedClient`); the default keeps every harness that has not on the shared one.
 export async function bootAndLogin(page: Page, base: string, user: string, clientPage = '/bot.html'): Promise<void> {
+    const unreachable = await simUnreachable(base, clientPage);
+    if (unreachable !== null) {
+        throw new Error(`bootAndLogin: ${unreachable}`);
+    }
     console.log(`  boot: loading ${base}${clientPage} (cache download may take a while; BOOT_MS=${Math.round(BOOT_MS / 1000)}s)`);
     await page.goto(`${base}${clientPage}?nodeid=10`);
     await waitClientBooted(page, 'bootAndLogin');
