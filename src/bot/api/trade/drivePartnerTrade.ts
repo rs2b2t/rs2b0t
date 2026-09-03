@@ -83,7 +83,7 @@ function tradeScreen(): string {
     if (Trade.onConfirmScreen()) {
         return 'confirm';
     }
-    return Trade.active() ? 'unknown' : 'closed';
+    return 'closed';
 }
 
 /** Which trade screen is up, for scripts that log hand-back diagnostics. */
@@ -91,19 +91,20 @@ export function tradeScreenState(): string {
     return tradeScreen();
 }
 
-// Why: the offer→confirm swap reports neither screen for a stretch, so closure needs ~250ms of continuous inactivity, which also holds under uneven frame rates.
-function stableClosedPoll(minMs = 250): () => boolean {
+// Why: the offer→confirm swap reports neither screen for a stretch, so closure needs one full tick of continuous inactivity, which also holds under uneven frame rates.
+export function stableClosedPoll(minMs = 600, nowFn?: () => number): () => boolean {
     let inactiveSince = -1;
+    const now = nowFn ?? (() => performance.now());
     return () => {
         if (Trade.active()) {
             inactiveSince = -1;
             return false;
         }
-        const now = performance.now();
+        const t = now();
         if (inactiveSince < 0) {
-            inactiveSince = now;
+            inactiveSince = t;
         }
-        return now - inactiveSince >= minMs;
+        return t - inactiveSince >= minMs;
     };
 }
 

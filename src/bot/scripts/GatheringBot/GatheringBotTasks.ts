@@ -565,7 +565,7 @@ export class HandleGatherMuleTrade implements Task {
                     );
                 }
             } else {
-                this.bot.log('mule: verified — traded items landed in the pack');
+                // Receiver: no pack-clear check possible; delta > 0 at line 518 is the proof.
             }
         }
         if (Trade.active()) {
