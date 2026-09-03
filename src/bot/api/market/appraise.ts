@@ -162,23 +162,12 @@ function purchase(
         }
     }
 
-    // Why: paying for part of a stack means picking which units and the window has no way to say so, so a thin purse drops lines outright, dearest first.
+    // Why: the window cannot say which units of a stack it is paying for, so over the ceiling the shop bids the ceiling for the pile as it stands and the customer takes items back if they want full price.
     const ceiling = Math.min(desk.purse, book.maxTradeValue);
-    lines.sort((a, b) => b.value - a.value);
-    const afford: ValuedLine[] = [];
-    let total = 0;
-    let dropped = false;
-    for (const line of lines) {
-        if (total + line.value <= ceiling) {
-            afford.push(line);
-            total += line.value;
-        } else {
-            ignored.push({ name: line.name, count: line.count });
-            dropped = true;
-        }
-    }
-    if (dropped) {
-        note = `I can only cover ${formatGp(total)}gp of that`;
+    const value = lines.reduce((sum, l) => sum + l.value, 0);
+    const total = Math.min(value, ceiling);
+    if (value > ceiling) {
+        note = `max I can offer is ${formatGp(ceiling)}gp per trade`;
     }
 
     if (total <= 0) {
@@ -187,9 +176,9 @@ function purchase(
     return {
         kind: 'buy',
         owe: new Map([[coinId, total]]),
-        want: new Map(afford.map(l => [l.id, l.count])),
+        want: new Map(lines.map(l => [l.id, l.count])),
         total,
-        lines: afford,
+        lines,
         ignored,
         note
     };
@@ -197,12 +186,11 @@ function purchase(
 
 /** One line, so the customer sees the deal before the bot accepts anything. */
 export function describeAppraisal(a: Appraisal): string {
-    const parts = a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`);
+    // Why: the line is cut at the chat limit and two priced lines already reach it, so the reason goes first or goes unread.
+    const parts = a.note === null ? [] : [`${a.note}.`];
+    parts.push(...a.lines.map(l => `${l.name} x${formatGp(l.count)} = ${formatGp(l.value)}.`));
     for (const i of a.ignored) {
         parts.push(`${formatGp(i.count)} ${i.name}: not counted, keep them.`);
-    }
-    if (a.note) {
-        parts.push(`${a.note}.`);
     }
     if (parts.length === 0) {
         // Why: an empty window is when a customer is most likely to be lost, so it teaches rather than shrugs.

@@ -2,19 +2,32 @@
  *  Why: the cast is a TGT_HELD action on a noted stack and the payout only shows up in the coin
  *  count, so the run watches notes fall, coins rise and magic XP move together. */
 
-//   bun e2e/alcher-nearest-bank-live.ts [http://localhost:8890]
+//   bun e2e/alcher-nearest-bank-live.ts [http://localhost:8890] [--item "Iron platebody"]
 import { cheatQuiet, deployIsolatedClient, fail, launchBrowser, positionalArgs, setSettings } from './lib/harness.js';
 import { clearChatDialogs, mainlandAccount, seedItemsToBank, teleTo } from './tutorial/harness.js';
+import { ITEM_DB } from '../src/bot/data/itemdb.js';
 
-const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
+const argv = process.argv.slice(2);
+const args = positionalArgs(argv, 'http://localhost:8890');
 const base = args[0];
 const user = args[1] ?? `al${Date.now().toString(36).slice(-5)}`;
+// Why: `--item` drives the Custom chip with any item the database knows; without it the vetted rune chainbody path runs.
+const itemAt = argv.indexOf('--item');
+const itemArg = itemAt >= 0 ? argv[itemAt + 1] : undefined;
 
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 const AL_KHARID_BANK = { x: 3269, z: 3167, level: 0 };
 /** Chainbody, not platebody: the house rule for every bank seed. */
-const ALCH_ITEM = 'Rune chainbody';
-const ALCH_KEY = 'rune_chainbody';
+const DEFAULT_OBJ = 'rune_chainbody';
+const fodder = itemArg === undefined
+    ? ITEM_DB.find(r => r.obj === DEFAULT_OBJ)
+    : (ITEM_DB.find(r => r.obj === itemArg.toLowerCase()) ?? ITEM_DB.find(r => r.name.toLowerCase() === itemArg.toLowerCase()));
+if (!fodder) {
+    fail(`--item ${itemArg}: not in the item database`);
+}
+const ALCH_ITEM = fodder.name;
+const ALCH_SETTINGS: Record<string, string> = itemArg === undefined ? { items: DEFAULT_OBJ } : { items: 'custom', customItem: itemArg };
+const SCREENSHOT = itemArg === undefined ? 'docs/e2e/alcher-nearest-bank-live.png' : 'docs/e2e/alcher-custom-item-live.png';
 const ALCHS_PER_TRIP = 10;
 const BANKED_STOCK = 30;
 /** The poll can miss the peak by a cast or two, so require a stack rather than the exact trip size. */
@@ -49,7 +62,7 @@ try {
     await seedItemsToBank(
         page,
         [
-            { debugName: 'rune_chainbody', displayName: ALCH_ITEM, qty: BANKED_STOCK },
+            { debugName: fodder.obj, displayName: ALCH_ITEM, qty: BANKED_STOCK },
             { debugName: 'naturerune', displayName: 'Nature rune', qty: 200 },
             { debugName: 'staff_of_fire', displayName: 'Staff of fire', qty: 1 }
         ],
@@ -59,7 +72,7 @@ try {
         fail(`could not reach the Varrock West bank stand (${VARROCK_WEST_BANK.x},${VARROCK_WEST_BANK.z})`);
     }
 
-    await setSettings(page, 'Alcher', { items: ALCH_KEY, alchs: ALCHS_PER_TRIP });
+    await setSettings(page, 'Alcher', { ...ALCH_SETTINGS, alchs: ALCHS_PER_TRIP });
 
     const magicBefore = await page.evaluate(() => (globalThis as never as Api).__rs2b0t.Skills.xp('magic'));
     await page.evaluate(() => {
@@ -114,7 +127,7 @@ try {
     for (const m of logs.slice(-20)) {
         console.log(`  ${m}`);
     }
-    await page.screenshot({ path: 'docs/e2e/alcher-nearest-bank-live.png' });
+    await page.screenshot({ path: SCREENSHOT });
     await page.evaluate(() => (globalThis as never as Api).rs2b0t.runner.stop('harness stop'));
 
     // Why: the poll can miss the instant the full stack lands, since the first cast fires within a tick of the withdraw. A stack big enough to watch shrink is what matters.
@@ -130,7 +143,8 @@ try {
     if (farthest > 40) {
         fail(`walked ${farthest} tiles from the bank it started at (Al Kharid closest ${closestAlKharid})`);
     }
-    console.log(`PASS, ${notesPeak - notesNow} of ${notesPeak} noted ${ALCH_ITEM} alched into ${coinsPeak} coins at the nearest bank: magic +${magicXp}`);
+    const via = itemArg === undefined ? '' : ' via the Custom chip';
+    console.log(`PASS, ${notesPeak - notesNow} of ${notesPeak} noted ${ALCH_ITEM} alched into ${coinsPeak} coins at the nearest bank${via}: magic +${magicXp}`);
 } finally {
     client.cleanup();
     await browser.close();

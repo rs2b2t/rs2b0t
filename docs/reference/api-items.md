@@ -58,6 +58,7 @@ Bank.isOpen(): boolean
 Bank.ready(): boolean                     // the bank has said what it holds, empty included
 Bank.waitReady(timeoutMs?, log?): Promise<boolean>
 Bank.snapshotGeneration(): number         // take before a deposit
+Bank.snapshotReady(): boolean             // the bank-side view has been captured
 Bank.waitSnapshotAfter(gen, timeoutMs?): Promise<boolean>  // wait for the list that follows
 Bank.loaded(): boolean                    // item list is non-empty; false for an empty bank
 Bank.setNoteMode(on: boolean): Promise<void>

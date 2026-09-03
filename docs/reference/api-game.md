@@ -25,7 +25,19 @@ Game.setCameraYaw(yaw: number): boolean
 Game.openSideTab(tab: number): Promise<boolean>
 Game.castOnNpc(spell: string, npc: Npc): Promise<boolean>
 Game.teleport(name: string): Promise<boolean>
+Game.castOnLoc(spell: string, loc: Loc): Promise<boolean>
+Game.castOnItem(spell: string, item: InvItem): Promise<boolean>  // Superheat Item on a pack ore
+Game.sceneReady(): boolean       // the scene is built and takes input
+Game.sceneState(): number        // 0 idle/loading, 1 building, 2 ready
+Game.combatStyleResolution(style): CombatStyleResolution | null
+Game.combatStyles(): readonly CombatModeLabel[] | null   // every mode the weapon offers, with its label
+Game.autoRetaliateOn(): boolean
+Game.setAutoRetaliate(on: boolean): boolean
+Game.attackedByPlayer(): boolean // the local player's target is another player
 ```
+
+Send nothing before `Game.sceneReady()` is true: menu and walk packets injected
+while the scene is still building soft-fail or retry (#445).
 
 ### Camera (client-only)
 
@@ -106,6 +118,12 @@ abstract class Area {
     getRandomTile(): Tile;
 }
 ```
+
+### reader
+
+`reader` is the raw client reader every object above is built on. It is exported
+untyped (`Record<string, (...args) => unknown>`), so reach for it only when no API
+object covers the read. `reader.varp(id)` is the common case ([Quests](api-quests.md)).
 
 ---
 

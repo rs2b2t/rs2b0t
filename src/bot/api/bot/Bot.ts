@@ -85,10 +85,12 @@ export abstract class AbstractBot {
         this.subscriptions.push(bus.on(event, cb));
     }
 
+    /** @internal */
     bindLog(sink: (msg: string) => void): void {
         this.logSink = sink;
     }
 
+    /** @internal */
     disposeSubscriptions(): void {
         for (const unsub of this.subscriptions) {
             unsub();

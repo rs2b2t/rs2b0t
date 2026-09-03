@@ -9,7 +9,7 @@ import { opIndex, presentOps, type Interactable, type Locatable } from './Intera
  * @see docs/reference/api-entities.md#entity-shapes
  */
 export class Npc implements Interactable, Locatable {
-    constructor(readonly snap: NpcSnapshot) {}
+    constructor(/** @internal */ readonly snap: NpcSnapshot) {}
 
     get name(): string | null {
         return this.snap.name;

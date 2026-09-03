@@ -22,6 +22,8 @@ export const {
     Tile,
     Area,
     Traversal,
+    NAV_PURE_WALK,
+    NAV_WITH_TELES,
     DirectNavigator,
     Npcs,
     Players,

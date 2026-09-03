@@ -25,8 +25,8 @@ export function isVisible(def: SettingDef, valueOf: (key: string) => string): bo
     if (!def.showIf) {
         return true;
     }
-    const value = valueOf(def.showIf.key).trim().toLowerCase();
-    return def.showIf.anyOf.some(v => v.toLowerCase() === value);
+    const ticked = new Set(valueOf(def.showIf.key).split(',').map(v => v.trim().toLowerCase()));
+    return def.showIf.anyOf.some(v => ticked.has(v.toLowerCase()));
 }
 
 export function visibilityDeps(schema: SettingsSchema): Set<string> {

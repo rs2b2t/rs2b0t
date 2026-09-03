@@ -120,6 +120,10 @@ describe('positionalArgs', () => {
         expect(positionalArgs(['--minutes', '5', 'user1'], FB)).toEqual([FB, 'user1']);
     });
 
+    test('--item takes a value, so an item name is never read as the user', () => {
+        expect(positionalArgs(['--item', 'iron_platebody', 'user1'], FB)).toEqual([FB, 'user1']);
+    });
+
     test('short flags are stripped as well', () => {
         expect(positionalArgs(['-v', 'user1'], FB)).toEqual([FB, 'user1']);
     });

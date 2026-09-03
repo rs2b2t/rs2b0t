@@ -42,7 +42,7 @@ export const CASES: readonly Case[] = [
         status: 'vetted',
         provenAt: 'd00d66de',
         budgetMin: 12,
-        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves'
+        note: 'noted rune chainbodies, natures and a fire staff banked at Varrock West; passes when the note stack shrinks, coins appear and magic XP moves. `--item "Iron platebody"` runs the same drain through the Custom chip on any item the database knows'
     },
     {
         id: 'alcher-swarm-drain-live',
@@ -376,10 +376,10 @@ export const CASES: readonly Case[] = [
         harness: 'marketmaker-pair-live.ts',
         covers: { scripts: ['MarketMaker'] },
         status: 'vetted',
-        provenAt: '55e047c3',
-        budgetMin: 16,
+        provenAt: '02ca7734',
+        budgetMin: 17,
         env: { BUDGET_S: '900' },
-        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, coins ignored and named, and a cooldown after walking out'
+        note: 'two accounts at Seers bank: a sale paid by coins in the window, a mixed pile bought with no chat, a live re-price mid-trade, a pile over the trade cap bid at the cap, coins ignored and named, and a cooldown after walking out'
     },
     {
         id: 'marketmaker-aliases-live',

@@ -16,7 +16,9 @@ import { etaHours, levelProgress } from '../../paint/levelProgress.js';
 import {
     ALCH_OPTIONS,
     ALCH_OPTION_LABELS,
+    CUSTOM_ALCH_KEY,
     DEFAULT_ALCH_ITEMS,
+    customAlchItem,
     fmtGp,
     nextAlchTarget,
     selectedAlchItems,
@@ -54,8 +56,17 @@ export const ALCHER_SETTINGS: SettingsSchema = {
         label: 'Items to alch',
         help:
             'ticked items are drained richest first: the bot withdraws one as notes, alchs it until '
-            + 'the bank is out, then moves to the next. Chips show the alch value each. Leave every '
-            + 'chip clear to run the defaults.'
+            + 'the bank is out, then moves to the next. Chips show the alch value each. Tick Custom '
+            + 'to add the item named below. Leave every chip clear to run the defaults.'
+    },
+    customItem: {
+        type: 'string',
+        default: '',
+        label: 'Custom item',
+        showIf: { key: 'items', anyOf: [CUSTOM_ALCH_KEY] },
+        help:
+            'shown when Custom is ticked. Any item the database knows, by client name or obj name, '
+            + 'e.g. "Iron platebody" or "iron_platebody". It drains in value order with the ticked chips.'
     },
     alchs: {
         type: 'number',
@@ -99,7 +110,18 @@ export default class Alcher extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        this.selected = selectedAlchItems(this.settings.list('items', DEFAULT_ALCH_ITEMS));
+        const keys = this.settings.list('items', DEFAULT_ALCH_ITEMS);
+        const customText = this.settings.str('customItem', '');
+        if (keys.includes(CUSTOM_ALCH_KEY)) {
+            const custom = customAlchItem(customText);
+            if (!custom) {
+                this.log(`custom item "${customText}" is not in the item database — stopping`);
+                ScriptRunner.stop(`custom item "${customText}" is not in the item database`);
+                return;
+            }
+            this.log(`custom item: ${custom.label} (${custom.key}, ${custom.alchValue}gp each)`);
+        }
+        this.selected = selectedAlchItems(keys, customText);
         this.alchs = this.settings.num('alchs', 27);
 
         if (Skills.level('magic') < ALCHEMY_REQUIRED) {
