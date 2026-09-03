@@ -5,10 +5,6 @@ import { SETTINGS } from '#/bot/scripts/JiveShilo/JiveShilo.js';
 import '#/bot/scripts/index.js';
 
 describe('JiveShilo settings', () => {
-    test('the river stand is the bank row south of the first fly spot, not the water it sits in', () => {
-        expect(SETTINGS.riverStand!.default).toEqual(new Tile(2855, 2972, 0));
-    });
-
     test('the counter tile is the one the Fernahei buyout preset stands on', () => {
         expect(SETTINGS.hutStand!.default).toEqual(new Tile(2870, 2971, 0));
     });
@@ -18,9 +14,9 @@ describe('JiveShilo settings', () => {
         expect(SETTINGS.feathersTarget!.min).toBe(0);
     });
 
-    test('the spot radius keeps the search to the two spots on the village bank', () => {
-        expect(SETTINGS.spotRadius!.default).toBe(2);
-        expect(SETTINGS.spotRadius!.min).toBe(1);
+    test('no river stand or radius is offered, since the spots move and the bank tiles are baked', () => {
+        expect(SETTINGS.riverStand).toBeUndefined();
+        expect(SETTINGS.spotRadius).toBeUndefined();
     });
 });
 

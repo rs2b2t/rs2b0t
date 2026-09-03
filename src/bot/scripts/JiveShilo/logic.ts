@@ -1,3 +1,6 @@
+import type Tile from '../../geometry/Tile.js';
+import { SCAN_STANDS, SPOT_STANDS } from './river.js';
+
 export const ROD = 'Fly fishing rod';
 export const FEATHER = 'Feather';
 export const KEEPER = 'Fernahei';
@@ -59,4 +62,37 @@ export function featherAsk(stock: number, coins: number): number {
 export function tripLine(sold: { name: string; count: number }[], earned: number, feathers: number, spent: number, holding: number): string {
     const fish = sold.length === 0 ? 'nothing' : sold.map(s => `${s.count} ${s.name.replace(/^Raw /, '').toLowerCase()}`).join(' + ');
     return `sold ${fish} for ${earned}gp, bought ${feathers} feathers for ${spent}gp (holding ${holding})`;
+}
+
+export interface SpotLike {
+    tile(): { x: number; z: number };
+}
+
+/** The village-side bank tile for a spot on one of the known river tiles, or null when it sits where no bank reaches. */
+export function standFor(spot: { x: number; z: number }): Tile | null {
+    return SPOT_STANDS.find(s => s.spot.x === spot.x && s.spot.z === spot.z)?.stand ?? null;
+}
+
+const cheb = (a: { x: number; z: number }, b: { x: number; z: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+
+/** The fishable spot whose stand is the shortest walk from here, with its stand. */
+export function nearestFishable<T extends SpotLike>(spots: readonly T[], here: { x: number; z: number }): { spot: T; stand: Tile } | null {
+    let best: { spot: T; stand: Tile } | null = null;
+    for (const spot of spots) {
+        const stand = standFor(spot.tile());
+        if (!stand) {
+            continue;
+        }
+        if (!best || cheb(stand, here) < cheb(best.stand, here)) {
+            best = { spot, stand };
+        }
+    }
+    return best;
+}
+
+// Why: a spot beyond npc view range is invisible to the client, so with none in sight the bank is walked stand by stand, nearest first and never the one it has left.
+/** The next bank tile to look for spots from. */
+export function nextScan(here: { x: number; z: number }, last: Tile | null): Tile {
+    const others = SCAN_STANDS.filter(s => !last || s.x !== last.x || s.z !== last.z);
+    return others.reduce((a, b) => (cheb(b, here) < cheb(a, here) ? b : a));
 }

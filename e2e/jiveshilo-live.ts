@@ -36,7 +36,8 @@ const args = parse(process.argv.slice(2));
 
 interface Point { x: number; z: number; level: number }
 
-const RIVER_STAND: Point = { x: 2855, z: 2972, level: 0 };
+/** The first scan stand, beside the three spawn tiles. */
+const RIVER_STAND: Point = { x: 2857, z: 2972, level: 0 };
 const HUT_STAND: Point = { x: 2870, z: 2971, level: 0 };
 const SHILO_VILLAGE_COMPLETE = 15;
 /** A rod is 5gp and the first feathers a couple each, so this buys the kit and nothing more. */

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { decide, featherAsk, sellPlan, tripLine, type PackState } from '#/bot/scripts/JiveShilo/logic.js';
+import Tile from '#/bot/geometry/Tile.js';
+import { decide, featherAsk, nearestFishable, nextScan, sellPlan, standFor, tripLine, type PackState } from '#/bot/scripts/JiveShilo/logic.js';
+import { SCAN_STANDS, SPOT_STANDS } from '#/bot/scripts/JiveShilo/river.js';
 
 const ready: PackState = { rod: true, feathers: 40, fish: 5, coins: 12, free: 20 };
 
@@ -79,5 +81,52 @@ describe('tripLine', () => {
 
     test('says so when nothing was sold', () => {
         expect(tripLine([], 0, 25, 50, 25)).toBe('sold nothing for 0gp, bought 25 feathers for 50gp (holding 25)');
+    });
+});
+
+describe('standFor', () => {
+    test('maps a known river tile to the bank tile beside it', () => {
+        expect(standFor({ x: 2855, z: 2973 })).toEqual(new Tile(2855, 2972, 0));
+        expect(standFor({ x: 2834, z: 2974 })).toEqual(new Tile(2834, 2975, 0));
+    });
+
+    test('a far-bank tile and open water have no stand', () => {
+        expect(standFor({ x: 2855, z: 2977 })).toBeNull();
+        expect(standFor({ x: 2860, z: 2976 })).toBeNull();
+        expect(standFor({ x: 2850, z: 2975 })).toBeNull();
+    });
+
+    test('every baked stand is orthogonally beside its spot', () => {
+        for (const { spot, stand } of SPOT_STANDS) {
+            expect(Math.abs(spot.x - stand.x) + Math.abs(spot.z - stand.z)).toBe(1);
+        }
+    });
+});
+
+describe('nearestFishable', () => {
+    const at = (x: number, z: number) => ({ tile: () => ({ x, z }), x, z });
+
+    test('picks the spot whose stand is the shortest walk and skips the far bank', () => {
+        const spots = [at(2855, 2977), at(2862, 2972), at(2836, 2971)];
+        const pick = nearestFishable(spots, { x: 2857, z: 2972 });
+        expect(pick?.spot.x).toBe(2862);
+        expect(pick?.stand).toEqual(new Tile(2862, 2971, 0));
+    });
+
+    test('is null when every spot in view sits where no bank reaches', () => {
+        expect(nearestFishable([at(2855, 2977), at(2869, 2977)], { x: 2857, z: 2972 })).toBeNull();
+        expect(nearestFishable([], { x: 2857, z: 2972 })).toBeNull();
+    });
+});
+
+describe('nextScan', () => {
+    test('walks to the nearest scan stand first', () => {
+        expect(nextScan({ x: 2860, z: 2972 }, null)).toEqual(SCAN_STANDS[0]!);
+        expect(nextScan({ x: 2830, z: 2969 }, null)).toEqual(SCAN_STANDS[2]!);
+    });
+
+    test('never returns the stand just left, so an empty bank is walked rather than waited on', () => {
+        expect(nextScan({ x: 2857, z: 2972 }, SCAN_STANDS[0]!)).toEqual(SCAN_STANDS[1]!);
+        expect(nextScan({ x: 2841, z: 2970 }, SCAN_STANDS[1]!)).toEqual(SCAN_STANDS[0]!);
     });
 });

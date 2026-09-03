@@ -3,7 +3,6 @@ import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import type { Npc } from '../../api/model/Npc.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { Shop } from '../../api/shop/Shop.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -15,22 +14,20 @@ import { jiveFrame } from '../../paint/jive.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { CAST, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, decide, featherAsk, sellPlan, tripLine, type PackState, type Step } from './logic.js';
+import { CAST, FEATHER, FISH, FLY_LEVEL, KEEPER, ROD, SPOT, decide, featherAsk, nearestFishable, nextScan, sellPlan, tripLine, type PackState, type Step } from './logic.js';
+import { SCAN_STANDS, SPOT_STANDS } from './river.js';
 
-/** The village bank of the Shilo river, the tile south of the fly spot at (2855,2973); (2856,2973) is the other near spot and (2855,2977) sits across five tiles of water. */
-const RIVER_STAND = new Tile(2855, 2972, 0);
 /** The customer side of Fernahei's counter, the tile the ShopBuyout preset stands on. */
 const HUT_STAND = new Tile(2870, 2971, 0);
 
 const CAST_START_TICKS = 10;
 const CAST_HOLD_TICKS = 20;
-const SPOT_WALK_MS = 20_000;
+const STAND_WALK_MS = 30_000;
+const SCAN_WALK_MS = 45_000;
 const HUT_WALK_MS = 60_000;
 
 export const SETTINGS: SettingsSchema = {
-    riverStand: { type: 'tile', default: RIVER_STAND, label: 'River stand tile (x,z)', help: 'row 2972 is the village bank; rows 2973 to 2977 are the river and the far bank is an 81-cost walk round' },
     hutStand: { type: 'tile', default: HUT_STAND, label: "Fernahei's counter tile (x,z)" },
-    spotRadius: { type: 'number', default: 2, min: 1, max: 20, label: 'Spot search radius (tiles)', help: 'measured from the river stand; 2 keeps the two spots on the village bank and leaves the third, across the water, alone' },
     feathersTarget: { type: 'number', default: 0, min: 0, max: 100_000, label: 'Stop at this many feathers (0 = keep going)' }
 };
 
@@ -48,17 +45,13 @@ export default class JiveShilo extends TaskBot {
     private spent = 0;
     private soldByName = new Map<string, number>();
 
-    riverStand = RIVER_STAND;
     hutStand = HUT_STAND;
-    spotRadius = 2;
     feathersTarget = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        this.riverStand = this.settings.tile('riverStand', RIVER_STAND);
         this.hutStand = this.settings.tile('hutStand', HUT_STAND);
-        this.spotRadius = this.settings.num('spotRadius', 2);
         this.feathersTarget = this.settings.num('feathersTarget', 0);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('fishing');
@@ -68,12 +61,12 @@ export default class JiveShilo extends TaskBot {
             ScriptRunner.stop(`[shilo] fly fishing needs Fishing ${FLY_LEVEL}, this account has ${level}`);
             return;
         }
-        this.log(`[shilo] fly fishing from ${this.riverStand}, selling to ${KEEPER} at ${this.hutStand}${this.feathersTarget > 0 ? `, stopping at ${this.feathersTarget} feathers` : ''}`);
+        this.log(`[shilo] fly fishing the village bank (${SPOT_STANDS.length} spot tiles, ${SCAN_STANDS.length} scan stands), selling to ${KEEPER} at ${this.hutStand}${this.feathersTarget > 0 ? `, stopping at ${this.feathersTarget} feathers` : ''}`);
         this.add(new ContinueDialog(), new Stop(this), new Restock(this), new Fish(this));
     }
 
     override recoveryAnchor(): Tile | null {
-        return this.riverStand;
+        return SCAN_STANDS[0]!;
     }
 
     setStatus(s: string): void {
@@ -125,8 +118,8 @@ export default class JiveShilo extends TaskBot {
 
         if (page === 'Options') {
             p.statGrid([
-                [{ text: `River: ${this.riverStand.x},${this.riverStand.z}` }, { text: `Hut: ${this.hutStand.x},${this.hutStand.z}` }],
-                [{ text: `Spot radius: ${this.spotRadius}` }, { text: `Target: ${this.feathersTarget > 0 ? this.feathersTarget : 'none'}` }]
+                [{ text: `Hut: ${this.hutStand.x},${this.hutStand.z}` }, { text: `Target: ${this.feathersTarget > 0 ? this.feathersTarget : 'none'}` }],
+                [{ text: `Spot tiles: ${SPOT_STANDS.length}` }, { text: `Scan stands: ${SCAN_STANDS.length}` }]
             ]);
         } else if (section === 'Overview') {
             p.statGrid([
@@ -217,8 +210,10 @@ class Restock implements Task {
     }
 }
 
+// Why: a spot teleports along the river every 280 to 530 ticks and is only in the client's npc list within view range, so the task casts at the nearest spot it can see a bank tile for and otherwise walks the bank stand by stand until one shows.
 class Fish implements Task {
     private castIndex: number | null = null;
+    private lastScan: Tile | null = null;
 
     constructor(private bot: JiveShilo) {}
 
@@ -226,28 +221,28 @@ class Fish implements Task {
         return this.bot.step().kind === 'fish';
     }
 
-    private spot(): Npc | null {
-        return Npcs.query().name(SPOT).action(CAST).withinOf(this.bot.riverStand, this.bot.spotRadius).nearest();
-    }
-
     async execute(): Promise<void> {
         const bot = this.bot;
         const here = Game.tile();
-        const spot = this.spot();
-        if (!spot) {
+        if (!here) {
+            await Execution.delayTicks(1);
+            return;
+        }
+        const pick = nearestFishable(Npcs.query().name(SPOT).action(CAST).results(), here);
+        if (!pick) {
             this.castIndex = null;
-            if (here && bot.riverStand.distanceTo(here) > 1) {
-                bot.setStatus('walking to the river');
-                await Traversal.walkResilient(bot.riverStand, { radius: 1, attempts: 3, timeoutMs: SPOT_WALK_MS, log: m => bot.log(`  ${m}`) });
-                return;
-            }
-            bot.setStatus('waiting for a spot');
+            const scan = nextScan(here, this.lastScan);
+            this.lastScan = scan;
+            bot.setStatus(`no spot in view, scanning from ${scan.x},${scan.z}`);
+            await Traversal.walkResilient(scan, { radius: 0, attempts: 3, timeoutMs: SCAN_WALK_MS, log: m => bot.log(`  ${m}`) });
             await Execution.delayTicks(2);
             return;
         }
-        if (here && spot.tile().distanceTo(here) > 3) {
-            bot.setStatus('walking to the spot');
-            await Traversal.walkTo(spot.tile(), { radius: 1, timeoutMs: SPOT_WALK_MS });
+        const { spot, stand } = pick;
+        this.lastScan = null;
+        if (stand.distanceTo(here) > 0 && this.castIndex !== spot.index) {
+            bot.setStatus(`walking to the spot at ${spot.tile().x},${spot.tile().z}`);
+            await Traversal.walkResilient(stand, { radius: 0, attempts: 3, timeoutMs: STAND_WALK_MS, log: m => bot.log(`  ${m}`) });
             return;
         }
 
