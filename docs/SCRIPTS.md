@@ -671,9 +671,7 @@ Fly fishes the river inside Shilo Village, sells the trout and salmon to Fernahe
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `riverStand` | tile | `{"x":2855,"z":2972,"level":0}` | River stand tile (x,z) |
 | `hutStand` | tile | `{"x":2870,"z":2971,"level":0}` | Fernahei's counter tile (x,z) |
-| `spotRadius` | number (1–20) | `2` | Spot search radius (tiles) |
 | `feathersTarget` | number (0–100000) | `0` | Stop at this many feathers (0 = keep going) |
 
 ## Fletching
