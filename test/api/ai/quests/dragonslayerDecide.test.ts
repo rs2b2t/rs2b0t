@@ -294,6 +294,13 @@ describe('Dragon Slayer sources its own shopping at the point of use', () => {
         expect((step as { name: string }).name).toContain('fetch 3 planks');
     });
 
+    test('a plank trip is finished before the hull is patched', () => {
+        // Why: one plank in the pack reads as one hole's worth everywhere else, and read that way at the spawns it sent the bot back to Port Sarim three times.
+        const graveyard = { x: 3171, z: 3680, level: 0 };
+        const step = decide(snapshot({ carried: [DS_ID.MAP, DS_ID.HAMMER, NAILS, DS_ID.PLANK], tile: graveyard, ...boat }));
+        expect((step as { name: string }).name).toContain('fetch 2 planks');
+    });
+
     test('an unread bank is scanned before a hull supply is bought', () => {
         expect(decide(snapshot({ carried: [DS_ID.MAP], bankKnown: false, ...boat }))).toMatchObject({ kind: 'scanBank' });
     });

@@ -410,6 +410,10 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
     return Inventory.count('Nails') >= need;
 }
 
+/** Within a few tiles of the Graveyard of Shadows plank spawns. */
+export const inPlankGraveyard = (t: { x: number; z: number; level: number } | null | undefined): boolean =>
+    !!t && t.level === 0 && SUPPLY_LOC.PLANK_SPAWNS.some(s => Math.abs(s.x - t.x) <= 8 && Math.abs(s.z - t.z) <= 8);
+
 /** Spawns already emptied this trip, so the walk moves on instead of circling. */
 const plankTried = new Set<string>();
 

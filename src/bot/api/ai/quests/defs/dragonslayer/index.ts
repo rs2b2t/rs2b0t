@@ -16,7 +16,7 @@ import { gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/pri
 import { DS_ID, DS_ITEM, DS_LOC, DS_NPC, SHIP_PRICE, SHIP_REPAIR, WORMBRAIN_PRICE } from './areas.js';
 import { DRAGON_STAGE, describeJournal, readDragonProgress } from './journal.js';
 import { MazeRun, heldById, inMaze, leaveMaze, lootChest, mazeSceneLoaded } from './maze.js';
-import { SUPPLY_GATHERS, SUPPLY_TOOLS, smithNails } from './supplies.js';
+import { SUPPLY_GATHERS, SUPPLY_TOOLS, inPlankGraveyard, smithNails } from './supplies.js';
 
 const GUILDMASTER: NpcStop = {
     npc: 'Guild master', anchor: DS_NPC.GUILDMASTER, leash: 8,
@@ -727,9 +727,11 @@ function hullErrand(snap: QuestSnapshot): QuestStep | null {
             log => smithNails(need, log)
         )
     };
+    // Why: at the spawns a part-filled pack is a trip half done rather than a hull half patched, and read the other way it sent the bot back to Port Sarim after every plank.
+    const planksToFetch = inPlankGraveyard(snap.tile) ? SHIP_REPAIR.planks : planksWanted;
     // Why: smithing belongs to the boat leg rather than the shopping, as it is eighteen slots of ore and wants the pack the map pieces and the Oracle's four charms were using.
     // Why: the hammer comes before it, as the anvil answers nothing without one, and the planks after, as three slots the ore leg would only bank and draw again.
-    return stock(snap, [bought(DS_ID.HAMMER, DS_ITEM.HAMMER), nails, bought(DS_ID.PLANK, DS_ITEM.PLANK, planksWanted)]);
+    return stock(snap, [bought(DS_ID.HAMMER, DS_ITEM.HAMMER), nails, bought(DS_ID.PLANK, DS_ITEM.PLANK, planksToFetch)]);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
