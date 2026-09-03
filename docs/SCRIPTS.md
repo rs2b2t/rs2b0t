@@ -822,7 +822,7 @@ Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
+| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Fernahei's fishing — Shilo Village (Shilo bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
 | `budgetGp` | number (100–) | `250000` | Total gp to spend |
 | `perTripGp` | number (100–) | `100000` | Gp per bank trip |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
