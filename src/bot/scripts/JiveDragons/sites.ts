@@ -30,6 +30,8 @@ export interface DragonSite {
     escapeTeleportId: string;
     /** Walk-out target when the teleport will not fire. */
     walkOut: Tile;
+    /** The target hits the safespot from range, so hp lost there is not the derivation being wrong. */
+    rangedThreat?: boolean;
     inArea(t: AreaPoint | null): boolean;
 }
 

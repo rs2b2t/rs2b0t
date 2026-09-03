@@ -6,6 +6,7 @@ import {
     engageRangeFor,
     gapTo,
     holdDue,
+    hurtOnSpot,
     isClueObj,
     lootHalts,
     keyStatus,
@@ -290,5 +291,21 @@ describe('lootHalts', () => {
     test('with the retreat off, the panic line is the floor', () => {
         expect(lootHalts({ hpFrac: 0.4, panicHp: 0.3, retreatHp: 0 })).toBe(false);
         expect(lootHalts({ hpFrac: 0.29, panicHp: 0.3, retreatHp: 0 })).toBe(true);
+    });
+});
+
+describe('hurtOnSpot', () => {
+    test('hp falling on the tile is a bad tile when nothing hits from range', () => {
+        expect(hurtOnSpot({ rangedThreat: false, onSpot: true, lastHp: 80, hp: 70 })).toBe(true);
+    });
+
+    test('the same drop on a ranged-threat site is expected', () => {
+        expect(hurtOnSpot({ rangedThreat: true, onSpot: true, lastHp: 80, hp: 70 })).toBe(false);
+    });
+
+    test('off the tile, a first reading, or steady hp never counts', () => {
+        expect(hurtOnSpot({ rangedThreat: false, onSpot: false, lastHp: 80, hp: 70 })).toBe(false);
+        expect(hurtOnSpot({ rangedThreat: false, onSpot: true, lastHp: -1, hp: 70 })).toBe(false);
+        expect(hurtOnSpot({ rangedThreat: false, onSpot: true, lastHp: 70, hp: 70 })).toBe(false);
     });
 });

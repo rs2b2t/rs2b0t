@@ -30,6 +30,21 @@ export function nextSafespot(s: LadderState): number {
     return (s.index + 1) % s.spots;
 }
 
+export interface HurtState {
+    rangedThreat: boolean;
+    onSpot: boolean;
+    /** The hp read on the previous pass, or -1 when the bot was off the tile. */
+    lastHp: number;
+    hp: number;
+}
+
+// Why: the King Black Dragon breathes at anything it can see, so on its site a hit on the tile is expected and only the blind clock turns the ladder.
+
+/** Whether hp lost on the current safespot says the tile is wrong. */
+export function hurtOnSpot(s: HurtState): boolean {
+    return !s.rangedThreat && s.onSpot && s.lastHp >= 0 && s.hp < s.lastHp;
+}
+
 export interface RetreatState {
     inLair: boolean;
     /** Standing on one of the site's safespots right now. */
