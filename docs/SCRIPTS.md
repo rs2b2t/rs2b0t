@@ -5,7 +5,7 @@
 
 # Bundled scripts
 
-- Scripts: 63. Categories: 20.
+- Scripts: 64. Categories: 20.
 - Source: [`src/bot/scripts/`](../src/bot/scripts/). API: [scripting API](API.md).
 - Settings are the parameters the panel exposes before a script starts.
 
