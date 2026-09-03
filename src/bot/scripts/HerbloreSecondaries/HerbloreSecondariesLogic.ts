@@ -115,8 +115,9 @@ export const SECONDARIES: readonly SecondaryDef[] = [
         // red dragon isle (wilderness), needs dragonfire shield
         anchor: { x: 3216, z: 3812, level: 0 },
         searchRadius: 12,
-        bank: { x: 3094, z: 3493, level: 0 },
-        bankName: 'Edgeville',
+        // Why: the Deserted Keep lever lands beside the Ardougne lever, so every trip home ends in Ardougne; Edgeville was two spirit trees further each way.
+        bank: { x: 2616, z: 3332, level: 0 },
+        bankName: 'Ardougne West',
         takeFood: true,
         needShield: true
     },
