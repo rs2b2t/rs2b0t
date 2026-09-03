@@ -289,21 +289,14 @@ export const QUESTS: QuestRecord[] = [
     {
         id: 'dragon', name: 'Dragon Slayer', questPoints: 2,
         requirements: { minQuestPoints: 32 },
+        // Why: the Oracle's four charms, the hammer, the planks and the nails are the module's own business, stocked by decide() at the leg that spends them.
+        // Why: the engine walks this list on every session start and after every death, and the door eats the charms and the hull eats the planks, so listing them had a run resumed with the map in Ned's hands shop for a map piece it already had.
+        // Why: melee kit is absent too, what the player fights in is their own business, and the quest takes the account as it finds it.
         items: [
             // Why: 1 is deliberate against the quest's 12k bill, since provisioning re-checks every mustHave each loop while anything is outstanding.
             // Why: a coin requirement of any size then sends the bot back to the bank after every purchase, a Dwarven Mine round trip to collect one coin, in the run that found this.
-            // Why: the float covers the shopping, and the module withdraws Wormbrain's 10k and the ship's 2k when it needs them.
-            { name: 'Coins', qty: 1, kind: 'mustHave' },
-            // Why: provisioning walks this list in order, so it is ordered as a geographic sweep of Port Sarim, Falador, Varrock then the wilderness, or the bot crosses Asgarnia between each item.
-            // Why: nails are deliberately absent, as six steel bars is eighteen slots of ore that will not fit behind the rest of the shopping.
-            // Why: that nails leg runs from decide() once provisioning is done, late enough to bank the shopping first without the engine withdrawing it straight back.
-            // Why: melee kit is absent too, what the player fights in is their own business, and the quest takes the account as it finds it.
-            { name: 'Lobster pot', qty: 1, kind: 'acquirable' },   // Gerrant, Port Sarim
-            { name: 'Hammer', qty: 1, kind: 'acquirable' },        // Falador general store
-            { name: "Wizard's mind bomb", qty: 1, kind: 'acquirable' }, // Rising Sun, Falador
-            { name: 'Unfired bowl', qty: 1, kind: 'acquirable' },  // jug + fountain + Varrock clay
-            { name: 'Silk', qty: 1, kind: 'acquirable' },          // Thessalia, Varrock
-            { name: 'Plank', qty: 3, kind: 'acquirable' }          // Graveyard of Shadows
+            // Why: the module fetches coin at each counter and withdraws Wormbrain's 10k and the ship's 2k when it needs them.
+            { name: 'Coins', qty: 1, kind: 'mustHave' }
         ]
     },
     {

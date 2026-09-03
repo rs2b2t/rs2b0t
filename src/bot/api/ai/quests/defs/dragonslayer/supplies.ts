@@ -481,7 +481,7 @@ function makeRoom(snap: QuestSnapshot, slots = 1): QuestStep | null {
         : { kind: 'wait', reason: `no room for ${slots} more item${slots === 1 ? '' : 's'} and nothing spare to bank` };
 }
 
-/** Wired into the quest module's `gather` map, keyed by item display name. */
+/** Keyed by item display name; decide() draws on these at the leg that spends the item. */
 export const SUPPLY_GATHERS: Record<string, (snap: QuestSnapshot, need: number) => QuestStep> = {
     hammer: snap => makeRoom(snap) ?? buy('Hammer', 1, SUPPLY.GENERAL_STORE, 100),
     silk: snap => makeRoom(snap) ?? buy('Silk', 1, SUPPLY.THESSALIA, 200),
